@@ -1,0 +1,21 @@
+{
+  "short_name": "Wildgate",
+  "name": "Wildgate Stat Tracker",
+  "description": "Track your Artifact Brawl and Fleet Battle stats.",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2933/2933245.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2933/2933245.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0b0d14",
+  "background_color": "#0b0d14"
+}
