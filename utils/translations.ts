@@ -26,6 +26,7 @@ export const TRANSLATIONS: Record<Language, any> = {
     
     // Welcome
     welcome: 'Welcome, Prospector',
+    welcomeBack: 'Welcome back,',
     initialize: 'Initialize',
     launchSystem: 'Launch System', // NEW
     skip: 'Skip', // NEW

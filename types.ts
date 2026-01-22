@@ -2,7 +2,7 @@ export type GameMode = 'Artifact Brawl' | 'Fleet Battle';
 export type MatchResult = 'Win' | 'Loss' | 'Draw';
 export type ColorblindMode = 'none' | 'protanopia' | 'deuteranopia' | 'tritanopia';
 
-export const APP_VERSION = "v1.7.1";
+export const APP_VERSION = "v2.6.0";
 
 export type Language = 'en' | 'es' | 'mx' | 'pt' | 'br' | 'zh';
 

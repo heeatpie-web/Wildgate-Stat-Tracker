@@ -128,3 +128,45 @@ export const generateMatchImage = (match: Match) => {
   link.click();
   document.body.removeChild(link);
 };
+
+export const generateShareCode = (match: Match): string => {
+    const subset = {
+        m: match.mode === 'Artifact Brawl' ? 0 : 1,
+        r: match.result === 'Win' ? 0 : (match.result === 'Loss' ? 1 : 2),
+        s: match.ship,
+        h: match.hero,
+        t: match.teammates,
+        o: match.opponents,
+        d: match.damageTaken,
+        tm: match.time,
+        mod: match.reachModifiers,
+        k: match.kills,
+        n: match.notes
+    };
+    return btoa(JSON.stringify(subset));
+};
+
+export const parseShareCode = (code: string): Partial<Match> => {
+    try {
+        const subset = JSON.parse(atob(code));
+        return {
+            id: Date.now(),
+            timestamp: Date.now(),
+            date: new Date().toLocaleDateString(),
+            mode: subset.m === 0 ? 'Artifact Brawl' : 'Fleet Battle',
+            result: subset.r === 0 ? 'Win' : (subset.r === 1 ? 'Loss' : 'Draw'),
+            ship: subset.s,
+            hero: subset.h,
+            teammates: subset.t || [],
+            opponents: subset.o || [],
+            damageTaken: subset.d || 0,
+            time: subset.tm || '',
+            reachModifiers: subset.mod || [],
+            kills: subset.k || {},
+            notes: subset.n || '',
+            subType: 'Imported'
+        };
+    } catch (e) {
+        throw new Error("Invalid share code");
+    }
+};

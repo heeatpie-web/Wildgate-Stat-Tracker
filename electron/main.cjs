@@ -1,9 +1,31 @@
 const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const { autoUpdater } = require('electron-updater');
+const DiscordRPC = require('discord-rpc');
 const path = require('path');
 const isDev = !app.isPackaged;
 
 let win;
+
+// Discord RPC Setup
+const clientId = '1331154341514117120'; // Replace with your Discord Client ID
+DiscordRPC.register(clientId);
+const rpc = new DiscordRPC.Client({ transport: 'ipc' });
+
+async function setActivity(stats) {
+  if (!rpc || !win) return;
+  
+  const { sessionWins, sessionTotal, activeMode } = stats;
+  const winRate = sessionTotal > 0 ? Math.round((sessionWins / sessionTotal) * 100) : 0;
+
+  rpc.setActivity({
+    details: `${activeMode}`,
+    state: `Session: ${sessionWins}W - ${sessionTotal - sessionWins}L (${winRate}%)`,
+    startTimestamp: stats.startTime || Date.now(),
+    largeImageKey: 'logo',
+    largeImageText: 'Wildgate Stat Tracker',
+    instance: false,
+  }).catch(err => console.error("Discord RPC Error:", err));
+}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -11,7 +33,7 @@ function createWindow() {
     height: 800,
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: false, // For simple projects; consider turning true + preload script for security
+      contextIsolation: false,
     },
     icon: path.join(__dirname, '../public/favicon.ico'),
     autoHideMenuBar: true,
@@ -19,20 +41,29 @@ function createWindow() {
 
   if (isDev) {
     win.loadURL('http://localhost:5173');
-    // win.webContents.openDevTools(); // Optional: Open DevTools by default
   } else {
     win.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
-  // Open external links in default browser
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
   });
   
-  // IPC listener for opening DevTools
   ipcMain.on('open-devtools', () => {
     win.webContents.openDevTools();
+  });
+
+  ipcMain.on('update-presence', (event, stats) => {
+    setActivity(stats);
+  });
+
+  ipcMain.on('check-for-updates', () => {
+    if (!isDev) {
+      autoUpdater.checkForUpdatesAndNotify();
+    } else {
+      if(win) win.webContents.send('update_not_available');
+    }
   });
 }
 
@@ -42,6 +73,8 @@ app.whenReady().then(() => {
   if (!isDev) {
     autoUpdater.checkForUpdatesAndNotify();
   }
+
+  rpc.login({ clientId }).catch(console.error);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

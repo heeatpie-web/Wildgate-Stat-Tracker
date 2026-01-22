@@ -8,16 +8,19 @@ import AnalyticsPanel from './components/AnalyticsPanel';
 import HistoryTable from './components/HistoryTable';
 import Tutorial from './components/Tutorial';
 import { SessionTimer } from './components/SessionTimer';
-import { exportToJSON, exportToCSV } from './utils/export';
+import { exportToJSON, exportToCSV, parseShareCode } from './utils/export';
 import { TRANSLATIONS } from './utils/translations';
-import { Upload, Download, RefreshCw, Settings, Moon, Sun, Monitor, PlusCircle, HelpCircle, CloudMoon, User, X, Palette, Eye, Globe, ZapOff, Bug, FileJson, AlertOctagon, Layout, HeartCrack, MinusCircle, Grip, RotateCcw, Timer } from 'lucide-react';
+import { CHANGELOG } from './utils/changelog';
+import { Upload, Download, RefreshCw, Settings, Moon, Sun, Monitor, PlusCircle, HelpCircle, CloudMoon, User, X, Palette, Eye, Globe, ZapOff, Bug, FileJson, AlertOctagon, Layout, HeartCrack, MinusCircle, Grip, RotateCcw, Timer, Share2, Rocket, PartyPopper } from 'lucide-react';
 import confetti from 'canvas-confetti';
+
+const { ipcRenderer } = window.require ? window.require('electron') : { ipcRenderer: null };
 
 // Fallback for missing WidthProvider
 const SimpleWidthProvider = (ComposedComponent: any) => {
   return (props: any) => {
     const outerRef = useRef<HTMLDivElement>(null);
-    const [width, setWidth] = useState(1200);
+    const [width, setWidth] = useState(window.innerWidth - 40);
 
     useEffect(() => {
         const updateWidth = () => {
@@ -77,11 +80,17 @@ const App: React.FC = () => {
   const [showWelcome, setShowWelcome] = useState(() => loadFromStorage<string[]>('wg_v13_players', []).length === 0);
   const [showTutorial, setShowTutorial] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showChangelog, setShowChangelog] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showWizard, setShowWizard] = useState<'Win' | 'Loss' | 'Draw' | null>(null);
   const [isRearranging, setIsRearranging] = useState(false);
   
-  // Lifted Recording State
+  // UX State
+  const [showWelcomeBack, setShowWelcomeBack] = useState(false);
+  const [isLayoutReady, setIsLayoutReady] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'downloaded' | 'not-available'>('idle');
+  
+  // Recording State
   const [inputMode, setInputMode] = useState<'Smart' | 'Manual'>('Manual'); 
   const [selectedTeammates, setSelectedTeammates] = useState<string[]>([]);
   const [selectedOpponents, setSelectedOpponents] = useState<string[]>([]);
@@ -130,7 +139,59 @@ const App: React.FC = () => {
 
   // Session Timer
   const [sessionStartTime] = useState(Date.now());
-  const [lastActivity, setLastActivity] = useState(Date.now());
+  const [lastActivity, setLastActivity] = useState(() => {
+      const saved = localStorage.getItem('wg_last_activity');
+      return saved ? parseInt(saved) : Date.now();
+  });
+  const sessionMatches = matches.filter(m => m.timestamp >= sessionStartTime);
+  const sessionWins = sessionMatches.filter(m => m.result === 'Win').length;
+
+  // Mount Effects
+  useEffect(() => {
+      // Welcome Back Splash
+      if (activeUser && !showWelcome) {
+          setShowWelcomeBack(true);
+          setTimeout(() => setShowWelcomeBack(false), 2000);
+      }
+      
+      // Changelog Check
+      const lastSeen = localStorage.getItem('wg_last_seen_version');
+      if (lastSeen !== APP_VERSION && !showWelcome) {
+          setShowChangelog(true);
+      }
+
+      // Reveal layout after short delay to prevent jank
+      setTimeout(() => setIsLayoutReady(true), 150);
+  }, []);
+
+  // Discord Rich Presence Sync
+  useEffect(() => {
+    if (ipcRenderer) {
+        ipcRenderer.send('update-presence', {
+            sessionWins,
+            sessionTotal: sessionMatches.length,
+            activeMode,
+            startTime: sessionStartTime
+        });
+    }
+  }, [sessionWins, sessionMatches.length, activeMode]);
+
+  // Update Listeners
+  useEffect(() => {
+    if (!ipcRenderer) return;
+    const onAvailable = () => setUpdateStatus('available');
+    const onDownloaded = () => setUpdateStatus('downloaded');
+    const onNotAvailable = () => { setUpdateStatus('not-available'); setTimeout(() => setUpdateStatus('idle'), 3000); };
+    
+    ipcRenderer.on('update_available', onAvailable);
+    ipcRenderer.on('update_downloaded', onDownloaded);
+    ipcRenderer.on('update_not_available', onNotAvailable);
+    return () => {
+        ipcRenderer.removeListener('update_available', onAvailable);
+        ipcRenderer.removeListener('update_downloaded', onDownloaded);
+        ipcRenderer.removeListener('update_not_available', onNotAvailable);
+    };
+  }, []);
 
   // Recording Logic
   const maxTeammates = getShipCapacity(activeShip) - 1;
@@ -139,7 +200,6 @@ const App: React.FC = () => {
     setLayouts(prev => {
         const newLg = prev.lg.map(item => {
             if (item.i === 'mission') {
-                // Shrink to 2 (header only) in Smart mode, expand to 11 in Manual
                 return { ...item, h: inputMode === 'Smart' ? 2 : 11 };
             }
             return item;
@@ -180,12 +240,25 @@ const App: React.FC = () => {
       setPoiEasy(0); setPoiMedium(0); setPoiEpic(0); setKills({"AI Legion": 0}); setTimeMin(""); setTimeSec(""); setSelectedReachModifiers([]); setDamageTaken(""); setCurrentNote("");
   };
 
+  const handleCheckUpdates = () => {
+      if (!ipcRenderer) return;
+      setUpdateStatus('checking');
+      ipcRenderer.send('check-for-updates');
+  };
+
+  const handleRestartUpdate = () => {
+      if (ipcRenderer) ipcRenderer.send('restart_app');
+  };
+
+  const closeChangelog = () => {
+      localStorage.setItem('wg_last_seen_version', APP_VERSION);
+      setShowChangelog(false);
+  };
+
   useEffect(() => {
       if (devMode) {
           try {
-              // @ts-ignore
-              const { ipcRenderer } = window.require('electron');
-              ipcRenderer.send('open-devtools');
+              if (ipcRenderer) ipcRenderer.send('open-devtools');
           } catch (e) {
               console.log("DevTools not available (not in Electron)");
           }
@@ -222,7 +295,8 @@ const App: React.FC = () => {
     localStorage.setItem('wg_layouts_v7', JSON.stringify(layouts));
     localStorage.setItem('wg_show_session_timer', JSON.stringify(showSessionTimer));
     localStorage.setItem('wg_custom_bg_url', JSON.stringify(customBgUrl));
-  }, [matches, players, pilotRegistry, favorites, pilotNotes, appearanceMode, colorTheme, colorblindMode, disableAnimations, language, layouts, showSessionTimer, customBgUrl]);
+    localStorage.setItem('wg_last_activity', lastActivity.toString());
+  }, [matches, players, pilotRegistry, favorites, pilotNotes, appearanceMode, colorTheme, colorblindMode, disableAnimations, language, layouts, showSessionTimer, customBgUrl, lastActivity]);
 
   const handleRegisterUser = (name: string) => {
     if (!name.trim()) return;
@@ -267,6 +341,21 @@ const App: React.FC = () => {
       };
       reader.readAsText(file);
   };
+
+  const handleImportShareCode = () => {
+      const code = prompt("Paste your Match Share Code here:");
+      if (!code) return;
+      try {
+          const match = parseShareCode(code);
+          if (match) {
+              setMatches(prev => [match as Match, ...prev]);
+              setLastActivity(Date.now());
+              alert("Match imported successfully!");
+          }
+      } catch (e) {
+          alert("Invalid or corrupt share code.");
+      }
+  };
   
   const handleInitiateSubmission = (data: any, result: 'Win' | 'Loss' | 'Draw') => {
       setPendingMatchData(data);
@@ -306,6 +395,7 @@ const App: React.FC = () => {
           result: showWizard||'Win', subType: subType||'Combat', placement: pendingPlacement||undefined,
           damageTaken: pendingMatchData.damageTaken || 0, time: pendingMatchData.time,
           poiEasy: pendingMatchData.poiEasy, poiMedium: pendingMatchData.poiMedium, poiEpic: pendingMatchData.poiEpic,
+          notes: pendingMatchData.notes
       };
       setMatches(prev => [newMatch, ...prev]);
       setLastActivity(Date.now());
@@ -488,6 +578,14 @@ const App: React.FC = () => {
           border-color: rgba(255, 255, 255, 0.8);
         }
       `}</style>
+      {showWelcomeBack && (
+          <div className="fixed inset-0 z-[5000] bg-black/80 flex items-center justify-center p-4 animate-fade-out pointer-events-none">
+              <div className="bg-md-sys-surface1 px-10 py-6 rounded-[40px] shadow-2xl border border-md-sys-outline/20 text-center animate-scale-in">
+                  <h2 className="text-2xl font-black uppercase tracking-widest text-md-sys-primary">{t.welcomeBack} {activeUser}!</h2>
+                  <div className="text-xs font-bold opacity-60 mt-2 uppercase tracking-wide">System Online</div>
+              </div>
+          </div>
+      )}
       {showWelcome && (
             <div className="fixed inset-0 z-[300] bg-black/90 flex items-center justify-center p-4">
                 <div className="bg-md-sys-surface1 p-10 rounded-[40px] max-w-lg w-full text-center shadow-2xl border-md-sys-outline/20">
@@ -499,7 +597,7 @@ const App: React.FC = () => {
                 </div>
             </div>
       )}
-      <div className="w-full max-w-[1800px] flex flex-col gap-6 animate-fade-in">
+      <div className={`w-full max-w-[1800px] flex flex-col gap-6 transition-opacity duration-500 ${isLayoutReady ? 'opacity-100' : 'opacity-0'}`}>
         <header className="md-card flex flex-col md:flex-row justify-between items-center gap-4 bg-md-sys-surface1 p-6 rounded-[32px] shadow-lg">
           <div className="flex items-baseline gap-3">
             <h1 className="text-3xl font-black tracking-tighter select-none">WILDGATE STAT TRACKER</h1>
@@ -507,7 +605,7 @@ const App: React.FC = () => {
             {devMode && <span className="text-xs font-black bg-red-500 text-white px-2 py-1 rounded">DEV MODE</span>}
           </div>
           
-          {showSessionTimer && <SessionTimer startTime={sessionStartTime} matches={matches} lastActivity={lastActivity} />}
+          {showSessionTimer && <SessionTimer startTime={sessionStartTime} matches={matches} lastActivity={lastActivity} onRefreshActivity={() => setLastActivity(Date.now())} />}
 
           <div className="flex flex-col md:flex-row items-center gap-4">
              <div className="flex items-center gap-2 bg-md-sys-surface2 px-6 py-3 rounded-full border-md-sys-outline/10 shadow-inner">
@@ -518,7 +616,7 @@ const App: React.FC = () => {
              </div>
              <div className="bg-md-sys-surface2 p-1 rounded-full flex gap-1 border-md-sys-outline/5 shadow-inner">
                 <button onClick={() => setActiveMode('Artifact Brawl')} className={`px-4 py-2 rounded-full text-xs font-black ${activeMode === 'Artifact Brawl' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-md' : 'text-md-sys-on-surface/60 hover:bg-md-sys-surface3'}`}>{t.artifactBrawl}</button>
-                <button onClick={() => setActiveMode('Fleet Battle')} className={`px-4 py-2 rounded-full text-xs font-black ${activeMode === 'Fleet Battle' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-md' : 'text-md-sys-on-surface/60 hover:bg-md-sys-surface3'}`}>{t.fleetBattle}</button>
+                <button onClick={() => setActiveMode('Fleet Battle')} className={`px-4 py-2 rounded-full text-xs font-black ${activeMode === 'Fleet Battle' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg' : 'text-md-sys-on-surface/60 hover:bg-md-sys-surface3'}`}>{t.fleetBattle}</button>
              </div>
              <div className="flex gap-2">
                 <button onClick={() => setShowTutorial(true)} className="p-3.5 bg-md-sys-surface2 rounded-full border-md-sys-outline/10 hover:bg-md-sys-surface3" title="Tutorial"><HelpCircle size={18} /></button>
@@ -534,14 +632,22 @@ const App: React.FC = () => {
 
         <ResponsiveGridLayout 
             className="layout" 
-            layouts={layouts} 
+            layouts={{
+                lg: layouts.lg.map(l => ({ ...l, static: !isRearranging })),
+                md: (layouts.md || layouts.lg).map(l => ({ ...l, static: !isRearranging })),
+                sm: (layouts.sm || layouts.lg).map(l => ({ ...l, static: !isRearranging })),
+                xs: (layouts.xs || layouts.lg).map(l => ({ ...l, static: !isRearranging })),
+                xxs: (layouts.xxs || layouts.lg).map(l => ({ ...l, static: !isRearranging }))
+            }}
             breakpoints={{lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0}}
             cols={{lg: 12, md: 10, sm: 6, xs: 4, xxs: 2}}
             rowHeight={30}
             margin={[24, 24]}
             onLayoutChange={(layout, layouts) => {
-                setLayouts(layouts);
-                localStorage.setItem('wg_layouts_v6', JSON.stringify(layouts));
+                if (isRearranging) {
+                    setLayouts(layouts);
+                    localStorage.setItem('wg_layouts_v7', JSON.stringify(layouts));
+                }
             }}
             isDraggable={isRearranging}
             isResizable={isRearranging}
@@ -571,6 +677,7 @@ const App: React.FC = () => {
                     poiEasy={poiEasy} setPoiEasy={setPoiEasy} poiMedium={poiMedium} setPoiMedium={setPoiMedium} poiEpic={poiEpic} setPoiEpic={setPoiEpic}
                     selectedReachModifiers={selectedReachModifiers} toggleReachModifier={toggleReachModifier}
                     showArtifactSelect={showArtifactSelect} setShowArtifactSelect={setShowArtifactSelect}
+                    currentNote={currentNote} setCurrentNote={setCurrentNote}
                 />
             </div>
             <div key="actions">
@@ -593,6 +700,29 @@ const App: React.FC = () => {
                 />
             </div>
         </ResponsiveGridLayout>
+
+        {showChangelog && (
+            <div className="fixed inset-0 z-[10000] bg-black/80 flex items-center justify-center p-4 animate-fade-in" onClick={closeChangelog}>
+                <div className="bg-md-sys-surface1 w-full max-w-xl rounded-[40px] p-10 shadow-2xl border border-md-sys-outline/20 animate-scale-in" onClick={e => e.stopPropagation()}>
+                    <div className="flex justify-between items-center mb-8">
+                        <div>
+                            <div className="text-sm font-black uppercase opacity-40 tracking-widest mb-1">System Updated</div>
+                            <h2 className="text-4xl font-black flex items-center gap-3"><PartyPopper className="text-md-sys-primary"/> Version {APP_VERSION}</h2>
+                        </div>
+                        <button onClick={closeChangelog} className="p-3 bg-md-sys-surface2 rounded-full hover:bg-md-sys-surface3"><X size={20}/></button>
+                    </div>
+                    <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-4 custom-scrollbar">
+                        {CHANGELOG[APP_VERSION]?.map((item, i) => (
+                            <div key={i} className="flex gap-4 items-start">
+                                <div className="w-2 h-2 rounded-full bg-md-sys-primary mt-2 flex-shrink-0"></div>
+                                <div className="text-sm font-bold opacity-80 leading-relaxed">{item}</div>
+                            </div>
+                        ))}
+                    </div>
+                    <button onClick={closeChangelog} className="w-full mt-10 py-4 bg-md-sys-primary text-md-sys-onPrimary rounded-2xl font-black uppercase tracking-widest hover:brightness-110 shadow-lg">Got it!</button>
+                </div>
+            </div>
+        )}
 
         {renderWizard()}
         {showTutorial && <Tutorial onComplete={() => setShowTutorial(false)} onSkip={() => setShowTutorial(false)} />}
@@ -659,10 +789,54 @@ const App: React.FC = () => {
                             <label className="flex flex-col items-center justify-center gap-2 p-6 bg-md-sys-surface2 rounded-2xl hover:bg-md-sys-surface3 font-bold text-xs cursor-pointer"><Upload size={24}/> Restore JSON <input type="file" hidden onChange={handleImport}/></label>
                             <button onClick={() => setShowResetConfirm(true)} className="flex flex-col items-center justify-center gap-2 p-6 bg-md-sys-error-container text-md-sys-on-error-container rounded-2xl hover:brightness-110 font-bold text-xs"><RefreshCw size={24}/> Reset Data</button>
                         </div>
+                        <div className="bg-md-sys-surface2 p-5 rounded-2xl">
+                            <label className="text-xs font-bold uppercase opacity-80 mb-3 block">Import Match Code</label>
+                            <button onClick={handleImportShareCode} className="w-full py-3 bg-md-sys-primary text-md-sys-onPrimary rounded-xl font-black uppercase tracking-widest hover:brightness-110 flex items-center justify-center gap-2"><Share2 size={18}/> Import from Share Code</button>
+                        </div>
                     </div>
-                    <div className="text-center opacity-40 text-[10px] font-mono">Wildgate Stat Tracker {APP_VERSION} • {matches.length} Missions Logged</div>
+                    <div className="space-y-6">
+                        <h3 className="text-sm font-black uppercase opacity-60 flex items-center gap-2 border-b border-md-sys-outline/10 pb-2"><Timer size={16}/> Software Update</h3>
+                        <div className="bg-md-sys-surface2 p-5 rounded-2xl flex flex-col gap-4">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <div className="text-xs font-bold uppercase opacity-80">Update Status</div>
+                                    <div className="text-[10px] font-mono opacity-40">Version {APP_VERSION}</div>
+                                </div>
+                                <div className="text-right">
+                                    <div className={`text-xs font-black uppercase ${updateStatus === 'downloaded' ? 'text-green-500' : (updateStatus === 'available' ? 'text-amber-500' : 'opacity-40')}`}>
+                                        {updateStatus === 'checking' ? 'Checking...' : 
+                                         updateStatus === 'available' ? 'Downloading...' : 
+                                         updateStatus === 'downloaded' ? 'Ready to Install' : 
+                                         updateStatus === 'not-available' ? 'Up to Date' : 'No Check Performed'}
+                                    </div>
+                                </div>
+                            </div>
+                            {updateStatus === 'downloaded' ? (
+                                <button onClick={handleRestartUpdate} className="w-full py-3 bg-green-600 text-white rounded-xl font-black uppercase tracking-widest hover:brightness-110 shadow-lg animate-pulse">Restart & Update</button>
+                            ) : (
+                                <button onClick={handleCheckUpdates} disabled={updateStatus === 'checking'} className="w-full py-3 bg-md-sys-surface3 rounded-xl font-black uppercase tracking-widest hover:bg-md-sys-primary hover:text-white disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+                                    <RefreshCw size={16} className={updateStatus === 'checking' ? 'animate-spin' : ''}/> Check for Updates
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <div className="text-center opacity-40 text-[10px] font-mono mt-4">Wildgate Stat Tracker {APP_VERSION} • {matches.length} Missions Logged</div>
                 </div>
             </div>
+        )}
+
+        {showResetConfirm && (
+             <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setShowResetConfirm(false)}>
+                <div className="bg-md-sys-surface1 p-10 rounded-[40px] w-full max-w-md shadow-2xl border-2 border-md-sys-error" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-4 text-md-sys-error mb-6"><AlertOctagon size={48} /><h2 className="text-3xl font-black uppercase tracking-tighter">Reset Data?</h2></div>
+                    <p className="text-base opacity-80 mb-10 font-bold leading-relaxed">This action will delete ALL match history and pilot records. This cannot be undone.</p>
+                    <div className="flex flex-col gap-4">
+                        <button onClick={() => handleReset(true)} className="w-full py-5 bg-md-sys-primary text-md-sys-onPrimary rounded-2xl font-black uppercase tracking-widest hover:brightness-110 shadow-lg">Backup & Reset</button>
+                        <button onClick={() => handleReset(false)} className="w-full py-5 bg-md-sys-error-container text-md-sys-on-error-container rounded-2xl font-black uppercase tracking-widest hover:brightness-110">Just Reset</button>
+                        <button onClick={() => setShowResetConfirm(false)} className="w-full py-5 bg-md-sys-surface3 rounded-2xl font-black uppercase tracking-widest hover:bg-md-sys-surface-variant">Cancel</button>
+                    </div>
+                </div>
+             </div>
         )}
 
         {devMode && (
