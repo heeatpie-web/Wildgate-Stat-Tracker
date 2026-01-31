@@ -1,150 +1,107 @@
 import React, { useState, useEffect, useRef } from 'react';
-import * as ReactGridLayout from 'react-grid-layout';
-import 'react-grid-layout/css/styles.css';
-import 'react-resizable/css/styles.css';
-import { Match, GameMode, APP_VERSION, Language, CHARACTERS, SHIPS, UI_REACH_MODIFIERS, KillMap, ColorblindMode, getShipCapacity } from './types';
-import { SquadronPanel, RosterPanel, MissionPanel, ActionPanel } from './components/RecordingPanel';
+import { Match, GameMode, APP_VERSION, Language, CHARACTERS, SHIPS, UI_REACH_MODIFIERS, KillMap, ColorblindMode, getShipCapacity, DrillDownTarget } from './types';
+import { DashboardLayout } from './components/DashboardLayout';
+import { SquadronPanel } from './components/recording/SquadronPanel';
+import { RosterPanel } from './components/recording/RosterPanel';
+import { MissionPanel } from './components/recording/MissionPanel';
+import { ActionPanel } from './components/recording/ActionPanel';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import HistoryTable from './components/HistoryTable';
 import Tutorial from './components/Tutorial';
 import { SessionTimer } from './components/SessionTimer';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { exportToJSON, exportToCSV, parseShareCode } from './utils/export';
 import { TRANSLATIONS } from './utils/translations';
 import { CHANGELOG } from './utils/changelog';
-import { Upload, Download, RefreshCw, Settings, Moon, Sun, Monitor, PlusCircle, HelpCircle, CloudMoon, User, X, Palette, Eye, Globe, ZapOff, Bug, FileJson, AlertOctagon, Layout, HeartCrack, MinusCircle, Grip, RotateCcw, Timer, Share2, Rocket, PartyPopper } from 'lucide-react';
+import { StorageService } from './utils/storage';
+import { Toast } from './components/Toast';
+import { useTiltMonitor } from './hooks/useTiltMonitor';
+import { useDiscordRPC } from './hooks/useDiscordRPC';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { Upload, Download, RefreshCw, Settings, Moon, Sun, Monitor, PlusCircle, HelpCircle, CloudMoon, User, X, Palette, Eye, Globe, ZapOff, Bug, FileJson, AlertOctagon, Layout, HeartCrack, MinusCircle, Grip, RotateCcw, Timer, Share2, Rocket, PartyPopper, Save, Edit } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import confetti from 'canvas-confetti';
+import { useAppStore } from './store/useAppStore';
+// @ts-ignore
+import { Responsive, WidthProvider } from 'react-grid-layout/legacy';
+
+const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const { ipcRenderer } = window.require ? window.require('electron') : { ipcRenderer: null };
 
-// Fallback for missing WidthProvider
-const SimpleWidthProvider = (ComposedComponent: any) => {
-  return (props: any) => {
-    const outerRef = useRef<HTMLDivElement>(null);
-    const [width, setWidth] = useState(window.innerWidth - 40);
-
-    useEffect(() => {
-        const updateWidth = () => {
-            if (outerRef.current) {
-                setWidth(outerRef.current.offsetWidth);
-            } else {
-                setWidth(window.innerWidth - 40); // fallback
-            }
-        };
-        
-        window.addEventListener('resize', updateWidth);
-        // Delay initial measure to ensure DOM is ready
-        setTimeout(updateWidth, 100); 
-        
-        return () => window.removeEventListener('resize', updateWidth);
-    }, []);
-
-    return (
-        <div ref={outerRef} style={{width: '100%'}}>
-            <ComposedComponent {...props} width={width} />
-        </div>
-    );
-  };
-};
-
-// Defensive access for Responsive
-// @ts-ignore
-const RGL = ReactGridLayout.default || ReactGridLayout;
-// @ts-ignore
-const Responsive = RGL.Responsive || ReactGridLayout.Responsive;
-
-// Use custom WidthProvider
-const ResponsiveGridLayout = SimpleWidthProvider(Responsive);
-
-const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
-  try {
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : defaultValue;
-  } catch (error) {
-    return defaultValue;
-  }
-};
-
 const App: React.FC = () => {
-  const [activeMode, setActiveMode] = useState<GameMode>('Artifact Brawl');
-  const [matches, setMatches] = useState<Match[]>(() => loadFromStorage('wg_v13_matches', []));
-  const [players, setPlayers] = useState<string[]>(() => loadFromStorage('wg_v13_players', []));
-  const [pilotRegistry, setPilotRegistry] = useState<string[]>(() => loadFromStorage('wg_v13_pilot_registry', []));
-  const [favorites, setFavorites] = useState<string[]>(() => loadFromStorage('wg_v13_favorites', []));
-  const [pilotNotes, setPilotNotes] = useState<Record<string, string>>(() => loadFromStorage('wg_v13_pilot_notes', {}));
-  
-  const [activeUser, setActiveUser] = useState<string>(() => {
-    const saved = loadFromStorage<string[]>('wg_v13_players', []);
-    return saved.length > 0 ? saved[0] : '';
-  });
+  const {
+    matches, setMatches, addMatch, updateMatch, deleteMatch,
+    players, setPlayers,
+    pilotRegistry, setPilotRegistry,
+    favorites, setFavorites,
+    pilotNotes, setPilotNotes,
+    lastActivity, setLastActivity,
+    renamePilot, updatePilotNote, toggleFavorite,
+    addPlayer, deletePlayer, addToRegistry, removeFromRegistry,
 
-  const [showWelcome, setShowWelcome] = useState(() => loadFromStorage<string[]>('wg_v13_players', []).length === 0);
-  const [showTutorial, setShowTutorial] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showChangelog, setShowChangelog] = useState(false);
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [showWizard, setShowWizard] = useState<'Win' | 'Loss' | 'Draw' | null>(null);
-  const [isRearranging, setIsRearranging] = useState(false);
-  
-  // UX State
-  const [showWelcomeBack, setShowWelcomeBack] = useState(false);
-  const [isLayoutReady, setIsLayoutReady] = useState(false);
-  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'downloaded' | 'not-available'>('idle');
-  
-  // Recording State
-  const [inputMode, setInputMode] = useState<'Smart' | 'Manual'>('Manual'); 
-  const [selectedTeammates, setSelectedTeammates] = useState<string[]>([]);
-  const [selectedOpponents, setSelectedOpponents] = useState<string[]>([]);
-  const [activeHero, setActiveHero] = useState(CHARACTERS[0]);
-  const [activeShip, setActiveShip] = useState(SHIPS[0]);
-  const [selectedReachModifiers, setSelectedReachModifiers] = useState<string[]>([]);
-  const [kills, setKills] = useState<KillMap>({ "AI Legion": 0 });
-  const [poiEasy, setPoiEasy] = useState(0);
-  const [poiMedium, setPoiMedium] = useState(0);
-  const [poiEpic, setPoiEpic] = useState(0);
-  const [timeMin, setTimeMin] = useState("");
-  const [timeSec, setTimeSec] = useState("");
-  const [damageTaken, setDamageTaken] = useState("");
-  const [currentNote, setCurrentNote] = useState("");
-  const [showArtifactSelect, setShowArtifactSelect] = useState(false);
+    activeMode, setActiveMode,
+    activeUser, setActiveUser,
+    appearanceMode, setAppearanceMode,
+    colorTheme, setColorTheme,
+    customHue, setCustomHue,
+    devMode, setDevMode,
+    colorblindMode, setColorblindMode,
+    disableAnimations, setDisableAnimations,
+    language, setLanguage,
+    showSessionTimer, setShowSessionTimer,
+    customBgUrl, setCustomBgUrl,
 
-  const [layouts, setLayouts] = useState(() => loadFromStorage('wg_layouts_v7', {
-      lg: [
-          { i: 'squadron', x: 0, y: 0, w: 6, h: 9 },
-          { i: 'roster', x: 6, y: 0, w: 6, h: 9 },
-          { i: 'actions', x: 0, y: 9, w: 12, h: 5 },
-          { i: 'mission', x: 0, y: 14, w: 12, h: 11 },
-          { i: 'analytics', x: 0, y: 25, w: 12, h: 12 },
-          { i: 'history', x: 0, y: 37, w: 12, h: 16 }
-      ]
-  }));
+    isLoading, setIsLoading,
+    showWelcome, setShowWelcome,
+    showTutorial, setShowTutorial,
+    showSettings, setShowSettings,
+    showChangelog, setShowChangelog,
+    showResetConfirm, setShowResetConfirm,
+    isRearranging, setIsRearranging,
+    toast, setToast,
+    drillDownTarget, setDrillDownTarget,
+    showWelcomeBack, setShowWelcomeBack,
+    isLayoutReady, setIsLayoutReady,
+    updateStatus, setUpdateStatus,
+    inputMode, setInputMode,
+    showArtifactSelect, setShowArtifactSelect,
+    layouts, setLayouts,
 
-  const [pendingMatchData, setPendingMatchData] = useState<any>(null);
-  const [pendingSubType, setPendingSubType] = useState('');
-  const [pendingPlacement, setPendingPlacement] = useState<number | null>(null);
-  const [pendingArtifactType, setPendingArtifactType] = useState('');
-
-  const [appearanceMode, setAppearanceMode] = useState<'light'|'dark'|'twilight'|'system'>(() => loadFromStorage('wg_mode', 'twilight'));
-  const [colorTheme, setColorTheme] = useState<string>(() => loadFromStorage('wg_theme_accent', 'ocean'));
-  const [customHue, setCustomHue] = useState<string>(() => loadFromStorage('wg_custom_hue', '0'));
-  const [devMode, setDevMode] = useState(false);
-  const [colorblindMode, setColorblindMode] = useState<ColorblindMode>(() => loadFromStorage('wg_colorblind', 'none'));
-  const [disableAnimations, setDisableAnimations] = useState(() => loadFromStorage('wg_disable_animations', false));
-  const [language, setLanguage] = useState<Language>(() => loadFromStorage('wg_language', 'en'));
-  const [showSessionTimer, setShowSessionTimer] = useState(() => loadFromStorage('wg_show_session_timer', true));
-  const [customBgUrl, setCustomBgUrl] = useState(() => loadFromStorage('wg_custom_bg_url', ''));
+    selectedTeammates, setSelectedTeammates, toggleTeammate,
+    selectedOpponents, setSelectedOpponents, toggleOpponent,
+    activeHero, setActiveHero,
+    activeShip, setActiveShip,
+    activeWeapons, setActiveWeapons,
+    matchStartTime, setMatchStartTime,
+    isMatchInProgress, setIsMatchInProgress,
+    selectedReachModifiers, setSelectedReachModifiers, toggleReachModifier,
+    kills, setKills,
+    poiEasy, setPoiEasy,
+    poiMedium, setPoiMedium,
+    poiEpic, setPoiEpic,
+    timeMin, setTimeMin,
+    timeSec, setTimeSec,
+    damageTaken, setDamageTaken,
+    currentNote, setCurrentNote,
+    pendingMatchData, setPendingMatchData,
+    pendingSubType, setPendingSubType,
+    pendingPlacement, setPendingPlacement,
+    pendingArtifactType, setPendingArtifactType,
+    showWizard, setShowWizard,
+    sessionStartTime
+  } = useAppStore();
 
   const t = TRANSLATIONS[language];
   const devClicks = useRef(0);
   const isResetting = useRef(false);
 
   // Session Timer
-  const [sessionStartTime] = useState(Date.now());
-  const [lastActivity, setLastActivity] = useState(() => {
-      const saved = localStorage.getItem('wg_last_activity');
-      return saved ? parseInt(saved) : Date.now();
-  });
+  // const [lastActivity, setLastActivity] = useState(Date.now()); // Already in store
   const sessionMatches = matches.filter(m => m.timestamp >= sessionStartTime);
   const sessionWins = sessionMatches.filter(m => m.result === 'Win').length;
+
+  // Keyboard Shortcuts
 
   // Mount Effects
   useEffect(() => {
@@ -165,16 +122,7 @@ const App: React.FC = () => {
   }, []);
 
   // Discord Rich Presence Sync
-  useEffect(() => {
-    if (ipcRenderer) {
-        ipcRenderer.send('update-presence', {
-            sessionWins,
-            sessionTotal: sessionMatches.length,
-            activeMode,
-            startTime: sessionStartTime
-        });
-    }
-  }, [sessionWins, sessionMatches.length, activeMode]);
+  useDiscordRPC(sessionWins, sessionMatches.length, activeMode, sessionStartTime);
 
   // Update Listeners
   useEffect(() => {
@@ -182,68 +130,81 @@ const App: React.FC = () => {
     const onAvailable = () => setUpdateStatus('available');
     const onDownloaded = () => setUpdateStatus('downloaded');
     const onNotAvailable = () => { setUpdateStatus('not-available'); setTimeout(() => setUpdateStatus('idle'), 3000); };
+    const onError = (_: any, msg: string) => { 
+        console.error("AutoUpdater Error:", msg);
+        setUpdateStatus('not-available'); 
+        alert("Update Check Failed: " + msg);
+        setTimeout(() => setUpdateStatus('idle'), 3000); 
+    };
     
     ipcRenderer.on('update_available', onAvailable);
     ipcRenderer.on('update_downloaded', onDownloaded);
     ipcRenderer.on('update_not_available', onNotAvailable);
+    ipcRenderer.on('update_error', onError);
     return () => {
         ipcRenderer.removeListener('update_available', onAvailable);
         ipcRenderer.removeListener('update_downloaded', onDownloaded);
         ipcRenderer.removeListener('update_not_available', onNotAvailable);
+        ipcRenderer.removeListener('update_error', onError);
     };
   }, []);
+
+  // Keyboard Shortcuts
+  useKeyboardShortcuts({
+      onWin: () => initiateSubmission('Win'),
+      onLoss: () => initiateSubmission('Loss')
+  }, showWizard);
 
   // Recording Logic
   const maxTeammates = getShipCapacity(activeShip) - 1;
 
   useEffect(() => {
-    setLayouts(prev => {
-        const newLg = prev.lg.map(item => {
-            if (item.i === 'mission') {
-                return { ...item, h: inputMode === 'Smart' ? 2 : 11 };
-            }
-            return item;
-        });
-        return { ...prev, lg: newLg };
-    });
-  }, [inputMode]);
-
-  useEffect(() => {
-    setSelectedTeammates(prev => prev.filter((_, i) => i < maxTeammates));
+    // Sync teammates with ship capacity if changed
+    setSelectedTeammates(selectedTeammates.filter((_, i) => i < maxTeammates));
   }, [activeShip, maxTeammates]);
-
-  const toggleTeammate = (name: string) => {
-      if (selectedTeammates.includes(name)) setSelectedTeammates(prev => prev.filter(t => t !== name));
-      else if (selectedTeammates.length < maxTeammates) setSelectedTeammates(prev => [...prev, name]);
-  };
-
-  const toggleOpponent = (name: string) => {
-      if (selectedOpponents.includes(name)) setSelectedOpponents(prev => prev.filter(o => o !== name));
-      else setSelectedOpponents(prev => [...prev, name]);
-  };
-
-  const toggleReachModifier = (mod: string) => {
-      if (selectedReachModifiers.includes(mod)) setSelectedReachModifiers(prev => prev.filter(m => m !== mod));
-      else setSelectedReachModifiers(prev => [...prev, mod]);
-  };
 
   const initiateSubmission = (result: 'Win' | 'Loss' | 'Draw') => {
       if (!activeUser) { alert("Select a prospector!"); return; }
-      const timeStr = (timeMin || timeSec) ? `${timeMin || '00'}:${timeSec || '00'}` : "";
+      
+      let finalTimeMin = timeMin;
+      let finalTimeSec = timeSec;
+
+      // Auto-calculate time if match was in progress and manual time is empty
+      if (isMatchInProgress && matchStartTime && !timeMin && !timeSec) {
+          const durationMs = Date.now() - matchStartTime;
+          const totalSeconds = Math.floor(durationMs / 1000);
+          finalTimeMin = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+          finalTimeSec = (totalSeconds % 60).toString().padStart(2, '0');
+          
+          // Reset match timer after capture
+          setIsMatchInProgress(false);
+          setMatchStartTime(null);
+      }
+
+      const timeStr = (finalTimeMin || finalTimeSec) ? `${finalTimeMin || '00'}:${finalTimeSec || '00'}` : "";
       const dmg = parseInt(damageTaken) || 0;
       const data = {
-        activeMode, activeUser, selectedTeammates, selectedOpponents, activeHero, activeShip,
+        activeMode, activeUser, selectedTeammates, selectedOpponents, activeHero, activeShip, weapons: activeWeapons,
         selectedReachModifiers, kills, time: timeStr, poiEasy, poiMedium, poiEpic, damageTaken: dmg, notes: currentNote
       };
       handleInitiateSubmission(data, result);
       // Reset manual fields
-      setPoiEasy(0); setPoiMedium(0); setPoiEpic(0); setKills({"AI Legion": 0}); setTimeMin(""); setTimeSec(""); setSelectedReachModifiers([]); setDamageTaken(""); setCurrentNote("");
+      setPoiEasy(0); setPoiMedium(0); setPoiEpic(0); setKills({"AI Legion": 0}); setTimeMin(""); setTimeSec(""); setSelectedReachModifiers([]); setDamageTaken(""); setCurrentNote(""); setActiveWeapons({});
   };
 
   const handleCheckUpdates = () => {
       if (!ipcRenderer) return;
       setUpdateStatus('checking');
       ipcRenderer.send('check-for-updates');
+  };
+
+  const handleBackupDB = async () => {
+      const res = await StorageService.backup();
+      if (res && res.success) {
+          alert(`Backup saved to:\n${res.path}`);
+      } else {
+          alert("Backup failed: " + (res?.error || "Unknown error"));
+      }
   };
 
   const handleRestartUpdate = () => {
@@ -280,27 +241,9 @@ const App: React.FC = () => {
     if (disableAnimations) body.classList.add('no-animate'); else body.classList.remove('no-animate');
   }, [appearanceMode, colorTheme, customHue, colorblindMode, disableAnimations]);
 
-  useEffect(() => {
-    if (isResetting.current) return;
-    localStorage.setItem('wg_v13_matches', JSON.stringify(matches));
-    localStorage.setItem('wg_v13_players', JSON.stringify(players));
-    localStorage.setItem('wg_v13_pilot_registry', JSON.stringify(pilotRegistry));
-    localStorage.setItem('wg_v13_favorites', JSON.stringify(favorites));
-    localStorage.setItem('wg_v13_pilot_notes', JSON.stringify(pilotNotes));
-    localStorage.setItem('wg_mode', JSON.stringify(appearanceMode));
-    localStorage.setItem('wg_theme_accent', JSON.stringify(colorTheme));
-    localStorage.setItem('wg_colorblind', JSON.stringify(colorblindMode));
-    localStorage.setItem('wg_disable_animations', JSON.stringify(disableAnimations));
-    localStorage.setItem('wg_language', JSON.stringify(language));
-    localStorage.setItem('wg_layouts_v7', JSON.stringify(layouts));
-    localStorage.setItem('wg_show_session_timer', JSON.stringify(showSessionTimer));
-    localStorage.setItem('wg_custom_bg_url', JSON.stringify(customBgUrl));
-    localStorage.setItem('wg_last_activity', lastActivity.toString());
-  }, [matches, players, pilotRegistry, favorites, pilotNotes, appearanceMode, colorTheme, colorblindMode, disableAnimations, language, layouts, showSessionTimer, customBgUrl, lastActivity]);
-
   const handleRegisterUser = (name: string) => {
     if (!name.trim()) return;
-    if (!players.includes(name)) setPlayers(prev => [...prev, name]);
+    if (!players.includes(name)) addPlayer(name);
     setActiveUser(name); setShowWelcome(false);
   };
 
@@ -308,21 +251,40 @@ const App: React.FC = () => {
       if (!activeUser) return;
       if (!window.confirm(`Delete profile "${activeUser}"? Matches will be preserved.`)) return;
       const newPlayers = players.filter(p => p !== activeUser);
-      setPlayers(newPlayers);
+      deletePlayer(activeUser);
       setActiveUser(newPlayers.length > 0 ? newPlayers[0] : '');
       if(newPlayers.length === 0) setShowWelcome(true);
   };
 
   const handleReset = (backup: boolean) => {
-      isResetting.current = true;
       if (backup) exportToJSON({matches, players, pilotRegistry});
       setTimeout(() => { localStorage.clear(); window.location.reload(); }, 500);
   };
 
+  const defaultLayouts = {
+      lg: [
+          { i: 'squadron', x: 0, y: 0, w: 6, h: 9 },
+          { i: 'roster', x: 6, y: 0, w: 6, h: 9 },
+          { i: 'actions', x: 0, y: 9, w: 12, h: 6 },
+          { i: 'mission', x: 0, y: 15, w: 12, h: 12 },
+          { i: 'analytics', x: 0, y: 27, w: 12, h: 16 },
+          { i: 'history', x: 0, y: 43, w: 12, h: 23 }
+      ]
+  };
+
+  const currentLayouts = (layouts && layouts.lg && layouts.lg.length > 0) ? layouts : defaultLayouts;
+  
+  const finalLayouts = {
+      lg: (currentLayouts.lg || defaultLayouts.lg).map((l: any) => ({ ...l, static: !isRearranging })),
+      md: (currentLayouts.md || currentLayouts.lg || defaultLayouts.lg).map((l: any) => ({ ...l, static: !isRearranging })),
+      sm: (currentLayouts.sm || currentLayouts.lg || defaultLayouts.lg).map((l: any) => ({ ...l, static: !isRearranging })),
+      xs: (currentLayouts.xs || currentLayouts.lg || defaultLayouts.lg).map((l: any) => ({ ...l, static: !isRearranging })),
+      xxs: (currentLayouts.xxs || currentLayouts.lg || defaultLayouts.lg).map((l: any) => ({ ...l, static: !isRearranging }))
+  };
+
   const handleResetLayout = () => {
       if(window.confirm("Reset dashboard layout to default?")) {
-          localStorage.removeItem('wg_layouts_v7');
-          window.location.reload();
+          setLayouts(defaultLayouts);
       }
   };
 
@@ -348,8 +310,7 @@ const App: React.FC = () => {
       try {
           const match = parseShareCode(code);
           if (match) {
-              setMatches(prev => [match as Match, ...prev]);
-              setLastActivity(Date.now());
+              addMatch(match as Match);
               alert("Match imported successfully!");
           }
       } catch (e) {
@@ -362,28 +323,24 @@ const App: React.FC = () => {
       setShowWizard(result);
   };
 
-  const handleToggleFavorite = (name: string) => setFavorites(prev => prev.includes(name) ? prev.filter(f => f !== name) : [...prev, name]);
-  const handleUpdateNote = (name: string, note: string) => setPilotNotes(prev => ({ ...prev, [name]: note }));
+  const handleToggleFavorite = (name: string) => toggleFavorite(name);
+  const handleUpdateNote = (name: string, note: string) => updatePilotNote(name, note);
   const handleDeletePilot = (name: string) => {
     if (!window.confirm(`Delete pilot profile "${name}"? This cannot be undone.`)) return;
-    setPilotRegistry(prev => prev.filter(p => p !== name));
-    setFavorites(prev => prev.filter(f => f !== name));
-    setPilotNotes(prev => { const n = {...prev}; delete n[name]; return n; });
+    removeFromRegistry(name);
+    if(favorites.includes(name)) toggleFavorite(name);
   };
 
   const handleRenamePilot = (oldName: string, newName: string) => {
       if (!newName.trim() || pilotRegistry.includes(newName)) return;
-      setPilotRegistry(prev => prev.map(p => p === oldName ? newName : p));
-      setFavorites(prev => prev.map(f => f === oldName ? newName : f));
-      setPilotNotes(prev => { const n = {...prev}; if(n[oldName]) { n[newName] = n[oldName]; delete n[oldName]; } return n; });
-      setMatches(prev => prev.map(m => ({ ...m, player: m.player === oldName ? newName : m.player, teammates: m.teammates.map(t => t === oldName ? newName : t), opponents: m.opponents.map(o => o === oldName ? newName : o)})));
+      renamePilot(oldName, newName);
       if (activeUser === oldName) setActiveUser(newName);
   };
 
   const processFinalSubmission = (subType: string) => {
       if(!pendingMatchData) return;
       let finalMods = [...(pendingMatchData.selectedReachModifiers||[])];
-      if(showWizard === 'Win' && subType === 'Artifact') finalMods.push(`Artifact: ${pendingArtifactType || 'Healing'}`);
+      if(subType === 'Artifact') finalMods.push(`Artifact: ${pendingArtifactType || 'Healing'}`);
       if(showWizard === 'Win') confetti({ particleCount: 100, spread: 70 });
       
       const newMatch: Match = {
@@ -397,8 +354,7 @@ const App: React.FC = () => {
           poiEasy: pendingMatchData.poiEasy, poiMedium: pendingMatchData.poiMedium, poiEpic: pendingMatchData.poiEpic,
           notes: pendingMatchData.notes
       };
-      setMatches(prev => [newMatch, ...prev]);
-      setLastActivity(Date.now());
+      addMatch(newMatch);
       setShowWizard(null); setPendingMatchData(null); setPendingPlacement(null);
   };
   
@@ -434,13 +390,14 @@ const App: React.FC = () => {
                          </> : isDefeat ? <>
                             <button onClick={() => setPendingSubType('Eliminated')} className={`flex-1 p-4 rounded-2xl font-bold ${pendingSubType === 'Eliminated' ? 'bg-md-sys-error-container text-md-sys-on-error-container' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3'}`}>Eliminated</button>
                             <button onClick={() => setPendingSubType('Surrender')} className={`flex-1 p-4 rounded-2xl font-bold ${pendingSubType === 'Surrender' ? 'bg-md-sys-error-container text-md-sys-on-error-container' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3'}`}>Surrender</button>
+                            <button onClick={() => setPendingSubType('Artifact')} className={`flex-1 p-4 rounded-2xl font-bold ${pendingSubType === 'Artifact' ? 'bg-md-sys-error-container text-md-sys-on-error-container' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3'}`}>Artifact</button>
                          </> : <>
                             <button onClick={() => setPendingSubType('Mutual Elimination')} className={`flex-1 p-4 rounded-2xl font-bold ${pendingSubType === 'Mutual Elimination' ? 'bg-slate-600 text-white' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3'}`}>Mutual Elimination</button>
                             <button onClick={() => setPendingSubType('Time Expired')} className={`flex-1 p-4 rounded-2xl font-bold ${pendingSubType === 'Time Expired' ? 'bg-slate-600 text-white' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3'}`}>Time Expired</button>
                          </>}
                      </div>
 
-                     {showWizard === 'Win' && pendingSubType === 'Artifact' && (
+                     {pendingSubType === 'Artifact' && (
                         <div className="bg-md-sys-surface2 p-4 rounded-[24px] animate-fade-in">
                             <label className="text-xs font-bold uppercase opacity-60 mb-2 block">Artifact Type</label>
                             <div className="flex gap-2">
@@ -469,13 +426,13 @@ const App: React.FC = () => {
                          <div className="bg-md-sys-surface2 p-4 rounded-[24px] md:row-span-2 md:col-start-3">
                              <label className="text-[10px] font-black uppercase opacity-60 mb-2 block">Eliminations</label>
                              <div className="space-y-1">
-                                 {SHIPS.map(ship => (
-                                     <div key={ship} className="flex justify-between items-center bg-md-sys-surface1 p-1.5 rounded-xl">
-                                         <span className="text-[9px] font-bold opacity-70 truncate max-w-[80px] ml-2">{ship.split('(')[0]}</span>
+                                 {[...SHIPS, "AI Legion"].map(ship => (
+                                     <div key={ship} className={`flex justify-between items-center p-1.5 rounded-xl ${ship === 'AI Legion' ? 'bg-purple-500/20 border border-purple-500/40 shadow-[0_0_10px_rgba(168,85,247,0.1)]' : 'bg-md-sys-surface1'}`}>
+                                         <span className={`text-[9px] font-bold truncate max-w-[80px] ml-2 ${ship === 'AI Legion' ? 'text-purple-300' : 'opacity-70'}`}>{ship.split('(')[0]}</span>
                                          <div className="flex gap-1 items-center">
-                                             <button onClick={() => setPendingMatchData((p:any) => ({...p, kills: {...p.kills, [ship]: Math.max(0, (p.kills?.[ship]||0)-1)}}))} className="w-6 h-6 bg-md-sys-surface3 rounded">-</button>
-                                             <span className="font-black w-5 text-center text-sm">{pendingMatchData.kills?.[ship] || 0}</span>
-                                             <button onClick={() => setPendingMatchData((p:any) => ({...p, kills: {...p.kills, [ship]: (p.kills?.[ship]||0)+1}}))} className="w-6 h-6 bg-md-sys-primary text-md-sys-onPrimary rounded">+</button>
+                                             <button onClick={() => setPendingMatchData((p:any) => ({...p, kills: {...p.kills, [ship]: Math.max(0, (p.kills?.[ship]||0)-1)}}))} className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${ship === 'AI Legion' ? 'bg-purple-500/30 hover:bg-purple-500/50 text-purple-200' : 'bg-md-sys-surface3'}`}>-</button>
+                                             <span className={`font-black w-5 text-center text-sm ${ship === 'AI Legion' ? 'text-purple-200' : ''}`}>{pendingMatchData.kills?.[ship] || 0}</span>
+                                             <button onClick={() => setPendingMatchData((p:any) => ({...p, kills: {...p.kills, [ship]: (p.kills?.[ship]||0)+1}}))} className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${ship === 'AI Legion' ? 'bg-purple-500 text-white hover:brightness-110 shadow-lg shadow-purple-500/20' : 'bg-md-sys-primary text-md-sys-onPrimary'}`}>+</button>
                                          </div>
                                      </div>
                                  ))}
@@ -508,8 +465,8 @@ const App: React.FC = () => {
   const handleDevMock = () => {
     // Generate random players
     const mockPlayers = Array.from({length: 5}, (_, i) => `Mock Pilot ${Math.floor(Math.random()*1000)}`);
-    // setPlayers(prev => [...new Set([...prev, ...mockPlayers])]); // Keep profile list clean
-    setPilotRegistry(prev => [...new Set([...prev, ...mockPlayers])]);
+    // setPlayers([...new Set([...players, ...mockPlayers])]); // Keep profile list clean
+    setPilotRegistry([...new Set([...pilotRegistry, ...mockPlayers])]);
     
     // Generate 10-25 random matches
     const matchCount = Math.floor(Math.random() * 16) + 10;
@@ -548,8 +505,70 @@ const App: React.FC = () => {
             time
         });
     }
-    setMatches(prev => [...newMatches, ...prev]);
+    setMatches([...newMatches, ...matches]);
     alert(`Generated ${matchCount} matches and ${mockPlayers.length} mock players.`);
+  };
+
+  const renderDrillDown = () => {
+    if (!drillDownTarget) return null;
+    
+    // Filter matches based on target
+    const targetMatches = matches.filter(m => {
+        if (m.mode !== activeMode) return false;
+        
+        if (drillDownTarget.type === 'Teammate') return (m.teammates || []).includes(drillDownTarget.name);
+        if (drillDownTarget.type === 'Opponent') return (m.opponents || []).includes(drillDownTarget.name);
+        if (drillDownTarget.type === 'Ship') return (m.ship || '').includes(drillDownTarget.name);
+        if (drillDownTarget.type === 'Hero') return (m.hero || '') === drillDownTarget.name;
+        if (drillDownTarget.type === 'Artifact') return m.subType === 'Artifact' && (m.reachModifiers || []).some(r => r.includes(drillDownTarget.name));
+        
+        return true; // For KPIs that use all matches
+    }).sort((a, b) => a.timestamp - b.timestamp);
+
+    const trendData = targetMatches.map((m, i) => ({
+        idx: i + 1,
+        rollingWinRate: Math.round((targetMatches.slice(0, i + 1).filter(x => x.result === 'Win').length / (i + 1)) * 100)
+    }));
+    
+    // Calculate simple stats
+    const totalWins = targetMatches.filter(m => m.result === 'Win').length;
+    const wr = targetMatches.length > 0 ? Math.round((totalWins / targetMatches.length) * 100) : 0;
+
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-6 animate-fade-in" onClick={() => setDrillDownTarget(null)}>
+          <div className="bg-md-sys-surface1 w-full max-w-5xl rounded-[40px] p-10 shadow-2xl border border-md-sys-outline/20" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-start mb-10">
+                  <div>
+                      <div className="text-sm font-black uppercase opacity-40 tracking-[0.2em] mb-1">Deep Dive Analysis • {drillDownTarget.type}</div>
+                      <h2 className="text-5xl font-black">{drillDownTarget.name}</h2>
+                      <div className="flex gap-4 mt-4">
+                          <div className="bg-md-sys-surface2 px-4 py-2 rounded-xl text-xs font-black uppercase"><span className="opacity-60">Matches:</span> {targetMatches.length}</div>
+                          <div className="bg-md-sys-surface2 px-4 py-2 rounded-xl text-xs font-black uppercase"><span className="opacity-60">Win Rate:</span> <span className={wr >= 50 ? 'text-green-500' : 'text-red-500'}>{wr}%</span></div>
+                      </div>
+                  </div>
+                  <button onClick={() => setDrillDownTarget(null)} className="p-4 bg-md-sys-surface2 rounded-full hover:bg-md-sys-surface3"><X size={24}/></button>
+              </div>
+              
+              {targetMatches.length < 2 ? (
+                  <div className="h-80 w-full bg-md-sys-surface2 rounded-[32px] flex items-center justify-center opacity-40 font-bold uppercase tracking-widest">Not enough data for trend analysis</div>
+              ) : (
+                  <div className="h-80 w-full bg-md-sys-surface2 rounded-[32px] p-6 border border-md-sys-outline/5 shadow-inner">
+                      <h4 className="text-xs font-black uppercase tracking-widest mb-6 opacity-60">Rolling Win Rate Over Time</h4>
+                      <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={trendData}>
+                              <defs><linearGradient id="colorWin" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={wr >= 50 ? "#22c55e" : "#ef4444"} stopOpacity={0.3}/><stop offset="95%" stopColor={wr >= 50 ? "#22c55e" : "#ef4444"} stopOpacity={0}/></linearGradient></defs>
+                              <CartesianGrid strokeOpacity={0.05} vertical={false}/>
+                              <XAxis dataKey="idx" tick={{fontSize: 12}} label={{ value: 'Matches', position: 'insideBottom', offset: -5 }}/>
+                              <YAxis tick={{fontSize: 12}} label={{ value: 'Win Rate %', angle: -90, position: 'insideLeft' }} domain={[0, 100]}/>
+                              <Tooltip contentStyle={{backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '16px', border: 'none'}}/>
+                              <Area type="monotone" dataKey="rollingWinRate" name="Win Rate" stroke={wr >= 50 ? "#22c55e" : "#ef4444"} strokeWidth={4} fillOpacity={1} fill="url(#colorWin)" />
+                          </AreaChart>
+                      </ResponsiveContainer>
+                  </div>
+              )}
+          </div>
+      </div>
+    );
   };
 
   return (
@@ -597,7 +616,10 @@ const App: React.FC = () => {
                 </div>
             </div>
       )}
-      <div className={`w-full max-w-[1800px] flex flex-col gap-6 transition-opacity duration-500 ${isLayoutReady ? 'opacity-100' : 'opacity-0'}`}>
+      
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+      <div className={`w-full max-w-[1800px] flex flex-col gap-3 transition-opacity duration-500 ${isLayoutReady ? 'opacity-100' : 'opacity-0'}`}>
         <header className="md-card flex flex-col md:flex-row justify-between items-center gap-4 bg-md-sys-surface1 p-6 rounded-[32px] shadow-lg">
           <div className="flex items-baseline gap-3">
             <h1 className="text-3xl font-black tracking-tighter select-none">WILDGATE STAT TRACKER</h1>
@@ -605,13 +627,12 @@ const App: React.FC = () => {
             {devMode && <span className="text-xs font-black bg-red-500 text-white px-2 py-1 rounded">DEV MODE</span>}
           </div>
           
-          {showSessionTimer && <SessionTimer startTime={sessionStartTime} matches={matches} lastActivity={lastActivity} onRefreshActivity={() => setLastActivity(Date.now())} />}
-
           <div className="flex flex-col md:flex-row items-center gap-4">
              <div className="flex items-center gap-2 bg-md-sys-surface2 px-6 py-3 rounded-full border-md-sys-outline/10 shadow-inner">
                 <User size={20} className="text-md-sys-primary"/>
                 <select value={activeUser} onChange={(e) => setActiveUser(e.target.value)} className="bg-transparent font-bold outline-none cursor-pointer text-base" title="Select Active Prospector">{players.map(p => <option key={p} value={p}>{p}</option>)}</select>
                 <button onClick={() => { const n = prompt("New profile:"); if(n) handleRegisterUser(n); }} className="p-2 hover:bg-md-sys-surface3 rounded-full" title="Create New Profile"><PlusCircle size={20} className="text-md-sys-primary hover:scale-110" /></button>
+                <button onClick={() => { if(!activeUser) return; const n = prompt("Rename profile:", activeUser); if(n && n !== activeUser) handleRenamePilot(activeUser, n); }} className="p-2 hover:bg-md-sys-surface3 rounded-full transition-colors" title="Rename Profile" disabled={!activeUser}><Edit size={20} className="text-md-sys-primary hover:scale-110" /></button>
                 <button onClick={handleDeleteProfile} className="p-2 hover:bg-red-500/20 hover:text-red-500 rounded-full transition-colors" title="Delete Profile" disabled={!activeUser}><MinusCircle size={20} /></button>
              </div>
              <div className="bg-md-sys-surface2 p-1 rounded-full flex gap-1 border-md-sys-outline/5 shadow-inner">
@@ -632,21 +653,15 @@ const App: React.FC = () => {
 
         <ResponsiveGridLayout 
             className="layout" 
-            layouts={{
-                lg: layouts.lg.map(l => ({ ...l, static: !isRearranging })),
-                md: (layouts.md || layouts.lg).map(l => ({ ...l, static: !isRearranging })),
-                sm: (layouts.sm || layouts.lg).map(l => ({ ...l, static: !isRearranging })),
-                xs: (layouts.xs || layouts.lg).map(l => ({ ...l, static: !isRearranging })),
-                xxs: (layouts.xxs || layouts.lg).map(l => ({ ...l, static: !isRearranging }))
-            }}
+            layouts={finalLayouts}
             breakpoints={{lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0}}
             cols={{lg: 12, md: 10, sm: 6, xs: 4, xxs: 2}}
             rowHeight={30}
-            margin={[24, 24]}
-            onLayoutChange={(layout, layouts) => {
+            margin={[16, 16]}
+            onLayoutChange={(layout: any, layouts: any) => {
                 if (isRearranging) {
                     setLayouts(layouts);
-                    localStorage.setItem('wg_layouts_v7', JSON.stringify(layouts));
+                    localStorage.setItem('wg_layouts_v11', JSON.stringify(layouts));
                 }
             }}
             isDraggable={isRearranging}
@@ -655,49 +670,92 @@ const App: React.FC = () => {
         >
             <div key="squadron">
                 {isRearranging && <div className="grid-drag-handle absolute top-2 right-2 p-2 bg-white/20 rounded-full cursor-move z-50 hover:bg-white/40"><Grip size={16}/></div>}
-                <SquadronPanel activeShip={activeShip} setActiveShip={setActiveShip} activeHero={activeHero} setActiveHero={setActiveHero} />
+                <ErrorBoundary>
+                    <SquadronPanel 
+                        activeShip={activeShip} 
+                        setActiveShip={setActiveShip} 
+                        activeHero={activeHero} 
+                        setActiveHero={setActiveHero} 
+                    />
+                </ErrorBoundary>
             </div>
             <div key="roster">
                 {isRearranging && <div className="grid-drag-handle absolute top-2 right-2 p-2 bg-white/20 rounded-full cursor-move z-50 hover:bg-white/40"><Grip size={16}/></div>}
-                <RosterPanel 
-                    pilotRegistry={pilotRegistry} favorites={favorites} pilotNotes={pilotNotes} 
-                    selectedTeammates={selectedTeammates} toggleTeammate={toggleTeammate}
-                    selectedOpponents={selectedOpponents} toggleOpponent={toggleOpponent}
-                    onAddPilot={(n:string) => setPilotRegistry(p=>[...p,n])}
-                    onToggleFavorite={handleToggleFavorite} onUpdateNote={handleUpdateNote} 
-                    onDeletePilot={handleDeletePilot} onRenamePilot={handleRenamePilot}
-                />
+                <ErrorBoundary>
+                    <RosterPanel 
+                        pilotRegistry={pilotRegistry} favorites={favorites} pilotNotes={pilotNotes} 
+                        selectedTeammates={selectedTeammates} toggleTeammate={toggleTeammate}
+                        selectedOpponents={selectedOpponents} toggleOpponent={toggleOpponent}
+                        onAddPilot={(n:string) => setPilotRegistry([...pilotRegistry, n])}
+                        onToggleFavorite={handleToggleFavorite} onUpdateNote={handleUpdateNote} 
+                        onDeletePilot={handleDeletePilot} onRenamePilot={handleRenamePilot}
+                        onDrillDown={(name, type) => setDrillDownTarget({name, type})}
+                    />
+                </ErrorBoundary>
             </div>
             <div key="mission">
                 {isRearranging && <div className="grid-drag-handle absolute top-2 right-2 p-2 bg-white/20 rounded-full cursor-move z-50 hover:bg-white/40"><Grip size={16}/></div>}
-                <MissionPanel 
-                    inputMode={inputMode} setInputMode={setInputMode} 
-                    timeMin={timeMin} setTimeMin={setTimeMin} timeSec={timeSec} setTimeSec={setTimeSec} 
-                    damageTaken={damageTaken} setDamageTaken={setDamageTaken} 
-                    poiEasy={poiEasy} setPoiEasy={setPoiEasy} poiMedium={poiMedium} setPoiMedium={setPoiMedium} poiEpic={poiEpic} setPoiEpic={setPoiEpic}
-                    selectedReachModifiers={selectedReachModifiers} toggleReachModifier={toggleReachModifier}
-                    showArtifactSelect={showArtifactSelect} setShowArtifactSelect={setShowArtifactSelect}
-                    currentNote={currentNote} setCurrentNote={setCurrentNote}
-                />
+                <ErrorBoundary>
+                    <MissionPanel 
+                        inputMode={inputMode} setInputMode={setInputMode} 
+                        timeMin={timeMin} setTimeMin={setTimeMin} timeSec={timeSec} setTimeSec={setTimeSec} 
+                        damageTaken={damageTaken} setDamageTaken={setDamageTaken} 
+                        poiEasy={poiEasy} setPoiEasy={setPoiEasy} poiMedium={poiMedium} setPoiMedium={setPoiMedium} poiEpic={poiEpic} setPoiEpic={setPoiEpic}
+                        selectedReachModifiers={selectedReachModifiers} toggleReachModifier={toggleReachModifier}
+                        showArtifactSelect={showArtifactSelect} setShowArtifactSelect={setShowArtifactSelect}
+                        currentNote={currentNote} setCurrentNote={setCurrentNote}
+                        kills={kills} setKills={setKills}
+                        weapons={activeWeapons} setWeapons={setActiveWeapons}
+                    />
+                </ErrorBoundary>
             </div>
             <div key="actions">
                 {isRearranging && <div className="grid-drag-handle absolute top-2 right-2 p-2 bg-white/20 rounded-full cursor-move z-50 hover:bg-white/40"><Grip size={16}/></div>}
-                <ActionPanel inputMode={inputMode} setInputMode={setInputMode} initiateSubmission={initiateSubmission} />
+                <ErrorBoundary>
+                    <ActionPanel 
+                        inputMode={inputMode} 
+                        setInputMode={setInputMode} 
+                        initiateSubmission={initiateSubmission}
+                        showSessionTimer={showSessionTimer}
+                        sessionStartTime={sessionStartTime}
+                        matches={matches}
+                        lastActivity={lastActivity}
+                        onRefreshActivity={() => setLastActivity(Date.now())}
+                        matchStartTime={matchStartTime}
+                        isMatchInProgress={isMatchInProgress}
+                        onStartMatch={() => { setMatchStartTime(Date.now()); setIsMatchInProgress(true); }}
+                        onResetMatch={() => { setMatchStartTime(null); setIsMatchInProgress(false); }}
+                    />
+                </ErrorBoundary>
             </div>
             
-            <div key="analytics" className="bg-md-sys-surface1 rounded-[32px] p-4 shadow-lg overflow-hidden flex flex-col">
+            <div key="analytics">
                 {isRearranging && <div className="grid-drag-handle absolute top-2 right-2 p-2 bg-white/20 rounded-full cursor-move z-50 hover:bg-white/40"><Grip size={16}/></div>}
-                <AnalyticsPanel matches={matches} currentMode={activeMode} language={language} />
+                <ErrorBoundary>
+                    <AnalyticsPanel 
+                        matches={matches} 
+                        currentMode={activeMode} 
+                        language={language} 
+                        currentUser={activeUser}
+                        onDrillDown={(name, type) => setDrillDownTarget({name, type})}
+                    />
+                </ErrorBoundary>
             </div>
             <div key="history" className="bg-md-sys-surface1 rounded-[32px] p-4 shadow-lg overflow-hidden flex flex-col">
                 {isRearranging && <div className="grid-drag-handle absolute top-2 right-2 p-2 bg-white/20 rounded-full cursor-move z-50 hover:bg-white/40"><Grip size={16}/></div>}
-                <HistoryTable 
-                    matches={matches.filter(m => m.mode === activeMode)} 
-                    onDelete={(id) => setMatches(prev => prev.filter(m => m.id !== id))} 
-                    onEdit={(updatedMatch) => setMatches(prev => prev.map(m => m.id === updatedMatch.id ? updatedMatch : m))} 
-                    onPin={(id) => setMatches(prev => prev.map(m => m.id === id ? { ...m, isPinned: !m.isPinned } : m))} 
-                    language={language} 
-                />
+                <ErrorBoundary>
+                    <HistoryTable 
+                        matches={matches.filter(m => m.mode === activeMode)} 
+                        onDelete={(id) => deleteMatch(id)} 
+                        onEdit={(updatedMatch) => updateMatch(updatedMatch)} 
+                        onPin={(id) => {
+                            const m = matches.find(m => m.id === id);
+                            if(m) updateMatch({ ...m, isPinned: !m.isPinned });
+                        }} 
+                        language={language} 
+                        onDrillDown={(name, type) => setDrillDownTarget({name, type})}
+                    />
+                </ErrorBoundary>
             </div>
         </ResponsiveGridLayout>
 
@@ -724,6 +782,7 @@ const App: React.FC = () => {
             </div>
         )}
 
+        {renderDrillDown()}
         {renderWizard()}
         {showTutorial && <Tutorial onComplete={() => setShowTutorial(false)} onSkip={() => setShowTutorial(false)} />}
         
@@ -736,10 +795,17 @@ const App: React.FC = () => {
                         <div>
                             <label className="text-xs font-bold uppercase opacity-80 mb-3 block">Theme Accent</label>
                             <div className="grid grid-cols-4 gap-3 mb-4">
-                                {['ocean', 'emerald', 'crimson', 'amber', 'amethyst', 'cyan'].map(th => (
-                                    <button key={th} onClick={() => setColorTheme(th)} className={`h-12 rounded-xl border-2 uppercase text-[10px] font-black ${colorTheme === th ? 'bg-md-sys-primary-container border-md-sys-primary text-md-sys-onPrimaryContainer' : 'bg-md-sys-surface2 border-transparent hover:bg-md-sys-surface3'}`}>{th}</button>
+                                {[
+                                    { id: 'ocean', c: '#0ea5e9' }, { id: 'emerald', c: '#10b981' }, 
+                                    { id: 'crimson', c: '#ef4444' }, { id: 'amber', c: '#f59e0b' }, 
+                                    { id: 'amethyst', c: '#a855f7' }, { id: 'cyan', c: '#06b6d4' }
+                                ].map(th => (
+                                    <button key={th.id} onClick={() => setColorTheme(th.id)} className={`h-12 rounded-xl border-2 relative overflow-hidden transition-all hover:scale-105 ${colorTheme === th.id ? 'border-white shadow-lg' : 'border-transparent opacity-80 hover:opacity-100'}`} style={{backgroundColor: th.c}}>
+                                        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent"></div>
+                                        {colorTheme === th.id && <div className="absolute inset-0 flex items-center justify-center"><div className="w-2 h-2 bg-white rounded-full shadow-sm"></div></div>}
+                                    </button>
                                 ))} 
-                                <button onClick={() => setColorTheme('custom')} className={`h-12 rounded-xl border-2 uppercase text-[10px] font-black ${colorTheme === 'custom' ? 'bg-md-sys-primary-container border-md-sys-primary text-md-sys-onPrimaryContainer' : 'bg-md-sys-surface2 border-transparent hover:bg-md-sys-surface3'}`}>Custom</button>
+                                <button onClick={() => setColorTheme('custom')} className={`h-12 rounded-xl border-2 uppercase text-[10px] font-black flex items-center justify-center ${colorTheme === 'custom' ? 'bg-md-sys-primary-container border-md-sys-primary text-md-sys-onPrimaryContainer' : 'bg-md-sys-surface2 border-transparent hover:bg-md-sys-surface3'}`}>Custom</button>
                             </div>
                             {colorTheme === 'custom' && (
                                 <div className="bg-md-sys-surface2 p-4 rounded-2xl flex items-center gap-4">
@@ -784,10 +850,11 @@ const App: React.FC = () => {
                     <div className="space-y-6">
                         <h3 className="text-sm font-black uppercase opacity-60 flex items-center gap-2 border-b border-md-sys-outline/10 pb-2"><FileJson size={16}/> Data Management</h3>
                         <div className="grid grid-cols-2 gap-4">
+                            <button onClick={handleBackupDB} className="flex flex-col items-center justify-center gap-2 p-6 bg-md-sys-surface2 rounded-2xl hover:bg-md-sys-surface3 font-bold text-xs"><Save size={24}/> Backup Database</button>
                             <button onClick={() => exportToCSV(matches)} className="flex flex-col items-center justify-center gap-2 p-6 bg-md-sys-surface2 rounded-2xl hover:bg-md-sys-surface3 font-bold text-xs"><Download size={24}/> Export CSV</button>
-                            <button onClick={() => exportToJSON({matches, players, pilotRegistry})} className="flex flex-col items-center justify-center gap-2 p-6 bg-md-sys-surface2 rounded-2xl hover:bg-md-sys-surface3 font-bold text-xs"><FileJson size={24}/> Backup JSON</button>
+                            <button onClick={() => exportToJSON({matches, players, pilotRegistry})} className="flex flex-col items-center justify-center gap-2 p-6 bg-md-sys-surface2 rounded-2xl hover:bg-md-sys-surface3 font-bold text-xs"><FileJson size={24}/> Export JSON</button>
                             <label className="flex flex-col items-center justify-center gap-2 p-6 bg-md-sys-surface2 rounded-2xl hover:bg-md-sys-surface3 font-bold text-xs cursor-pointer"><Upload size={24}/> Restore JSON <input type="file" hidden onChange={handleImport}/></label>
-                            <button onClick={() => setShowResetConfirm(true)} className="flex flex-col items-center justify-center gap-2 p-6 bg-md-sys-error-container text-md-sys-on-error-container rounded-2xl hover:brightness-110 font-bold text-xs"><RefreshCw size={24}/> Reset Data</button>
+                            <button onClick={() => setShowResetConfirm(true)} className="flex flex-col items-center justify-center gap-2 p-6 bg-md-sys-error-container text-md-sys-on-error-container rounded-2xl hover:brightness-110 font-bold text-xs col-span-2"><RefreshCw size={24}/> Reset All Data</button>
                         </div>
                         <div className="bg-md-sys-surface2 p-5 rounded-2xl">
                             <label className="text-xs font-bold uppercase opacity-80 mb-3 block">Import Match Code</label>

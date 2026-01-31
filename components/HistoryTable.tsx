@@ -1,9 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Match, Language } from '../types';
+import { Match, Language, DrillDownTarget } from '../types';
 import { TRANSLATIONS } from '../utils/translations';
-import { Trash2, Edit2, Pin, ChevronDown, ChevronUp, Clock, Image as ImageIcon, Download, ArrowUpDown, Users, Swords, X, FileText, Share2, Save } from 'lucide-react';
+import { Trash2, Edit2, Pin, ChevronDown, ChevronUp, Clock, Image as ImageIcon, Download, ArrowUpDown, Users, Swords, X, FileText, Share2, Save, Ghost } from 'lucide-react';
 import html2canvas from 'html2canvas';
+
+import { EditMatchModal } from './EditMatchModal';
 
 interface HistoryTableProps {
   matches: Match[];
@@ -11,6 +13,7 @@ interface HistoryTableProps {
   onEdit: (match: Match) => void;
   onPin: (id: number) => void;
   language: Language;
+  onDrillDown?: (name: string, type: DrillDownTarget['type']) => void;
 }
 
 const timeAgo = (timestamp: number): string => {
@@ -30,7 +33,7 @@ const timeAgo = (timestamp: number): string => {
     return Math.floor(seconds) + "s ago";
 };
 
-const HistoryTable: React.FC<HistoryTableProps> = ({ matches, onDelete, onEdit, onPin, language }) => {
+const HistoryTable: React.FC<HistoryTableProps> = ({ matches, onDelete, onEdit, onPin, language, onDrillDown }) => {
   const t = TRANSLATIONS[language];
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<keyof Match | 'timeAgo'>('timestamp');
@@ -41,6 +44,7 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ matches, onDelete, onEdit, 
 
   const [selectedMatchForDetails, setSelectedMatchForDetails] = useState<Match | null>(null);
   const [editingNoteMatch, setEditingNoteMatch] = useState<Match | null>(null);
+  const [editingMatch, setEditingMatch] = useState<Match | null>(null);
   const [noteText, setNoteText] = useState("");
 
   useEffect(() => setCurrentPage(1), [searchTerm, itemsPerPage]);
@@ -252,7 +256,15 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ matches, onDelete, onEdit, 
             </thead>
             <tbody className="text-sm font-bold text-md-sys-on-surface">
               {sortedMatches.length === 0 ? (
-                <tr><td colSpan={8} className="p-8 text-center opacity-40 uppercase tracking-widest">No matching records found.</td></tr>
+                <tr>
+                    <td colSpan={8}>
+                        <div className="flex flex-col items-center justify-center py-20 opacity-40">
+                            <Ghost size={64} className="mb-4 text-md-sys-primary animate-pulse"/>
+                            <h3 className="text-xl font-black uppercase tracking-widest">No Flight Logs Found</h3>
+                            <p className="text-xs font-bold mt-2">Start your engines, Commander.</p>
+                        </div>
+                    </td>
+                </tr>
               ) : (
                 paginatedMatches.map(m => {
                   const isWin = m.result === 'Win';
@@ -279,13 +291,22 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ matches, onDelete, onEdit, 
                     </td>
                     <td className="p-4 font-mono opacity-80">{m.time || '--:--'}</td>
                     <td className="p-4 text-xs max-w-[150px] truncate">
-                        {(m.teammates && m.teammates.length > 0) ? m.teammates.join(', ') : <span className="opacity-40 italic">None</span>}
+                        {(m.teammates && m.teammates.length > 0) ? m.teammates.map((t, i) => (
+                            <span key={i} onClick={(e) => { e.stopPropagation(); onDrillDown?.(t, 'Teammate'); }} className="hover:underline hover:text-blue-400 cursor-pointer">
+                                {t}{i < m.teammates.length - 1 ? ', ' : ''}
+                            </span>
+                        )) : <span className="opacity-40 italic">None</span>}
                     </td>
                     <td className="p-4 text-xs max-w-[150px] truncate">
-                        {(m.opponents && m.opponents.length > 0) ? m.opponents.join(', ') : <span className="opacity-40 italic">None</span>}
+                        {(m.opponents && m.opponents.length > 0) ? m.opponents.map((o, i) => (
+                            <span key={i} onClick={(e) => { e.stopPropagation(); onDrillDown?.(o, 'Opponent'); }} className="hover:underline hover:text-red-400 cursor-pointer">
+                                {o}{i < m.opponents.length - 1 ? ', ' : ''}
+                            </span>
+                        )) : <span className="opacity-40 italic">None</span>}
                     </td>
                     <td className="p-4 text-right">
                         <div className="flex justify-end items-center gap-1" onClick={e => e.stopPropagation()}>
+                            <button onClick={() => setEditingMatch(m)} className="p-2 rounded-lg transition-all opacity-30 group-hover:opacity-100 hover:bg-md-sys-surface3 text-md-sys-on-surface/40" title="Edit"><Edit2 size={14}/></button>
                             <button onClick={() => handleOpenNote(m)} className={`p-2 rounded-lg transition-all opacity-30 group-hover:opacity-100 ${m.notes ? 'text-md-sys-primary !opacity-100' : 'hover:bg-md-sys-surface3 text-md-sys-on-surface/40'}`} title="Notes"><FileText size={14} className={m.notes ? 'fill-current' : ''}/></button>
                             <button onClick={() => handleDelete(m.id)} className="p-2 rounded-lg transition-all opacity-30 group-hover:opacity-100 hover:bg-md-sys-error-container hover:text-md-sys-on-error-container text-md-sys-on-surface/40" title="Delete"><Trash2 size={14}/></button>
                             <button onClick={() => onPin(m.id)} className={`p-2 rounded-lg transition-all opacity-30 group-hover:opacity-100 ${m.isPinned ? 'bg-yellow-500 text-black !opacity-100' : 'hover:bg-md-sys-surface3 text-md-sys-on-surface/40'}`} title="Pin"><Pin size={14} className={m.isPinned ? 'fill-black' : ''}/></button>
@@ -306,6 +327,8 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ matches, onDelete, onEdit, 
           </table>
         </div>
       </div>
+
+      {editingMatch && <EditMatchModal match={editingMatch} onClose={() => setEditingMatch(null)} onSave={(m) => { onEdit(m); setEditingMatch(null); }} />}
 
       {editingNoteMatch && createPortal(
           <div className="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setEditingNoteMatch(null)}>
@@ -356,7 +379,16 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ matches, onDelete, onEdit, 
                       <div className="bg-md-sys-surface2 p-4 rounded-3xl">
                           <div className="text-[10px] font-black uppercase opacity-60 mb-2">Pilot Loadout</div>
                           <div className="text-xl font-black mb-1">{(selectedMatchForDetails.ship || 'Unknown').split('(')[0]}</div>
-                          <div className="text-sm opacity-70">{selectedMatchForDetails.hero}</div>
+                          <div className="text-sm opacity-70 mb-2">{selectedMatchForDetails.hero}</div>
+                          {selectedMatchForDetails.weapons && Object.keys(selectedMatchForDetails.weapons).length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                  {Object.entries(selectedMatchForDetails.weapons).filter(([_, count]) => count > 0).map(([w, count]) => (
+                                      <span key={w} className="px-2 py-1 bg-md-sys-surface3 rounded-lg text-[10px] font-black uppercase border border-md-sys-outline/10">
+                                          {w} {count > 1 && <span className="text-md-sys-primary">x{count}</span>}
+                                      </span>
+                                  ))}
+                              </div>
+                          )}
                       </div>
                       <div className="bg-md-sys-surface2 p-4 rounded-3xl">
                           <div className="text-[10px] font-black uppercase opacity-60 mb-2">Performance</div>
@@ -373,18 +405,40 @@ const HistoryTable: React.FC<HistoryTableProps> = ({ matches, onDelete, onEdit, 
                       </div>
                   </div>
 
+                  {selectedMatchForDetails.kills && Object.values(selectedMatchForDetails.kills).some(v => v > 0) && (
+                      <div className="bg-md-sys-surface2 p-6 rounded-3xl border border-md-sys-outline/5">
+                          <div className="text-[10px] font-black uppercase opacity-60 mb-4 flex items-center gap-2"><Swords size={12}/> Combat Record (Eliminations)</div>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                              {Object.entries(selectedMatchForDetails.kills).filter(([_, count]) => count > 0).map(([ship, count]) => (
+                                  <div key={ship} className={`p-3 rounded-2xl flex justify-between items-center ${ship === 'AI Legion' ? 'bg-purple-500/10 border border-purple-500/30' : 'bg-md-sys-surface1 border border-md-sys-outline/5'}`}>
+                                      <span className={`text-[10px] font-bold uppercase ${ship === 'AI Legion' ? 'text-purple-300' : 'opacity-60'}`}>{ship.split('(')[0]}</span>
+                                      <span className={`text-lg font-black ${ship === 'AI Legion' ? 'text-purple-200' : ''}`}>{count}</span>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+                  )}
+
                   <div className="bg-md-sys-surface2 p-6 rounded-3xl">
                       <div className="flex justify-between mb-4">
                           <div>
                               <div className="text-[10px] font-black uppercase opacity-60 mb-2">Squadron</div>
                               <div className="flex flex-wrap gap-2">
-                                  {(selectedMatchForDetails.teammates || []).length > 0 ? (selectedMatchForDetails.teammates || []).map(t => <span key={t} className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-lg text-xs font-bold">{t}</span>) : <span className="opacity-40 text-xs italic">None</span>}
+                                  {(selectedMatchForDetails.teammates || []).length > 0 ? (selectedMatchForDetails.teammates || []).map(t => (
+                                      <span key={t} onClick={() => onDrillDown?.(t, 'Teammate')} className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-lg text-xs font-bold cursor-pointer hover:bg-blue-500/40 transition-colors">
+                                          {t}
+                                      </span>
+                                  )) : <span className="opacity-40 text-xs italic">None</span>}
                               </div>
                           </div>
                           <div className="text-right">
                               <div className="text-[10px] font-black uppercase opacity-60 mb-2">Hostiles</div>
                               <div className="flex flex-wrap gap-2 justify-end">
-                                  {(selectedMatchForDetails.opponents || []).length > 0 ? (selectedMatchForDetails.opponents || []).map(t => <span key={t} className="px-3 py-1 bg-red-500/20 text-red-300 rounded-lg text-xs font-bold">{t}</span>) : <span className="opacity-40 text-xs italic">None</span>}
+                                  {(selectedMatchForDetails.opponents || []).length > 0 ? (selectedMatchForDetails.opponents || []).map(t => (
+                                      <span key={t} onClick={() => onDrillDown?.(t, 'Opponent')} className="px-3 py-1 bg-red-500/20 text-red-300 rounded-lg text-xs font-bold cursor-pointer hover:bg-red-500/40 transition-colors">
+                                          {t}
+                                      </span>
+                                  )) : <span className="opacity-40 text-xs italic">None</span>}
                               </div>
                           </div>
                       </div>

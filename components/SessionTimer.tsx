@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Clock, Trophy, PauseCircle, PlayCircle, Pause } from 'lucide-react';
+import { Clock, Trophy, PauseCircle, PlayCircle, Pause, Swords, RotateCcw, Timer } from 'lucide-react';
 import { Match } from '../types';
 
 interface SessionTimerProps {
@@ -7,10 +7,18 @@ interface SessionTimerProps {
   matches: Match[];
   lastActivity: number;
   onRefreshActivity: () => void;
+  matchStartTime: number | null;
+  isMatchInProgress: boolean;
+  onStartMatch: () => void;
+  onResetMatch: () => void;
 }
 
-export const SessionTimer: React.FC<SessionTimerProps> = ({ startTime, matches, lastActivity, onRefreshActivity }) => {
+export const SessionTimer: React.FC<SessionTimerProps> = ({ 
+  startTime, matches, lastActivity, onRefreshActivity, 
+  matchStartTime, isMatchInProgress, onStartMatch, onResetMatch 
+}) => {
   const [elapsedDisplay, setElapsedDisplay] = useState("00:00:00");
+  const [matchElapsedDisplay, setMatchElapsedDisplay] = useState("00:00");
   
   // State for manual pausing logic
   const [isManualPaused, setIsManualPaused] = useState(false);
@@ -80,22 +88,62 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({ startTime, matches, 
       const m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
       const s = (diff % 60).toString().padStart(2, '0');
       setElapsedDisplay(`${h}:${m}:${s}`);
+
+      // Match timer display
+      if (isMatchInProgress && matchStartTime) {
+          const mDiff = Math.floor((now - matchStartTime) / 1000);
+          const mm = Math.floor(mDiff / 60).toString().padStart(2, '0');
+          const ms = (mDiff % 60).toString().padStart(2, '0');
+          setMatchElapsedDisplay(`${mm}:${ms}`);
+      }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [startTime, lastActivity, isManualPaused, isAutoPaused, offsetTime, currentPauseStart]);
+  }, [startTime, lastActivity, isManualPaused, isAutoPaused, offsetTime, currentPauseStart, isMatchInProgress, matchStartTime]);
 
   const isPaused = isManualPaused || isAutoPaused;
 
   return (
     <div className="flex items-center gap-4 bg-md-sys-surface2 px-5 py-3 rounded-2xl border border-md-sys-outline/10 shadow-lg animate-fade-in">
-        <button 
-            onClick={togglePause}
-            className={`p-2 rounded-full transition-all ${isPaused ? 'bg-amber-500 text-black hover:brightness-110' : 'bg-md-sys-surface3 text-md-sys-on-surface hover:bg-md-sys-primary hover:text-md-sys-onPrimary'}`}
-            title={isPaused ? "Resume Session" : "Pause Session"}
-        >
-            {isPaused ? <PlayCircle size={20} className="fill-current"/> : <Pause size={20} className="fill-current"/>}
-        </button>
+        <div className="flex items-center gap-2">
+            <button 
+                onClick={togglePause}
+                className={`p-2 rounded-full transition-all ${isPaused ? 'bg-amber-500 text-black hover:brightness-110' : 'bg-md-sys-surface3 text-md-sys-on-surface hover:bg-md-sys-primary hover:text-md-sys-onPrimary'}`}
+                title={isPaused ? "Resume Session" : "Pause Session"}
+            >
+                {isPaused ? <PlayCircle size={20} className="fill-current"/> : <Pause size={20} className="fill-current"/>}
+            </button>
+            
+            <div className="h-8 w-px bg-md-sys-outline/10 mx-1"></div>
+
+            {!isMatchInProgress ? (
+                <button 
+                    onClick={onStartMatch}
+                    className="p-2 bg-md-sys-surface3 text-md-sys-on-surface rounded-full hover:bg-green-600 hover:text-white transition-all flex items-center gap-2 px-4"
+                    title="Start New Mission"
+                >
+                    <Swords size={20}/>
+                    <span className="text-[10px] font-black uppercase tracking-wider">Start Mission</span>
+                </button>
+            ) : (
+                <div className="flex items-center gap-3 bg-md-sys-surface1 rounded-full px-4 py-1.5 border border-green-500/30 animate-pulse-slow">
+                    <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black uppercase text-green-500">Live Mission</span>
+                        <span className="font-mono font-black text-sm text-green-500">{matchElapsedDisplay}</span>
+                    </div>
+                    <button 
+                        onClick={onResetMatch}
+                        className="p-1 text-md-sys-on-surface/40 hover:text-red-500 transition-colors"
+                        title="Reset Mission Timer"
+                    >
+                        <RotateCcw size={14}/>
+                    </button>
+                </div>
+            )}
+        </div>
+
+        <div className="h-8 w-px bg-md-sys-outline/10"></div>
+        
         <div className="flex flex-col items-end">
             <div className="text-[10px] font-black uppercase opacity-60 leading-none mb-1 flex items-center gap-1">
                 {isPaused ? <span className="text-amber-500 flex items-center gap-1">Paused</span> : "Session Time"}

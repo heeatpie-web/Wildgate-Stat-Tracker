@@ -1,14 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Match, SHIPS, Language, getShipColor, CHARACTERS, UI_REACH_MODIFIERS, PIE_COLORS } from '../types';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList, LineChart, Line, AreaChart, Area } from 'recharts';
-import { Flame, Swords, Heart, Skull, Trophy, Lightbulb, ChevronUp, X, Activity, Crown, BarChart3, TrendingUp, Calendar, Zap, Users, Rocket, ChevronRight, User, Clock, Target, PieChart as PieIcon, Minus, Plus, List, ShieldCheck, Moon, Sun, Ghost, Crosshair, Handshake } from 'lucide-react';
+import { Match, SHIPS, Language, getShipColor, CHARACTERS, UI_REACH_MODIFIERS, PIE_COLORS, DrillDownTarget, Insight } from '../types';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList, LineChart, Line, AreaChart, Area, ScatterChart, Scatter, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
+import { Flame, Swords, Heart, Skull, Trophy, Lightbulb, ChevronUp, X, Activity, Crown, BarChart3, TrendingUp, Calendar, Zap, Users, Rocket, ChevronRight, User, Clock, Target, PieChart as PieIcon, Minus, Plus, List, ShieldCheck, Moon, Sun, Ghost, Crosshair, Handshake, Network, Radar as RadarIcon, ScatterChart as ScatterIcon } from 'lucide-react';
 import { TRANSLATIONS } from '../utils/translations';
+import { RivalryGraph } from './RivalryGraph';
+import { calculateInsights, calculateSocialData, calculateSynergyMatrix } from '../utils/analytics';
 
 interface AnalyticsPanelProps {
   matches: Match[];
   currentMode: string;
   language: Language;
+  currentUser: string;
+  onDrillDown: (name: string, type: DrillDownTarget['type']) => void;
 }
 
 const getColor = (name: string) => {
@@ -21,22 +25,68 @@ const getColor = (name: string) => {
     return PIE_COLORS[index];
 };
 
-const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ matches, currentMode, language }) => {
+const getIconComponent = (type: Insight['iconType']) => {
+    switch (type) {
+        case 'Rocket': return <Rocket/>;
+        case 'Crown': return <Crown/>;
+        case 'Flame': return <Flame/>;
+        case 'Zap': return <Zap/>;
+        case 'Clock': return <Clock/>;
+        case 'Target': return <Target/>;
+        case 'ShieldCheck': return <ShieldCheck/>;
+        case 'Ghost': return <Ghost/>;
+        case 'Crosshair': return <Crosshair/>;
+        case 'Moon': return <Moon/>;
+        case 'Sun': return <Sun/>;
+        default: return <Lightbulb/>;
+    }
+};
+
+const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ matches, currentMode, language, currentUser, onDrillDown }) => {
   const t = TRANSLATIONS[language];
-  const [viewMode, setViewMode] = useState<'Standard' | 'Pro' | 'Insights' | 'Social'>('Standard');
-  const [drillDownTarget, setDrillDownTarget] = useState<{ type: 'Ship' | 'Hero' | 'Teammate' | 'Artifact' | 'KPI', name: string } | null>(null);
+  const [viewMode, setViewMode] = useState<'Standard' | 'Pro' | 'Synergy' | 'Insights' | 'Social'>('Standard');
+  const [showSocialGraph, setShowSocialGraph] = useState(false);
+  const [timeRange, setTimeRange] = useState<'All' | 'Recent'>('All');
 
   // Pro View State
   const [proResultType, setProResultType] = useState<'Win' | 'Loss' | 'All'>('All');
   const [proMetric, setProMetric] = useState('ship_usage');
-  const [proChartType, setProChartType] = useState<'pie' | 'bar' | 'line'>('bar');
+  const [proChartType, setProChartType] = useState<'pie' | 'bar' | 'line' | 'scatter' | 'radar'>('bar');
 
-  const filteredMatches = useMemo(() => matches.filter(m => m.mode === currentMode).sort((a, b) => a.timestamp - b.timestamp), [matches, currentMode]);
+  const filteredMatches = useMemo(() => {
+      let m = matches.filter(m => m.mode === currentMode).sort((a, b) => a.timestamp - b.timestamp);
+      if (timeRange === 'Recent') m = m.slice(-20);
+      return m;
+  }, [matches, currentMode, timeRange]);
+
+  const previousMatches = useMemo(() => {
+      let m = matches.filter(m => m.mode === currentMode).sort((a, b) => a.timestamp - b.timestamp);
+      if (timeRange === 'Recent') {
+          const start = Math.max(0, m.length - 40);
+          const end = Math.max(0, m.length - 20);
+          return m.slice(start, end);
+      }
+      return []; 
+  }, [matches, currentMode, timeRange]);
+
+  const calculateTrend = (currentVal: number, prevVal: number, type: 'percent' | 'count' = 'percent') => {
+      if (previousMatches.length === 0) return null;
+      const diff = currentVal - prevVal;
+      if (diff === 0) return <span className="text-[10px] font-bold opacity-40 ml-2">-</span>;
+      const isPositiveGood = true; 
+      const color = diff > 0 ? (isPositiveGood ? 'text-green-500' : 'text-red-500') : (isPositiveGood ? 'text-red-500' : 'text-green-500');
+      return <span className={`text-[10px] font-black ml-2 ${color}`}>{diff > 0 ? '+' : ''}{diff}{type === 'percent' ? '%' : ''}</span>;
+  };
   
   const winRate = useMemo(() => {
     if (filteredMatches.length === 0) return 0;
     return Math.round((filteredMatches.filter(m => m.result === 'Win').length / filteredMatches.length) * 100);
   }, [filteredMatches]);
+
+  const prevWinRate = useMemo(() => {
+      if (previousMatches.length === 0) return 0;
+      return Math.round((previousMatches.filter(m => m.result === 'Win').length / previousMatches.length) * 100);
+  }, [previousMatches]);
 
   const currentStreak = useMemo(() => {
     const reversed = [...filteredMatches].reverse();
@@ -45,98 +95,51 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ matches, currentMode, l
     return streak;
   }, [filteredMatches]);
 
+  const avgSortiesPerDay = useMemo(() => Math.round(filteredMatches.length / 14), [filteredMatches]);
+  const prevAvgSorties = useMemo(() => Math.round(previousMatches.length / 14), [previousMatches]);
+
   const insights = useMemo(() => {
-      if (filteredMatches.length < 2) return [];
-      const res: any[] = [];
-      const wins = filteredMatches.filter(m => m.result === 'Win');
-      
-      // 1. The Specialist (Most Piloted)
-      const shipCounts: Record<string, number> = {};
-      filteredMatches.forEach(m => { const s = (m.ship || 'Unknown').split('(')[0]; shipCounts[s] = (shipCounts[s]||0)+1; });
-      const topShip = Object.entries(shipCounts).sort((a,b)=>b[1]-a[1])[0];
-      if(topShip) res.push({ title: "The Specialist", subtitle: "Most Piloted Vessel", value: topShip[0], subValue: `${topShip[1]} Sorties`, color: "bg-blue-500", icon: <Rocket/>, priority: 10 });
-
-      // 2. Ace Pilot (Best Hero WR)
-      const heroStats: Record<string, {wins: number, total: number}> = {};
-      filteredMatches.forEach(m => { const h = m.hero || 'Unknown'; if(!heroStats[h]) heroStats[h] = {wins:0, total:0}; heroStats[h].total++; if(m.result === 'Win') heroStats[h].wins++; });
-      const topHero = Object.entries(heroStats).filter(([_, s]) => s.total >= 3).sort((a,b) => (b[1].wins/b[1].total) - (a[1].wins/a[1].total))[0];
-      if(topHero) res.push({ title: "Ace Pilot", subtitle: "Best Hero Win Rate", value: topHero[0], subValue: `${Math.round((topHero[1].wins/topHero[1].total)*100)}% Win Rate`, color: "bg-green-500", icon: <Crown/>, priority: 20 });
-
-      // 3. Top Gun (Highest Damage)
-      const topDmg = [...filteredMatches].sort((a,b) => (b.damageTaken||0) - (a.damageTaken||0))[0];
-      if(topDmg && (topDmg.damageTaken||0) > 500) res.push({ title: "Top Gun", subtitle: "Highest Damage Record", value: `${topDmg.damageTaken} DMG`, subValue: `${(topDmg.ship||'').split('(')[0]}`, color: "bg-red-500", icon: <Flame/>, priority: 15 });
-
-      // 4. Blitz (Fastest Win)
-      const fastWin = [...wins].filter(m => m.time && m.time.includes(':')).sort((a,b) => {
-          const [am, as] = (a.time||'99:99').split(':').map(Number);
-          const [bm, bs] = (b.time||'99:99').split(':').map(Number);
-          return (am*60+as) - (bm*60+bs);
-      })[0];
-      if(fastWin) res.push({ title: "Blitz", subtitle: "Fastest Victory", value: fastWin.time, subValue: `${(fastWin.ship||'').split('(')[0]}`, color: "bg-yellow-500", icon: <Zap/>, priority: 25 });
-
-      // 5. Snail (Slowest Win)
-      const slowWin = [...wins].filter(m => m.time && m.time.includes(':')).sort((a,b) => {
-          const [am, as] = (a.time||'00:00').split(':').map(Number);
-          const [bm, bs] = (b.time||'00:00').split(':').map(Number);
-          return (bm*60+bs) - (am*60+as);
-      })[0];
-      if(slowWin) res.push({ title: "The Grinder", subtitle: "Longest Victory", value: slowWin.time, subValue: "Endurance Test", color: "bg-slate-500", icon: <Clock/>, priority: 5 });
-
-      // 6. Objective Master (Max POIs)
-      const maxPoi = [...filteredMatches].sort((a,b) => ((b.poiEasy||0)+(b.poiMedium||0)+(b.poiEpic||0)) - ((a.poiEasy||0)+(a.poiMedium||0)+(a.poiEpic||0)))[0];
-      const totalPoi = (maxPoi?.poiEasy||0)+(maxPoi?.poiMedium||0)+(maxPoi?.poiEpic||0);
-      if(maxPoi && totalPoi > 5) res.push({ title: "Objective Master", subtitle: "Most POIs Secured", value: `${totalPoi} Captures`, subValue: "Tactical Genius", color: "bg-teal-500", icon: <Target/>, priority: 18 });
-
-      // 7. Flawless (0 Damage Win)
-      const flawless = wins.find(m => (m.damageTaken||0) === 0);
-      if(flawless) res.push({ title: "Flawless", subtitle: "Zero Damage Victory", value: "Untouchable", subValue: `${(flawless.ship||'').split('(')[0]}`, color: "bg-cyan-400", icon: <ShieldCheck/>, priority: 50 });
-
-      // 8. Pacifist (0 Kills Win)
-      const pacifist = wins.find(m => Object.values(m.kills||{}).reduce((a,b)=>a+b,0) === 0);
-      if(pacifist) res.push({ title: "Pacifist", subtitle: "Zero Kill Victory", value: "Peacekeeper", subValue: "Diplomatic Win", color: "bg-indigo-400", icon: <Ghost/>, priority: 30 });
-
-      // 9. Warlord (>5 Kills Win)
-      const warlord = wins.find(m => Object.values(m.kills||{}).reduce((a,b)=>a+b,0) >= 5);
-      if(warlord) res.push({ title: "Warlord", subtitle: "High Kill Count", value: `${Object.values(warlord.kills||{}).reduce((a,b)=>a+b,0)} Eliminations`, subValue: "Ace Status", color: "bg-red-600", icon: <Crosshair/>, priority: 30 });
-
-      // 10. Night Owl / Early Bird
-      const hours = wins.map(m => new Date(m.timestamp).getHours());
-      const nightWins = hours.filter(h => h >= 22 || h < 4).length;
-      const morningWins = hours.filter(h => h >= 4 && h < 10).length;
-      if(nightWins > 2 && nightWins > wins.length * 0.4) res.push({ title: "Night Owl", subtitle: "Late Night Dominance", value: `${nightWins} Wins`, subValue: "After Hours", color: "bg-indigo-900", icon: <Moon/>, priority: 12 });
-      if(morningWins > 2 && morningWins > wins.length * 0.4) res.push({ title: "Early Bird", subtitle: "Morning Routine", value: `${morningWins} Wins`, subValue: "Rise & Grind", color: "bg-orange-400", icon: <Sun/>, priority: 12 });
-
-      return res.sort((a,b) => b.priority - a.priority);
+      return calculateInsights(filteredMatches).map(insight => ({
+          ...insight,
+          icon: getIconComponent(insight.iconType)
+      }));
   }, [filteredMatches]);
 
-  const socialData = useMemo(() => {
-      const teammates: Record<string, { wins: number, total: number }> = {};
-      const opponents: Record<string, { wins: number, total: number }> = {};
-
-      filteredMatches.forEach(m => {
-          m.teammates.forEach(t => {
-              if (!teammates[t]) teammates[t] = { wins: 0, total: 0 };
-              teammates[t].total++;
-              if (m.result === 'Win') teammates[t].wins++;
-          });
-          m.opponents.forEach(o => {
-              if (!opponents[o]) opponents[o] = { wins: 0, total: 0 };
-              opponents[o].total++;
-              if (m.result === 'Win') opponents[o].wins++;
-          });
-      });
-
-      const sortFn = (a: any, b: any) => b[1].total - a[1].total; // Sort by encounters
-      
-      return {
-          teammates: Object.entries(teammates).sort(sortFn).slice(0, 10),
-          opponents: Object.entries(opponents).sort(sortFn).slice(0, 10)
-      };
-  }, [filteredMatches]);
+  const socialData = useMemo(() => calculateSocialData(filteredMatches), [filteredMatches]);
 
   const getProData = useMemo(() => {
       const targetMatches = proResultType === 'All' ? filteredMatches : filteredMatches.filter(m => m.result === proResultType);
       
+      if (proChartType === 'scatter') {
+          return targetMatches.map(m => ({
+              x: m.time ? parseInt(m.time.split(':')[0])*60 + parseInt(m.time.split(':')[1]) : 0,
+              y: m.damageTaken || 0,
+              name: (m.ship||'').split('(')[0],
+              result: m.result
+          })).filter(d => d.y > 0 && d.x > 0);
+      }
+
+      if (proChartType === 'radar') {
+          const shipStats: Record<string, {wins: number, total: number, damage: number}> = {};
+          filteredMatches.forEach(m => {
+              const s = (m.ship||'Unknown').split('(')[0];
+              if(!shipStats[s]) shipStats[s] = {wins:0, total:0, damage:0};
+              shipStats[s].total++;
+              shipStats[s].damage += (m.damageTaken||0);
+              if(m.result === 'Win') shipStats[s].wins++;
+          });
+          
+          const topShips = Object.entries(shipStats).sort((a,b)=>b[1].total - a[1].total).slice(0, 3);
+          const maxTotal = Math.max(...topShips.map(s => s[1].total), 1);
+          const maxDmg = Math.max(...topShips.map(s => s[1].damage / s[1].total), 1);
+
+          return [
+              { subject: 'Win Rate', ...topShips.reduce((acc, [name, s]) => ({...acc, [name]: Math.round((s.wins/s.total)*100)}), {}), fullMark: 100 },
+              { subject: 'Pick Rate', ...topShips.reduce((acc, [name, s]) => ({...acc, [name]: Math.round((s.total/filteredMatches.length)*100)}), {}), fullMark: 100 },
+              { subject: 'Dmg Eff', ...topShips.reduce((acc, [name, s]) => ({...acc, [name]: Math.round(((s.damage/s.total)/maxDmg)*100)}), {}), fullMark: 100 },
+          ];
+      }
+
       if (proChartType === 'line') {
           // Identify Top Entities first
           let topEntities: string[] = [];
@@ -163,6 +166,12 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ matches, currentMode, l
                    counts[type] = (counts[type]||0)+1;
                });
                topEntities = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0, 5).map(e=>e[0]);
+          } else if (proMetric === 'weapon_win_rate') {
+               const counts: Record<string, number> = {};
+               targetMatches.forEach(m => Object.keys(m.weapons || {}).forEach(w => counts[w] = (counts[w]||0)+1));
+               topEntities = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0, 5).map(e=>e[0]);
+          } else if (proMetric === 'objective_impact') {
+               return { data: [], keys: [] };
           }
 
           const dailyData: Record<string, any> = {};
@@ -171,13 +180,15 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ matches, currentMode, l
               const date = new Date(m.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
               if (!dailyData[date]) dailyData[date] = { name: date };
               
-              const relevantEntities = [];
+              const relevantEntities: string[] = [];
               if (proMetric.includes('ship')) relevantEntities.push((m.ship||'Unknown').split('(')[0]);
               else if (proMetric.includes('hero')) relevantEntities.push(m.hero||'Unknown');
               else if (proMetric.includes('teammate')) relevantEntities.push(...(m.teammates||[]));
               else if (proMetric.includes('opponent')) relevantEntities.push(...(m.opponents||[]));
               else if (proMetric.includes('artifact') && m.subType==='Artifact') {
                   relevantEntities.push((m.reachModifiers||[]).find(r => r.startsWith('Artifact:'))?.split(': ')[1] || 'Unknown');
+              } else if (proMetric === 'weapon_win_rate') {
+                  relevantEntities.push(...Object.keys(m.weapons || {}));
               }
 
               relevantEntities.forEach(ent => {
@@ -186,9 +197,12 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ matches, currentMode, l
                            if(!dailyData[date][ent]) dailyData[date][ent] = 0;
                            if (m.result === 'Win') dailyData[date][ent] += 1;
                        } else if (proMetric.includes('damage')) {
-                           if(!dailyData[date][ent]) dailyData[date][ent] = {sum:0, count:0};
-                           dailyData[date][ent].sum += m.damageTaken || 0;
-                           dailyData[date][ent].count++;
+                           const dmg = m.damageTaken || 0;
+                           if (dmg > 0) {
+                               if(!dailyData[date][ent]) dailyData[date][ent] = {sum:0, count:0};
+                               dailyData[date][ent].sum += dmg;
+                               dailyData[date][ent].count++;
+                           }
                        } else {
                            if(!dailyData[date][ent]) dailyData[date][ent] = 0;
                            dailyData[date][ent] += 1;
@@ -201,7 +215,7 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ matches, currentMode, l
               const newD = { ...d };
               if (proMetric.includes('damage')) {
                   topEntities.forEach(e => {
-                      if(newD[e]) newD[e] = Math.round(newD[e].sum / newD[e].count);
+                      if(newD[e] && newD[e].count > 0) newD[e] = Math.round(newD[e].sum / newD[e].count);
                       else newD[e] = 0;
                   });
               }
@@ -252,15 +266,96 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ matches, currentMode, l
           const stats: Record<string, { totalDmg: number, count: number }> = {};
           targetMatches.forEach(m => {
                const name = (m.ship||'Unknown').split('(')[0];
-               if (!stats[name]) stats[name] = { totalDmg: 0, count: 0 };
-               stats[name].totalDmg += m.damageTaken || 0;
-               stats[name].count++;
+               const dmg = m.damageTaken || 0;
+               if (dmg > 0) {
+                   if (!stats[name]) stats[name] = { totalDmg: 0, count: 0 };
+                   stats[name].totalDmg += dmg;
+                   stats[name].count++;
+               }
           });
           data = Object.entries(stats).map(([name, s]) => ({ name, value: Math.round(s.totalDmg / s.count) }));
+      } else if (proMetric === 'weapon_win_rate') {
+          const stats: Record<string, { wins: number, total: number }> = {};
+          filteredMatches.forEach(m => {
+              if (m.weapons) {
+                  Object.keys(m.weapons).forEach(w => {
+                      if (m.weapons![w] > 0) {
+                          if (!stats[w]) stats[w] = { wins: 0, total: 0 };
+                          stats[w].total++;
+                          if (m.result === 'Win') stats[w].wins++;
+                      }
+                  });
+              }
+          });
+          data = Object.entries(stats).map(([name, s]) => ({ name, value: Math.round((s.wins / s.total) * 100), count: s.total }));
+      } else if (proMetric === 'objective_impact') {
+          const winPois = { total: 0, count: 0 };
+          const lossPois = { total: 0, count: 0 };
+          filteredMatches.forEach(m => {
+              const pois = (m.poiEasy||0) + (m.poiMedium||0) + (m.poiEpic||0);
+              if (m.result === 'Win') { winPois.total += pois; winPois.count++; }
+              else if (m.result === 'Loss') { lossPois.total += pois; lossPois.count++; }
+          });
+          data = [
+              { name: 'Avg POIs (Win)', value: winPois.count ? Number((winPois.total / winPois.count).toFixed(1)) : 0 },
+              { name: 'Avg POIs (Loss)', value: lossPois.count ? Number((lossPois.total / lossPois.count).toFixed(1)) : 0 }
+          ];
       }
 
       return data.sort((a, b) => b.value - a.value).slice(0, 15); 
   }, [filteredMatches, proResultType, proMetric, proChartType]);
+
+  const synergyMatrix = useMemo(() => calculateSynergyMatrix(filteredMatches), [filteredMatches]);
+
+  const renderSynergyMatrix = () => {
+      return (
+          <div className="md-card !p-6 flex flex-col gap-6 animate-fade-in flex-1 min-h-0">
+              <div className="flex justify-between items-center">
+                  <h3 className="text-xl font-black uppercase tracking-tight">Hero x Ship Synergy Matrix</h3>
+                  <div className="flex gap-4 text-xs font-bold opacity-60">
+                      <div className="flex items-center gap-2"><div className="w-3 h-3 bg-md-sys-primary rounded-sm opacity-20"></div> Low WR</div>
+                      <div className="flex items-center gap-2"><div className="w-3 h-3 bg-md-sys-primary rounded-sm"></div> High WR</div>
+                  </div>
+              </div>
+              <div className="flex-1 overflow-auto custom-scrollbar">
+                  <table className="w-full border-collapse">
+                      <thead>
+                          <tr>
+                              <th className="p-2"></th>
+                              {CHARACTERS.map(c => <th key={c} className="p-2 text-[10px] font-black uppercase rotate-45 origin-bottom-left translate-x-4">{c}</th>)}
+                          </tr>
+                      </thead>
+                      <tbody>
+                          {Object.keys(synergyMatrix).map(ship => (
+                              <tr key={ship}>
+                                  <td className="p-2 text-[10px] font-black uppercase text-right">{ship}</td>
+                                  {CHARACTERS.map(hero => {
+                                      const stat = synergyMatrix[ship][hero];
+                                      const wr = stat.total > 0 ? stat.wins / stat.total : 0;
+                                      const opacity = stat.total > 0 ? 0.2 + (wr * 0.8) : 0.05;
+                                      return (
+                                          <td key={hero} className="p-1">
+                                              <div className="w-full h-10 rounded-lg flex items-center justify-center relative group transition-all hover:scale-110 hover:z-10 hover:shadow-lg bg-md-sys-primary" style={{ opacity }}>
+                                                  {stat.total > 0 && <span className="text-[10px] font-black text-md-sys-onPrimary relative z-20">{Math.round(wr * 100)}%</span>}
+                                                  {stat.total > 0 && (
+                                                      <div className="absolute bottom-full mb-2 bg-black/80 text-white text-[10px] p-2 rounded-lg whitespace-nowrap hidden group-hover:block z-50 pointer-events-none">
+                                                          <div className="font-black">{hero} & {ship}</div>
+                                                          <div>Win Rate: {Math.round(wr*100)}%</div>
+                                                          <div>Matches: {stat.total}</div>
+                                                      </div>
+                                                  )}
+                                              </div>
+                                          </td>
+                                      );
+                                  })}
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+      );
+  };
 
   const renderProView = () => {
       const isLine = proChartType === 'line';
@@ -268,7 +363,7 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ matches, currentMode, l
       const lineKeys = isLine ? (getProData as any).keys : [];
 
       return (
-        <div className="md-card !p-6 flex flex-col gap-6 animate-fade-in h-full">
+        <div className="md-card !p-6 flex flex-col gap-6 animate-fade-in flex-1 min-h-0">
             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="flex bg-md-sys-surface2 p-1.5 rounded-2xl">
                     <button onClick={() => setProChartType('bar')} className={`p-2 rounded-xl ${proChartType === 'bar' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-md' : 'opacity-60 hover:bg-md-sys-surface3'}`}><BarChart3 size={20}/></button>
@@ -277,7 +372,7 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ matches, currentMode, l
                 </div>
                 
                 <div className="flex overflow-x-auto gap-2 max-w-full pb-2 md:pb-0 custom-scrollbar">
-                     {['ship_usage', 'hero_usage', 'teammate_usage', 'opponent_usage', 'win_rate_ship', 'win_rate_artifact', 'avg_damage_ship'].map(m => {
+                     {['ship_usage', 'hero_usage', 'teammate_usage', 'opponent_usage', 'win_rate_ship', 'win_rate_artifact', 'avg_damage_ship', 'weapon_win_rate', 'objective_impact'].map(m => {
                          let label = m.replace(/_/g, ' ');
                          if (proResultType === 'Loss') {
                              label = label.replace('win rate', 'loss rate');
@@ -297,7 +392,7 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ matches, currentMode, l
                 </div>
             </div>
 
-            <div className="flex-1 min-h-[400px] w-full bg-md-sys-surface2 rounded-[32px] p-8 border border-md-sys-outline/5 shadow-inner">
+            <div className="h-[500px] w-full bg-md-sys-surface2 rounded-[32px] p-4 md:p-8 border border-md-sys-outline/5 shadow-inner overflow-hidden">
                  <ResponsiveContainer width="100%" height="100%">
                      {proChartType === 'bar' ? (
                          <BarChart data={chartData} layout="vertical" margin={{ left: 40, right: 40, top: 20, bottom: 20 }}>
@@ -312,7 +407,7 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ matches, currentMode, l
                          </BarChart>
                      ) : proChartType === 'pie' ? (
                          <PieChart>
-                             <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={180} innerRadius={100} paddingAngle={2}>
+                             <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="80%" innerRadius="50%" paddingAngle={2}>
                                 {chartData.map((entry: any, index: number) => <Cell key={`cell-${index}`} fill={getColor(String(entry.name || ''))} stroke="var(--md-sys-color-surface2)" strokeWidth={4}/>)}
                              </Pie>
                              <Tooltip contentStyle={{backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '16px', border: 'none', boxShadow: '0 10px 30px -10px rgba(0,0,0,0.5)'}} itemStyle={{color: 'var(--md-sys-color-on-surface)'}}/>
@@ -336,111 +431,115 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ matches, currentMode, l
       );
   };
 
-  const renderDrillDown = () => {
-    if (!drillDownTarget) return null;
-    const trendData = filteredMatches.map((m, i) => ({
-        idx: i + 1,
-        rollingWinRate: Math.round((filteredMatches.slice(0, i + 1).filter(x => x.result === 'Win').length / (i + 1)) * 100)
-    }));
-
-    return createPortal(
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-6 animate-fade-in" onClick={() => setDrillDownTarget(null)}>
-          <div className="bg-md-sys-surface1 w-full max-w-5xl rounded-[40px] p-10 shadow-2xl border border-md-sys-outline/20" onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between items-start mb-10">
-                  <div>
-                      <div className="text-sm font-black uppercase opacity-40 tracking-[0.2em] mb-1">Deep Dive Analysis</div>
-                      <h2 className="text-5xl font-black">{drillDownTarget.name}</h2>
-                  </div>
-                  <button onClick={() => setDrillDownTarget(null)} className="p-4 bg-md-sys-surface2 rounded-full hover:bg-md-sys-surface3"><X size={24}/></button>
-              </div>
-              <div className="h-80 w-full bg-md-sys-surface2 rounded-[32px] p-6 border border-md-sys-outline/5 shadow-inner">
-                  <h4 className="text-xs font-black uppercase tracking-widest mb-6 opacity-60">Rolling Win Rate Over Time</h4>
-                  <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={trendData}>
-                          <defs><linearGradient id="colorWin" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="var(--color-win)" stopOpacity={0.3}/><stop offset="95%" stopColor="var(--color-win)" stopOpacity={0}/></linearGradient></defs>
-                          <CartesianGrid strokeOpacity={0.05} vertical={false}/>
-                          <XAxis dataKey="idx" tick={{fontSize: 12}} label={{ value: 'Matches', position: 'insideBottom', offset: -5 }}/>
-                          <YAxis tick={{fontSize: 12}} label={{ value: 'Win Rate %', angle: -90, position: 'insideLeft' }}/>
-                          <Tooltip contentStyle={{backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '16px', border: 'none'}}/>
-                          <Area type="monotone" dataKey="rollingWinRate" name="Win Rate" stroke="var(--color-win)" strokeWidth={4} fillOpacity={1} fill="url(#colorWin)" />
-                      </AreaChart>
-                  </ResponsiveContainer>
-              </div>
-          </div>
-      </div>, document.body
-    );
-  };
-
   return (
-    <div className="flex flex-col gap-6 animate-slide-up h-full">
-      {renderDrillDown()}
+    <div className="bg-md-sys-surface1 rounded-[32px] p-4 shadow-lg h-full flex flex-col gap-4 animate-slide-up overflow-hidden">
       <div className="md-card flex flex-col md:flex-row justify-between items-center gap-4 bg-md-sys-surface1 p-6 rounded-[32px] shadow-sm flex-shrink-0">
           <div><h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3"><Activity className="text-md-sys-primary"/> Performance Statistics</h2><p className="text-[10px] font-bold opacity-60 uppercase tracking-widest mt-1">Detailed Combat Analysis • {currentMode}</p></div>
-          <div className="flex bg-md-sys-surface2 p-1.5 rounded-full shadow-inner">
-              <button onClick={() => setViewMode('Standard')} className={`px-6 py-2 rounded-full text-xs font-black uppercase ${viewMode === 'Standard' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg' : 'opacity-60 hover:bg-md-sys-surface3'}`}>Dashboard</button>
-              <button onClick={() => setViewMode('Pro')} className={`px-6 py-2 rounded-full text-xs font-black uppercase ${viewMode === 'Pro' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg' : 'opacity-60 hover:bg-md-sys-surface3'}`}>Detailed</button>
-              <button onClick={() => setViewMode('Insights')} className={`px-6 py-2 rounded-full text-xs font-black uppercase ${viewMode === 'Insights' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg' : 'opacity-60 hover:bg-md-sys-surface3'}`}><Lightbulb size={16} className="inline mr-2"/>Insights</button>
-              <button onClick={() => setViewMode('Social')} className={`px-6 py-2 rounded-full text-xs font-black uppercase ${viewMode === 'Social' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg' : 'opacity-60 hover:bg-md-sys-surface3'}`}><Handshake size={16} className="inline mr-2"/>Social</button>
+          <div className="flex gap-4">
+              <div className="flex bg-md-sys-surface2 p-1.5 rounded-full shadow-inner">
+                  <button onClick={() => setTimeRange('All')} className={`px-4 py-2 rounded-full text-xs font-black uppercase ${timeRange === 'All' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg' : 'opacity-60 hover:bg-md-sys-surface3'}`}>All Time</button>
+                  <button onClick={() => setTimeRange('Recent')} className={`px-4 py-2 rounded-full text-xs font-black uppercase ${timeRange === 'Recent' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg' : 'opacity-60 hover:bg-md-sys-surface3'}`}>Recent (20)</button>
+              </div>
+              <div className="flex bg-md-sys-surface2 p-1.5 rounded-full shadow-inner">
+                  <button onClick={() => setViewMode('Standard')} className={`px-6 py-2 rounded-full text-xs font-black uppercase ${viewMode === 'Standard' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg' : 'opacity-60 hover:bg-md-sys-surface3'}`}>Dashboard</button>
+                  <button onClick={() => setViewMode('Pro')} className={`px-6 py-2 rounded-full text-xs font-black uppercase ${viewMode === 'Pro' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg' : 'opacity-60 hover:bg-md-sys-surface3'}`}>Detailed</button>
+                  <button onClick={() => setViewMode('Synergy')} className={`px-6 py-2 rounded-full text-xs font-black uppercase ${viewMode === 'Synergy' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg' : 'opacity-60 hover:bg-md-sys-surface3'}`}><Network size={16} className="inline mr-2"/>Synergy</button>
+                  <button onClick={() => setViewMode('Insights')} className={`px-6 py-2 rounded-full text-xs font-black uppercase ${viewMode === 'Insights' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg' : 'opacity-60 hover:bg-md-sys-surface3'}`}><Lightbulb size={16} className="inline mr-2"/>Insights</button>
+                  <button onClick={() => setViewMode('Social')} className={`px-6 py-2 rounded-full text-xs font-black uppercase ${viewMode === 'Social' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg' : 'opacity-60 hover:bg-md-sys-surface3'}`}><Handshake size={16} className="inline mr-2"/>Social</button>
+              </div>
           </div>
       </div>
-      {viewMode === 'Pro' ? renderProView() : viewMode === 'Insights' ? (
-          <div className="md-card !p-0 overflow-hidden shadow-lg rounded-[32px] max-h-[600px] overflow-y-auto custom-scrollbar flex-1">
+      {viewMode === 'Pro' ? renderProView() : viewMode === 'Synergy' ? renderSynergyMatrix() : viewMode === 'Insights' ? (
+          <div className="md-card !p-0 overflow-hidden shadow-lg rounded-[32px] max-h-[600px] flex-1">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-8">
                   {insights.map((stat, i) => <div key={i} className="md-card !p-8 relative overflow-hidden shadow-lg hover:scale-105 transition-transform cursor-pointer group rounded-[32px] bg-md-sys-surface2"><div className={`absolute -top-6 -right-6 w-32 h-32 opacity-10 rounded-full ${stat.color} blur-2xl`}></div><div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white mb-6 shadow-lg ${stat.color}`}>{stat.icon}</div><div className="text-xs font-black uppercase tracking-widest opacity-60 mb-1">{stat.title}</div><div className="text-[10px] font-bold uppercase opacity-40 mb-6">{stat.subtitle}</div><div className="text-xl font-black leading-tight mb-2">{stat.value}</div><div className="text-xs font-bold px-3 py-1 bg-md-sys-surface1 rounded-lg inline-block">{stat.subValue}</div></div>)}
                   {insights.length === 0 && <div className="col-span-full text-center opacity-60 text-sm font-bold uppercase p-12">Not enough data to generate insights.</div>}
               </div>
           </div>
       ) : viewMode === 'Social' ? (
-          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 overflow-hidden">
-              <div className="md-card flex flex-col bg-md-sys-surface2 !rounded-[32px] overflow-hidden shadow-lg">
-                  <div className="p-6 pb-2"><h3 className="text-sm font-black uppercase flex items-center gap-2 opacity-60"><Swords size={16}/> Top Rivals (Opponents)</h3></div>
-                  <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pt-2">
-                      {socialData.opponents.length === 0 ? <div className="opacity-40 text-xs font-bold text-center py-10">No opponent data</div> : 
-                      socialData.opponents.map(([name, stat], i) => (
-                          <div key={name} className="flex justify-between items-center py-3 border-b border-md-sys-outline/10 last:border-0">
-                              <div className="flex items-center gap-3">
-                                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${i===0?'bg-red-500 text-white':'bg-md-sys-surface3'}`}>{i+1}</div>
-                                  <span className="font-bold text-sm">{name}</span>
-                              </div>
-                              <div className="text-right">
-                                  <div className="text-xs font-black" style={{color: (stat.wins/stat.total) < 0.5 ? 'var(--color-win)' : 'var(--color-loss)'}}>{Math.round((stat.wins/stat.total)*100)}% WR</div>
-                                  <div className="text-[9px] font-bold opacity-40">{stat.total} Encounters</div>
-                              </div>
-                          </div>
-                      ))}
-                  </div>
+          <div className="flex-1 flex flex-col overflow-hidden h-full">
+              <div className="flex justify-end mb-4">
+                  <button onClick={() => setShowSocialGraph(!showSocialGraph)} className="flex items-center gap-2 px-4 py-2 bg-md-sys-surface2 rounded-xl text-xs font-bold uppercase hover:bg-md-sys-primary hover:text-white transition-all shadow-sm">
+                      {showSocialGraph ? <List size={16}/> : <Network size={16}/>} {showSocialGraph ? "View List" : "View Network"}
+                  </button>
               </div>
-              <div className="md-card flex flex-col bg-md-sys-surface2 !rounded-[32px] overflow-hidden shadow-lg">
-                  <div className="p-6 pb-2"><h3 className="text-sm font-black uppercase flex items-center gap-2 opacity-60"><Handshake size={16}/> Best Wingmen (Teammates)</h3></div>
-                  <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pt-2">
-                      {socialData.teammates.length === 0 ? <div className="opacity-40 text-xs font-bold text-center py-10">No teammate data</div> : 
-                      socialData.teammates.map(([name, stat], i) => (
-                          <div key={name} className="flex justify-between items-center py-3 border-b border-md-sys-outline/10 last:border-0">
-                              <div className="flex items-center gap-3">
-                                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${i===0?'bg-green-500 text-white':'bg-md-sys-surface3'}`}>{i+1}</div>
-                                  <span className="font-bold text-sm">{name}</span>
-                              </div>
-                              <div className="text-right">
-                                  <div className="text-xs font-black" style={{color: (stat.wins/stat.total) > 0.5 ? 'var(--color-win)' : 'var(--color-loss)'}}>{Math.round((stat.wins/stat.total)*100)}% WR</div>
-                                  <div className="text-[9px] font-bold opacity-40">{stat.total} Missions</div>
-                              </div>
+              
+              {showSocialGraph ? (
+                  <RivalryGraph matches={filteredMatches} currentUser={currentUser} />
+              ) : (
+                  <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 overflow-hidden">
+                      <div className="md-card flex flex-col bg-md-sys-surface2 !rounded-[32px] overflow-hidden shadow-lg">
+                          <div className="p-6 pb-2"><h3 className="text-sm font-black uppercase flex items-center gap-2 opacity-60"><Swords size={16}/> Top Rivals (Opponents)</h3></div>
+                          <div className="flex-1 p-6 pt-2">
+                              {socialData.opponents.length === 0 ? <div className="opacity-40 text-xs font-bold text-center py-10">No opponent data</div> : 
+                              socialData.opponents.map(([name, stat], i) => (
+                                  <div key={name} onClick={() => onDrillDown(name, 'Opponent')} className="flex justify-between items-center py-3 border-b border-md-sys-outline/10 last:border-0 cursor-pointer hover:bg-md-sys-surface3 p-2 rounded-xl transition-colors">
+                                      <div className="flex items-center gap-3">
+                                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${i===0?'bg-red-500 text-white':'bg-md-sys-surface3'}`}>{i+1}</div>
+                                          <span className="font-bold text-sm">{name}</span>
+                                      </div>
+                                      <div className="text-right">
+                                          <div className="text-xs font-black" style={{color: (stat.wins/stat.total) < 0.5 ? 'var(--color-win)' : 'var(--color-loss)'}}>{Math.round((stat.wins/stat.total)*100)}% WR</div>
+                                          <div className="text-[9px] font-bold opacity-40">{stat.total} Encounters</div>
+                                      </div>
+                                  </div>
+                              ))}
                           </div>
-                      ))}
+                      </div>
+                      <div className="md-card flex flex-col bg-md-sys-surface2 !rounded-[32px] overflow-hidden shadow-lg">
+                          <div className="p-6 pb-2"><h3 className="text-sm font-black uppercase flex items-center gap-2 opacity-60"><Handshake size={16}/> Best Wingmen (Teammates)</h3></div>
+                          <div className="flex-1 p-6 pt-2">
+                              {socialData.teammates.length === 0 ? <div className="opacity-40 text-xs font-bold text-center py-10">No teammate data</div> : 
+                              socialData.teammates.map(([name, stat], i) => (
+                                  <div key={name} onClick={() => onDrillDown(name, 'Teammate')} className="flex justify-between items-center py-3 border-b border-md-sys-outline/10 last:border-0 cursor-pointer hover:bg-md-sys-surface3 p-2 rounded-xl transition-colors">
+                                      <div className="flex items-center gap-3">
+                                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${i===0?'bg-green-500 text-white':'bg-md-sys-surface3'}`}>{i+1}</div>
+                                          <span className="font-bold text-sm">{name}</span>
+                                      </div>
+                                      <div className="text-right">
+                                          <div className="text-xs font-black" style={{color: (stat.wins/stat.total) > 0.5 ? 'var(--color-win)' : 'var(--color-loss)'}}>{Math.round((stat.wins/stat.total)*100)}% WR</div>
+                                          <div className="text-[9px] font-bold opacity-40">{stat.total} Missions</div>
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
                   </div>
-              </div>
+              )}
           </div>
       ) : ( <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div onClick={() => setDrillDownTarget({type: 'KPI', name: 'Win Ratio Analysis'})} className="md-card p-6 !rounded-[28px] relative overflow-hidden group cursor-pointer hover:bg-md-sys-surface2 hover:scale-[1.02] shadow-sm"><div className="absolute top-0 right-0 p-4 opacity-[0.05]"><Trophy size={64}/></div><div className="text-4xl font-black mb-1 tracking-tighter" style={{color: winRate >= 50 ? 'var(--color-win)' : 'var(--color-loss)'}}>{winRate}%</div><div className="text-[10px] font-black uppercase tracking-widest opacity-60">Win Rate</div></div>
-              <div onClick={() => setDrillDownTarget({type: 'KPI', name: 'Win Streak Analysis'})} className="md-card p-6 !rounded-[28px] relative overflow-hidden group cursor-pointer hover:bg-md-sys-surface2 hover:scale-[1.02] shadow-sm"><div className="absolute top-0 right-0 p-4 opacity-[0.05]"><Flame size={64}/></div><div className="text-4xl font-black mb-1 text-orange-500 tracking-tighter">{currentStreak}</div><div className="text-[10px] font-black uppercase tracking-widest opacity-60">Active Streak</div></div>
-              <div onClick={() => setDrillDownTarget({type: 'KPI', name: 'Total Sorties Analysis'})} className="md-card p-6 !rounded-[28px] relative overflow-hidden group shadow-sm cursor-pointer hover:bg-md-sys-surface2"><div className="absolute top-0 right-0 p-4 opacity-[0.05]"><Swords size={64}/></div><div className="text-4xl font-black mb-1 text-md-sys-primary tracking-tighter">{filteredMatches.length}</div><div className="text-[10px] font-black uppercase tracking-widest opacity-60">Total Sorties</div></div>
-              <div className="md-card p-6 !rounded-[28px] relative overflow-hidden group shadow-sm"><div className="absolute top-0 right-0 p-4 opacity-[0.05]"><Zap size={64}/></div><div className="text-4xl font-black mb-1 text-blue-400 tracking-tighter">{Math.round(filteredMatches.length / 14)}</div><div className="text-[10px] font-black uppercase tracking-widest opacity-60">Daily Avg</div></div>
+              <div onClick={() => onDrillDown('Win Ratio Analysis', 'KPI')} className="md-card p-4 !rounded-[28px] relative overflow-hidden group cursor-pointer hover:bg-md-sys-surface2 hover:scale-[1.02] shadow-sm">
+                  <div className="absolute top-0 right-0 p-4 opacity-[0.05]"><Trophy size={48}/></div>
+                  <div className="flex items-end gap-1 mb-1">
+                      <div className="text-3xl font-black tracking-tighter" style={{color: winRate >= 50 ? 'var(--color-win)' : 'var(--color-loss)'}}>{winRate}%</div>
+                      {calculateTrend(winRate, prevWinRate)}
+                  </div>
+                  <div className="text-[10px] font-black uppercase tracking-widest opacity-60">Win Rate</div>
+              </div>
+              <div onClick={() => onDrillDown('Win Streak Analysis', 'KPI')} className="md-card p-4 !rounded-[28px] relative overflow-hidden group cursor-pointer hover:bg-md-sys-surface2 hover:scale-[1.02] shadow-sm"><div className="absolute top-0 right-0 p-4 opacity-[0.05]"><Flame size={48}/></div><div className="text-3xl font-black mb-1 text-orange-500 tracking-tighter">{currentStreak}</div><div className="text-[10px] font-black uppercase tracking-widest opacity-60">Active Streak</div></div>
+              <div onClick={() => onDrillDown('Total Sorties Analysis', 'KPI')} className="md-card p-4 !rounded-[28px] relative overflow-hidden group shadow-sm cursor-pointer hover:bg-md-sys-surface2">
+                  <div className="absolute top-0 right-0 p-4 opacity-[0.05]"><Swords size={48}/></div>
+                  <div className="flex items-end gap-1 mb-1">
+                      <div className="text-3xl font-black text-md-sys-primary tracking-tighter">{filteredMatches.length}</div>
+                      {calculateTrend(filteredMatches.length, previousMatches.length, 'count')}
+                  </div>
+                  <div className="text-[10px] font-black uppercase tracking-widest opacity-60">Total Sorties</div>
+              </div>
+              <div className="md-card p-4 !rounded-[28px] relative overflow-hidden group shadow-sm">
+                  <div className="absolute top-0 right-0 p-4 opacity-[0.05]"><Zap size={48}/></div>
+                  <div className="flex items-end gap-1 mb-1">
+                      <div className="text-3xl font-black text-blue-400 tracking-tighter">{avgSortiesPerDay}</div>
+                      {calculateTrend(avgSortiesPerDay, prevAvgSorties, 'count')}
+                  </div>
+                  <div className="text-[10px] font-black uppercase tracking-widest opacity-60">Daily Avg</div>
+              </div>
           </div>
           
           {insights.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {insights.slice(0, 3).map((stat, i) => (
-                      <div key={i} onClick={() => setViewMode('Insights')} className="md-card !p-6 relative overflow-hidden shadow-lg hover:scale-105 transition-transform cursor-pointer group rounded-[32px] bg-md-sys-surface2 flex items-center gap-4">
+                      <div key={i} onClick={() => setViewMode('Insights')} className="md-card !p-4 relative overflow-hidden shadow-lg hover:scale-105 transition-transform cursor-pointer group rounded-[32px] bg-md-sys-surface2 flex items-center gap-4">
                           <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg flex-shrink-0 ${stat.color}`}>{stat.icon}</div>
                           <div className="overflow-hidden">
                               <div className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-0.5">{stat.title}</div>
@@ -453,12 +552,12 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ matches, currentMode, l
               </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-              <div className="md-card flex flex-col bg-md-sys-surface2 !rounded-[24px] overflow-hidden shadow-lg min-h-[250px] border border-md-sys-outline/5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div className="md-card flex flex-col bg-md-sys-surface2 !rounded-[24px] overflow-hidden shadow-lg min-h-[180px] border border-md-sys-outline/5">
                   <div className="p-6 pb-2"><h3 className="text-sm font-black uppercase flex items-center gap-2 opacity-60"><Swords size={16}/> Top Rivals</h3></div>
                   <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pt-2">
                       {socialData.opponents.slice(0, 5).map(([name, stat], i) => (
-                          <div key={name} className="flex justify-between items-center py-2 border-b border-md-sys-outline/10 last:border-0">
+                          <div key={name} onClick={() => onDrillDown(name, 'Opponent')} className="flex justify-between items-center py-2 border-b border-md-sys-outline/10 last:border-0 cursor-pointer hover:bg-md-sys-surface3 p-1.5 rounded-lg transition-colors">
                               <div className="flex items-center gap-3"><div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black ${i===0?'bg-red-500 text-white':'bg-md-sys-surface3'}`}>{i+1}</div><span className="font-bold text-xs">{name}</span></div>
                               <div className="text-right"><div className="text-[10px] font-black" style={{color: (stat.wins/stat.total) < 0.5 ? 'var(--color-win)' : 'var(--color-loss)'}}>{Math.round((stat.wins/stat.total)*100)}% WR</div><div className="text-[8px] font-bold opacity-40">{stat.total} Enc.</div></div>
                           </div>
@@ -466,11 +565,11 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ matches, currentMode, l
                       {socialData.opponents.length === 0 && <div className="opacity-40 text-xs font-bold text-center py-10">No data</div>}
                   </div>
               </div>
-              <div className="md-card flex flex-col bg-md-sys-surface2 !rounded-[24px] overflow-hidden shadow-lg min-h-[250px] border border-md-sys-outline/5">
+              <div className="md-card flex flex-col bg-md-sys-surface2 !rounded-[24px] overflow-hidden shadow-lg min-h-[180px] border border-md-sys-outline/5">
                   <div className="p-6 pb-2"><h3 className="text-sm font-black uppercase flex items-center gap-2 opacity-60"><Handshake size={16}/> Best Wingmen</h3></div>
                   <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pt-2">
                       {socialData.teammates.slice(0, 5).map(([name, stat], i) => (
-                          <div key={name} className="flex justify-between items-center py-2 border-b border-md-sys-outline/10 last:border-0">
+                          <div key={name} onClick={() => onDrillDown(name, 'Teammate')} className="flex justify-between items-center py-2 border-b border-md-sys-outline/10 last:border-0 cursor-pointer hover:bg-md-sys-surface3 p-1.5 rounded-lg transition-colors">
                               <div className="flex items-center gap-3"><div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black ${i===0?'bg-green-500 text-white':'bg-md-sys-surface3'}`}>{i+1}</div><span className="font-bold text-xs">{name}</span></div>
                               <div className="text-right"><div className="text-[10px] font-black" style={{color: (stat.wins/stat.total) > 0.5 ? 'var(--color-win)' : 'var(--color-loss)'}}>{Math.round((stat.wins/stat.total)*100)}% WR</div><div className="text-[8px] font-bold opacity-40">{stat.total} Missions</div></div>
                           </div>

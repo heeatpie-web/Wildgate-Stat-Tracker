@@ -2,7 +2,7 @@
   "name": "wildgate-stat-tracker",
   "productName": "Wildgate Stat Tracker",
   "private": true,
-  "version": "2.6.0",
+  "version": "2.7.0",
   "type": "module",
   "main": "electron/main.cjs",
   "author": {
@@ -22,7 +22,8 @@
     "discord-rpc": "^4.0.1",
     "electron-updater": "^6.7.3",
     "html2canvas": "^1.4.1",
-    "react-grid-layout": "^2.2.2"
+    "react-grid-layout": "^2.2.2",
+    "zustand": "^4.5.2"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.6.4",
@@ -49,6 +50,7 @@
     "appId": "com.wildgate.tracker",
     "productName": "Wildgate Stat Tracker",
     "compression": "maximum",
+    "npmRebuild": false,
     "directories": {
       "output": "dist-electron"
     },
@@ -63,7 +65,8 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "public/favicon.ico"
+      "icon": "public/favicon.ico",
+      "forceCodeSigning": false
     },
     "nsis": {
       "oneClick": false,
@@ -75,8 +78,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "Alixerthus",
-        "repo": "wildgate-stat-tracker"
+        "owner": "heeatpie-web",
+        "repo": "Wildgate-Stat-Tracker"
       }
     ]
   }

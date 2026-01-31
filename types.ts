@@ -2,56 +2,11 @@ export type GameMode = 'Artifact Brawl' | 'Fleet Battle';
 export type MatchResult = 'Win' | 'Loss' | 'Draw';
 export type ColorblindMode = 'none' | 'protanopia' | 'deuteranopia' | 'tritanopia';
 
-export const APP_VERSION = "v2.6.0";
+export * from './utils/constants';
 
 export type Language = 'en' | 'es' | 'mx' | 'pt' | 'br' | 'zh';
 
-// FINAL PROSPECTOR LIST - DO NOT MODIFY WITHOUT USER CONSENT
-export const CHARACTERS = [
-  "Adrian", 
-  "Venture",
-  "Kae", 
-  "Sammo",
-  "Ion", 
-  "Mophs",
-  "Sal", 
-  "Charlie"
-];
-
-export const SHIPS = [
-  "Hunter (4 Player)",
-  "Bastion (4 Player)",
-  "Privateer (4 Player)",
-  "Scout (3 Player)",
-  "Outlaw (2 Player)",
-  "Solo Outlaw"
-];
-
-export const UI_REACH_MODIFIERS = [
-  "Ancient Vault",
-  "Cryon Reach",
-  "Dead Sensors",
-  "Deadworlds",
-  "Easy Loot",
-  "Epic Loot",
-  "Fast Gate",
-  "Few asteroids",
-  "Ice Storm",
-  "Lava Epics",
-  "Leech Swarms",
-  "Legion Patrols",
-  "Many asteroids",
-  "No ships",
-  "Rogue Turrets",
-  "Artifact: Healing",
-  "Artifact: Ice",
-  "Artifact: Weapon"
-];
-
-export const KILLED_BY_OPTIONS = [
-  "Enemy Player", "AI Legion", "World Hazard", "Friendly Fire", "Unknown"
-];
-
+// Helper functions kept for compatibility (consider moving to utils)
 export interface KillMap {
   [shipName: string]: number;
 }
@@ -66,6 +21,7 @@ export interface Match {
   opponents: string[];
   hero: string;
   ship: string;
+  weapons?: Record<string, number>;
   reachModifiers: string[];
   kills: KillMap;
   result: 'Win' | 'Loss' | 'Draw';
@@ -96,11 +52,14 @@ export const getShipColor = (ship: string): string => {
   return "#a855f7"; 
 };
 
-export const PIE_COLORS = [
-  "#a8c7fa", // Pastel Blue
-  "#81c995", // Pastel Green
-  "#fdc69c", // Pastel Orange
-  "#f28b82", // Pastel Red
-  "#c58af9", // Pastel Purple
-  "#8ab4f8"  // Pastel Cyan
-];
+export type DrillDownTarget = { type: 'Ship' | 'Hero' | 'Teammate' | 'Opponent' | 'Artifact' | 'KPI', name: string };
+
+export interface Insight {
+  title: string;
+  subtitle: string;
+  value: string;
+  subValue: string;
+  color: string;
+  iconType: 'Rocket' | 'Crown' | 'Flame' | 'Zap' | 'Clock' | 'Target' | 'ShieldCheck' | 'Ghost' | 'Crosshair' | 'Moon' | 'Sun';
+  priority: number;
+}
