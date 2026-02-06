@@ -1,0 +1,316 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --hue-ocean: 215;
+  --hue-emerald: 150;
+  --hue-crimson: 345;
+  --hue-amber: 35;
+  --hue-amethyst: 270;
+  --hue-cyan: 190;
+  --app-hue: var(--hue-ocean);
+}
+
+body[data-theme='ocean'] {
+  --app-hue: var(--hue-ocean);
+}
+
+body[data-theme='emerald'] {
+  --app-hue: var(--hue-emerald);
+}
+
+body[data-theme='crimson'] {
+  --app-hue: var(--hue-crimson);
+}
+
+body[data-theme='amber'] {
+  --app-hue: var(--hue-amber);
+}
+
+body[data-theme='amethyst'] {
+  --app-hue: var(--hue-amethyst);
+}
+
+body[data-theme='cyan'] {
+  --app-hue: var(--hue-cyan);
+}
+
+body[data-mode='twilight'][data-theme='amber'] {
+  --app-hue: var(--hue-amber);
+}
+
+/* --- LIGHT MODE --- */
+body[data-mode='light'] {
+  --md-sys-color-primary: hsl(var(--app-hue), 80%, 35%);
+  /* Dark enough for white text */
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: hsl(var(--app-hue), 90%, 90%);
+  --md-sys-color-on-primary-container: hsl(var(--app-hue), 30%, 10%);
+  --md-sys-color-background: #F0F2F5;
+  /* Low-glare cool grey */
+  --md-sys-color-on-background: #191919;
+
+  --md-sys-color-surface: #FFFFFF;
+  --md-sys-color-on-surface: #191919;
+
+  /* Containers */
+  --md-sys-color-surface-container-low: #FFFFFF;
+  --md-sys-color-surface-container: #F7F9FC;
+  --md-sys-color-surface-container-high: #F0F2F5;
+
+  --md-sys-color-outline: #79747e;
+  --md-sys-color-outline-variant: #c4c7c5;
+  --md-sys-color-error: #ba1a1a;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #ffdad6;
+  --md-sys-color-on-error-container: #410002;
+
+  --color-win: #146c2e;
+  --color-loss: #c00015;
+  --color-draw: #546e7a;
+
+  /* POI / Categories - Darker/Richer for light mode readability */
+  --color-easy: #059669;
+  /* Emerald 600 */
+  --color-medium: #D97706;
+  /* Amber 600 */
+  --color-epic: #7C3AED;
+  /* Violet 600 */
+
+  --color-weapon: #E11D48;
+  /* Rose 600 */
+  --color-equipment: #059669;
+  /* Emerald 600 */
+
+  --elevation-1: 0px 1px 3px 1px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.3);
+  --elevation-2: 0px 2px 6px 2px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.3);
+}
+
+/* --- DARK MODE --- */
+body[data-mode='dark'] {
+  /* Primary accent - warm gold */
+  --md-sys-color-primary: #DAA520;
+  --md-sys-color-on-primary: #1A1406;
+  --md-sys-color-primary-container: #3D2E0A;
+  --md-sys-color-on-primary-container: #F5E6C3;
+
+  /* Backgrounds - Material Design 3 Standard Dark */
+  --md-sys-color-background: #121212;
+  --md-sys-color-on-background: #E2E2E2;
+
+  --md-sys-color-surface: #121212;
+  --md-sys-color-on-surface: #E2E2E2;
+
+  /* Containers - Subtle elevation */
+  --md-sys-color-surface-container-low: #1E1E1E;
+  --md-sys-color-surface-container: #232323;
+  --md-sys-color-surface-container-high: #2C2C2C;
+
+  /* Outlines - much softer, almost invisible */
+  --md-sys-color-outline: #444444;
+  --md-sys-color-outline-variant: #2A2A2A;
+
+  /* Semantic colors - muted versions */
+  --md-sys-color-error: #FF6B6B;
+  --md-sys-color-on-error: #1A0505;
+
+  /* Functional Colors */
+  --color-win: #4ADE80;
+  --color-on-win: #003912;
+  --color-loss: #F87171;
+  --color-on-loss: #551010;
+  --color-draw: #94A3B8;
+  --color-on-draw: #202020;
+
+  /* POI / Categories - Softer for dark mode */
+  --color-easy: #34D399;
+  /* Emerald 400 */
+  --color-medium: #FBBF24;
+  /* Amber 400 */
+  --color-epic: #A78BFA;
+  /* Violet 400 */
+
+  --color-weapon: #F43F5E;
+  /* Rose 500 (mutes well) */
+  --color-equipment: #10B981;
+  /* Emerald 500 */
+
+  /* Text hierarchy */
+  --text-primary: #EEEEEE;
+  --text-secondary: #A0A0A0;
+  --text-muted: #666666;
+
+  /* Shadows for elevation */
+  --elevation-1: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --elevation-2: 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+
+body[data-theme='amber'][data-mode='dark'],
+body[data-theme='amber'][data-mode='twilight'] {
+  --md-sys-color-on-primary: #402800;
+}
+
+
+/* --- TWILIGHT MODE (Discord-like) --- */
+body[data-mode='twilight'] {
+  --md-sys-color-primary: hsl(var(--app-hue), 80%, 70%);
+  --md-sys-color-on-primary: hsl(var(--app-hue), 40%, 15%);
+  --md-sys-color-primary-container: hsl(var(--app-hue), 60%, 55%);
+  --md-sys-color-on-primary-container: #ffffff;
+
+  --md-sys-color-background: #313338;
+  --md-sys-color-on-background: #f2f3f5;
+  --md-sys-color-surface: #313338;
+  --md-sys-color-on-surface: #f2f3f5;
+
+  --md-sys-color-surface-container-low: #2b2d31;
+  --md-sys-color-surface-container: #232428;
+  --md-sys-color-surface-container-high: #1e1f22;
+
+  --md-sys-color-outline: #b5bac1;
+  --md-sys-color-outline-variant: #1e1f22;
+  --color-win: #23a559;
+  --color-loss: #da373c;
+  --color-draw: #949ba4;
+  --elevation-1: 0 1px 0 rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.1);
+  --elevation-2: 0 8px 16px rgba(0, 0, 0, 0.24);
+}
+
+body {
+  background-color: var(--md-sys-color-background);
+  color: var(--md-sys-color-on-background);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* THIS CLASS IS CRITICAL FOR HIERARCHY */
+.md-card {
+  background-color: var(--md-sys-color-surface-container-low);
+  border-radius: 12px;
+  padding: 16px;
+  border: none !important;
+}
+
+/* Typography utilities */
+.text-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #EEEEEE);
+}
+
+.text-body {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-primary, #EEEEEE);
+}
+
+.text-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary, #A0A0A0);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.text-caption {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-muted, #666666);
+}
+
+.text-secondary {
+  color: var(--text-secondary, #A0A0A0) !important;
+}
+
+.text-muted {
+  color: var(--text-muted, #666666) !important;
+}
+
+.artifact-btn-active {
+  background-color: var(--md-sys-color-primary) !important;
+  color: var(--md-sys-color-on-primary) !important;
+}
+
+.combat-btn-active {
+  border-color: var(--color-win) !important;
+  color: var(--color-win) !important;
+}
+
+.yellow-btn-active {
+  background-color: #f59e0b !important;
+  color: black !important;
+}
+
+/* --- FUNCTIONAL UTILITIES --- */
+.bg-poi-easy {
+  background-color: var(--color-easy);
+}
+
+.bg-poi-medium {
+  background-color: var(--color-medium);
+}
+
+.bg-poi-epic {
+  background-color: var(--color-epic);
+}
+
+.bg-weapon-soft {
+  background-color: color-mix(in srgb, var(--color-weapon), transparent 80%);
+}
+
+.text-weapon {
+  color: var(--color-weapon) !important;
+}
+
+.ring-weapon {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-weapon), transparent 70%);
+}
+
+.bg-equipment-soft {
+  background-color: color-mix(in srgb, var(--color-equipment), transparent 80%);
+}
+
+.text-equipment {
+  color: var(--color-equipment) !important;
+}
+
+.ring-equipment {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-equipment), transparent 70%);
+}
+
+.btn-win {
+  background-color: var(--color-win);
+  color: var(--color-on-win);
+}
+
+.btn-loss {
+  background-color: var(--color-loss);
+  color: var(--color-on-loss);
+}
+
+.btn-draw {
+  background-color: var(--color-draw);
+  color: var(--color-on-draw);
+}
+
+.btn-win:hover {
+  filter: brightness(1.1);
+}
+
+.btn-loss:hover {
+  filter: brightness(1.1);
+}
+
+.btn-draw:hover {
+  filter: brightness(1.1);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--md-sys-color-outline-variant);
+  border-radius: 4px;
+}

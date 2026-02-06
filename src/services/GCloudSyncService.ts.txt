@@ -1,0 +1,54 @@
+import { Storage } from '@google-cloud/storage';
+import * as path from 'path';
+import * as fs from 'fs';
+
+class GCloudSyncService {
+    private storage: Storage | null = null;
+    private bucketName: string = "";
+    private isInitialized = false;
+
+    /**
+     * Initializes the Storage client for continuous training sync.
+     * @param keyPath Path to the service account JSON file.
+     * @param bucketName Name of your Google Cloud Storage bucket.
+     */
+    public initialize(keyPath: string, bucketName: string) {
+        try {
+            this.storage = new Storage({ keyFilename: keyPath });
+            this.bucketName = bucketName;
+            this.isInitialized = true;
+            console.log(`GCloud Storage initialized for bucket: ${bucketName}`);
+        } catch (error) {
+            console.error('Failed to initialize GCloud Storage:', error);
+            this.isInitialized = false;
+        }
+    }
+
+    /**
+     * Uploads a file to the cloud bucket.
+     */
+    public async uploadFile(localFilePath: string, destinationPath: string) {
+        if (!this.isInitialized || !this.storage || !this.bucketName) return;
+        try {
+            await this.storage.bucket(this.bucketName).upload(localFilePath, {
+                destination: destinationPath,
+            });
+            console.log(`Uploaded to cloud: ${destinationPath}`);
+        } catch (error) {
+            console.error('GCloud Upload Error:', error);
+        }
+    }
+
+    /**
+     * Helper to sync a training sample (Both the PNG and the JSON label).
+     */
+    public async syncSample(trainingDataDir: string, sampleId: string) {
+        const imageFile = `sample_${sampleId}.png`;
+        const jsonFile = `sample_${sampleId}.json`;
+
+        await this.uploadFile(path.join(trainingDataDir, imageFile), `dataset/${imageFile}`);
+        await this.uploadFile(path.join(trainingDataDir, jsonFile), `dataset/${jsonFile}`);
+    }
+}
+
+export default new GCloudSyncService();
