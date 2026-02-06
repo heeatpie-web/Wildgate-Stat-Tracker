@@ -1,0 +1,330 @@
+import React, { useState, useMemo } from 'react';
+import { Save, Trash2, Download, Upload, Users, UserMinus, UserCheck, Eye, ChevronDown, FileJson, X } from 'lucide-react';
+import { useUIState } from '../providers/UIStateProvider';
+import { useAppStore } from '../store/useAppStore';
+import { PlayerRole } from '../store/slices/createMappingSlice';
+import Logger from '../utils/logger';
+
+// Role badge component
+const RoleBadge: React.FC<{ role: PlayerRole }> = ({ role }) => {
+    const styles: Record<PlayerRole, { bg: string; text: string; label: string }> = {
+        teammate: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Teammate' },
+        opponent: { bg: 'bg-rose-500/20', text: 'text-rose-400', label: 'Opponent' },
+        mixed: { bg: 'bg-amber-500/20', text: 'text-amber-400', label: 'Mixed' },
+        unknown: { bg: 'bg-md-sys-surface3', text: 'text-md-sys-on-surface/40', label: 'Unknown' }
+    };
+    const s = styles[role];
+    return (
+        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${s.bg} ${s.text}`}>
+            {s.label}
+        </span>
+    );
+};
+
+export const IdMapper: React.FC = () => {
+    const {
+        detectedUnknowns,
+        knownMappings,
+        playerProfiles,
+        addMapping,
+        removeMapping,
+        importMappings,
+        getPlayerRole,
+        getMostFrequentOpponents,
+        getMostFrequentTeammates
+    } = useAppStore();
+    const { setToast } = useUIState();
+    const [nameInputs, setNameInputs] = useState<Record<string, string>>({});
+    const [jsonInput, setJsonInput] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [activeTab, setActiveTab] = useState<'unknowns' | 'known' | 'relationships'>('unknowns');
+
+    // Computed relationship data
+    const topOpponents = useMemo(() => getMostFrequentOpponents(5), [playerProfiles]);
+    const topTeammates = useMemo(() => getMostFrequentTeammates(5), [playerProfiles]);
+
+    const handleSave = (id: string) => {
+        const name = nameInputs[id];
+        if (name && name.trim()) {
+            addMapping(id, name.trim());
+            const newInputs = { ...nameInputs };
+            delete newInputs[id];
+            setNameInputs(newInputs);
+            setToast({ message: "Mapping Saved", type: 'success' });
+            Logger.info('IdMapper', `Saved mapping: ${id} -> ${name.trim()}`);
+        }
+    };
+
+    const handleExport = () => {
+        const exportData = {
+            mappings: knownMappings,
+            profiles: playerProfiles,
+            exportedAt: new Date().toISOString()
+        };
+        const data = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `wildgate_id_mappings_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setToast({ message: "Mappings Exported", type: 'success' });
+        Logger.info('IdMapper', `Exported ${Object.keys(knownMappings).length} mappings`);
+    };
+
+    const handleImport = () => {
+        try {
+            const parsed = JSON.parse(jsonInput);
+            // Support both old format (direct mappings) and new format (with profiles)
+            const mappings = parsed.mappings || parsed;
+            if (typeof mappings === 'object') {
+                importMappings(mappings);
+                setJsonInput('');
+                setToast({ message: "Mappings Imported Successfully", type: 'success' });
+                Logger.info('IdMapper', `Imported mappings`);
+            }
+        } catch (e) {
+            setToast({ message: "Invalid JSON", type: 'error' });
+            Logger.error('IdMapper', 'Import failed', e);
+        }
+    };
+
+    const formatLastSeen = (timestamp: number) => {
+        const diff = Date.now() - timestamp;
+        const mins = Math.floor(diff / 60000);
+        if (mins < 60) return `${mins}m ago`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `${hours}h ago`;
+        return new Date(timestamp).toLocaleDateString();
+    };
+
+    return (
+        <div className="flex flex-col gap-4 p-4 bg-md-sys-surface1 rounded-xl">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h3 className="text-xl font-bold text-md-sys-on-surface">ID Mapping</h3>
+                    <p className="text-xs text-md-sys-on-surface/60">Track players and relationships</p>
+                </div>
+                <div className="flex gap-2">
+                    <button onClick={() => {
+                        const lines = Object.entries(knownMappings).map(([id, name]) => `    '${id}': '${name}'`).join(',\n');
+                        const code = `// Paste into utils/guids.ts\n${lines}`;
+                        navigator.clipboard.writeText(code);
+                        setToast({ message: "Copied to Clipboard!", type: 'success' });
+                    }} className="flex items-center gap-2 px-3 py-1.5 bg-md-sys-primary/10 text-md-sys-primary rounded-lg text-sm font-bold hover:bg-md-sys-primary/20 transition-colors">
+                        <FileJson size={14} /> Copy Code
+                    </button>
+                    <button onClick={handleExport} className="flex items-center gap-2 px-3 py-1.5 bg-md-sys-primary/10 text-md-sys-primary rounded-lg text-sm font-bold hover:bg-md-sys-primary/20 transition-colors">
+                        <Download size={14} /> Export JSON
+                    </button>
+                </div>
+            </div>
+
+            {/* Search */}
+            <div className="bg-md-sys-surface2 p-2 rounded-lg flex items-center gap-2">
+                <Users size={14} className="opacity-50" />
+                <input
+                    type="text"
+                    placeholder="Search IDs or Names..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    className="flex-1 bg-transparent text-xs outline-none font-medium placeholder:opacity-40"
+                />
+                {searchTerm && (
+                    <button onClick={() => setSearchTerm('')} className="opacity-50 hover:opacity-100">
+                        <X size={12} />
+                    </button>
+                )}
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-1 bg-md-sys-surface2 p-1 rounded-lg">
+                {[
+                    { id: 'unknowns', label: 'Unknowns', count: Object.keys(detectedUnknowns).length },
+                    { id: 'known', label: 'Known', count: Object.keys(knownMappings).length },
+                    { id: 'relationships', label: 'Relationships', count: Object.keys(playerProfiles).length }
+                ].map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as any)}
+                        className={`flex-1 px-3 py-2 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${activeTab === tab.id
+                            ? 'bg-md-sys-primary text-md-sys-onPrimary'
+                            : 'hover:bg-md-sys-surface3 text-md-sys-on-surface/60'
+                            }`}
+                    >
+                        {tab.label}
+                        {tab.count > 0 && (
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] ${activeTab === tab.id ? 'bg-white/20' : 'bg-md-sys-surface3'
+                                }`}>{tab.count}</span>
+                        )}
+                    </button>
+                ))}
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 min-h-0">
+                {/* Unknowns Tab */}
+                {activeTab === 'unknowns' && (
+                    <div className="bg-md-sys-surface2 rounded-lg p-2 max-h-60 overflow-y-auto space-y-2">
+                        {Object.keys(detectedUnknowns).length === 0 ? (
+                            <div className="text-center p-8 text-xs opacity-40">No unknown IDs detected yet</div>
+                        ) : (
+                            Object.entries(detectedUnknowns)
+                                .filter(([id, meta]) =>
+                                    !searchTerm ||
+                                    id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                    (playerProfiles[id] && playerProfiles[id].name?.toLowerCase().includes(searchTerm.toLowerCase()))
+                                )
+                                .map(([id, meta]) => {
+                                    const profile = playerProfiles[id];
+                                    const role = getPlayerRole(id);
+                                    return (
+                                        <div key={id} className="flex items-center gap-3 bg-md-sys-surface3 p-2 rounded-md">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] font-mono opacity-50 bg-black/20 px-1 rounded">{meta.type}</span>
+                                                    <RoleBadge role={role} />
+                                                </div>
+                                                <div className="text-xs font-mono truncate select-all opacity-70 mt-0.5" title={id}>{id.slice(0, 20)}...</div>
+                                                <div className="flex gap-3 text-[10px] opacity-40 mt-1">
+                                                    <span>Seen {profile?.sightings || 1}x</span>
+                                                    <span>{formatLastSeen(meta.lastSeen)}</span>
+                                                </div>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                placeholder="Name..."
+                                                value={nameInputs[id] || ''}
+                                                onChange={e => setNameInputs({ ...nameInputs, [id]: e.target.value })}
+                                                className="w-24 bg-black/20 rounded px-2 py-1 text-xs outline-none focus:ring-1 ring-md-sys-primary"
+                                                onKeyDown={e => e.key === 'Enter' && handleSave(id)}
+                                            />
+                                            <button
+                                                onClick={() => handleSave(id)}
+                                                disabled={!nameInputs[id]}
+                                                className="p-1.5 bg-emerald-500/20 text-emerald-500 rounded hover:bg-emerald-500/30 disabled:opacity-30"
+                                            >
+                                                <Save size={14} />
+                                            </button>
+                                        </div>
+                                    );
+                                })
+                        )}
+                    </div>
+                )}
+
+                {/* Known Tab */}
+                {activeTab === 'known' && (
+                    <div className="bg-md-sys-surface2 rounded-lg p-2 max-h-60 overflow-y-auto space-y-1">
+                        {Object.entries(knownMappings)
+                            .filter(([id, name]) =>
+                                !searchTerm ||
+                                name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                id.toLowerCase().includes(searchTerm.toLowerCase())
+                            )
+                            .length === 0 ? (
+                            <div className="text-center p-8 text-xs opacity-40">No mappings match '{searchTerm}'</div>
+                        ) : (
+                            Object.entries(knownMappings)
+                                .filter(([id, name]) =>
+                                    !searchTerm ||
+                                    name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                    id.toLowerCase().includes(searchTerm.toLowerCase())
+                                )
+                                .map(([id, name]) => {
+                                    const profile = playerProfiles[id];
+                                    const role = getPlayerRole(id);
+                                    return (
+                                        <div key={id} className="flex items-center justify-between bg-md-sys-surface3/50 px-3 py-2 rounded text-xs group">
+                                            <div className="flex items-center gap-3 overflow-hidden">
+                                                <span className="font-bold text-md-sys-primary truncate">{name}</span>
+                                                <RoleBadge role={role} />
+                                                {profile && (
+                                                    <span className="text-[10px] opacity-40">
+                                                        {profile.sightings}x seen
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <button
+                                                onClick={() => removeMapping(id)}
+                                                className="opacity-0 group-hover:opacity-100 p-1 text-rose-400 hover:bg-rose-500/10 rounded transition-all"
+                                            >
+                                                <Trash2 size={12} />
+                                            </button>
+                                        </div>
+                                    );
+                                })
+                        )}
+                    </div>
+                )}
+
+                {/* Relationships Tab */}
+                {activeTab === 'relationships' && (
+                    <div className="space-y-4">
+                        {/* Top Opponents */}
+                        <div className="bg-md-sys-surface2 rounded-lg p-3">
+                            <h4 className="text-xs font-bold uppercase tracking-wide text-rose-400 flex items-center gap-2 mb-2">
+                                <UserMinus size={12} /> Frequent Opponents
+                            </h4>
+                            {topOpponents.length === 0 ? (
+                                <div className="text-xs opacity-40 text-center py-2">No opponent data yet</div>
+                            ) : (
+                                <div className="space-y-1">
+                                    {topOpponents.map((p, i) => (
+                                        <div key={p.id} className="flex items-center gap-2 text-xs">
+                                            <span className="w-4 text-rose-400 font-bold">{i + 1}</span>
+                                            <span className="flex-1 truncate font-medium">{p.name || p.id.slice(0, 12) + '...'}</span>
+                                            <span className="text-rose-400/70">{Object.values(p.playedAgainst).reduce((a, b) => a + b, 0)} games</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Top Teammates */}
+                        <div className="bg-md-sys-surface2 rounded-lg p-3">
+                            <h4 className="text-xs font-bold uppercase tracking-wide text-emerald-400 flex items-center gap-2 mb-2">
+                                <UserCheck size={12} /> Frequent Teammates
+                            </h4>
+                            {topTeammates.length === 0 ? (
+                                <div className="text-xs opacity-40 text-center py-2">No teammate data yet</div>
+                            ) : (
+                                <div className="space-y-1">
+                                    {topTeammates.map((p, i) => (
+                                        <div key={p.id} className="flex items-center gap-2 text-xs">
+                                            <span className="w-4 text-emerald-400 font-bold">{i + 1}</span>
+                                            <span className="flex-1 truncate font-medium">{p.name || p.id.slice(0, 12) + '...'}</span>
+                                            <span className="text-emerald-400/70">{Object.values(p.playedWith).reduce((a, b) => a + b, 0)} games</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Import Section */}
+            <details className="border-t border-md-sys-outline/10 pt-4">
+                <summary className="text-xs font-bold cursor-pointer hover:text-md-sys-primary transition-colors flex items-center gap-1">
+                    <ChevronDown size={12} /> Advanced: Import JSON
+                </summary>
+                <div className="mt-2 flex gap-2">
+                    <textarea
+                        value={jsonInput}
+                        onChange={e => setJsonInput(e.target.value)}
+                        placeholder='Paste JSON here: {"ID": "Name", ...}'
+                        className="flex-1 h-20 bg-black/20 rounded p-2 text-[10px] font-mono outline-none"
+                    />
+                    <button onClick={handleImport} className="px-3 bg-md-sys-surface3 hover:bg-md-sys-primary hover:text-md-sys-onPrimary rounded transition-colors text-xs font-bold">
+                        Import
+                    </button>
+                </div>
+            </details>
+        </div>
+    );
+};

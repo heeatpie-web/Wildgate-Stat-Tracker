@@ -7,6 +7,13 @@ export default defineConfig({
   server: {
     open: false, // Electron handles opening the window now
     host: true,
+    port: 5173,
+    strictPort: true,
+  },
+  resolve: {
+    alias: {
+      "@": "/src",
+    },
   },
   optimizeDeps: {
     include: ['react-grid-layout', 'react-resizable'],
