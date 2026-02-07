@@ -2,7 +2,7 @@
  * @module App
  * Root application component. Orchestrates:
  * - Hook integration (log monitor, Discord RPC, keyboard shortcuts, tilt monitor)
- * - View routing (recording, analytics, history, dev-ocr)
+ * - View routing (recording, analytics, history, smart-captures)
  * - Modal management (wizard, settings, changelog, tutorial, OCR review)
  * - IPC listeners for auto-update and overlay hotkey (F9)
  */
@@ -34,11 +34,13 @@ import { CHANGELOG } from './utils/changelog';
 import { Toast } from './components/Toast';
 import { IdMapper } from './components/IdMapper';
 import DevOCRPanel from './components/DevOCRPanel';
+import SmartCapturesPanel from './components/SmartCapturesPanel';
+import { MatchRecordingPage } from './components/MatchRecordingPage';
 import { OCRReviewModal } from './components/ocr/OCRReviewModal';
 import type { OCRExtractedData } from './utils/ocr/ocrTypes';
 import { useAppStore } from './store/useAppStore';
-
-const { ipcRenderer } = window.require ? window.require('electron') : { ipcRenderer: null };
+import { getElectronAPI } from './utils/electronAPI';
+import { findClosestMatch } from './utils/stringUtils';
 
 const App: React.FC = () => {
     // START IN DEV MODE BY DEFAULT per user request
@@ -99,23 +101,24 @@ const App: React.FC = () => {
             body.style.backgroundColor = 'transparent';
             document.documentElement.style.backgroundColor = 'transparent';
             body.style.overflow = 'hidden';
-            ipcRenderer?.send('toggle-overlay', true);
+            getElectronAPI()?.send('toggle-overlay', true);
         } else {
             body.style.removeProperty('background-color');
             document.documentElement.style.removeProperty('background-color');
             body.style.removeProperty('overflow');
-            ipcRenderer?.send('toggle-overlay', false);
+            getElectronAPI()?.send('toggle-overlay', false);
         }
     }, [appearanceMode, colorTheme, customHue, colorblindMode, disableAnimations, isOverlayMode]);
 
     // Update Status Listeners
     useEffect(() => {
-        if (!ipcRenderer) return;
-        ipcRenderer.on('update_available', () => setUpdateStatus('available'));
-        ipcRenderer.on('update_downloaded', () => setUpdateStatus('downloaded'));
+        const api = getElectronAPI();
+        if (!api) return;
+        const unsubAvailable = api.on('update_available', () => setUpdateStatus('available'));
+        const unsubDownloaded = api.on('update_downloaded', () => setUpdateStatus('downloaded'));
 
         // F9 Hotkey Listener
-        ipcRenderer.on('hotkey-toggle-overlay', (_event: any, forceState?: boolean) => {
+        const unsubHotkey = api.on('hotkey-toggle-overlay', (forceState?: boolean) => {
             if (typeof forceState === 'boolean') {
                 setIsOverlayMode(forceState);
             } else {
@@ -124,9 +127,9 @@ const App: React.FC = () => {
         });
 
         return () => {
-            ipcRenderer.removeAllListeners('update_available');
-            ipcRenderer.removeAllListeners('update_downloaded');
-            ipcRenderer.removeAllListeners('hotkey-toggle-overlay');
+            unsubAvailable();
+            unsubDownloaded();
+            unsubHotkey();
         };
     }, [setUpdateStatus, setIsOverlayMode]);
 
@@ -146,43 +149,82 @@ const App: React.FC = () => {
 
     // OCR Data Application Handler
     const handleApplyOCRData = useCallback((data: OCRExtractedData) => {
+        const ocrCorrections = useAppStore.getState().ocrCorrections;
+
+        // Resolve an OCR name: apply corrections then fuzzy-match against known names
+        const resolvePlayerName = (ocrName: string, existingList: string[]): string => {
+            if (!ocrName || ocrName.length < 2) return ocrName;
+            // 1. Apply learned OCR corrections
+            const correction = ocrCorrections?.[ocrName];
+            if (correction && correction.count >= 2) return correction.correctedTo;
+            // 2. Case-insensitive exact match against existing list + registry
+            const allKnown = [...new Set([...existingList, ...pilotRegistry])];
+            const exactCI = allKnown.find(n => n.toLowerCase() === ocrName.toLowerCase());
+            if (exactCI) return exactCI;
+            // 3. Fuzzy match (Levenshtein threshold 2)
+            const fuzzy = findClosestMatch(ocrName, allKnown, 2);
+            if (fuzzy) return fuzzy;
+            return ocrName;
+        };
+
         // Apply ship if detected
         if (data.playerShip?.shipType) {
-            setActiveShip(data.playerShip.shipType);
+            setActiveShip(data.playerShip.shipType, 'ocr');
         }
 
         // Apply reach modifiers
         if (data.reachModifiers.length > 0) {
             const newModifiers = data.reachModifiers.map(m => m.name);
             const combined = [...new Set([...selectedReachModifiers, ...newModifiers])];
-            setSelectedReachModifiers(combined);
+            setSelectedReachModifiers(combined, 'ocr');
         }
 
-        // Add all detected players to registry
+        // Add all detected players to registry (resolved names)
         const allPlayers = [
             ...data.teammates.map(t => t.name),
             ...data.opponentTeams.flatMap(team => team.players.map(p => p.name))
         ];
         allPlayers.forEach(player => {
-            if (player && player.length > 2 && !pilotRegistry.includes(player)) {
-                addToRegistry(player);
+            const resolved = resolvePlayerName(player, []);
+            if (resolved && resolved.length > 2 && !pilotRegistry.includes(resolved)) {
+                addToRegistry(resolved);
             }
         });
 
-        // Apply teammates
+        // Apply teammates (with dedup via fuzzy matching)
         data.teammates.forEach(teammate => {
-            if (teammate.name && !selectedTeammates.includes(teammate.name)) {
-                setSelectedTeammates((prev: string[]) => [...prev, teammate.name]);
+            const resolved = resolvePlayerName(teammate.name, selectedTeammates);
+            if (resolved && !selectedTeammates.some(t => t.toLowerCase() === resolved.toLowerCase())) {
+                setSelectedTeammates((prev: string[]) => prev.some(t => t.toLowerCase() === resolved.toLowerCase()) ? prev : [...prev, resolved]);
             }
         });
 
-        // Apply opponents
+        // Apply opponents (with dedup via fuzzy matching)
         data.opponentTeams.forEach(team => {
             team.players.forEach(player => {
-                if (player.name && !selectedOpponents.includes(player.name)) {
-                    setSelectedOpponents((prev: string[]) => [...prev, player.name]);
+                const resolved = resolvePlayerName(player.name, selectedOpponents);
+                if (resolved && !selectedOpponents.some(o => o.toLowerCase() === resolved.toLowerCase())) {
+                    setSelectedOpponents((prev: string[]) => prev.some(o => o.toLowerCase() === resolved.toLowerCase()) ? prev : [...prev, resolved]);
                 }
             });
+        });
+
+        // Apply artifact type if detected
+        if (data.artifactType) {
+            useAppStore.getState().setPendingArtifactType(data.artifactType);
+        }
+
+        // Store OCR debug metadata for match log display (Bug 3)
+        const pendingMatch = useAppStore.getState().pendingMatchData || {};
+        useAppStore.getState().setPendingMatchData({
+            ...pendingMatch,
+            ocrDebug: {
+                rawText: data.rawText?.substring(0, 2000),
+                confidence: data.overallConfidence,
+                source: data.ocrSource,
+                mergeStats: data.mergeStats,
+                timestamp: data.captureTimestamp || Date.now(),
+            }
         });
 
         // Close modal and show success toast
@@ -217,13 +259,19 @@ const App: React.FC = () => {
                 );
             case 'history':
                 return (
-                    <div className="h-full p-3 overflow-auto">
+                    <div className="h-full overflow-hidden">
                         <HistoryTable />
+                    </div>
+                );
+            case 'smart-captures':
+                return (
+                    <div className="h-full p-4 overflow-auto">
+                        <SmartCapturesPanel />
                     </div>
                 );
             case 'dev-ocr':
                 return (
-                    <div className="h-full p-4 overflow-auto">
+                    <div className="h-full overflow-hidden">
                         <DevOCRPanel />
                     </div>
                 );

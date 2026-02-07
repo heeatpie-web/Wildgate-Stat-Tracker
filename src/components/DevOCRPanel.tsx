@@ -7,10 +7,13 @@ import SimulatorPanel from './SimulatorPanel';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { bundleMatchArtifacts } from '../utils/artifactService';
+import { getElectronAPI } from '../utils/electronAPI';
+import { useAppStore } from '../store/useAppStore';
 
 const DevOCRPanel: React.FC = () => {
     const { matches, updateMatch } = useGameData();
     const { activeUser } = useUIState();
+    const ocrMode = useAppStore(s => s.ocrMode);
     const [tab, setTab] = useState<'OCR' | 'Sim' | 'Utils'>('OCR');
     const [imageSrc, setImageSrc] = useState<string | null>(null);
     const [ocrResult, setOcrResult] = useState<OCRExtractedData | null>(null);
@@ -18,6 +21,8 @@ const DevOCRPanel: React.FC = () => {
     const [status, setStatus] = useState("");
     const [recentFiles, setRecentFiles] = useState<any[]>([]);
     const [currentFile, setCurrentFile] = useState<any>(null);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
     useEffect(() => {
         loadRecentFiles();
@@ -25,10 +30,9 @@ const DevOCRPanel: React.FC = () => {
 
     const loadRecentFiles = async () => {
         try {
-            const win = window as any;
-            const electron = win.require?.('electron');
-            if (electron) {
-                const files = await electron.ipcRenderer.invoke('list-ocr-debug-files');
+            const api = getElectronAPI();
+            if (api) {
+                const files = await api.invoke('list-ocr-debug-files');
                 setRecentFiles(files);
             }
         } catch (e) {
@@ -36,26 +40,28 @@ const DevOCRPanel: React.FC = () => {
         }
     };
 
-    const loadFile = async (path: string) => {
+    const loadFile = async (filePath: string) => {
+        setLoadError(null);
         try {
-            const win = window as any;
-            const fs = win.require?.('fs');
-            if (fs) {
-                const base64 = fs.readFileSync(path, 'base64');
+            const api = getElectronAPI();
+            if (api) {
+                const base64 = await api.invoke('read-file-base64', filePath);
+                if (!base64) throw new Error('File read returned null');
                 setImageSrc(`data:image/png;base64,${base64}`);
                 setOcrResult(null);
 
-                // Find file object to set currentFile
-                const found = recentFiles.find(f => f.path === path) || { name: path.split(/[\\/]/).pop(), path };
+                const found = recentFiles.find(f => f.path === filePath) || { name: filePath.split(/[\\/]/).pop(), path: filePath };
                 setCurrentFile(found);
 
                 setStatus("Loaded: " + found.name);
             } else {
-                console.error("FS not available");
+                throw new Error("ElectronAPI not available");
             }
         } catch (e: any) {
             console.error("Failed to load file", e);
-            setStatus("Error loading file: " + e.message);
+            const errMsg = "Error loading file: " + e.message;
+            setStatus(errMsg);
+            setLoadError(errMsg);
         }
     }
 
@@ -106,12 +112,10 @@ const DevOCRPanel: React.FC = () => {
         setLoading(true);
         setStatus("Decoding Telemetry Cache (All Files)...");
         try {
-            const win = window as any;
-            const electron = win.require?.('electron');
-            const ipcRenderer = electron?.ipcRenderer;
-            if (!ipcRenderer) throw new Error("IPC not available");
+            const api = getElectronAPI();
+            if (!api) throw new Error("IPC not available");
 
-            const result = await ipcRenderer.invoke('decode-telemetry-cache');
+            const result = await api.invoke('decode-telemetry-cache');
             if (result.success) {
                 setStatus(`Success! ${result.message}`);
             } else {
@@ -137,14 +141,15 @@ const DevOCRPanel: React.FC = () => {
     const runOCR = async () => {
         if (!imageSrc) return;
         setLoading(true);
-        setStatus(`Running OCR (Tesseract.js + eng+chi_sim)${activeUser ? ` with anchor: ${activeUser}` : ''}...`);
+        const modeLabel = ocrMode === 'both' ? 'Local+Cloud' : ocrMode === 'cloud' ? 'Cloud Vision' : 'Tesseract (Local)';
+        setStatus(`Running OCR (${modeLabel})${activeUser ? ` with anchor: ${activeUser}` : ''}...`);
         setOcrResult(null);
         try {
             // Extract base64 from data URL
             const base64Data = imageSrc.replace(/^data:image\/\w+;base64,/, '');
 
             // Pass activeUser for anchor-based detection
-            const ocrResponse = await ocrProcessCapture(base64Data, activeUser || null);
+            const ocrResponse = await ocrProcessCapture(base64Data, activeUser || null, null, ocrMode);
 
             if (ocrResponse.success && ocrResponse.data) {
                 const ocrData = ocrResponse.data;
@@ -212,12 +217,10 @@ const DevOCRPanel: React.FC = () => {
                                     setLoading(true);
                                     setStatus("Clearing archives...");
                                     try {
-                                        const win = window as any;
-                                        const electron = win.require?.('electron');
-                                        const ipcRenderer = electron?.ipcRenderer;
-                                        if (!ipcRenderer) throw new Error("IPC not available");
+                                        const api = getElectronAPI();
+                                        if (!api) throw new Error("IPC not available");
 
-                                        const res = await ipcRenderer.invoke('clear-telemetry-archives');
+                                        const res = await api.invoke('clear-telemetry-archives');
                                         if (res.success) setStatus(`Cleared ${res.count} file(s).`);
                                         else setStatus(`Error: ${res.message}`);
                                     } catch (e: any) {
@@ -242,12 +245,10 @@ const DevOCRPanel: React.FC = () => {
                                     setLoading(true);
                                     setStatus("Clearing preprocessed images...");
                                     try {
-                                        const win = window as any;
-                                        const electron = win.require?.('electron');
-                                        const ipcRenderer = electron?.ipcRenderer;
-                                        if (!ipcRenderer) throw new Error("IPC not available");
+                                        const api = getElectronAPI();
+                                        if (!api) throw new Error("IPC not available");
 
-                                        const res = await ipcRenderer.invoke('clear-ocr-preprocessed');
+                                        const res = await api.invoke('clear-ocr-preprocessed');
                                         if (res.success) setStatus(`Cleared ${res.deletedCount} preprocessed image(s).`);
                                         else setStatus(`Error: ${res.error}`);
                                     } catch (e: any) {
@@ -271,19 +272,14 @@ const DevOCRPanel: React.FC = () => {
                                 setLoading(true);
                                 setStatus("Getting OCR debug directory...");
                                 try {
-                                    const win = window as any;
-                                    const electron = win.require?.('electron');
-                                    const ipcRenderer = electron?.ipcRenderer;
-                                    if (!ipcRenderer) throw new Error("IPC not available");
+                                    const api = getElectronAPI();
+                                    if (!api) throw new Error("IPC not available");
 
-                                    const debugDir = await ipcRenderer.invoke('get-ocr-debug-dir');
+                                    const debugDir = await api.invoke('get-ocr-debug-dir');
                                     setStatus(`OCR Debug Dir: ${debugDir}`);
 
                                     // Open the folder in explorer
-                                    const { shell } = win.require?.('electron') || {};
-                                    if (shell?.openPath) {
-                                        await shell.openPath(debugDir);
-                                    }
+                                    await api.invoke('open-path', debugDir);
                                 } catch (e: any) {
                                     setStatus(`Error: ${e.message}`);
                                 }
@@ -316,12 +312,18 @@ const DevOCRPanel: React.FC = () => {
                         <div className="flex gap-4 flex-1 min-h-0">
                             {/* Image Preview Area */}
                             <div className="flex-1 bg-black rounded-xl border border-md-sys-outline/20 overflow-hidden relative flex items-center justify-center">
+                                {loadError && (
+                                    <div className="absolute top-2 left-2 right-2 bg-red-500/20 border border-red-500/30 rounded-lg px-3 py-2 text-xs text-red-400 z-10">
+                                        {loadError}
+                                    </div>
+                                )}
                                 {imageSrc ? (
                                     <img
                                         src={imageSrc}
-                                        className="object-contain max-w-full max-h-full select-none"
+                                        className="object-contain max-w-full max-h-full select-none cursor-zoom-in"
                                         alt="Preview"
                                         draggable={false}
+                                        onClick={() => setLightboxSrc(imageSrc)}
                                     />
                                 ) : (
                                     <div className="text-md-sys-on-surface opacity-20 font-black uppercase text-4xl">Drop Target</div>
@@ -335,7 +337,7 @@ const DevOCRPanel: React.FC = () => {
                                     disabled={loading || !imageSrc}
                                     className="p-4 bg-md-sys-primary text-md-sys-on-primary font-bold rounded-lg hover:brightness-110 disabled:opacity-50 shadow-lg shadow-md-sys-primary/20 text-lg"
                                 >
-                                    {loading ? 'Processing...' : 'Run OCR (Tesseract.js)'}
+                                    {loading ? 'Processing...' : `Run OCR (${ocrMode === 'both' ? 'Local+Cloud' : ocrMode === 'cloud' ? 'Cloud' : 'Local'})`}
                                 </button>
 
                                 {/* Results Visualization */}
@@ -348,10 +350,35 @@ const DevOCRPanel: React.FC = () => {
                                     <div className="flex-1 overflow-auto p-3">
                                         {ocrResult ? (
                                             <div className="flex flex-col gap-3">
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-2 flex-wrap">
                                                     <span className="text-md-sys-primary text-xs font-black uppercase">OCR Results</span>
                                                     <span className="text-[10px] bg-md-sys-primary/20 text-md-sys-primary px-2 py-0.5 rounded">{ocrResult.screenshotType}</span>
+                                                    {ocrResult.cloudContributed && (
+                                                        <span className="text-[10px] bg-sky-500/20 text-sky-400 px-2 py-0.5 rounded font-bold flex items-center gap-1" title="Cloud Vision OCR contributed to this result">
+                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                                                            Cloud
+                                                        </span>
+                                                    )}
+                                                    {ocrResult.ocrSource && (
+                                                        <span className="text-[10px] opacity-40 font-mono">{ocrResult.ocrSource}</span>
+                                                    )}
                                                 </div>
+
+                                                {/* Merge Stats (dev info) */}
+                                                {ocrResult.mergeStats && (
+                                                    <div className="bg-sky-500/10 border border-sky-500/20 p-2 rounded text-[10px] font-mono">
+                                                        <div className="font-bold text-sky-400 mb-1">Merge Stats</div>
+                                                        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 opacity-80">
+                                                            <span>Total words:</span><span>{ocrResult.mergeStats.total}</span>
+                                                            <span>Agreed:</span><span className="text-green-400">{ocrResult.mergeStats.agreed}</span>
+                                                            <span>Cloud preferred:</span><span className="text-sky-400">{ocrResult.mergeStats.cloudPreferred}</span>
+                                                            <span>CJK cloud:</span><span className="text-sky-400">{ocrResult.mergeStats.cloudPreferredCJK}</span>
+                                                            <span>Local only:</span><span>{ocrResult.mergeStats.localOnly}</span>
+                                                            <span>Cloud only:</span><span>{ocrResult.mergeStats.cloudOnly}</span>
+                                                            <span>Conflicts:</span><span className="text-amber-400">{ocrResult.mergeStats.conflicts}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
 
                                                 {/* Ship Info */}
                                                 {ocrResult.playerShip && (
@@ -452,7 +479,7 @@ const DevOCRPanel: React.FC = () => {
                                     <h3 className="text-xs font-bold uppercase opacity-50 px-2 py-1">Recent Captures</h3>
                                     <div className="overflow-auto flex-1 flex flex-col gap-1">
                                         {recentFiles.map((f, i) => {
-                                            const isRaw = f.name.includes('debug_raw');
+                                            const isRaw = f.name.includes('raw_capture');
                                             const isMatch = f.name.startsWith('Match');
                                             const displayTime = new Date(f.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -469,7 +496,7 @@ const DevOCRPanel: React.FC = () => {
                                                     <span className={`block w-2 h-2 rounded-full shrink-0 ${isRaw ? 'bg-md-sys-primary' : 'bg-md-sys-tertiary'}`}></span>
                                                     <div className="flex flex-col overflow-hidden">
                                                         <span className="truncate font-bold">
-                                                            {isMatch ? f.name.split('/')[0] : (isRaw ? 'RAW CAPTURE' : f.name)}
+                                                            {isMatch ? f.name.split('/')[0] : (isRaw ? 'Raw Capture' : f.name)}
                                                         </span>
                                                         <span className="opacity-50 text-[9px] truncate">{displayTime}</span>
                                                     </div>
@@ -482,6 +509,27 @@ const DevOCRPanel: React.FC = () => {
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Lightbox Overlay */}
+            {lightboxSrc && (
+                <div
+                    className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center cursor-zoom-out"
+                    onClick={() => setLightboxSrc(null)}
+                >
+                    <img
+                        src={lightboxSrc}
+                        className="max-w-[95vw] max-h-[95vh] object-contain select-none"
+                        alt="Full size preview"
+                        draggable={false}
+                    />
+                    <button
+                        onClick={() => setLightboxSrc(null)}
+                        className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-xl transition-colors"
+                    >
+                        &times;
+                    </button>
                 </div>
             )}
         </div>

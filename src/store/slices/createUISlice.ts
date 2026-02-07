@@ -28,7 +28,7 @@ export interface UISlice {
     isAlwaysOnTop: boolean;
     overlayTab: 'Mission' | 'Squadron' | 'Social';
     overlayPhase: 'Setup' | 'Live' | 'Result';
-    activeView: 'recording' | 'analytics' | 'history' | 'dev-ocr';
+    activeView: 'recording' | 'analytics' | 'history' | 'smart-captures' | 'dev-ocr';
 
     setIsLoading: (isLoading: boolean) => void;
     setShowWelcome: (show: boolean) => void;
@@ -49,7 +49,7 @@ export interface UISlice {
     setIsAlwaysOnTop: (always: boolean) => void;
     setOverlayTab: (tab: 'Mission' | 'Squadron' | 'Social') => void;
     setOverlayPhase: (phase: 'Setup' | 'Live' | 'Result') => void;
-    setActiveView: (view: 'recording' | 'analytics' | 'history' | 'dev-ocr') => void;
+    setActiveView: (view: 'recording' | 'analytics' | 'history' | 'smart-captures' | 'dev-ocr') => void;
     showIdMapper: boolean;
     setShowIdMapper: (show: boolean) => void;
 }
