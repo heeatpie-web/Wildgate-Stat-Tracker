@@ -160,11 +160,17 @@ ipcMain.handle('rerun-ocr-on-artifact', async (event, { imagePath, activeUser, o
   try {
     const fullPath = path.resolve(imagePath);
     if (!fs.existsSync(fullPath)) return { success: false, error: 'File not found' };
+    const ext = path.extname(fullPath).toLowerCase();
+    if (!['.png', '.jpg', '.jpeg', '.bmp', '.webp'].includes(ext)) {
+      return { success: false, error: `Not an image file: ${ext}` };
+    }
     const imageBuffer = fs.readFileSync(fullPath);
     const base64 = imageBuffer.toString('base64');
-    return await processCapture(base64, activeUser, null, ocrMode || 'both');
+    const result = await processCapture(base64, activeUser, null, ocrMode || 'both');
+    return result;
   } catch (e) {
-    return { success: false, error: e.message };
+    console.error('[rerun-ocr] Error:', e.message);
+    return { success: false, error: e.message || 'Unknown error' };
   }
 });
 
