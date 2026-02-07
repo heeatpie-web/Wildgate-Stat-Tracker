@@ -1,8 +1,8 @@
 import React from 'react';
-import { Gamepad2, BarChart3, History, Settings, ScanEye } from 'lucide-react';
+import { Gamepad2, BarChart3, History, Settings, ScanEye, FlaskConical } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 
-export type AppView = 'recording' | 'analytics' | 'history' | 'dev-ocr';
+export type AppView = 'recording' | 'analytics' | 'history' | 'smart-captures' | 'dev-ocr';
 
 interface NavItem {
     id: AppView;
@@ -14,6 +14,7 @@ const navItems: NavItem[] = [
     { id: 'recording', icon: <Gamepad2 size={18} />, label: 'Recording' },
     { id: 'analytics', icon: <BarChart3 size={18} />, label: 'Analytics' },
     { id: 'history', icon: <History size={18} />, label: 'History' },
+    { id: 'smart-captures', icon: <ScanEye size={18} />, label: 'Smart Captures' },
 ];
 
 export const Sidebar: React.FC = () => {
@@ -58,7 +59,7 @@ export const Sidebar: React.FC = () => {
                         {activeView === 'dev-ocr' && (
                             <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-md-sys-primary rounded-r" />
                         )}
-                        <ScanEye size={18} />
+                        <FlaskConical size={18} />
                         <span className="absolute left-12 px-2 py-1 bg-md-sys-surface3 text-md-sys-on-surface text-xs font-medium rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
                             Dev OCR
                         </span>

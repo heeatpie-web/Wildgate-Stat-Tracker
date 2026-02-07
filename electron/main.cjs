@@ -4,7 +4,7 @@ const DiscordRPC = require('discord-rpc');
 const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
-const { registerOCRHandlers } = require('./ocrHandler.cjs');
+const { registerOCRHandlers, processCapture } = require('./ocrHandler.cjs');
 const gcloudService = require('./gcloudService.cjs');
 const gcloudSyncService = require('./gcloudSyncService.cjs');
 const isDev = !app.isPackaged;
@@ -66,119 +66,112 @@ function createTray() {
 const DB_PATH = path.join(app.getPath('userData'), 'wildgate_db.json');
 const LOG_FILE_PATH = path.join(app.getPath('userData'), 'app_logs.txt');
 
+// Artifact Bundling
+ipcMain.handle('bundle-artifacts', async (event, { matchId, startTime, endTime }) => {
+  try {
+    const debugDir = path.join(app.getPath('userData'), 'ocr-debug');
+    const matchDir = path.join(app.getPath('userData'), 'match_artifacts', matchId.toString());
+
+    if (!fs.existsSync(debugDir)) return [];
+    if (!fs.existsSync(matchDir)) fs.mkdirSync(matchDir, { recursive: true });
+
+    const files = fs.readdirSync(debugDir);
+    const bundledFiles = [];
+
+    for (const file of files) {
+      const srcPath = path.join(debugDir, file);
+      const stat = fs.statSync(srcPath);
+      const birthtime = stat.birthtimeMs || stat.mtimeMs;
+
+      if (birthtime >= startTime - 5000 && birthtime <= endTime + 30000) {
+        const destPath = path.join(matchDir, file);
+        fs.copyFileSync(srcPath, destPath);
+        bundledFiles.push(destPath);
+
+        // Upload to GCloud (fire-and-forget)
+        if (gcloudSyncService.isInitialized) {
+          gcloudSyncService.uploadFile(destPath, `match_artifacts/${matchId}/${file}`)
+            .then(r => { if (!r.success) console.warn(`[GCloud] Artifact upload failed: ${r.error}`); })
+            .catch(err => console.warn(`[GCloud] Artifact upload error: ${err.message}`));
+        }
+      }
+    }
+
+    // Also bundle matching telemetry JSON files
+    const telemetryDir = path.join(app.getPath('userData'), 'telemetry_archive');
+    if (fs.existsSync(telemetryDir)) {
+      const telemetryFiles = fs.readdirSync(telemetryDir).filter(f => f.endsWith('.json'));
+      for (const file of telemetryFiles) {
+        try {
+          const srcPath = path.join(telemetryDir, file);
+          const content = JSON.parse(fs.readFileSync(srcPath, 'utf-8'));
+          const events = content.telemetry || [];
+          const hasOverlap = events.some(e => {
+            const t = e.timestamp || e.EventTimestamp;
+            return t && t >= startTime - 5000 && t <= endTime + 30000;
+          });
+          if (hasOverlap) {
+            const destPath = path.join(matchDir, file);
+            fs.copyFileSync(srcPath, destPath);
+            bundledFiles.push(destPath);
+          }
+        } catch (e) { /* skip unparseable files */ }
+      }
+    }
+
+    console.log(`[Artifacts] Bundled ${bundledFiles.length} files for match ${matchId}`);
+    return bundledFiles;
+  } catch (e) {
+    console.error("Artifact Bundling Error", e);
+    return [];
+  }
+});
+
+ipcMain.handle('get-match-artifacts', async (event, matchId) => {
+  try {
+    const matchDir = path.join(app.getPath('userData'), 'match_artifacts', matchId.toString());
+    if (!fs.existsSync(matchDir)) return { images: [], telemetry: [] };
+
+    const files = fs.readdirSync(matchDir);
+    const images = [];
+    const telemetry = [];
+
+    for (const f of files) {
+      const fullPath = path.join(matchDir, f);
+      const ext = path.extname(f).toLowerCase();
+      if (ext === '.json') {
+        try {
+          const content = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
+          telemetry.push(content);
+        } catch (e) { /* skip unparseable */ }
+      } else {
+        const data = fs.readFileSync(fullPath).toString('base64');
+        const mime = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
+        images.push(`data:${mime};base64,${data}`);
+      }
+    }
+    return { images, telemetry };
+  } catch (e) {
+    return { images: [], telemetry: [] };
+  }
+});
+
+ipcMain.handle('rerun-ocr-on-artifact', async (event, { imagePath, activeUser, ocrMode }) => {
+  try {
+    const fullPath = path.resolve(imagePath);
+    if (!fs.existsSync(fullPath)) return { success: false, error: 'File not found' };
+    const imageBuffer = fs.readFileSync(fullPath);
+    const base64 = imageBuffer.toString('base64');
+    return await processCapture(base64, activeUser, null, ocrMode || 'both');
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
 // Log Persistence Handler
 ipcMain.handle('persist-logs', async (event, logContent) => {
   try {
-    // Append to log file, keeping last 100KB
     const MAX_LOG_SIZE = 100 * 1024;
-    // Artifact Bundling
-    ipcMain.handle('bundle-artifacts', async (event, { matchId, startTime, endTime }) => {
-      try {
-        const debugDir = path.join(app.getPath('userData'), 'ocr-debug');
-        const matchDir = path.join(app.getPath('userData'), 'match_artifacts', matchId.toString());
-
-        if (!fs.existsSync(debugDir)) return [];
-        if (!fs.existsSync(matchDir)) fs.mkdirSync(matchDir, { recursive: true });
-
-        const files = fs.readdirSync(debugDir);
-        const bundledFiles = [];
-
-        for (const file of files) {
-          const srcPath = path.join(debugDir, file);
-          const stat = fs.statSync(srcPath);
-          const birthtime = stat.birthtimeMs || stat.mtimeMs;
-
-          // Check if file was created during the match (with slight buffer)
-          if (birthtime >= startTime - 5000 && birthtime <= endTime + 30000) {
-            const destPath = path.join(matchDir, file);
-            // Copy to preserve debug logic, or move? Copy is safer.
-            fs.copyFileSync(srcPath, destPath);
-            bundledFiles.push(file);
-          }
-        }
-
-        console.log(`[Artifacts] Bundled ${bundledFiles.length} images for match ${matchId}`);
-        return bundledFiles;
-      } catch (e) {
-        console.error("Artifact Bundling Error", e);
-        return [];
-      }
-    });
-
-    ipcMain.handle('get-match-artifacts', async (event, matchId) => {
-      try {
-        const matchDir = path.join(app.getPath('userData'), 'match_artifacts', matchId.toString());
-        if (!fs.existsSync(matchDir)) return [];
-
-        const files = fs.readdirSync(matchDir);
-        return files.map(f => {
-          const fullPath = path.join(matchDir, f);
-          const data = fs.readFileSync(fullPath).toString('base64');
-          return `data:image/png;base64,${data}`; // Assuming PNG/JPG. If unknown, check extension.
-        });
-      } catch (e) {
-        return [];
-      }
-    });
-
-    // Telemetry Decoding
-    ipcMain.handle('decode-telemetry-cache', async () => {
-      try {
-        const rawPath = path.join(app.getPath('localData'), 'Nebula', 'Saved', 'Logs', 'AccelByteTelemetryCache', 'AccelByteTelemetryCache');
-        // Note: app.getPath('localData') might not map to LocalAppData correctly in all electron versions. 
-        // Usually 'userData' is AppData/Roaming. LocalAppData is 'appData'/../Local or via process.env.
-        // Safer to use process.env.LOCALAPPDATA on Windows.
-        const localAppData = process.env.LOCALAPPDATA;
-        const cachePath = path.join(localAppData, 'Nebula', 'Saved', 'Logs', 'AccelByteTelemetryCache', 'AccelByteTelemetryCache');
-
-        if (!fs.existsSync(cachePath)) {
-          return { success: false, message: 'Cache file not found' };
-        }
-
-        const buffer = fs.readFileSync(cachePath);
-
-        // Layer 1 Decode (+1 shift)
-        const layer1Buf = Buffer.allocUnsafe(buffer.length);
-        for (let i = 0; i < buffer.length; i++) {
-          layer1Buf[i] = buffer[i] + 1;
-        }
-
-        let layer1Obj;
-        try {
-          layer1Obj = JSON.parse(layer1Buf.toString('utf8'));
-        } catch (e) {
-          return { success: false, message: 'Layer 1 Decode Failed' };
-        }
-
-        let finalJson = layer1Obj;
-
-        // Layer 2 Decode (if ArrayByte exists)
-        const abArray = layer1Obj.ArrayByte || layer1Obj.arrayByte;
-        if (abArray && Array.isArray(abArray)) {
-          const layer2Buf = Buffer.allocUnsafe(abArray.length);
-          for (let i = 0; i < abArray.length; i++) {
-            layer2Buf[i] = abArray[i] + 1;
-          }
-          try {
-            finalJson = JSON.parse(layer2Buf.toString('utf8'));
-          } catch (e) {
-            // Keep Layer 1 if Layer 2 fails? 
-            // Usually if L2 exists we want that.
-            return { success: false, message: 'Layer 2 Decode Failed' };
-          }
-        }
-
-        const outputPath = path.join(localAppData, 'Nebula', 'Saved', 'Logs', 'AccelByteTelemetryCache', `decoded_${Date.now()}.json`);
-        fs.writeFileSync(outputPath, JSON.stringify(finalJson, null, 2));
-
-        return { success: true, path: outputPath };
-
-      } catch (e) {
-        console.error("Decode Error:", e);
-        return { success: false, message: e.message };
-      }
-    });
-    '';
     let existing = '';
     try {
       existing = await fsPromises.readFile(LOG_FILE_PATH, 'utf-8');
@@ -857,8 +850,9 @@ function createWindow() {
     width: 1200,
     height: 850,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.cjs'),
     },
     icon: path.join(__dirname, '../public/favicon.png'),
     autoHideMenuBar: true,
@@ -975,16 +969,20 @@ ipcMain.handle('sync-training-sample', async (event, sampleId) => {
   return await gcloudSyncService.syncSample(trainingDir, sampleId);
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createTray();
   createWindow();
   cleanupOldArchives();
-  registerOCRHandlers();  // Register new OCR IPC handlers
+  registerOCRHandlers(win);  // Register new OCR IPC handlers (pass win for hide-during-capture)
 
-  // Initialize GCloud services
+  // Initialize GCloud services (only if key file exists on this machine)
   const GCLOUD_KEY = "C:/Users/Alec Gougebas/Desktop/GCloudInfo/project-144d1cf3-4cee-4171-859-4b7c070c807e.json";
-  gcloudService.initialize(GCLOUD_KEY);
-  gcloudSyncService.initialize(GCLOUD_KEY, "wildgate-training-heeatpie");
+  if (fs.existsSync(GCLOUD_KEY)) {
+    gcloudService.initialize(GCLOUD_KEY);
+    await gcloudSyncService.initialize(GCLOUD_KEY, "wildgate-training-heeatpie");
+  } else {
+    console.warn('[GCloud] Key file not found, GCloud services disabled:', GCLOUD_KEY);
+  }
   if (!isDev) autoUpdater.checkForUpdates();
   rpc.login({ clientId }).catch(console.error);
 
@@ -1123,6 +1121,39 @@ ipcMain.handle('clear-telemetry-archives', async () => {
     console.error('Failed to clear telemetry archives:', e);
     return { success: false, message: e.message };
   }
+});
+
+// Utility IPC handlers for contextIsolation (replaces direct fs/shell access in renderer)
+ipcMain.handle('read-file-base64', async (event, filePath) => {
+  try {
+    const data = fs.readFileSync(filePath);
+    return data.toString('base64');
+  } catch (e) {
+    return null;
+  }
+});
+
+ipcMain.handle('open-path', async (event, targetPath) => {
+  try {
+    await shell.openPath(targetPath);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+// GCloud status check (renderer queries this to show availability in settings)
+ipcMain.handle('get-gcloud-status', async () => {
+  return {
+    visionReady: gcloudService.isInitialized || false,
+    storageReady: gcloudSyncService.isInitialized || false,
+    storageStats: gcloudSyncService.getStats(),
+  };
+});
+
+// GCloud test upload (verify credentials and bucket access from UI)
+ipcMain.handle('test-gcloud-upload', async () => {
+  return await gcloudSyncService.testUpload();
 });
 
 app.on('will-quit', () => globalShortcut.unregisterAll());

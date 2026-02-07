@@ -21,6 +21,7 @@ export const useMatchSubmission = () => {
         setPendingPlacement,
         setPendingArtifactType,
         setPendingKilledBy,
+        setPendingKilledByShip,
         setSelectedOpponents,
         setTimeMin,
         setTimeSec,
@@ -80,7 +81,7 @@ export const useMatchSubmission = () => {
         }
 
         const timeStr = (finalTimeMin || finalTimeSec) ? `${finalTimeMin || '00'}:${finalTimeSec || '00'}` : "";
-        const dmg = parseInt(damageTaken) || 0;
+        const dmg = Math.max(0, Math.min(15000, parseInt(damageTaken) || 0));
 
         // We set pending match data to be used in the Wizard
         const data: Partial<Match> = {
@@ -109,7 +110,7 @@ export const useMatchSubmission = () => {
         const state = useAppStore.getState();
         const {
             pendingMatchData, showWizard,
-            pendingPlacement, pendingArtifactType, pendingKilledBy,
+            pendingPlacement, pendingArtifactType, pendingKilledBy, pendingKilledByShip,
             timeMin, timeSec, activeUser, activeMode,
             currentLoadout, timelineEvents, sessionStartTime,
             sessionTeams, sessionShipTypes
@@ -154,9 +155,11 @@ export const useMatchSubmission = () => {
                 poiMedium: pendingMatchData.poiMedium || 0,
                 poiEpic: pendingMatchData.poiEpic || 0,
                 killedBy: pendingKilledBy || undefined,
+                killedByShip: pendingKilledByShip || undefined,
                 notes: pendingMatchData.notes || "",
                 timelineEvents: [...(timelineEvents || [])],
-                artifacts: []
+                artifacts: [],
+                ocrDebug: pendingMatchData?.ocrDebug || undefined
             };
 
             // Add Match first
@@ -194,6 +197,7 @@ export const useMatchSubmission = () => {
             setPendingPlacement(null);
             setPendingArtifactType("");
             setPendingKilledBy("");
+            setPendingKilledByShip("");
             setSelectedOpponents([]);
             setTimelineEvents([]);
             setIsMatchInProgress(false);
@@ -212,7 +216,7 @@ export const useMatchSubmission = () => {
         } finally {
             setSubmitting(false);
         }
-    }, [submitting, addMatch, setPendingMatchData, setShowWizard, setPendingPlacement, setPendingArtifactType, setPendingKilledBy, setSelectedOpponents, setTimelineEvents, setIsMatchInProgress, setMatchStartTime, setPoiEasy, setPoiMedium, setPoiEpic, setKills, setTimeMin, setTimeSec, setSelectedReachModifiers, setDamageTaken, setCurrentNote, setActiveWeapons, setToast, playVictory, playDefeat, updateMatch, recordPlayerSighting]);
+    }, [submitting, addMatch, setPendingMatchData, setShowWizard, setPendingPlacement, setPendingArtifactType, setPendingKilledBy, setPendingKilledByShip, setSelectedOpponents, setTimelineEvents, setIsMatchInProgress, setMatchStartTime, setPoiEasy, setPoiMedium, setPoiEpic, setKills, setTimeMin, setTimeSec, setSelectedReachModifiers, setDamageTaken, setCurrentNote, setActiveWeapons, setToast, playVictory, playDefeat, updateMatch, recordPlayerSighting]);
 
     return {
         initiateSubmission,
