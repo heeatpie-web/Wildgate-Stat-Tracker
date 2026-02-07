@@ -331,8 +331,11 @@ const SmartMatchDetail: React.FC<{
         if (!match.artifacts || match.artifacts.length === 0) return;
         setRerunning(true);
         setRerunResults(null);
+        const imageExts = ['.png', '.jpg', '.jpeg', '.bmp', '.webp'];
+        const imagePaths = match.artifacts.filter(p => imageExts.some(ext => p.toLowerCase().endsWith(ext)));
+        if (imagePaths.length === 0) { setRerunning(false); return; }
         const results: any[] = [];
-        for (const artifactPath of match.artifacts) {
+        for (const artifactPath of imagePaths) {
             try {
                 const result = await rerunOCROnArtifact(artifactPath, activeUser, ocrMode);
                 results.push(result);
