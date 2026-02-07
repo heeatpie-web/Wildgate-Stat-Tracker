@@ -10,6 +10,9 @@ import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { getMatchArtifactsStructured, rerunOCROnArtifact } from '../utils/artifactService';
 import { useAppStore } from '../store/useAppStore';
+import { OCRReviewModal } from './ocr/OCRReviewModal';
+import { mergeOCRData, calculateOverallConfidence } from '../utils/ocr/ocrParser';
+import type { OCRExtractedData } from '../utils/ocr/ocrTypes';
 
 type ModeFilter = 'all' | 'Artifact Brawl' | 'Fleet Battle';
 
@@ -20,7 +23,7 @@ const RESULT_COLORS: Record<string, string> = {
 };
 
 const SmartCapturesPanel: React.FC = () => {
-    const { matches, updateMatch } = useGameData();
+    const { matches, updateMatch, pilotRegistry } = useGameData();
     const { activeUser } = useUIState();
     const ocrMode = useAppStore(s => s.ocrMode);
 
@@ -118,6 +121,7 @@ const SmartCapturesPanel: React.FC = () => {
                         onUpdate={updateMatch}
                         activeUser={activeUser}
                         ocrMode={ocrMode}
+                        pilotRegistry={pilotRegistry}
                     />
                 ) : (
                     <div className="h-full flex items-center justify-center">
@@ -184,7 +188,8 @@ const SmartMatchDetail: React.FC<{
     onUpdate: (m: Match) => void;
     activeUser: string;
     ocrMode: string;
-}> = ({ match, onUpdate, activeUser, ocrMode }) => {
+    pilotRegistry: string[];
+}> = ({ match, onUpdate, activeUser, ocrMode, pilotRegistry }) => {
     const [artifacts, setArtifacts] = useState<{ images: string[], telemetry: any[] }>({ images: [], telemetry: [] });
     const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
     const [editingField, setEditingField] = useState<string | null>(null);
@@ -195,6 +200,7 @@ const SmartMatchDetail: React.FC<{
     const [newPlayerName, setNewPlayerName] = useState('');
     const [rerunning, setRerunning] = useState(false);
     const [rerunResults, setRerunResults] = useState<any[] | null>(null);
+    const [reviewData, setReviewData] = useState<OCRExtractedData | null>(null);
 
     useEffect(() => {
         setArtifacts({ images: [], telemetry: [] });
@@ -326,11 +332,12 @@ const SmartMatchDetail: React.FC<{
         );
     };
 
-    // Re-run OCR analysis
+    // Re-run OCR analysis — merge all results and open OCRReviewModal
     const handleRerunAnalysis = async () => {
         if (!match.artifacts || match.artifacts.length === 0) return;
         setRerunning(true);
         setRerunResults(null);
+        setReviewData(null);
         const imageExts = ['.png', '.jpg', '.jpeg', '.bmp', '.webp'];
         const imagePaths = match.artifacts.filter(p => imageExts.some(ext => p.toLowerCase().endsWith(ext)));
         if (imagePaths.length === 0) { setRerunning(false); return; }
@@ -345,28 +352,61 @@ const SmartMatchDetail: React.FC<{
         }
         setRerunResults(results);
         setRerunning(false);
+
+        // Merge all successful OCR results into one combined OCRExtractedData
+        const successful = results.filter(r => r.success && r.data);
+        if (successful.length > 0) {
+            let merged: Partial<OCRExtractedData> = {
+                playerShip: undefined,
+                reachModifiers: [],
+                teammates: [],
+                opponentTeams: [],
+            };
+            for (const r of successful) {
+                merged = mergeOCRData(merged, {
+                    playerShip: r.data.playerShip,
+                    reachModifiers: r.data.reachModifiers || [],
+                    teammates: r.data.teammates || [],
+                    opponentTeams: r.data.opponentTeams || [],
+                });
+            }
+            const lastData = successful[successful.length - 1].data;
+            const combinedData: OCRExtractedData = {
+                screenshotType: lastData.screenshotType || 'unknown',
+                playerShip: merged.playerShip,
+                reachModifiers: merged.reachModifiers || [],
+                enemyShips: lastData.enemyShips || [],
+                teammates: merged.teammates || [],
+                opponentTeams: merged.opponentTeams || [],
+                artifactType: lastData.artifactType,
+                overallConfidence: calculateOverallConfidence(merged),
+                captureTimestamp: Date.now(),
+                rawText: lastData.rawText,
+                ocrSource: lastData.ocrSource,
+                mergeStats: lastData.mergeStats,
+            };
+            setReviewData(combinedData);
+        }
     };
 
-    const applyRerunResults = () => {
-        if (!rerunResults) return;
-        const successful = rerunResults.filter(r => r.success && r.data);
-        if (successful.length === 0) return;
-
-        // Merge results from re-analysis
-        const lastResult = successful[successful.length - 1].data;
+    // Called when user confirms data in the OCRReviewModal
+    const handleApplyReviewData = (data: OCRExtractedData) => {
         const updates: Partial<Match> = {};
-
-        if (lastResult.playerShip?.shipType) updates.ship = lastResult.playerShip.shipType;
-        if (lastResult.teammates?.length > 0) {
-            const newTeammates = lastResult.teammates.map((t: any) => t.name);
-            updates.teammates = [...new Set([...(match.teammates || []), ...newTeammates])];
+        if (data.playerShip?.shipType) updates.ship = data.playerShip.shipType;
+        if (data.teammates?.length > 0) {
+            updates.teammates = data.teammates.map(t => t.name);
         }
-        if (lastResult.opponentTeams?.length > 0) {
-            const newOpponents = lastResult.opponentTeams.flatMap((t: any) => t.players.map((p: any) => p.name));
-            updates.opponents = [...new Set([...(match.opponents || []), ...newOpponents])];
+        if (data.opponentTeams?.length > 0) {
+            updates.opponents = data.opponentTeams.flatMap(t => t.players.map(p => p.name));
         }
-
+        if (data.reachModifiers?.length > 0) {
+            updates.reachModifiers = data.reachModifiers.map(m => m.name);
+        }
+        if (data.artifactType) {
+            updates.artifactSource = data.artifactType;
+        }
         onUpdate({ ...match, ...updates });
+        setReviewData(null);
         setRerunResults(null);
     };
 
@@ -612,18 +652,23 @@ const SmartMatchDetail: React.FC<{
                                         )}
                                     </div>
                                 ))}
-                                {rerunResults.some(r => r.success) && (
-                                    <button
-                                        onClick={applyRerunResults}
-                                        className="px-4 py-2 bg-green-600 text-white rounded-lg font-bold text-xs hover:brightness-110 transition-all"
-                                    >
-                                        Apply Changes
-                                    </button>
+                                {!reviewData && rerunResults.some(r => r.success) && (
+                                    <p className="text-[10px] text-white/40 italic">Review modal opened automatically — confirm data there.</p>
                                 )}
                             </div>
                         )}
                     </div>
                 </Section>
+            )}
+
+            {/* OCR Review Modal */}
+            {reviewData && (
+                <OCRReviewModal
+                    data={reviewData}
+                    onApply={handleApplyReviewData}
+                    onCancel={() => setReviewData(null)}
+                    pilotRegistry={pilotRegistry}
+                />
             )}
 
             {/* Lightbox */}
