@@ -7,7 +7,7 @@
 import React, { createContext, useContext, useEffect, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useShallow } from 'zustand/react/shallow';
-import { ColorblindMode, Language } from '../types';
+import { ColorblindMode, Language, VisualMode } from '../types';
 import { OverlayStyle } from '../store/slices/createSettingsSlice';
 
 interface UserPreferencesContextType {
@@ -31,6 +31,8 @@ interface UserPreferencesContextType {
     setCustomBgUrl: (url: string) => void;
     overlayStyle: OverlayStyle;
     setOverlayStyle: (style: OverlayStyle) => void;
+    visualMode: VisualMode;
+    setVisualMode: (mode: VisualMode) => void;
 }
 
 const UserPreferencesContext = createContext<UserPreferencesContextType | null>(null);
@@ -54,7 +56,8 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
         language, setLanguage,
         showSessionTimer, setShowSessionTimer,
         customBgUrl, setCustomBgUrl,
-        overlayStyle, setOverlayStyle
+        overlayStyle, setOverlayStyle,
+        visualMode, setVisualMode
     } = useAppStore(useShallow(s => ({
         appearanceMode: s.appearanceMode, setAppearanceMode: s.setAppearanceMode,
         colorTheme: s.colorTheme, setColorTheme: s.setColorTheme,
@@ -66,6 +69,7 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
         showSessionTimer: s.showSessionTimer, setShowSessionTimer: s.setShowSessionTimer,
         customBgUrl: s.customBgUrl, setCustomBgUrl: s.setCustomBgUrl,
         overlayStyle: s.overlayStyle, setOverlayStyle: s.setOverlayStyle,
+        visualMode: s.visualMode, setVisualMode: s.setVisualMode,
     })));
 
     // Side Effects moved from App.tsx
@@ -120,11 +124,12 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
         language, setLanguage,
         showSessionTimer, setShowSessionTimer,
         customBgUrl, setCustomBgUrl,
-        overlayStyle, setOverlayStyle
+        overlayStyle, setOverlayStyle,
+        visualMode, setVisualMode
     }), [appearanceMode, setAppearanceMode, colorTheme, setColorTheme, customHue, setCustomHue,
         colorblindMode, setColorblindMode, disableAnimations, setDisableAnimations,
         soundEnabled, setSoundEnabled, language, setLanguage, showSessionTimer, setShowSessionTimer,
-        customBgUrl, setCustomBgUrl, overlayStyle, setOverlayStyle]);
+        customBgUrl, setCustomBgUrl, overlayStyle, setOverlayStyle, visualMode, setVisualMode]);
 
     return (
         <UserPreferencesContext.Provider value={value}>

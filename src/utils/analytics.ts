@@ -5,12 +5,12 @@
  * impact, damage efficiency, time-of-day patterns, and more.
  * Requires >= 5 valid matches to produce results.
  */
-import { Match, CHARACTERS, SHIPS, Insight, UI_REACH_MODIFIERS } from '../types';
+import { Match, CHARACTERS, SHIPS, Insight, UI_REACH_MODIFIERS, TimePatternData, StreakData, StreakPoint, SessionSummaryData, DaySummary, PeriodComparisonData, PeriodStats, KillEfficiencyData, PlacementData, MomentumData } from '../types';
 
 /** Generates prioritized insight cards from match history. */
 export const calculateInsights = (matches: Match[]): Insight[] => {
     const validMatches: Match[] = matches.filter(m => {
-        const isZeroDamage = (m.damageTaken || 0) === 0;
+        const isZeroDamage = (Number(m.damageTaken) || 0) === 0;
         const isZeroTime = !m.time || m.time === '00:00' || m.time === '0:00';
         return !(isZeroDamage && isZeroTime);
     });
@@ -33,9 +33,12 @@ export const calculateInsights = (matches: Match[]): Insight[] => {
     // Hazard Stats
     const hazardStats: Record<string, { wins: number, total: number }> = {};
 
-    // Damage Stats
+    // Damage Stats - use median-based outlier filtering
     const highDmgMatches = { wins: 0, total: 0 };
-    const avgDmg = validMatches.reduce((a, b) => a + (b.damageTaken || 0), 0) / validMatches.length;
+    const allDmgValues = validMatches.map(m => Math.min(Number(m.damageTaken) || 0, 15000)).sort((a, b) => a - b);
+    const medianDmg = allDmgValues.length > 0 ? allDmgValues[Math.floor(allDmgValues.length / 2)] : 0;
+    const filteredDmgValues = allDmgValues.filter(d => d <= Math.max(medianDmg * 3, 500));
+    const avgDmg = filteredDmgValues.length > 0 ? filteredDmgValues.reduce((a, b) => a + b, 0) / filteredDmgValues.length : 0;
 
     // POI Stats
     const highPoiMatches = { wins: 0, total: 0 };
@@ -99,7 +102,7 @@ export const calculateInsights = (matches: Match[]): Insight[] => {
         });
 
         // Survival/Damage Analysis
-        if ((m.damageTaken || 0) > avgDmg * 1.2) {
+        if ((Number(m.damageTaken) || 0) > avgDmg * 1.2) {
             highDmgMatches.total++;
             if (isWin) highDmgMatches.wins++;
         }
@@ -112,7 +115,7 @@ export const calculateInsights = (matches: Match[]): Insight[] => {
         }
 
         // Extremes Tracking
-        if (!topDmgMatch || (m.damageTaken || 0) > (topDmgMatch.damageTaken || 0)) topDmgMatch = m;
+        if (!topDmgMatch || (Number(m.damageTaken) || 0) > (Number(topDmgMatch.damageTaken) || 0)) topDmgMatch = m;
         if (pois > maxPoiCount) { maxPoiCount = pois; maxPoiMatch = m; }
 
         if (isWin) {
@@ -124,7 +127,7 @@ export const calculateInsights = (matches: Match[]): Insight[] => {
                     if (totalSecs > slowWinSecs) { slowWinSecs = totalSecs; slowWinMatch = m; }
                 }
             }
-            if ((m.damageTaken || 0) === 0) flawlessMatch = m;
+            if ((Number(m.damageTaken) || 0) === 0) flawlessMatch = m;
             const totalKills = Object.values(m.kills || {}).reduce((a, b) => a + b, 0);
             if (totalKills === 0) pacifistMatch = m;
             if (totalKills >= 5) warlordMatch = m;
@@ -583,7 +586,7 @@ export const calculateLoadoutAnalytics = (matches: Match[]): {
     validMatches.forEach(m => {
         const weapons = m.loadout?.weapons || {};
         const isWin = m.result === 'Win';
-        const damage = m.damageTaken || 0;
+        const damage = Number(m.damageTaken) || 0;
 
         Object.keys(weapons).forEach(weapon => {
             if (!weaponStats[weapon]) {
@@ -649,4 +652,347 @@ export const calculateLoadoutAnalytics = (matches: Match[]): {
         worstWeapon,
         insights
     };
+};
+
+// ============================================================
+// Analytics V2: New calculation functions
+// ============================================================
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** Extract hour-of-day and day-of-week patterns from match timestamps. */
+export const calculateTimePatterns = (matches: Match[]): TimePatternData => {
+    const byHourMap: Record<number, { matches: number; wins: number }> = {};
+    const byDayMap: Record<number, { matches: number; wins: number }> = {};
+    const heatmapMap: Record<string, { matches: number; wins: number }> = {};
+
+    for (let h = 0; h < 24; h++) byHourMap[h] = { matches: 0, wins: 0 };
+    for (let d = 0; d < 7; d++) byDayMap[d] = { matches: 0, wins: 0 };
+
+    matches.forEach(m => {
+        const date = new Date(m.timestamp);
+        const hour = date.getHours();
+        const day = date.getDay();
+        const isWin = m.result === 'Win';
+        const key = `${day}-${hour}`;
+
+        byHourMap[hour].matches++;
+        if (isWin) byHourMap[hour].wins++;
+
+        byDayMap[day].matches++;
+        if (isWin) byDayMap[day].wins++;
+
+        if (!heatmapMap[key]) heatmapMap[key] = { matches: 0, wins: 0 };
+        heatmapMap[key].matches++;
+        if (isWin) heatmapMap[key].wins++;
+    });
+
+    const byHour = Object.entries(byHourMap).map(([h, s]) => ({
+        hour: Number(h), matches: s.matches, wins: s.wins,
+        winRate: s.matches > 0 ? Math.round((s.wins / s.matches) * 100) : 0
+    }));
+
+    const byDayOfWeek = Object.entries(byDayMap).map(([d, s]) => ({
+        day: Number(d), dayName: DAY_NAMES[Number(d)], matches: s.matches, wins: s.wins,
+        winRate: s.matches > 0 ? Math.round((s.wins / s.matches) * 100) : 0
+    }));
+
+    const heatmap = Object.entries(heatmapMap).map(([key, s]) => {
+        const [d, h] = key.split('-').map(Number);
+        return { day: d, hour: h, matches: s.matches, winRate: s.matches > 0 ? Math.round((s.wins / s.matches) * 100) : 0 };
+    });
+
+    const peakHour = byHour.reduce((best, cur) => cur.matches > best.matches ? cur : best, byHour[0]).hour;
+    const peakDay = byDayOfWeek.reduce((best, cur) => cur.matches > best.matches ? cur : best, byDayOfWeek[0]).day;
+
+    return { byHour, byDayOfWeek, heatmap, peakHour, peakDay };
+};
+
+/** Walk matches chronologically and compute win/loss streak history. */
+export const calculateStreakHistory = (matches: Match[]): StreakData => {
+    const sorted = [...matches].sort((a, b) => a.timestamp - b.timestamp);
+    const timeline: StreakPoint[] = [];
+    let currentStreak = 0;
+    let longestWin = 0;
+    let longestLoss = 0;
+    const streakLengths: number[] = [];
+    let prevDirection: 'win' | 'loss' | null = null;
+
+    sorted.forEach((m, i) => {
+        if (m.result === 'Win') {
+            if (currentStreak > 0) { currentStreak++; }
+            else {
+                if (prevDirection !== null) streakLengths.push(Math.abs(currentStreak));
+                currentStreak = 1;
+            }
+            prevDirection = 'win';
+        } else if (m.result === 'Loss') {
+            if (currentStreak < 0) { currentStreak--; }
+            else {
+                if (prevDirection !== null) streakLengths.push(Math.abs(currentStreak));
+                currentStreak = -1;
+            }
+            prevDirection = 'loss';
+        }
+        // Draw: keep current streak unchanged
+
+        timeline.push({ index: i, streak: currentStreak, timestamp: m.timestamp });
+        if (currentStreak > longestWin) longestWin = currentStreak;
+        if (currentStreak < -longestLoss) longestLoss = Math.abs(currentStreak);
+    });
+
+    if (currentStreak !== 0) streakLengths.push(Math.abs(currentStreak));
+    const averageStreakLength = streakLengths.length > 0
+        ? parseFloat((streakLengths.reduce((a, b) => a + b, 0) / streakLengths.length).toFixed(1))
+        : 0;
+
+    return { timeline, longestWinStreak: longestWin, longestLossStreak: longestLoss, currentStreak, averageStreakLength };
+};
+
+/** Group matches by calendar date and compute daily summaries. */
+export const calculateSessionSummary = (matches: Match[]): SessionSummaryData => {
+    const byDate: Record<string, Match[]> = {};
+
+    matches.forEach(m => {
+        const dateKey = new Date(m.timestamp).toISOString().split('T')[0];
+        if (!byDate[dateKey]) byDate[dateKey] = [];
+        byDate[dateKey].push(m);
+    });
+
+    const buildDaySummary = (dateMatches: Match[], date: string): DaySummary => {
+        const wins = dateMatches.filter(m => m.result === 'Win').length;
+        const losses = dateMatches.filter(m => m.result === 'Loss').length;
+        const totalKills = dateMatches.reduce((sum, m) => sum + Object.values(m.kills || {}).reduce((a, b) => a + b, 0), 0);
+        const avgDamage = dateMatches.length > 0
+            ? Math.round(dateMatches.reduce((sum, m) => sum + (Number(m.damageTaken) || 0), 0) / dateMatches.length)
+            : 0;
+
+        // Best streak for the day
+        let bestStreak = 0, currentRun = 0;
+        const sorted = [...dateMatches].sort((a, b) => a.timestamp - b.timestamp);
+        sorted.forEach(m => {
+            if (m.result === 'Win') { currentRun++; if (currentRun > bestStreak) bestStreak = currentRun; }
+            else currentRun = 0;
+        });
+
+        const heroes: Record<string, number> = {};
+        const ships: Record<string, number> = {};
+        dateMatches.forEach(m => {
+            const h = m.hero || 'Unknown';
+            const s = (m.ship || 'Unknown').split('(')[0];
+            heroes[h] = (heroes[h] || 0) + 1;
+            ships[s] = (ships[s] || 0) + 1;
+        });
+
+        return {
+            date, matches: dateMatches.length, wins, losses,
+            winRate: dateMatches.length > 0 ? Math.round((wins / dateMatches.length) * 100) : 0,
+            totalKills, avgDamage, bestStreak, heroes, ships
+        };
+    };
+
+    const todayKey = new Date().toISOString().split('T')[0];
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayKey = yesterday.toISOString().split('T')[0];
+
+    const today = byDate[todayKey] ? buildDaySummary(byDate[todayKey], todayKey) : null;
+    const yesterdaySummary = byDate[yesterdayKey] ? buildDaySummary(byDate[yesterdayKey], yesterdayKey) : null;
+
+    // Last 7 days
+    const last7: DaySummary[] = [];
+    for (let i = 0; i < 7; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().split('T')[0];
+        if (byDate[key]) last7.push(buildDaySummary(byDate[key], key));
+    }
+
+    const allDays = Object.entries(byDate).map(([date, ms]) => buildDaySummary(ms, date));
+    const totalDays = Math.max(1, allDays.length);
+    const dailyAverage = {
+        matches: parseFloat((allDays.reduce((s, d) => s + d.matches, 0) / totalDays).toFixed(1)),
+        wins: parseFloat((allDays.reduce((s, d) => s + d.wins, 0) / totalDays).toFixed(1)),
+        kills: parseFloat((allDays.reduce((s, d) => s + d.totalKills, 0) / totalDays).toFixed(1)),
+    };
+
+    return { today, yesterday: yesterdaySummary, last7Days: last7, dailyAverage };
+};
+
+/** Compare stats between this week/month and previous week/month. */
+export const calculatePeriodComparison = (matches: Match[]): PeriodComparisonData => {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const startOfLastWeek = new Date(startOfWeek);
+    startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+    const computePeriodStats = (periodMatches: Match[]): PeriodStats => {
+        const wins = periodMatches.filter(m => m.result === 'Win').length;
+        const losses = periodMatches.filter(m => m.result === 'Loss').length;
+        const totalKills = periodMatches.reduce((s, m) => s + Object.values(m.kills || {}).reduce((a, b) => a + b, 0), 0);
+        const totalDamage = periodMatches.reduce((s, m) => s + Math.min(Number(m.damageTaken) || 0, 15000), 0);
+        return {
+            matches: periodMatches.length,
+            wins, losses,
+            winRate: periodMatches.length > 0 ? Math.round((wins / periodMatches.length) * 100) : 0,
+            avgKills: periodMatches.length > 0 ? parseFloat((totalKills / periodMatches.length).toFixed(1)) : 0,
+            avgDamage: periodMatches.length > 0 ? Math.round(totalDamage / periodMatches.length) : 0,
+        };
+    };
+
+    const thisWeekMatches = matches.filter(m => m.timestamp >= startOfWeek.getTime());
+    const lastWeekMatches = matches.filter(m => m.timestamp >= startOfLastWeek.getTime() && m.timestamp < startOfWeek.getTime());
+    const thisMonthMatches = matches.filter(m => m.timestamp >= startOfMonth.getTime());
+    const lastMonthMatches = matches.filter(m => m.timestamp >= startOfLastMonth.getTime() && m.timestamp < startOfMonth.getTime());
+
+    const thisWeek = computePeriodStats(thisWeekMatches);
+    const lastWeek = computePeriodStats(lastWeekMatches);
+    const thisMonth = computePeriodStats(thisMonthMatches);
+    const lastMonth = computePeriodStats(lastMonthMatches);
+
+    return {
+        thisWeek, lastWeek, thisMonth, lastMonth,
+        weekDelta: {
+            winRate: thisWeek.winRate - lastWeek.winRate,
+            matches: thisWeek.matches - lastWeek.matches,
+            avgKills: parseFloat((thisWeek.avgKills - lastWeek.avgKills).toFixed(1)),
+            avgDamage: thisWeek.avgDamage - lastWeek.avgDamage,
+        },
+        monthDelta: {
+            winRate: thisMonth.winRate - lastMonth.winRate,
+            matches: thisMonth.matches - lastMonth.matches,
+            avgKills: parseFloat((thisMonth.avgKills - lastMonth.avgKills).toFixed(1)),
+            avgDamage: thisMonth.avgDamage - lastMonth.avgDamage,
+        },
+    };
+};
+
+/** Compute rolling kill efficiency trends and breakdowns by ship/hero. */
+export const calculateKillEfficiency = (matches: Match[]): KillEfficiencyData => {
+    const sorted = [...matches].sort((a, b) => a.timestamp - b.timestamp);
+    const windowSize = 10;
+
+    const timeline = sorted.map((m, i) => {
+        const start = Math.max(0, i - windowSize + 1);
+        const window = sorted.slice(start, i + 1);
+        const avgKills = parseFloat((window.reduce((s, x) => s + Object.values(x.kills || {}).reduce((a, b) => a + b, 0), 0) / window.length).toFixed(1));
+        return { index: i, avgKills, timestamp: m.timestamp };
+    });
+
+    const totalKills = sorted.reduce((s, m) => s + Object.values(m.kills || {}).reduce((a, b) => a + b, 0), 0);
+    const overallAvgKills = sorted.length > 0 ? parseFloat((totalKills / sorted.length).toFixed(1)) : 0;
+
+    const killsByShipType: Record<string, { totalKills: number; count: number }> = {};
+    const killsByHero: Record<string, { totalKills: number; count: number }> = {};
+
+    sorted.forEach(m => {
+        const shipKey = (m.ship || 'Unknown').split('(')[0];
+        const heroKey = m.hero || 'Unknown';
+        const mk = Object.values(m.kills || {}).reduce((a, b) => a + b, 0);
+
+        if (!killsByShipType[shipKey]) killsByShipType[shipKey] = { totalKills: 0, count: 0 };
+        killsByShipType[shipKey].totalKills += mk;
+        killsByShipType[shipKey].count++;
+
+        if (!killsByHero[heroKey]) killsByHero[heroKey] = { totalKills: 0, count: 0 };
+        killsByHero[heroKey].totalKills += mk;
+        killsByHero[heroKey].count++;
+    });
+
+    const shipResult: Record<string, { avgKills: number; total: number }> = {};
+    Object.entries(killsByShipType).forEach(([k, v]) => {
+        shipResult[k] = { avgKills: parseFloat((v.totalKills / v.count).toFixed(1)), total: v.count };
+    });
+
+    const heroResult: Record<string, { avgKills: number; total: number }> = {};
+    Object.entries(killsByHero).forEach(([k, v]) => {
+        heroResult[k] = { avgKills: parseFloat((v.totalKills / v.count).toFixed(1)), total: v.count };
+    });
+
+    // Determine trend from last 10 vs previous 10
+    let trendDirection: 'up' | 'down' | 'stable' = 'stable';
+    if (sorted.length >= 20) {
+        const recent10 = sorted.slice(-10);
+        const prev10 = sorted.slice(-20, -10);
+        const recentAvg = recent10.reduce((s, m) => s + Object.values(m.kills || {}).reduce((a, b) => a + b, 0), 0) / 10;
+        const prevAvg = prev10.reduce((s, m) => s + Object.values(m.kills || {}).reduce((a, b) => a + b, 0), 0) / 10;
+        if (recentAvg > prevAvg + 0.3) trendDirection = 'up';
+        else if (recentAvg < prevAvg - 0.3) trendDirection = 'down';
+    }
+
+    return { timeline, overallAvgKills, killsByShipType: shipResult, killsByHero: heroResult, trendDirection };
+};
+
+/** Build placement distribution histogram from Fleet Battle matches. */
+export const calculatePlacementDistribution = (matches: Match[]): PlacementData | null => {
+    const withPlacement = matches.filter(m => m.placement != null && m.placement > 0);
+    if (withPlacement.length < 5) return null;
+
+    const buckets: Record<number, number> = {};
+    const placements: number[] = [];
+
+    withPlacement.forEach(m => {
+        const p = m.placement!;
+        buckets[p] = (buckets[p] || 0) + 1;
+        placements.push(p);
+    });
+
+    const distribution = Object.entries(buckets)
+        .map(([p, count]) => ({ placement: Number(p), count }))
+        .sort((a, b) => a.placement - b.placement);
+
+    placements.sort((a, b) => a - b);
+    const avgPlacement = parseFloat((placements.reduce((a, b) => a + b, 0) / placements.length).toFixed(1));
+    const medianPlacement = placements[Math.floor(placements.length / 2)];
+    const topQuartile = Math.ceil(Math.max(...placements) * 0.25);
+    const topQuartileRate = Math.round((placements.filter(p => p <= topQuartile).length / placements.length) * 100);
+
+    return { distribution, avgPlacement, medianPlacement, topQuartileRate };
+};
+
+/** Compute rolling performance momentum score (0-100). */
+export const calculatePerformanceMomentum = (matches: Match[], windowSize = 10): MomentumData => {
+    const sorted = [...matches].sort((a, b) => a.timestamp - b.timestamp);
+
+    // Compute normalization baselines
+    const allKills = sorted.map(m => Object.values(m.kills || {}).reduce((a, b) => a + b, 0));
+    const allDamage = sorted.map(m => Math.min(Number(m.damageTaken) || 0, 15000));
+    const maxKills = Math.max(1, ...allKills);
+    // Cap maxDamage at 10000 to prevent single outlier from killing normalization
+    const maxDamage = Math.min(10000, Math.max(1, ...allDamage));
+
+    const timeline = sorted.map((_, i) => {
+        const start = Math.max(0, i - windowSize + 1);
+        const window = sorted.slice(start, i + 1);
+        const winRate = window.filter(m => m.result === 'Win').length / window.length;
+        const avgKillsNorm = (window.reduce((s, m) => s + Object.values(m.kills || {}).reduce((a, b) => a + b, 0), 0) / window.length) / maxKills;
+        const avgDamageNorm = (window.reduce((s, m) => s + (Number(m.damageTaken) || 0), 0) / window.length) / maxDamage;
+
+        const score = Math.round((winRate * 40) + (avgKillsNorm * 30) + (avgDamageNorm * 30));
+
+        return { index: i, score: Math.min(100, Math.max(0, score)), timestamp: sorted[i].timestamp };
+    });
+
+    const currentMomentum = timeline.length > 0 ? timeline[timeline.length - 1].score : 0;
+    const peakMomentum = timeline.length > 0 ? Math.max(...timeline.map(t => t.score)) : 0;
+
+    let trend: 'rising' | 'falling' | 'stable' = 'stable';
+    if (timeline.length >= 5) {
+        const last5 = timeline.slice(-5);
+        const prev5 = timeline.slice(-10, -5);
+        if (prev5.length >= 5) {
+            const recentAvg = last5.reduce((s, t) => s + t.score, 0) / 5;
+            const prevAvg = prev5.reduce((s, t) => s + t.score, 0) / 5;
+            if (recentAvg > prevAvg + 3) trend = 'rising';
+            else if (recentAvg < prevAvg - 3) trend = 'falling';
+        }
+    }
+
+    return { timeline, currentMomentum, peakMomentum, trend };
 };

@@ -1,4 +1,4 @@
-
+﻿
 /**
  * Calculates the Levenshtein distance between two strings.
  * Returns the number of edits (insertions, deletions, substitutions) needed to transform a into b.
@@ -36,22 +36,46 @@ export const levenshteinDistance = (a: string, b: string): number => {
     return matrix[b.length][a.length];
 };
 
-export const findClosestMatch = (target: string, candidates: string[], threshold: number = 2): string | null => {
+export const findClosestMatch = (target: string, candidates: string[], threshold?: number): string | null => {
+    // Dynamic threshold: allow more edits for longer names (OCR errors scale with name length)
+    const effectiveThreshold = threshold ?? (target.length > 6 ? 3 : 2);
     let bestMatch = null;
     let minDistance = Infinity;
 
     for (const candidate of candidates) {
         // Optimization: Skip if lengths differ by more than threshold
-        if (Math.abs(candidate.length - target.length) > threshold) continue;
+        if (Math.abs(candidate.length - target.length) > effectiveThreshold) continue;
 
         const dist = levenshteinDistance(target.toLowerCase(), candidate.toLowerCase());
-        if (dist <= threshold && dist < minDistance) {
+        if (dist <= effectiveThreshold && dist < minDistance) {
             minDistance = dist;
             bestMatch = candidate;
         }
     }
 
     return bestMatch;
+};
+
+export const similarityScore = (a: string, b: string): number => {
+    if (!a && !b) return 100;
+    if (!a || !b) return 0;
+    const dist = levenshteinDistance(a.toLowerCase(), b.toLowerCase());
+    const maxLen = Math.max(a.length, b.length);
+    if (maxLen === 0) return 100;
+    return Math.max(0, Math.min(100, Math.round((1 - dist / maxLen) * 100)));
+};
+
+export const bestMatchWithScore = (target: string, candidates: string[]) => {
+    let bestMatch: string | null = null;
+    let bestScore = 0;
+    for (const candidate of candidates) {
+        const score = similarityScore(target, candidate);
+        if (score > bestScore) {
+            bestScore = score;
+            bestMatch = candidate;
+        }
+    }
+    return { match: bestMatch, score: bestScore };
 };
 
 /**
@@ -98,24 +122,37 @@ export const isOcrNoise = (line: string): boolean => {
  */
 export const cleanPlayerName = (name: string): string => {
     // Remove trailing symbols common in OCR (e.g. "Scare(" -> "Scare")
-    let cleaned = name.replace(/[()\[\]{}|\\\/<>.,;:"'!@#$%^&*+=~`]$/, '');
+    // Preserve periods between alphanumeric chars (e.g. "River.Banks")
+    let cleaned = name.replace(/[()\[\]{}|\\\/<>,;:"'!@#$%^&*+=~`]$/, '');
+    // Only strip trailing dot if NOT preceded by alphanumeric
+    cleaned = cleaned.replace(/(?<![a-zA-Z0-9])\.$/, '');
 
-    // If it starts with a bullet or prefix (e.g. "•Name")
-    cleaned = cleaned.replace(/^[•\-_* ]+/, '');
+    // If it starts with a bullet or prefix
+    cleaned = cleaned.replace(/^[\u2022\u00b7•·\-_* ]+/, '');
 
     return cleaned;
 };
 /**
- * Cleans up mission/modifier names (e.g. "GE•THE BULL T" -> "THE BULL")
+ * Cleans up mission/modifier names (e.g. "GEâ€¢THE BULL T" -> "THE BULL")
  */
 export const cleanMissionName = (name: string): string => {
     let cleaned = name.trim();
 
     // Remove common UI prefixes like icons or category tags
-    cleaned = cleaned.replace(/^[A-Z]{2}[•·\- ]+/, '');
+    cleaned = cleaned.replace(/^[A-Z]{2}[\u2022\u00b7•·\- ]+/, '');
 
     // Remove common UI suffixes like alignment or status tags
     cleaned = cleaned.replace(/[ ]+[A-Z]$/, '');
 
     return cleaned.trim();
 };
+
+export const normalizeOcrName = (name: string): string => {
+    if (!name) return '';
+    let cleaned = cleanPlayerName(name);
+    cleaned = cleaned.replace(/^\s*[\[\(\{<][A-Z0-9 _-]{2,12}[\]\)\}>]\s*/i, '');
+    cleaned = cleaned.replace(/^[\|\-_:]+/, '').replace(/[\|\-_:]+$/, '');
+    cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+    return cleaned;
+};
+

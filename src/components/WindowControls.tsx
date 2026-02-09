@@ -1,17 +1,17 @@
 import React from 'react';
-
-const { ipcRenderer } = window.require ? window.require('electron') : { ipcRenderer: null };
+import { getElectronAPI } from '../utils/electronAPI';
 
 interface WindowControlsProps {
     className?: string;
 }
 
 export const WindowControls: React.FC<WindowControlsProps> = ({ className = '' }) => {
-    if (!ipcRenderer) return null;
+    const api = getElectronAPI();
+    if (!api) return null;
 
-    const handleMinimize = () => ipcRenderer.send('minimize-window');
-    const handleMaximize = () => ipcRenderer.send('maximize-window');
-    const handleClose = () => ipcRenderer.send('close-window');
+    const handleMinimize = () => api.send('minimize-window');
+    const handleMaximize = () => api.send('maximize-window');
+    const handleClose = () => api.send('close-window');
 
     const btnBase = "h-6 w-9 flex items-center justify-center transition-colors text-gray-400 hover:text-white";
     const btnHover = "hover:bg-white/10";

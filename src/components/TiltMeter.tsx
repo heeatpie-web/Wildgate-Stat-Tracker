@@ -46,7 +46,7 @@ export const TiltMeter: React.FC<TiltMeterProps> = ({ recentMatches }) => {
     const color = tiltScore > 80 ? 'bg-red-600' : tiltScore > 50 ? 'bg-orange-500' : tiltScore > 20 ? 'bg-yellow-500' : 'bg-green-500';
 
     return (
-        <div className="bg-md-sys-surface2 p-6 rounded-3xl flex items-center gap-6 shadow-lg border border-md-sys-outline/10">
+        <div className="bg-md-sys-surface2 p-6 rounded-xl flex items-center gap-6 shadow-lg border border-md-sys-outline/10">
             <div className="relative w-24 h-24 flex-shrink-0">
                 <svg className="w-full h-full transform -rotate-90">
                     <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-md-sys-surface3" />
@@ -54,7 +54,7 @@ export const TiltMeter: React.FC<TiltMeterProps> = ({ recentMatches }) => {
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <span className="text-2xl font-black">{tiltScore}%</span>
-                    <span className="text-[8px] font-bold uppercase opacity-60">Tilt</span>
+                    <span className="text-[9px] font-bold uppercase opacity-60">Tilt</span>
                 </div>
             </div>
             

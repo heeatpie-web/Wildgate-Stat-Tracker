@@ -146,15 +146,15 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-white/10">
+                <div className="flex items-center justify-between p-4 border-b border-md-sys-outline/10">
                     <div className="flex items-center gap-2">
                         <User size={20} className="text-md-sys-primary" />
                         <h2 className="text-lg font-bold">Review Detected Players</h2>
-                        <span className="text-xs text-white/50 bg-white/10 px-2 py-0.5 rounded-full">
+                        <span className="text-xs opacity-50 bg-md-sys-on-surface/10 px-2 py-0.5 rounded-full">
                             {detectedPlayers.length} found
                         </span>
                     </div>
-                    <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-lg transition-colors">
+                    <button onClick={onClose} className="p-1 hover:bg-md-sys-surface3 rounded-lg transition-colors">
                         <X size={20} />
                     </button>
                 </div>
@@ -162,7 +162,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                 {/* Player List */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
                     {detectedPlayers.length === 0 ? (
-                        <div className="text-center text-white/50 py-8">
+                        <div className="text-center opacity-50 py-8">
                             No players detected in this session
                         </div>
                     ) : (
@@ -177,7 +177,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                                     key={`${player.name}-${idx}`}
                                     className={`p-3 rounded-xl border transition-all ${
                                         isIgnored
-                                            ? 'bg-white/5 border-white/10 opacity-50'
+                                            ? 'bg-md-sys-on-surface/5 border-md-sys-outline/10 opacity-50'
                                             : hasCorrected
                                                 ? 'bg-green-500/10 border-green-500/30'
                                                 : getConfidenceBg(conf)
@@ -210,7 +210,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                                                     )}
                                                 </div>
                                                 {player.shipType && (
-                                                    <div className="flex items-center gap-1 text-xs text-white/50 mt-0.5">
+                                                    <div className="flex items-center gap-1 text-xs opacity-50 mt-0.5">
                                                         <Ship size={10} />
                                                         {player.shipType}
                                                     </div>
@@ -222,7 +222,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                                         {isIgnored ? (
                                             <button
                                                 onClick={() => handleUnignore(player.name)}
-                                                className="text-xs px-2 py-1 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                                                className="text-xs px-2 py-1 bg-md-sys-on-surface/10 hover:bg-md-sys-on-surface/20 rounded-lg transition-colors"
                                             >
                                                 Undo Ignore
                                             </button>
@@ -231,7 +231,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                                                 {/* Correction Dropdown */}
                                                 <div className="relative">
                                                     <div className="flex items-center gap-1 bg-md-sys-surface3 rounded-lg px-2 py-1">
-                                                        <Search size={12} className="text-white/40" />
+                                                        <Search size={12} className="opacity-40" />
                                                         <input
                                                             type="text"
                                                             placeholder="Link to..."
@@ -248,13 +248,13 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                                                                 <button
                                                                     key={p}
                                                                     onClick={() => handleCorrection(player.name, p)}
-                                                                    className="w-full text-left px-3 py-1.5 text-sm hover:bg-white/10 truncate"
+                                                                    className="w-full text-left px-3 py-1.5 text-sm hover:bg-md-sys-on-surface/10 truncate"
                                                                 >
                                                                     {p}
                                                                 </button>
                                                             ))}
                                                             {getFilteredRegistry(player.name).length === 0 && (
-                                                                <div className="px-3 py-2 text-xs text-white/50">No matches</div>
+                                                                <div className="px-3 py-2 text-xs opacity-50">No matches</div>
                                                             )}
                                                         </div>
                                                     )}
@@ -289,7 +289,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                                     {/* Show correction target */}
                                     {hasCorrected && hasCorrected !== player.name && (
                                         <div className="mt-2 text-xs text-green-400 flex items-center gap-1">
-                                            <span className="text-white/50">Linked to:</span>
+                                            <span className="opacity-50">Linked to:</span>
                                             <span className="font-semibold">{hasCorrected}</span>
                                         </div>
                                     )}
@@ -300,10 +300,10 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                 </div>
 
                 {/* Footer */}
-                <div className="flex items-center justify-between p-4 border-t border-white/10 gap-3">
+                <div className="flex items-center justify-between p-4 border-t border-md-sys-outline/10 gap-3">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 text-sm text-white/60 hover:text-white transition-colors"
+                        className="px-4 py-2 text-sm opacity-60 hover:opacity-100 transition-colors"
                     >
                         Skip Review
                     </button>
@@ -311,7 +311,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                     <div className="flex items-center gap-2">
                         <button
                             onClick={handleAcceptAllHigh}
-                            className="px-4 py-2 text-sm bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                            className="px-4 py-2 text-sm bg-md-sys-on-surface/10 hover:bg-md-sys-on-surface/20 rounded-lg transition-colors"
                         >
                             Auto-Accept High
                         </button>

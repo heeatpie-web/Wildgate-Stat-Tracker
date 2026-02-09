@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useGameData } from '../providers/GameDataProvider';
 import { processTelemetryEvent, TelemetryContext, TelemetryActions } from '../utils/telemetryProcessor';
 import Logger from '../utils/logger';
+import { getElectronAPI } from '../utils/electronAPI';
 
 interface SimEvent {
     ClientTimestamp: number;
@@ -33,15 +34,12 @@ const SimulatorPanel: React.FC = () => {
     const fetchArchives = async (autoLoadLatest = false) => {
         setStatus("Fetching archives...");
         try {
-            const win = window as any;
-            const electron = win.require?.('electron');
-            const ipcRenderer = electron?.ipcRenderer;
-
-            if (!ipcRenderer) {
+            const api = getElectronAPI();
+            if (!api) {
                 setStatus("Error: IPC not available");
                 return;
             }
-            const list = await ipcRenderer.invoke('list-telemetry-archives');
+            const list = await api.invoke('list-telemetry-archives');
             console.log('[Simulator] Found archives:', list?.length);
             setArchiveFiles(list || []);
 
@@ -70,12 +68,10 @@ const SimulatorPanel: React.FC = () => {
         setLoading(true);
         setStatus(`Loading ${filename}...`);
         try {
-            const win = window as any;
-            const electron = win.require?.('electron');
-            const ipcRenderer = electron?.ipcRenderer;
-            if (!ipcRenderer) throw new Error("IPC not available");
+            const api = getElectronAPI();
+            if (!api) throw new Error("IPC not available");
 
-            const data = await ipcRenderer.invoke('load-telemetry-archive-file', filename);
+            const data = await api.invoke('load-telemetry-archive-file', filename);
             const rawEvents = Array.isArray(data) ? data : (data.telemetry || []);
             const sorted = rawEvents.sort((a: any, b: any) => (a.ClientTimestamp || 0) - (b.ClientTimestamp || 0));
             setEvents(sorted);
@@ -167,17 +163,13 @@ const SimulatorPanel: React.FC = () => {
                 setMatchStartTime,
                 setOverlayPhase: (p: any) => setOverlayPhase(p), // Type cast if needed
                 setToast: (t) => Logger.info('Sim', t.message), // Don't spam real toasts
-                addTimelineEvent,
-                setKills,
                 updatePlayerIdMapping,
                 setShowWizard: () => {}, // No-op for simulation
-                initiateSubmission: () => {} // No-op for simulation
             };
 
             const context: TelemetryContext = {
                 matchStartTime: events[0].ClientTimestamp * 1000,
                 isMatchInProgress: true, // Force true for sim usually
-                kills,
                 playerIdMap,
                 pilotRegistry
             };

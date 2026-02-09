@@ -45,7 +45,7 @@ export const RenameModal: React.FC = () => {
 
     return (
         <div className="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setRenameModal(null)}>
-            <div className="bg-md-sys-surface1 p-8 rounded-[40px] max-w-sm w-full shadow-2xl border border-md-sys-outline/20 animate-scale-in" onClick={e => e.stopPropagation()}>
+            <div className="bg-md-sys-surface1 p-8 rounded-2xl max-w-sm w-full shadow-2xl border border-md-sys-outline/20 animate-scale-in" onClick={e => e.stopPropagation()}>
                 <h3 className="text-2xl font-black uppercase mb-2">{title}</h3>
                 <p className="text-xs font-bold opacity-60 uppercase tracking-widest mb-6">{sub}</p>
 

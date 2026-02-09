@@ -2,29 +2,26 @@ import React from 'react';
 import { Minus, Square, X, Maximize2, Minimize2 } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { APP_VERSION } from '../types';
-
-const { ipcRenderer } = window.require ? window.require('electron') : { ipcRenderer: null };
+import { getElectronAPI } from '../utils/electronAPI';
 
 export const WindowFrame: React.FC = () => {
     const { isAlwaysOnTop } = useUIState();
     const [isMaximized, setIsMaximized] = React.useState(false);
+    const api = getElectronAPI();
 
     React.useEffect(() => {
-        if (!ipcRenderer) return;
+        if (!api) return;
 
-        const handleMaximizeChange = (_: any, maximized: boolean) => {
+        const unsub = api.on('window-maximized-changed', (maximized: boolean) => {
             setIsMaximized(maximized);
-        };
+        });
 
-        ipcRenderer.on('window-maximized-changed', handleMaximizeChange);
-        return () => {
-            ipcRenderer.removeListener('window-maximized-changed', handleMaximizeChange);
-        };
+        return unsub;
     }, []);
 
-    const handleMinimize = () => ipcRenderer?.send('minimize-window');
-    const handleMaximize = () => ipcRenderer?.send('maximize-window');
-    const handleClose = () => ipcRenderer?.send('close-window');
+    const handleMinimize = () => api?.send('minimize-window');
+    const handleMaximize = () => api?.send('maximize-window');
+    const handleClose = () => api?.send('close-window');
 
     return (
         <div

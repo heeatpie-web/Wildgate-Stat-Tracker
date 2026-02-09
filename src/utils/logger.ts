@@ -3,6 +3,8 @@
  * Supports file persistence in Electron environment
  */
 
+import { getElectronAPI } from './electronAPI';
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 interface LogEntry {
@@ -23,16 +25,9 @@ interface PerformanceTimer {
 const LOG_BUFFER: LogEntry[] = [];
 const MAX_BUFFER_SIZE = 500;
 const activeTimers: Map<string, PerformanceTimer> = new Map();
+let lastPersistedIndex = 0;
 
-// Get IPC renderer if in Electron
-const getIPC = () => {
-    try {
-        if ((window as any).require) {
-            return (window as any).require('electron').ipcRenderer;
-        }
-    } catch (e) { }
-    return null;
-};
+const getIPC = () => getElectronAPI();
 
 const formatEntry = (entry: LogEntry): string => {
     const base = `[${entry.timestamp}] [${entry.level.toUpperCase()}] [${entry.category}] ${entry.message}`;
@@ -70,7 +65,10 @@ const persistLogs = async () => {
     if (!ipc) return;
 
     try {
-        await ipc.invoke('persist-logs', LOG_BUFFER.map(formatEntry).join('\n'));
+        const newEntries = LOG_BUFFER.slice(lastPersistedIndex);
+        if (newEntries.length === 0) return;
+        await ipc.invoke('persist-logs', newEntries.map(formatEntry).join('\n'));
+        lastPersistedIndex = LOG_BUFFER.length;
     } catch (e) {
         // Silent fail - logging shouldn't break the app
     }

@@ -22,6 +22,7 @@ export const useMatchSubmission = () => {
         setPendingArtifactType,
         setPendingKilledBy,
         setPendingKilledByShip,
+        setSelectedTeammates,
         setSelectedOpponents,
         setTimeMin,
         setTimeSec,
@@ -37,7 +38,8 @@ export const useMatchSubmission = () => {
         setIsMatchInProgress,
         updateMatch,
         recordPlayerSighting,
-        setTimelineEvents
+        setTimelineEvents,
+        setSessionTeams
     } = useGameData();
 
     const {
@@ -159,7 +161,8 @@ export const useMatchSubmission = () => {
                 notes: pendingMatchData.notes || "",
                 timelineEvents: [...(timelineEvents || [])],
                 artifacts: [],
-                ocrDebug: pendingMatchData?.ocrDebug || undefined
+                ocrDebug: pendingMatchData?.ocrDebug || undefined,
+                opponentTeams: pendingMatchData?.opponentTeams || undefined
             };
 
             // Add Match first
@@ -198,7 +201,9 @@ export const useMatchSubmission = () => {
             setPendingArtifactType("");
             setPendingKilledBy("");
             setPendingKilledByShip("");
+            setSelectedTeammates([]);
             setSelectedOpponents([]);
+            setSessionTeams({});
             setTimelineEvents([]);
             setIsMatchInProgress(false);
             setMatchStartTime(null);

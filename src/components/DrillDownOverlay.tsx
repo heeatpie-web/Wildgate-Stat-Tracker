@@ -95,12 +95,12 @@ export const DrillDownOverlay: React.FC = () => {
 
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-6 animate-fade-in" onClick={() => setDrillDownTarget(null)}>
-            <div className="bg-md-sys-surface1 w-full max-w-6xl rounded-[40px] p-8 shadow-2xl border border-md-sys-outline/20 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <div className="bg-md-sys-surface1 w-full max-w-6xl rounded-2xl p-6 shadow-2xl border border-md-sys-outline/20 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
 
                 {/* Header */}
                 <div className="flex justify-between items-start mb-8 flex-shrink-0">
                     <div>
-                        <div className="text-sm font-black uppercase opacity-40 tracking-[0.2em] mb-1">Deep Dive Analysis • {drillDownTarget.type}</div>
+                        <div className="text-sm font-black uppercase opacity-40 tracking-[0.2em] mb-1">Deep Dive Analysis - {drillDownTarget.type}</div>
                         <h2 className="text-5xl font-black">{drillDownTarget.name}</h2>
                         <div className="flex gap-4 mt-4">
                             <div className="bg-md-sys-surface2 px-4 py-2 rounded-xl text-xs font-black uppercase"><span className="opacity-60">Matches:</span> {targetMatches.length}</div>
@@ -123,7 +123,7 @@ export const DrillDownOverlay: React.FC = () => {
                     {/* Top Stats Row */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-shrink-0">
                         {/* Recent Form */}
-                        <div className="bg-md-sys-surface2 p-6 rounded-[32px] relative overflow-hidden flex flex-col justify-between">
+                        <div className="bg-md-sys-surface2 p-6 rounded-xl relative overflow-hidden flex flex-col justify-between">
                             <div>
                                 <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2">Recent Form (Last 10)</h4>
                                 <div className="text-4xl font-black mb-1 flex items-baseline gap-2">
@@ -136,7 +136,7 @@ export const DrillDownOverlay: React.FC = () => {
                         </div>
 
                         {/* Best Synergies */}
-                        <div className="bg-md-sys-surface2 p-6 rounded-[32px] relative overflow-hidden col-span-1">
+                        <div className="bg-md-sys-surface2 p-6 rounded-xl relative overflow-hidden col-span-1">
                             <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-4">{['Ship', 'Hero'].includes(drillDownTarget.type) ? 'Top Wingmen' : 'Best Synergies'}</h4>
                             <div className="flex flex-col gap-2">
                                 {topSynergies.length > 0 ? topSynergies.map(([name, stat], i) => (
@@ -150,7 +150,7 @@ export const DrillDownOverlay: React.FC = () => {
                         </div>
 
                         {/* Worst Nemeses */}
-                        <div className="bg-md-sys-surface2 p-6 rounded-[32px] relative overflow-hidden col-span-1">
+                        <div className="bg-md-sys-surface2 p-6 rounded-xl relative overflow-hidden col-span-1">
                             <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-4">{['Ship', 'Hero'].includes(drillDownTarget.type) ? 'Worst Nightmares' : (drillDownTarget.type === 'Opponent' ? 'Weakness' : 'Worst Combo')}</h4>
                             <div className="flex flex-col gap-2">
                                 {topNemeses.length > 0 ? topNemeses.map(([name, stat], i) => (
@@ -164,7 +164,7 @@ export const DrillDownOverlay: React.FC = () => {
                         </div>
 
                         {/* Environment Affinity */}
-                        <div className="bg-md-sys-surface2 p-6 rounded-[32px] relative overflow-hidden col-span-1">
+                        <div className="bg-md-sys-surface2 p-6 rounded-xl relative overflow-hidden col-span-1">
                             <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-4">Environment Affinity</h4>
                             <div className="flex flex-col gap-1">
                                 {topEnvs.length > 0 ? (
@@ -185,9 +185,9 @@ export const DrillDownOverlay: React.FC = () => {
 
                     {/* Chart */}
                     {targetMatches.length < 2 ? (
-                        <div className="h-64 w-full bg-md-sys-surface2 rounded-[32px] flex items-center justify-center opacity-40 font-bold uppercase tracking-widest flex-shrink-0">Not enough data for trend analysis</div>
+                        <div className="h-64 w-full bg-md-sys-surface2 rounded-xl flex items-center justify-center opacity-40 font-bold uppercase tracking-widest flex-shrink-0">Not enough data for trend analysis</div>
                     ) : (
-                        <div className="h-80 w-full bg-md-sys-surface2 rounded-[32px] p-6 border border-md-sys-outline/5 shadow-inner flex-shrink-0">
+                        <div className="h-80 w-full bg-md-sys-surface2 rounded-xl p-6 border border-md-sys-outline/5 shadow-inner flex-shrink-0">
                             <h4 className="text-xs font-black uppercase tracking-widest mb-6 opacity-60">Rolling Win Rate Over Time</h4>
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={trendData}>

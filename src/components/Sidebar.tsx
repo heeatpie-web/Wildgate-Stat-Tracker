@@ -28,6 +28,7 @@ export const Sidebar: React.FC = () => {
                     <button
                         key={item.id}
                         onClick={() => setActiveView(item.id)}
+                        data-tour={`nav-${item.id}`}
                         className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-150 group ${activeView === item.id
                             ? 'text-md-sys-primary'
                             : 'text-md-sys-on-surface/40 hover:text-md-sys-on-surface/70'
@@ -70,6 +71,7 @@ export const Sidebar: React.FC = () => {
             {/* Bottom: Settings */}
             <button
                 onClick={() => setShowSettings(true)}
+                data-tour="nav-settings"
                 className="w-9 h-9 rounded-lg flex items-center justify-center text-md-sys-on-surface/40 hover:text-md-sys-on-surface/70 transition-all duration-150 group relative"
                 title="Settings"
             >

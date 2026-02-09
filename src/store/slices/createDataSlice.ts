@@ -8,6 +8,7 @@
  */
 import { StateCreator } from 'zustand';
 import { Match, Loadout } from '../../types';
+import { normalizeOcrName } from '../../utils/stringUtils';
 
 /**
  * Origin of a data value. Priority: manual (3) > telemetry (2) > ocr (1).
@@ -16,7 +17,7 @@ import { Match, Loadout } from '../../types';
 export type DataSource = 'manual' | 'telemetry' | 'ocr';
 
 /** Returns numeric priority for a DataSource. Higher = more authoritative. */
-const getPriority = (source: DataSource = 'manual'): number => {
+export const getPriority = (source: DataSource = 'manual'): number => {
   switch (source) {
     case 'manual': return 3;
     case 'telemetry': return 2;
@@ -24,6 +25,43 @@ const getPriority = (source: DataSource = 'manual'): number => {
     default: return 0;
   }
 };
+
+/** Snapshot of state before a merge, enabling undo. */
+export interface MergeHistoryEntry {
+  id: string;
+  timestamp: number;
+  sourceName: string;
+  targetName: string;
+  snapshot: {
+    matches: Match[];
+    pilotRegistry: string[];
+    favorites: string[];
+    pilotNotes: Record<string, string>;
+    playerIdMap: Record<string, string>;
+    pendingReviews: PendingReview[];
+  };
+}
+
+/** An OCR result flagged for manual review before acceptance. */
+export interface PendingReview {
+  id: string;
+  type: 'player_name' | 'modifier' | 'ship_type' | 'roster_candidate';
+  value: string;
+  originalConfidence: number;
+  context?: string;
+  bestMatch?: string;
+  bestScore?: number;
+  suggestions?: Array<{ name: string; score: number }>;
+  source?: 'ocr' | 'telemetry' | 'manual';
+}
+
+/** A timestamped event entry for the session timeline. */
+export interface TimelineEvent {
+  timestamp: number;
+  type: string;
+  label: string;
+  data?: Record<string, unknown>;
+}
 
 export interface DataSlice {
   matches: Match[];
@@ -37,6 +75,8 @@ export interface DataSlice {
   lastActivity: number;
   pendingKilledBy: string;
   setPendingKilledBy: (s: string) => void;
+  pendingKilledByShip: string;
+  setPendingKilledByShip: (s: string) => void;
   sessionTeams: Record<string, string[]>;
   setSessionTeams: (teams: Record<string, string[]>) => void;
 
@@ -57,7 +97,8 @@ export interface DataSlice {
   setTimeMin: (v: string, source?: DataSource) => void;
   setTimeSec: (v: string, source?: DataSource) => void;
   damageTaken: string;
-  setDamageTaken: (v: string) => void; // Keeping simple for now or update if needed
+  damageSource?: DataSource;
+  setDamageTaken: (v: string, source?: DataSource) => void;
 
   // ... rest of interface
 
@@ -86,19 +127,21 @@ export interface DataSlice {
   setPlayerIdMap: (map: Record<string, string>) => void;
   updatePlayerIdMapping: (id: string, name: string) => void;
   mergePilots: (sourceName: string, targetName: string) => void;
-  timelineEvents: any[];
-  setTimelineEvents: (events: any[]) => void;
-  addTimelineEvent: (event: any) => void;
+  mergeHistory: MergeHistoryEntry[];
+  undoLastMerge: () => boolean;
+  timelineEvents: TimelineEvent[];
+  setTimelineEvents: (events: TimelineEvent[]) => void;
+  addTimelineEvent: (event: TimelineEvent) => void;
 
-  pendingReviews: any[];
-  addPendingReview: (review: any) => void;
+  pendingReviews: PendingReview[];
+  addPendingReview: (review: PendingReview) => void;
   removePendingReview: (id: string) => void;
   clearPendingReviews: () => void;
 
   setLastActivity: (timestamp: number) => void;
 }
 
-export const createDataSlice: StateCreator<DataSlice> = (set) => ({
+export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
   matches: [],
   players: [],
   pilotRegistry: [],
@@ -108,6 +151,8 @@ export const createDataSlice: StateCreator<DataSlice> = (set) => ({
   lastActivity: Date.now(),
   pendingKilledBy: "",
   setPendingKilledBy: (s) => set({ pendingKilledBy: s }),
+  pendingKilledByShip: "",
+  setPendingKilledByShip: (s) => set({ pendingKilledByShip: s }),
   sessionTeams: {},
   setSessionTeams: (teams) => set({ sessionTeams: teams }),
   sessionShipTypes: {},
@@ -152,7 +197,15 @@ export const createDataSlice: StateCreator<DataSlice> = (set) => ({
   }),
 
   damageTaken: "",
-  setDamageTaken: (v) => set({ damageTaken: v }),
+  damageSource: undefined,
+  setDamageTaken: (v, source = 'manual') => set((state) => {
+    const currentP = getPriority(state.damageSource);
+    const newP = getPriority(source);
+    if (newP >= currentP || !state.damageSource) {
+      return { damageTaken: v, damageSource: source };
+    }
+    return {};
+  }),
   timelineEvents: [],
   setTimelineEvents: (events) => set({ timelineEvents: events }),
   addTimelineEvent: (event) => set((state) => ({ timelineEvents: [event, ...state.timelineEvents] })),
@@ -161,6 +214,8 @@ export const createDataSlice: StateCreator<DataSlice> = (set) => ({
   addPendingReview: (review) => set((state) => ({ pendingReviews: [...state.pendingReviews, review] })),
   removePendingReview: (id) => set((state) => ({ pendingReviews: state.pendingReviews.filter(r => r.id !== id) })),
   clearPendingReviews: () => set({ pendingReviews: [] }),
+
+  mergeHistory: [],
 
   setMatches: (matches) => set({ matches, lastActivity: Date.now() }),
   addMatch: (match) => set((state) => ({ matches: [match, ...state.matches], lastActivity: Date.now() })),
@@ -216,41 +271,126 @@ export const createDataSlice: StateCreator<DataSlice> = (set) => ({
   }),
 
   mergePilots: (sourceName, targetName) => set((state) => {
-    // 1. Update Matches
+    // ─── Snapshot for undo (keep last 10 merges) ───
+    const snapshot: MergeHistoryEntry = {
+      id: `merge_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: Date.now(),
+      sourceName,
+      targetName,
+      snapshot: {
+        matches: state.matches,
+        pilotRegistry: [...state.pilotRegistry],
+        favorites: [...state.favorites],
+        pilotNotes: { ...state.pilotNotes },
+        playerIdMap: { ...state.playerIdMap },
+        pendingReviews: [...(state.pendingReviews || [])],
+      },
+    };
+    const mergeHistory = [snapshot, ...(state.mergeHistory || [])].slice(0, 10);
+
+    const srcNorm = normalizeOcrName(sourceName).toLowerCase();
+
+    // Helper: case-insensitive match against source name
+    const isSource = (name: string) =>
+      name === sourceName || normalizeOcrName(name).toLowerCase() === srcNorm;
+
+    // 1. Update Matches (case-insensitive)
     const newMatches = state.matches.map(m => ({
       ...m,
-      player: m.player === sourceName ? targetName : m.player,
-      teammates: (m.teammates || []).map(t => t === sourceName ? targetName : t),
-      opponents: (m.opponents || []).map(o => o === sourceName ? targetName : o)
+      player: isSource(m.player) ? targetName : m.player,
+      teammates: (m.teammates || []).map(t => isSource(t) ? targetName : t),
+      opponents: (m.opponents || []).map(o => isSource(o) ? targetName : o)
     }));
 
     // 2. Update Registry
-    const newRegistry = state.pilotRegistry.filter(p => p !== sourceName);
+    const newRegistry = state.pilotRegistry.filter(p => !isSource(p));
     if (!newRegistry.includes(targetName)) newRegistry.push(targetName);
 
     // 3. Update Favorites & Notes
-    const newFavorites = state.favorites.filter(f => f !== sourceName);
+    const newFavorites = state.favorites.filter(f => !isSource(f));
     const newNotes = { ...state.pilotNotes };
     if (newNotes[sourceName]) {
       newNotes[targetName] = (newNotes[targetName] ? newNotes[targetName] + "\n" : "") + newNotes[sourceName];
       delete newNotes[sourceName];
     }
 
-    // 4. Update ID Map (Critical for future auto-detection)
+    // 4. Update ID Map (case-insensitive)
     const newIdMap = { ...state.playerIdMap };
     Object.entries(newIdMap).forEach(([id, name]) => {
-      if (name === sourceName) newIdMap[id] = targetName;
+      if (isSource(name)) newIdMap[id] = targetName;
     });
 
+    // 5. Consolidate playerProfiles (from MappingSlice, accessible via combined store)
+    const fullState = get() as any;
+    const profiles = fullState.playerProfiles;
+    if (profiles) {
+      const srcProfile = profiles[sourceName];
+      const tgtProfile = profiles[targetName];
+      if (srcProfile && tgtProfile) {
+        // Merge sighting counts and relationship data
+        const merged = { ...tgtProfile };
+        merged.sightings = (tgtProfile.sightings || 0) + (srcProfile.sightings || 0);
+        merged.ocrSightings = (tgtProfile.ocrSightings || 0) + (srcProfile.ocrSightings || 0);
+        merged.manualSightings = (tgtProfile.manualSightings || 0) + (srcProfile.manualSightings || 0);
+        merged.firstSeen = Math.min(tgtProfile.firstSeen || Infinity, srcProfile.firstSeen || Infinity);
+        merged.lastSeen = Math.max(tgtProfile.lastSeen || 0, srcProfile.lastSeen || 0);
+        // Merge playedWith/playedAgainst
+        for (const [pid, count] of Object.entries(srcProfile.playedWith || {})) {
+          merged.playedWith = { ...merged.playedWith, [pid]: ((merged.playedWith || {})[pid] || 0) + (count as number) };
+        }
+        for (const [pid, count] of Object.entries(srcProfile.playedAgainst || {})) {
+          merged.playedAgainst = { ...merged.playedAgainst, [pid]: ((merged.playedAgainst || {})[pid] || 0) + (count as number) };
+        }
+        // Merge observed teams/ships
+        for (const [key, count] of Object.entries(srcProfile.teamsObserved || {})) {
+          merged.teamsObserved = { ...merged.teamsObserved, [key]: ((merged.teamsObserved || {})[key] || 0) + (count as number) };
+        }
+        for (const [key, count] of Object.entries(srcProfile.shipsObserved || {})) {
+          merged.shipsObserved = { ...merged.shipsObserved, [key]: ((merged.shipsObserved || {})[key] || 0) + (count as number) };
+        }
+        const newProfiles = { ...profiles, [targetName]: merged };
+        delete newProfiles[sourceName];
+        return {
+          matches: newMatches, pilotRegistry: newRegistry, favorites: newFavorites,
+          pilotNotes: newNotes, playerIdMap: newIdMap, playerProfiles: newProfiles, mergeHistory, lastActivity: Date.now()
+        };
+      } else if (srcProfile) {
+        const newProfiles = { ...profiles, [targetName]: { ...srcProfile, id: targetName, name: targetName } };
+        delete newProfiles[sourceName];
+        return {
+          matches: newMatches, pilotRegistry: newRegistry, favorites: newFavorites,
+          pilotNotes: newNotes, playerIdMap: newIdMap, playerProfiles: newProfiles, mergeHistory, lastActivity: Date.now()
+        };
+      }
+    }
+
+    // 6. Clear pending reviews referencing source name
+    const pendingReviews = state.pendingReviews || [];
+    const newPending = pendingReviews.filter(r => !isSource(r.value));
+
     return {
-      matches: newMatches,
-      pilotRegistry: newRegistry,
-      favorites: newFavorites,
-      pilotNotes: newNotes,
-      playerIdMap: newIdMap,
-      lastActivity: Date.now()
+      matches: newMatches, pilotRegistry: newRegistry, favorites: newFavorites,
+      pilotNotes: newNotes, playerIdMap: newIdMap, pendingReviews: newPending, mergeHistory, lastActivity: Date.now()
     };
   }),
+
+  undoLastMerge: () => {
+    const state = get() as DataSlice;
+    const history = state.mergeHistory || [];
+    if (history.length === 0) return false;
+    const [latest, ...rest] = history;
+    set({
+      matches: latest.snapshot.matches,
+      pilotRegistry: latest.snapshot.pilotRegistry,
+      favorites: latest.snapshot.favorites,
+      pilotNotes: latest.snapshot.pilotNotes,
+      playerIdMap: latest.snapshot.playerIdMap,
+      pendingReviews: latest.snapshot.pendingReviews,
+      mergeHistory: rest,
+      lastActivity: Date.now(),
+    });
+    return true;
+  },
 
   setFavorites: (favorites) => set({ favorites }),
   toggleFavorite: (name) => set((state) => ({

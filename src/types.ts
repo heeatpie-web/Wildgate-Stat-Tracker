@@ -29,6 +29,14 @@ export interface Loadout {
   equipment: string[];
 }
 
+/** Structured opponent team data preserving team name, ship type, color, and player names. */
+export interface OpponentTeam {
+  teamName: string;
+  shipType: string;
+  color: string;
+  players: string[];
+}
+
 /** Primary data record for a completed match. Persisted to disk via StorageService. */
 export interface Match {
   id: number;
@@ -54,10 +62,20 @@ export interface Match {
   poiEpic?: number;
   artifactSource?: string;
   killedBy?: string;
+  killedByShip?: string;
+  opponentTeams?: OpponentTeam[];
+  eliminatedByTeam?: string;
   isPinned?: boolean;
   notes?: string;
   timelineEvents?: any[]; // New field for match chronology
   artifacts?: string[]; // New field for bundled screenshots
+  ocrDebug?: {
+    rawText?: string;
+    confidence?: number;
+    source?: 'local' | 'cloud' | 'merged';
+    mergeStats?: { total: number; agreed: number; cloudPreferred: number; localOnly: number; cloudOnly: number; conflicts: number };
+    timestamp?: number;
+  };
 }
 
 /** Returns crew capacity (1-4) based on the ship display name. */
@@ -89,4 +107,116 @@ export interface Insight {
   color: string;
   iconType: 'Rocket' | 'Crown' | 'Flame' | 'Zap' | 'Clock' | 'Target' | 'ShieldCheck' | 'Ghost' | 'Crosshair' | 'Moon' | 'Sun' | 'Users' | 'User' | 'Mountain' | 'Skull' | 'AlertTriangle';
   priority: number;
+}
+
+/** Visual density mode for analytics views. */
+export type VisualMode = 'dense' | 'editorial';
+
+/** Analytics view routing — 'overview' is the dashboard, others are expanded views. */
+export type AnalyticsView =
+  | 'overview'
+  | 'session'
+  | 'momentum'
+  | 'period'
+  | 'timePatterns'
+  | 'streaks'
+  | 'killEfficiency'
+  | 'placement'
+  | 'insights'
+  | 'social'
+  | 'pro'
+  | 'environment'
+  | 'synergy'
+  | 'essay';
+
+/** Time range filter options for analytics. */
+export type AnalyticsTimeRange = 'all' | 'month' | 'week' | 'today' | 'lastN';
+
+// --- Analytics V2 Data Types ---
+
+export interface HourStat { hour: number; matches: number; wins: number; winRate: number; }
+export interface DayOfWeekStat { day: number; dayName: string; matches: number; wins: number; winRate: number; }
+export interface HeatmapCell { day: number; hour: number; matches: number; winRate: number; }
+export interface TimePatternData {
+  byHour: HourStat[];
+  byDayOfWeek: DayOfWeekStat[];
+  heatmap: HeatmapCell[];
+  peakHour: number;
+  peakDay: number;
+}
+
+export interface StreakPoint { index: number; streak: number; timestamp: number; }
+export interface StreakData {
+  timeline: StreakPoint[];
+  longestWinStreak: number;
+  longestLossStreak: number;
+  currentStreak: number;
+  averageStreakLength: number;
+}
+
+export interface DaySummary {
+  date: string;
+  matches: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  totalKills: number;
+  avgDamage: number;
+  bestStreak: number;
+  heroes: Record<string, number>;
+  ships: Record<string, number>;
+}
+export interface SessionSummaryData {
+  today: DaySummary | null;
+  yesterday: DaySummary | null;
+  last7Days: DaySummary[];
+  dailyAverage: { matches: number; wins: number; kills: number };
+}
+
+export interface PeriodStats {
+  matches: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  avgKills: number;
+  avgDamage: number;
+}
+export interface PeriodDelta {
+  winRate: number;
+  matches: number;
+  avgKills: number;
+  avgDamage: number;
+}
+export interface PeriodComparisonData {
+  thisWeek: PeriodStats;
+  lastWeek: PeriodStats;
+  thisMonth: PeriodStats;
+  lastMonth: PeriodStats;
+  weekDelta: PeriodDelta;
+  monthDelta: PeriodDelta;
+}
+
+export interface KillEfficiencyPoint { index: number; avgKills: number; timestamp: number; }
+export interface KillEfficiencyData {
+  timeline: KillEfficiencyPoint[];
+  overallAvgKills: number;
+  killsByShipType: Record<string, { avgKills: number; total: number }>;
+  killsByHero: Record<string, { avgKills: number; total: number }>;
+  trendDirection: 'up' | 'down' | 'stable';
+}
+
+export interface PlacementBucket { placement: number; count: number; }
+export interface PlacementData {
+  distribution: PlacementBucket[];
+  avgPlacement: number;
+  medianPlacement: number;
+  topQuartileRate: number;
+}
+
+export interface MomentumPoint { index: number; score: number; timestamp: number; }
+export interface MomentumData {
+  timeline: MomentumPoint[];
+  currentMomentum: number;
+  peakMomentum: number;
+  trend: 'rising' | 'falling' | 'stable';
 }

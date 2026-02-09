@@ -8,7 +8,19 @@ interface ReviewQueueModalProps {
 }
 
 export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) => {
-    const { pendingReviews, removePendingReview, sessionTeams, setSessionTeams, detectedUnknowns, addMapping } = useGameData();
+    const {
+        pendingReviews,
+        removePendingReview,
+        sessionTeams,
+        setSessionTeams,
+        detectedUnknowns,
+        addMapping,
+        addToRegistry,
+        selectedTeammates,
+        setSelectedTeammates,
+        selectedOpponents,
+        setSelectedOpponents
+    } = useGameData();
     const { setToast } = useUIState();
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState("");
@@ -25,6 +37,17 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
 
     const allItems = [...pendingReviews, ...unknownItems];
 
+    const replaceNameInSession = (oldName: string, newName: string) => {
+        if (oldName === newName) return;
+        const newTeams = { ...sessionTeams };
+        Object.keys(newTeams).forEach(color => {
+            newTeams[color] = newTeams[color].map(n => n === oldName ? newName : n);
+        });
+        setSessionTeams(newTeams);
+        setSelectedTeammates(selectedTeammates.map(n => n === oldName ? newName : n));
+        setSelectedOpponents(selectedOpponents.map(n => n === oldName ? newName : n));
+    };
+
     const handleConfirm = (review: any) => {
         if (review.isUnknown) {
             // Confirming an unknown without editing doesn't make sense unless we want to keep it as "Unknown X"
@@ -32,6 +55,13 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             // For better UX, clicking Check on unknown should probably trigger "Please rename" toast or enter edit mode.
             setToast({ message: "Please rename to identify this item", type: 'info' });
             startEdit(review);
+            return;
+        }
+
+        if (review.type === 'roster_candidate') {
+            addToRegistry(review.value);
+            removePendingReview(review.id);
+            setToast({ message: `Added "${review.value}" to roster`, type: 'success' });
             return;
         }
 
@@ -49,7 +79,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         }
 
         // Remove from sessionTeams
-        if (review.type === 'player_name') {
+        if (review.type === 'player_name' || review.type === 'roster_candidate') {
             const newTeams = { ...sessionTeams };
             let found = false;
             Object.keys(newTeams).forEach(color => {
@@ -60,6 +90,8 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                 }
             });
             if (found) setSessionTeams(newTeams);
+            setSelectedTeammates(selectedTeammates.filter(n => n !== review.value));
+            setSelectedOpponents(selectedOpponents.filter(n => n !== review.value));
         }
         removePendingReview(review.id);
         setToast({ message: "Item deleted", type: 'success' });
@@ -76,7 +108,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         }
 
         // Update Session Teams
-        if (review.type === 'player_name') {
+        if (review.type === 'player_name' || review.type === 'roster_candidate') {
             const newTeams = { ...sessionTeams };
             Object.keys(newTeams).forEach(color => {
                 const idx = newTeams[color].indexOf(review.value);
@@ -85,6 +117,10 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                 }
             });
             setSessionTeams(newTeams);
+        }
+
+        if (review.type === 'roster_candidate') {
+            addToRegistry(editValue);
         }
 
         removePendingReview(review.id);
@@ -165,6 +201,36 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                             ) : (
                                 <div className="text-lg font-bold text-md-sys-on-surface break-all">
                                     {review.value}
+                                </div>
+                            )}
+
+                            {!editingId && review.type === 'roster_candidate' && (
+                                <div className="mt-2 space-y-2">
+                                    {review.bestScore != null && (
+                                        <div className="text-xs text-md-sys-on-surface/60">
+                                            Best match: <span className="font-semibold">{review.bestMatch || 'None'}</span> ({Math.round(review.bestScore)}%)
+                                            {review.bestScore >= 90 && (
+                                                <span className="ml-2 text-green-400 font-bold">Auto-Merge Suggested</span>
+                                            )}
+                                        </div>
+                                    )}
+                                    {Array.isArray(review.suggestions) && review.suggestions.length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {review.suggestions.map((s: any) => (
+                                                <button
+                                                    key={s.name}
+                                                    onClick={() => {
+                                                        replaceNameInSession(review.value, s.name);
+                                                        removePendingReview(review.id);
+                                                        setToast({ message: `Merged into "${s.name}"`, type: 'success' });
+                                                    }}
+                                                    className="px-2 py-1 rounded-lg bg-md-sys-surface3 text-[10px] font-bold hover:bg-md-sys-primary hover:text-md-sys-onPrimary transition-colors"
+                                                >
+                                                    Merge with {s.name} ({Math.round(s.score)}%)
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

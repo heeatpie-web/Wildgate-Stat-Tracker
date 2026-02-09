@@ -1,0 +1,99 @@
+import React from 'react';
+import { KillEfficiencyData, VisualMode } from '../../types';
+import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts';
+import { Crosshair, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { generateKillEfficiencyEditorial } from '../../utils/analyticsEditorial';
+
+interface KillEfficiencyViewProps { data: KillEfficiencyData; visualMode: VisualMode; }
+
+export const KillEfficiencyView: React.FC<KillEfficiencyViewProps> = ({ data, visualMode }) => {
+    const dense = visualMode === 'dense';
+    const TrendIcon = data.trendDirection === 'up' ? TrendingUp : data.trendDirection === 'down' ? TrendingDown : Minus;
+    const trendColor = data.trendDirection === 'up' ? 'text-green-500' : data.trendDirection === 'down' ? 'text-red-500' : 'opacity-60';
+
+    const shipData = Object.entries(data.killsByShipType)
+        .map(([name, s]) => ({ name, avgKills: s.avgKills, total: s.total }))
+        .sort((a, b) => b.avgKills - a.avgKills);
+
+    const heroData = Object.entries(data.killsByHero)
+        .map(([name, s]) => ({ name, avgKills: s.avgKills, total: s.total }))
+        .sort((a, b) => b.avgKills - a.avgKills);
+
+    return (
+        <div className="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar animate-fade-in p-1">
+            {/* Editorial Summary */}
+            {!dense && (
+                <div className="bg-md-sys-surface2 rounded-2xl border border-white/5 p-6">
+                    <p className="text-sm leading-relaxed opacity-70">{generateKillEfficiencyEditorial(data)}</p>
+                </div>
+            )}
+
+            {/* KPI Row */}
+            <div className={`grid gap-4 ${dense ? 'grid-cols-3' : 'grid-cols-1 md:grid-cols-3'}`}>
+                <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 ${dense ? 'p-4' : 'p-6'}`}>
+                    <div className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">Overall Avg Kills</div>
+                    <div className={`font-black text-orange-500 ${dense ? 'text-3xl' : 'text-4xl'}`}>{data.overallAvgKills}</div>
+                    <div className="text-[9px] font-bold opacity-40">Per match</div>
+                </div>
+                <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 ${dense ? 'p-4' : 'p-6'}`}>
+                    <div className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">Trend</div>
+                    <div className={`font-black flex items-center gap-2 ${trendColor} ${dense ? 'text-2xl' : 'text-3xl'}`}>
+                        <TrendIcon size={dense ? 20 : 24} />
+                        {data.trendDirection === 'up' ? 'Rising' : data.trendDirection === 'down' ? 'Falling' : 'Stable'}
+                    </div>
+                    <div className="text-[9px] font-bold opacity-40">Last 10 vs previous 10</div>
+                </div>
+                <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 ${dense ? 'p-4' : 'p-6'}`}>
+                    <div className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">Best Ship</div>
+                    <div className={`font-black text-md-sys-primary ${dense ? 'text-xl' : 'text-2xl'} truncate`}>{shipData[0]?.name || '--'}</div>
+                    <div className="text-[9px] font-bold opacity-40">{shipData[0]?.avgKills || 0} avg kills</div>
+                </div>
+            </div>
+
+            {/* Rolling average chart */}
+            <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 ${dense ? 'p-4' : 'p-6'}`}>
+                <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-xs' : 'text-sm'}`}><Crosshair size={14} /> Rolling 10-Match Avg Kills</h3>
+                {data.timeline.length < 2 ? (
+                    <div className="h-48 flex items-center justify-center opacity-40 font-bold uppercase text-sm">Not enough data</div>
+                ) : (
+                    <ResponsiveContainer width="100%" height={dense ? 200 : 300}>
+                        <AreaChart data={data.timeline}>
+                            <defs><linearGradient id="killGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f97316" stopOpacity={0.3} /><stop offset="95%" stopColor="#f97316" stopOpacity={0} /></linearGradient></defs>
+                            <CartesianGrid strokeOpacity={0.05} vertical={false} />
+                            <XAxis dataKey="index" tick={{ fontSize: 9 }} />
+                            <YAxis tick={{ fontSize: 9 }} />
+                            <Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }} />
+                            <Area type="monotone" dataKey="avgKills" name="Avg Kills" stroke="#f97316" strokeWidth={2} fill="url(#killGrad)" />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                )}
+            </div>
+
+            {/* Breakdown charts */}
+            <div className={`grid gap-4 ${dense ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2'}`}>
+                <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 min-h-[250px] ${dense ? 'p-4' : 'p-6'}`}>
+                    <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-xs' : 'text-sm'}`}>By Ship</h3>
+                    <ResponsiveContainer width="100%" height={dense ? 180 : 250}>
+                        <BarChart data={shipData} layout="vertical" margin={{ left: 10 }}>
+                            <XAxis type="number" hide />
+                            <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 9, fontWeight: 'bold', fill: '#888' }} axisLine={false} />
+                            <Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }} />
+                            <Bar dataKey="avgKills" name="Avg Kills" fill="#f97316" radius={[0, 4, 4, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+                <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 min-h-[250px] ${dense ? 'p-4' : 'p-6'}`}>
+                    <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-xs' : 'text-sm'}`}>By Hero</h3>
+                    <ResponsiveContainer width="100%" height={dense ? 180 : 250}>
+                        <BarChart data={heroData} layout="vertical" margin={{ left: 10 }}>
+                            <XAxis type="number" hide />
+                            <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 9, fontWeight: 'bold', fill: '#888' }} axisLine={false} />
+                            <Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }} />
+                            <Bar dataKey="avgKills" name="Avg Kills" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+        </div>
+    );
+};

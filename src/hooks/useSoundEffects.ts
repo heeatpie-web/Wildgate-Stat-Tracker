@@ -55,5 +55,21 @@ export const useSoundEffects = () => {
         playTone(800, 'sine', 0.05);
     }, [playTone]);
 
-    return { playStart, playVictory, playDefeat, playClick };
+    const playSuccess = useCallback(() => {
+        playTone(600, 'sine', 0.15);
+        playTone(800, 'sine', 0.25, 0.1);
+    }, [playTone]);
+
+    const playError = useCallback(() => {
+        playTone(300, 'square', 0.15);
+        playTone(200, 'square', 0.3, 0.15);
+    }, [playTone]);
+
+    const playEnd = useCallback(() => {
+        playTone(659, 'triangle', 0.2);
+        playTone(523, 'triangle', 0.2, 0.15);
+        playTone(440, 'triangle', 0.5, 0.3);
+    }, [playTone]);
+
+    return { playStart, playVictory, playDefeat, playClick, playSuccess, playError, playEnd };
 };

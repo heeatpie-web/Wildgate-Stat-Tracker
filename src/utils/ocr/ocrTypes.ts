@@ -62,11 +62,27 @@ export interface OCRExtractedData {
   teammates: ExtractedPlayer[];
   opponentTeams: ExtractedOpponentTeam[];
 
+  // Game-specific
+  artifactType?: string;
+
   // Metadata
   overallConfidence: number;
   captureTimestamp: number;
   rawText?: string;
   imagePreview?: string;
+
+  // Cloud OCR metadata
+  cloudContributed?: boolean;
+  ocrSource?: 'local' | 'cloud' | 'merged';
+  mergeStats?: {
+    total: number;
+    agreed: number;
+    cloudPreferred: number;
+    cloudPreferredCJK: number;
+    localOnly: number;
+    cloudOnly: number;
+    conflicts: number;
+  };
 }
 
 /**

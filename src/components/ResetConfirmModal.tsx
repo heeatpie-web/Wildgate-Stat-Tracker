@@ -17,7 +17,7 @@ export const ResetConfirmModal: React.FC = () => {
 
     return (
         <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setShowResetConfirm(false)}>
-            <div className="bg-md-sys-surface1 p-10 rounded-[40px] w-full max-w-md shadow-2xl border-2 border-md-sys-error" onClick={e => e.stopPropagation()}>
+            <div className="bg-md-sys-surface1 p-10 rounded-2xl w-full max-w-md shadow-2xl border-2 border-md-sys-error" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center gap-4 text-md-sys-error mb-6"><AlertOctagon size={48} /><h2 className="text-3xl font-black uppercase tracking-tighter">Reset Data?</h2></div>
                 <p className="text-base opacity-80 mb-10 font-bold leading-relaxed">This action will delete ALL match history and pilot records. This cannot be undone.</p>
                 <div className="flex flex-col gap-4">

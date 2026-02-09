@@ -403,13 +403,50 @@ export function mergeOCRData(
     merged.teammates = [...(merged.teammates || []), ...newTeammates];
   }
 
-  // Merge opponent teams (union, dedupe by team name)
+  // Merge opponent teams — cross-reference by color or name to combine
+  // ship types (from map screen) with player lists (from crew hub)
   if (newData.opponentTeams) {
-    const existingTeams = new Set((merged.opponentTeams || []).map(t => t.teamName.toLowerCase()));
-    const newTeams = newData.opponentTeams.filter(
-      t => !existingTeams.has(t.teamName.toLowerCase())
-    );
-    merged.opponentTeams = [...(merged.opponentTeams || []), ...newTeams];
+    const existingArr = [...(merged.opponentTeams || [])];
+
+    for (const newTeam of newData.opponentTeams) {
+      // Try to find matching existing team by color first, then name
+      let matchIdx = -1;
+      if (newTeam.color && newTeam.color !== 'unknown') {
+        matchIdx = existingArr.findIndex(t => t.color === newTeam.color);
+      }
+      if (matchIdx < 0 && newTeam.teamName) {
+        matchIdx = existingArr.findIndex(
+          t => t.teamName.toLowerCase() === newTeam.teamName.toLowerCase()
+        );
+      }
+
+      if (matchIdx >= 0) {
+        // Merge into existing team
+        const existing = existingArr[matchIdx];
+        // Prefer longer/non-empty team name
+        if ((newTeam.teamName?.length || 0) > (existing.teamName?.length || 0)) {
+          existing.teamName = newTeam.teamName;
+        }
+        // Fill in ship type if missing
+        if (!existing.shipType && newTeam.shipType) {
+          existing.shipType = newTeam.shipType;
+        }
+        // Fill in color if missing
+        if ((!existing.color || existing.color === 'unknown') && newTeam.color && newTeam.color !== 'unknown') {
+          existing.color = newTeam.color;
+        }
+        // Merge players (dedupe by name)
+        const existingNames = new Set(existing.players.map(p => p.name.toLowerCase()));
+        const newPlayers = newTeam.players.filter(p => !existingNames.has(p.name.toLowerCase()));
+        existing.players = [...existing.players, ...newPlayers];
+        // Keep higher confidence
+        existing.confidence = Math.max(existing.confidence, newTeam.confidence);
+      } else {
+        // No match — add as new team
+        existingArr.push({ ...newTeam, players: [...newTeam.players] });
+      }
+    }
+    merged.opponentTeams = existingArr;
   }
 
   return merged;

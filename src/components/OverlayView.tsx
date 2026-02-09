@@ -5,8 +5,7 @@ import { WindowResizer } from './WindowResizer';
 import { X, Minus, LayoutTemplate, Maximize2, GripHorizontal } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
-
-const { ipcRenderer } = window.require ? window.require('electron') : { ipcRenderer: null };
+import { getElectronAPI } from '../utils/electronAPI';
 
 interface OverlayViewProps {
     onSmartCaptureData?: (data: any) => void;
@@ -16,14 +15,14 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
     const { setIsOverlayMode, showWizard } = useUIState();
     const { overlayStyle } = useUserPreferences();
 
-    const handleMinimize = () => ipcRenderer?.send('minimize-window');
-    const handleClose = () => ipcRenderer?.send('close-window');
+    const handleMinimize = () => getElectronAPI()?.send('minimize-window');
+    const handleClose = () => getElectronAPI()?.send('close-window');
 
     const isTransparent = overlayStyle === 'transparent';
 
     // Notify main process of overlay style for click-through behavior
     useEffect(() => {
-        ipcRenderer?.send('set-overlay-style', overlayStyle);
+        getElectronAPI()?.send('set-overlay-style', overlayStyle);
     }, [overlayStyle]);
 
     // Standard Mini Mode (Opaque)
@@ -79,7 +78,7 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
     const setIgnoreFn = (ignore: boolean) => {
         if (showWizard) return; // Allow Wizard to manage mouse events
         if (isTransparent) {
-            ipcRenderer?.send('set-ignore-mouse-events', ignore, { forward: true });
+            getElectronAPI()?.send('set-ignore-mouse-events', ignore, { forward: true });
         }
     };
 

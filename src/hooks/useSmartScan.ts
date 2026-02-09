@@ -10,21 +10,21 @@ import { useUIState } from '../providers/UIStateProvider';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { useAppStore } from '../store/useAppStore';
 import { captureScreen, smartAnalyzeScreen, ScanOptions } from '../utils/scanService';
-import { findClosestMatch } from '../utils/stringUtils';
+import { findClosestMatch, normalizeOcrName, similarityScore } from '../utils/stringUtils';
 import { SHIPS, UNNAMED_PLAYER_PREFIX } from '../utils/constants';
 import Logger from '../utils/logger';
 
 // OCR confidence thresholds for data quality control
 const OCR_THRESHOLDS = {
-    REJECT: 40,   // Below this = garbage, skip entirely
-    REVIEW: 80,   // Below this but above REJECT = add to pending review
+    REJECT: 55,   // Below this = garbage, skip entirely
+    REVIEW: 75,   // Below this but above REJECT = add to pending review
     ACCEPT: 80    // Above this = auto-accept
 };
 
 export const useSmartScan = () => {
     const {
         setSessionTeams, sessionTeams,
-        pilotRegistry, addToRegistry,
+        pilotRegistry,
         selectedTeammates, setSelectedTeammates,
         selectedOpponents, setSelectedOpponents,
         updatePlayerIdMapping, playerIdMap,
@@ -32,11 +32,14 @@ export const useSmartScan = () => {
         setTimeMin, setTimeSec, setDamageTaken,
         setSelectedReachModifiers, selectedReachModifiers,
         addPendingReview,
+        pendingReviews,
         recordPlayerSighting  // For immediate profile recording during scan
     } = useGameData();
 
     const { setToast, setHiddenForScan, activeUser } = useUIState();
     const { soundEnabled } = useUserPreferences();
+    const ocrMode = useAppStore(state => state.ocrMode);
+    const ocrCalibration = useAppStore(state => state.ocrCalibration);
 
     // Phase 4.4: Access OCR corrections for improved fuzzy matching
     const ocrCorrections = useAppStore(state => state.ocrCorrections);
@@ -63,6 +66,20 @@ export const useSmartScan = () => {
     const [scanProgress, setScanProgress] = useState({ status: '', pct: 0 });
     const [scanLogs, setScanLogs] = useState<string[]>([]);
 
+    const buildRosterSuggestions = (name: string) => {
+        const normalized = normalizeOcrName(name);
+        const scored = (pilotRegistry || []).map(p => ({
+            name: p,
+            score: similarityScore(normalized, normalizeOcrName(p))
+        })).sort((a, b) => b.score - a.score);
+        const top = scored.filter(s => s.score > 0).slice(0, 3);
+        return {
+            bestMatch: top[0]?.name,
+            bestScore: top[0]?.score,
+            suggestions: top
+        };
+    };
+
     const handleSmartScan = async () => {
         setIsScanning(true);
         setScanProgress({ status: 'Capturing screen...', pct: 0 });
@@ -70,14 +87,8 @@ export const useSmartScan = () => {
         Logger.info('SmartScan', 'Starting smart scan');
 
         try {
-            // Hide UI
-            setHiddenForScan(true);
-            await new Promise(r => setTimeout(r, 500)); // Increased from 200ms to ensure full hide
-
+            // Window hiding is now handled by the main process (win.hide/win.show)
             const img = await captureScreen();
-
-            // Show UI again immediately after capture
-            setHiddenForScan(false);
 
             if (img) {
                 const options: ScanOptions = {
@@ -91,15 +102,15 @@ export const useSmartScan = () => {
                 };
 
                 // Pass activeUser to enable anchor-based detection
-                const res = await smartAnalyzeScreen(img.dataUrl, options, activeUser || null);
+                const res = await smartAnalyzeScreen(img.dataUrl, { ...options, ocrMode, ocrCalibration }, activeUser || null);
 
                 if (res.mode === 'MatchStats' && res.matchData) {
                     if (res.matchData.time) {
                         const parts = res.matchData.time.split(':');
                         if (parts.length === 2) { setTimeMin(parts[0], 'ocr'); setTimeSec(parts[1], 'ocr'); }
                     }
-                    if (res.matchData.damage !== undefined) setDamageTaken(res.matchData.damage.toString());
-                    if (res.matchData.modifiers && res.matchData.modifiers.length > 0) setSelectedReachModifiers(res.matchData.modifiers);
+                    if (res.matchData.damage !== undefined) setDamageTaken(res.matchData.damage.toString(), 'ocr');
+                    if (res.matchData.modifiers && res.matchData.modifiers.length > 0) setSelectedReachModifiers(res.matchData.modifiers, 'ocr');
                     setToast({ message: "Game Stats Updated", type: 'success' });
                     Logger.info('SmartScan', 'Match stats captured', res.matchData);
                 } else if ((res.mode === 'Lobby' || res.mode === 'Tactical' || res.mode === 'Social') && res.lobbyData) {
@@ -117,6 +128,7 @@ export const useSmartScan = () => {
                             // Collect all players by team role for profile recording
                             const myTeamPlayers: string[] = [];
                             const opponentPlayers: string[] = [];
+                            const pendingValues = new Set((pendingReviews || []).map(r => normalizeOcrName(r.value)));
 
                             for (const r of players) {
                                 // Phase 2.3: Confidence threshold - reject garbage OCR
@@ -136,9 +148,8 @@ export const useSmartScan = () => {
                                     });
                                 }
 
-                                // Team grouping: Prioritize detected Team Name, fallback to Color
-                                // We combine them (e.g. "Red:Alpha") to keep color info for UI while unique-ing the group
-                                const teamKey = r.teamName ? `${r.teamColor}: ${r.teamName}` : r.teamColor;
+                                // Team grouping: Prefer stable team color when available
+                                const teamKey = (r.teamColor && r.teamColor !== 'Unknown') ? r.teamColor : (r.teamName ? `Team:${r.teamName}` : 'Unknown');
 
                                 if (!mergedTeams[teamKey]) mergedTeams[teamKey] = [];
                                 const teamList = mergedTeams[teamKey];
@@ -147,8 +158,12 @@ export const useSmartScan = () => {
 
                                 // Phase 4.4: Check OCR corrections before fuzzy matching
                                 // If we've corrected this OCR text before (2+ times), use the stored correction
-                                const existingCorrection = ocrCorrections?.[r.name];
-                                let finalName = r.name;
+                                const rawName = r.name;
+                                const normalizedName = normalizeOcrName(rawName);
+                                const existingCorrection = ocrCorrections?.[rawName] || ocrCorrections?.[normalizedName];
+                                let finalName = existingCorrection && existingCorrection.count >= 2
+                                    ? existingCorrection.correctedTo
+                                    : normalizedName;
                                 if (existingCorrection && existingCorrection.count >= 2) {
                                     finalName = existingCorrection.correctedTo;
                                     Logger.debug('SmartScan', `Applied prior OCR correction: "${r.name}" -> "${finalName}"`);
@@ -157,9 +172,16 @@ export const useSmartScan = () => {
                                 if (teamList.includes(finalName) && !isGenericShip) continue;
 
                                 // Only do fuzzy matching if we didn't already have a correction
-                                if (finalName === r.name) {
-                                    const closest = findClosestMatch(r.name, uniqueKnownNames, 2);
-                                    if (closest && closest !== r.name) {
+                                if (finalName === normalizedName) {
+                                    // Use distance threshold 2 for names >6 chars, 1 for shorter names
+                                    const threshold = finalName.length > 6 ? 2 : 1;
+                                    // Check against pilotRegistry for cross-session deduplication
+                                    const allCandidates = [...uniqueKnownNames, ...(pilotRegistry || [])];
+                                    const uniqueCandidates = Array.from(new Set(allCandidates));
+                                    const closest = findClosestMatch(finalName, uniqueCandidates, threshold);
+                                    if (closest && closest !== finalName) {
+                                        // Use the canonical registry name
+                                        finalName = closest;
                                         if (!teamList.includes(closest)) teamList.push(closest);
                                         continue;
                                     }
@@ -168,12 +190,27 @@ export const useSmartScan = () => {
                                 // For generic ships, we only add if it's a new occurrence in THIS scan
                                 teamList.push(finalName);
 
-                                // 3. Auto-Discovery (Add new names to registry)
-                                if (!pilotRegistry.includes(r.name)) {
-                                    const cleaned = r.name.trim();
+                                // 3. Auto-Discovery - queue for confirmation instead of auto-adding
+                                if (!pilotRegistry.includes(finalName)) {
+                                    const cleaned = finalName.trim();
                                     if (cleaned.length > 2 && !/READY|TEAM|LOBBY|CREW|MATCH|VS|PING|LEVEL/i.test(cleaned)) {
-                                        addToRegistry(cleaned);
-                                        Logger.info('SmartScan', `Auto-registered new pilot: ${cleaned}`);
+                                        const normalizedCleaned = normalizeOcrName(cleaned);
+                                        if (!pendingValues.has(normalizedCleaned)) {
+                                            const suggestions = buildRosterSuggestions(cleaned);
+                                            addPendingReview({
+                                                id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                                                type: 'roster_candidate',
+                                                value: cleaned,
+                                                originalConfidence: r.confidence,
+                                                context: `OCR ${res.mode}`,
+                                                bestMatch: suggestions.bestMatch,
+                                                bestScore: suggestions.bestScore,
+                                                suggestions: suggestions.suggestions,
+                                                source: 'ocr'
+                                            });
+                                            pendingValues.add(normalizedCleaned);
+                                            Logger.info('SmartScan', `Queued roster candidate for review: ${cleaned}`);
+                                        }
                                     }
                                 }
 
@@ -184,34 +221,36 @@ export const useSmartScan = () => {
 
                                 // Track for profile recording
                                 if (isTeammate) {
-                                    myTeamPlayers.push(r.name);
+                                    myTeamPlayers.push(finalName);
                                 } else {
-                                    opponentPlayers.push(r.name);
+                                    opponentPlayers.push(finalName);
                                 }
 
                                 if (isTeammate) {
-                                    if (r.name.toUpperCase() !== (activeUser || '').toUpperCase()) {
+                                    if (finalName.toUpperCase() !== (activeUser || '').toUpperCase()) {
                                         setSelectedTeammates((curr: string[]) => {
-                                            if (isGenericShip) return [...curr, r.name]; // Allow multiple hunters
-                                            return curr.includes(r.name) ? curr : [...curr, r.name];
+                                            if (isGenericShip) return [...curr, finalName]; // Allow multiple hunters
+                                            return curr.includes(finalName) ? curr : [...curr, finalName];
                                         });
                                     }
                                 } else if (r.teamColor !== 'Unknown' && r.teamColor !== 'Cyan' && !isLeftSide) {
                                     setSelectedOpponents((curr: string[]) => {
-                                        if (isGenericShip) return [...curr, r.name];
-                                        return curr.includes(r.name) ? curr : [...curr, r.name];
+                                        if (isGenericShip) return [...curr, finalName];
+                                        return curr.includes(finalName) ? curr : [...curr, finalName];
                                     });
                                 }
+                            }
 
-                                // Phase 2.1: Record player sighting IMMEDIATELY during OCR scan
-                                // This ensures playerProfiles are populated even without match submit
+                            // Second pass: Record sightings with complete team arrays
+                            for (const r of players) {
+                                if (r.confidence < OCR_THRESHOLDS.REJECT) continue;
                                 recordPlayerSighting(
-                                    r.name,
+                                    normalizeOcrName(r.name),
                                     r.teamColor || 'unknown',
                                     myTeamPlayers,
                                     opponentPlayers,
                                     r.shipType || undefined,
-                                    'ocr'  // Source tracking for analytics
+                                    'ocr'
                                 );
                                 Logger.debug('SmartScan', `Recorded sighting for ${r.name} (${r.teamColor}, ship: ${r.shipType || 'unknown'}, source: ocr)`);
                             }
@@ -267,7 +306,7 @@ export const useSmartScan = () => {
 
                     if (modifiers.length > 0) {
                         const current = selectedReachModifiers || [];
-                        setSelectedReachModifiers(Array.from(new Set([...current, ...modifiers])));
+                        setSelectedReachModifiers(Array.from(new Set([...current, ...modifiers])), 'ocr');
                     }
 
                     if (res.mode === 'Lobby') {
@@ -312,7 +351,6 @@ export const useSmartScan = () => {
             const msg = e?.message || "Unknown error";
             setToast({ message: `Scan failed: ${msg}`, type: 'error' });
         } finally {
-            setHiddenForScan(false);
             setIsScanning(false);
             setScanProgress({ status: '', pct: 0 });
         }

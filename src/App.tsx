@@ -29,7 +29,7 @@ import Tutorial from './components/Tutorial';
 import { WindowResizer } from './components/WindowResizer';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import HistoryTable from './components/HistoryTable';
-import { APP_VERSION } from './types';
+import { APP_VERSION, getShipCapacity } from './types';
 import { CHANGELOG } from './utils/changelog';
 import { Toast } from './components/Toast';
 import { IdMapper } from './components/IdMapper';
@@ -40,11 +40,10 @@ import { OCRReviewModal } from './components/ocr/OCRReviewModal';
 import type { OCRExtractedData } from './utils/ocr/ocrTypes';
 import { useAppStore } from './store/useAppStore';
 import { getElectronAPI } from './utils/electronAPI';
-import { findClosestMatch } from './utils/stringUtils';
+import { findClosestMatch, normalizeOcrName, similarityScore } from './utils/stringUtils';
+import { StorageService } from './utils/storage';
 
 const App: React.FC = () => {
-    // START IN DEV MODE BY DEFAULT per user request
-    const [isDev, setIsDev] = useState(true);
     // OCR Review Modal state
     const [ocrReviewData, setOcrReviewData] = useState<OCRExtractedData | null>(null);
 
@@ -67,11 +66,14 @@ const App: React.FC = () => {
         sessionStartTime,
         setPendingMatchData,
         pilotRegistry,
-        addToRegistry,
         selectedTeammates, setSelectedTeammates,
         selectedOpponents, setSelectedOpponents,
         activeShip, setActiveShip,
-        selectedReachModifiers, setSelectedReachModifiers
+        selectedReachModifiers, setSelectedReachModifiers,
+        addPendingReview,
+        pendingReviews,
+        sessionTeams, setSessionTeams,
+        setSessionShipTypes
     } = useGameData();
 
     const {
@@ -95,7 +97,10 @@ const App: React.FC = () => {
 
         if (disableAnimations) body.classList.add('no-animate');
         else body.classList.remove('no-animate');
+    }, [appearanceMode, colorTheme, customHue, colorblindMode, disableAnimations]);
 
+    useEffect(() => {
+        const body = document.body;
         // Overlay Mode Transparency
         if (isOverlayMode) {
             body.style.backgroundColor = 'transparent';
@@ -108,7 +113,7 @@ const App: React.FC = () => {
             body.style.removeProperty('overflow');
             getElectronAPI()?.send('toggle-overlay', false);
         }
-    }, [appearanceMode, colorTheme, customHue, colorblindMode, disableAnimations, isOverlayMode]);
+    }, [isOverlayMode]);
 
     // Update Status Listeners
     useEffect(() => {
@@ -154,17 +159,42 @@ const App: React.FC = () => {
         // Resolve an OCR name: apply corrections then fuzzy-match against known names
         const resolvePlayerName = (ocrName: string, existingList: string[]): string => {
             if (!ocrName || ocrName.length < 2) return ocrName;
+            const normalized = normalizeOcrName(ocrName);
             // 1. Apply learned OCR corrections
-            const correction = ocrCorrections?.[ocrName];
-            if (correction && correction.count >= 2) return correction.correctedTo;
+            const correction = ocrCorrections?.[ocrName] || ocrCorrections?.[normalized];
+            if (correction && correction.count >= 2) {
+                console.log(`[OCR-Resolve] "${ocrName}" → correction: "${correction.correctedTo}" (seen ${correction.count}x)`);
+                return correction.correctedTo;
+            }
             // 2. Case-insensitive exact match against existing list + registry
             const allKnown = [...new Set([...existingList, ...pilotRegistry])];
-            const exactCI = allKnown.find(n => n.toLowerCase() === ocrName.toLowerCase());
-            if (exactCI) return exactCI;
-            // 3. Fuzzy match (Levenshtein threshold 2)
-            const fuzzy = findClosestMatch(ocrName, allKnown, 2);
-            if (fuzzy) return fuzzy;
-            return ocrName;
+            const exactCI = allKnown.find(n => n.toLowerCase() === normalized.toLowerCase());
+            if (exactCI) {
+                console.log(`[OCR-Resolve] "${ocrName}" → exact match: "${exactCI}"`);
+                return exactCI;
+            }
+            // 3. Fuzzy match (dynamic threshold based on name length)
+            const fuzzy = findClosestMatch(normalized, allKnown);
+            if (fuzzy) {
+                console.log(`[OCR-Resolve] "${ocrName}" → fuzzy match: "${fuzzy}" (from "${normalized}")`);
+                return fuzzy;
+            }
+            console.log(`[OCR-Resolve] "${ocrName}" → no match found, using normalized: "${normalized}"`);
+            return normalized;
+        };
+
+        const buildRosterSuggestions = (name: string) => {
+            const normalized = normalizeOcrName(name);
+            const scored = pilotRegistry.map(p => ({
+                name: p,
+                score: similarityScore(normalized, normalizeOcrName(p))
+            })).sort((a, b) => b.score - a.score);
+            const top = scored.filter(s => s.score > 0).slice(0, 3);
+            return {
+                bestMatch: top[0]?.name,
+                bestScore: top[0]?.score,
+                suggestions: top
+            };
         };
 
         // Apply ship if detected
@@ -179,23 +209,44 @@ const App: React.FC = () => {
             setSelectedReachModifiers(combined, 'ocr');
         }
 
-        // Add all detected players to registry (resolved names)
+        // Queue detected players for roster confirmation (no auto-add)
         const allPlayers = [
             ...data.teammates.map(t => t.name),
             ...data.opponentTeams.flatMap(team => team.players.map(p => p.name))
         ];
+        const pendingValues = new Set((pendingReviews || []).map(r => normalizeOcrName(r.value)));
         allPlayers.forEach(player => {
             const resolved = resolvePlayerName(player, []);
             if (resolved && resolved.length > 2 && !pilotRegistry.includes(resolved)) {
-                addToRegistry(resolved);
+                const normalizedResolved = normalizeOcrName(resolved);
+                if (!pendingValues.has(normalizedResolved)) {
+                    const suggestions = buildRosterSuggestions(resolved);
+                    addPendingReview({
+                        id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                        type: 'roster_candidate',
+                        value: resolved,
+                        originalConfidence: 100,
+                        context: 'OCR Review',
+                        bestMatch: suggestions.bestMatch,
+                        bestScore: suggestions.bestScore,
+                        suggestions: suggestions.suggestions,
+                        source: 'ocr'
+                    });
+                    pendingValues.add(normalizedResolved);
+                }
             }
         });
 
-        // Apply teammates (with dedup via fuzzy matching)
+        // Apply teammates (with dedup via fuzzy matching, capped by ship capacity)
+        const currentShip = useAppStore.getState().activeShip;
+        const maxTeammates = getShipCapacity(currentShip) - 1; // -1 for the player themselves
         data.teammates.forEach(teammate => {
             const resolved = resolvePlayerName(teammate.name, selectedTeammates);
             if (resolved && !selectedTeammates.some(t => t.toLowerCase() === resolved.toLowerCase())) {
-                setSelectedTeammates((prev: string[]) => prev.some(t => t.toLowerCase() === resolved.toLowerCase()) ? prev : [...prev, resolved]);
+                setSelectedTeammates((prev: string[]) => {
+                    if (prev.length >= maxTeammates) return prev; // Cap at ship capacity
+                    return prev.some(t => t.toLowerCase() === resolved.toLowerCase()) ? prev : [...prev, resolved];
+                });
             }
         });
 
@@ -214,10 +265,37 @@ const App: React.FC = () => {
             useAppStore.getState().setPendingArtifactType(data.artifactType);
         }
 
+        // Store structured opponent teams for match record
+        const structuredTeams = data.opponentTeams.map(team => ({
+            teamName: team.teamName || 'Unknown Team',
+            shipType: team.shipType || '',
+            color: team.color || 'unknown',
+            players: team.players.map(p => resolvePlayerName(p.name, selectedOpponents)),
+        }));
+
+        // Populate sessionTeams and sessionShipTypes for live roster grouping
+        const newSessionTeams = { ...sessionTeams };
+        const newShipTypes: Record<string, string> = {};
+        structuredTeams.forEach(team => {
+            const colorKey = team.color || 'unknown';
+            if (!newSessionTeams[colorKey]) newSessionTeams[colorKey] = [];
+            team.players.forEach(p => {
+                if (p && !newSessionTeams[colorKey].includes(p)) {
+                    newSessionTeams[colorKey].push(p);
+                }
+            });
+            if (team.shipType) {
+                newShipTypes[colorKey] = team.shipType;
+            }
+        });
+        setSessionTeams(newSessionTeams);
+        setSessionShipTypes(newShipTypes, 'ocr');
+
         // Store OCR debug metadata for match log display (Bug 3)
         const pendingMatch = useAppStore.getState().pendingMatchData || {};
         useAppStore.getState().setPendingMatchData({
             ...pendingMatch,
+            opponentTeams: structuredTeams,
             ocrDebug: {
                 rawText: data.rawText?.substring(0, 2000),
                 confidence: data.overallConfidence,
@@ -230,7 +308,7 @@ const App: React.FC = () => {
         // Close modal and show success toast
         setOcrReviewData(null);
         setToast({ message: `Applied OCR data: ${data.teammates.length} teammates, ${data.reachModifiers.length} modifiers`, type: 'success' });
-    }, [pilotRegistry, addToRegistry, selectedTeammates, setSelectedTeammates, selectedOpponents, setSelectedOpponents, setActiveShip, selectedReachModifiers, setSelectedReachModifiers, setToast]);
+    }, [pilotRegistry, selectedTeammates, setSelectedTeammates, selectedOpponents, setSelectedOpponents, setActiveShip, selectedReachModifiers, setSelectedReachModifiers, setToast, addPendingReview, pendingReviews, sessionTeams, setSessionTeams, setSessionShipTypes]);
 
     // Tutorial & Version Check
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -245,6 +323,14 @@ const App: React.FC = () => {
         localStorage.setItem('wg_last_seen_version', APP_VERSION);
         setShowChangelog(false);
     };
+
+    useEffect(() => {
+        const onBeforeUnload = () => {
+            StorageService.flush?.();
+        };
+        window.addEventListener('beforeunload', onBeforeUnload);
+        return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    }, []);
 
     // View Router
     const renderActiveView = () => {
@@ -335,7 +421,7 @@ const App: React.FC = () => {
                                 <h2 className="text-3xl font-black uppercase tracking-tighter bg-gradient-to-r from-md-sys-primary to-md-sys-secondary bg-clip-text text-transparent">Update {APP_VERSION}</h2>
                                 <p className="text-xs font-bold opacity-60 uppercase tracking-widest mt-1">What's New</p>
                             </div>
-                            <div className="w-12 h-12 rounded-full bg-md-sys-surface2 flex items-center justify-center text-2xl">🚀</div>
+                            <div className="w-12 h-12 rounded-full bg-md-sys-surface2 flex items-center justify-center text-2xl">Update</div>
                         </div>
                         <div className="space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
                             {CHANGELOG[APP_VERSION]?.map((item, i) => (
@@ -376,4 +462,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-

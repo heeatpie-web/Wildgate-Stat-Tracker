@@ -55,13 +55,13 @@ export const EditMatchModal: React.FC<EditMatchModalProps> = ({ match, onSave, o
 
   return createPortal(
     <div className="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
-      <div className="bg-md-sys-surface1 w-full max-w-2xl rounded-[32px] p-8 shadow-2xl border border-md-sys-outline/20 flex flex-col gap-6 max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
+      <div className="bg-md-sys-surface1 w-full max-w-2xl rounded-2xl p-6 shadow-2xl border border-md-sys-outline/20 flex flex-col gap-6 max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
 
         <div className="flex justify-between items-center border-b border-md-sys-outline/10 pb-4">
           <h3 className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
             <Edit2Icon className="text-md-sys-primary" size={24} /> Edit Mission Log
           </h3>
-          <button onClick={onClose} className="p-2 hover:bg-md-sys-surface2 rounded-full transition-colors"><X size={20} /></button>
+          <button onClick={onClose} className="p-2 hover:bg-md-sys-surface2 rounded-lg transition-colors"><X size={20} /></button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

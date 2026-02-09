@@ -24,14 +24,14 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
 }) => {
     const {
         timeMin, setTimeMin, timeSec, setTimeSec,
-        damageTaken, setDamageTaken,
+        damageTaken, setDamageTaken, damageSource,
         poiEasy, setPoiEasy, poiMedium, setPoiMedium, poiEpic, setPoiEpic,
-        selectedReachModifiers, toggleReachModifier, setSelectedReachModifiers,
+        selectedReachModifiers, modifiersSource, toggleReachModifier, setSelectedReachModifiers,
         currentNote, setCurrentNote,
         activeWeapons: weapons, setActiveWeapons: setWeapons
     } = useGameData();
 
-    const { inputMode, showArtifactSelect, setShowArtifactSelect } = useUIState();
+    const { showArtifactSelect, setShowArtifactSelect } = useUIState();
 
     const isTransparent = variant === 'transparent';
     const [isScanning, setIsScanning] = useState(false);
@@ -67,15 +67,15 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                 if (res.time) {
                     const parts = res.time.split(':');
                     if (parts.length === 2) {
-                        setTimeMin(parts[0]);
-                        setTimeSec(parts[1]);
+                        setTimeMin(parts[0], 'ocr');
+                        setTimeSec(parts[1], 'ocr');
                     }
                 }
                 if (res.damage !== undefined) {
-                    setDamageTaken(res.damage.toString());
+                    setDamageTaken(res.damage.toString(), 'ocr');
                 }
                 if (res.modifiers && res.modifiers.length > 0) {
-                    setSelectedReachModifiers(res.modifiers);
+                    setSelectedReachModifiers(res.modifiers, 'ocr');
                 }
                 Logger.info('MissionPanel', 'Match stats captured', { time: res.time, damage: res.damage });
             }
@@ -132,11 +132,6 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                         Mission Intel
                     </span>
                     <div className="flex items-center gap-2">
-                        {inputMode === 'Smart' && (
-                            <span className="px-2 py-0.5 bg-md-sys-primary/20 text-md-sys-primary rounded text-[10px] font-semibold uppercase">
-                                Live
-                            </span>
-                        )}
                     </div>
                 </div>
             )}
@@ -155,26 +150,29 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                         type="number"
                                         placeholder="00"
                                         value={timeMin}
-                                        readOnly={inputMode === 'Smart'}
+                                        readOnly={false}
                                         onChange={(e) => setTimeMin(e.target.value)}
                                         className={`${accordionMode ? 'w-8 text-base' : 'w-10 text-xl'} font-bold outline-none text-center rounded-lg py-0.5 placeholder:opacity-30
                                             ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'bg-md-sys-surface3 text-md-sys-on-surface'}
-                                            ${inputMode === 'Smart' ? 'opacity-90' : ''}`}
+                                            `}
                                     />
                                     <span className={`${accordionMode ? 'text-base' : 'text-xl'} font-bold text-md-sys-on-surface/50`}>:</span>
                                     <input
                                         type="number"
                                         placeholder="00"
                                         value={timeSec}
-                                        readOnly={inputMode === 'Smart'}
+                                        readOnly={false}
                                         onChange={(e) => setTimeSec(e.target.value)}
                                         className={`${accordionMode ? 'w-8 text-base' : 'w-10 text-xl'} font-bold outline-none text-center rounded-lg py-0.5 placeholder:opacity-30
                                             ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'bg-md-sys-surface3 text-md-sys-on-surface'}
-                                            ${inputMode === 'Smart' ? 'opacity-90' : ''}`}
+                                            `}
                                     />
                                 </div>
                             </div>
-                            <div className={`${isTransparent ? 'bg-zinc-900/90 border border-white/20' : 'bg-md-sys-surface2'} ${accordionMode ? 'p-2' : 'p-3'} rounded-xl flex flex-col items-center justify-center shadow-lg`}>
+                            <div className={`relative ${isTransparent ? 'bg-zinc-900/90 border border-white/20' : 'bg-md-sys-surface2'} ${accordionMode ? 'p-2' : 'p-3'} rounded-xl flex flex-col items-center justify-center shadow-lg`}>
+                                {damageSource && damageSource !== 'manual' && (
+                                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-blue-500" title={`Auto-detected from ${damageSource}`} />
+                                )}
                                 <HeartCrack size={accordionMode ? 12 : 16} className="text-rose-400 mb-0.5" />
                                 <span className="text-[9px] font-semibold text-rose-400/90 uppercase mb-0.5">Dmg</span>
                                 <input
@@ -182,11 +180,11 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                     placeholder="0"
                                     maxLength={4}
                                     value={damageTaken}
-                                    readOnly={inputMode === 'Smart'}
+                                    readOnly={false}
                                     onChange={(e) => setDamageTaken(e.target.value.replace(/[^0-9]/g, ''))}
                                     className={`${accordionMode ? 'w-12 text-base' : 'w-16 text-xl'} font-bold outline-none text-center rounded-lg py-0.5 placeholder:opacity-30
                                         ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'bg-md-sys-surface3 text-md-sys-on-surface'}
-                                        ${inputMode === 'Smart' ? 'opacity-90' : ''}`}
+                                        `}
                                 />
                             </div>
                         </div>
@@ -205,20 +203,16 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                             ].map((item) => (
                                 <div
                                     key={item.label}
-                                    className={`relative ${accordionMode ? 'h-10' : 'h-14'} rounded-xl ${isTransparent ? 'bg-zinc-900/80 border border-white/10' : 'bg-md-sys-surface2'} flex items-center justify-center gap-1 select-none overflow-hidden ${inputMode === 'Smart' ? 'cursor-default opacity-70' : 'cursor-pointer'}`}
+                                    className={`relative ${accordionMode ? 'h-10' : 'h-14'} rounded-xl ${isTransparent ? 'bg-zinc-900/80 border border-white/10' : 'bg-md-sys-surface2'} flex items-center justify-center gap-1 select-none overflow-hidden cursor-pointer`}
                                 >
-                                    {inputMode !== 'Smart' && (
-                                        <>
-                                            <div
-                                                onClick={() => item.set(Math.max(0, item.val - 1))}
-                                                className="absolute inset-y-0 left-0 w-1/2 hover:bg-white/5 transition-colors z-10"
-                                            />
-                                            <div
-                                                onClick={() => item.set(item.val + 1)}
-                                                className="absolute inset-y-0 right-0 w-1/2 hover:bg-white/5 transition-colors z-10"
-                                            />
-                                        </>
-                                    )}
+                                    <div
+                                        onClick={() => item.set(Math.max(0, item.val - 1))}
+                                        className="absolute inset-y-0 left-0 w-1/2 hover:bg-md-sys-on-surface/5 transition-colors z-10"
+                                    />
+                                    <div
+                                        onClick={() => item.set(item.val + 1)}
+                                        className="absolute inset-y-0 right-0 w-1/2 hover:bg-md-sys-on-surface/5 transition-colors z-10"
+                                    />
                                     <div className={`w-1 h-4 rounded-full ${item.color}`} />
                                     <span className={`${accordionMode ? 'text-lg' : 'text-2xl'} font-bold text-md-sys-on-surface`}>{item.val}</span>
                                     <span className="text-[8px] font-semibold text-md-sys-on-surface/50 uppercase">{item.label}</span>
@@ -245,20 +239,16 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                 className={`relative ${accordionMode ? 'h-8' : 'h-10'} rounded-lg transition-all select-none overflow-hidden ${isActive
                                                     ? 'bg-md-sys-primary/20 ring-1 ring-md-sys-primary/30'
                                                     : (isTransparent ? 'bg-zinc-900/80 border border-white/10 text-white' : 'bg-md-sys-surface2')
-                                                    } ${inputMode === 'Smart' ? 'cursor-default opacity-70' : 'cursor-pointer'}`}
+                                                    } cursor-pointer`}
                                             >
-                                                {inputMode !== 'Smart' && (
-                                                    <>
-                                                        <div
-                                                            onClick={() => setWeapons({ ...weapons, [w]: Math.max(0, count - 1) })}
-                                                            className="absolute inset-y-0 left-0 w-1/2 hover:bg-white/5 transition-colors z-10"
-                                                        />
-                                                        <div
-                                                            onClick={() => setWeapons({ ...weapons, [w]: count + 1 })}
-                                                            className="absolute inset-y-0 right-0 w-1/2 hover:bg-white/5 transition-colors z-10"
-                                                        />
-                                                    </>
-                                                )}
+                                                <div
+                                                    onClick={() => setWeapons({ ...weapons, [w]: Math.max(0, count - 1) })}
+                                                    className="absolute inset-y-0 left-0 w-1/2 hover:bg-md-sys-on-surface/5 transition-colors z-10"
+                                                />
+                                                <div
+                                                    onClick={() => setWeapons({ ...weapons, [w]: count + 1 })}
+                                                    className="absolute inset-y-0 right-0 w-1/2 hover:bg-md-sys-on-surface/5 transition-colors z-10"
+                                                />
                                                 <div className="absolute inset-0 flex items-center justify-between px-3 pointer-events-none">
                                                     <span className={`text-[10px] font-semibold uppercase truncate ${isActive ? 'text-md-sys-primary' : 'text-md-sys-on-surface/50'}`}>
                                                         {w.replace('Cannon', '').replace('Scatter', 'Sct').replace('Spec Ops', 'SO')}
@@ -298,7 +288,6 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                 key={w}
                                                 title={tooltip}
                                                 onClick={() => {
-                                                    if (inputMode === 'Smart') return;
                                                     if (isActive) {
                                                         setWeapons({ ...weapons, [w]: 0 });
                                                     } else if (canAdd) {
@@ -312,7 +301,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                             ? (isTransparent ? 'bg-zinc-900/80 border border-white/10 hover:bg-zinc-800' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3')
                                                             : (isTransparent ? 'bg-black/40 opacity-40' : 'bg-md-sys-surface2 opacity-40')
                                                     }
-                                                    ${inputMode === 'Smart' ? 'cursor-default opacity-70' : isActive || canAdd ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                                                    ${isActive || canAdd ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                                             >
                                                 <div className="absolute inset-0 flex items-center justify-between px-3 pointer-events-none">
                                                     <span className={`text-[10px] font-semibold uppercase truncate ${isActive ? 'text-weapon' : 'text-md-sys-on-surface/50'}`}>
@@ -353,7 +342,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                 key={w}
                                                 title={tooltip}
                                                 onClick={() => {
-                                                    if (inputMode === 'Smart') return;
+                                                    // Equipment is always editable
                                                     if (isActive) {
                                                         setWeapons({ ...weapons, [w]: 0 });
                                                     } else if (canAdd) {
@@ -367,7 +356,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                             ? (isTransparent ? 'bg-zinc-900/80 border border-white/10 hover:bg-zinc-800' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3')
                                                             : (isTransparent ? 'bg-black/40 opacity-40' : 'bg-md-sys-surface2 opacity-40')
                                                     }
-                                                    ${inputMode === 'Smart' ? 'cursor-default opacity-70' : isActive || canAdd ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                                                    ${isActive || canAdd ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                                             >
                                                 <div className="absolute inset-0 flex items-center justify-between px-3 pointer-events-none">
                                                     <span className={`text-[10px] font-semibold uppercase truncate ${isActive ? 'text-equipment' : 'text-md-sys-on-surface/50'}`}>
@@ -389,19 +378,15 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                 {/* Reach Modifiers */}
                 {showModifiers && (
                     <div className="flex flex-col gap-2">
-                        <SectionHeader id="modifiers" icon={<Zap size={12} />} title="Modifiers" badge={selectedReachModifiers.length > 0 ? `${selectedReachModifiers.length}` : undefined} />
+                        <div className="flex items-center gap-1">
+                            <SectionHeader id="modifiers" icon={<Zap size={12} />} title="Modifiers" badge={selectedReachModifiers.length > 0 ? `${selectedReachModifiers.length}` : undefined} />
+                            {modifiersSource && modifiersSource !== 'manual' && (
+                                <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" title={`Auto-detected from ${modifiersSource}`} />
+                            )}
+                        </div>
                         {isSectionExpanded('modifiers') && (
                             <div className={`flex flex-wrap ${accordionMode ? 'gap-1' : 'gap-2'}`}>
-                                {inputMode === 'Smart' ? (
-                                    selectedReachModifiers.map((mod: string) => (
-                                        <div
-                                            key={mod}
-                                            className={`${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} rounded-lg text-xs font-semibold bg-md-sys-primary text-md-sys-onPrimary opacity-70`}
-                                        >
-                                            {mod}
-                                        </div>
-                                    ))
-                                ) : showArtifactSelect ? (
+                                {showArtifactSelect ? (
                                     <div className={`flex items-center gap-2 ${isTransparent ? 'bg-black/50' : 'bg-md-sys-surface2'} p-2 rounded-xl w-full`}>
                                         {['Healing', 'Ice', 'Weapon'].map(type => (
                                             <button
@@ -463,9 +448,9 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                         value={currentNote}
                         onChange={(e) => setCurrentNote(e.target.value)}
                         placeholder="Match Notes..."
-                        readOnly={inputMode === 'Smart'}
+                        readOnly={false}
                         className={`w-full h-20 bg-md-sys-surface2 rounded-xl p-3 text-sm outline-none resize-none placeholder:text-md-sys-on-surface/30 
-                        ${inputMode === 'Smart' ? 'opacity-50 cursor-default' : 'focus:ring-2 focus:ring-md-sys-primary/50'}`}
+                        focus:ring-2 focus:ring-md-sys-primary/50`}
                     />
                 )}
             </div>

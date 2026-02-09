@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Users, Star, Filter, Search, Edit2, Plus, X, Trash2, Camera, Loader2, Check, Scan, Eye } from 'lucide-react';
+import { Users, Star, Filter, Search, Edit2, Plus, X, Trash2, Camera, Loader2, Check, Scan, Eye, Undo2 } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
 import { captureScreen, processLobbyScreenshot, LobbyScanResult, TeamColor, ScanOptions } from '../../utils/scanService';
+import { getShipColor } from '../../types';
 import Logger from '../../utils/logger';
+import { normalizeOcrName, similarityScore } from '../../utils/stringUtils';
 
 export const RosterPanel: React.FC = () => {
     const {
@@ -20,11 +22,16 @@ export const RosterPanel: React.FC = () => {
         removeFromRegistry: onDeletePilot,
         renamePilot: onRenamePilot,
         mergePilots: onMergePilots,
+        undoLastMerge,
+        mergeHistory,
         setDrillDownTarget,
         setSessionTeams,
         sessionTeams,
         selectedReachModifiers,
-        setSelectedReachModifiers
+        setSelectedReachModifiers,
+        sessionShipTypes,
+        addPendingReview,
+        pendingReviews
     } = useGameData();
 
     const [searchTerm, setSearchTerm] = useState("");
@@ -35,6 +42,8 @@ export const RosterPanel: React.FC = () => {
     const [newPilotName, setNewPilotName] = useState("");
     const [showMerge, setShowMerge] = useState(false);
     const [mergeTarget, setMergeTarget] = useState("");
+    const [mergeSearch, setMergeSearch] = useState("");
+    const [mergeKeepName, setMergeKeepName] = useState<string | null>(null);
 
     // Scanner State
     const [isScanning, setIsScanning] = useState(false);
@@ -65,6 +74,8 @@ export const RosterPanel: React.FC = () => {
         setEditRename(pilot);
         setShowMerge(false);
         setMergeTarget("");
+        setMergeSearch("");
+        setMergeKeepName(null);
     };
 
     const saveEdit = () => {
@@ -79,11 +90,14 @@ export const RosterPanel: React.FC = () => {
     };
 
     const handleMerge = () => {
-        if (!editingPilot || !mergeTarget) return;
-        if (window.confirm(`Merge ALL data from "${editingPilot}" into "${mergeTarget}"?`)) {
-            onMergePilots(editingPilot, mergeTarget);
-            setEditingPilot(null);
-        }
+        if (!editingPilot || !mergeTarget || !mergeKeepName) return;
+        // Determine source and target based on which name to keep
+        const keepName = mergeKeepName;
+        const removeName = keepName === editingPilot ? mergeTarget : editingPilot;
+        // mergePilots(source, target) — source data goes INTO target, source is removed
+        onMergePilots(removeName, keepName);
+        setEditingPilot(null);
+        setMergeKeepName(null);
     };
 
     const handleAddNewPilot = () => {
@@ -112,7 +126,7 @@ export const RosterPanel: React.FC = () => {
                 if (modifiers && modifiers.length > 0) {
                     const current = selectedReachModifiers || [];
                     const newSet = Array.from(new Set([...current, ...modifiers]));
-                    setSelectedReachModifiers(newSet);
+                    setSelectedReachModifiers(newSet, 'ocr');
                 }
 
                 if (players.length > 0) {
@@ -142,10 +156,29 @@ export const RosterPanel: React.FC = () => {
     }, [scanResults, setSessionTeams]);
 
     const handleAddTeamToRoster = (players: LobbyScanResult[], type: 'Hostile' | 'Friendly') => {
+        const pendingValues = new Set((pendingReviews || []).map(r => normalizeOcrName(r.value)));
         players.forEach(p => {
-            // First ensure they exist in registry (addPilot handles dups usually or we check)
             if (!pilotRegistry.includes(p.name)) {
-                onAddPilot(p.name);
+                const cleaned = p.name.trim();
+                const normalizedCleaned = normalizeOcrName(cleaned);
+                if (!pendingValues.has(normalizedCleaned)) {
+                    const scored = pilotRegistry.map(existing => ({
+                        name: existing,
+                        score: similarityScore(normalizedCleaned, normalizeOcrName(existing))
+                    })).sort((a, b) => b.score - a.score).slice(0, 3);
+                    addPendingReview({
+                        id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                        type: 'roster_candidate',
+                        value: cleaned,
+                        originalConfidence: p.confidence ?? 100,
+                        context: `Roster Scan (${type})`,
+                        bestMatch: scored[0]?.name,
+                        bestScore: scored[0]?.score,
+                        suggestions: scored,
+                        source: 'ocr'
+                    });
+                    pendingValues.add(normalizedCleaned);
+                }
             }
 
             if (type === 'Hostile') {
@@ -184,6 +217,26 @@ export const RosterPanel: React.FC = () => {
                 </div>
             </div>
 
+            {/* Undo Last Merge Banner */}
+            {mergeHistory && mergeHistory.length > 0 && (() => {
+                const last = mergeHistory[0];
+                const ago = Math.round((Date.now() - last.timestamp) / 1000);
+                const agoLabel = ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`;
+                return (
+                    <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                        <span className="text-xs text-amber-300">
+                            Merged <strong>{last.sourceName}</strong> → <strong>{last.targetName}</strong> ({agoLabel})
+                        </span>
+                        <button
+                            onClick={() => undoLastMerge()}
+                            className="flex items-center gap-1 px-2 py-1 bg-amber-500/20 hover:bg-amber-500 hover:text-black text-amber-300 rounded text-[10px] font-bold transition-colors"
+                        >
+                            <Undo2 size={10} /> Undo
+                        </button>
+                    </div>
+                );
+            })()}
+
             {/* Team Slots */}
             <div className="grid grid-cols-2 gap-2">
                 <div className={`bg-md-sys-surface2 p-3 rounded-xl flex flex-col gap-2 min-h-[70px]`}>
@@ -203,24 +256,102 @@ export const RosterPanel: React.FC = () => {
                             ))}
                         </div>
                     )}
+                    <div className="flex gap-1 mt-0.5">
+                        <input
+                            type="text"
+                            placeholder="Add teammate..."
+                            className="flex-1 bg-md-sys-surface3 rounded-lg px-2 py-1 text-[10px] outline-none placeholder:opacity-40"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    const val = (e.target as HTMLInputElement).value.trim();
+                                    if (val && !selectedTeammates.includes(val)) { toggleTeammate(val); (e.target as HTMLInputElement).value = ''; }
+                                }
+                            }}
+                        />
+                    </div>
                 </div>
                 <div className={`bg-md-sys-surface2 p-3 rounded-xl flex flex-col gap-2 min-h-[70px]`}>
                     <span className={`text-[10px] font-semibold uppercase ${hasOpponents ? 'text-rose-400' : 'text-md-sys-on-surface/40'}`}>
                         Hostiles
                     </span>
-                    {hasOpponents && (
-                        <div className="flex flex-wrap gap-1">
-                            {selectedOpponents.map((p: string) => (
-                                <button
-                                    key={p}
-                                    onClick={() => toggleOpponent(p)}
-                                    className="px-2 py-1 bg-rose-500/20 text-rose-400 rounded-lg text-[10px] font-semibold hover:bg-rose-500 hover:text-white transition-colors"
-                                >
-                                    {p}
-                                </button>
-                            ))}
-                        </div>
-                    )}
+                    {hasOpponents && (() => {
+                        // Group selected opponents by their session team color
+                        const teamEntries = Object.entries(sessionTeams || {});
+                        const grouped: Record<string, string[]> = {};
+                        const ungrouped: string[] = [];
+
+                        for (const opp of selectedOpponents) {
+                            const teamEntry = teamEntries.find(([, members]) => (members as string[]).includes(opp));
+                            if (teamEntry) {
+                                const color = teamEntry[0];
+                                if (!grouped[color]) grouped[color] = [];
+                                grouped[color].push(opp);
+                            } else {
+                                ungrouped.push(opp);
+                            }
+                        }
+
+                        const hasGroups = Object.keys(grouped).length > 0;
+
+                        return hasGroups ? (
+                            <div className="flex flex-col gap-1.5">
+                                {Object.entries(grouped).map(([color, players]) => {
+                                    const shipType = (sessionShipTypes || {})[color] || '';
+                                    return (
+                                        <div key={color} className="flex items-center gap-1.5 flex-wrap">
+                                            <div
+                                                className="w-2 h-2 rounded-full shrink-0"
+                                                style={{ backgroundColor: color.toLowerCase() === 'unknown' ? '#666' : color.toLowerCase() }}
+                                                title={`${color} Team`}
+                                            />
+                                            {shipType && (
+                                                <span
+                                                    className="text-[9px] px-1 py-0.5 rounded font-bold shrink-0"
+                                                    style={{ backgroundColor: getShipColor(shipType) + '20', color: getShipColor(shipType) }}
+                                                >
+                                                    {shipType.replace(/ \(\d Player\)/, '')}
+                                                </span>
+                                            )}
+                                            {players.map((p: string) => (
+                                                <button
+                                                    key={p}
+                                                    onClick={() => toggleOpponent(p)}
+                                                    className="px-2 py-0.5 bg-rose-500/20 text-rose-400 rounded-lg text-[10px] font-semibold hover:bg-rose-500 hover:text-white transition-colors"
+                                                >
+                                                    {p}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    );
+                                })}
+                                {ungrouped.length > 0 && (
+                                    <div className="flex flex-wrap gap-1">
+                                        {ungrouped.map((p: string) => (
+                                            <button
+                                                key={p}
+                                                onClick={() => toggleOpponent(p)}
+                                                className="px-2 py-0.5 bg-rose-500/20 text-rose-400 rounded-lg text-[10px] font-semibold hover:bg-rose-500 hover:text-white transition-colors"
+                                            >
+                                                {p}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="flex flex-wrap gap-1">
+                                {selectedOpponents.map((p: string) => (
+                                    <button
+                                        key={p}
+                                        onClick={() => toggleOpponent(p)}
+                                        className="px-2 py-1 bg-rose-500/20 text-rose-400 rounded-lg text-[10px] font-semibold hover:bg-rose-500 hover:text-white transition-colors"
+                                    >
+                                        {p}
+                                    </button>
+                                ))}
+                            </div>
+                        );
+                    })()}
                 </div>
             </div>
 
@@ -365,7 +496,7 @@ export const RosterPanel: React.FC = () => {
 
             {showScanModal && createPortal(
                 <div className="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowScanModal(false)}>
-                    <div className="bg-md-sys-surface1 w-full max-w-lg rounded-[24px] p-6 shadow-2xl border border-md-sys-outline/20 flex flex-col gap-6 max-h-[80vh]" onClick={e => e.stopPropagation()}>
+                    <div className="bg-md-sys-surface1 w-full max-w-lg rounded-2xl p-6 shadow-2xl border border-md-sys-outline/20 flex flex-col gap-6 max-h-[80vh]" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center border-b border-md-sys-outline/10 pb-4">
                             <h3 className="text-lg font-black uppercase tracking-tight flex items-center gap-2">
                                 <Camera className="text-md-sys-primary" size={20} /> Scan Results
@@ -504,39 +635,106 @@ export const RosterPanel: React.FC = () => {
                                     </button>
                                 </div>
                             </div>
-                        ) : (
+                        ) : mergeKeepName ? (
+                            /* Step 3: Choose which name to keep */
                             <div className="flex flex-col gap-3">
                                 <div className="bg-amber-500/10 p-3 rounded-lg">
                                     <p className="text-xs text-amber-300">
-                                        Merging will transfer all data from <strong>{editingPilot}</strong> into another pilot.
+                                        Merging <strong>{editingPilot}</strong> and <strong>{mergeTarget}</strong>. Which name should the merged pilot use?
                                     </p>
                                 </div>
-                                <div>
-                                    <label className="text-[10px] font-semibold text-md-sys-on-surface/50 uppercase block mb-1">Target Pilot</label>
-                                    <select
-                                        value={mergeTarget}
-                                        onChange={(e) => setMergeTarget(e.target.value)}
-                                        className="w-full bg-md-sys-surface2 p-3 rounded-lg text-sm font-medium outline-none"
+                                <div className="flex flex-col gap-2">
+                                    <button
+                                        onClick={() => setMergeKeepName(editingPilot)}
+                                        className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-all border-2 ${
+                                            mergeKeepName === editingPilot ? 'border-md-sys-primary bg-md-sys-primary/10 text-md-sys-primary' : 'border-transparent bg-md-sys-surface2 text-md-sys-on-surface/60'
+                                        }`}
                                     >
-                                        <option value="">Choose pilot...</option>
-                                        {pilotRegistry.filter(p => p !== editingPilot).sort().map(p => (
-                                            <option key={p} value={p}>{p}</option>
-                                        ))}
-                                    </select>
+                                        {editingPilot}
+                                    </button>
+                                    <button
+                                        onClick={() => setMergeKeepName(mergeTarget)}
+                                        className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-all border-2 ${
+                                            mergeKeepName === mergeTarget ? 'border-md-sys-primary bg-md-sys-primary/10 text-md-sys-primary' : 'border-transparent bg-md-sys-surface2 text-md-sys-on-surface/60'
+                                        }`}
+                                    >
+                                        {mergeTarget}
+                                    </button>
                                 </div>
                                 <div className="flex gap-2">
                                     <button
-                                        onClick={() => setShowMerge(false)}
+                                        onClick={() => setMergeKeepName(null)}
+                                        className="flex-1 py-2.5 bg-md-sys-surface2 rounded-lg font-semibold text-sm"
+                                    >
+                                        Back
+                                    </button>
+                                    <button
+                                        onClick={handleMerge}
+                                        className="flex-1 py-2.5 bg-md-sys-primary text-md-sys-onPrimary rounded-lg font-semibold text-sm"
+                                    >
+                                        Merge as "{mergeKeepName}"
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            /* Step 2: Search and select merge target */
+                            <div className="flex flex-col gap-3">
+                                <div className="bg-amber-500/10 p-3 rounded-lg">
+                                    <p className="text-xs text-amber-300">
+                                        Merging will combine all data from <strong>{editingPilot}</strong> with the selected pilot.
+                                    </p>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-semibold text-md-sys-on-surface/50 uppercase block mb-1">Search Target Pilot</label>
+                                    <div className="relative">
+                                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-md-sys-on-surface/30" />
+                                        <input
+                                            type="text"
+                                            placeholder="Type to search pilots..."
+                                            value={mergeSearch}
+                                            onChange={(e) => { setMergeSearch(e.target.value); setMergeTarget(''); }}
+                                            className="w-full bg-md-sys-surface2 p-3 pl-9 rounded-lg text-sm font-medium outline-none"
+                                            autoFocus
+                                        />
+                                    </div>
+                                </div>
+                                {mergeSearch.trim() && (() => {
+                                    const mergeFiltered = pilotRegistry
+                                        .filter(p => p !== editingPilot && p.toLowerCase().includes(mergeSearch.toLowerCase()))
+                                        .sort()
+                                        .slice(0, 8);
+                                    return mergeFiltered.length > 0 ? (
+                                        <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto custom-scrollbar bg-md-sys-surface2 rounded-lg p-1">
+                                            {mergeFiltered.map(p => (
+                                                <button
+                                                    key={p}
+                                                    onClick={() => { setMergeTarget(p); setMergeSearch(p); }}
+                                                    className={`w-full text-left px-3 py-2 rounded-md text-sm hover:bg-md-sys-surface3 transition-colors ${
+                                                        mergeTarget === p ? 'bg-md-sys-primary/10 text-md-sys-primary font-bold' : ''
+                                                    }`}
+                                                >
+                                                    {p}
+                                                    {favorites.includes(p) && <Star size={10} className="inline ml-1 fill-amber-400 text-amber-400" />}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-md-sys-on-surface/30 text-center py-2">No pilots found</p>
+                                    );
+                                })()}
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => { setShowMerge(false); setMergeSearch(''); setMergeTarget(''); }}
                                         className="flex-1 py-2.5 bg-md-sys-surface2 rounded-lg font-semibold text-sm"
                                     >
                                         Cancel
                                     </button>
                                     <button
                                         disabled={!mergeTarget}
-                                        onClick={handleMerge}
+                                        onClick={() => setMergeKeepName(mergeTarget)}
                                         className="flex-1 py-2.5 bg-md-sys-primary text-md-sys-onPrimary rounded-lg font-semibold text-sm disabled:opacity-30"
                                     >
-                                        Confirm
+                                        Next
                                     </button>
                                 </div>
                             </div>
