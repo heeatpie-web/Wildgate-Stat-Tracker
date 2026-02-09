@@ -107,13 +107,20 @@ function hueDistance(h1, h2) {
 function classifyTeamColorHSL(r, g, b) {
   const hsl = rgbToHsl(r, g, b);
 
+  // Detect spectator badges: very dark with low saturation (black/near-black labels)
+  // Spectators in Crew Hub have dark/black team labels. We classify these as 'spectator'
+  // so downstream code can filter them out of opponent lists.
+  if (hsl.l < 20 && hsl.s < 40) {
+    return { color: 'spectator', confidence: 70 };
+  }
+
   // Filter out grayscale/low saturation (UI background, not team colors)
   if (hsl.s < 30) {
     return { color: 'unknown', confidence: 0 };
   }
 
-  // Filter out very dark or very light (probably UI elements)
-  if (hsl.l < 15 || hsl.l > 90) {
+  // Filter out very light (probably UI elements)
+  if (hsl.l > 90) {
     return { color: 'unknown', confidence: 0 };
   }
 

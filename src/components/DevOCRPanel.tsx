@@ -74,12 +74,6 @@ const DevOCRPanel: React.FC = () => {
         let errors = 0;
 
         for (const m of matches) {
-            // SKIP if already bundled
-            if (m.artifacts && m.artifacts.length > 0) {
-                skipped++;
-                continue;
-            }
-
             try {
                 // Determine approximate start/end if only specific fields exist
                 // m.timestamp is usually creation time (end of match)
@@ -91,14 +85,19 @@ const DevOCRPanel: React.FC = () => {
                 const start = end - (durationMs || 1800000); // broadened fallback to 30m
 
                 console.log(`[RetroBundle] Scanning for match ${m.id} from ${new Date(start).toLocaleTimeString()} to ${new Date(end).toLocaleTimeString()}`);
-                const artifacts = await bundleMatchArtifacts(m.id, start, end);
-                if (artifacts && artifacts.length > 0) {
-                    const updated = { ...m, artifacts };
-                    updateMatch(updated);
+                const newArtifacts = await bundleMatchArtifacts(m.id, start, end);
+                // Merge with existing artifacts (dedup by filename)
+                const existingSet = new Set((m.artifacts || []).map((p: string) => p.split(/[\\/]/).pop()));
+                const merged = [
+                    ...(m.artifacts || []),
+                    ...newArtifacts.filter(p => !existingSet.has(p.split(/[\\/]/).pop())),
+                ];
+                if (newArtifacts.length > 0 && merged.length !== (m.artifacts || []).length) {
+                    updateMatch({ ...m, artifacts: merged });
                     count++;
-                    setStatus(`Bundled Match ${m.id} (${artifacts.length} file(s))`);
+                    setStatus(`Bundled Match ${m.id} (+${merged.length - (m.artifacts || []).length} new file(s))`);
                 } else {
-                    console.log(`[RetroBundle] No artifacts found for match ${m.id}`);
+                    skipped++;
                 }
             } catch (e) {
                 errors++;

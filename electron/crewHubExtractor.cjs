@@ -256,9 +256,21 @@ async function extractRightPanel(imageBuffer, words, lines, text, imageWidth, im
   // Group into lines (with X-proximity clustering)
   const groupedLines = groupWordsIntoLines(rightPanelWords, imageHeight, imageWidth);
 
+  // Known spectator team name patterns (these are NOT opponents)
+  const SPECTATOR_PATTERNS = [
+    /FIEND\s*(OR|0R)\s*FOE/i,
+    /SPECTATOR/i,
+    /OBSERVER/i,
+  ];
+
+  const isSpectatorTeamName = (name) => {
+    return SPECTATOR_PATTERNS.some(p => p.test(name));
+  };
+
   // Process each line, detecting team badge colors
   let currentTeamColor = 'unknown';
   let currentTeamName = '';
+  let currentIsSpectator = false;
 
   console.log('[CrewHub] Processing', groupedLines.length, 'lines in right panel');
 
@@ -275,7 +287,13 @@ async function extractRightPanel(imageBuffer, words, lines, text, imageWidth, im
         const colorResult = await detectBadgeColorNearText(imageBuffer, firstWord.bbox, scale);
         if (colorResult.color !== 'unknown' && colorResult.confidence > 40) {
           currentTeamColor = colorResult.color;
-          console.log('[CrewHub] Detected team color:', currentTeamColor, 'for line:', lineText.substring(0, 30));
+          // Detect spectator badges (dark/black team labels)
+          currentIsSpectator = (colorResult.color === 'spectator');
+          if (currentIsSpectator) {
+            console.log('[CrewHub] SPECTATOR detected (dark badge) for line:', lineText.substring(0, 30));
+          } else {
+            console.log('[CrewHub] Detected team color:', currentTeamColor, 'for line:', lineText.substring(0, 30));
+          }
         }
       } catch (e) {
         // Color detection failed, continue with current color
@@ -285,6 +303,19 @@ async function extractRightPanel(imageBuffer, words, lines, text, imageWidth, im
     // Check if this line is a team name (all caps, multiple words, no numbers)
     if (isTeamName(lineText)) {
       currentTeamName = lineText;
+
+      // Also check team name text for spectator patterns
+      if (isSpectatorTeamName(lineText)) {
+        currentIsSpectator = true;
+        console.log('[CrewHub] SPECTATOR team name detected:', currentTeamName);
+      }
+
+      // Skip spectator teams entirely
+      if (currentIsSpectator) {
+        console.log('[CrewHub] Skipping spectator team:', currentTeamName);
+        continue;
+      }
+
       console.log('[CrewHub] Found team name:', currentTeamName, 'color:', currentTeamColor);
 
       // Initialize team in map if not exists
@@ -300,6 +331,12 @@ async function extractRightPanel(imageBuffer, words, lines, text, imageWidth, im
         // Update team name if we found a better one
         teamMap.get(teamKey).name = currentTeamName;
       }
+      continue;
+    }
+
+    // Skip players belonging to spectator teams
+    if (currentIsSpectator) {
+      console.log('[CrewHub] Skipping spectator player:', lineText.substring(0, 30));
       continue;
     }
 
@@ -536,7 +573,12 @@ function cleanupPlayerName(name) {
     .replace(/«/g, '')       // <<
     .replace(/[{}()\[\]<>]/g, '')
     .replace(/[¥£€¢]/g, '')
-    .replace(/[.,:;!?'"]/g, '')
+    // Preserve periods/dots that appear BETWEEN alphanumeric chars (e.g. "River.Banks")
+    // Only strip isolated or trailing punctuation
+    .replace(/(?<![a-zA-Z0-9])[.,:;!?'"]+/g, '') // Leading punctuation
+    .replace(/[,:;!?'"]+(?![a-zA-Z0-9])/g, '')   // Trailing punctuation (keep dots mid-name)
+    .replace(/\.(?![a-zA-Z0-9])/g, '')             // Trailing dot only
+    .replace(/(?<![a-zA-Z0-9])\./g, '')             // Leading dot only
     .replace(/\\/g, '')      // Backslashes
     .replace(/[|]/g, '')     // Pipes
     .replace(/[~#%&*^]/g, '') // Common OCR noise symbols
@@ -544,11 +586,11 @@ function cleanupPlayerName(name) {
     .replace(/\s*[XPCD]$/i, '')
     // Remove common OCR prefixes/suffixes
     .replace(/^[A-Z]{1,3}(?=[A-Z][a-z])/g, '') // Remove short caps prefix before CamelCase (e.g., "GNAlixThus" -> "AlixThus")
-    .replace(/[=\-]+$/g, '') // Remove trailing = or - (e.g., "oSalad=" -> "oSalad")
-    .replace(/^[=\-]+/g, '') // Remove leading = or -
-    // Clean edges (allow Latin, extended Latin, Cyrillic, CJK, numbers, underscore)
+    .replace(/[=]+$/g, '')   // Remove trailing = (e.g., "oSalad=" -> "oSalad")
+    .replace(/^[=]+/g, '')   // Remove leading =
+    // Clean edges (allow Latin, extended Latin, Cyrillic, CJK, numbers, underscore, period, hyphen)
     .replace(/^[^a-zA-Z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]+/, '')
-    .replace(/[^a-zA-Z0-9_\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]+$/, '')
+    .replace(/[^a-zA-Z0-9_.\-\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]+$/, '')
     .trim();
 
   // Additional cleanup: remove single isolated characters at start/end

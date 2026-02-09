@@ -8,6 +8,7 @@ import { Match, SHIPS, getShipColor } from '../types';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { getMatchArtifactsStructured } from '../utils/artifactService';
+import { LocalImage } from './LocalImage';
 
 type ModeFilter = 'all' | 'Artifact Brawl' | 'Fleet Battle';
 
@@ -68,9 +69,9 @@ export const MatchRecordingPage: React.FC = () => {
     return (
         <div className="h-full flex">
             {/* Left Panel — Match List */}
-            <div className="w-80 flex-shrink-0 border-r border-white/5 flex flex-col bg-md-sys-surface1/50">
+            <div className="w-80 flex-shrink-0 border-r border-md-sys-outline/5 flex flex-col bg-md-sys-surface1/50">
                 {/* Search & Filter Bar */}
-                <div className="p-3 border-b border-white/5 space-y-2">
+                <div className="p-3 border-b border-md-sys-outline/5 space-y-2">
                     <div className="relative">
                         <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 opacity-40" />
                         <input
@@ -86,7 +87,7 @@ export const MatchRecordingPage: React.FC = () => {
                             <button
                                 key={mode}
                                 onClick={() => setModeFilter(mode)}
-                                className={`px-2 py-0.5 text-[10px] rounded-full font-bold uppercase transition-colors ${modeFilter === mode ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'bg-white/5 hover:bg-white/10 opacity-60'}`}
+                                className={`px-2 py-0.5 text-[10px] rounded-full font-bold uppercase transition-colors ${modeFilter === mode ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'bg-md-sys-on-surface/5 hover:bg-md-sys-on-surface/10 opacity-60'}`}
                             >
                                 {mode === 'all' ? 'All' : mode}
                             </button>
@@ -110,7 +111,7 @@ export const MatchRecordingPage: React.FC = () => {
                     )}
                 </div>
 
-                <div className="p-2 border-t border-white/5 text-center text-[10px] opacity-30 font-bold uppercase">
+                <div className="p-2 border-t border-md-sys-outline/5 text-center text-[10px] opacity-30 font-bold uppercase">
                     {filteredMatches.length} match{filteredMatches.length !== 1 ? 'es' : ''}
                 </div>
             </div>
@@ -144,7 +145,7 @@ const MatchListItem: React.FC<{
     return (
         <button
             onClick={onClick}
-            className={`w-full text-left px-3 py-2.5 border-b border-white/5 transition-colors flex items-center gap-2.5 ${isSelected ? 'bg-md-sys-primary/10 border-l-2 border-l-md-sys-primary' : 'hover:bg-white/5 border-l-2 border-l-transparent'}`}
+            className={`w-full text-left px-3 py-2.5 border-b border-md-sys-outline/5 transition-colors flex items-center gap-2.5 ${isSelected ? 'bg-md-sys-primary/10 border-l-2 border-l-md-sys-primary' : 'hover:bg-md-sys-on-surface/5 border-l-2 border-l-transparent'}`}
         >
             {/* Result Badge */}
             <div className={`w-2 h-8 rounded-full flex-shrink-0 ${RESULT_COLORS[match.result] || 'bg-slate-500'}`} />
@@ -153,13 +154,13 @@ const MatchListItem: React.FC<{
                 <div className="flex items-center gap-1.5">
                     <span className="text-xs font-black uppercase">{match.result}</span>
                     {match.subType && match.subType !== 'Combat' && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/10 font-bold uppercase">{match.subType}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-md-sys-on-surface/10 font-bold uppercase">{match.subType}</span>
                     )}
-                    {hasArtifact && <span className="text-[9px]">💎</span>}
+                    {hasArtifact && <span className="text-[9px]">Artifact</span>}
                 </div>
                 <div className="flex items-center gap-1 mt-0.5">
                     {match.hero && <span className="text-[10px] opacity-60">{match.hero}</span>}
-                    {match.hero && match.ship && <span className="text-[8px] opacity-30">·</span>}
+                    {match.hero && match.ship && <span className="text-[8px] opacity-30">-</span>}
                     {match.ship && <span className="text-[10px] opacity-60">{match.ship.split('(')[0].trim()}</span>}
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
@@ -181,6 +182,10 @@ const MatchDetail: React.FC<{
     onViewCaptures?: () => void;
 }> = ({ match, onUpdate, onViewCaptures }) => {
     const [artifacts, setArtifacts] = useState<string[]>([]);
+    const toDisplaySrc = (src: string) => {
+        if (src.startsWith('data:') || src.startsWith('file://')) return src;
+        return `file:///${src.replace(/\\/g, '/')}`;
+    };
     const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
     const [editingField, setEditingField] = useState<string | null>(null);
     const [editValue, setEditValue] = useState<string>('');
@@ -227,7 +232,7 @@ const MatchDetail: React.FC<{
                 </div>
             ) : (
                 <div className="flex items-center gap-1 flex-1 group cursor-pointer" onClick={() => startEdit(field, value || '')}>
-                    <span className="text-xs">{value || <span className="opacity-30 italic">—</span>}</span>
+                    <span className="text-xs">{value || <span className="opacity-30 italic">--</span>}</span>
                     <Edit3 size={10} className="opacity-0 group-hover:opacity-40 transition-opacity" />
                 </div>
             )}
@@ -249,7 +254,7 @@ const MatchDetail: React.FC<{
                                 {match.ship}
                             </span>
                         )}
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-white/5 font-bold uppercase">{match.mode}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-md-sys-on-surface/5 font-bold uppercase">{match.mode}</span>
                         {match.subType && match.subType !== 'Combat' && (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 font-bold">{match.subType}</span>
                         )}
@@ -263,7 +268,7 @@ const MatchDetail: React.FC<{
 
             {/* Stats Summary */}
             <div className="grid grid-cols-4 gap-2">
-                <StatCard icon={<Clock size={14} />} label="Time" value={match.time || '—'} />
+                <StatCard icon={<Clock size={14} />} label="Time" value={match.time || '--'} />
                 <StatCard icon={<HeartCrack size={14} className="text-rose-400" />} label="Damage" value={match.damageTaken?.toString() || '0'} />
                 <StatCard icon={<Target size={14} className="text-emerald-400" />} label="Kills" value={totalKills.toString()} />
                 {match.placement && <StatCard icon={<Trophy size={14} className="text-yellow-400" />} label="Place" value={`#${match.placement}`} />}
@@ -293,11 +298,10 @@ const MatchDetail: React.FC<{
                                 onClick={() => setLightboxSrc(src)}
                                 className="relative aspect-video bg-md-sys-surface3 rounded-lg overflow-hidden group"
                             >
-                                <img
-                                    src={src.startsWith('data:') ? src : `file://${src.replace(/\\/g, '/')}`}
+                                <LocalImage
+                                    src={src}
                                     alt={`Screenshot ${i + 1}`}
                                     className="w-full h-full object-cover"
-                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                 />
                                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                     <Eye size={20} />
@@ -397,7 +401,7 @@ const MatchDetail: React.FC<{
                                 <span className="text-[9px] opacity-30 w-16 flex-shrink-0">
                                     {new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                                 </span>
-                                <span className="px-1.5 py-0.5 rounded bg-white/5 text-[9px] font-bold uppercase">{evt.type}</span>
+                                <span className="px-1.5 py-0.5 rounded bg-md-sys-on-surface/5 text-[9px] font-bold uppercase">{evt.type}</span>
                                 <span className="opacity-60">{evt.label}</span>
                             </div>
                         ))}
@@ -463,7 +467,7 @@ const MatchDetail: React.FC<{
                     <button onClick={() => setLightboxSrc(null)} className="absolute top-4 right-4 text-white/50 hover:text-white">
                         <X size={24} />
                     </button>
-                    <img src={lightboxSrc.startsWith('data:') ? lightboxSrc : `file://${lightboxSrc.replace(/\\/g, '/')}`} alt="Screenshot" className="max-w-full max-h-full object-contain rounded-lg" />
+                    <LocalImage src={lightboxSrc} alt="Screenshot" className="max-w-full max-h-full object-contain rounded-lg" />
                 </div>
             )}
         </div>

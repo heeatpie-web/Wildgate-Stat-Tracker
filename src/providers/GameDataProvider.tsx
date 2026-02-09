@@ -35,6 +35,8 @@ interface GameDataContextType {
     setPlayerIdMap: (map: Record<string, string>) => void;
     updatePlayerIdMapping: (id: string, name: string) => void;
     mergePilots: (target: string, source: string) => void;
+    undoLastMerge: () => boolean;
+    mergeHistory: Array<{ id: string; timestamp: number; sourceName: string; targetName: string }>;
     renamePilot: (oldName: string, newName: string) => void;
     lastActivity: number;
     setLastActivity: (ts: number) => void;
@@ -53,9 +55,13 @@ interface GameDataContextType {
     setSelectedOpponents: (o: string[] | ((curr: string[]) => string[])) => void;
     toggleOpponent: (o: string) => void;
     activeHero: string | null;
-    setActiveHero: (h: string) => void;
+    heroSource?: 'manual' | 'telemetry' | 'ocr';
+    telemetryDetectedHero?: string;
+    setActiveHero: (h: string, source?: 'manual' | 'telemetry' | 'ocr') => void;
     activeShip: string | null;
-    setActiveShip: (s: string) => void;
+    shipSource?: 'manual' | 'telemetry' | 'ocr';
+    telemetryDetectedShip?: string;
+    setActiveShip: (s: string, source?: 'manual' | 'telemetry' | 'ocr') => void;
     activeWeapons: Record<string, number>;
     setActiveWeapons: (w: Record<string, number>) => void;
     matchStartTime: number | null;
@@ -63,7 +69,8 @@ interface GameDataContextType {
     isMatchInProgress: boolean;
     setIsMatchInProgress: (is: boolean) => void;
     selectedReachModifiers: string[];
-    setSelectedReachModifiers: (m: string[]) => void;
+    modifiersSource?: 'manual' | 'telemetry' | 'ocr';
+    setSelectedReachModifiers: (m: string[], source?: 'manual' | 'telemetry' | 'ocr') => void;
     toggleReachModifier: (m: string) => void;
     kills: KillMap;
     setKills: (k: KillMap) => void;
@@ -81,7 +88,8 @@ interface GameDataContextType {
     timeSec: string;
     setTimeSec: (v: string, source?: 'manual' | 'telemetry' | 'ocr') => void;
     damageTaken: string;
-    setDamageTaken: (v: string) => void;
+    damageSource?: 'manual' | 'telemetry' | 'ocr';
+    setDamageTaken: (v: string, source?: 'manual' | 'telemetry' | 'ocr') => void;
 
     currentNote: string;
     setCurrentNote: (s: string) => void;
@@ -100,6 +108,8 @@ interface GameDataContextType {
     setPendingArtifactType: (s: string) => void;
     pendingKilledBy: string;
     setPendingKilledBy: (s: string) => void;
+    pendingKilledByShip: string;
+    setPendingKilledByShip: (s: string) => void;
     sessionTeams: Record<string, string[]>;
     setSessionTeams: (teams: Record<string, string[]>) => void;
     sessionShipTypes: Record<string, string>;
@@ -145,7 +155,8 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         pilotNotes: s.pilotNotes, setPilotNotes: s.setPilotNotes, updatePilotNote: s.updatePilotNote,
         playerIdMap: s.playerIdMap, setPlayerIdMap: s.setPlayerIdMap,
         updatePlayerIdMapping: s.updatePlayerIdMapping,
-        mergePilots: s.mergePilots, renamePilot: s.renamePilot,
+        mergePilots: s.mergePilots, undoLastMerge: s.undoLastMerge, mergeHistory: s.mergeHistory,
+        renamePilot: s.renamePilot,
         lastActivity: s.lastActivity, setLastActivity: s.setLastActivity,
         isLoading: s.isLoading, setIsLoading: s.setIsLoading,
         drillDownTarget: s.drillDownTarget, setDrillDownTarget: s.setDrillDownTarget,
@@ -153,12 +164,12 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         toggleTeammate: s.toggleTeammate,
         selectedOpponents: s.selectedOpponents, setSelectedOpponents: s.setSelectedOpponents,
         toggleOpponent: s.toggleOpponent,
-        activeHero: s.activeHero, setActiveHero: s.setActiveHero,
-        activeShip: s.activeShip, setActiveShip: s.setActiveShip,
+        activeHero: s.activeHero, heroSource: s.heroSource, telemetryDetectedHero: s.telemetryDetectedHero, setActiveHero: s.setActiveHero,
+        activeShip: s.activeShip, shipSource: s.shipSource, telemetryDetectedShip: s.telemetryDetectedShip, setActiveShip: s.setActiveShip,
         activeWeapons: s.activeWeapons, setActiveWeapons: s.setActiveWeapons,
         matchStartTime: s.matchStartTime, setMatchStartTime: s.setMatchStartTime,
         isMatchInProgress: s.isMatchInProgress, setIsMatchInProgress: s.setIsMatchInProgress,
-        selectedReachModifiers: s.selectedReachModifiers, setSelectedReachModifiers: s.setSelectedReachModifiers,
+        selectedReachModifiers: s.selectedReachModifiers, modifiersSource: s.modifiersSource, setSelectedReachModifiers: s.setSelectedReachModifiers,
         toggleReachModifier: s.toggleReachModifier,
         kills: s.kills, setKills: s.setKills,
         elims: s.elims, setElims: s.setElims,
@@ -167,7 +178,7 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         poiEpic: s.poiEpic, setPoiEpic: s.setPoiEpic,
         timeMin: s.timeMin, setTimeMin: s.setTimeMin,
         timeSec: s.timeSec, setTimeSec: s.setTimeSec,
-        damageTaken: s.damageTaken, setDamageTaken: s.setDamageTaken,
+        damageTaken: s.damageTaken, damageSource: s.damageSource, setDamageTaken: s.setDamageTaken,
         currentNote: s.currentNote, setCurrentNote: s.setCurrentNote,
         isSimulation: s.isSimulation, setIsSimulation: s.setIsSimulation,
         pendingMatchData: s.pendingMatchData, setPendingMatchData: s.setPendingMatchData,
@@ -175,6 +186,7 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         pendingPlacement: s.pendingPlacement, setPendingPlacement: s.setPendingPlacement,
         pendingArtifactType: s.pendingArtifactType, setPendingArtifactType: s.setPendingArtifactType,
         pendingKilledBy: s.pendingKilledBy, setPendingKilledBy: s.setPendingKilledBy,
+        pendingKilledByShip: s.pendingKilledByShip, setPendingKilledByShip: s.setPendingKilledByShip,
         sessionTeams: s.sessionTeams, setSessionTeams: s.setSessionTeams,
         sessionShipTypes: s.sessionShipTypes, setSessionShipTypes: s.setSessionShipTypes,
         sessionStartTime: s.sessionStartTime,

@@ -129,6 +129,11 @@ function mergeEnemyTeams(existingTeams = [], newTeams = []) {
         existingTeam.color = newTeam.color;
       }
 
+      // Fill in ship type if missing
+      if (!existingTeam.shipType && newTeam.shipType) {
+        existingTeam.shipType = newTeam.shipType;
+      }
+
       // Merge players
       existingTeam.players = mergePlayers(existingTeam.players, newTeam.players);
 

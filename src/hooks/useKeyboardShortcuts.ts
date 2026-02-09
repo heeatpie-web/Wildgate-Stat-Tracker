@@ -1,7 +1,7 @@
 /**
  * @module useKeyboardShortcuts
- * Global keyboard shortcut handler. Currently supports Ctrl+W (Win) and
- * Ctrl+L (Loss) for rapid match result entry. Disabled when a wizard modal is open.
+ * Global keyboard shortcut handler. Currently supports Ctrl/Cmd+Enter (Win) and
+ * Ctrl/Cmd+Shift+Enter (Loss) for rapid match result entry. Disabled when a wizard modal is open.
  */
 import { useEffect } from 'react';
 

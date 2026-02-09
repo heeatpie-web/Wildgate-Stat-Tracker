@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-
-const { ipcRenderer } = window.require ? window.require('electron') : { ipcRenderer: null };
+import { getElectronAPI } from '../utils/electronAPI';
 
 export const WindowResizer: React.FC = () => {
     const [draggingDir, setDraggingDir] = useState<string | null>(null);
@@ -35,7 +34,7 @@ export const WindowResizer: React.FC = () => {
                 newBounds.y = startBounds.y + (startBounds.height - newBounds.height);
             }
 
-            ipcRenderer?.send('set-window-bounds', newBounds);
+            getElectronAPI()?.send('set-window-bounds', newBounds);
         };
 
         const handleMouseUp = () => {
@@ -52,7 +51,7 @@ export const WindowResizer: React.FC = () => {
         };
     }, [draggingDir, startPos, startBounds]);
 
-    if (!ipcRenderer) return null;
+    if (!getElectronAPI()) return null;
 
     const startDrag = async (dir: string, e: React.MouseEvent) => {
         e.preventDefault();

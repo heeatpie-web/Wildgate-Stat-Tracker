@@ -265,6 +265,59 @@ export const IdMapper: React.FC = () => {
                 {/* Relationships Tab */}
                 {activeTab === 'relationships' && (
                     <div className="space-y-4">
+                        {/* Player Profiles - Direct from playerProfiles data */}
+                        <div className="bg-md-sys-surface2 rounded-lg p-3">
+                            <h4 className="text-xs font-bold uppercase tracking-wide text-md-sys-primary flex items-center gap-2 mb-2">
+                                <Users size={12} /> Player Sightings ({Object.keys(playerProfiles).length})
+                            </h4>
+                            {Object.keys(playerProfiles).length === 0 ? (
+                                <div className="text-xs opacity-40 text-center py-4">No player sightings recorded yet. Use Smart Capture or Smart Scan to detect players.</div>
+                            ) : (
+                                <div className="space-y-1 max-h-40 overflow-y-auto">
+                                    {Object.entries(playerProfiles)
+                                        .filter(([id, profile]: [string, any]) =>
+                                            !searchTerm ||
+                                            (profile.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                            id.toLowerCase().includes(searchTerm.toLowerCase())
+                                        )
+                                        .sort((a: any, b: any) => (b[1].sightings || 0) - (a[1].sightings || 0))
+                                        .map(([id, profile]: [string, any]) => {
+                                            const role = getPlayerRole(id);
+                                            const playedWithCount = Object.values(profile.playedWith || {}).reduce((a: number, b: any) => a + (b as number), 0) as number;
+                                            const playedAgainstCount = Object.values(profile.playedAgainst || {}).reduce((a: number, b: any) => a + (b as number), 0) as number;
+                                            const lastSeen = profile.lastSeen ? formatLastSeen(profile.lastSeen) : 'Unknown';
+                                            const topTeam = profile.teamColors ? Object.entries(profile.teamColors).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] : null;
+                                            const topShip = profile.ships ? Object.entries(profile.ships).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] : null;
+
+                                            return (
+                                                <div key={id} className="flex items-center gap-2 bg-md-sys-surface3/50 px-2 py-1.5 rounded text-xs group">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-bold truncate">{profile.name || id.slice(0, 12) + '...'}</span>
+                                                            <RoleBadge role={role} />
+                                                        </div>
+                                                        <div className="flex gap-3 text-[10px] opacity-50 mt-0.5">
+                                                            <span>{profile.sightings || 0}x seen</span>
+                                                            <span>{lastSeen}</span>
+                                                            {topTeam && <span className="capitalize">{topTeam}</span>}
+                                                            {topShip && <span>{topShip}</span>}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-2 text-[10px] shrink-0">
+                                                        {playedWithCount > 0 && (
+                                                            <span className="text-emerald-400">{playedWithCount} with</span>
+                                                        )}
+                                                        {playedAgainstCount > 0 && (
+                                                            <span className="text-rose-400">{playedAgainstCount} vs</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+                            )}
+                        </div>
+
                         {/* Top Opponents */}
                         <div className="bg-md-sys-surface2 rounded-lg p-3">
                             <h4 className="text-xs font-bold uppercase tracking-wide text-rose-400 flex items-center gap-2 mb-2">

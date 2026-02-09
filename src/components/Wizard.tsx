@@ -6,6 +6,8 @@ import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useMatchSubmission } from '../hooks/useMatchSubmission';
 import { OcrCorrectionModal } from './OcrCorrectionModal';
+import { useAppStore } from '../store/useAppStore';
+import { getElectronAPI } from '../utils/electronAPI';
 
 export const Wizard: React.FC = () => {
     const {
@@ -13,6 +15,7 @@ export const Wizard: React.FC = () => {
         pendingPlacement, setPendingPlacement,
         pendingArtifactType, setPendingArtifactType,
         pendingKilledBy, setPendingKilledBy,
+        pendingKilledByShip, setPendingKilledByShip,
         selectedOpponents, setSelectedOpponents,
         sessionTeams, sessionShipTypes,
         // Data fields
@@ -32,8 +35,7 @@ export const Wizard: React.FC = () => {
     // Ensure Wizard captures mouse events in Overlay Mode (Force Update)
     React.useEffect(() => {
         if (showWizard && isOverlayMode) {
-            const { ipcRenderer } = window.require ? window.require('electron') : { ipcRenderer: null };
-            ipcRenderer?.send('set-ignore-mouse-events', false);
+            getElectronAPI()?.send('set-ignore-mouse-events', false);
         }
     }, [showWizard, isOverlayMode]);
 
@@ -62,13 +64,13 @@ export const Wizard: React.FC = () => {
     const showPlacement = isDefeat && activeMode === 'Artifact Brawl' && selectedWinType === 'Combat';
 
     // Helper for compact vs full styling
-    const cardClass = isOverlayMode ? 'p-2 rounded-xl' : 'p-4 rounded-[24px]';
+    const cardClass = isOverlayMode ? 'p-2 rounded-xl' : 'p-4 rounded-xl';
     const labelClass = 'text-xs font-bold uppercase opacity-60 mb-1 block';
     const inputBaseClass = 'bg-md-sys-surface3 font-bold outline-none text-center rounded-lg';
 
     return (
         <div className="fixed inset-0 bg-black/80 z-[99999] flex items-center justify-center p-2 animate-fade-in" onClick={() => setShowWizard(null)}>
-            <div className={`bg-md-sys-surface1 rounded-2xl w-full ${isOverlayMode ? 'max-w-[340px] max-h-[680px] p-3 border border-white/10' : 'max-w-3xl max-h-[95vh] p-6 rounded-[32px]'} text-center shadow-2xl overflow-hidden flex flex-col animate-scale-in`} onClick={e => e.stopPropagation()}>
+            <div className={`bg-md-sys-surface1 rounded-2xl w-full ${isOverlayMode ? 'max-w-[340px] max-h-[680px] p-3 border border-md-sys-outline/10' : 'max-w-3xl max-h-[95vh] p-6 rounded-2xl'} text-center shadow-2xl overflow-hidden flex flex-col animate-scale-in`} onClick={e => e.stopPropagation()}>
                 <div className={`${isOverlayMode ? 'p-2 -m-3 mb-2 text-sm' : 'p-4 -m-6 mb-4 text-xl'} ${bg} text-white font-black uppercase tracking-widest rounded-t-2xl`}>{title}</div>
                 <div className={`overflow-y-auto flex-1 flex flex-col ${isOverlayMode ? 'gap-2 px-1 py-2' : 'gap-3 px-2 py-4'} custom-scrollbar`}>
 
@@ -110,7 +112,25 @@ export const Wizard: React.FC = () => {
                         </div>
                     )}
 
-                    <button onClick={() => setShowWizard(null)} className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors z-[100000]">
+                    {/* Artifact Type - Only for Artifact Brawl (placed near Win Type) */}
+                    {activeMode === 'Artifact Brawl' && (
+                        <div className={`bg-md-sys-surface2 ${cardClass}`}>
+                            <label className={labelClass}>Artifact</label>
+                            <div className="flex flex-wrap gap-1 justify-center">
+                                {['Healing', 'Weapon', 'Ice'].map(t => (
+                                    <button
+                                        key={t}
+                                        onClick={() => setPendingArtifactType(t)}
+                                        className={`${isOverlayMode ? 'px-2 py-0.5 text-[10px]' : 'px-3 py-1 text-xs'} rounded-full font-bold transition-colors ${pendingArtifactType === t ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'bg-md-sys-on-surface/5 hover:bg-md-sys-on-surface/10'}`}
+                                    >
+                                        {t}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <button onClick={() => setShowWizard(null)} className="absolute top-4 right-4 opacity-50 hover:opacity-100 transition-colors z-[100000]">
                         <X size={24} />
                     </button>
                     {/* Re-rendering title and content wrapper structure from original file to maintain layout */}
@@ -150,12 +170,12 @@ export const Wizard: React.FC = () => {
                             <span className={labelClass + ' mb-0'}>Ship Eliminations</span>
                         </div>
                         <div className="grid grid-cols-4 gap-1">
-                            {SHIPS.map(ship => {
+                            {[...SHIPS, 'AI Legion'].map(ship => {
                                 const shortName = ship.split('(')[0].trim();
                                 const currentVal = kills?.[shortName] || '';
                                 return (
                                     <div key={ship} className="flex flex-col items-center bg-md-sys-surface3 rounded-lg p-1">
-                                        <span className="text-[9px] font-bold text-white/50 uppercase mb-0.5 truncate w-full text-center" title={shortName}>{shortName}</span>
+                                        <span className="text-[9px] font-bold opacity-50 uppercase mb-0.5 truncate w-full text-center" title={shortName}>{shortName}</span>
                                         <div className="flex items-center w-full gap-0.5">
                                             <button
                                                 onClick={() => setKills({ ...kills, [shortName]: Math.max(0, (kills?.[shortName] || 0) - 1) })}
@@ -194,15 +214,15 @@ export const Wizard: React.FC = () => {
                                     >
                                         <div
                                             onClick={() => item.set(Math.max(0, item.val - 1))}
-                                            className="absolute inset-y-0 left-0 w-1/2 hover:bg-white/5 transition-colors z-10"
+                                            className="absolute inset-y-0 left-0 w-1/2 hover:bg-md-sys-on-surface/5 transition-colors z-10"
                                         />
                                         <div
                                             onClick={() => item.set(item.val + 1)}
-                                            className="absolute inset-y-0 right-0 w-1/2 hover:bg-white/5 transition-colors z-10"
+                                            className="absolute inset-y-0 right-0 w-1/2 hover:bg-md-sys-on-surface/5 transition-colors z-10"
                                         />
                                         <div className={`w-1 h-4 rounded-full ${item.color}`} />
                                         <span className={`${isOverlayMode ? 'text-lg' : 'text-xl'} font-bold text-md-sys-on-surface`}>{item.val}</span>
-                                        <span className="text-[8px] font-semibold text-md-sys-on-surface/50 uppercase">{item.label}</span>
+                                        <span className="text-[9px] font-semibold text-md-sys-on-surface/50 uppercase">{item.label}</span>
                                     </div>
                                 ))}
                             </div>
@@ -234,20 +254,30 @@ export const Wizard: React.FC = () => {
 
                             {/* Team Selection */}
                             {sessionTeams && Object.keys(sessionTeams).length > 0 && (
-                                <div className={`flex flex-wrap justify-center gap-1 ${isOverlayMode ? 'mb-2 pb-2' : 'mb-3 pb-3'} border-b border-white/5`}>
-                                    {Object.entries(sessionTeams).map(([teamKey, players]) => (
-                                        <button
-                                            key={teamKey}
-                                            onClick={() => setPendingKilledBy(`${teamKey} Team`)}
-                                            className={`${isOverlayMode ? 'px-2 py-1 text-[10px]' : 'px-3 py-1.5 text-xs'} rounded-lg font-bold uppercase flex items-center gap-1 border border-white/10 hover:brightness-110 active:scale-95 transition-all`}
-                                            style={{
-                                                backgroundColor: teamKey.split(':')[0].toLowerCase() === 'unknown' ? '#444' : teamKey.split(':')[0].toLowerCase(),
-                                                color: ['yellow', 'cyan', 'white'].includes(teamKey.split(':')[0].toLowerCase()) ? 'black' : 'white'
-                                            }}
-                                        >
-                                            {teamKey}
-                                        </button>
-                                    ))}
+                                <div className={`flex flex-wrap justify-center gap-1 ${isOverlayMode ? 'mb-2 pb-2' : 'mb-3 pb-3'} border-b border-md-sys-outline/5`}>
+                                    {Object.entries(sessionTeams).map(([teamKey, players]) => {
+                                        const shipType = sessionShipTypes?.[teamKey] || '';
+                                        return (
+                                            <button
+                                                key={teamKey}
+                                                onClick={() => {
+                                                    setPendingKilledBy(`${teamKey} Team`);
+                                                    if (shipType) setPendingKilledByShip(shipType);
+                                                    // Store eliminatedByTeam on pendingMatchData
+                                                    const pm = pendingMatchData || {};
+                                                    useAppStore.getState().setPendingMatchData({ ...pm, eliminatedByTeam: teamKey });
+                                                }}
+                                                className={`${isOverlayMode ? 'px-2 py-1 text-[10px]' : 'px-3 py-1.5 text-xs'} rounded-lg font-bold uppercase flex items-center gap-1 border border-md-sys-outline/10 hover:brightness-110 active:scale-95 transition-all ${pendingMatchData?.eliminatedByTeam === teamKey ? 'ring-2 ring-md-sys-primary' : ''}`}
+                                                style={{
+                                                    backgroundColor: teamKey.split(':')[0].toLowerCase() === 'unknown' ? '#444' : teamKey.split(':')[0].toLowerCase(),
+                                                    color: ['yellow', 'cyan', 'white'].includes(teamKey.split(':')[0].toLowerCase()) ? 'black' : 'white'
+                                                }}
+                                            >
+                                                {teamKey}
+                                                {shipType && <span className="opacity-70 text-[9px]">({shipType.replace(/ \(\d Player\)/, '')})</span>}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             )}
 
@@ -256,16 +286,21 @@ export const Wizard: React.FC = () => {
                                 <div className={`flex flex-wrap justify-center gap-1 ${isOverlayMode ? 'mb-2' : 'mb-3'}`}>
                                     {Object.entries(sessionTeams).flatMap(([teamKey, players]) =>
                                         (players as string[]).map(player => {
-                                            const ship = sessionShipTypes?.[player];
+                                            const ship = sessionShipTypes?.[player] || sessionShipTypes?.[teamKey];
                                             return (
                                                 <button
                                                     key={`${teamKey}-${player}`}
-                                                    onClick={() => setPendingKilledBy(player)}
-                                                    className={`${isOverlayMode ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-1 text-[10px]'} rounded-md bg-white/5 hover:bg-white/15 truncate max-w-[100px] transition-all flex flex-col items-center leading-tight ${pendingKilledBy === player ? 'ring-1 ring-md-sys-primary bg-md-sys-primary/20' : ''}`}
+                                                    onClick={() => {
+                                                        setPendingKilledBy(player);
+                                                        if (ship) setPendingKilledByShip(ship);
+                                                        const pm = pendingMatchData || {};
+                                                        useAppStore.getState().setPendingMatchData({ ...pm, eliminatedByTeam: teamKey });
+                                                    }}
+                                                    className={`${isOverlayMode ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-1 text-[10px]'} rounded-md bg-md-sys-on-surface/5 hover:bg-md-sys-on-surface/15 truncate max-w-[100px] transition-all flex flex-col items-center leading-tight ${pendingKilledBy === player ? 'ring-1 ring-md-sys-primary bg-md-sys-primary/20' : ''}`}
                                                     title={`${player} (${teamKey})${ship ? ` - ${ship}` : ''}`}
                                                 >
                                                     <span>{player}</span>
-                                                    {ship && <span className="opacity-50 text-[8px] uppercase tracking-tighter">{ship}</span>}
+                                                    {ship && <span className="opacity-50 text-[9px] uppercase tracking-tighter">{ship}</span>}
                                                 </button>
                                             );
                                         })
@@ -283,29 +318,11 @@ export const Wizard: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Artifact Type - Only for Artifact Brawl */}
-                    {activeMode === 'Artifact Brawl' && (
-                        <div className={`bg-md-sys-surface2 ${cardClass}`}>
-                            <label className={labelClass}>Artifact</label>
-                            <div className="flex flex-wrap gap-1 justify-center">
-                                {['Healing', 'Weapon', 'Ice'].map(t => (
-                                    <button
-                                        key={t}
-                                        onClick={() => setPendingArtifactType(t)}
-                                        className={`${isOverlayMode ? 'px-2 py-0.5 text-[10px]' : 'px-3 py-1 text-xs'} rounded-full font-bold transition-colors ${pendingArtifactType === t ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'bg-white/5 hover:bg-white/10'}`}
-                                    >
-                                        {t}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
                     {/* Review Detected Players Button */}
                     {detectedPlayerCount > 0 && (
                         <button
                             onClick={() => setShowOcrReview(true)}
-                            className={`w-full ${isOverlayMode ? 'py-2 text-xs rounded-lg' : 'py-3 text-sm rounded-xl'} bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center gap-2`}
+                            className={`w-full ${isOverlayMode ? 'py-2 text-xs rounded-lg' : 'py-3 text-sm rounded-xl'} bg-md-sys-on-surface/5 hover:bg-md-sys-on-surface/10 transition-colors flex items-center justify-center gap-2`}
                         >
                             <Users size={isOverlayMode ? 14 : 16} />
                             Review Detected Players ({detectedPlayerCount})

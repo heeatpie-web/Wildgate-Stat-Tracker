@@ -11,11 +11,12 @@ import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
 import { useSoundEffects } from '../hooks/useSoundEffects';
 import { HERO_GUIDS, SHIP_GUIDS, WEAPON_GUIDS, EQUIPMENT_GUIDS } from '../utils/guids';
-import { SHIPS, UNNAMED_PLAYER_PREFIX } from '../types';
+import { SHIPS, CHARACTERS, UNNAMED_PLAYER_PREFIX } from '../types';
 import { processTelemetryEvent, TelemetryActions, TelemetryContext } from '../utils/telemetryProcessor';
 import Logger from '../utils/logger';
+import { getElectronAPI } from '../utils/electronAPI';
 
-const { ipcRenderer } = window.require ? window.require('electron') : { ipcRenderer: null };
+const ipcRenderer = getElectronAPI();
 
 export const useLogMonitor = () => {
     const {
@@ -30,7 +31,8 @@ export const useLogMonitor = () => {
         setLastActivity,
         setSelectedTeammates,
         setCurrentLoadout,
-        currentLoadout
+        currentLoadout,
+        sessionStartTime
     } = useGameData();
     const { accelByteToEpicId, setIDMapping } = useAppStore();
 
@@ -44,13 +46,15 @@ export const useLogMonitor = () => {
         devMode
     } = useUIState();
 
-    const { playStart } = useSoundEffects();
+    const { playStart, playEnd } = useSoundEffects();
+    const wasMatchInProgressRef = useRef(false);
 
     const [logFeed, setLogFeed] = useState<any[]>([]);
     const [logStatus, setLogStatus] = useState<any>({});
     const prevKillCount = useRef(0);
     const currentSquadIds = useRef<string[]>([]);
-    const sessionStartTime = useRef(Date.now()); // Track when app session started
+    const sessionStartTimeRef = useRef(sessionStartTime);
+    const lastActivityRef = useRef(0);
 
     // Refs for frequently-changing values to avoid IPC listener re-subscription churn
     const playerIdMapRef = useRef(playerIdMap);
@@ -63,6 +67,7 @@ export const useLogMonitor = () => {
     const activeShipRef = useRef(activeShip);
     const activeUserRef = useRef(activeUser);
     const devModeRef = useRef(devMode);
+    const lastMatchSessionIdRef = useRef<string>('');
 
     // Keep refs in sync
     useEffect(() => { playerIdMapRef.current = playerIdMap; }, [playerIdMap]);
@@ -75,6 +80,8 @@ export const useLogMonitor = () => {
     useEffect(() => { activeShipRef.current = activeShip; }, [activeShip]);
     useEffect(() => { activeUserRef.current = activeUser; }, [activeUser]);
     useEffect(() => { devModeRef.current = devMode; }, [devMode]);
+    useEffect(() => { sessionStartTimeRef.current = sessionStartTime; }, [sessionStartTime]);
+    // lastMatchSessionIdRef is updated via setLastMatchSessionId action, no sync needed
 
     // --- ID Discovery from Archives ---
     useEffect(() => {
@@ -114,6 +121,17 @@ export const useLogMonitor = () => {
         }
     }, [enableAutoLogRecording]);
 
+    // Sound feedback on match state transitions
+    useEffect(() => {
+        if (isMatchInProgress && !wasMatchInProgressRef.current) {
+            playStart(); // Match just started
+        }
+        if (!isMatchInProgress && wasMatchInProgressRef.current) {
+            playEnd(); // Match just ended
+        }
+        wasMatchInProgressRef.current = isMatchInProgress;
+    }, [isMatchInProgress, playStart, playEnd]);
+
     // Match Timer Tick
     useEffect(() => {
         if (isMatchInProgress && matchStartTime) {
@@ -134,10 +152,14 @@ export const useLogMonitor = () => {
     useEffect(() => {
         if (!ipcRenderer) return;
 
-        const onStatus = (_: any, status: any) => setLogStatus(status);
-        const onLogData = (_: any, data: any) => {
+        const onStatus = (status: any) => setLogStatus(status);
+        const onLogData = (data: any) => {
             if (data) {
-                setLastActivity(Date.now());
+                const now = Date.now();
+                if (now - lastActivityRef.current > 5000) {
+                    lastActivityRef.current = now;
+                    setLastActivity(now);
+                }
 
                 // Extract events
                 let events: any[] = [];
@@ -160,7 +182,7 @@ export const useLogMonitor = () => {
 
                     // FIX: Use session-based filtering instead of hard 30-second window
                     // Events are relevant if they occurred after app start (with 60s grace for startup delay)
-                    const isRelevantToSession = gameTime >= (sessionStartTime.current - 60000);
+                    const isRelevantToSession = gameTime >= (sessionStartTimeRef.current - 60000);
 
                     // Log all events for discovery (before filtering)
                     const ageSeconds = Math.floor((Date.now() - gameTime) / 1000);
@@ -217,23 +239,42 @@ export const useLogMonitor = () => {
                         let heroName = '';
                         let shipName = '';
 
+                        // Helper: match a raw name against a known list (case-insensitive substring)
+                        const fuzzyMatchList = (raw: string, list: string[]): string | null => {
+                            if (!raw) return null;
+                            const lower = raw.toLowerCase();
+                            // Exact match first
+                            const exact = list.find(item => item.toLowerCase() === lower);
+                            if (exact) return exact;
+                            // Substring match (e.g. "Hunter" matches "Hunter (4 Player)")
+                            const partial = list.find(item => item.toLowerCase().startsWith(lower) || lower.startsWith(item.toLowerCase().split('(')[0].trim()));
+                            return partial || null;
+                        };
+
                         const heroGuid = payload.loadout.guidHero?.split(':')[1];
                         if (heroGuid) {
                             heroName = knownMappings[heroGuid] || HERO_GUIDS[heroGuid];
 
                             if (!heroName) {
-                                // Try plain text fallback
-                                if (payload.loadout.hero && !payload.loadout.hero.includes(':')) heroName = payload.loadout.hero;
+                                // Try plain text fallback with fuzzy matching against known characters
+                                const rawHero = payload.loadout.hero;
+                                if (rawHero && !rawHero.includes(':')) {
+                                    // Match against CHARACTERS list for hero fuzzy matching
+                                    const matched = fuzzyMatchList(rawHero, [...CHARACTERS]);
+                                    if (matched) heroName = matched;
+                                    else heroName = rawHero;
+                                }
 
                                 if (!heroName) {
                                     registerUnknownId(heroGuid, 'Hero');
                                     heroName = `Unknown (${heroGuid.substr(0, 4)})`;
-                                    Logger.warn('LogMonitor', `Unknown Hero GUID: ${heroGuid}`);
                                 }
+                                Logger.warn('LogMonitor', `Unknown Hero GUID: ${heroGuid} | raw: "${payload.loadout.hero}" | resolved: "${heroName}"`);
                             }
 
                             if (heroName && !heroName.startsWith('Unknown') && heroName !== activeHeroRef.current) {
-                                setActiveHero(heroName);
+                                setActiveHero(heroName, 'telemetry');
+                                Logger.info('LogMonitor', `Auto-selected prospector: ${heroName}`);
                             }
                         }
 
@@ -242,19 +283,23 @@ export const useLogMonitor = () => {
                             shipName = knownMappings[shipGuid] || SHIP_GUIDS[shipGuid];
 
                             if (!shipName) {
-                                if (payload.loadout.ship && !payload.loadout.ship.includes(':')) shipName = payload.loadout.ship;
+                                // Try plain text fallback with fuzzy matching against known ships
+                                const rawShip = payload.loadout.ship;
+                                if (rawShip && !rawShip.includes(':')) {
+                                    const matched = fuzzyMatchList(rawShip, [...SHIPS]);
+                                    if (matched) shipName = matched;
+                                    else shipName = rawShip;
+                                }
 
                                 if (!shipName) {
                                     shipName = `Unknown (${shipGuid.substr(0, 4)})`;
-                                    Logger.warn('LogMonitor', `Unknown Ship GUID: ${shipGuid}`);
                                 }
-
-                                // Normalization for raw class names
-                                if (shipName.includes('Hunter')) shipName = 'Hunter';
+                                Logger.warn('LogMonitor', `Unknown Ship GUID: ${shipGuid} | raw: "${payload.loadout.ship}" | resolved: "${shipName}"`);
                             }
 
                             if (shipName && !shipName.startsWith('Unknown') && shipName !== activeShipRef.current) {
-                                setActiveShip(shipName);
+                                setActiveShip(shipName, 'telemetry');
+                                Logger.info('LogMonitor', `Auto-selected ship: ${shipName}`);
                             }
                         }
 
@@ -301,14 +346,16 @@ export const useLogMonitor = () => {
                         setOverlayPhase,
                         setToast,
                         updatePlayerIdMapping,
-                        setShowWizard
+                        setShowWizard,
+                        setLastMatchSessionId: (id: string) => { lastMatchSessionIdRef.current = id; }
                     };
 
                     const context: TelemetryContext = {
                         matchStartTime: matchStartTimeRef.current,
                         isMatchInProgress: isMatchInProgressRef.current,
                         playerIdMap: playerIdMapRef.current,
-                        pilotRegistry: pilotRegistryRef.current
+                        pilotRegistry: pilotRegistryRef.current,
+                        lastMatchSessionId: lastMatchSessionIdRef.current
                     };
 
                     // Execute Processor
@@ -324,11 +371,11 @@ export const useLogMonitor = () => {
             }
         };
 
-        ipcRenderer.on('log-status', onStatus);
-        ipcRenderer.on('log-data', onLogData);
+        const unsubStatus = ipcRenderer.on('log-status', onStatus);
+        const unsubData = ipcRenderer.on('log-data', onLogData);
         return () => {
-            ipcRenderer.removeListener('log-status', onStatus);
-            ipcRenderer.removeListener('log-data', onLogData);
+            unsubStatus();
+            unsubData();
         };
     }, [setIDMapping, updatePlayerIdMapping, setToast, setLastActivity, setTimeMin, setTimeSec, setIsMatchInProgress, setMatchStartTime, setOverlayPhase, setShowWizard, setActiveHero, setActiveShip, setCurrentLoadout]);
 

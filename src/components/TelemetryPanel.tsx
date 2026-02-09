@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
-const { ipcRenderer } = window.require ? window.require('electron') : { ipcRenderer: null };
+import { getElectronAPI } from '../utils/electronAPI';
 
 interface TelemetryPanelProps {
     logFeed: any[];
@@ -10,7 +10,7 @@ interface TelemetryPanelProps {
 
 export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logFeed, logStatus, onClear }) => {
     return (
-        <div className="fixed top-24 right-6 w-[400px] h-[600px] bg-md-sys-surface1 rounded-[32px] shadow-2xl border border-md-sys-outline/20 flex flex-col overflow-hidden z-[5000] animate-slide-up">
+        <div className="fixed top-24 right-6 w-[400px] h-[600px] bg-md-sys-surface1 rounded-2xl shadow-2xl border border-md-sys-outline/20 flex flex-col overflow-hidden z-[5000] animate-slide-up">
             <div className="p-4 bg-md-sys-surface2 border-b border-md-sys-outline/10 flex justify-between items-center">
                 <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${logStatus.exists ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
@@ -19,7 +19,7 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logFeed, logStat
                 <button onClick={onClear} className="text-[8px] font-black uppercase px-2 py-1 bg-md-sys-surface3 rounded hover:bg-red-500/20 hover:text-red-500 transition-colors">Clear</button>
             </div>
 
-            <div className="px-4 py-2 bg-black/20 flex flex-col gap-1 border-b border-white/5">
+            <div className="px-4 py-2 bg-black/20 flex flex-col gap-1 border-b border-md-sys-outline/5">
                 <div className="flex justify-between items-center">
                     <span className="text-[8px] font-black uppercase opacity-40">File Status</span>
                     <span className={`text-[8px] font-black uppercase ${logStatus.exists ? 'text-green-500' : 'text-red-500'}`}>
@@ -44,7 +44,7 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logFeed, logStat
                         <span className="text-[8px] font-mono opacity-60">
                             {logStatus.lastCheck ? new Date(logStatus.lastCheck).toLocaleTimeString() : 'Never'}
                         </span>
-                        {ipcRenderer && <button onClick={() => ipcRenderer.send('start-log-monitoring')} className="p-1 hover:bg-white/10 rounded transition-colors"><RefreshCw size={8} /></button>}
+                        {getElectronAPI() && <button onClick={() => getElectronAPI()?.send('start-log-monitoring')} className="p-1 hover:bg-md-sys-surface3 rounded transition-colors"><RefreshCw size={8} /></button>}
                     </div>
                 </div>
                 <div className="flex flex-col gap-0.5 mt-1 border-t border-white/5 pt-1">
@@ -71,12 +71,12 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logFeed, logStat
                 {logFeed.length === 0 ? (
                     <div className="h-full flex items-center justify-center opacity-20 uppercase font-black text-center">Waiting for game data...</div>
                 ) : logFeed.map((entry, i) => (
-                    <div key={i} className="bg-black/20 p-2 rounded-lg border border-white/5 group relative">
+                    <div key={i} className="bg-black/20 p-2 rounded-lg border border-md-sys-outline/5 group relative">
                         <div className="flex justify-between items-start mb-1">
                             <span className="text-md-sys-primary font-black">{entry.EventName || 'Unknown Event'}</span>
                             <span className="opacity-30 text-[7px]">{new Date(entry.ClientTimestamp * 1000).toLocaleTimeString()}</span>
                         </div>
-                        <pre className="text-white/60 overflow-hidden text-ellipsis">
+                        <pre className="opacity-60 overflow-hidden text-ellipsis">
                             {JSON.stringify(entry.Payload || entry, null, 2)}
                         </pre>
                     </div>

@@ -47,7 +47,7 @@ const LAYOUT = {
 /**
  * Known ship types
  */
-const SHIP_TYPES = ['HUNTER', 'BASTION', 'PRIVATEER', 'SCOUT', 'OUTLAW'];
+const SHIP_TYPES = ['HUNTER', 'BASTION', 'PRIVATEER', 'SCOUT', 'SOLO OUTLAW', 'OUTLAW'];
 
 /**
  * Known hazards/modifiers
@@ -491,10 +491,14 @@ function extractPlayerNameFromLine(words) {
   name = name
     .replace(/@/g, 'Q')
     .replace(/[{}()\[\]]/g, '')
-    .replace(/[.,:;!?]/g, '')
+    // Preserve periods between alphanumeric chars (e.g. "River.Banks")
+    .replace(/(?<![a-zA-Z0-9])[.,:;!?]+/g, '')
+    .replace(/[,:;!?]+(?![a-zA-Z0-9])/g, '')
+    .replace(/\.(?![a-zA-Z0-9])/g, '')
+    .replace(/(?<![a-zA-Z0-9])\./g, '')
     .replace(/\s*[XPCD]$/i, '')
     .replace(/^[^a-zA-Z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]+/, '')
-    .replace(/[^a-zA-Z0-9_\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]+$/, '')
+    .replace(/[^a-zA-Z0-9_.\-\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]+$/, '')
     .trim();
 
   return name.length >= 3 ? name : null;

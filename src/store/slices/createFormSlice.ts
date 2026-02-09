@@ -6,16 +6,22 @@
  */
 import { StateCreator } from 'zustand';
 import { CHARACTERS, SHIPS, KillMap, getShipCapacity } from '../../types';
+import { DataSource, getPriority } from './createDataSlice';
 
 export interface FormSlice {
     selectedTeammates: string[];
     selectedOpponents: string[];
     activeHero: string;
+    heroSource?: DataSource;
     activeShip: string;
+    shipSource?: DataSource;
+    telemetryDetectedHero?: string;
+    telemetryDetectedShip?: string;
     activeWeapons: Record<string, number>;
     matchStartTime: number | null;
     isMatchInProgress: boolean;
     selectedReachModifiers: string[];
+    modifiersSource?: DataSource;
     kills: KillMap;
     poiEasy: number;
     poiMedium: number;
@@ -34,12 +40,12 @@ export interface FormSlice {
     toggleTeammate: (name: string) => void;
     setSelectedOpponents: (opponents: string[] | ((curr: string[]) => string[])) => void;
     toggleOpponent: (name: string) => void;
-    setActiveHero: (hero: string) => void;
-    setActiveShip: (ship: string) => void;
+    setActiveHero: (hero: string, source?: DataSource) => void;
+    setActiveShip: (ship: string, source?: DataSource) => void;
     setActiveWeapons: (weapons: Record<string, number>) => void;
     setMatchStartTime: (time: number | null) => void;
     setIsMatchInProgress: (inProgress: boolean) => void;
-    setSelectedReachModifiers: (modifiers: string[]) => void;
+    setSelectedReachModifiers: (modifiers: string[], source?: DataSource) => void;
     toggleReachModifier: (modifier: string) => void;
     setKills: (kills: KillMap) => void;
     setPoiEasy: (val: number) => void;
@@ -60,12 +66,17 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
     selectedTeammates: [],
     selectedOpponents: [],
     activeHero: CHARACTERS[0],
+    heroSource: undefined,
     activeShip: SHIPS[0],
+    shipSource: undefined,
+    telemetryDetectedHero: undefined,
+    telemetryDetectedShip: undefined,
     activeWeapons: {},
     characterLoadouts: {},
     matchStartTime: null,
     isMatchInProgress: false,
     selectedReachModifiers: [],
+    modifiersSource: undefined,
     kills: { "AI Legion": 0 },
     poiEasy: 0,
     poiMedium: 0,
@@ -95,15 +106,30 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
             ? state.selectedOpponents.filter(o => o !== name)
             : [...state.selectedOpponents, name]
     })),
-    setActiveHero: (hero) => set((state) => ({
-        activeHero: hero,
-        // Load saved loadout for this hero, or empty
-        activeWeapons: state.characterLoadouts[hero] || {}
-    })),
-    setActiveShip: (ship) => set((state) => {
-        const maxTeammates = getShipCapacity(ship) - 1;
-        const newTeammates = state.selectedTeammates.filter((_, i) => i < maxTeammates);
-        return { activeShip: ship, selectedTeammates: newTeammates };
+    setActiveHero: (hero, source = 'manual') => set((state) => {
+        const telemetryUpdate = source === 'telemetry' ? { telemetryDetectedHero: hero } : {};
+        const currentP = getPriority(state.heroSource);
+        const newP = getPriority(source);
+        if (newP >= currentP || !state.heroSource) {
+            return {
+                activeHero: hero,
+                heroSource: source,
+                activeWeapons: state.characterLoadouts[hero] || {},
+                ...telemetryUpdate
+            };
+        }
+        return telemetryUpdate;
+    }),
+    setActiveShip: (ship, source = 'manual') => set((state) => {
+        const telemetryUpdate = source === 'telemetry' ? { telemetryDetectedShip: ship } : {};
+        const currentP = getPriority(state.shipSource);
+        const newP = getPriority(source);
+        if (newP >= currentP || !state.shipSource) {
+            const maxTeammates = getShipCapacity(ship) - 1;
+            const newTeammates = state.selectedTeammates.filter((_, i) => i < maxTeammates);
+            return { activeShip: ship, shipSource: source, selectedTeammates: newTeammates, ...telemetryUpdate };
+        }
+        return telemetryUpdate;
     }),
     setActiveWeapons: (weapons) => set((state) => ({
         activeWeapons: weapons,
@@ -115,7 +141,14 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
     })),
     setMatchStartTime: (time) => set({ matchStartTime: time }),
     setIsMatchInProgress: (inProgress) => set({ isMatchInProgress: inProgress }),
-    setSelectedReachModifiers: (modifiers) => set({ selectedReachModifiers: modifiers }),
+    setSelectedReachModifiers: (modifiers, source = 'manual') => set((state) => {
+        const currentP = getPriority(state.modifiersSource);
+        const newP = getPriority(source);
+        if (newP >= currentP || !state.modifiersSource) {
+            return { selectedReachModifiers: modifiers, modifiersSource: source };
+        }
+        return {};
+    }),
     toggleReachModifier: (modifier) => set((state) => ({
         selectedReachModifiers: state.selectedReachModifiers.includes(modifier)
             ? state.selectedReachModifiers.filter(m => m !== modifier)
@@ -141,6 +174,11 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
         timeMin: "",
         timeSec: "",
         selectedReachModifiers: [],
+        modifiersSource: undefined,
+        heroSource: undefined,
+        shipSource: undefined,
+        telemetryDetectedHero: undefined,
+        telemetryDetectedShip: undefined,
         damageTaken: "",
         elims: "",
         currentNote: "",

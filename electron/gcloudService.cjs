@@ -40,7 +40,7 @@ class GCloudService {
     }
 
     try {
-      const [result] = await this.client.textDetection(imagePath);
+      const [result] = await this.client.documentTextDetection(imagePath);
       const annotations = result.textAnnotations || [];
       const fullText = annotations.length > 0 ? annotations[0].description || '' : '';
 

@@ -1,7 +1,0 @@
-{
-  "name": "Wildgate Stat Tracker",
-  "description": "A high-performance statistic tracking application for Wildgate prospectors, featuring data visualization, match logging, and export capabilities.",
-  "requestFramePermissions": [
-    "microphone"
-  ]
-}

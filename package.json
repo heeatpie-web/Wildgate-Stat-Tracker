@@ -2,7 +2,7 @@
   "name": "wildgate-stat-tracker",
   "productName": "Wildgate Stat Tracker",
   "private": true,
-  "version": "2.8.1",
+  "version": "2.12.0",
   "type": "module",
   "main": "electron/main.cjs",
   "author": {
@@ -82,6 +82,9 @@
       "!**/*.spec.ts",
       "!**/tsconfig.json",
       "!**/README.md"
+    ],
+    "asarUnpack": [
+      "node_modules/screenshot-desktop/**/*"
     ],
     "win": {
       "target": "nsis",

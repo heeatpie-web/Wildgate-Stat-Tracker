@@ -11,11 +11,13 @@ interface RecordingViewProps {
 
 export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData }) => {
     return (
-        <div className="h-full flex gap-4 p-4">
+        <div data-tour="view-recording" className="h-full flex gap-4 p-4">
             {/* Left Column: Ship & Loadout + Actions */}
             <div className="flex-[1.2] min-w-[220px] flex flex-col gap-4 overflow-hidden">
                 <SquadronPanel />
-                <ActionPanel onSmartCaptureData={onSmartCaptureData} />
+                <div data-tour="action-panel">
+                    <ActionPanel onSmartCaptureData={onSmartCaptureData} />
+                </div>
             </div>
 
             {/* Center: Roster Manager */}

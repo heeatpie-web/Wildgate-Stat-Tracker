@@ -8,6 +8,7 @@ import html2canvas from 'html2canvas';
 import { EditMatchModal } from './EditMatchModal';
 
 import { useGameData } from '../providers/GameDataProvider';
+import { LocalImage } from './LocalImage';
 import { useUIState } from '../providers/UIStateProvider';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 
@@ -15,10 +16,9 @@ interface HistoryTableProps {
     // No props needed
 }
 
-const timeAgo = (timestamp: number): string => {
+const timeAgo = (timestamp: number, nowMs: number): string => {
     if (!timestamp) return '';
-    const now = new Date();
-    const seconds = Math.floor((now.getTime() - timestamp) / 1000);
+    const seconds = Math.floor((nowMs - timestamp) / 1000);
     let interval = seconds / 31536000;
     if (interval > 1) return Math.floor(interval) + "y ago";
     interval = seconds / 2592000;
@@ -41,19 +41,36 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
     };
 
     const t = TRANSLATIONS[language];
+    const [searchInput, setSearchInput] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [sortField, setSortField] = useState<keyof Match | 'timeAgo'>('timestamp');
     const [sortDesc, setSortDesc] = useState(true);
     const [selectedMatches, setSelectedMatches] = useState<number[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState<number | 'Infinity'>(10);
+    const [renderAll, setRenderAll] = useState(false);
+    const [nowTick, setNowTick] = useState(Date.now());
 
     const [selectedMatchForDetails, setSelectedMatchForDetails] = useState<Match | null>(null);
     const [editingNoteMatch, setEditingNoteMatch] = useState<Match | null>(null);
     const [editingMatch, setEditingMatch] = useState<Match | null>(null);
     const [noteText, setNoteText] = useState("");
 
+    useEffect(() => {
+        const t = setTimeout(() => setSearchTerm(searchInput.trim()), 200);
+        return () => clearTimeout(t);
+    }, [searchInput]);
+
     useEffect(() => setCurrentPage(1), [searchTerm, itemsPerPage]);
+
+    useEffect(() => {
+        setRenderAll(false);
+    }, [searchTerm, itemsPerPage, sortField, sortDesc]);
+
+    useEffect(() => {
+        const interval = setInterval(() => setNowTick(Date.now()), 60000);
+        return () => clearInterval(interval);
+    }, []);
 
     const filteredMatches = useMemo(() => matches.filter(m => {
         const term = searchTerm.toLowerCase();
@@ -106,11 +123,20 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
         return [...pinned, ...unpinned];
     }, [filteredMatches, sortField, sortDesc]);
 
+    const shouldLimitAll = itemsPerPage === 'Infinity' && sortedMatches.length > 500 && !renderAll;
+    const effectiveAllList = shouldLimitAll ? sortedMatches.slice(0, 500) : sortedMatches;
+
     const paginatedMatches = useMemo(() => {
-        if (itemsPerPage === 'Infinity') return sortedMatches;
+        if (itemsPerPage === 'Infinity') return effectiveAllList;
         const start = (currentPage - 1) * (itemsPerPage as number);
         return sortedMatches.slice(start, start + (itemsPerPage as number));
-    }, [sortedMatches, currentPage, itemsPerPage]);
+    }, [sortedMatches, effectiveAllList, currentPage, itemsPerPage]);
+
+    const timeAgoMap = useMemo(() => {
+        const map = new Map<number, string>();
+        filteredMatches.forEach(m => map.set(m.id, timeAgo(m.timestamp, nowTick)));
+        return map;
+    }, [filteredMatches, nowTick]);
 
     const handleSort = (field: keyof Match | 'timeAgo') => {
         if (sortField === field) setSortDesc(!sortDesc);
@@ -170,7 +196,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                 <div>
                     <div style="font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; opacity: 0.5; margin-bottom: 4px;">Mission Report</div>
                     <div style="font-size: 32px; font-weight: 900; text-transform: uppercase; letter-spacing: -1px; color: ${color};">${m.result}</div>
-                    <div style="font-size: 12px; font-weight: 700; opacity: 0.8; margin-top: 4px;">${(m.ship || '').split('(')[0]} • ${m.hero}</div>
+                    <div style="font-size: 12px; font-weight: 700; opacity: 0.8; margin-top: 4px;">${(m.ship || '').split('(')[0]} - ${m.hero}</div>
                     ${teammatesStr ? `<div style="font-size: 10px; font-weight: 500; opacity: 0.5; margin-top: 2px;">${teammatesStr}</div>` : ''}
                 </div>
                 <div style="text-align: right;">
@@ -196,14 +222,14 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
     };
 
     return (
-        <div className="w-full flex flex-col gap-2 animate-slide-up">
+        <div data-tour="view-history" className="w-full flex flex-col gap-2 animate-slide-up">
             <div className="flex flex-col md:flex-row justify-between items-center gap-2">
                 <h2 className="text-lg font-bold uppercase tracking-tight text-md-sys-on-surface">Match History</h2>
                 <input
                     type="text"
                     placeholder="Search logs..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
                     className="bg-md-sys-surface2 px-3 py-1.5 rounded-lg text-xs font-bold outline-none text-md-sys-on-surface border border-md-sys-outline/10 focus:border-md-sys-primary w-full md:w-56 transition-all"
                 />
             </div>
@@ -224,7 +250,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                         </select>
                     </div>
                     <div className="uppercase tracking-widest text-[10px] opacity-60">
-                        {itemsPerPage === 'Infinity' ? `Showing All ${sortedMatches.length} Missions` : `Page ${currentPage} of ${Math.ceil(sortedMatches.length / (itemsPerPage as number)) || 1} • ${sortedMatches.length} Missions`}
+                        {itemsPerPage === 'Infinity' ? `Showing ${shouldLimitAll ? 'First 500 of' : 'All'} ${sortedMatches.length} Missions` : `Page ${currentPage} of ${Math.ceil(sortedMatches.length / (itemsPerPage as number)) || 1} - ${sortedMatches.length} Missions`}
                     </div>
                     <div className="flex gap-2">
                         <button
@@ -243,6 +269,18 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                         </button>
                     </div>
                 </div>
+
+                {shouldLimitAll && (
+                    <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest bg-amber-500/10 text-amber-400 border-b border-md-sys-outline/10 flex items-center justify-between">
+                        Rendering is capped at 500 rows for performance.
+                        <button
+                            onClick={() => setRenderAll(true)}
+                            className="px-3 py-1 bg-amber-500/20 rounded-lg hover:bg-amber-500/30"
+                        >
+                            Render All
+                        </button>
+                    </div>
+                )}
 
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
@@ -293,7 +331,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                                     <span className="text-[10px] opacity-50 font-medium ml-0.5">{m.subType}</span>
                                                 </div>
                                             </td>
-                                            <td className="p-4 text-xs opacity-60">{timeAgo(m.timestamp)}</td>
+                                            <td className="p-4 text-xs opacity-60">{timeAgoMap.get(m.id) || ''}</td>
                                             <td className="p-4">
                                                 <div className="flex flex-col">
                                                     <span>{(m.ship || 'Unknown').split('(')[0]}</span>
@@ -337,14 +375,14 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
 
             {editingNoteMatch && createPortal(
                 <div className="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setEditingNoteMatch(null)}>
-                    <div className="bg-md-sys-surface1 w-full max-w-md rounded-[32px] p-8 shadow-2xl border border-md-sys-outline/20 flex flex-col gap-6" onClick={e => e.stopPropagation()}>
+                    <div className="bg-md-sys-surface1 w-full max-w-md rounded-2xl p-6 shadow-2xl border border-md-sys-outline/20 flex flex-col gap-6" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center">
                             <h3 className="text-xl font-black uppercase tracking-tight">Mission Notes</h3>
                             <button onClick={() => setEditingNoteMatch(null)}><X size={20} /></button>
                         </div>
                         <div className="bg-md-sys-surface2 p-4 rounded-2xl border border-md-sys-outline/10">
                             <div className="text-[10px] font-black uppercase opacity-60 mb-2">Match Details</div>
-                            <div className="text-sm font-bold">{editingNoteMatch.result} • {(editingNoteMatch.ship || '').split('(')[0]} • {editingNoteMatch.hero}</div>
+                            <div className="text-sm font-bold">{editingNoteMatch.result} - {(editingNoteMatch.ship || '').split('(')[0]} - {editingNoteMatch.hero}</div>
                             <div className="text-xs opacity-60 mt-1">{new Date(editingNoteMatch.timestamp).toLocaleString()}</div>
                         </div>
                         <textarea
@@ -363,7 +401,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
 
             {selectedMatchForDetails && createPortal(
                 <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4 animate-fade-in" onClick={() => setSelectedMatchForDetails(null)}>
-                    <div className="bg-md-sys-surface1 w-full max-w-2xl rounded-[40px] p-8 shadow-2xl border border-md-sys-outline/20 flex flex-col gap-6 animate-scale-in max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
+                    <div className="bg-md-sys-surface1 w-full max-w-2xl rounded-2xl p-6 shadow-2xl border border-md-sys-outline/20 flex flex-col gap-6 animate-scale-in max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-start">
                             <div>
                                 <div className="text-xs font-black uppercase opacity-40 tracking-widest mb-1">Mission Report</div>
@@ -374,14 +412,14 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                         </div>
 
                         {selectedMatchForDetails.notes && (
-                            <div className="bg-md-sys-surface2 p-6 rounded-3xl border-l-4 border-md-sys-primary">
+                            <div className="bg-md-sys-surface2 p-6 rounded-xl border-l-4 border-md-sys-primary">
                                 <div className="text-[10px] font-black uppercase opacity-60 mb-2 flex items-center gap-2"><FileText size={12} /> Captain's Log</div>
                                 <div className="text-sm font-medium italic opacity-80 leading-relaxed">"{selectedMatchForDetails.notes}"</div>
                             </div>
                         )}
 
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-md-sys-surface2 p-4 rounded-3xl">
+                            <div className="bg-md-sys-surface2 p-4 rounded-xl">
                                 <div className="text-[10px] font-black uppercase opacity-60 mb-2">Pilot Loadout</div>
                                 <div className="text-xl font-black mb-1">{(selectedMatchForDetails.ship || 'Unknown').split('(')[0]}</div>
                                 <div className="text-sm opacity-70 mb-2">{selectedMatchForDetails.hero}</div>
@@ -427,7 +465,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                     </div>
                                 )}
                             </div>
-                            <div className="bg-md-sys-surface2 p-4 rounded-3xl">
+                            <div className="bg-md-sys-surface2 p-4 rounded-xl">
                                 <div className="text-[10px] font-black uppercase opacity-60 mb-2">Performance</div>
                                 <div className="flex justify-between items-end">
                                     <div>
@@ -443,7 +481,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                         </div>
 
                         {selectedMatchForDetails.kills && Object.values(selectedMatchForDetails.kills).some(v => v > 0) && (
-                            <div className="bg-md-sys-surface2 p-6 rounded-3xl border border-md-sys-outline/5">
+                            <div className="bg-md-sys-surface2 p-6 rounded-xl border border-md-sys-outline/5">
                                 <div className="text-[10px] font-black uppercase opacity-60 mb-4 flex items-center gap-2"><Swords size={12} /> Combat Record (Eliminations)</div>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                     {Object.entries(selectedMatchForDetails.kills).filter(([_, count]) => count > 0).map(([ship, count]) => (
@@ -456,7 +494,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                             </div>
                         )}
 
-                        <div className="bg-md-sys-surface2 p-6 rounded-3xl">
+                        <div className="bg-md-sys-surface2 p-6 rounded-xl">
                             <div className="flex justify-between mb-4">
                                 <div>
                                     <div className="text-[10px] font-black uppercase opacity-60 mb-2">Squadron</div>
@@ -482,19 +520,16 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                         </div>
 
                         {selectedMatchForDetails.artifacts && selectedMatchForDetails.artifacts.length > 0 && (
-                            <div className="bg-md-sys-surface2 p-6 rounded-3xl border border-md-sys-outline/5">
+                            <div className="bg-md-sys-surface2 p-6 rounded-xl border border-md-sys-outline/5">
                                 <div className="text-[10px] font-black uppercase opacity-60 mb-4 flex items-center gap-2"><ImageIcon size={12} /> Visual Intel (Bundled Artifacts)</div>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                     {selectedMatchForDetails.artifacts.map((src, i) => (
                                         <div key={i} className="aspect-video bg-black rounded-xl overflow-hidden border border-md-sys-outline/20 group relative cursor-pointer">
-                                            <img src={src} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt={`Artifact ${i}`} />
+                                            <LocalImage src={src} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt={`Artifact ${i}`} />
                                             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                <button onClick={() => {
-                                                    const w = window.open("");
-                                                    w?.document.write('<img src="' + src + '" style="width:100%"/>');
-                                                }} className="p-2 bg-white/10 rounded-full hover:bg-white/20 text-white">
+                                                <span className="p-2 bg-white/10 rounded-full hover:bg-white/20 text-white">
                                                     <Download size={16} />
-                                                </button>
+                                                </span>
                                             </div>
                                         </div>
                                     ))}
@@ -503,7 +538,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                         )}
 
                         {selectedMatchForDetails.reachModifiers && selectedMatchForDetails.reachModifiers.length > 0 && (
-                            <div className="bg-md-sys-surface2 p-4 rounded-3xl">
+                            <div className="bg-md-sys-surface2 p-4 rounded-xl">
                                 <div className="text-[10px] font-black uppercase opacity-60 mb-2">Modifiers & Artifacts</div>
                                 <div className="flex flex-wrap gap-2">
                                     {selectedMatchForDetails.reachModifiers.map(m => <span key={m} className="px-3 py-1 bg-md-sys-surface3 rounded-lg text-xs font-bold border border-md-sys-outline/10">{m}</span>)}
@@ -513,7 +548,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
 
                         {/* Match Chronology (Timeline) */}
                         {selectedMatchForDetails.timelineEvents && selectedMatchForDetails.timelineEvents.length > 0 && (
-                            <div className="bg-md-sys-surface2 p-6 rounded-[2.5rem] border border-md-sys-outline/5">
+                            <div className="bg-md-sys-surface2 p-6 rounded-xl border border-md-sys-outline/5">
                                 <div className="text-[10px] font-black uppercase opacity-60 mb-4 flex items-center gap-2"><Clock size={12} /> Tactical Chronology</div>
                                 <div className="space-y-3">
                                     {/* Mini Graph */}
@@ -539,7 +574,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4">
                                         {[...selectedMatchForDetails.timelineEvents].sort((a, b) => a.timestamp - b.timestamp).map((evt: any, idx: number) => (
-                                            <div key={idx} className="flex gap-2 text-[11px] items-center p-2 bg-md-sys-surface3/50 rounded-xl">
+                                            <div key={idx} className="flex gap-2 text-xs items-center p-2 bg-md-sys-surface3/50 rounded-xl">
                                                 <span className="font-mono text-md-sys-primary/60 font-medium shrink-0 w-8">{evt.timeRelative}</span>
                                                 <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${evt.type === 'kill' ? 'bg-green-500' : evt.type === 'death' ? 'bg-red-500' : 'bg-blue-500'}`} />
                                                 <span className="text-md-sys-on-surface/90 flex-1 truncate">{evt.description}</span>
@@ -551,7 +586,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                         )}
 
                         <div className="text-center text-[10px] font-mono opacity-30 uppercase tracking-widest mt-2">
-                            ID: {selectedMatchForDetails.id} • {new Date(selectedMatchForDetails.timestamp).toLocaleString()}
+                            ID: {selectedMatchForDetails.id} - {new Date(selectedMatchForDetails.timestamp).toLocaleString()}
                         </div>
                     </div>
                 </div>, document.body

@@ -4,10 +4,17 @@ const DiscordRPC = require('discord-rpc');
 const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
-const { registerOCRHandlers, processCapture } = require('./ocrHandler.cjs');
+const { registerOCRHandlers, processCapture, runOCR } = require('./ocrHandler.cjs');
 const gcloudService = require('./gcloudService.cjs');
 const gcloudSyncService = require('./gcloudSyncService.cjs');
 const isDev = !app.isPackaged;
+
+// Force app name to match productName so app.getPath('userData') resolves
+// to the same directory in both dev and production (e.g. "Wildgate Stat Tracker").
+// Without this, dev mode uses the package "name" field which differs from productName.
+if (isDev) {
+  app.setName('Wildgate Stat Tracker');
+}
 
 let win;
 let tray = null;
@@ -25,7 +32,7 @@ function createTray() {
             if (win) {
               win.show();
               win.setSkipTaskbar(false);
-              win.webContents.send('hotkey-toggle-overlay', true); // Ensure UI state matches
+              win.webContents.send('hotkey-toggle-overlay', false); // Ensure overlay is off
             }
           }
         },
@@ -63,64 +70,94 @@ function createTray() {
 }
 
 // Database Path
-const DB_PATH = path.join(app.getPath('userData'), 'wildgate_db.json');
+const DB_FILENAME = 'wildgate_db.json';
+const DB_PATH = path.join(app.getPath('userData'), DB_FILENAME);
+const LEGACY_APP_NAMES = ['Wildgate Stat Tracker', 'wildgate-stat-tracker', 'Wildgate Tracker'];
+const LEGACY_APPDATA_ROOTS = [app.getPath('appData')];
+if (process.platform === 'win32') {
+  LEGACY_APPDATA_ROOTS.push(path.join(app.getPath('home'), 'AppData', 'Local'));
+}
+const LEGACY_DB_PATHS = LEGACY_APPDATA_ROOTS.flatMap(root =>
+  LEGACY_APP_NAMES.map(name => path.join(root, name, DB_FILENAME))
+);
+const getDbCandidates = () => {
+  const set = new Set([DB_PATH, ...LEGACY_DB_PATHS]);
+  return Array.from(set);
+};
 const LOG_FILE_PATH = path.join(app.getPath('userData'), 'app_logs.txt');
 
 // Artifact Bundling
 ipcMain.handle('bundle-artifacts', async (event, { matchId, startTime, endTime }) => {
   try {
-    const debugDir = path.join(app.getPath('userData'), 'ocr-debug');
     const matchDir = path.join(app.getPath('userData'), 'match_artifacts', matchId.toString());
-
-    if (!fs.existsSync(debugDir)) return [];
     if (!fs.existsSync(matchDir)) fs.mkdirSync(matchDir, { recursive: true });
 
-    const files = fs.readdirSync(debugDir);
-    const bundledFiles = [];
+    const bundledImages = [];
+    const bundledNames = new Set(); // Deduplicate by filename
+    const bundledSizes = new Set(); // Deduplicate by file size (catches same image with different names)
 
-    for (const file of files) {
-      const srcPath = path.join(debugDir, file);
-      const stat = fs.statSync(srcPath);
-      const birthtime = stat.birthtimeMs || stat.mtimeMs;
+    // Helper: scan a directory for images matching the time window
+    const scanDir = async (dir) => {
+      if (!fs.existsSync(dir)) return;
+      const files = await fsPromises.readdir(dir);
+      const imageExts = ['.png', '.jpg', '.jpeg', '.bmp', '.webp'];
+      for (const file of files) {
+        if (bundledNames.has(file)) continue;
+        const ext = path.extname(file).toLowerCase();
+        if (!imageExts.includes(ext)) continue;
+        const srcPath = path.join(dir, file);
+        const stat = await fsPromises.stat(srcPath);
+        const birthtime = stat.birthtimeMs || stat.mtimeMs;
+        if (birthtime >= startTime - 5000 && birthtime <= endTime + 30000) {
+          // Deduplicate by size — same screenshot saved to screenshots/ and ocr-debug/ will have identical size
+          const sizeKey = `${stat.size}`;
+          if (bundledSizes.has(sizeKey)) continue;
+          const destPath = path.join(matchDir, file);
+          await fsPromises.copyFile(srcPath, destPath);
+          bundledImages.push(destPath);
+          bundledNames.add(file);
+          bundledSizes.add(sizeKey);
 
-      if (birthtime >= startTime - 5000 && birthtime <= endTime + 30000) {
-        const destPath = path.join(matchDir, file);
-        fs.copyFileSync(srcPath, destPath);
-        bundledFiles.push(destPath);
-
-        // Upload to GCloud (fire-and-forget)
-        if (gcloudSyncService.isInitialized) {
-          gcloudSyncService.uploadFile(destPath, `match_artifacts/${matchId}/${file}`)
-            .then(r => { if (!r.success) console.warn(`[GCloud] Artifact upload failed: ${r.error}`); })
-            .catch(err => console.warn(`[GCloud] Artifact upload error: ${err.message}`));
+          // Upload to GCloud (fire-and-forget)
+          if (gcloudSyncService.isInitialized) {
+            gcloudSyncService.uploadFile(destPath, `match_artifacts/${matchId}/${file}`)
+              .then(r => { if (!r.success) console.warn(`[GCloud] Artifact upload failed: ${r.error}`); })
+              .catch(err => console.warn(`[GCloud] Artifact upload error: ${err.message}`));
+          }
         }
       }
-    }
+    };
 
-    // Also bundle matching telemetry JSON files
+    // Primary: screenshots saved by saveScreenshot (smart capture flow)
+    await scanDir(path.join(app.getPath('userData'), 'screenshots'));
+    // Fallback: legacy ocr-debug images (old capture flow)
+    await scanDir(path.join(app.getPath('userData'), 'ocr-debug'));
+
+    // Also bundle matching telemetry JSON files (not included in returned array — accessible via get-match-artifacts)
+    let telemetryCount = 0;
     const telemetryDir = path.join(app.getPath('userData'), 'telemetry_archive');
     if (fs.existsSync(telemetryDir)) {
-      const telemetryFiles = fs.readdirSync(telemetryDir).filter(f => f.endsWith('.json'));
+      const telemetryFiles = (await fsPromises.readdir(telemetryDir)).filter(f => f.endsWith('.json'));
       for (const file of telemetryFiles) {
         try {
           const srcPath = path.join(telemetryDir, file);
-          const content = JSON.parse(fs.readFileSync(srcPath, 'utf-8'));
-          const events = content.telemetry || [];
+          const content = JSON.parse(await fsPromises.readFile(srcPath, 'utf-8'));
+          const events = Array.isArray(content) ? content : (content.telemetry || []);
           const hasOverlap = events.some(e => {
-            const t = e.timestamp || e.EventTimestamp;
+            const t = e.ClientTimestamp || e.timestamp || e.EventTimestamp;
             return t && t >= startTime - 5000 && t <= endTime + 30000;
           });
           if (hasOverlap) {
             const destPath = path.join(matchDir, file);
-            fs.copyFileSync(srcPath, destPath);
-            bundledFiles.push(destPath);
+            await fsPromises.copyFile(srcPath, destPath);
+            telemetryCount++;
           }
         } catch (e) { /* skip unparseable files */ }
       }
     }
 
-    console.log(`[Artifacts] Bundled ${bundledFiles.length} files for match ${matchId}`);
-    return bundledFiles;
+    console.log(`[Artifacts] Bundled ${bundledImages.length} images + ${telemetryCount} telemetry files for match ${matchId}`);
+    return bundledImages;
   } catch (e) {
     console.error("Artifact Bundling Error", e);
     return [];
@@ -130,10 +167,11 @@ ipcMain.handle('bundle-artifacts', async (event, { matchId, startTime, endTime }
 ipcMain.handle('get-match-artifacts', async (event, matchId) => {
   try {
     const matchDir = path.join(app.getPath('userData'), 'match_artifacts', matchId.toString());
-    if (!fs.existsSync(matchDir)) return { images: [], telemetry: [] };
+    if (!fs.existsSync(matchDir)) return { images: [], imageFiles: [], telemetry: [] };
 
-    const files = fs.readdirSync(matchDir);
+    const files = await fsPromises.readdir(matchDir);
     const images = [];
+    const imageFiles = [];
     const telemetry = [];
 
     for (const f of files) {
@@ -141,18 +179,128 @@ ipcMain.handle('get-match-artifacts', async (event, matchId) => {
       const ext = path.extname(f).toLowerCase();
       if (ext === '.json') {
         try {
-          const content = JSON.parse(fs.readFileSync(fullPath, 'utf-8'));
+          const content = JSON.parse(await fsPromises.readFile(fullPath, 'utf-8'));
           telemetry.push(content);
         } catch (e) { /* skip unparseable */ }
-      } else {
-        const data = fs.readFileSync(fullPath).toString('base64');
-        const mime = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
-        images.push(`data:${mime};base64,${data}`);
+      } else if (['.png', '.jpg', '.jpeg', '.bmp', '.webp'].includes(ext)) {
+        images.push(fullPath);
+        imageFiles.push({ filename: f, path: fullPath });
       }
     }
-    return { images, telemetry };
+    return { images, imageFiles, telemetry };
   } catch (e) {
-    return { images: [], telemetry: [] };
+    return { images: [], imageFiles: [], telemetry: [] };
+  }
+});
+
+ipcMain.handle('list-match-artifacts', async () => {
+  try {
+    const baseDir = path.join(app.getPath('userData'), 'match_artifacts');
+    if (!fs.existsSync(baseDir)) return [];
+
+    const entries = await fsPromises.readdir(baseDir, { withFileTypes: true });
+    const imageExts = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.webp']);
+    const results = [];
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const dirName = entry.name;
+      if (!/^\d+$/.test(dirName)) continue;
+
+      const dirPath = path.join(baseDir, dirName);
+      let files = [];
+      try {
+        files = await fsPromises.readdir(dirPath);
+      } catch {
+        continue;
+      }
+
+      const images = files
+        .filter(f => imageExts.has(path.extname(f).toLowerCase()))
+        .map(f => path.join(dirPath, f));
+
+      results.push({ id: Number(dirName), images });
+    }
+
+    return results;
+  } catch (e) {
+    console.error('[Artifacts] list-match-artifacts error:', e.message || e);
+    return [];
+  }
+});
+
+ipcMain.handle('remove-match-artifact', async (event, { matchId, filename }) => {
+  try {
+    const matchDir = path.join(app.getPath('userData'), 'match_artifacts', matchId.toString());
+    const filePath = path.join(matchDir, filename);
+    if (fs.existsSync(filePath)) {
+      await fsPromises.unlink(filePath);
+      console.log(`[Artifacts] Removed ${filename} from match ${matchId}`);
+      return { success: true };
+    }
+    return { success: false, error: 'File not found' };
+  } catch (e) {
+    console.error('[Artifacts] Remove error:', e.message);
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('add-match-artifact', async (event, { matchId }) => {
+  try {
+    const { dialog } = require('electron');
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Add Screenshot to Match',
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'bmp', 'webp'] }],
+      properties: ['openFile', 'multiSelections'],
+    });
+    if (result.canceled || result.filePaths.length === 0) return { success: false, canceled: true };
+
+    const matchDir = path.join(app.getPath('userData'), 'match_artifacts', matchId.toString());
+    if (!fs.existsSync(matchDir)) fs.mkdirSync(matchDir, { recursive: true });
+
+    const added = [];
+    for (const srcPath of result.filePaths) {
+      const ext = path.extname(srcPath).toLowerCase();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const destName = `added_${timestamp}_${path.basename(srcPath)}`;
+      const destPath = path.join(matchDir, destName);
+      await fsPromises.copyFile(srcPath, destPath);
+      added.push(destPath);
+      console.log(`[Artifacts] Added ${destName} to match ${matchId}`);
+    }
+    return { success: true, added };
+  } catch (e) {
+    console.error('[Artifacts] Add error:', e.message);
+    return { success: false, error: e.message };
+  }
+});
+
+// ─── Screenshot-first: save capture to disk without OCR ───
+ipcMain.handle('save-screenshot', async (event, { imageBase64, matchId }) => {
+  try {
+    if (!imageBase64 || imageBase64.length < 100) {
+      return { success: false, error: 'Invalid image data' };
+    }
+    const imageBuffer = Buffer.from(imageBase64, 'base64');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `capture_${timestamp}.png`;
+
+    let destDir;
+    if (matchId) {
+      destDir = path.join(app.getPath('userData'), 'match_artifacts', matchId.toString());
+    } else {
+      destDir = path.join(app.getPath('userData'), 'screenshots');
+    }
+    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+
+    const filePath = path.join(destDir, filename);
+    await fsPromises.writeFile(filePath, imageBuffer);
+    console.log(`[Screenshot] Saved ${filename} (${(imageBuffer.length / 1024).toFixed(1)}KB) to ${destDir}`);
+
+    return { success: true, filePath, filename, size: imageBuffer.length };
+  } catch (e) {
+    console.error('[Screenshot] Save error:', e.message);
+    return { success: false, error: e.message };
   }
 });
 
@@ -164,9 +312,10 @@ ipcMain.handle('rerun-ocr-on-artifact', async (event, { imagePath, activeUser, o
     if (!['.png', '.jpg', '.jpeg', '.bmp', '.webp'].includes(ext)) {
       return { success: false, error: `Not an image file: ${ext}` };
     }
-    const imageBuffer = fs.readFileSync(fullPath);
+    const imageBuffer = await fsPromises.readFile(fullPath);
     const base64 = imageBuffer.toString('base64');
-    const result = await processCapture(base64, activeUser, null, ocrMode || 'both');
+    // Pass sourceImagePath to skip duplicate debug save and cloud upload
+    const result = await processCapture(base64, activeUser, null, ocrMode || 'both', { sourceImagePath: fullPath });
     return result;
   } catch (e) {
     console.error('[rerun-ocr] Error:', e.message);
@@ -207,16 +356,50 @@ ipcMain.handle('persist-logs', async (event, logContent) => {
 //   }
 // });
 
+// OCR Scan (compatibility for scan pipeline)
+ipcMain.handle('ocr-scan', async (event, imagePath) => {
+  try {
+    if (!fs.existsSync(imagePath)) throw new Error(`File not found: ${imagePath}`);
+    const buffer = await fsPromises.readFile(imagePath);
+    return await runOCR(buffer);
+  } catch (e) {
+    console.error('[OCR] Scan Error:', e);
+    throw e;
+  }
+});
+
+// ML Scan (stub fallback to avoid IPC errors when model is unavailable)
+ipcMain.handle('ml-scan', async () => {
+  return { detections: [] };
+});
+
 // Database Handlers
 ipcMain.handle('db-read', async () => {
   try {
-    try {
-      await fsPromises.access(DB_PATH);
-    } catch {
-      return null;
+    const candidates = getDbCandidates();
+    for (const candidate of candidates) {
+      try {
+        await fsPromises.access(candidate);
+      } catch {
+        continue;
+      }
+      try {
+        const content = await fsPromises.readFile(candidate, 'utf-8');
+        const parsed = JSON.parse(content);
+        if (candidate !== DB_PATH) {
+          await fsPromises.mkdir(path.dirname(DB_PATH), { recursive: true });
+          await fsPromises.copyFile(candidate, DB_PATH);
+          console.log(`[DB] Migrated legacy DB from ${candidate} -> ${DB_PATH}`);
+        }
+        return parsed;
+      } catch (e) {
+        console.error(`[DB] Read/parse error for ${candidate}:`, e);
+      }
     }
-    const content = await fsPromises.readFile(DB_PATH, 'utf-8');
-    return JSON.parse(content);
+    if (isDev) {
+      console.warn(`[DB] No database found. Searched: ${candidates.join(', ')}`);
+    }
+    return null;
   } catch (e) {
     console.error("DB Read Error", e);
     return null;
@@ -225,7 +408,14 @@ ipcMain.handle('db-read', async () => {
 
 ipcMain.handle('db-write', async (event, data) => {
   const TEMP_PATH = DB_PATH + '.tmp';
+  const PREV_PATH = DB_PATH.replace('.json', '.prev.json');
   try {
+    // Safety: keep previous version so we can always recover
+    try {
+      await fsPromises.access(DB_PATH);
+      await fsPromises.copyFile(DB_PATH, PREV_PATH);
+    } catch { /* No existing DB to back up — first write */ }
+
     await fsPromises.writeFile(TEMP_PATH, JSON.stringify(data, null, 2));
     await fsPromises.rename(TEMP_PATH, DB_PATH);
     return true;
@@ -858,6 +1048,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      webSecurity: false,
       preload: path.join(__dirname, 'preload.cjs'),
     },
     icon: path.join(__dirname, '../public/favicon.png'),
@@ -1021,7 +1212,7 @@ ipcMain.handle('decode-telemetry-cache', async () => {
       return { success: false, message: 'Logs directory not found' };
     }
 
-    const files = fs.readdirSync(logsDir);
+    const files = await fsPromises.readdir(logsDir);
     let decodedCount = 0;
 
     for (const file of files) {
@@ -1031,8 +1222,8 @@ ipcMain.handle('decode-telemetry-cache', async () => {
       const srcPath = path.join(logsDir, file);
 
       try {
-        if (!fs.statSync(srcPath).isFile()) continue;
-        const buffer = fs.readFileSync(srcPath);
+        if (!(await fsPromises.stat(srcPath)).isFile()) continue;
+        const buffer = await fsPromises.readFile(srcPath);
         if (buffer.length === 0) continue;
 
         // Layer 1 (+1 shift)
@@ -1055,7 +1246,7 @@ ipcMain.handle('decode-telemetry-cache', async () => {
         }
 
         const outPath = path.join(logsDir, `decoded_${file}.json`);
-        fs.writeFileSync(outPath, JSON.stringify(finalJson, null, 2));
+        await fsPromises.writeFile(outPath, JSON.stringify(finalJson, null, 2));
         decodedCount++;
       } catch (e) {
         console.error(`Failed to decode ${file}:`, e);
@@ -1077,20 +1268,20 @@ ipcMain.handle('list-telemetry-archives', async () => {
       return [];
     }
 
-    const files = fs.readdirSync(archiveDir)
-      .filter(f => f.endsWith('.json'))
-      .map(file => {
-        const fullPath = path.join(archiveDir, file);
-        const stats = fs.statSync(fullPath);
-        return {
-          filename: file,
-          date: stats.mtimeMs,
-          size: stats.size
-        };
-      })
-      .sort((a, b) => b.date - a.date); // Newest first
+    const files = (await fsPromises.readdir(archiveDir))
+      .filter(f => f.endsWith('.json'));
 
-    return files;
+    const fileStats = await Promise.all(files.map(async (file) => {
+      const fullPath = path.join(archiveDir, file);
+      const stats = await fsPromises.stat(fullPath);
+      return {
+        filename: file,
+        date: stats.mtimeMs,
+        size: stats.size
+      };
+    }));
+
+    return fileStats.sort((a, b) => b.date - a.date); // Newest first
   } catch (e) {
     console.error('Failed to list telemetry archives:', e);
     return [];
@@ -1106,7 +1297,7 @@ ipcMain.handle('load-telemetry-archive-file', async (event, filename) => {
       throw new Error('File not found');
     }
 
-    const content = fs.readFileSync(fullPath, 'utf-8');
+    const content = await fsPromises.readFile(fullPath, 'utf-8');
     return JSON.parse(content);
   } catch (e) {
     console.error('Failed to load telemetry archive file:', e);
@@ -1119,8 +1310,8 @@ ipcMain.handle('clear-telemetry-archives', async () => {
     const archiveDir = path.join(app.getPath('userData'), 'telemetry_archive');
     if (!fs.existsSync(archiveDir)) return { success: true, count: 0 };
 
-    const files = fs.readdirSync(archiveDir).filter(f => f.endsWith('.json'));
-    files.forEach(file => fs.unlinkSync(path.join(archiveDir, file)));
+    const files = (await fsPromises.readdir(archiveDir)).filter(f => f.endsWith('.json'));
+    await Promise.all(files.map(file => fsPromises.unlink(path.join(archiveDir, file))));
 
     return { success: true, count: files.length };
   } catch (e) {
@@ -1132,7 +1323,7 @@ ipcMain.handle('clear-telemetry-archives', async () => {
 // Utility IPC handlers for contextIsolation (replaces direct fs/shell access in renderer)
 ipcMain.handle('read-file-base64', async (event, filePath) => {
   try {
-    const data = fs.readFileSync(filePath);
+    const data = await fsPromises.readFile(filePath);
     return data.toString('base64');
   } catch (e) {
     return null;

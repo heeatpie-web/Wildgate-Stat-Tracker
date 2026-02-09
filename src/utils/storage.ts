@@ -4,7 +4,7 @@
  * StorageService.init() loads data on startup (with localStorage migration),
  * and StorageService.save() writes the full state to disk via IPC.
  */
-const { ipcRenderer } = window.require ? window.require('electron') : { ipcRenderer: null };
+import { getElectronAPI } from './electronAPI';
 
 /** Shape of the persisted data payload exchanged with the main process. */
 export interface StorageData {
@@ -14,6 +14,7 @@ export interface StorageData {
   favorites: string[];
   pilotNotes: Record<string, string>;
   playerIdMap?: Record<string, string>;
+  ocrCorrections?: Record<string, any>;
   settings: Record<string, any>;
   layouts: any;
   lastActivity: number;
@@ -32,11 +33,49 @@ const LEGACY_KEYS = [
 ];
 
 let saveTimeout: any = null;
+let pendingResolvers: Array<(ok: boolean) => void> = [];
+let lastData: StorageData | null = null;
+let lastAutoBackupCount: number | null = null;
+
+const maybeAutoBackup = async (data: StorageData) => {
+  const ipc = getElectronAPI();
+  if (!ipc) return;
+  const autoBackupEnabled = data.settings?.autoBackup ?? true;
+  if (!autoBackupEnabled) return;
+
+  const matchCount = data.matches?.length || 0;
+  if (matchCount === 0 || matchCount % 5 !== 0) return;
+  if (lastAutoBackupCount === matchCount) return;
+
+  lastAutoBackupCount = matchCount;
+  try {
+    await ipc.invoke('db-backup');
+  } catch (e) {
+    console.warn('[AutoBackup] Failed to create backup:', e);
+  }
+};
+
+const writeNow = async (data: StorageData): Promise<boolean> => {
+  try {
+    const ipc = getElectronAPI();
+    if (ipc) {
+      await ipc.invoke('db-write', data);
+      await maybeAutoBackup(data);
+    } else {
+      localStorage.setItem('wg_db', JSON.stringify(data));
+    }
+    return true;
+  } catch (e) {
+    console.error("Failed to write DB", e);
+    return false;
+  }
+};
 
 export const StorageService = {
   async init(): Promise<StorageData | null> {
     // WEB / DEV MODE
-    if (!ipcRenderer) {
+    const ipc = getElectronAPI();
+    if (!ipc) {
       console.log("Running in Web Mode (localStorage fallback)");
       const webDB = localStorage.getItem('wg_db');
       if (webDB) {
@@ -46,7 +85,7 @@ export const StorageService = {
     } else {
       // ELECTRON MODE
       try {
-        const dbData = await ipcRenderer.invoke('db-read');
+        const dbData = await ipc.invoke('db-read');
         if (dbData) {
           console.log("Database loaded from disk.");
           return dbData;
@@ -84,7 +123,7 @@ export const StorageService = {
       await this.save(migrationData);
 
       // Backup & Clear Legacy (Only in Electron to prevent Dev Server chaos, or just backup)
-      if (ipcRenderer) {
+      if (ipc) {
         LEGACY_KEYS.forEach(key => {
           const val = localStorage.getItem(key);
           if (val) {
@@ -111,24 +150,38 @@ export const StorageService = {
   },
 
   async save(data: StorageData) {
+    lastData = data;
     if (saveTimeout) clearTimeout(saveTimeout);
 
-    return new Promise((resolve) => {
+    return new Promise<boolean>((resolve) => {
+      pendingResolvers.push(resolve);
       saveTimeout = setTimeout(async () => {
-        if (ipcRenderer) {
-          await ipcRenderer.invoke('db-write', data);
-        } else {
-          localStorage.setItem('wg_db', JSON.stringify(data));
-        }
+        const ok = await writeNow(lastData as StorageData);
         saveTimeout = null;
-        resolve(true);
+        const resolvers = pendingResolvers;
+        pendingResolvers = [];
+        resolvers.forEach(r => r(ok));
       }, 1000); // 1 second debounce
     });
   },
 
+  async flush() {
+    if (!lastData) return false;
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+      saveTimeout = null;
+    }
+    const ok = await writeNow(lastData);
+    const resolvers = pendingResolvers;
+    pendingResolvers = [];
+    resolvers.forEach(r => r(ok));
+    return ok;
+  },
+
   async backup() {
-    if (ipcRenderer) {
-      return await ipcRenderer.invoke('db-backup');
+    const ipc = getElectronAPI();
+    if (ipc) {
+      return await ipc.invoke('db-backup');
     }
     // Web backup could download the JSON
     return { success: false, error: 'Not in Electron' };

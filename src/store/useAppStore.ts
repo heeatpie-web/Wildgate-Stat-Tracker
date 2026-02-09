@@ -17,10 +17,13 @@ import { StorageService } from '../utils/storage';
 
 export type AppState = DataSlice & SettingsSlice & UISlice & FormSlice & MappingSlice;
 
+let _hydrated = false;
+
 const customStorage: PersistStorage<AppState> = {
   getItem: async (name) => {
     const data = await StorageService.init();
-    if (!data) return null;
+    if (!data) { _hydrated = true; return null; }
+    const settings = data.settings || {};
 
     return {
       state: {
@@ -34,20 +37,33 @@ const customStorage: PersistStorage<AppState> = {
         lastActivity: data.lastActivity || Date.now(),
         knownMappings: data.mappings || {},
         playerProfiles: data.playerProfiles || {},
+        ocrCorrections: data.ocrCorrections || {},
 
         // Settings
-        appearanceMode: data.settings.mode || 'twilight',
-        colorTheme: data.settings.theme || 'ocean',
-        customHue: data.settings.hue || '0',
-        colorblindMode: data.settings.colorblind || 'none',
-        disableAnimations: data.settings.disableAnimations || false,
-        soundEnabled: data.settings.soundEnabled ?? true,
-        language: data.settings.language || 'en',
-        showSessionTimer: data.settings.showTimer ?? true,
-        customBgUrl: data.settings.bgUrl || '',
-        enableAutoLogRecording: data.settings.autoLog ?? true,
-        isAlwaysOnTop: data.settings.alwaysOnTop ?? false,
-        overlayStyle: data.settings.overlayStyle || 'compact',
+        appearanceMode: settings.mode || 'twilight',
+        colorTheme: settings.theme || 'ocean',
+        customHue: settings.hue || '0',
+        colorblindMode: settings.colorblind || 'none',
+        disableAnimations: settings.disableAnimations || false,
+        soundEnabled: settings.soundEnabled ?? true,
+        language: settings.language || 'en',
+        showSessionTimer: settings.showTimer ?? true,
+        customBgUrl: settings.bgUrl || '',
+        enableAutoLogRecording: settings.autoLog ?? true,
+        enableAutoBackup: settings.autoBackup ?? true,
+        isAlwaysOnTop: settings.alwaysOnTop ?? false,
+        overlayStyle: settings.overlayStyle || 'compact',
+        visualMode: settings.visualMode || 'dense',
+        ocrMode: settings.ocrMode || 'both',
+        captureMode: settings.captureMode || 'auto',
+        ocrCalibration: settings.ocrCalibration || {
+          sampleOffsetX: 0,
+          sampleOffsetY: 0,
+          sampleWidthAdjust: 0,
+          sampleHeightAdjust: 0,
+          saturationMin: 35,
+          luminanceMin: 30
+        },
 
         // LIVE SESSION (Temporary persistence allowed for refresh safety)
         timelineEvents: data.timelineEvents || [],
@@ -73,8 +89,13 @@ const customStorage: PersistStorage<AppState> = {
       } as any,
       version: 0
     };
+    _hydrated = true;
   },
   setItem: async (name, value) => {
+    // Guard: never persist until hydration has completed.
+    // Without this, Zustand can save the initial empty state before
+    // getItem resolves, overwriting real data on disk.
+    if (!_hydrated) return;
     const state = value.state;
     const dbData = {
       matches: state.matches,
@@ -97,11 +118,17 @@ const customStorage: PersistStorage<AppState> = {
         showTimer: state.showSessionTimer,
         bgUrl: state.customBgUrl,
         autoLog: state.enableAutoLogRecording,
+        autoBackup: state.enableAutoBackup,
         alwaysOnTop: state.isAlwaysOnTop,
-        overlayStyle: state.overlayStyle
+        overlayStyle: state.overlayStyle,
+        visualMode: state.visualMode,
+        ocrMode: state.ocrMode,
+        captureMode: state.captureMode,
+        ocrCalibration: state.ocrCalibration
       },
       layouts: state.layouts,
-      timelineEvents: state.timelineEvents
+      timelineEvents: state.timelineEvents,
+      ocrCorrections: state.ocrCorrections
     };
     await StorageService.save(dbData);
   },
@@ -142,10 +169,16 @@ export const useAppStore = create<AppState>()(
         showSessionTimer: state.showSessionTimer,
         customBgUrl: state.customBgUrl,
         enableAutoLogRecording: state.enableAutoLogRecording,
+        enableAutoBackup: state.enableAutoBackup,
         isAlwaysOnTop: state.isAlwaysOnTop,
         overlayStyle: state.overlayStyle,
+        visualMode: state.visualMode,
+        ocrMode: state.ocrMode,
+        captureMode: state.captureMode,
+        ocrCalibration: state.ocrCalibration,
         layouts: state.layouts,
-        timelineEvents: state.timelineEvents
+        timelineEvents: state.timelineEvents,
+        ocrCorrections: state.ocrCorrections
         // sessionTeams removed from persistence to prevent color sticking
       } as any),
     }

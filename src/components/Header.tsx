@@ -59,7 +59,7 @@ export const Header: React.FC = () => {
                 {/* Center: Profile + Mode */}
                 <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
                     {/* Profile Selector */}
-                    <div className="flex items-center gap-1.5 bg-md-sys-surface2 pl-3 pr-1.5 py-1 rounded-lg">
+                    <div data-tour="profile-selector" className="flex items-center gap-1.5 bg-md-sys-surface2 pl-3 pr-1.5 py-1 rounded-lg">
                         <User size={14} className="text-md-sys-primary" />
                         <select
                             value={activeUser}
@@ -94,10 +94,10 @@ export const Header: React.FC = () => {
                     </div>
 
                     {/* Mode Toggle */}
-                    <div className="flex bg-md-sys-surface2 p-0.5 rounded-lg">
+                    <div data-tour="mode-toggle" className="flex bg-md-sys-surface2 p-0.5 rounded-lg">
                         <button
                             onClick={() => setActiveMode('Artifact Brawl')}
-                            className={`px-3 py-1.5 rounded-md text-[11px] font-semibold transition-all ${activeMode === 'Artifact Brawl'
+                            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeMode === 'Artifact Brawl'
                                 ? 'bg-md-sys-primary text-md-sys-onPrimary'
                                 : 'text-secondary hover:text-md-sys-on-surface'
                                 }`}
@@ -106,7 +106,7 @@ export const Header: React.FC = () => {
                         </button>
                         <button
                             onClick={() => setActiveMode('Fleet Battle')}
-                            className={`px-3 py-1.5 rounded-md text-[11px] font-semibold transition-all ${activeMode === 'Fleet Battle'
+                            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeMode === 'Fleet Battle'
                                 ? 'bg-md-sys-primary text-md-sys-onPrimary'
                                 : 'text-secondary hover:text-md-sys-on-surface'
                                 }`}
@@ -128,6 +128,7 @@ export const Header: React.FC = () => {
                     </button>
                     <button
                         onClick={() => setIsOverlayMode(true)}
+                        data-tour="overlay-button"
                         className="flex items-center gap-1.5 px-2.5 h-8 hover:bg-purple-500/10 hover:text-purple-400 rounded-lg transition-colors text-secondary border border-transparent hover:border-purple-500/30"
                         title="Switch to Overlay Mode"
                     >

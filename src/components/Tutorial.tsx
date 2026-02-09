@@ -1,195 +1,291 @@
-import React, { useState, useEffect } from 'react';
-import { X, ChevronRight, ChevronLeft, Zap, List, Rocket, Activity, CheckCircle, GripVertical, Camera } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronRight, X } from 'lucide-react';
+import { useUIState } from '../providers/UIStateProvider';
 
 interface TutorialProps {
-  onComplete: () => void;
-  onSkip: () => void;
+    onComplete: () => void;
+    onSkip: () => void;
 }
 
+type ViewId = 'recording' | 'analytics' | 'history' | 'smart-captures' | 'dev-ocr';
+
+interface TutorialStep {
+    title: string;
+    description: string;
+    selector?: string;
+    view?: ViewId;
+    openSettings?: boolean;
+}
+
+const steps: TutorialStep[] = [
+    {
+        title: 'Match Recording',
+        description: 'Start new matches, track ships and modifiers, and keep the live session up to date here.',
+        selector: 'view-recording',
+        view: 'recording',
+    },
+    {
+        title: 'Quick Actions',
+        description: 'Log wins, losses, and key events fast from this action panel.',
+        selector: 'action-panel',
+        view: 'recording',
+    },
+    {
+        title: 'Analytics',
+        description: 'Review performance trends and drill into ships, pilots, and modifiers.',
+        selector: 'view-analytics',
+        view: 'analytics',
+    },
+    {
+        title: 'History',
+        description: 'Browse, edit, and export previous matches from the full history table.',
+        selector: 'view-history',
+        view: 'history',
+    },
+    {
+        title: 'Smart Captures',
+        description: 'Review OCR scans, fix detections, and promote captures into structured matches.',
+        selector: 'view-smart-captures',
+        view: 'smart-captures',
+    },
+    {
+        title: 'Profile Selector',
+        description: 'Switch pilots here to keep multiple players or accounts separate.',
+        selector: 'profile-selector',
+    },
+    {
+        title: 'Mode Toggle',
+        description: 'Swap between Smart and Manual input modes depending on how detailed you want to log.',
+        selector: 'mode-toggle',
+    },
+    {
+        title: 'Overlay Mode',
+        description: 'Toggle the always-on-top overlay when you want a compact HUD during play.',
+        selector: 'overlay-button',
+    },
+    {
+        title: 'Settings',
+        description: 'Configure backups, OCR behavior, and experimental tools from the settings panel.',
+        selector: 'nav-settings',
+    },
+];
+
+const highlightPadding = 8;
+
 const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
-  const [step, setStep] = useState(0);
+    const { activeView, setActiveView, showSettings, setShowSettings } = useUIState();
+    const [stepIndex, setStepIndex] = useState(0);
+    const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
+    const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties | null>(null);
+    const tooltipRef = useRef<HTMLDivElement | null>(null);
+    const initialViewRef = useRef(activeView);
+    const initialSettingsRef = useRef(showSettings);
+    const openedSettingsRef = useRef(false);
 
-  const steps = [
-    {
-      title: "Welcome to Wildgate Tracker",
-      desc: "Your ultimate command center for tracking performance in the Reach. This quick tour will get you mission-ready.",
-      icon: <Rocket size={48} className="text-md-sys-primary" />,
-      visual: (
-          <div className="w-32 h-20 bg-md-sys-primary/20 rounded-xl border-2 border-md-sys-primary flex items-center justify-center">
-              <Rocket size={32} className="text-md-sys-primary animate-pulse"/>
-          </div>
-      )
-    },
-    {
-      title: "Smart vs Manual Mode",
-      desc: "Use 'Smart Mode' for rapid result logging. 'Manual Mode' unlocks detailed entry for Hazards, Kills, and Objectives.",
-      icon: <Zap size={48} className="text-yellow-500" />,
-      visual: (
-          <div className="flex bg-md-sys-surface2 p-1 rounded-xl shadow-inner scale-125">
-              <div className="px-4 py-2 bg-md-sys-primary rounded-lg text-md-sys-onPrimary text-[10px] font-black uppercase">Smart</div>
-              <div className="px-4 py-2 rounded-lg text-md-sys-on-surface text-[10px] font-black uppercase opacity-60">Manual</div>
-          </div>
-      )
-    },
-    {
-      title: "Pilot Registry",
-      desc: "Build your database of Pilots. Add them once, then assign them as Squad or Hostile for each match with a single click.",
-      icon: <List size={48} className="text-blue-500" />,
-      visual: (
-          <div className="flex flex-col gap-2 w-48 bg-md-sys-surface2 p-3 rounded-2xl shadow-sm">
-              <div className="flex justify-between items-center p-2 bg-md-sys-surface3 rounded-xl border border-md-sys-outline/10">
-                  <span className="text-[10px] font-bold text-md-sys-on-surface">Ace Pilot</span>
-                  <div className="flex gap-1">
-                      <div className="w-8 h-6 bg-blue-500 rounded-lg flex items-center justify-center text-[8px] font-black text-white">JOIN</div>
-                      <div className="w-8 h-6 bg-red-500/10 rounded-lg flex items-center justify-center text-[8px] font-black text-red-500">VS</div>
-                  </div>
-              </div>
-          </div>
-      )
-    },
-    {
-      title: "Customizable Layout",
-      desc: "Your HUD, your rules. Click 'Customize Layout' to drag and drop panels. Reset anytime if you get lost.",
-      icon: <Activity size={48} className="text-green-500" />,
-      visual: (
-          <div className="w-40 h-24 relative bg-md-sys-surface3 rounded-xl border-2 border-dashed border-md-sys-outline/30 flex items-center justify-center">
-              <div className="absolute top-2 left-2 p-1 bg-md-sys-surface1 rounded shadow-sm">
-                  <GripVertical size={12}/>
-              </div>
-              <span className="text-[10px] opacity-50 font-bold uppercase">Drag Me</span>
-          </div>
-      )
-    },
-    {
-        title: "Deep Analytics",
-        desc: "Analyze your performance. Use 'Pro Mode' for dense data tables, or click any chart bar to see detailed history for that specific ship or hero.",
-        icon: <Activity size={48} className="text-purple-500" />,
-        visual: (
-            <div className="flex gap-2 items-end h-16">
-                <div className="w-4 h-8 bg-purple-500/40 rounded-t"></div>
-                <div className="w-4 h-12 bg-purple-500/70 rounded-t"></div>
-                <div className="w-4 h-16 bg-purple-500 rounded-t"></div>
-                <div className="w-4 h-10 bg-purple-500/50 rounded-t"></div>
+    const step = steps[stepIndex];
+
+    const resolveTarget = useCallback(() => {
+        if (!step.selector) return null;
+        return document.querySelector(`[data-tour="${step.selector}"]`) as HTMLElement | null;
+    }, [step.selector]);
+
+    const updateTooltipPosition = useCallback((rect: DOMRect | null) => {
+        const tooltip = tooltipRef.current;
+        if (!tooltip) return;
+
+        const tooltipRect = tooltip.getBoundingClientRect();
+        const padding = 12;
+
+        if (!rect) {
+            const top = Math.max(padding, (window.innerHeight - tooltipRect.height) / 2);
+            const left = Math.max(padding, (window.innerWidth - tooltipRect.width) / 2);
+            setTooltipStyle({ top, left });
+            return;
+        }
+
+        const spaceBelow = window.innerHeight - rect.bottom - padding;
+        const spaceAbove = rect.top - padding;
+        const placeBelow = spaceBelow >= tooltipRect.height || spaceBelow >= spaceAbove;
+
+        let top = placeBelow ? rect.bottom + padding : rect.top - tooltipRect.height - padding;
+        top = Math.max(padding, Math.min(top, window.innerHeight - tooltipRect.height - padding));
+
+        let left = rect.left;
+        left = Math.max(padding, Math.min(left, window.innerWidth - tooltipRect.width - padding));
+
+        setTooltipStyle({ top, left });
+    }, []);
+
+    const updateTarget = useCallback(() => {
+        const target = resolveTarget();
+        if (!target) {
+            setTargetRect(null);
+            updateTooltipPosition(null);
+            return;
+        }
+
+        const rect = target.getBoundingClientRect();
+        setTargetRect(rect);
+        updateTooltipPosition(rect);
+    }, [resolveTarget, updateTooltipPosition]);
+
+    const handleNext = useCallback(() => {
+        setStepIndex(current => {
+            if (current >= steps.length - 1) {
+                onComplete();
+                return current;
+            }
+            return current + 1;
+        });
+    }, [onComplete]);
+
+    const handlePrev = useCallback(() => {
+        setStepIndex(current => Math.max(0, current - 1));
+    }, []);
+
+    useEffect(() => {
+        if (step.view && step.view !== activeView) {
+            setActiveView(step.view);
+        }
+
+        if (step.openSettings && !showSettings) {
+            setShowSettings(true);
+            openedSettingsRef.current = true;
+        } else if (!step.openSettings && openedSettingsRef.current) {
+            setShowSettings(false);
+            openedSettingsRef.current = false;
+        }
+    }, [activeView, setActiveView, showSettings, setShowSettings, step.openSettings, step.view]);
+
+    useEffect(() => {
+        let cancelled = false;
+        let attempts = 0;
+
+        const locate = () => {
+            if (cancelled) return;
+            const target = resolveTarget();
+            if (!target) {
+                attempts += 1;
+                if (attempts < 12) {
+                    setTimeout(locate, 120);
+                } else {
+                    setTargetRect(null);
+                    updateTooltipPosition(null);
+                }
+                return;
+            }
+
+            const rect = target.getBoundingClientRect();
+            const offscreen = rect.top < 0 || rect.bottom > window.innerHeight || rect.left < 0 || rect.right > window.innerWidth;
+            if (offscreen) {
+                target.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+            }
+
+            setTimeout(() => {
+                if (!cancelled) updateTarget();
+            }, 50);
+        };
+
+        locate();
+        return () => {
+            cancelled = true;
+        };
+    }, [stepIndex, activeView, showSettings, resolveTarget, updateTarget, updateTooltipPosition]);
+
+    useEffect(() => {
+        const handleResize = () => updateTarget();
+        window.addEventListener('resize', handleResize);
+        window.addEventListener('scroll', handleResize, true);
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            window.removeEventListener('scroll', handleResize, true);
+        };
+    }, [updateTarget]);
+
+    useEffect(() => {
+        const handleKey = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') onSkip();
+            if (event.key === 'ArrowRight') handleNext();
+            if (event.key === 'ArrowLeft') handlePrev();
+        };
+        window.addEventListener('keydown', handleKey);
+        return () => window.removeEventListener('keydown', handleKey);
+    }, [handleNext, handlePrev, onSkip]);
+
+    useEffect(() => {
+        return () => {
+            setActiveView(initialViewRef.current);
+            if (initialSettingsRef.current !== showSettings) {
+                setShowSettings(initialSettingsRef.current);
+            }
+        };
+    }, [setActiveView, setShowSettings, showSettings]);
+
+    const tooltipInlineStyle: React.CSSProperties =
+        tooltipStyle || { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
+
+    return (
+        <div className="fixed inset-0 z-[1000]">
+            {targetRect ? (
+                <div
+                    className="absolute rounded-xl border-2 border-md-sys-primary shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-200 pointer-events-none"
+                    style={{
+                        top: Math.max(targetRect.top - highlightPadding, 0),
+                        left: Math.max(targetRect.left - highlightPadding, 0),
+                        width: Math.max(targetRect.width + highlightPadding * 2, 0),
+                        height: Math.max(targetRect.height + highlightPadding * 2, 0),
+                    }}
+                />
+            ) : (
+                <div className="absolute inset-0 bg-black/70 pointer-events-none" />
+            )}
+
+            <div
+                ref={tooltipRef}
+                className="absolute w-[320px] max-w-[calc(100vw-32px)] bg-md-sys-surface1 text-md-sys-on-surface rounded-2xl border border-md-sys-outline/20 shadow-2xl p-4 pointer-events-auto"
+                style={tooltipInlineStyle}
+            >
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <div className="text-[11px] uppercase tracking-[0.2em] text-md-sys-primary font-bold">
+                            Step {stepIndex + 1} of {steps.length}
+                        </div>
+                        <h2 className="text-lg font-black mt-1">{step.title}</h2>
+                    </div>
+                    <button
+                        onClick={onSkip}
+                        className="p-2 rounded-lg hover:bg-md-sys-surface2 transition-colors text-md-sys-outline"
+                        aria-label="Exit tutorial"
+                    >
+                        <X size={18} />
+                    </button>
+                </div>
+
+                <p className="text-sm opacity-80 leading-relaxed mt-2">{step.description}</p>
+
+                <div className="flex gap-2 mt-4">
+                    <button
+                        onClick={stepIndex === 0 ? onSkip : handlePrev}
+                        className="px-4 py-2 rounded-lg font-bold transition-colors text-md-sys-on-surface hover:bg-md-sys-surface2"
+                    >
+                        {stepIndex === 0 ? 'Skip' : 'Back'}
+                    </button>
+                    <button
+                        onClick={handleNext}
+                        className="flex-1 bg-md-sys-primary text-md-sys-onPrimary px-4 py-2 rounded-lg font-black uppercase tracking-widest hover:brightness-110 transition-all flex items-center justify-center gap-2"
+                    >
+                        {stepIndex === steps.length - 1 ? (
+                            <>Finish</>
+                        ) : (
+                            <>
+                                Next <ChevronRight size={16} />
+                            </>
+                        )}
+                    </button>
+                </div>
             </div>
-        )
-    },
-    {
-      title: "Mini-Mode Overlay",
-      desc: "Stay in the game. Toggle the compact overlay by clicking the icon in the header or pressing F9 at any time.",
-      icon: <Zap size={48} className="text-cyan-400" />,
-      visual: (
-          <div className="w-24 h-32 bg-md-sys-surface1 rounded-lg border-2 border-md-sys-primary flex flex-col items-center justify-center p-2 shadow-xl">
-              <div className="w-full h-1 bg-md-sys-primary/40 rounded mb-4"></div>
-              <div className="w-12 h-12 bg-md-sys-primary/20 rounded-full flex items-center justify-center">
-                  <Zap size={20} className="text-md-sys-primary"/>
-              </div>
-          </div>
-      )
-    },
-    {
-      title: "Phased Workflow",
-      desc: "The overlay guides you through the match: Setup your loadout, track Live mission time, and log Results instantly after extraction.",
-      icon: <CheckCircle size={48} className="text-green-500" />,
-      visual: (
-          <div className="flex gap-2 items-center">
-              <div className="w-10 h-10 rounded bg-green-500/20 flex items-center justify-center text-[10px] font-bold">1</div>
-              <ChevronRight size={16} className="opacity-30"/>
-              <div className="w-10 h-10 rounded bg-green-500/50 flex items-center justify-center text-[10px] font-bold">2</div>
-              <ChevronRight size={16} className="opacity-30"/>
-              <div className="w-10 h-10 rounded bg-green-500 flex items-center justify-center text-[10px] font-bold">3</div>
-          </div>
-      )
-    },
-    {
-      title: "Auto Log Recording",
-      desc: "Automatically detects match starts from local game logs. Enable this experimental feature in Settings to track your missions without manual input.",
-      icon: <Activity size={48} className="text-pink-500" />,
-      visual: (
-          <div className="w-24 h-24 bg-md-sys-surface1 rounded-full border-2 border-pink-500/50 flex flex-col items-center justify-center relative">
-              <div className="w-16 h-1 bg-pink-500/20 rounded mb-2 animate-pulse"></div>
-              <div className="w-12 h-1 bg-pink-500/40 rounded mb-2 animate-pulse delay-75"></div>
-              <div className="w-8 h-1 bg-pink-500/60 rounded animate-pulse delay-150"></div>
-              <div className="absolute top-2 right-4 w-2 h-2 bg-pink-500 rounded-full animate-ping"></div>
-          </div>
-      )
-    },
-    {
-      title: "Smart Capture & OCR",
-      desc: "Capture your screen mid-match to auto-detect teammates, opponents, ship types, and hazards. Review and correct OCR results before applying them to your session.",
-      icon: <Camera size={48} className="text-orange-400" />,
-      visual: (
-          <div className="w-40 h-28 bg-md-sys-surface1 rounded-xl border-2 border-orange-400/50 flex flex-col items-center justify-center relative overflow-hidden">
-              <Camera size={28} className="text-orange-400 mb-2" />
-              <div className="w-full flex flex-col gap-1 px-3">
-                  <div className="h-1 bg-orange-400/30 rounded w-full animate-pulse"></div>
-                  <div className="h-1 bg-orange-400/50 rounded w-3/4 animate-pulse delay-75"></div>
-                  <div className="h-1 bg-orange-400/70 rounded w-1/2 animate-pulse delay-150"></div>
-              </div>
-              <div className="absolute top-1 right-1 w-6 h-6 bg-orange-400/20 rounded-full flex items-center justify-center">
-                  <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
-              </div>
-          </div>
-      )
-    }
-  ];
-
-  const handleNext = () => {
-    if (step < steps.length - 1) {
-      setStep(step + 1);
-    } else {
-      onComplete();
-    }
-  };
-
-  const handlePrev = () => {
-    if (step > 0) setStep(step - 1);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[1000] flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-md-sys-surface1 max-w-lg w-full rounded-[32px] p-8 shadow-2xl border border-md-sys-outline/20 relative elevation-2 animate-scale-in flex flex-col items-center text-center">
-        
-        <button onClick={onSkip} className="absolute top-6 right-6 p-2 hover:bg-md-sys-surface2 rounded-full transition-colors text-md-sys-outline">
-            <X size={24} />
-        </button>
-
-        {/* Visual Header */}
-        <div className="mb-6 w-full h-32 bg-md-sys-surface2 rounded-2xl flex items-center justify-center border border-md-sys-outline/5 overflow-hidden relative">
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-md-sys-surface1/10"></div>
-            {steps[step].visual}
         </div>
-
-        <h2 className="text-2xl font-black uppercase tracking-tight mb-4 text-md-sys-on-surface">{steps[step].title}</h2>
-        <p className="text-sm opacity-80 leading-relaxed mb-8 max-w-md">{steps[step].desc}</p>
-
-        <div className="flex gap-2 mb-8">
-            {steps.map((_, i) => (
-                <div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${i === step ? 'w-8 bg-md-sys-primary' : 'w-2 bg-md-sys-outline/30'}`} />
-            ))}
-        </div>
-
-        <div className="flex w-full gap-4">
-            <button 
-                onClick={step === 0 ? onSkip : handlePrev} 
-                className="px-6 py-3 rounded-xl font-bold transition-all text-md-sys-on-surface hover:bg-md-sys-surface2"
-            >
-                {step === 0 ? 'Skip' : 'Back'}
-            </button>
-            <button 
-                onClick={handleNext}
-                className="flex-1 bg-md-sys-primary text-md-sys-onPrimary px-6 py-3 rounded-xl font-black uppercase tracking-widest hover:brightness-110 transition-all elevation-1 flex items-center justify-center gap-2"
-            >
-                {step === steps.length - 1 ? (
-                    <>Get Started <CheckCircle size={18}/></>
-                ) : (
-                    <>Next <ChevronRight size={18}/></>
-                )}
-            </button>
-        </div>
-
-      </div>
-    </div>
-  );
+    );
 };
 
 export default Tutorial;
