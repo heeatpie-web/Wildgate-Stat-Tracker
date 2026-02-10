@@ -1223,11 +1223,11 @@ const SmartMatchDetail: React.FC<{
                                     )}
                                     <button
                                         onClick={handleCopyRerunJson}
-                                        disabled={copyingJson || !rerunResults || rerunResults.length === 0}
+                                        disabled={copyingKey === 'full' || !rerunResults || rerunResults.length === 0}
                                         className="flex-1 min-w-[160px] px-4 py-2.5 bg-md-sys-surface3 text-md-sys-on-surface rounded-lg font-bold text-sm hover:bg-md-sys-surface1 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                                         title="Copy rerun OCR JSON (combined + per-screenshot)"
                                     >
-                                        {copyingJson ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+                                        {copyingKey === 'full' ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
                                         Copy JSON
                                     </button>
                                 </div>
@@ -1245,10 +1245,10 @@ const SmartMatchDetail: React.FC<{
                                 {rerunResults && rerunResults.length > 0 && (
                                     <button
                                         onClick={handleCopyRerunJson}
-                                        disabled={copyingJson}
+                                        disabled={copyingKey === 'full'}
                                         className="mt-2 px-3 py-1.5 bg-md-sys-surface3 text-md-sys-on-surface rounded-lg font-bold text-[10px] hover:bg-md-sys-surface1 transition-all inline-flex items-center gap-1.5 disabled:opacity-50"
                                     >
-                                        {copyingJson ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                                        {copyingKey === 'full' ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
                                         Copy JSON
                                     </button>
                                 )}

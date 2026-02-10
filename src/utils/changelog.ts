@@ -1,4 +1,10 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v2.12.1": [
+    "Improvement: Unified mission/session timing into a single compact indicator with start/reset controls.",
+    "Improvement: Smart Capture is now visually prioritized as the primary action button in Recording view.",
+    "Fix: Removed forced vertical scrolling from the first Recording column to keep controls fully visible.",
+    "Fix: Resolved TypeScript build errors in HistoryTable, ActionPanel, and SmartCapturesPanel.",
+  ],
   "v2.12.0": [
     "Improvement: UI Consistency — Normalized border radii across 12 components (eliminated all ad-hoc rounded-[Npx] values).",
     "Improvement: UI Consistency — Replaced hardcoded white/black colors with design tokens across 8 files for light-mode compatibility.",

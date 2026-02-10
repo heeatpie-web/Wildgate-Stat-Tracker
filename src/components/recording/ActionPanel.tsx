@@ -57,8 +57,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', o
         error: captureError,
         pendingData,
         queueDepth,
-        capturedScreenshots,
-        qualityHint
+        capturedScreenshots
     } = smartCaptureState;
     const {
         capture: triggerSmartCapture,
@@ -158,19 +157,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', o
                         <button onClick={clearCaptureError} className="hover:text-md-sys-error/80">&times;</button>
                     </div>
                 )}
-                {qualityHint && (
-                    <div className={`rounded-xl px-3 py-2 text-[10px] font-semibold border ${
-                        qualityHint.level === 'good'
-                            ? 'bg-success-soft text-success border-success-soft-strong'
-                            : qualityHint.level === 'fair'
-                                ? 'bg-warning-soft text-warning border-warning-soft-strong'
-                                : 'bg-danger-soft text-danger border-danger-soft-strong'
-                    }`}>
-                        <div className="uppercase tracking-wide text-[9px] opacity-70 mb-0.5">Capture Quality</div>
-                        {qualityHint.message}
-                    </div>
-                )}
-
                 {capturedScreenshots.length > 0 && (
                     <div className="flex gap-2 animate-in slide-in-from-top-1">
                         <button
@@ -291,19 +277,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', o
                         <button onClick={clearCaptureError} className="opacity-60 hover:opacity-100">&times;</button>
                     </div>
                 )}
-                {qualityHint && (
-                    <div className={`rounded-xl px-4 py-2.5 text-[10px] font-semibold border ${
-                        qualityHint.level === 'good'
-                            ? 'bg-success-soft text-success border-success-soft-strong'
-                            : qualityHint.level === 'fair'
-                                ? 'bg-warning-soft text-warning border-warning-soft-strong'
-                                : 'bg-danger-soft text-danger border-danger-soft-strong'
-                    }`}>
-                        <div className="uppercase tracking-wide text-[9px] opacity-70 mb-0.5">Capture Quality</div>
-                        {qualityHint.message}
-                    </div>
-                )}
-
                 <StatusOverlay />
             </div>
 

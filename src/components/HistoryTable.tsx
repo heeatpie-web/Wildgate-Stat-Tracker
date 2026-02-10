@@ -34,8 +34,8 @@ const timeAgo = (timestamp: number, nowMs: number): string => {
 
 const HistoryTable: React.FC<HistoryTableProps> = () => {
     const { matches, deleteMatch: onDelete, updateMatch: onEdit, toggleMatchPin: onPin, setDrillDownTarget } = useGameData();
-    const { language, uiStyle } = useUserPreferences();
-    const isLegacy = uiStyle === 'legacy';
+    const { language, visualMode } = useUserPreferences();
+    const isLegacy = visualMode === 'dense';
 
     const onDrillDown = (name: string, type: DrillDownTarget['type']) => {
         setDrillDownTarget({ name, type });
