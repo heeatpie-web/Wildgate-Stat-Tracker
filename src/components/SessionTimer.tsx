@@ -137,52 +137,61 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
 
     // Compact variant - for narrow columns (Overlay HUD)
     if (variant === 'compact') {
-        const showMatchTime = isMatchInProgress;
-
         return (
-            <div className="flex items-center justify-between gap-2 bg-black/40 rounded-lg p-1">
+            <div className="flex items-center justify-between gap-2 md3-surface-high rounded-lg p-1 border border-md-sys-outline/10">
                 <div className="flex items-center gap-2">
                     <button
                         onClick={togglePause}
                         className={`w-6 h-6 rounded flex items-center justify-center transition-all ${isPaused
                             ? 'bg-amber-500 text-black'
-                            : 'bg-white/10 text-white/60 hover:text-white hover:bg-white/20'
+                            : 'md3-btn-tonal text-md-sys-on-surface hover:bg-md-sys-primary hover:text-md-sys-onPrimary'
                             }`}
                         title={isPaused ? "Resume" : "Pause"}
                     >
                         {isPaused ? <Play size={10} /> : <Pause size={10} />}
                     </button>
                     <div className="flex flex-col min-w-[60px]">
-                        {/* Match Time (Primary if active) */}
-                        {showMatchTime && (
-                            <div className="flex flex-col mb-0.5">
-                                <span className="font-mono font-bold text-sm leading-none text-green-400">
-                                    {matchElapsedDisplay}
-                                </span>
-                                <span className="text-[7px] font-black uppercase text-green-500/50">Mission</span>
-                            </div>
+                        <span className={`font-mono font-bold text-sm leading-none ${isMatchInProgress ? 'text-success' : (isPaused ? 'text-amber-500' : 'text-md-sys-on-surface')}`}>
+                            {isMatchInProgress ? matchElapsedDisplay : elapsedDisplay}
+                        </span>
+                        <span className={`text-[7px] font-black uppercase ${isMatchInProgress ? 'text-success/70' : (isPaused ? 'text-amber-500/70' : 'text-md-sys-on-surface/40')}`}>
+                            {isMatchInProgress ? 'Mission' : (isPaused ? 'Session Paused' : 'Session')}
+                        </span>
+                        {isMatchInProgress && (
+                            <span className="text-[7px] font-semibold text-md-sys-on-surface/50">
+                                S: {elapsedDisplay}
+                            </span>
                         )}
-
-                        {/* Session Time (Always visible, smaller if match active) */}
-                        <div className="flex flex-col">
-                            <span className={`font-mono font-bold leading-none ${isPaused ? 'text-amber-500' : 'text-white'} ${showMatchTime ? 'text-[10px] opacity-70' : 'text-sm'}`}>
-                                {elapsedDisplay}
-                            </span>
-                            <span className={`text-[7px] font-black uppercase ${isPaused ? 'text-amber-500/70' : 'text-white/30'}`}>
-                                {isPaused ? 'Paused' : 'Session'}
-                            </span>
-                        </div>
                     </div>
                 </div>
 
-                {/* Win/Loss Record (Only show if not in mission to save space, or keep tiny) */}
-                <div className="flex flex-col items-end border-l border-white/10 pl-2">
+                <div className="flex items-center gap-1.5 border-l border-md-sys-outline/10 pl-2">
+                    {!isMatchInProgress ? (
+                        <button
+                            onClick={onStartMatch}
+                            className="w-6 h-6 rounded flex items-center justify-center bg-md-sys-primary text-md-sys-onPrimary hover:brightness-110 transition-all"
+                            title="Start Mission"
+                        >
+                            <Swords size={10} />
+                        </button>
+                    ) : (
+                        <button
+                            onClick={onResetMatch}
+                            className="w-6 h-6 rounded flex items-center justify-center bg-md-sys-errorContainer/40 text-md-sys-error hover:bg-md-sys-error/20 transition-all"
+                            title="Reset Mission Timer"
+                        >
+                            <RotateCcw size={10} />
+                        </button>
+                    )}
+
+                    <div className="flex flex-col items-end">
                     <span className="font-bold text-xs leading-tight">
-                        <span className="text-emerald-500">{sessionWins}</span>
-                        <span className="text-white/20 px-0.5">/</span>
-                        <span className="text-white/60">{sessionMatches.length}</span>
+                        <span className="text-success">{sessionWins}</span>
+                        <span className="text-md-sys-on-surface/30 px-0.5">/</span>
+                        <span className="text-md-sys-on-surface/60">{sessionMatches.length}</span>
                     </span>
-                    <span className="text-[7px] font-semibold text-white/30 uppercase">W/L</span>
+                    <span className="text-[7px] font-semibold text-md-sys-on-surface/40 uppercase">W/L</span>
+                    </div>
                 </div>
             </div>
         );
@@ -190,11 +199,11 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
 
     // Default variant - full horizontal layout
     return (
-        <div className="flex items-center gap-4 bg-md-sys-surface2 px-5 py-3 rounded-2xl border border-md-sys-outline/10 shadow-lg animate-fade-in">
+        <div className="flex items-center gap-4 md3-card px-5 py-3 rounded-2xl border border-md-sys-outline/10 shadow-lg animate-fade-in">
             <div className="flex items-center gap-2">
                 <button
                     onClick={togglePause}
-                    className={`p-2 rounded-full transition-all ${isPaused ? 'bg-amber-500 text-black hover:brightness-110' : 'bg-md-sys-surface3 text-md-sys-on-surface hover:bg-md-sys-primary hover:text-md-sys-onPrimary'}`}
+                    className={`p-2 rounded-full transition-all ${isPaused ? 'bg-amber-500 text-black hover:brightness-110' : 'md3-btn-tonal text-md-sys-on-surface hover:bg-md-sys-primary hover:text-md-sys-onPrimary'}`}
                     title={isPaused ? "Resume Session" : "Pause Session"}
                 >
                     {isPaused ? <Play size={20} /> : <Pause size={20} />}
@@ -205,14 +214,14 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
                 {!isMatchInProgress ? (
                     <button
                         onClick={onStartMatch}
-                        className="p-2 bg-md-sys-surface3 text-md-sys-on-surface rounded-full hover:bg-green-600 hover:text-white transition-all flex items-center gap-2 px-4"
+                        className="md3-btn-tonal rounded-full hover:bg-green-600 hover:text-white transition-all flex items-center gap-2 px-4"
                         title="Start New Mission"
                     >
                         <Swords size={20} />
                         <span className="text-[10px] font-black uppercase tracking-wider">Start Mission</span>
                     </button>
                 ) : (
-                    <div className="flex items-center gap-3 bg-md-sys-surface1 rounded-full px-4 py-1.5 border border-green-500/30 animate-pulse-slow">
+                    <div className="flex items-center gap-3 md3-surface-high rounded-full px-4 py-1.5 border border-green-500/30 animate-pulse-slow">
                         <div className="flex flex-col items-center">
                             <span className="text-[8px] font-black uppercase text-green-500">Live Mission</span>
                             <span className="font-mono font-black text-sm text-green-500">{matchElapsedDisplay}</span>
