@@ -68,6 +68,15 @@ export const Sidebar: React.FC = () => {
                 )}
             </div>
 
+            {/* Data Safety / Local Storage Indicator */}
+            <div
+                data-tour="data-safety"
+                className="w-9 h-7 mb-1 rounded-lg flex items-center justify-center border border-md-sys-outline/10 bg-md-sys-surface-container-high/85 text-[9px] font-black uppercase tracking-wider text-md-sys-primary/90"
+                title="Data is stored locally on this device. Use Settings to export/back up."
+            >
+                DATA
+            </div>
+
             {/* Bottom: Settings */}
             <button
                 onClick={() => setShowSettings(true)}

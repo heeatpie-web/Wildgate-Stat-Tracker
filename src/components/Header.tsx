@@ -66,7 +66,7 @@ export const Header: React.FC = () => {
                 </div>
 
                 {/* System Monitoring Pulse */}
-                <div style={{ WebkitAppRegion: 'no-drag' } as any}>
+                <div data-tour="system-pulse" style={{ WebkitAppRegion: 'no-drag' } as any}>
                     <SystemPulse />
                 </div>
 

@@ -141,10 +141,11 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', o
 
     if (isTransparent) {
         return (
-            <div className="flex flex-col gap-3 p-1">
+            <div data-tour="action-panel" className="flex flex-col gap-3 p-1">
                 <button
                     onClick={handleNewSmartCapture}
                     disabled={isBusy}
+                    data-tour="smart-capture"
                     className="relative z-50 w-full bg-md-sys-primary text-md-sys-onPrimary py-4 font-black text-sm uppercase tracking-wide flex items-center justify-center gap-3 shadow-xl ring-2 ring-md-sys-primary/30 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed group rounded-2xl"
                 >
                     {isBusy ? <Loader2 size={18} className="animate-spin" /> : <Scan size={18} className="group-hover:scale-110 transition-transform" />}
@@ -198,7 +199,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', o
 
     // Default Layout
     return (
-        <div className="flex flex-col gap-4">
+        <div data-tour="action-panel" className="flex flex-col gap-4">
             {/* Mission Section */}
             <div className="mg-surface-high rounded-2xl p-4 border border-md-sys-outline/10 shadow-sm flex flex-col gap-4">
                 <div className="flex items-center justify-between">
@@ -252,6 +253,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', o
                     <button
                         onClick={handleNewSmartCapture}
                         disabled={isBusy}
+                        data-tour="smart-capture"
                         className="flex-1 bg-md-sys-primary text-md-sys-onPrimary py-3.5 flex items-center justify-center gap-2 rounded-xl transition-all font-black text-[10px] uppercase tracking-wider disabled:opacity-50 active:scale-95 shadow-lg ring-2 ring-md-sys-primary/30"
                     >
                         {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Scan size={16} />}

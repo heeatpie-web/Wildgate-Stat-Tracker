@@ -19,54 +19,71 @@ interface TutorialStep {
 
 const steps: TutorialStep[] = [
     {
+        title: 'Profile Selector',
+        description: 'Switch profiles to keep stats and match history separated per pilot/account.',
+        selector: 'profile-selector',
+    },
+    {
+        title: 'Game Mode',
+        description: 'Switch between Artifact Brawl and Fleet Battle. Recording and Analytics follow the selected mode.',
+        selector: 'mode-toggle',
+    },
+    {
+        title: 'System Status',
+        description: 'This pulse shows key background health: data capture state, OCR review queue, mission live/idle, and update state.',
+        selector: 'system-pulse',
+    },
+    {
+        title: 'Data Safety',
+        description: 'Your data is stored locally. Use this indicator and Settings to export/back up and recover if needed.',
+        selector: 'data-safety',
+    },
+    {
         title: 'Match Recording',
-        description: 'Start new matches, track ships and modifiers, and keep the live session up to date here.',
-        selector: 'view-recording',
+        description: 'The main recording surface: mission/session controls, mission intel, and rapid match logging.',
+        selector: 'nav-recording',
+        view: 'recording',
+    },
+    {
+        title: 'Smart Capture',
+        description: 'High-priority action. Captures the game window and extracts teammates/opponents/ship/modifiers via OCR for faster entry.',
+        selector: 'smart-capture',
         view: 'recording',
     },
     {
         title: 'Quick Actions',
-        description: 'Log wins, losses, and key events fast from this action panel.',
+        description: 'Use this panel to log wins/losses quickly and keep your mission/session timer in one place.',
         selector: 'action-panel',
         view: 'recording',
     },
     {
         title: 'Analytics',
-        description: 'Review performance trends and drill into ships, pilots, and modifiers.',
-        selector: 'view-analytics',
+        description: 'Your performance cockpit. Use quick chips to jump into Momentum, Insights, Social, Pro, and more.',
+        selector: 'nav-analytics',
         view: 'analytics',
     },
     {
         title: 'History',
-        description: 'Browse, edit, and export previous matches from the full history table.',
-        selector: 'view-history',
+        description: 'Browse, edit, and export previous matches from the history table.',
+        selector: 'nav-history',
         view: 'history',
     },
     {
         title: 'Smart Captures',
-        description: 'Review OCR scans, fix detections, and promote captures into structured matches.',
-        selector: 'view-smart-captures',
+        description: 'Review captured screenshots, rerun OCR, and apply extracted data back into matches or your current session.',
+        selector: 'nav-smart-captures',
         view: 'smart-captures',
     },
     {
-        title: 'Profile Selector',
-        description: 'Switch pilots here to keep multiple players or accounts separate.',
-        selector: 'profile-selector',
-    },
-    {
-        title: 'Mode Toggle',
-        description: 'Swap between Smart and Manual input modes depending on how detailed you want to log.',
-        selector: 'mode-toggle',
-    },
-    {
         title: 'Overlay Mode',
-        description: 'Toggle the always-on-top overlay when you want a compact HUD during play.',
+        description: 'Switch to overlay when you want a compact HUD during play.',
         selector: 'overlay-button',
     },
     {
         title: 'Settings',
-        description: 'Configure backups, OCR behavior, and experimental tools from the settings panel.',
+        description: 'Configure OCR, backups, UI preferences, and advanced options here.',
         selector: 'nav-settings',
+        openSettings: true,
     },
 ];
 
