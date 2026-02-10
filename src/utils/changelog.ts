@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v2.12.4": [
+    "Improvement: Clarified Smart Capture workflow with an explicit 3-step indicator (Capture / Review / Apply).",
+    "Fix: Removed stray left-column scroll behavior caused by Smart Scan log overflow.",
+    "Maintenance: Version bump.",
+  ],
   "v2.12.3": [
     "Security: Resolved high severity dependency advisories (tar, axios) via npm overrides.",
   ],
