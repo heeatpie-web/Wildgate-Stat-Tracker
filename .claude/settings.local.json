@@ -1,4 +1,4 @@
-{
+﻿{
   "permissions": {
     "allow": [
       "Bash(find:*)",
@@ -10,7 +10,19 @@
       "Bash(npx vitest:*)",
       "Bash(npx tsc:*)",
       "Bash(grep:*)",
-      "Bash(npx vite build)"
+      "Bash(npx vite build)",
+      "Bash(magick:*)",
+      "Bash(copy \"C:\\\\Users\\\\<USERNAME>\\\\Downloads\\\\Gemini_Generated_Image_zhbe57zhbe57zhbe.png\" \"N:\\\\Coding \\(backup\\)\\\\public\\\\favicon.png\")",
+      "Bash(wc:*)",
+      "Bash(npm run dev:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(npx vite-bundle-visualizer:*)",
+      "Bash(while read pkg)",
+      "Bash(do echo -n \"$pkg: \")",
+      "Bash(npm pack:*)",
+      "Bash(done)"
     ]
   }
 }
+

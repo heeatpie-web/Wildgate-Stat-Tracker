@@ -1,4 +1,4 @@
-const { recognizeBatchFromPath } = require('node-windows-ocr');
+﻿const { recognizeBatchFromPath } = require('node-windows-ocr');
 
 const SHIP_TYPES = ['HUNTER', 'BASTION', 'PRIVATEER', 'SCOUT', 'OUTLAW', 'SOLO OUTLAW', 'SWER'];
 
@@ -52,6 +52,7 @@ async function simulate(imagePath) {
 }
 
 async function run() {
-    await simulate("C:\\Users\\Alec Gougebas\\AppData\\Roaming\\Wildgate Stat Tracker\\ocr-debug\\capture_2026-02-04T08-22-04-350Z.png");
+    await simulate("C:\\Users\\<USERNAME>\\AppData\\Roaming\\Wildgate Stat Tracker\\ocr-debug\\capture_2026-02-04T08-22-04-350Z.png");
 }
 run();
+

@@ -1,9 +1,9 @@
-const fs = require('fs');
+﻿const fs = require('fs');
 const path = require('path');
 
 // Use the specific directory we found earlier
 // Scan the parent Logs directory
-const LOGS_DIR = "C:\\Users\\Alec Gougebas\\AppData\\Local\\Nebula\\Saved\\Logs";
+const LOGS_DIR = "C:\\Users\\<USERNAME>\\AppData\\Local\\Nebula\\Saved\\Logs";
 
 async function batchDecode() {
     try {
@@ -90,3 +90,4 @@ async function batchDecode() {
 }
 
 batchDecode();
+

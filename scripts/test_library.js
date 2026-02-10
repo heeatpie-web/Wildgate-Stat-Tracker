@@ -1,10 +1,10 @@
-import * as OcrLib from 'node-windows-ocr';
+﻿import * as OcrLib from 'node-windows-ocr';
 import path from 'path';
 
 // Log exports to see API
 console.log("Library Exports:", OcrLib);
 
-const imagePath = path.resolve("C:\\Users\\Alec Gougebas\\AppData\\Roaming\\Wildgate Stat Tracker\\ocr-debug\\capture_2026-02-04T08-22-46-561Z.png");
+const imagePath = path.resolve("C:\\Users\\<USERNAME>\\AppData\\Roaming\\Wildgate Stat Tracker\\ocr-debug\\capture_2026-02-04T08-22-46-561Z.png");
 
 async function run() {
     try {
@@ -24,3 +24,4 @@ async function run() {
 }
 
 run();
+

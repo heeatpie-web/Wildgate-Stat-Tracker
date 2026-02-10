@@ -8,6 +8,25 @@ const { registerOCRHandlers, processCapture, runOCR } = require('./ocrHandler.cj
 const gcloudService = require('./gcloudService.cjs');
 const gcloudSyncService = require('./gcloudSyncService.cjs');
 const isDev = !app.isPackaged;
+const USER_DATA_ROOT = path.resolve(app.getPath('userData'));
+const ALLOWED_FILE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.webp', '.gif']);
+
+function isPathWithinRoot(targetPath, rootPath) {
+  const relative = path.relative(rootPath, targetPath);
+  return relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+function isAllowedRendererPath(inputPath) {
+  if (!inputPath || typeof inputPath !== 'string') return false;
+  const resolved = path.resolve(inputPath);
+  const roots = [
+    USER_DATA_ROOT,
+    path.resolve(path.join(app.getPath('documents'), 'Wildgate Stat Tracker')),
+    path.resolve(path.join(app.getPath('home'), 'AppData', 'Local', 'Nebula', 'Saved', 'Logs')),
+    path.resolve(path.join(app.getPath('home'), 'AppData', 'Local', 'Wildgate', 'Saved', 'Logs')),
+  ];
+  return roots.some(root => resolved === root || isPathWithinRoot(resolved, root));
+}
 
 // Force app name to match productName so app.getPath('userData') resolves
 // to the same directory in both dev and production (e.g. "Wildgate Stat Tracker").
@@ -366,11 +385,6 @@ ipcMain.handle('ocr-scan', async (event, imagePath) => {
     console.error('[OCR] Scan Error:', e);
     throw e;
   }
-});
-
-// ML Scan (stub fallback to avoid IPC errors when model is unavailable)
-ipcMain.handle('ml-scan', async () => {
-  return { detections: [] };
 });
 
 // Database Handlers
@@ -1048,7 +1062,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false,
+      webSecurity: true,
       preload: path.join(__dirname, 'preload.cjs'),
     },
     icon: path.join(__dirname, '../public/favicon.png'),
@@ -1173,12 +1187,16 @@ app.whenReady().then(async () => {
   registerOCRHandlers(win);  // Register new OCR IPC handlers (pass win for hide-during-capture)
 
   // Initialize GCloud services (only if key file exists on this machine)
-  const GCLOUD_KEY = "C:/Users/Alec Gougebas/Desktop/GCloudInfo/project-144d1cf3-4cee-4171-859-4b7c070c807e.json";
+  const GCLOUD_KEY =
+    process.env.WILDGATE_GCLOUD_KEY ||
+    process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+    path.join(app.getPath('documents'), 'GCloudInfo', 'service-account.json');
+  const GCLOUD_BUCKET = process.env.WILDGATE_GCLOUD_BUCKET || 'wildgate-training';
   if (fs.existsSync(GCLOUD_KEY)) {
     gcloudService.initialize(GCLOUD_KEY);
-    await gcloudSyncService.initialize(GCLOUD_KEY, "wildgate-training-heeatpie");
+    await gcloudSyncService.initialize(GCLOUD_KEY, GCLOUD_BUCKET);
   } else {
-    console.warn('[GCloud] Key file not found, GCloud services disabled:', GCLOUD_KEY);
+    console.warn('[GCloud] Key file not found, GCloud services disabled');
   }
   if (!isDev) autoUpdater.checkForUpdates();
   rpc.login({ clientId }).catch(console.error);
@@ -1323,7 +1341,11 @@ ipcMain.handle('clear-telemetry-archives', async () => {
 // Utility IPC handlers for contextIsolation (replaces direct fs/shell access in renderer)
 ipcMain.handle('read-file-base64', async (event, filePath) => {
   try {
-    const data = await fsPromises.readFile(filePath);
+    if (!isAllowedRendererPath(filePath)) return null;
+    const resolved = path.resolve(filePath);
+    const ext = path.extname(resolved).toLowerCase();
+    if (!ALLOWED_FILE_EXTENSIONS.has(ext)) return null;
+    const data = await fsPromises.readFile(resolved);
     return data.toString('base64');
   } catch (e) {
     return null;
@@ -1332,7 +1354,10 @@ ipcMain.handle('read-file-base64', async (event, filePath) => {
 
 ipcMain.handle('open-path', async (event, targetPath) => {
   try {
-    await shell.openPath(targetPath);
+    if (!isAllowedRendererPath(targetPath)) {
+      return { success: false, error: 'Path not allowed' };
+    }
+    await shell.openPath(path.resolve(targetPath));
     return { success: true };
   } catch (e) {
     return { success: false, error: e.message };

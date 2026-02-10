@@ -1,5 +1,5 @@
-const fs = require('fs');
-const path = 'C:\\Users\\Alec Gougebas\\AppData\\Local\\Nebula\\Saved\\Logs\\AccelByteTelemetryCache';
+﻿const fs = require('fs');
+const path = 'C:\\Users\\<USERNAME>\\AppData\\Local\\Nebula\\Saved\\Logs\\AccelByteTelemetryCache';
 
 try {
     const buffer = fs.readFileSync(path);
@@ -36,3 +36,4 @@ try {
 } catch (e) {
     console.error(e);
 }
+
