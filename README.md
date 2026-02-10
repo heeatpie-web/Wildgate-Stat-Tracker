@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
@@ -6,11 +6,11 @@
 
 A specialized stat tracking and analytics application for **Artifact Brawl** and **Fleet Battle**, built as a high-performance desktop application.
 
-## 🚀 Overview
+## ðŸš€ Overview
 
 Wildgate Stat Tracker provides real-time tracking, match history, and deep analytics for competitive players. It features a customizable dashboard layout, automated log recording, and Discord Rich Presence integration.
 
-## 🛠️ Technology Stack
+## ðŸ› ï¸ Technology Stack
 
 - **Core Framework:** [React 18](https://reactjs.org/) + [TypeScript](https://www.typescriptlang.org/)
 - **Desktop Wrapper:** [Electron](https://www.electronjs.org/)
@@ -22,7 +22,7 @@ Wildgate Stat Tracker provides real-time tracking, match history, and deep analy
   - [React Grid Layout](https://github.com/react-grid-layout/react-grid-layout) for the dashboard
 - **Styling:** Custom CSS with theme support (Twilight, Ocean, etc.)
 
-## 📦 Project Structure
+## ðŸ“¦ Project Structure
 
 - `/components`: UI building blocks (Dashboard, Analytics, etc.)
 - `/electron`: Main process and window management logic.
@@ -30,7 +30,17 @@ Wildgate Stat Tracker provides real-time tracking, match history, and deep analy
 - `/store`: Zustand state slices (Data, UI, Settings, Forms).
 - `/utils`: Utility functions for analytics, storage, and translations.
 
-## ⚙️ Development Setup
+## Quick Developer/AI Docs
+
+- `docs/AI_CONTEXT.md` - minimal context map and read order
+- `src/README.md` - renderer code map
+- `src/components/README.md` - UI feature map
+- `src/hooks/README.md` - hook responsibilities
+- `src/store/README.md` - Zustand slice map
+- `src/utils/README.md` - utility and IPC wrapper map
+- `electron/README.md` - main process and IPC map
+
+## âš™ï¸ Development Setup
 
 1. **Install Dependencies:**
    ```bash
@@ -52,6 +62,6 @@ Wildgate Stat Tracker provides real-time tracking, match history, and deep analy
    npm run electron:build
    ```
 
-## 📝 Roadmap & Tasks
+## ðŸ“ Roadmap & Tasks
 
 See [TODO.md](TODO.md) for current progress and upcoming features.
