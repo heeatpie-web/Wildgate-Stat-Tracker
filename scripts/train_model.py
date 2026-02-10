@@ -1,4 +1,4 @@
-import os
+﻿import os
 import shutil
 from ultralytics import YOLO
 
@@ -7,7 +7,7 @@ from ultralytics import YOLO
 # Provide the absolute path to your 'userData/training_data' folder here
 # You can find this by checking the logs in Dev OCR Lab when you save a dataset.
 # Example: C:/Users/<USERNAME>/AppData/Roaming/Wildgate Stat Tracker/training_data
-DATASET_DIR = r"C:\Users\<USERNAME>\AppData\Roaming\Wildgate Stat Tracker\training_data"
+DATASET_DIR = r"C:\\Users\\<USERNAME>\AppData\Roaming\Wildgate Stat Tracker\training_data"
 
 # Classes matching your DevOCRPanel.tsx
 CLASSES = {
@@ -101,3 +101,4 @@ def train():
 
 if __name__ == '__main__':
     train()
+

@@ -1,4 +1,4 @@
-const fs = require('fs');
+﻿const fs = require('fs');
 const path = require('path');
 
 // Use the specific directory we found earlier
@@ -90,3 +90,4 @@ async function batchDecode() {
 }
 
 batchDecode();
+

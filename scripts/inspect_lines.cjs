@@ -1,4 +1,4 @@
-const { recognizeBatchFromPath } = require('node-windows-ocr');
+﻿const { recognizeBatchFromPath } = require('node-windows-ocr');
 
 async function inspect(imagePath) {
     try {
@@ -22,3 +22,4 @@ async function inspect(imagePath) {
 }
 
 inspect("C:\\Users\\<USERNAME>\\AppData\\Roaming\\Wildgate Stat Tracker\\ocr-debug\\capture_2026-02-04T08-22-04-350Z.png");
+

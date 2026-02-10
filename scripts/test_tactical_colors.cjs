@@ -1,4 +1,4 @@
-const { recognizeBatchFromPath } = require('node-windows-ocr');
+﻿const { recognizeBatchFromPath } = require('node-windows-ocr');
 const fs = require('fs');
 const { createCanvas, loadImage } = require('canvas');
 
@@ -36,3 +36,4 @@ async function run() {
     }
 }
 run();
+

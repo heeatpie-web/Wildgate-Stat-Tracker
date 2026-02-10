@@ -1,4 +1,4 @@
-import * as OcrLib from 'node-windows-ocr';
+﻿import * as OcrLib from 'node-windows-ocr';
 import path from 'path';
 
 // Log exports to see API
@@ -24,3 +24,4 @@ async function run() {
 }
 
 run();
+

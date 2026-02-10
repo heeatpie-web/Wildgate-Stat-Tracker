@@ -1,4 +1,4 @@
-const fs = require('fs');
+﻿const fs = require('fs');
 const path = 'C:\\Users\\<USERNAME>\\AppData\\Local\\Nebula\\Saved\\Logs\\AccelByteTelemetryCache';
 
 try {
@@ -36,3 +36,4 @@ try {
 } catch (e) {
     console.error(e);
 }
+
