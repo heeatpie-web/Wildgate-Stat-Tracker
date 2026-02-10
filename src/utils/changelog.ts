@@ -1,4 +1,7 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v2.12.3": [
+    "Security: Resolved high severity dependency advisories (tar, axios) via npm overrides.",
+  ],
   "v2.12.2": [
     "Fix: Restored the missing SystemPulse header component (prevents build failures on fresh clones).",
     "Improvement: Updated the guided tutorial to match the current UI (System Status, Data Safety, Smart Capture, and navigation).",

@@ -2,7 +2,7 @@
   "name": "wildgate-stat-tracker",
   "productName": "Wildgate Stat Tracker",
   "private": true,
-  "version": "2.12.2",
+  "version": "2.12.3",
   "type": "module",
   "main": "electron/main.cjs",
   "author": {
@@ -64,7 +64,8 @@
     "wait-on": "^7.2.0"
   },
   "overrides": {
-    "tar": "7.5.3"
+    "tar": "7.5.7",
+    "axios": "1.13.5"
   },
   "build": {
     "appId": "com.wildgate.tracker",
