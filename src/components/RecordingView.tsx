@@ -11,9 +11,9 @@ interface RecordingViewProps {
 
 export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData }) => {
     return (
-        <div data-tour="view-recording" className="h-full min-h-0 flex gap-4 p-4 overflow-hidden">
+        <div data-tour="view-recording" className="h-full min-h-0 flex gap-4 p-4 pb-6 overflow-y-auto overflow-x-hidden custom-scrollbar">
             {/* Left Column: Ship & Loadout + Actions */}
-            <div className="flex-[1.1] min-w-[220px] max-w-[360px] min-h-0 flex flex-col gap-4 overflow-y-visible overflow-x-hidden pr-0">
+            <div className="flex-[1.1] min-w-[220px] max-w-[360px] min-h-fit flex flex-col gap-4 overflow-visible">
                 <SquadronPanel />
                 <div data-tour="action-panel">
                     <ActionPanel onSmartCaptureData={onSmartCaptureData} />
@@ -32,4 +32,3 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
         </div>
     );
 };
-

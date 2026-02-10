@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { AnalyticsView, AnalyticsTimeRange, DrillDownTarget, VisualMode } from '../../types';
-import { Activity, ArrowLeft } from 'lucide-react';
+import { AnalyticsView, AnalyticsTimeRange, DrillDownTarget } from '../../types';
+import { Activity, ArrowLeft, Gauge, Lightbulb, Handshake, BarChart3, Globe, Flame, PenSquare } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
 import { useUserPreferences } from '../../providers/UserPreferencesProvider';
@@ -41,10 +41,20 @@ const VIEW_LABELS: Record<AnalyticsView, string> = {
 
 const TIME_RANGE_OPTIONS: { value: AnalyticsTimeRange; label: string }[] = [
     { value: 'all', label: 'All Time' },
-    { value: 'month', label: 'This Month' },
-    { value: 'week', label: 'This Week' },
+    { value: 'month', label: 'Month' },
+    { value: 'week', label: 'Week' },
     { value: 'today', label: 'Today' },
     { value: 'lastN', label: 'Last 20' },
+];
+
+const QUICK_VIEWS: { view: AnalyticsView; icon: React.ReactNode }[] = [
+    { view: 'momentum', icon: <Gauge size={12} /> },
+    { view: 'insights', icon: <Lightbulb size={12} /> },
+    { view: 'social', icon: <Handshake size={12} /> },
+    { view: 'pro', icon: <BarChart3 size={12} /> },
+    { view: 'environment', icon: <Globe size={12} /> },
+    { view: 'streaks', icon: <Flame size={12} /> },
+    { view: 'essay', icon: <PenSquare size={12} /> },
 ];
 
 export const AnalyticsShell: React.FC = () => {
@@ -55,7 +65,7 @@ export const AnalyticsShell: React.FC = () => {
 
     const [currentView, setCurrentView] = useState<AnalyticsView>('overview');
     const [timeRange, setTimeRange] = useState<AnalyticsTimeRange>('all');
-    const [lastN, setLastN] = useState(20);
+    const [lastN] = useState(20);
 
     const data = useAnalyticsData(timeRange, lastN, currentView);
 
@@ -85,32 +95,44 @@ export const AnalyticsShell: React.FC = () => {
         }
     };
 
+    const modeBadge = currentMode === 'Artifact Brawl' ? 'bg-orange-500/15 text-orange-300 border-orange-500/30' : 'bg-sky-500/15 text-sky-300 border-sky-500/30';
+
     return (
-        <div className="bg-md-sys-surface1 h-full flex flex-col gap-3 animate-slide-up overflow-hidden p-1">
-            {/* Header Bar */}
-            <div className="flex flex-col md:flex-row justify-between items-center gap-3 bg-md-sys-surface2 p-3 rounded-2xl shadow-sm flex-shrink-0 border border-white/5">
-                <div className="flex items-center gap-3">
-                    {currentView !== 'overview' && (
-                        <button onClick={goBack} className="p-2 bg-md-sys-surface1 rounded-xl hover:bg-md-sys-surface3 transition-colors">
-                            <ArrowLeft size={16} />
-                        </button>
-                    )}
-                    <div>
-                        <h2 className="text-lg font-bold uppercase tracking-tight flex items-center gap-2">
-                            <Activity className="text-md-sys-primary" size={18} />
-                            {currentView === 'overview' ? 'Performance' : VIEW_LABELS[currentView]}
-                        </h2>
-                        <p className="text-[9px] font-semibold opacity-50 uppercase tracking-widest pl-7">
-                            {currentView === 'overview' ? 'Dashboard' : 'Detailed Analysis'} - {currentMode}
-                        </p>
+        <div className="h-full flex flex-col gap-3 overflow-hidden p-3 rounded-2xl border border-md-sys-outline/10 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.10),transparent_35%),radial-gradient(circle_at_top_left,rgba(251,146,60,0.08),transparent_40%)]">
+            <div className="flex-shrink-0 rounded-2xl border border-md-sys-outline/10 bg-md-sys-surfaceContainerLowest/80 backdrop-blur p-3 md:p-4">
+                <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                            {currentView !== 'overview' && (
+                                <button onClick={goBack} className="md3-icon-btn">
+                                    <ArrowLeft size={16} />
+                                </button>
+                            )}
+                            <div className="min-w-0">
+                                <h2 className="text-base md:text-lg font-black tracking-tight flex items-center gap-2 text-md-sys-on-surface">
+                                    <Activity className="text-md-sys-primary" size={18} />
+                                    <span className="truncate">{currentView === 'overview' ? 'Analytics Cockpit' : VIEW_LABELS[currentView]}</span>
+                                </h2>
+                                <div className="mt-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
+                                    <span className={`px-2 py-0.5 rounded-full border ${modeBadge}`}>{currentMode}</span>
+                                    <span className="text-md-sys-on-surface/50">{currentView === 'overview' ? 'Performance Overview' : 'Deep Dive View'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <InlineNarrativeToggle visualMode={visualMode} onChange={setVisualMode} />
                     </div>
-                </div>
-                <div className="flex gap-2 items-center flex-wrap">
-                    {/* Time Range Selector */}
-                    <div className="flex bg-md-sys-surface1 p-1 rounded-xl">
+
+                    <div className="flex flex-wrap items-center gap-2">
                         {TIME_RANGE_OPTIONS.map(opt => (
-                            <button key={opt.value} onClick={() => setTimeRange(opt.value)}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${timeRange === opt.value ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'opacity-60 hover:bg-md-sys-surface3'}`}>
+                            <button
+                                key={opt.value}
+                                onClick={() => setTimeRange(opt.value)}
+                                className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide border transition-all ${
+                                    timeRange === opt.value
+                                        ? 'bg-md-sys-primary text-md-sys-onPrimary border-md-sys-primary shadow'
+                                        : 'bg-md-sys-surface/50 text-md-sys-on-surface/70 border-md-sys-outline/20 hover:bg-md-sys-surfaceContainerHighest'
+                                }`}
+                            >
                                 {opt.label}
                             </button>
                         ))}
@@ -118,19 +140,21 @@ export const AnalyticsShell: React.FC = () => {
                 </div>
             </div>
 
-            {/* Quick Navigation (overview only) */}
             {currentView === 'overview' && (
-                <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar shrink-0">
-                    {(['essay', 'pro', 'environment', 'synergy', 'insights', 'social'] as AnalyticsView[]).map(view => (
-                        <button key={view} onClick={() => navigateTo(view)}
-                            className="px-4 py-2 rounded-xl text-[10px] font-bold uppercase whitespace-nowrap transition-all border border-transparent bg-transparent text-md-sys-on-surface/60 hover:bg-md-sys-surface2 hover:text-md-sys-on-surface">
+                <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar px-1 flex-shrink-0">
+                    {QUICK_VIEWS.map(({ view, icon }) => (
+                        <button
+                            key={view}
+                            onClick={() => navigateTo(view)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wide border border-md-sys-outline/15 bg-md-sys-surface/60 text-md-sys-on-surface/75 hover:bg-md-sys-primaryContainer hover:text-md-sys-onPrimaryContainer transition-colors whitespace-nowrap"
+                        >
+                            {icon}
                             {VIEW_LABELS[view]}
                         </button>
                     ))}
                 </div>
             )}
 
-            {/* Content */}
             {currentView === 'overview' ? (
                 <AnalyticsDashboard
                     visualMode={visualMode}
@@ -153,16 +177,11 @@ export const AnalyticsShell: React.FC = () => {
                     filteredMatches={data.filteredMatches}
                 />
             ) : (
-                <div className="flex-1 flex flex-col min-h-0">
-                    {/* Inline narrative toggle */}
-                    <div className="flex items-center justify-end px-2 pb-1 flex-shrink-0">
-                        <InlineNarrativeToggle visualMode={visualMode} onChange={setVisualMode} />
-                    </div>
-                    <div className="flex-1 min-h-0">
-                        {renderExpandedView()}
-                    </div>
+                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar rounded-xl border border-md-sys-outline/10 bg-md-sys-surfaceContainerLowest/70 p-2">
+                    {renderExpandedView()}
                 </div>
             )}
         </div>
     );
 };
+
