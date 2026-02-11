@@ -1,0 +1,32 @@
+{
+  "activeTemplate": "vibe-dev-redux.workflow.js",
+  "lastUpdated": "2026-02-11T00:58:05.568Z",
+  "completedSteps": {
+    "0": {
+      "sessionId": "019c49fc-1450-7553-a812-1f7ab3194173",
+      "monitoringId": 4,
+      "completedAt": "2026-02-11T00:20:06.015Z"
+    },
+    "1": {
+      "sessionId": "019c4a11-cd50-7081-80c7-e1904db95162",
+      "monitoringId": 5,
+      "completedAt": "2026-02-11T00:25:38.856Z"
+    },
+    "2": {
+      "sessionId": "019c4a16-e10a-7b63-8e76-8b4e5059e5a7",
+      "monitoringId": 6,
+      "completedAt": "2026-02-11T00:47:31.206Z"
+    },
+    "3": {
+      "sessionId": "019c4a2d-c339-7f20-82da-a28888614007",
+      "monitoringId": 7
+    }
+  },
+  "notCompletedSteps": [
+    3
+  ],
+  "resumeFromLastStep": true,
+  "autonomousMode": "true",
+  "selectedTrack": null,
+  "selectedConditions": []
+}
