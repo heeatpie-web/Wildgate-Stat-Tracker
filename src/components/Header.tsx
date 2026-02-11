@@ -5,7 +5,6 @@ import { useGameData } from '../providers/GameDataProvider';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { APP_VERSION } from '../types';
 import SystemPulse from './SystemPulse';
-import { useSmartCapture } from '../hooks/useSmartCapture';
 import { useAppStore } from '../store/useAppStore';
 
 /**
@@ -22,12 +21,12 @@ export const Header: React.FC = () => {
         setShowTutorial,
         isAlwaysOnTop, setIsAlwaysOnTop,
         setToast, setShowWelcome,
-        devMode, setDevMode
+        devMode, setDevMode,
+        visionStatus
     } = useUIState();
 
     const { players, deletePlayer } = useGameData();
     const { appearanceMode, setAppearanceMode } = useUserPreferences();
-    const [smartCaptureState, smartCaptureActions] = useSmartCapture();
     const showSmartCaptureInHeader = useAppStore(s => s.showSmartCaptureInHeader);
 
     const devClicks = useRef(0);
@@ -50,7 +49,9 @@ export const Header: React.FC = () => {
         try {
             // Smart Capture is meaningful primarily for live session recording.
             if (activeView !== 'recording') setActiveView('recording');
-            await smartCaptureActions.capture(activeUser || null);
+            window.dispatchEvent(new CustomEvent('smart-capture-request', {
+                detail: { activeUser: activeUser || null, source: 'header' }
+            }));
         } catch (e: any) {
             setToast({ message: e?.message || 'Smart capture failed', type: 'error' });
         }
@@ -161,19 +162,14 @@ export const Header: React.FC = () => {
                     {showSmartCaptureInHeader && (
                         <button
                             onClick={handleTopbarSmartCapture}
-                            disabled={smartCaptureState.isCapturing || smartCaptureState.isProcessing}
+                            disabled={visionStatus === 'capturing' || visionStatus === 'processing'}
                             className="h-8 px-3 rounded-full flex items-center gap-1.5 border border-md-sys-primary/25 bg-md-sys-primary text-md-sys-onPrimary hover:brightness-105 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Smart Capture (screenshots + OCR)"
                         >
-                            {(smartCaptureState.isCapturing || smartCaptureState.isProcessing)
+                            {(visionStatus === 'capturing' || visionStatus === 'processing')
                                 ? <Loader2 size={14} className="animate-spin" />
                                 : <Scan size={14} />}
                             <span className="text-[10px] font-black uppercase tracking-wide">Smart Capture</span>
-                            {smartCaptureState.queueDepth > 0 && (
-                                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-black/20 text-[9px] font-black">
-                                    {smartCaptureState.queueDepth}
-                                </span>
-                            )}
                         </button>
                     )}
                     <button

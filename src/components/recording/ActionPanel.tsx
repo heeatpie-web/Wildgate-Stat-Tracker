@@ -116,6 +116,16 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         if (logsEndRef.current) logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }, [scanLogs]);
 
+    React.useEffect(() => {
+        const onCaptureRequest = (evt: Event) => {
+            const custom = evt as CustomEvent<{ activeUser?: string | null }>;
+            const requestedUser = custom?.detail?.activeUser;
+            void triggerSmartCapture(requestedUser ?? activeUser ?? null);
+        };
+        window.addEventListener('smart-capture-request', onCaptureRequest as EventListener);
+        return () => window.removeEventListener('smart-capture-request', onCaptureRequest as EventListener);
+    }, [triggerSmartCapture, activeUser]);
+
     const initiateSubmission = (result: 'Win' | 'Loss' | 'Draw') => {
         setPendingMatchData({
             result,
