@@ -1,7 +1,3 @@
-/**
- * @module scan/imageUtils
- * Screen capture, image cropping, and preprocessing for OCR pipelines.
- */
 import Logger from '../logger';
 import { getElectronAPI } from '../electronAPI';
 
@@ -85,3 +81,5 @@ export const preprocessImage = async (dataUrl: string, scale: number = 1, invert
         img.src = dataUrl;
     });
 };
+
+

@@ -10,6 +10,22 @@ export const DrillDownOverlay: React.FC = () => {
 
     if (!drillDownTarget) return null;
 
+    const toLocalYmd = (ts: number) => {
+        const d = new Date(ts);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    };
+
+    const startOfLocalWeek = (ts: number) => {
+        const d = new Date(ts);
+        const day = d.getDay(); // 0..6 (Sun..Sat)
+        d.setHours(0, 0, 0, 0);
+        d.setDate(d.getDate() - day);
+        return d.getTime();
+    };
+
     // Filter matches based on target
     const targetMatches = matches.filter(m => {
         if (m.mode !== activeMode) return false;
@@ -17,7 +33,31 @@ export const DrillDownOverlay: React.FC = () => {
         if (drillDownTarget.type === 'Opponent') return (m.opponents || []).includes(drillDownTarget.name);
         if (drillDownTarget.type === 'Ship') return (m.ship || '').includes(drillDownTarget.name);
         if (drillDownTarget.type === 'Hero') return (m.hero || '') === drillDownTarget.name;
-        if (drillDownTarget.type === 'Artifact') return m.subType === 'Artifact' && (m.reachModifiers || []).some(r => r.includes(drillDownTarget.name));
+        if (drillDownTarget.type === 'Artifact') {
+            const rms = (m.reachModifiers || []);
+            const art = rms.find(r => r.startsWith('Artifact:'))?.split(': ')[1];
+            return (art && art === drillDownTarget.name)
+                || rms.some(r => r.includes(drillDownTarget.name))
+                || (m.artifactSource && m.artifactSource === drillDownTarget.name);
+        }
+        if (drillDownTarget.type === 'Modifier') {
+            const rms = (m.reachModifiers || []);
+            return rms.some(r => r === drillDownTarget.name)
+                || rms.some(r => r.includes(drillDownTarget.name));
+        }
+        if (drillDownTarget.type === 'Date') {
+            return toLocalYmd(m.timestamp) === drillDownTarget.name;
+        }
+        if (drillDownTarget.type === 'Week') {
+            const start = Date.parse(`${drillDownTarget.name}T00:00:00`);
+            if (!Number.isFinite(start)) return false;
+            const end = start + 7 * 86400000;
+            return m.timestamp >= start && m.timestamp < end;
+        }
+        if (drillDownTarget.type === 'Month') {
+            const ymd = toLocalYmd(m.timestamp);
+            return ymd.slice(0, 7) === drillDownTarget.name;
+        }
         return true;
     }).sort((a, b) => a.timestamp - b.timestamp);
 
@@ -94,8 +134,8 @@ export const DrillDownOverlay: React.FC = () => {
     const worstNemesis = topNemeses[0];
 
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-6 animate-fade-in" onClick={() => setDrillDownTarget(null)}>
-            <div className="bg-md-sys-surface1 w-full max-w-6xl rounded-2xl p-6 shadow-2xl border border-md-sys-outline/20 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 md3-dialog-scrim backdrop-blur-md z-[9999] flex items-center justify-center p-6 animate-fade-in" onClick={() => setDrillDownTarget(null)}>
+            <div className="md3-card w-full max-w-6xl rounded-2xl p-6 shadow-2xl border border-md-sys-outline/20 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
 
                 {/* Header */}
                 <div className="flex justify-between items-start mb-8 flex-shrink-0">
@@ -103,8 +143,8 @@ export const DrillDownOverlay: React.FC = () => {
                         <div className="text-sm font-black uppercase opacity-40 tracking-[0.2em] mb-1">Deep Dive Analysis - {drillDownTarget.type}</div>
                         <h2 className="text-5xl font-black">{drillDownTarget.name}</h2>
                         <div className="flex gap-4 mt-4">
-                            <div className="bg-md-sys-surface2 px-4 py-2 rounded-xl text-xs font-black uppercase"><span className="opacity-60">Matches:</span> {targetMatches.length}</div>
-                            <div className="bg-md-sys-surface2 px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2">
+                            <div className="md3-surface-high px-4 py-2 rounded-xl text-xs font-black uppercase"><span className="opacity-60">Matches:</span> {targetMatches.length}</div>
+                            <div className="md3-surface-high px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2">
                                 <span className="opacity-60">Win Rate:</span>
                                 <span className={wr >= 50 ? 'text-green-500' : 'text-red-500'}>{wr}%</span>
                                 {trendDiff !== 0 && (
@@ -113,17 +153,17 @@ export const DrillDownOverlay: React.FC = () => {
                                     </span>
                                 )}
                             </div>
-                            {avgDmg > 0 && <div className="bg-md-sys-surface2 px-4 py-2 rounded-xl text-xs font-black uppercase"><span className="opacity-60">Avg Dmg:</span> {avgDmg}</div>}
+                            {avgDmg > 0 && <div className="md3-surface-high px-4 py-2 rounded-xl text-xs font-black uppercase"><span className="opacity-60">Avg Dmg:</span> {avgDmg}</div>}
                         </div>
                     </div>
-                    <button onClick={() => setDrillDownTarget(null)} className="p-4 bg-md-sys-surface2 rounded-full hover:bg-md-sys-surface3"><X size={24} /></button>
+                    <button onClick={() => setDrillDownTarget(null)} className="md3-icon-btn"><X size={24} /></button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-6">
                     {/* Top Stats Row */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-shrink-0">
                         {/* Recent Form */}
-                        <div className="bg-md-sys-surface2 p-6 rounded-xl relative overflow-hidden flex flex-col justify-between">
+                        <div className="md3-card p-6 rounded-xl relative overflow-hidden flex flex-col justify-between">
                             <div>
                                 <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2">Recent Form (Last 10)</h4>
                                 <div className="text-4xl font-black mb-1 flex items-baseline gap-2">
@@ -136,7 +176,7 @@ export const DrillDownOverlay: React.FC = () => {
                         </div>
 
                         {/* Best Synergies */}
-                        <div className="bg-md-sys-surface2 p-6 rounded-xl relative overflow-hidden col-span-1">
+                        <div className="md3-card p-6 rounded-xl relative overflow-hidden col-span-1">
                             <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-4">{['Ship', 'Hero'].includes(drillDownTarget.type) ? 'Top Wingmen' : 'Best Synergies'}</h4>
                             <div className="flex flex-col gap-2">
                                 {topSynergies.length > 0 ? topSynergies.map(([name, stat], i) => (
@@ -150,7 +190,7 @@ export const DrillDownOverlay: React.FC = () => {
                         </div>
 
                         {/* Worst Nemeses */}
-                        <div className="bg-md-sys-surface2 p-6 rounded-xl relative overflow-hidden col-span-1">
+                        <div className="md3-card p-6 rounded-xl relative overflow-hidden col-span-1">
                             <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-4">{['Ship', 'Hero'].includes(drillDownTarget.type) ? 'Worst Nightmares' : (drillDownTarget.type === 'Opponent' ? 'Weakness' : 'Worst Combo')}</h4>
                             <div className="flex flex-col gap-2">
                                 {topNemeses.length > 0 ? topNemeses.map(([name, stat], i) => (
@@ -164,7 +204,7 @@ export const DrillDownOverlay: React.FC = () => {
                         </div>
 
                         {/* Environment Affinity */}
-                        <div className="bg-md-sys-surface2 p-6 rounded-xl relative overflow-hidden col-span-1">
+                        <div className="md3-card p-6 rounded-xl relative overflow-hidden col-span-1">
                             <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-4">Environment Affinity</h4>
                             <div className="flex flex-col gap-1">
                                 {topEnvs.length > 0 ? (
@@ -185,18 +225,18 @@ export const DrillDownOverlay: React.FC = () => {
 
                     {/* Chart */}
                     {targetMatches.length < 2 ? (
-                        <div className="h-64 w-full bg-md-sys-surface2 rounded-xl flex items-center justify-center opacity-40 font-bold uppercase tracking-widest flex-shrink-0">Not enough data for trend analysis</div>
+                        <div className="h-64 w-full md3-card rounded-xl flex items-center justify-center opacity-40 font-bold uppercase tracking-widest flex-shrink-0">Not enough data for trend analysis</div>
                     ) : (
-                        <div className="h-80 w-full bg-md-sys-surface2 rounded-xl p-6 border border-md-sys-outline/5 shadow-inner flex-shrink-0">
+                        <div className="h-80 w-full md3-card rounded-xl p-6 border border-md-sys-outline/5 shadow-inner flex-shrink-0">
                             <h4 className="text-xs font-black uppercase tracking-widest mb-6 opacity-60">Rolling Win Rate Over Time</h4>
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={trendData}>
-                                    <defs><linearGradient id="colorWin" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={wr >= 50 ? "#22c55e" : "#ef4444"} stopOpacity={0.3} /><stop offset="95%" stopColor={wr >= 50 ? "#22c55e" : "#ef4444"} stopOpacity={0} /></linearGradient></defs>
+                                    <defs><linearGradient id="colorWin" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={wr >= 50 ? "var(--color-success)" : "var(--color-danger)"} stopOpacity={0.3} /><stop offset="95%" stopColor={wr >= 50 ? "var(--color-success)" : "var(--color-danger)"} stopOpacity={0} /></linearGradient></defs>
                                     <CartesianGrid strokeOpacity={0.05} vertical={false} />
                                     <XAxis dataKey="idx" tick={{ fontSize: 12 }} label={{ value: 'Matches', position: 'insideBottom', offset: -5 }} />
                                     <YAxis tick={{ fontSize: 12 }} label={{ value: 'Win Rate %', angle: -90, position: 'insideLeft' }} domain={[0, 100]} />
-                                    <Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '16px', border: 'none' }} />
-                                    <Area type="monotone" dataKey="rollingWinRate" name="Win Rate" stroke={wr >= 50 ? "#22c55e" : "#ef4444"} strokeWidth={4} fillOpacity={1} fill="url(#colorWin)" />
+                                    <Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface-container-high)', borderRadius: '16px', border: 'none' }} />
+                                    <Area type="monotone" dataKey="rollingWinRate" name="Win Rate" stroke={wr >= 50 ? "var(--color-success)" : "var(--color-danger)"} strokeWidth={4} fillOpacity={1} fill="url(#colorWin)" />
                                 </AreaChart>
                             </ResponsiveContainer>
                         </div>
@@ -206,3 +246,4 @@ export const DrillDownOverlay: React.FC = () => {
         </div>
     );
 };
+

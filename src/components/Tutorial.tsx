@@ -25,23 +25,23 @@ const steps: TutorialStep[] = [
     },
     {
         title: 'Game Mode',
-        description: 'Switch between Artifact Brawl and Fleet Battle. Recording and Analytics follow the selected mode.',
+        description: 'This toggle switches between Artifact Brawl and Fleet Battle. Analytics and match entry follow the selected mode.',
         selector: 'mode-toggle',
     },
     {
         title: 'System Status',
-        description: 'This pulse shows key background health: data capture state, OCR review queue, mission live/idle, and update state.',
+        description: 'This pulse shows key background health: telemetry online/offline, OCR activity, mission live/idle, and update state.',
         selector: 'system-pulse',
     },
     {
         title: 'Data Safety',
-        description: 'Your data is stored locally. Use this indicator and Settings to export/back up and recover if needed.',
+        description: 'This indicates your local save safety. Hover it for last save/backup details and recovery state.',
         selector: 'data-safety',
     },
     {
         title: 'Match Recording',
-        description: 'The main recording surface: mission/session controls, mission intel, and rapid match logging.',
-        selector: 'nav-recording',
+        description: 'This is the main recording surface: live session controls, mission intel, and rapid match logging.',
+        selector: 'view-recording',
         view: 'recording',
     },
     {
@@ -59,19 +59,19 @@ const steps: TutorialStep[] = [
     {
         title: 'Analytics',
         description: 'Your performance cockpit. Use quick chips to jump into Momentum, Insights, Social, Pro, and more.',
-        selector: 'nav-analytics',
+        selector: 'view-analytics',
         view: 'analytics',
     },
     {
         title: 'History',
         description: 'Browse, edit, and export previous matches from the history table.',
-        selector: 'nav-history',
+        selector: 'view-history',
         view: 'history',
     },
     {
         title: 'Smart Captures',
         description: 'Review captured screenshots, rerun OCR, and apply extracted data back into matches or your current session.',
-        selector: 'nav-smart-captures',
+        selector: 'view-smart-captures',
         view: 'smart-captures',
     },
     {
@@ -83,7 +83,6 @@ const steps: TutorialStep[] = [
         title: 'Settings',
         description: 'Configure OCR, backups, UI preferences, and advanced options here.',
         selector: 'nav-settings',
-        openSettings: true,
     },
 ];
 
@@ -259,7 +258,7 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
 
             <div
                 ref={tooltipRef}
-                className="absolute w-[320px] max-w-[calc(100vw-32px)] bg-md-sys-surface1 text-md-sys-on-surface rounded-2xl border border-md-sys-outline/20 shadow-2xl p-4 pointer-events-auto"
+                className="absolute w-[320px] max-w-[calc(100vw-32px)] md3-card text-md-sys-on-surface rounded-2xl border border-md-sys-outline/20 shadow-2xl p-4 pointer-events-auto"
                 style={tooltipInlineStyle}
             >
                 <div className="flex items-start justify-between gap-3">
@@ -271,7 +270,7 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
                     </div>
                     <button
                         onClick={onSkip}
-                        className="p-2 rounded-lg hover:bg-md-sys-surface2 transition-colors text-md-sys-outline"
+                        className="md3-icon-btn"
                         aria-label="Exit tutorial"
                     >
                         <X size={18} />
@@ -283,13 +282,13 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
                 <div className="flex gap-2 mt-4">
                     <button
                         onClick={stepIndex === 0 ? onSkip : handlePrev}
-                        className="px-4 py-2 rounded-lg font-bold transition-colors text-md-sys-on-surface hover:bg-md-sys-surface2"
+                        className="md3-btn-text"
                     >
                         {stepIndex === 0 ? 'Skip' : 'Back'}
                     </button>
                     <button
                         onClick={handleNext}
-                        className="flex-1 bg-md-sys-primary text-md-sys-onPrimary px-4 py-2 rounded-lg font-black uppercase tracking-widest hover:brightness-110 transition-all flex items-center justify-center gap-2"
+                        className="md3-btn-filled flex-1 font-black uppercase tracking-widest flex items-center justify-center gap-2"
                     >
                         {stepIndex === steps.length - 1 ? (
                             <>Finish</>
@@ -306,3 +305,4 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
 };
 
 export default Tutorial;
+

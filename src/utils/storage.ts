@@ -1,12 +1,4 @@
-/**
- * @module storage
- * Persistence layer that bridges Zustand with Electron's main process.
- * StorageService.init() loads data on startup (with localStorage migration),
- * and StorageService.save() writes the full state to disk via IPC.
- */
 import { getElectronAPI } from './electronAPI';
-
-/** Shape of the persisted data payload exchanged with the main process. */
 export interface StorageData {
   matches: any[];
   players: string[];
@@ -21,9 +13,16 @@ export interface StorageData {
   mappings?: Record<string, string>;
   playerProfiles?: Record<string, any>;
   timelineEvents?: any[];
+  uidMappings?: {
+    players: Record<string, string>;
+    ships: Record<string, string>;
+    weapons: Record<string, string>;
+    equipment: Record<string, string>;
+  };
+  uidSeedState?: {
+    seedVersionApplied: number | null;
+  };
 }
-
-// Keys used in localStorage (legacy)
 const LEGACY_KEYS = [
   'wg_v13_matches', 'wg_v13_players', 'wg_v13_pilot_registry',
   'wg_v13_favorites', 'wg_v13_pilot_notes', 'wg_mode', 'wg_theme_accent',
@@ -36,6 +35,62 @@ let saveTimeout: any = null;
 let pendingResolvers: Array<(ok: boolean) => void> = [];
 let lastData: StorageData | null = null;
 let lastAutoBackupCount: number | null = null;
+let lifecycleGuardsBound = false;
+let intervalFlushHandle: any = null;
+
+const emptyUidMappings = () => ({
+  players: {} as Record<string, string>,
+  ships: {} as Record<string, string>,
+  weapons: {} as Record<string, string>,
+  equipment: {} as Record<string, string>,
+});
+
+const normalizeUidMappings = (input?: Partial<StorageData['uidMappings']>) => ({
+  players: { ...(input?.players || {}) },
+  ships: { ...(input?.ships || {}) },
+  weapons: { ...(input?.weapons || {}) },
+  equipment: { ...(input?.equipment || {}) },
+});
+
+const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
+  const ipc = getElectronAPI();
+  const merged: StorageData = {
+    ...data,
+    uidMappings: normalizeUidMappings(data.uidMappings || emptyUidMappings()),
+    uidSeedState: data.uidSeedState || { seedVersionApplied: null }
+  };
+
+  // Legacy migration: old mappings -> player UID domain
+  if (merged.mappings && Object.keys(merged.mappings).length > 0) {
+    merged.uidMappings!.players = {
+      ...merged.mappings,
+      ...merged.uidMappings!.players
+    };
+  }
+
+  if (!ipc) return merged;
+
+  try {
+    const seed = await ipc.invoke('read-uid-seed');
+    if (!seed || typeof seed !== 'object') return merged;
+    const seedVersion = Number(seed.version ?? 0) || 0;
+    const applied = merged.uidSeedState?.seedVersionApplied ?? null;
+    if (applied !== null && seedVersion <= applied) return merged;
+
+    const seedMappings = normalizeUidMappings(seed);
+    merged.uidMappings = {
+      players: { ...seedMappings.players, ...merged.uidMappings!.players },
+      ships: { ...seedMappings.ships, ...merged.uidMappings!.ships },
+      weapons: { ...seedMappings.weapons, ...merged.uidMappings!.weapons },
+      equipment: { ...seedMappings.equipment, ...merged.uidMappings!.equipment },
+    };
+    merged.uidSeedState = { seedVersionApplied: seedVersion };
+    return merged;
+  } catch (e) {
+    console.warn('[UIDSeed] Failed to load seed mappings', e);
+    return merged;
+  }
+};
 
 const maybeAutoBackup = async (data: StorageData) => {
   const ipc = getElectronAPI();
@@ -61,8 +116,13 @@ const writeNow = async (data: StorageData): Promise<boolean> => {
     if (ipc) {
       await ipc.invoke('db-write', data);
       await maybeAutoBackup(data);
-    } else {
-      localStorage.setItem('wg_db', JSON.stringify(data));
+    }
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('wg_db', JSON.stringify(data));
+      } catch (e) {
+        console.warn('LocalStorage write failed', e);
+      }
     }
     return true;
   } catch (e) {
@@ -72,31 +132,61 @@ const writeNow = async (data: StorageData): Promise<boolean> => {
 };
 
 export const StorageService = {
+  ensureLifecycleGuards() {
+    if (lifecycleGuardsBound) return;
+    if (typeof window === 'undefined') return;
+
+    lifecycleGuardsBound = true;
+    const flushSoon = () => { void this.flush(); };
+
+    window.addEventListener('beforeunload', flushSoon);
+    window.addEventListener('pagehide', flushSoon as any);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flushSoon();
+    });
+    // Best-effort: if the renderer is about to die due to an exception,
+    // attempt to flush whatever is currently staged.
+    window.addEventListener('error', flushSoon as any);
+    window.addEventListener('unhandledrejection', flushSoon as any);
+
+    // Failsafe in case lifecycle hooks are skipped/crash occurs.
+    intervalFlushHandle = window.setInterval(() => {
+      if (lastData) void this.flush();
+    }, 3000);
+  },
+
   async init(): Promise<StorageData | null> {
-    // WEB / DEV MODE
+    this.ensureLifecycleGuards();
     const ipc = getElectronAPI();
     if (!ipc) {
       console.log("Running in Web Mode (localStorage fallback)");
-      const webDB = localStorage.getItem('wg_db');
-      if (webDB) {
-        return JSON.parse(webDB);
+      if (typeof localStorage !== 'undefined') {
+        const webDB = localStorage.getItem('wg_db');
+        if (webDB) {
+          return JSON.parse(webDB);
+        }
       }
-      // If no DB, fall through to legacy migration
     } else {
-      // ELECTRON MODE
       try {
         const dbData = await ipc.invoke('db-read');
         if (dbData) {
           console.log("Database loaded from disk.");
-          return dbData;
+          return await applyUidSeed(dbData);
         }
       } catch (e) {
         console.error("Failed to read DB", e);
       }
+      if (typeof localStorage !== 'undefined') {
+        const webDB = localStorage.getItem('wg_db');
+        if (webDB) {
+          const parsed = JSON.parse(webDB);
+          const seeded = await applyUidSeed(parsed);
+          await this.save(seeded);
+          return seeded;
+        }
+      }
     }
-
-    // MIGRATION (Shared Logic)
-    const hasLegacyData = localStorage.getItem('wg_v13_matches');
+    const hasLegacyData = typeof localStorage !== 'undefined' && localStorage.getItem('wg_v13_matches');
     if (hasLegacyData) {
       console.log("Migrating from Legacy LocalStorage...");
       const migrationData: StorageData = {
@@ -118,11 +208,7 @@ export const StorageService = {
         layouts: JSON.parse(localStorage.getItem('wg_layouts_v11') || '{}'),
         lastActivity: parseInt(localStorage.getItem('wg_last_activity') || '0')
       };
-
-      // Save to new DB system
       await this.save(migrationData);
-
-      // Backup & Clear Legacy (Only in Electron to prevent Dev Server chaos, or just backup)
       if (ipc) {
         LEGACY_KEYS.forEach(key => {
           const val = localStorage.getItem(key);
@@ -133,11 +219,9 @@ export const StorageService = {
         });
       }
 
-      return migrationData;
+      return await applyUidSeed(migrationData);
     }
-
-    // FRESH START
-    return {
+    return await applyUidSeed({
       matches: [],
       players: [],
       pilotRegistry: [],
@@ -146,10 +230,11 @@ export const StorageService = {
       settings: {},
       layouts: {},
       lastActivity: Date.now()
-    };
+    });
   },
 
   async save(data: StorageData) {
+    this.ensureLifecycleGuards();
     lastData = data;
     if (saveTimeout) clearTimeout(saveTimeout);
 
@@ -161,7 +246,7 @@ export const StorageService = {
         const resolvers = pendingResolvers;
         pendingResolvers = [];
         resolvers.forEach(r => r(ok));
-      }, 1000); // 1 second debounce
+      }, 300); // tighter debounce to reduce loss window
     });
   },
 
@@ -183,7 +268,8 @@ export const StorageService = {
     if (ipc) {
       return await ipc.invoke('db-backup');
     }
-    // Web backup could download the JSON
     return { success: false, error: 'Not in Electron' };
   }
 };
+
+

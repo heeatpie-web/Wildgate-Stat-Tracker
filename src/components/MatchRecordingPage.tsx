@@ -31,8 +31,6 @@ export const MatchRecordingPage: React.FC = () => {
     const [selectedMatchId, setSelectedMatchId] = useState<number | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [modeFilter, setModeFilter] = useState<ModeFilter>('all');
-
-    // Select first match by default
     useEffect(() => {
         if (!selectedMatchId && matches.length > 0) {
             setSelectedMatchId(matches[0].id);
@@ -68,9 +66,7 @@ export const MatchRecordingPage: React.FC = () => {
 
     return (
         <div className="h-full flex">
-            {/* Left Panel — Match List */}
-            <div className="w-80 flex-shrink-0 border-r border-md-sys-outline/5 flex flex-col bg-md-sys-surface1/50">
-                {/* Search & Filter Bar */}
+            <div className="w-80 flex-shrink-0 border-r border-md-sys-outline/5 flex flex-col md3-card/80">
                 <div className="p-3 border-b border-md-sys-outline/5 space-y-2">
                     <div className="relative">
                         <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 opacity-40" />
@@ -79,7 +75,7 @@ export const MatchRecordingPage: React.FC = () => {
                             placeholder="Search players, heroes, ships..."
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
-                            className="w-full pl-8 pr-3 py-1.5 bg-md-sys-surface3 rounded-lg text-xs outline-none placeholder:opacity-40"
+                            className="md3-textfield md3-textfield--outlined w-full pl-8 pr-3 py-1.5 text-xs placeholder:opacity-40"
                         />
                     </div>
                     <div className="flex gap-1">
@@ -87,15 +83,13 @@ export const MatchRecordingPage: React.FC = () => {
                             <button
                                 key={mode}
                                 onClick={() => setModeFilter(mode)}
-                                className={`px-2 py-0.5 text-[10px] rounded-full font-bold uppercase transition-colors ${modeFilter === mode ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'bg-md-sys-on-surface/5 hover:bg-md-sys-on-surface/10 opacity-60'}`}
+                                className={`md3-chip px-2 py-0.5 text-[10px] font-bold uppercase transition-colors ${modeFilter === mode ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'text-md-sys-on-surface/70 hover:bg-md-sys-on-surface/10'}`}
                             >
                                 {mode === 'all' ? 'All' : mode}
                             </button>
                         ))}
                     </div>
                 </div>
-
-                {/* Match List */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     {filteredMatches.length === 0 ? (
                         <div className="p-4 text-center text-xs opacity-40">No matches found</div>
@@ -115,8 +109,6 @@ export const MatchRecordingPage: React.FC = () => {
                     {filteredMatches.length} match{filteredMatches.length !== 1 ? 'es' : ''}
                 </div>
             </div>
-
-            {/* Right Panel — Match Detail */}
             <div className="flex-1 overflow-y-auto custom-scrollbar">
                 {selectedMatch ? (
                     <MatchDetail match={selectedMatch} onUpdate={updateMatch} onViewCaptures={() => setActiveView('smart-captures')} />
@@ -132,8 +124,6 @@ export const MatchRecordingPage: React.FC = () => {
         </div>
     );
 };
-
-/* ─── Match List Item ─── */
 const MatchListItem: React.FC<{
     match: Match;
     isSelected: boolean;
@@ -145,9 +135,8 @@ const MatchListItem: React.FC<{
     return (
         <button
             onClick={onClick}
-            className={`w-full text-left px-3 py-2.5 border-b border-md-sys-outline/5 transition-colors flex items-center gap-2.5 ${isSelected ? 'bg-md-sys-primary/10 border-l-2 border-l-md-sys-primary' : 'hover:bg-md-sys-on-surface/5 border-l-2 border-l-transparent'}`}
+            className={`w-full text-left px-4 py-3 transition-colors flex items-center gap-3 ${isSelected ? 'md3-list-item--selected' : 'md3-list-item'}`}
         >
-            {/* Result Badge */}
             <div className={`w-2 h-8 rounded-full flex-shrink-0 ${RESULT_COLORS[match.result] || 'bg-slate-500'}`} />
 
             <div className="flex-1 min-w-0">
@@ -174,8 +163,6 @@ const MatchListItem: React.FC<{
         </button>
     );
 };
-
-/* ─── Match Detail Panel ─── */
 const MatchDetail: React.FC<{
     match: Match;
     onUpdate: (m: Match) => void;
@@ -190,8 +177,6 @@ const MatchDetail: React.FC<{
     const [editingField, setEditingField] = useState<string | null>(null);
     const [editValue, setEditValue] = useState<string>('');
     const [showRawOcr, setShowRawOcr] = useState(false);
-
-    // Load artifacts when match changes
     useEffect(() => {
         setArtifacts([]);
         if (match.artifacts && match.artifacts.length > 0) {
@@ -209,7 +194,13 @@ const MatchDetail: React.FC<{
     };
 
     const saveEdit = useCallback((field: string) => {
-        const updated = { ...match, [field]: editValue };
+        let updated: Match;
+        if (field === 'reachModifiers') {
+            const list = editValue.split(',').map(s => s.trim()).filter(Boolean);
+            updated = { ...match, reachModifiers: list };
+        } else {
+            updated = { ...match, [field]: editValue };
+        }
         onUpdate(updated);
         setEditingField(null);
     }, [match, editValue, onUpdate]);
@@ -224,7 +215,7 @@ const MatchDetail: React.FC<{
                         value={editValue}
                         onChange={e => setEditValue(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') saveEdit(field); if (e.key === 'Escape') setEditingField(null); }}
-                        className="flex-1 bg-md-sys-surface3 px-2 py-0.5 rounded text-xs outline-none"
+                        className="md3-textfield md3-textfield--outlined flex-1 text-xs"
                         autoFocus
                     />
                     <button onClick={() => saveEdit(field)} className="p-0.5 hover:text-green-400"><Check size={12} /></button>
@@ -241,7 +232,6 @@ const MatchDetail: React.FC<{
 
     return (
         <div className="p-4 space-y-4">
-            {/* Header */}
             <div className="flex items-start gap-4">
                 <div className={`px-3 py-1.5 rounded-xl text-sm font-black uppercase ${RESULT_COLORS[match.result]} text-white`}>
                     {match.result}
@@ -254,32 +244,27 @@ const MatchDetail: React.FC<{
                                 {match.ship}
                             </span>
                         )}
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-md-sys-on-surface/5 font-bold uppercase">{match.mode}</span>
+                        <span className="md3-chip text-xs font-bold uppercase">{match.mode}</span>
                         {match.subType && match.subType !== 'Combat' && (
                             <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 font-bold">{match.subType}</span>
                         )}
                     </div>
                     <div className="flex items-center gap-3 mt-1 text-[10px] opacity-40">
                         <span>{new Date(match.timestamp).toLocaleString()}</span>
-                        <span>ID: {match.id}</span>
                     </div>
                 </div>
             </div>
-
-            {/* Stats Summary */}
             <div className="grid grid-cols-4 gap-2">
                 <StatCard icon={<Clock size={14} />} label="Time" value={match.time || '--'} />
                 <StatCard icon={<HeartCrack size={14} className="text-rose-400" />} label="Damage" value={match.damageTaken?.toString() || '0'} />
                 <StatCard icon={<Target size={14} className="text-emerald-400" />} label="Kills" value={totalKills.toString()} />
                 {match.placement && <StatCard icon={<Trophy size={14} className="text-yellow-400" />} label="Place" value={`#${match.placement}`} />}
             </div>
-
-            {/* Kill Breakdown */}
             {totalKills > 0 && (
                 <Section title="Kill Breakdown" icon={<Crosshair size={14} />}>
                     <div className="flex flex-wrap gap-1.5">
                         {Object.entries(match.kills || {}).filter(([, v]) => v > 0).map(([ship, count]) => (
-                            <div key={ship} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-md-sys-surface3 text-xs">
+                            <div key={ship} className="flex items-center gap-1 px-2 py-1 rounded-lg md3-surface-high text-xs">
                                 <span className="font-bold">{count}</span>
                                 <span className="opacity-60">{ship}</span>
                             </div>
@@ -287,8 +272,6 @@ const MatchDetail: React.FC<{
                     </div>
                 </Section>
             )}
-
-            {/* Screenshots */}
             {artifacts.length > 0 && (
                 <Section title="Screenshots" icon={<Image size={14} />}>
                     <div className="grid grid-cols-3 gap-2">
@@ -296,7 +279,7 @@ const MatchDetail: React.FC<{
                             <button
                                 key={i}
                                 onClick={() => setLightboxSrc(src)}
-                                className="relative aspect-video bg-md-sys-surface3 rounded-lg overflow-hidden group"
+                                className="relative aspect-video md3-surface-high rounded-lg overflow-hidden group"
                             >
                                 <LocalImage
                                     src={src}
@@ -319,8 +302,6 @@ const MatchDetail: React.FC<{
                     )}
                 </Section>
             )}
-
-            {/* Editable Fields */}
             <Section title="Match Details" icon={<Edit3 size={14} />}>
                 <div className="space-y-2">
                     {renderEditableField('hero', match.hero, 'Hero')}
@@ -328,11 +309,10 @@ const MatchDetail: React.FC<{
                     {renderEditableField('killedBy', match.killedBy || '', 'Killed By')}
                     {renderEditableField('killedByShip', match.killedByShip || '', 'Killer Ship')}
                     {renderEditableField('artifactSource', match.artifactSource || '', 'Artifact')}
+                    {renderEditableField('reachModifiers', (match.reachModifiers || []).join(', '), 'Modifiers')}
                     {renderEditableField('notes', match.notes || '', 'Notes')}
                 </div>
             </Section>
-
-            {/* Teammates & Opponents */}
             {(match.teammates?.length > 0 || match.opponents?.length > 0) && (
                 <Section title="Players" icon={<Users size={14} />}>
                     {match.teammates?.length > 0 && (
@@ -340,7 +320,7 @@ const MatchDetail: React.FC<{
                             <span className="text-[10px] uppercase font-bold opacity-40 block mb-1">Teammates</span>
                             <div className="flex flex-wrap gap-1">
                                 {match.teammates.map(t => (
-                                    <span key={t} className="px-2 py-0.5 bg-green-500/10 text-green-400 rounded-md text-xs font-bold">{t}</span>
+                            <span key={t} className="md3-chip text-xs font-bold text-green-400">{t}</span>
                                 ))}
                             </div>
                         </div>
@@ -350,15 +330,13 @@ const MatchDetail: React.FC<{
                             <span className="text-[10px] uppercase font-bold opacity-40 block mb-1">Opponents</span>
                             <div className="flex flex-wrap gap-1">
                                 {match.opponents.map(o => (
-                                    <span key={o} className="px-2 py-0.5 bg-red-500/10 text-red-400 rounded-md text-xs font-bold">{o}</span>
+                            <span key={o} className="md3-chip text-xs font-bold text-red-400">{o}</span>
                                 ))}
                             </div>
                         </div>
                     )}
                 </Section>
             )}
-
-            {/* Killed By Section */}
             {match.killedBy && (
                 <Section title="Killed By" icon={<Skull size={14} />}>
                     <div className="flex items-center gap-2">
@@ -369,19 +347,15 @@ const MatchDetail: React.FC<{
                     </div>
                 </Section>
             )}
-
-            {/* Reach Modifiers */}
             {match.reachModifiers?.length > 0 && (
                 <Section title="Modifiers" icon={<AlertTriangle size={14} />}>
                     <div className="flex flex-wrap gap-1">
                         {match.reachModifiers.map((mod, i) => (
-                            <span key={i} className="px-2 py-0.5 bg-amber-500/10 text-amber-400 rounded-md text-xs font-bold">{mod}</span>
+                            <span key={i} className="md3-chip text-xs font-bold text-amber-400">{mod}</span>
                         ))}
                     </div>
                 </Section>
             )}
-
-            {/* POI Objectives */}
             {(match.poiEasy || match.poiMedium || match.poiEpic) ? (
                 <Section title="POI Objectives" icon={<Target size={14} />}>
                     <div className="flex gap-3">
@@ -391,8 +365,6 @@ const MatchDetail: React.FC<{
                     </div>
                 </Section>
             ) : null}
-
-            {/* Timeline Events */}
             {match.timelineEvents && match.timelineEvents.length > 0 && (
                 <Section title="Timeline" icon={<Clock size={14} />}>
                     <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
@@ -401,7 +373,7 @@ const MatchDetail: React.FC<{
                                 <span className="text-[9px] opacity-30 w-16 flex-shrink-0">
                                     {new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                                 </span>
-                                <span className="px-1.5 py-0.5 rounded bg-md-sys-on-surface/5 text-[9px] font-bold uppercase">{evt.type}</span>
+                                <span className="md3-chip text-[9px] font-bold uppercase">{evt.type}</span>
                                 <span className="opacity-60">{evt.label}</span>
                             </div>
                         ))}
@@ -409,7 +381,6 @@ const MatchDetail: React.FC<{
                 </Section>
             )}
 
-            {/* OCR Debug Info */}
             {(match.ocrDebug || (match.artifacts && match.artifacts.length > 0)) && (
                 <Section title="OCR Metadata" icon={<ShieldCheck size={14} />}>
                     <div className="space-y-2 text-xs">
@@ -461,7 +432,14 @@ const MatchDetail: React.FC<{
                 </Section>
             )}
 
-            {/* Lightbox */}
+            <Section title="Detection FAQ" icon={<ScanEye size={14} />}>
+                <div className="space-y-1 text-xs opacity-70">
+                    <div>Hero/Ship: telemetry when available, otherwise OCR from Smart Captures. Manual edits override.</div>
+                    <div>Modifiers/Hazards: only detected from Tactical or Crew Hub screenshots. Edit above if missing.</div>
+                    <div>Time/Damage: detected from the match result screen if visible; otherwise enter manually.</div>
+                    <div>Opponents/Teams: OCR is best-effort and often needs cleanup here.</div>
+                </div>
+            </Section>
             {lightboxSrc && (
                 <div className="fixed inset-0 z-[10000] bg-black/90 flex items-center justify-center p-8" onClick={() => setLightboxSrc(null)}>
                     <button onClick={() => setLightboxSrc(null)} className="absolute top-4 right-4 text-white/50 hover:text-white">
@@ -473,10 +451,8 @@ const MatchDetail: React.FC<{
         </div>
     );
 };
-
-/* ─── Reusable sub-components ─── */
 const Section: React.FC<{ title: string; icon: React.ReactNode; children: React.ReactNode }> = ({ title, icon, children }) => (
-    <div className="bg-md-sys-surface2 rounded-xl p-3">
+    <div className="md3-card rounded-xl p-3">
         <div className="flex items-center gap-1.5 mb-2">
             <span className="opacity-40">{icon}</span>
             <span className="text-[10px] uppercase font-bold opacity-50 tracking-wider">{title}</span>
@@ -486,7 +462,7 @@ const Section: React.FC<{ title: string; icon: React.ReactNode; children: React.
 );
 
 const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: string }> = ({ icon, label, value }) => (
-    <div className="bg-md-sys-surface2 rounded-xl p-2.5 flex flex-col items-center gap-0.5">
+    <div className="md3-card rounded-xl p-2.5 flex flex-col items-center gap-0.5">
         <span className="opacity-40">{icon}</span>
         <span className="text-[9px] uppercase font-bold opacity-40">{label}</span>
         <span className="text-sm font-black">{value}</span>
@@ -500,3 +476,5 @@ const POIBadge: React.FC<{ label: string; count: number; color: string }> = ({ l
         <span className="text-[9px] opacity-40 uppercase">{label}</span>
     </div>
 );
+
+

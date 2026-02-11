@@ -48,18 +48,18 @@ export class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-[#121212] text-white p-6">
-          <div className="max-w-md w-full bg-[#1e1e1e] p-8 rounded-2xl border border-red-500/20 shadow-2xl text-center">
-            <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
-                <AlertTriangle size={40} className="text-red-500" />
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center md3-dialog-scrim text-md-sys-on-surface p-6">
+          <div className="max-w-md w-full md3-dialog border border-md-sys-error/30 shadow-2xl text-center">
+            <div className="w-20 h-20 bg-md-sys-error-container/40 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
+                <AlertTriangle size={40} className="text-md-sys-error" />
             </div>
             <h1 className="text-2xl font-black uppercase tracking-widest mb-2">System Critical</h1>
             <p className="text-sm font-medium opacity-60 mb-6">
               The application encountered a critical error and could not render.
             </p>
             
-            <div className="bg-black/20 p-4 rounded-xl mb-6 text-left overflow-auto max-h-32 custom-scrollbar">
-                <code className="text-[10px] font-mono text-red-300 whitespace-pre-wrap">
+            <div className="md3-surface-high p-4 rounded-xl mb-6 text-left overflow-auto max-h-32 custom-scrollbar border border-md-sys-outline/10">
+                <code className="text-[10px] font-mono text-md-sys-error whitespace-pre-wrap">
                     {this.state.error?.toString()}
                 </code>
             </div>
@@ -67,13 +67,13 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="grid gap-3">
                 <button 
                     onClick={this.handleReload}
-                    className="w-full py-4 bg-red-600 text-white rounded-xl font-black uppercase tracking-widest hover:brightness-110 flex items-center justify-center gap-2"
+                    className="w-full py-4 md3-btn-filled rounded-xl font-black uppercase tracking-widest flex items-center justify-center gap-2 bg-md-sys-error text-md-sys-on-error hover:brightness-110"
                 >
                     <RefreshCw size={18}/> Reboot System
                 </button>
                 <button 
                     onClick={this.handleClearData}
-                    className="text-xs font-bold uppercase opacity-40 hover:opacity-100 hover:text-red-400 transition-colors"
+                    className="text-xs font-bold uppercase opacity-50 hover:opacity-100 hover:text-md-sys-error transition-colors"
                 >
                     Emergency Reset (Clear Cache)
                 </button>
@@ -86,3 +86,4 @@ export class ErrorBoundary extends Component<Props, State> {
     return this.props.children;
   }
 }
+

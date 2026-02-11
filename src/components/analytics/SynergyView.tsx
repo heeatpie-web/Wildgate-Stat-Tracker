@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+﻿import React, { useState, useMemo } from 'react';
 import { CHARACTERS, VisualMode } from '../../types';
 import { ArrowUpDown } from 'lucide-react';
 import { generateSynergyEditorial } from '../../utils/analyticsEditorial';
@@ -50,7 +50,7 @@ export const SynergyView: React.FC<SynergyViewProps> = ({ synergyMatrix, visualM
         <div className="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar animate-fade-in p-1">
             {/* Editorial Summary */}
             {!dense && (
-                <div className="bg-md-sys-surface2 rounded-2xl border border-white/5 p-6">
+                <div className="md3-card rounded-2xl p-6">
                     <p className="text-sm leading-relaxed opacity-70">{generateSynergyEditorial(synergyMatrix)}</p>
                 </div>
             )}
@@ -59,7 +59,7 @@ export const SynergyView: React.FC<SynergyViewProps> = ({ synergyMatrix, visualM
             {(top3.length > 0 || bottom3.length > 0) && (
                 <div className={`grid gap-3 ${dense ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2'}`}>
                     {top3.length > 0 && (
-                        <div className={`bg-md-sys-surface2 rounded-2xl border border-green-500/20 ${dense ? 'p-3' : 'p-4'}`}>
+                        <div className={`md3-card rounded-2xl border border-green-500/20 ${dense ? 'p-3' : 'p-4'}`}>
                             <div className="text-[10px] font-black uppercase opacity-60 text-green-500 mb-2">Best Synergies</div>
                             {top3.map((c, i) => (
                                 <div key={i} className="flex items-center justify-between py-1">
@@ -73,7 +73,7 @@ export const SynergyView: React.FC<SynergyViewProps> = ({ synergyMatrix, visualM
                         </div>
                     )}
                     {bottom3.length > 0 && (
-                        <div className={`bg-md-sys-surface2 rounded-2xl border border-red-500/20 ${dense ? 'p-3' : 'p-4'}`}>
+                        <div className={`md3-card rounded-2xl border border-red-500/20 ${dense ? 'p-3' : 'p-4'}`}>
                             <div className="text-[10px] font-black uppercase opacity-60 text-red-500 mb-2">Weakest Synergies</div>
                             {bottom3.map((c, i) => (
                                 <div key={i} className="flex items-center justify-between py-1">
@@ -90,14 +90,14 @@ export const SynergyView: React.FC<SynergyViewProps> = ({ synergyMatrix, visualM
             )}
 
             {/* Matrix */}
-            <div className="bg-md-sys-surface2 rounded-2xl p-6 flex flex-col gap-4 flex-1 min-h-0 border border-white/5">
+            <div className="md3-card rounded-2xl p-6 flex flex-col gap-4 flex-1 min-h-0">
                 <div className="flex justify-between items-center">
                     <h3 className={`font-black uppercase tracking-tight ${dense ? 'text-xl' : 'text-2xl'}`}>Synergy Matrix</h3>
                     <div className="flex items-center gap-3">
                         {/* Sort Toggle */}
                         <button
                             onClick={() => setSortBy(prev => prev === 'default' ? 'winRate' : prev === 'winRate' ? 'total' : 'default')}
-                            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-md-sys-surface3 text-[10px] font-bold uppercase hover:bg-md-sys-surface1 transition-colors"
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg md3-surface-high text-[10px] font-bold uppercase hover:bg-md-sys-on-surface/5 transition-colors"
                         >
                             <ArrowUpDown size={10} />
                             {sortBy === 'default' ? 'Default' : sortBy === 'winRate' ? 'By WR' : 'By Games'}
@@ -127,7 +127,7 @@ export const SynergyView: React.FC<SynergyViewProps> = ({ synergyMatrix, visualM
                                         const opacity = stat.total > 0 ? 0.2 + (wr * 0.8) : 0.05;
                                         return (
                                             <td key={hero} className="p-1">
-                                                <div className="w-full h-10 rounded-lg flex items-center justify-center relative group transition-all hover:scale-110 hover:z-10 hover:shadow-lg bg-md-sys-primary" style={{ opacity }}>
+                                                <div className="w-full h-10 rounded-lg flex items-center justify-center relative group transition-all hover:scale-110 hover:z-10 bg-md-sys-primary" style={{ opacity }}>
                                                     {stat.total > 0 && <span className="text-[10px] font-black text-md-sys-onPrimary relative z-20">{Math.round(wr * 100)}%</span>}
                                                     {stat.total > 0 && (
                                                         <div className="absolute bottom-full mb-2 bg-black/80 text-white text-[10px] p-2 rounded-lg whitespace-nowrap hidden group-hover:block z-50 pointer-events-none">
@@ -149,3 +149,7 @@ export const SynergyView: React.FC<SynergyViewProps> = ({ synergyMatrix, visualM
         </div>
     );
 };
+
+
+
+

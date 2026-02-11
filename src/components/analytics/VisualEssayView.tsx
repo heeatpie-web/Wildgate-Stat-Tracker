@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+﻿import React, { useMemo } from 'react';
 import { Match, VisualMode, MomentumData, SessionSummaryData, PeriodComparisonData, TimePatternData, KillEfficiencyData } from '../../types';
 import { synthesizeNarrative, type EssaySection } from '../../utils/analyticsEditorial';
 import { TrendingUp, TrendingDown, Minus, BookOpen } from 'lucide-react';
@@ -25,7 +25,7 @@ const TrendIcon: React.FC<{ trend?: 'up' | 'down' | 'stable' }> = ({ trend }) =>
 };
 
 const SectionCard: React.FC<{ section: EssaySection; index: number }> = ({ section, index }) => (
-    <div className="bg-md-sys-surface2 rounded-2xl border border-white/5 p-6 space-y-4 animate-fade-in" style={{ animationDelay: `${index * 80}ms` }}>
+    <div className="md3-card rounded-2xl p-6 space-y-4 animate-fade-in" style={{ animationDelay: `${index * 80}ms` }}>
         <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-full bg-md-sys-primary/20 flex items-center justify-center text-md-sys-primary text-[10px] font-black">
                 {index + 1}
@@ -36,9 +36,9 @@ const SectionCard: React.FC<{ section: EssaySection; index: number }> = ({ secti
         <p className="text-sm leading-relaxed opacity-70">{section.body}</p>
 
         {section.metrics && section.metrics.length > 0 && (
-            <div className="flex gap-3 pt-2 border-t border-white/5">
+            <div className="flex gap-3 pt-2 border-t border-md-sys-outlineVariant/30">
                 {section.metrics.map((m, i) => (
-                    <div key={i} className="flex items-center gap-1.5 bg-md-sys-surface3 px-3 py-1.5 rounded-lg">
+                    <div key={i} className="flex items-center gap-1.5 md3-surface-high px-3 py-1.5 rounded-lg">
                         <TrendIcon trend={m.trend} />
                         <span className="text-xs font-bold">{m.value}</span>
                         <span className="text-[9px] opacity-40 uppercase">{m.label}</span>
@@ -76,7 +76,7 @@ export const VisualEssayView: React.FC<VisualEssayViewProps> = ({
                 </p>
                 {momentumSparkline.length > 3 && (
                     <div className="flex justify-center pt-2 w-48 mx-auto">
-                        <SparklineWidget data={momentumSparkline} height={32} color="#8b5cf6" />
+                        <SparklineWidget data={momentumSparkline} height={32} color="var(--color-accent)" />
                     </div>
                 )}
             </div>
@@ -93,3 +93,7 @@ export const VisualEssayView: React.FC<VisualEssayViewProps> = ({
         </div>
     );
 };
+
+
+
+

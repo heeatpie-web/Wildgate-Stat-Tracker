@@ -142,13 +142,14 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
                 <div className="flex items-center gap-2">
                     <button
                         onClick={togglePause}
-                        className={`w-6 h-6 rounded flex items-center justify-center transition-all ${isPaused
-                            ? 'bg-amber-500 text-black'
-                            : 'md3-btn-tonal text-md-sys-on-surface hover:bg-md-sys-primary hover:text-md-sys-onPrimary'
+                        className={`md3-icon-btn md3-icon-btn--small transition-all ${isPaused
+                            ? 'bg-amber-500 text-black hover:brightness-110'
+                            : 'md3-icon-btn--tonal'
                             }`}
                         title={isPaused ? "Resume" : "Pause"}
+                        aria-label={isPaused ? "Resume" : "Pause"}
                     >
-                        {isPaused ? <Play size={10} /> : <Pause size={10} />}
+                        {isPaused ? <Play size={14} /> : <Pause size={14} />}
                     </button>
                     <div className="flex flex-col min-w-[60px]">
                         <span className={`font-mono font-bold text-sm leading-none ${isMatchInProgress ? 'text-success' : (isPaused ? 'text-amber-500' : 'text-md-sys-on-surface')}`}>

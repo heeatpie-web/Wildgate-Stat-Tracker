@@ -55,7 +55,7 @@ export const RivalryGraph: React.FC<RivalryGraphProps> = ({ matches, currentUser
   if (nodes.length === 0) return <div className="text-center p-10 opacity-40 uppercase font-black text-xs">No rivalry data yet</div>;
 
   return (
-    <div className="w-full h-[600px] flex items-center justify-center bg-md-sys-surface2 rounded-2xl overflow-hidden relative">
+    <div className="w-full h-[600px] flex items-center justify-center md3-card rounded-2xl overflow-hidden relative">
       <h3 className="absolute top-6 left-6 text-xs font-black uppercase opacity-60">Rivalry Network</h3>
       <svg width="600" height="600" viewBox="0 0 600 600" className="w-full h-full max-w-[600px] max-h-[600px]">
         {/* Links */}
@@ -64,7 +64,7 @@ export const RivalryGraph: React.FC<RivalryGraphProps> = ({ matches, currentUser
             key={i}
             x1={link.source.x} y1={link.source.y}
             x2={link.target.x} y2={link.target.y}
-            stroke={link.winRate > 0.5 ? '#22c55e' : '#ef4444'}
+            stroke={link.winRate > 0.5 ? 'var(--color-success)' : 'var(--color-danger)'}
             strokeWidth={Math.max(1, Math.min(10, link.weight / 2))}
             strokeOpacity="0.4"
           />
@@ -81,15 +81,17 @@ export const RivalryGraph: React.FC<RivalryGraphProps> = ({ matches, currentUser
               cx={n.x} cy={n.y} 
               r={Math.max(20, Math.min(50, n.stats.total * 3))} 
               fill="var(--md-sys-color-surface1)" 
-              stroke={n.stats.wins / n.stats.total > 0.5 ? '#22c55e' : '#ef4444'} 
+              stroke={n.stats.wins / n.stats.total > 0.5 ? 'var(--color-success)' : 'var(--color-danger)'} 
               strokeWidth="4"
             />
             <text x={n.x} y={n.y} dy="-10" textAnchor="middle" fill="var(--md-sys-color-on-surface)" fontSize="10" fontWeight="900" className="uppercase">{n.id}</text>
             <text x={n.x} y={n.y} dy="5" textAnchor="middle" fill="var(--md-sys-color-on-surface)" fontSize="9" opacity="0.6" fontWeight="bold">{n.stats.total} Games</text>
-            <text x={n.x} y={n.y} dy="18" textAnchor="middle" fill={n.stats.wins / n.stats.total > 0.5 ? '#22c55e' : '#ef4444'} fontSize="9" fontWeight="900">{Math.round((n.stats.wins/n.stats.total)*100)}% WR</text>
+            <text x={n.x} y={n.y} dy="18" textAnchor="middle" fill={n.stats.wins / n.stats.total > 0.5 ? 'var(--color-success)' : 'var(--color-danger)'} fontSize="9" fontWeight="900">{Math.round((n.stats.wins/n.stats.total)*100)}% WR</text>
           </g>
         ))}
       </svg>
     </div>
   );
 };
+
+

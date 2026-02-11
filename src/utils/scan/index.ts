@@ -4,13 +4,13 @@
  */
 
 // Types
-export type { ScanResult, TeamColor, LobbyScanResult, ScanOptions, SmartScanResult, MLDetection, OCRLine } from './types';
+export type { ScanResult, TeamColor, LobbyScanResult, ScanOptions, SmartScanResult, OCRLine } from './types';
 
 // Image utilities
 export { captureScreen, cropImageDataUrl, preprocessImage } from './imageUtils';
 
 // OCR utilities
-export { groupWordsIntoLines, runMLDetection, runNativeOCR, runCloudOCR, detectModifiers } from './ocrUtils';
+export { groupWordsIntoLines, runNativeOCR, runCloudOCR, detectModifiers } from './ocrUtils';
 
 // Color detection
 export { getTeamColor, sampleRegion } from './colorDetection';

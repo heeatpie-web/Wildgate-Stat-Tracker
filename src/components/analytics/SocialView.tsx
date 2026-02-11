@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Match, DrillDownTarget, VisualMode } from '../../types';
 import { Swords, Handshake, Search, Network, List, Rocket } from 'lucide-react';
 import { RivalryGraph } from '../RivalryGraph';
@@ -26,7 +26,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ socialData, filteredMatc
         <div className="flex-1 flex flex-col overflow-hidden h-full">
             {/* Editorial Summary */}
             {!dense && (
-                <div className="bg-md-sys-surface2 rounded-2xl border border-white/5 p-6 mb-4">
+                <div className="md3-card rounded-2xl p-6 mb-4">
                     <p className="text-sm leading-relaxed opacity-70">{generateSocialEditorial(socialData)}</p>
                 </div>
             )}
@@ -35,14 +35,14 @@ export const SocialView: React.FC<SocialViewProps> = ({ socialData, filteredMatc
                 <div className="relative flex-1">
                     <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" />
                     <input type="text" placeholder="Search pilots..." value={socialSearch} onChange={(e) => setSocialSearch(e.target.value)}
-                        className="w-full bg-md-sys-surface2 rounded-xl py-2 pl-10 pr-4 text-xs font-bold outline-none border border-transparent focus:border-md-sys-primary" />
+                        className="w-full md3-textfield--outlined rounded-xl py-2 pl-10 pr-4 text-xs font-bold outline-none" />
                 </div>
                 <div className="flex gap-2">
-                    <div className="flex bg-md-sys-surface2 p-1 rounded-xl">
-                        <button onClick={() => setSocialSort('WinRate')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase ${socialSort === 'WinRate' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-md' : 'opacity-60 hover:opacity-100'}`}>Win Rate</button>
-                        <button onClick={() => setSocialSort('Encounters')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase ${socialSort === 'Encounters' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-md' : 'opacity-60 hover:opacity-100'}`}>Encounters</button>
+                    <div className="flex md3-surface-high p-1 rounded-xl">
+                        <button onClick={() => setSocialSort('WinRate')} className={`md3-chip px-3 py-1.5 text-[10px] font-black uppercase ${socialSort === 'WinRate' ? 'md3-chip--selected' : 'opacity-60 hover:opacity-100'}`}>Win Rate</button>
+                        <button onClick={() => setSocialSort('Encounters')} className={`md3-chip px-3 py-1.5 text-[10px] font-black uppercase ${socialSort === 'Encounters' ? 'md3-chip--selected' : 'opacity-60 hover:opacity-100'}`}>Encounters</button>
                     </div>
-                    <button onClick={() => setShowSocialGraph(!showSocialGraph)} className="flex items-center gap-2 px-4 py-2 bg-md-sys-surface2 rounded-xl text-xs font-bold uppercase hover:bg-md-sys-primary hover:text-white transition-all shadow-sm">
+                    <button onClick={() => setShowSocialGraph(!showSocialGraph)} className="md3-btn-tonal flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase transition-all">
                         {showSocialGraph ? <List size={16} /> : <Network size={16} />} {showSocialGraph ? "List" : "Graph"}
                     </button>
                 </div>
@@ -63,7 +63,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ socialData, filteredMatc
                             });
 
                         return (
-                            <div key={type} className="bg-md-sys-surface2 flex flex-col rounded-2xl overflow-hidden shadow-lg border border-white/5">
+                            <div key={type} className="md3-card flex flex-col rounded-2xl overflow-hidden">
                                 <div className="p-4 pb-2"><h3 className="text-sm font-black uppercase flex items-center gap-2 opacity-60">
                                     {isOpponent ? <Swords size={16} /> : <Handshake size={16} />}
                                     {isOpponent ? 'Top Rivals' : 'Best Wingmen'}
@@ -74,9 +74,9 @@ export const SocialView: React.FC<SocialViewProps> = ({ socialData, filteredMatc
                                             const profile = playerProfiles[name];
                                             const topShip = profile?.shipsObserved ? Object.entries(profile.shipsObserved).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] : null;
                                             return (
-                                                <div key={name} onClick={() => onDrillDown(name, type as any)} className="flex justify-between items-center py-3 border-b border-md-sys-outline/10 last:border-0 cursor-pointer hover:bg-md-sys-surface3 p-2 rounded-xl transition-colors">
+                                                <div key={name} onClick={() => onDrillDown(name, type as any)} className="flex justify-between items-center py-3 border-b last:border-0 cursor-pointer hover:bg-md-sys-on-surface/5 p-2 rounded-xl transition-colors">
                                                     <div className="flex items-center gap-3">
-                                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${i === 0 ? (isOpponent ? 'bg-red-500 text-white' : 'bg-green-500 text-white') : 'bg-md-sys-surface3'}`}>{i + 1}</div>
+                                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${i === 0 ? (isOpponent ? 'bg-red-500 text-white' : 'bg-green-500 text-white') : 'md3-surface-high'}`}>{i + 1}</div>
                                                         <div className="flex flex-col">
                                                             <span className="font-bold text-sm leading-tight">{name}</span>
                                                             {topShip && <span className="text-[9px] font-black opacity-40 uppercase tracking-tighter flex items-center gap-1"><Rocket size={8} className="text-md-sys-primary" /> {topShip}</span>}
@@ -98,3 +98,8 @@ export const SocialView: React.FC<SocialViewProps> = ({ socialData, filteredMatc
         </div>
     );
 };
+
+
+
+
+

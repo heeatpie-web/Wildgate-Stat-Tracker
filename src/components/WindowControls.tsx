@@ -38,3 +38,4 @@ export const WindowControls: React.FC<WindowControlsProps> = ({ className = '' }
         </div>
     );
 };
+

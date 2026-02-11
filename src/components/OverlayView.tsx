@@ -28,10 +28,10 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
     // Standard Mini Mode (Opaque)
     if (!isTransparent) {
         return (
-            <div className="h-screen w-full flex flex-col overflow-hidden animate-fade-in bg-md-sys-surface1 border border-white/10 rounded-xl shadow-2xl">
+            <div className="h-screen w-full flex flex-col overflow-hidden animate-fade-in md3-card border border-md-sys-outlineVariant/25 rounded-xl shadow-2xl">
                 {/* Draggable Header */}
                 <div
-                    className="h-10 flex items-center justify-between px-3 shrink-0 select-none bg-black/20 border-b border-white/5"
+                    className="h-10 flex items-center justify-between px-3 shrink-0 select-none bg-black/20 border-b border-md-sys-outlineVariant/20"
                     style={{ WebkitAppRegion: 'drag' } as any}
                 >
                     <div className="flex items-center gap-2">
@@ -83,19 +83,19 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
     };
 
     return (
-        <div className="h-screen w-full flex flex-col pointer-events-none relative animate-fade-in border border-white/0 hover:border-white/10 transition-colors rounded-xl overflow-hidden">
+        <div className="h-screen w-full flex flex-col pointer-events-none relative animate-fade-in border border-transparent hover:border-md-sys-outlineVariant/25 transition-colors rounded-xl overflow-hidden">
             {/* Content - Floating Panels */}
             <div className="flex-1 flex flex-col items-center p-2 pointer-events-none relative z-10">
 
                 {/* Unified HUD Window - Wider for 2 Columns */}
                 <div
-                    className="pointer-events-auto mt-2 w-auto min-w-[320px] max-w-2xl flex flex-col bg-zinc-900/90 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+                    className="pointer-events-auto mt-2 w-full min-w-[300px] max-w-2xl flex flex-col bg-zinc-900/90 backdrop-blur-md border border-md-sys-outlineVariant/25 rounded-2xl shadow-2xl overflow-hidden"
                     onMouseEnter={() => setIgnoreFn(false)}
                     onMouseLeave={() => setIgnoreFn(true)}
                 >
                     {/* Header Bar (Drag Handle & Controls) */}
                     <div
-                        className="flex items-center justify-between px-3 py-2 bg-black/40 cursor-move active:cursor-grabbing border-b border-white/5"
+                        className="flex items-center justify-between px-3 py-2 bg-black/40 cursor-move active:cursor-grabbing border-b border-md-sys-outlineVariant/20"
                         style={{ WebkitAppRegion: 'drag' } as any}
                     >
                         <div className="flex items-center gap-2 text-white/70 group-hover:text-white transition-colors">
@@ -113,7 +113,7 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                                 <LayoutTemplate size={12} />
                                 <span className="text-[9px] font-bold uppercase">Dashboard</span>
                             </button>
-                            <button onClick={handleMinimize} className="p-1 hover:bg-white/10 rounded text-white/40 hover:text-white transition-colors" title="Minimize"><Minus size={12} /></button>
+                            <button onClick={handleMinimize} className="p-1 hover:bg-md-sys-on-surface/10 rounded text-white/40 hover:text-white transition-colors" title="Minimize"><Minus size={12} /></button>
                             <button onClick={handleClose} className="p-1 hover:bg-red-500/80 rounded text-white/40 hover:text-white transition-colors" title="Close"><X size={12} /></button>
                         </div>
                     </div>
@@ -126,7 +126,7 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                         </div>
 
                         {/* Right: Stats (Info) - Accordion keeps it compact */}
-                        <div className="flex flex-col justify-start border-l border-white/10 pl-3">
+                        <div className="flex flex-col justify-start border-l border-md-sys-outlineVariant/25 pl-3">
                             <MissionPanel variant="transparent" accordionMode={true} />
                         </div>
                     </div>
@@ -139,3 +139,4 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
         </div>
     );
 };
+

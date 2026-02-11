@@ -7,7 +7,7 @@ export default {
   darkMode: ['class', '[data-mode="dark"]', '[data-mode="twilight"]'],
   theme: {
     fontFamily: {
-      sans: ['Inter', 'sans-serif'],
+      sans: ['Inter', 'Roboto', 'sans-serif'],
     },
     extend: {
       animation: {
@@ -27,8 +27,18 @@ export default {
             onPrimary: 'var(--md-sys-color-on-primary)',
             primaryContainer: 'var(--md-sys-color-primary-container)',
             onPrimaryContainer: 'var(--md-sys-color-on-primary-container)',
+            secondary: 'var(--md-sys-color-secondary)',
+            onSecondary: 'var(--md-sys-color-on-secondary)',
+            secondaryContainer: 'var(--md-sys-color-secondary-container)',
+            onSecondaryContainer: 'var(--md-sys-color-on-secondary-container)',
+            tertiary: 'var(--md-sys-color-tertiary)',
+            onTertiary: 'var(--md-sys-color-on-tertiary)',
+            tertiaryContainer: 'var(--md-sys-color-tertiary-container)',
+            onTertiaryContainer: 'var(--md-sys-color-on-tertiary-container)',
             surface: 'var(--md-sys-color-surface)',
             onSurface: 'var(--md-sys-color-on-surface)',
+            surfaceVariant: 'var(--md-sys-color-surface-variant)',
+            onSurfaceVariant: 'var(--md-sys-color-on-surface-variant)',
             surface1: 'var(--md-sys-color-surface-container-low)',
             surface2: 'var(--md-sys-color-surface-container)',
             surface3: 'var(--md-sys-color-surface-container-high)',

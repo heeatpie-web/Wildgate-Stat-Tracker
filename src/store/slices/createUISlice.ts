@@ -29,6 +29,8 @@ export interface UISlice {
     overlayTab: 'Mission' | 'Squadron' | 'Social';
     overlayPhase: 'Setup' | 'Live' | 'Result';
     activeView: 'recording' | 'analytics' | 'history' | 'smart-captures' | 'dev-ocr';
+    visionStatus: 'idle' | 'capturing' | 'scanning' | 'processing';
+    telemetryStatus: { exists: boolean, size?: number, lastCheck?: number, error?: string, path?: string };
 
     setIsLoading: (isLoading: boolean) => void;
     setShowWelcome: (show: boolean) => void;
@@ -52,6 +54,10 @@ export interface UISlice {
     setActiveView: (view: 'recording' | 'analytics' | 'history' | 'smart-captures' | 'dev-ocr') => void;
     showIdMapper: boolean;
     setShowIdMapper: (show: boolean) => void;
+    setVisionStatus: (status: 'idle' | 'capturing' | 'scanning' | 'processing') => void;
+    setTelemetryStatus: (status: any) => void;
+    smartCapturesFocusMatchId: number | null;
+    setSmartCapturesFocusMatchId: (id: number | null) => void;
 }
 
 export const createUISlice: StateCreator<UISlice> = (set) => ({
@@ -75,6 +81,8 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     overlayTab: 'Mission',
     overlayPhase: 'Setup',
     activeView: 'recording',
+    visionStatus: 'idle',
+    telemetryStatus: { exists: false },
     layouts: {
         lg: [
             { i: 'squadron', x: 0, y: 0, w: 6, h: 9 },
@@ -145,4 +153,8 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     setActiveView: (view) => set({ activeView: view }),
     showIdMapper: false,
     setShowIdMapper: (show) => set({ showIdMapper: show }),
+    setVisionStatus: (status) => set({ visionStatus: status }),
+    setTelemetryStatus: (status) => set({ telemetryStatus: status }),
+    smartCapturesFocusMatchId: null,
+    setSmartCapturesFocusMatchId: (id) => set({ smartCapturesFocusMatchId: id }),
 });

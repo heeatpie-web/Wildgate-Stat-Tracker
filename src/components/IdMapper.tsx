@@ -11,7 +11,7 @@ const RoleBadge: React.FC<{ role: PlayerRole }> = ({ role }) => {
         teammate: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Teammate' },
         opponent: { bg: 'bg-rose-500/20', text: 'text-rose-400', label: 'Opponent' },
         mixed: { bg: 'bg-amber-500/20', text: 'text-amber-400', label: 'Mixed' },
-        unknown: { bg: 'bg-md-sys-surface3', text: 'text-md-sys-on-surface/40', label: 'Unknown' }
+        unknown: { bg: 'md3-surface-high', text: 'text-md-sys-on-surface/40', label: 'Unknown' }
     };
     const s = styles[role];
     return (
@@ -102,7 +102,7 @@ export const IdMapper: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col gap-4 p-4 bg-md-sys-surface1 rounded-xl">
+        <div className="flex flex-col gap-4 p-4 md3-card rounded-xl">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
@@ -125,7 +125,7 @@ export const IdMapper: React.FC = () => {
             </div>
 
             {/* Search */}
-            <div className="bg-md-sys-surface2 p-2 rounded-lg flex items-center gap-2">
+            <div className="md3-surface-high p-2 rounded-lg flex items-center gap-2">
                 <Users size={14} className="opacity-50" />
                 <input
                     type="text"
@@ -142,7 +142,7 @@ export const IdMapper: React.FC = () => {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-1 bg-md-sys-surface2 p-1 rounded-lg">
+            <div className="flex gap-1 md3-surface-high p-1 rounded-lg">
                 {[
                     { id: 'unknowns', label: 'Unknowns', count: Object.keys(detectedUnknowns).length },
                     { id: 'known', label: 'Known', count: Object.keys(knownMappings).length },
@@ -153,12 +153,12 @@ export const IdMapper: React.FC = () => {
                         onClick={() => setActiveTab(tab.id as any)}
                         className={`flex-1 px-3 py-2 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${activeTab === tab.id
                             ? 'bg-md-sys-primary text-md-sys-onPrimary'
-                            : 'hover:bg-md-sys-surface3 text-md-sys-on-surface/60'
+                            : 'hover:bg-md-sys-on-surface/10 text-md-sys-on-surface/60'
                             }`}
                     >
                         {tab.label}
                         {tab.count > 0 && (
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] ${activeTab === tab.id ? 'bg-white/20' : 'bg-md-sys-surface3'
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] ${activeTab === tab.id ? 'bg-white/20' : 'md3-surface-high'
                                 }`}>{tab.count}</span>
                         )}
                     </button>
@@ -169,7 +169,7 @@ export const IdMapper: React.FC = () => {
             <div className="flex-1 min-h-0">
                 {/* Unknowns Tab */}
                 {activeTab === 'unknowns' && (
-                    <div className="bg-md-sys-surface2 rounded-lg p-2 max-h-60 overflow-y-auto space-y-2">
+                    <div className="md3-card rounded-lg p-2 max-h-60 overflow-y-auto space-y-2">
                         {Object.keys(detectedUnknowns).length === 0 ? (
                             <div className="text-center p-8 text-xs opacity-40">No unknown IDs detected yet</div>
                         ) : (
@@ -183,7 +183,7 @@ export const IdMapper: React.FC = () => {
                                     const profile = playerProfiles[id];
                                     const role = getPlayerRole(id);
                                     return (
-                                        <div key={id} className="flex items-center gap-3 bg-md-sys-surface3 p-2 rounded-md">
+                                        <div key={id} className="flex items-center gap-3 md3-surface-high p-2 rounded-md">
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-[10px] font-mono opacity-50 bg-black/20 px-1 rounded">{meta.type}</span>
@@ -200,13 +200,13 @@ export const IdMapper: React.FC = () => {
                                                 placeholder="Name..."
                                                 value={nameInputs[id] || ''}
                                                 onChange={e => setNameInputs({ ...nameInputs, [id]: e.target.value })}
-                                                className="w-24 bg-black/20 rounded px-2 py-1 text-xs outline-none focus:ring-1 ring-md-sys-primary"
+                                                className="md3-textfield md3-textfield--outlined w-24 text-xs"
                                                 onKeyDown={e => e.key === 'Enter' && handleSave(id)}
                                             />
                                             <button
                                                 onClick={() => handleSave(id)}
                                                 disabled={!nameInputs[id]}
-                                                className="p-1.5 bg-emerald-500/20 text-emerald-500 rounded hover:bg-emerald-500/30 disabled:opacity-30"
+                                                className="md3-icon-btn text-emerald-400 disabled:opacity-30"
                                             >
                                                 <Save size={14} />
                                             </button>
@@ -219,7 +219,7 @@ export const IdMapper: React.FC = () => {
 
                 {/* Known Tab */}
                 {activeTab === 'known' && (
-                    <div className="bg-md-sys-surface2 rounded-lg p-2 max-h-60 overflow-y-auto space-y-1">
+                    <div className="md3-card rounded-lg p-2 max-h-60 overflow-y-auto space-y-1">
                         {Object.entries(knownMappings)
                             .filter(([id, name]) =>
                                 !searchTerm ||
@@ -239,7 +239,7 @@ export const IdMapper: React.FC = () => {
                                     const profile = playerProfiles[id];
                                     const role = getPlayerRole(id);
                                     return (
-                                        <div key={id} className="flex items-center justify-between bg-md-sys-surface3/50 px-3 py-2 rounded text-xs group">
+                                        <div key={id} className="flex items-center justify-between md3-surface-high/50 px-3 py-2 rounded text-xs group">
                                             <div className="flex items-center gap-3 overflow-hidden">
                                                 <span className="font-bold text-md-sys-primary truncate">{name}</span>
                                                 <RoleBadge role={role} />
@@ -266,7 +266,7 @@ export const IdMapper: React.FC = () => {
                 {activeTab === 'relationships' && (
                     <div className="space-y-4">
                         {/* Player Profiles - Direct from playerProfiles data */}
-                        <div className="bg-md-sys-surface2 rounded-lg p-3">
+                        <div className="md3-card rounded-lg p-3">
                             <h4 className="text-xs font-bold uppercase tracking-wide text-md-sys-primary flex items-center gap-2 mb-2">
                                 <Users size={12} /> Player Sightings ({Object.keys(playerProfiles).length})
                             </h4>
@@ -290,7 +290,7 @@ export const IdMapper: React.FC = () => {
                                             const topShip = profile.ships ? Object.entries(profile.ships).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] : null;
 
                                             return (
-                                                <div key={id} className="flex items-center gap-2 bg-md-sys-surface3/50 px-2 py-1.5 rounded text-xs group">
+                                                <div key={id} className="flex items-center gap-2 md3-surface-high/50 px-2 py-1.5 rounded text-xs group">
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center gap-2">
                                                             <span className="font-bold truncate">{profile.name || id.slice(0, 12) + '...'}</span>
@@ -319,7 +319,7 @@ export const IdMapper: React.FC = () => {
                         </div>
 
                         {/* Top Opponents */}
-                        <div className="bg-md-sys-surface2 rounded-lg p-3">
+                        <div className="md3-card rounded-lg p-3">
                             <h4 className="text-xs font-bold uppercase tracking-wide text-rose-400 flex items-center gap-2 mb-2">
                                 <UserMinus size={12} /> Frequent Opponents
                             </h4>
@@ -339,7 +339,7 @@ export const IdMapper: React.FC = () => {
                         </div>
 
                         {/* Top Teammates */}
-                        <div className="bg-md-sys-surface2 rounded-lg p-3">
+                        <div className="md3-card rounded-lg p-3">
                             <h4 className="text-xs font-bold uppercase tracking-wide text-emerald-400 flex items-center gap-2 mb-2">
                                 <UserCheck size={12} /> Frequent Teammates
                             </h4>
@@ -371,9 +371,9 @@ export const IdMapper: React.FC = () => {
                         value={jsonInput}
                         onChange={e => setJsonInput(e.target.value)}
                         placeholder='Paste JSON here: {"ID": "Name", ...}'
-                        className="flex-1 h-20 bg-black/20 rounded p-2 text-[10px] font-mono outline-none"
+                        className="md3-textfield md3-textfield--outlined flex-1 h-20 text-[10px] font-mono"
                     />
-                    <button onClick={handleImport} className="px-3 bg-md-sys-surface3 hover:bg-md-sys-primary hover:text-md-sys-onPrimary rounded transition-colors text-xs font-bold">
+                    <button onClick={handleImport} className="md3-btn-tonal text-xs font-bold">
                         Import
                     </button>
                 </div>
@@ -381,3 +381,4 @@ export const IdMapper: React.FC = () => {
         </div>
     );
 };
+

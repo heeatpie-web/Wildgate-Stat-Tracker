@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { LayoutGrid, Newspaper } from 'lucide-react';
 import { VisualMode } from '../../types';
 
@@ -9,13 +9,13 @@ interface DenseEditorialToggleProps {
 
 export const DenseEditorialToggle: React.FC<DenseEditorialToggleProps> = ({ visualMode, onChange }) => {
     return (
-        <div className="flex bg-md-sys-surface1 p-1 rounded-xl">
+        <div className="flex md3-surface-high p-1 rounded-xl">
             <button onClick={() => onChange('dense')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${visualMode === 'dense' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-md' : 'opacity-60 hover:opacity-100'}`}>
+                className={`md3-chip flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase transition-all ${visualMode === 'dense' ? 'md3-chip--selected' : 'opacity-60 hover:opacity-100'}`}>
                 <LayoutGrid size={12} /> Dense
             </button>
             <button onClick={() => onChange('editorial')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${visualMode === 'editorial' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-md' : 'opacity-60 hover:opacity-100'}`}>
+                className={`md3-chip flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase transition-all ${visualMode === 'editorial' ? 'md3-chip--selected' : 'opacity-60 hover:opacity-100'}`}>
                 <Newspaper size={12} /> Editorial
             </button>
         </div>
@@ -23,7 +23,7 @@ export const DenseEditorialToggle: React.FC<DenseEditorialToggleProps> = ({ visu
 };
 
 /**
- * Inline narrative toggle — sits within each analytics view's content area.
+ * Inline narrative toggle - sits within each analytics view's content area.
  * Shows a small pill toggle to show/hide the narrative summary text.
  */
 export const InlineNarrativeToggle: React.FC<{ visualMode: VisualMode; onChange: (mode: VisualMode) => void }> = ({ visualMode, onChange }) => {
@@ -31,14 +31,14 @@ export const InlineNarrativeToggle: React.FC<{ visualMode: VisualMode; onChange:
     return (
         <button
             onClick={() => onChange(isEditorial ? 'dense' : 'editorial')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all ${
-                isEditorial
-                    ? 'bg-md-sys-primary/15 text-md-sys-primary ring-1 ring-md-sys-primary/30'
-                    : 'bg-md-sys-surface3 opacity-50 hover:opacity-80'
-            }`}
+            className={`md3-chip flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase transition-all ${isEditorial ? 'md3-chip--selected' : 'md3-surface-high opacity-50 hover:opacity-80'}`}
         >
             <Newspaper size={11} />
             {isEditorial ? 'Narrative On' : 'Narrative'}
         </button>
     );
 };
+
+
+
+

@@ -1,8 +1,3 @@
-/**
- * @module scan/tesseractScan
- * Tesseract-based OCR with Chinese character support (eng+chi_sim).
- * Uses region-based extraction with dynamic user anchor detection.
- */
 import Logger from '../logger';
 import { ocrProcessCapture } from '../electronBridge';
 import type { LobbyScanResult, SmartScanResult, ScanOptions, TeamColor } from './types';
@@ -24,8 +19,6 @@ export const mapTeamColor = (color: string | undefined): TeamColor => {
         default: return 'Unknown';
     }
 };
-
-/** Check if a team color from OCR indicates spectators (dark/black badges) */
 export const isSpectatorColor = (color: string | undefined): boolean => {
     return color?.toLowerCase() === 'spectator';
 };
@@ -42,7 +35,8 @@ export const processWithTesseractOCR = async (
 
         const base64Data = imageDataUrl.replace(/^data:image\/\w+;base64,/, '');
 
-        const ocrResponse = await ocrProcessCapture(base64Data, activeUser, null, options.ocrMode || 'both');
+        const effectiveOcrMode = options.ocrMode === 'hybrid-plus' ? 'both' : (options.ocrMode || 'both');
+        const ocrResponse = await ocrProcessCapture(base64Data, activeUser, null, effectiveOcrMode);
 
         if (!ocrResponse.success || !ocrResponse.data) {
             Logger.warn('OCR', 'Tesseract OCR failed, falling back to native');
@@ -70,7 +64,6 @@ export const processWithTesseractOCR = async (
             });
 
             (ocrData.opponentTeams || []).forEach(team => {
-                // Skip spectator teams (dark/black badge = not opponents)
                 if (isSpectatorColor(team.color)) return;
                 const teamColor = mapTeamColor(team.color);
                 (team.players || []).forEach(p => {
@@ -131,7 +124,7 @@ export const processWithTesseractOCR = async (
 
             const modifiers = [
                 ...(ocrData.reachModifiers || []).map(m => getModifierName(m)).filter(Boolean),
-                ...((ocrData as any).hazards || []),
+                ...(ocrData.hazards || []),
             ];
 
             onProgress?.('Complete', 100);
@@ -157,3 +150,5 @@ export const processWithTesseractOCR = async (
         return { mode: 'Unknown' };
     }
 };
+
+

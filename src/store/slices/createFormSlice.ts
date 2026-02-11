@@ -1,9 +1,3 @@
-/**
- * @module createFormSlice
- * Transient form state for the match recording UI: selected teammates/opponents,
- * active hero/ship/weapons, kills, POI counts, and pending wizard data.
- * Reset after each match submission via resetForm().
- */
 import { StateCreator } from 'zustand';
 import { CHARACTERS, SHIPS, KillMap, getShipCapacity } from '../../types';
 import { DataSource, getPriority } from './createDataSlice';

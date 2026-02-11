@@ -35,13 +35,13 @@ export async function captureGameWindow(): Promise<CaptureResult> {
  * @param imageBase64 - Base64 encoded image
  * @param activeUser - Current user's display name (for anchor-based detection)
  * @param existingData - Previous capture data to merge with (for scrolled captures)
- * @param ocrMode - OCR engine mode: 'local', 'cloud', or 'both'
+ * @param ocrMode - OCR engine mode: 'local', 'cloud', 'both', or 'hybrid-plus'
  */
 export async function ocrProcessCapture(
   imageBase64: string,
   activeUser?: string | null,
   existingData?: any,
-  ocrMode: 'local' | 'cloud' | 'both' = 'both'
+  ocrMode: 'local' | 'cloud' | 'both' | 'hybrid-plus' = 'both'
 ): Promise<OCRProcessResult> {
   const ipc = getIpcRenderer();
   if (!ipc) {
@@ -91,6 +91,7 @@ export interface GCloudStorageStats {
 
 export interface GCloudStatus {
   visionReady: boolean;
+  geminiReady?: boolean;
   storageReady: boolean;
   storageStats: GCloudStorageStats;
 }

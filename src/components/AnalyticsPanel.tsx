@@ -10,3 +10,4 @@ const AnalyticsPanel: React.FC = () => {
 };
 
 export default AnalyticsPanel;
+

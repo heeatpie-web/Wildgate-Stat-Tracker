@@ -1,9 +1,3 @@
-/**
- * @module useMatchSubmission
- * Handles the end-to-end match submission flow: validates form data,
- * constructs a Match record, triggers confetti/sound effects, bundles
- * screenshot artifacts, persists via addMatch(), and resets the form.
- */
 import { useCallback, useState } from 'react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
@@ -12,6 +6,7 @@ import { Match } from '../types';
 import confetti from 'canvas-confetti';
 import { useSoundEffects } from '../hooks/useSoundEffects';
 import { bundleMatchArtifacts } from '../utils/artifactService';
+import { StorageService } from '../utils/storage';
 import Logger from '../utils/logger';
 
 export const useMatchSubmission = () => {
@@ -50,12 +45,17 @@ export const useMatchSubmission = () => {
     const { playVictory, playDefeat } = useSoundEffects();
     const [submitting, setSubmitting] = useState(false);
 
+    const pickFirstKnown = (...values: Array<string | undefined | null>) => {
+        const known = values.find(v => v && !/^unknown/i.test(v));
+        return known || values.find(v => v) || '';
+    };
+
     const initiateSubmission = useCallback((result: 'Win' | 'Loss' | 'Draw') => {
         const state = useAppStore.getState();
         const {
             activeUser, activeMode,
             selectedTeammates, selectedOpponents,
-            activeHero, activeShip, activeWeapons,
+            activeHero, activeShip, activeWeapons, currentLoadout,
             selectedReachModifiers, kills,
             timeMin, timeSec, isMatchInProgress, matchStartTime,
             damageTaken, currentNote,
@@ -69,30 +69,24 @@ export const useMatchSubmission = () => {
 
         let finalTimeMin = timeMin;
         let finalTimeSec = timeSec;
-
-        // Auto-calculate time if match was in progress and manual time is empty
         if (isMatchInProgress && matchStartTime && !timeMin && !timeSec) {
             const durationMs = Date.now() - matchStartTime;
             const totalSeconds = Math.floor(durationMs / 1000);
             finalTimeMin = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
             finalTimeSec = (totalSeconds % 60).toString().padStart(2, '0');
-
-            // Reset match timer after capture
             setIsMatchInProgress(false);
             setMatchStartTime(null);
         }
 
         const timeStr = (finalTimeMin || finalTimeSec) ? `${finalTimeMin || '00'}:${finalTimeSec || '00'}` : "";
         const dmg = Math.max(0, Math.min(15000, parseInt(damageTaken) || 0));
-
-        // We set pending match data to be used in the Wizard
         const data: Partial<Match> = {
             mode: activeMode,
             player: activeUser,
             teammates: selectedTeammates,
             opponents: selectedOpponents,
-            hero: activeHero || undefined,
-            ship: activeShip || undefined,
+            hero: pickFirstKnown(activeHero, currentLoadout?.hero) || undefined,
+            ship: pickFirstKnown(activeShip, currentLoadout?.ship) || undefined,
             weapons: activeWeapons,
             reachModifiers: selectedReachModifiers,
             kills,
@@ -104,9 +98,20 @@ export const useMatchSubmission = () => {
             notes: currentNote
         };
 
+        const healthWarnings: string[] = [];
+        if (!data.ship) healthWarnings.push('missing ship');
+        if (!data.hero) healthWarnings.push('missing hero');
+        if (!data.time) healthWarnings.push('missing duration');
+        if ((data.teammates?.length || 0) === 0 && (data.opponents?.length || 0) === 0) {
+            healthWarnings.push('no players detected');
+        }
+        if (healthWarnings.length > 0) {
+            setToast({ message: `Health check: ${healthWarnings.join(', ')}`, type: 'warning' });
+        }
+
         setPendingMatchData(data);
         setShowWizard(result);
-    }, [setToast, setPendingMatchData, setShowWizard, setIsMatchInProgress, setMatchStartTime]);
+    }, [setToast, setPendingMatchData, setShowWizard, setIsMatchInProgress, setMatchStartTime, pickFirstKnown]);
 
     const processFinalSubmission = useCallback(async (subType: string) => {
         const state = useAppStore.getState();
@@ -115,14 +120,19 @@ export const useMatchSubmission = () => {
             pendingPlacement, pendingArtifactType, pendingKilledBy, pendingKilledByShip,
             timeMin, timeSec, activeUser, activeMode,
             currentLoadout, timelineEvents, sessionStartTime,
-            sessionTeams, sessionShipTypes
+            sessionTeams, sessionShipTypes,
+            activeHero, activeShip,
+            selectedReachModifiers
         } = state;
 
         if (!pendingMatchData || submitting) return;
 
         try {
             setSubmitting(true);
-            let finalMods = [...(pendingMatchData.reachModifiers || [])];
+            const baseMods = (selectedReachModifiers && selectedReachModifiers.length > 0)
+                ? selectedReachModifiers
+                : (pendingMatchData.reachModifiers || []);
+            let finalMods = [...baseMods];
             if (subType === 'Artifact') finalMods.push(`Artifact: ${pendingArtifactType || 'Healing'}`);
 
             if (showWizard === 'Win') {
@@ -131,9 +141,10 @@ export const useMatchSubmission = () => {
             } else {
                 playDefeat();
             }
-
-            // NEW: Recalculate time from latest state to capture Wizard overrides
             const finalTime = (timeMin || timeSec) ? `${timeMin || '00'}:${timeSec || '00'}` : (pendingMatchData.time || "00:00");
+
+            const resolvedHero = pickFirstKnown(pendingMatchData.hero, currentLoadout?.hero, activeHero);
+            const resolvedShip = pickFirstKnown(pendingMatchData.ship, currentLoadout?.ship, activeShip);
 
             const newMatch: Match = {
                 id: Date.now(),
@@ -143,8 +154,8 @@ export const useMatchSubmission = () => {
                 player: pendingMatchData.player || activeUser,
                 teammates: pendingMatchData.teammates || [],
                 opponents: pendingMatchData.opponents || [],
-                hero: pendingMatchData.hero || "",
-                ship: pendingMatchData.ship || "",
+                hero: resolvedHero,
+                ship: resolvedShip,
                 loadout: currentLoadout || undefined,
                 reachModifiers: finalMods,
                 kills: pendingMatchData.kills || {},
@@ -164,11 +175,8 @@ export const useMatchSubmission = () => {
                 ocrDebug: pendingMatchData?.ocrDebug || undefined,
                 opponentTeams: pendingMatchData?.opponentTeams || undefined
             };
-
-            // Add Match first
             addMatch(newMatch);
-
-            // Bundle Artifacts (Async)
+            await StorageService.flush();
             const parts = finalTime.split(':').map(Number);
             const totalDurationSecs = ((parts[0] || 0) * 60) + (parts[1] || 0);
             const matchStart = sessionStartTime || (Date.now() - (totalDurationSecs * 1000));
@@ -181,8 +189,6 @@ export const useMatchSubmission = () => {
                     updateMatch(updated);
                 }
             });
-
-            // Comprehensive Recording for ID Mapping
             const myTeam = [activeUser, ...(pendingMatchData.teammates || [])];
             const explicitOpponents = (pendingMatchData.opponents || []);
 
@@ -193,8 +199,6 @@ export const useMatchSubmission = () => {
                     recordPlayerSighting(p, color, myTeam, explicitOpponents, ship);
                 });
             });
-
-            // Reset UI and State
             setShowWizard(null);
             setPendingMatchData(null);
             setPendingPlacement(null);
@@ -207,8 +211,6 @@ export const useMatchSubmission = () => {
             setTimelineEvents([]);
             setIsMatchInProgress(false);
             setMatchStartTime(null);
-
-            // Reset manual fields
             setPoiEasy(0); setPoiMedium(0); setPoiEpic(0); setKills({ "AI Legion": 0 });
             setTimeMin(""); setTimeSec(""); setSelectedReachModifiers([]);
             setDamageTaken(""); setCurrentNote(""); setActiveWeapons({});
@@ -221,7 +223,7 @@ export const useMatchSubmission = () => {
         } finally {
             setSubmitting(false);
         }
-    }, [submitting, addMatch, setPendingMatchData, setShowWizard, setPendingPlacement, setPendingArtifactType, setPendingKilledBy, setPendingKilledByShip, setSelectedOpponents, setTimelineEvents, setIsMatchInProgress, setMatchStartTime, setPoiEasy, setPoiMedium, setPoiEpic, setKills, setTimeMin, setTimeSec, setSelectedReachModifiers, setDamageTaken, setCurrentNote, setActiveWeapons, setToast, playVictory, playDefeat, updateMatch, recordPlayerSighting]);
+    }, [submitting, addMatch, setPendingMatchData, setShowWizard, setPendingPlacement, setPendingArtifactType, setPendingKilledBy, setPendingKilledByShip, setSelectedOpponents, setTimelineEvents, setIsMatchInProgress, setMatchStartTime, setPoiEasy, setPoiMedium, setPoiEpic, setKills, setTimeMin, setTimeSec, setSelectedReachModifiers, setDamageTaken, setCurrentNote, setActiveWeapons, setToast, playVictory, playDefeat, updateMatch, recordPlayerSighting, pickFirstKnown]);
 
     return {
         initiateSubmission,
@@ -229,3 +231,5 @@ export const useMatchSubmission = () => {
         submitting
     };
 };
+
+

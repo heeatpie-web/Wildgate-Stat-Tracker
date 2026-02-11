@@ -27,3 +27,4 @@ export const Toast: React.FC<ToastProps> = ({ message, type = 'info', duration =
     document.body
   );
 };
+

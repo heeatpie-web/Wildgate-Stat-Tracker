@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { SessionSummaryData, VisualMode } from '../../types';
 import { Calendar, Trophy, Crosshair, TrendingUp } from 'lucide-react';
 import { generateSessionSummaryEditorial } from '../../utils/analyticsEditorial';
@@ -14,13 +14,13 @@ export const SessionSummaryView: React.FC<SessionSummaryViewProps> = ({ data, vi
         <div className="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar animate-fade-in p-1">
             {/* Editorial Summary */}
             {!dense && (
-                <div className="bg-md-sys-surface2 rounded-2xl border border-white/5 p-6">
+                <div className="md3-card rounded-2xl p-6">
                     <p className="text-sm leading-relaxed opacity-70">{generateSessionSummaryEditorial(data)}</p>
                 </div>
             )}
 
             {/* Today's session */}
-            <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 ${dense ? 'p-4' : 'p-8'}`}>
+            <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-8'}`}>
                 <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-sm' : 'text-lg'}`}>
                     <Calendar size={16} /> Today's Session
                 </h3>
@@ -54,7 +54,7 @@ export const SessionSummaryView: React.FC<SessionSummaryViewProps> = ({ data, vi
 
             {/* Yesterday comparison */}
             {yesterday && today && (
-                <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 ${dense ? 'p-4' : 'p-6'}`}>
+                <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
                     <h3 className={`font-black uppercase opacity-60 mb-3 flex items-center gap-2 ${dense ? 'text-xs' : 'text-sm'}`}>
                         <TrendingUp size={14} /> vs Yesterday
                     </h3>
@@ -79,7 +79,7 @@ export const SessionSummaryView: React.FC<SessionSummaryViewProps> = ({ data, vi
             )}
 
             {/* Last 7 days */}
-            <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 ${dense ? 'p-4' : 'p-6'}`}>
+            <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
                 <h3 className={`font-black uppercase opacity-60 mb-3 flex items-center gap-2 ${dense ? 'text-xs' : 'text-sm'}`}>
                     <Calendar size={14} /> Last 7 Days
                 </h3>
@@ -88,7 +88,7 @@ export const SessionSummaryView: React.FC<SessionSummaryViewProps> = ({ data, vi
                 ) : (
                     <div className="flex flex-col gap-2">
                         {data.last7Days.map((day) => (
-                            <div key={day.date} className="flex items-center justify-between py-2 border-b border-md-sys-outline/10 last:border-0">
+                            <div key={day.date} className="flex items-center justify-between py-2 border-b last:border-0">
                                 <div className="text-xs font-bold opacity-60">{new Date(day.date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
                                 <div className="flex items-center gap-4">
                                     <span className="text-xs font-black">
@@ -106,7 +106,7 @@ export const SessionSummaryView: React.FC<SessionSummaryViewProps> = ({ data, vi
             </div>
 
             {/* Daily averages */}
-            <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 ${dense ? 'p-4' : 'p-6'}`}>
+            <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
                 <h3 className={`font-black uppercase opacity-60 mb-3 flex items-center gap-2 ${dense ? 'text-xs' : 'text-sm'}`}>
                     <Trophy size={14} /> Daily Averages
                 </h3>
@@ -128,3 +128,7 @@ export const SessionSummaryView: React.FC<SessionSummaryViewProps> = ({ data, vi
         </div>
     );
 };
+
+
+
+
