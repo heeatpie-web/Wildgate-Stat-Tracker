@@ -1,3 +1,24 @@
 {
-  "action": "continue"
+  "action": "continue",
+  "runtimeGuardrails": {
+    "staleSessionRecoveryCommand": "powershell -File ./codemachine-fixed.ps1 reset",
+    "finalizeCommand": "powershell -File ./codemachine-fixed.ps1 finalize",
+    "doctorCommand": "powershell -File ./codemachine-fixed.ps1 doctor",
+    "preflightCommand": "powershell -File ./codemachine-fixed.ps1 preflight"
+  },
+  "collaborationPolicy": {
+    "requirePMSummaryAtStepEnd": true,
+    "requiredCrossAgentDiscussionRounds": 2,
+    "discussionPairs": [
+      "project-manager<->ui-designer",
+      "project-manager<->backend-dev",
+      "ui-designer<->backend-dev"
+    ],
+    "requireExplicitHandoffArtifacts": true
+  },
+  "statusPolicy": {
+    "activeHeartbeatSeconds": 60,
+    "markEndTimeAsCompleted": true,
+    "warnOnStaleActiveMinutes": 15
+  }
 }

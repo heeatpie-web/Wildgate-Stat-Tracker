@@ -19,3 +19,16 @@ Project Manager -> UI Designer -> Backend Dev -> Code Builder -> Testing Agent -
 - Detailed analytics narrative contains structured sections + metrics (not a short blurb) and graphs remain visible.
 - Smart Captures list selection affordance is not always visible; rows are readable and status is clear.
 - Automated checks remain green: `npm test` and `npm run build`.
+
+## Codemachine Operations Policy
+- Before starting a new multi-agent run, execute `powershell -File ./codemachine-fixed.ps1 doctor`.
+- If stale active agents are detected, execute `powershell -File ./codemachine-fixed.ps1 reset` before launching a new task.
+- Every step must produce or update a handoff artifact in `.codemachine/artifacts/`.
+- PM must enforce at least two explicit cross-agent discussion rounds:
+  - PM <-> UI
+  - PM <-> Backend
+  - UI <-> Backend
+- Finalization flow for every run:
+  1. `powershell -File ./codemachine-fixed.ps1 preflight`
+  2. `powershell -File ./codemachine-fixed.ps1 finalize`
+  3. Only then mark the workflow step complete.

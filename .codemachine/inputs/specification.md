@@ -7,3 +7,6 @@ The canonical file in this repo is:
 
 If you edit one, consider keeping the other in sync.
 
+Operational note:
+- Run `powershell -File ./codemachine-fixed.ps1 doctor` before each new codemachine session.
+
