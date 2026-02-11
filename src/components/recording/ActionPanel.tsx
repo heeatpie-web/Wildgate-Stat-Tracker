@@ -157,7 +157,13 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                                 {isCapturing ? 'Capturing Window' : isProcessing ? 'Processing OCR' : 'Smart Scan'}
                             </div>
                             <div className="text-[10px] text-md-sys-on-surface/70 font-medium">
-                                {isCapturing ? 'Saving snapshot...' : isProcessing ? `Running ${ocrModeLabel} Engine...` : scanProgress.status}
+                                {isCapturing
+                                    ? 'Saving snapshot...'
+                                    : isProcessing
+                                        ? (processingProgress
+                                            ? `Running ${ocrModeLabel} Engine (${processingProgress.current}/${processingProgress.total})...`
+                                            : `Running ${ocrModeLabel} Engine...`)
+                                        : scanProgress.status}
                             </div>
                         </div>
                     </div>

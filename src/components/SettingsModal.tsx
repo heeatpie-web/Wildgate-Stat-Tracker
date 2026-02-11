@@ -602,7 +602,7 @@ export const SettingsModal: React.FC = () => {
                         )}
                         {captureMode === 'auto' && (
                             <div className="mt-3 text-[10px] opacity-50 text-center">
-                                OCR runs automatically after you stop capturing for a moment, so multiple captures bundle into one batch.
+                                OCR runs automatically after about 4 seconds of no new captures, so multiple captures bundle into one batch.
                             </div>
                         )}
                     </section>

@@ -93,7 +93,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
   // In "auto" mode, don't kick off OCR immediately for each keypress.
   // Instead, treat captures as a burst and OCR after a short quiet period.
-  const AUTO_OCR_BUNDLE_DELAY_MS = 1250;
+  const AUTO_OCR_BUNDLE_DELAY_MS = 3750;
   const autoOcrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const applySmartScanResult = useCallback((res: any, activeUser?: string | null) => {
