@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { PeriodComparisonData, PeriodStats, PeriodDelta, VisualMode } from '../../types';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { generatePeriodComparisonEditorial } from '../../utils/analyticsEditorial';
@@ -17,7 +17,7 @@ const DeltaBadge: React.FC<{ value: number; suffix?: string }> = ({ value, suffi
 };
 
 const PeriodCard: React.FC<{ title: string; stats: PeriodStats; delta: PeriodDelta; dense: boolean }> = ({ title, stats, delta, dense }) => (
-    <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 ${dense ? 'p-4' : 'p-6'}`}>
+    <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
         <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-3">{title}</h4>
         <div className={`grid gap-3 ${dense ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'}`}>
             <div>
@@ -51,7 +51,7 @@ export const PeriodComparisonView: React.FC<PeriodComparisonViewProps> = ({ data
         <div className="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar animate-fade-in p-1">
             {/* Editorial Summary */}
             {!dense && (
-                <div className="bg-md-sys-surface2 rounded-2xl border border-white/5 p-6">
+                <div className="md3-card rounded-2xl p-6">
                     <p className="text-sm leading-relaxed opacity-70">{generatePeriodComparisonEditorial(data)}</p>
                 </div>
             )}
@@ -60,12 +60,12 @@ export const PeriodComparisonView: React.FC<PeriodComparisonViewProps> = ({ data
 
             {/* Side by side comparison */}
             <div className={`grid gap-4 ${dense ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2'}`}>
-                <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 ${dense ? 'p-4' : 'p-6'}`}>
+                <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
                     <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-3">This Week</h4>
                     <div className={`font-black ${data.thisWeek.winRate >= 50 ? 'text-green-500' : 'text-red-500'} ${dense ? 'text-3xl' : 'text-4xl'}`}>{data.thisWeek.winRate}%</div>
                     <div className="text-[10px] font-bold opacity-40 mt-1">{data.thisWeek.wins}W - {data.thisWeek.losses}L ({data.thisWeek.matches} matches)</div>
                 </div>
-                <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 ${dense ? 'p-4' : 'p-6'}`}>
+                <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
                     <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-3">Last Week</h4>
                     <div className={`font-black ${data.lastWeek.winRate >= 50 ? 'text-green-500' : 'text-red-500'} ${dense ? 'text-3xl' : 'text-4xl'}`}>{data.lastWeek.winRate}%</div>
                     <div className="text-[10px] font-bold opacity-40 mt-1">{data.lastWeek.wins}W - {data.lastWeek.losses}L ({data.lastWeek.matches} matches)</div>
@@ -75,12 +75,12 @@ export const PeriodComparisonView: React.FC<PeriodComparisonViewProps> = ({ data
             <PeriodCard title="This Month vs Last Month" stats={data.thisMonth} delta={data.monthDelta} dense={dense} />
 
             <div className={`grid gap-4 ${dense ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2'}`}>
-                <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 ${dense ? 'p-4' : 'p-6'}`}>
+                <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
                     <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-3">This Month</h4>
                     <div className={`font-black ${data.thisMonth.winRate >= 50 ? 'text-green-500' : 'text-red-500'} ${dense ? 'text-3xl' : 'text-4xl'}`}>{data.thisMonth.winRate}%</div>
                     <div className="text-[10px] font-bold opacity-40 mt-1">{data.thisMonth.wins}W - {data.thisMonth.losses}L ({data.thisMonth.matches} matches)</div>
                 </div>
-                <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 ${dense ? 'p-4' : 'p-6'}`}>
+                <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
                     <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-3">Last Month</h4>
                     <div className={`font-black ${data.lastMonth.winRate >= 50 ? 'text-green-500' : 'text-red-500'} ${dense ? 'text-3xl' : 'text-4xl'}`}>{data.lastMonth.winRate}%</div>
                     <div className="text-[10px] font-bold opacity-40 mt-1">{data.lastMonth.wins}W - {data.lastMonth.losses}L ({data.lastMonth.matches} matches)</div>
@@ -89,3 +89,7 @@ export const PeriodComparisonView: React.FC<PeriodComparisonViewProps> = ({ data
         </div>
     );
 };
+
+
+
+

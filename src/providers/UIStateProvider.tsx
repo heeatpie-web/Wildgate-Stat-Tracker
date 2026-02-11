@@ -79,8 +79,12 @@ interface UIStateContextType {
     setHiddenForScan: (hidden: boolean) => void;
     showIdMapper: boolean;
     setShowIdMapper: (show: boolean) => void;
-    // soundEnabled is in UserPreferences, so no change here actually. 
-    // I need to correct useSmartScan to pull it from the right hook.
+    visionStatus: 'idle' | 'capturing' | 'scanning' | 'processing';
+    telemetryStatus: any;
+    setVisionStatus: (status: 'idle' | 'capturing' | 'scanning' | 'processing') => void;
+    setTelemetryStatus: (status: any) => void;
+    smartCapturesFocusMatchId: number | null;
+    setSmartCapturesFocusMatchId: (id: number | null) => void;
 }
 
 const UIStateContext = createContext<UIStateContextType | null>(null);
@@ -119,6 +123,9 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
         devMode: s.devMode, setDevMode: s.setDevMode,
         activeView: s.activeView, setActiveView: s.setActiveView,
         showIdMapper: s.showIdMapper, setShowIdMapper: s.setShowIdMapper,
+        visionStatus: s.visionStatus, setVisionStatus: s.setVisionStatus,
+        telemetryStatus: s.telemetryStatus, setTelemetryStatus: s.setTelemetryStatus,
+        smartCapturesFocusMatchId: s.smartCapturesFocusMatchId, setSmartCapturesFocusMatchId: s.setSmartCapturesFocusMatchId,
     })));
 
     const [renameModal, setRenameModal] = React.useState<RenameModalState | null>(null);

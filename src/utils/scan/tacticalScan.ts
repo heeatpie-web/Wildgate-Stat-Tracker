@@ -1,8 +1,3 @@
-/**
- * @module scan/tacticalScan
- * Processes tactical map screenshots to extract player names, team colors,
- * reach modifiers, and hazards using inverted preprocessing + OCR.
- */
 import { UI_REACH_MODIFIERS } from '../constants';
 import Logger from '../logger';
 import type { LobbyScanResult, TeamColor, ScanOptions, OCRLine } from './types';
@@ -66,18 +61,12 @@ export const processTacticalScreenshot = async (
             saturationMin: ocrCalibration?.saturationMin,
             luminanceMin: ocrCalibration?.luminanceMin
         };
-
-        // 1. Identify Regions (center exclusion zone: 40%-60% of screen)
         const middleX0 = screenW * 0.4;
         const middleX1 = screenW * 0.6;
         const middleY0 = screenH * 0.4;
         const middleY1 = screenH * 0.6;
-
-        // TOP-LEFT USER AREA (Ignore user's own ship info for noise reduction)
         const topLeftX = screenW * 0.6;
         const topLeftY = screenH * 0.4;
-
-        // 2. Classify & Filter Lines
         const nameLines: OCRLine[] = [];
 
         lines.forEach(line => {
@@ -110,8 +99,6 @@ export const processTacticalScreenshot = async (
                 }
             }
         });
-
-        // 2.5 Secondary Pass for Team Headers
         const teamHeaderLines = lines.filter(l => {
             const u = l.text.toUpperCase();
             return (u.includes('TEAM') || u.includes('SQUAD')) && !IGNORED.includes(u);
@@ -164,3 +151,5 @@ export const processTacticalScreenshot = async (
         return { players: [], modifiers: [] };
     }
 };
+
+

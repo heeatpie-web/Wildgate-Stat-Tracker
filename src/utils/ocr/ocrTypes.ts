@@ -57,6 +57,7 @@ export interface OCRExtractedData {
   playerTeamName?: string;
   reachModifiers: ExtractedModifier[];
   enemyShips: Array<{ teamName: string; shipType: string; color: TeamColor }>;
+  hazards?: string[];
 
   // From Crew Hub
   teammates: ExtractedPlayer[];

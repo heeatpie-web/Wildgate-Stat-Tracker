@@ -1,7 +1,3 @@
-/**
- * @module scan/matchScan
- * Processes match result screenshots to extract Win/Loss/Draw, time, and damage.
- */
 import Logger from '../logger';
 import type { ScanResult, ScanOptions } from './types';
 import { runNativeOCR, detectModifiers } from './ocrUtils';
@@ -51,3 +47,5 @@ export const processMatchScreenshot = async (
         return { rawText: '', modifiers: [] };
     }
 };
+
+

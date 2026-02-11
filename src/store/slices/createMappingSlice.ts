@@ -35,6 +35,13 @@ export interface OcrCorrection {
     count: number;        // How many times this correction was made
 }
 
+export interface UidMappings {
+    players: Record<string, string>;
+    ships: Record<string, string>;
+    weapons: Record<string, string>;
+    equipment: Record<string, string>;
+}
+
 export interface MappingSlice {
     // Player profiles with relationship tracking
     playerProfiles: Record<string, PlayerProfile>;
@@ -42,7 +49,8 @@ export interface MappingSlice {
     // Legacy mappings (for backwards compatibility)
     knownMappings: Record<string, string>;      // ID -> Name
     detectedUnknowns: Record<string, { type: 'Hero' | 'Ship' | 'Weapon' | 'Equipment' | 'Unknown'; lastSeen: number }>;
-    accelByteToEpicId: Record<string, string>;  // AccelByte ID -> Epic Account ID
+    uidMappings: UidMappings;
+    uidSeedVersionApplied: number | null;
 
     // OCR correction history for learning
     ocrCorrections: Record<string, OcrCorrection>;
@@ -64,7 +72,10 @@ export interface MappingSlice {
     registerUnknownId: (id: string, type: 'Hero' | 'Ship' | 'Weapon' | 'Equipment' | 'Unknown') => void;
     importMappings: (mappings: Record<string, string>) => void;
     clearUnknowns: () => void;
-    setIDMapping: (abId: string, epicId: string) => void;
+    setUidMapping: (domain: keyof UidMappings, id: string, name: string) => void;
+    removeUidMapping: (domain: keyof UidMappings, id: string) => void;
+    importUidMappings: (mappings: Partial<UidMappings>) => void;
+    setUidSeedVersionApplied: (version: number | null) => void;
 }
 
 // ============================================================================
@@ -104,7 +115,8 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
     playerProfiles: {},
     knownMappings: {},
     detectedUnknowns: {},
-    accelByteToEpicId: {},
+    uidMappings: { players: {}, ships: {}, weapons: {}, equipment: {} },
+    uidSeedVersionApplied: null,
     ocrCorrections: {},
 
     recordPlayerSighting: (playerId, teamColor, allTeamPlayers, allOpponentPlayers, shipType, source = 'manual') => {
@@ -178,7 +190,14 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
                     ...state.playerProfiles,
                     [playerId]: { ...existing, name }
                 },
-                knownMappings: { ...state.knownMappings, [playerId]: name }
+                knownMappings: { ...state.knownMappings, [playerId]: name },
+                uidMappings: {
+                    ...state.uidMappings,
+                    players: {
+                        ...state.uidMappings.players,
+                        [playerId]: name
+                    }
+                }
             };
         });
     },
@@ -250,6 +269,10 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
         return {
             knownMappings: { ...state.knownMappings, [id]: name },
             playerProfiles: { ...state.playerProfiles, [id]: { ...existing, name } },
+            uidMappings: {
+                ...state.uidMappings,
+                players: { ...state.uidMappings.players, [id]: name }
+            },
             detectedUnknowns: Object.fromEntries(
                 Object.entries(state.detectedUnknowns).filter(([k]) => k !== id)
             )
@@ -258,12 +281,17 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
 
     removeMapping: (id) => set((state) => {
         const { [id]: _, ...rest } = state.knownMappings;
+        const { [id]: __, ...restPlayers } = state.uidMappings.players;
         Logger.info('MappingSlice', `Removed mapping: ${id}`);
-        return { knownMappings: rest };
+        return {
+            knownMappings: rest,
+            uidMappings: { ...state.uidMappings, players: restPlayers }
+        };
     }),
 
     registerUnknownId: (id, type) => set((state) => {
         if (state.knownMappings[id]) return {};
+        if (state.uidMappings.players[id] || state.uidMappings.ships[id] || state.uidMappings.weapons[id] || state.uidMappings.equipment[id]) return {};
 
         // Initialize profile if needed
         const existingProfile = state.playerProfiles[id] || createEmptyProfile(id);
@@ -308,6 +336,10 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
 
         return {
             knownMappings: { ...state.knownMappings, ...mappings },
+            uidMappings: {
+                ...state.uidMappings,
+                players: { ...state.uidMappings.players, ...mappings }
+            },
             playerProfiles: newProfiles
         };
     }),
@@ -317,7 +349,36 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
         set({ detectedUnknowns: {} });
     },
 
-    setIDMapping: (abId, epicId) => set((state) => ({
-        accelByteToEpicId: { ...state.accelByteToEpicId, [abId]: epicId }
-    }))
+    setUidMapping: (domain, id, name) => set((state) => {
+        const nextDomain = { ...state.uidMappings[domain], [id]: name };
+        return {
+            uidMappings: { ...state.uidMappings, [domain]: nextDomain },
+            ...(domain === 'players' ? { knownMappings: { ...state.knownMappings, [id]: name } } : {})
+        } as Partial<MappingSlice>;
+    }),
+
+    removeUidMapping: (domain, id) => set((state) => {
+        const { [id]: _, ...rest } = state.uidMappings[domain];
+        const next = { ...state.uidMappings, [domain]: rest };
+        if (domain === 'players') {
+            const { [id]: __, ...km } = state.knownMappings;
+            return { uidMappings: next, knownMappings: km };
+        }
+        return { uidMappings: next };
+    }),
+
+    importUidMappings: (mappings) => set((state) => {
+        const merged: UidMappings = {
+            players: { ...state.uidMappings.players, ...(mappings.players || {}) },
+            ships: { ...state.uidMappings.ships, ...(mappings.ships || {}) },
+            weapons: { ...state.uidMappings.weapons, ...(mappings.weapons || {}) },
+            equipment: { ...state.uidMappings.equipment, ...(mappings.equipment || {}) },
+        };
+        return {
+            uidMappings: merged,
+            knownMappings: { ...state.knownMappings, ...(mappings.players || {}) }
+        };
+    }),
+
+    setUidSeedVersionApplied: (version) => set({ uidSeedVersionApplied: version })
 });

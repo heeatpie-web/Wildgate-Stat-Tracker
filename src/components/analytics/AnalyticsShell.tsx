@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { AnalyticsView, AnalyticsTimeRange, DrillDownTarget } from '../../types';
 import { Activity, ArrowLeft, Gauge, Lightbulb, Handshake, BarChart3, Globe, Flame, PenSquare } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
@@ -54,7 +54,6 @@ const QUICK_VIEWS: { view: AnalyticsView; icon: React.ReactNode }[] = [
     { view: 'pro', icon: <BarChart3 size={12} /> },
     { view: 'environment', icon: <Globe size={12} /> },
     { view: 'streaks', icon: <Flame size={12} /> },
-    { view: 'essay', icon: <PenSquare size={12} /> },
 ];
 
 export const AnalyticsShell: React.FC = () => {
@@ -98,8 +97,8 @@ export const AnalyticsShell: React.FC = () => {
     const modeBadge = currentMode === 'Artifact Brawl' ? 'bg-orange-500/15 text-orange-300 border-orange-500/30' : 'bg-sky-500/15 text-sky-300 border-sky-500/30';
 
     return (
-        <div className="h-full flex flex-col gap-3 overflow-hidden p-3 rounded-2xl border border-md-sys-outline/10 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.10),transparent_35%),radial-gradient(circle_at_top_left,rgba(251,146,60,0.08),transparent_40%)]">
-            <div className="flex-shrink-0 rounded-2xl border border-md-sys-outline/10 bg-md-sys-surfaceContainerLowest/80 backdrop-blur p-3 md:p-4">
+        <div className="h-full flex flex-col gap-3 overflow-hidden p-3 rounded-2xl bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.10),transparent_35%),radial-gradient(circle_at_top_left,rgba(251,146,60,0.08),transparent_40%)]">
+            <div className="flex-shrink-0 rounded-2xl bg-md-sys-surfaceContainerLowest/80 backdrop-blur p-3 md:p-4">
                 <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
@@ -127,10 +126,10 @@ export const AnalyticsShell: React.FC = () => {
                             <button
                                 key={opt.value}
                                 onClick={() => setTimeRange(opt.value)}
-                                className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide border transition-all ${
+                                className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/25 ${
                                     timeRange === opt.value
-                                        ? 'bg-md-sys-primary text-md-sys-onPrimary border-md-sys-primary shadow'
-                                        : 'bg-md-sys-surface/50 text-md-sys-on-surface/70 border-md-sys-outline/20 hover:bg-md-sys-surfaceContainerHighest'
+                                        ? 'bg-md-sys-primary text-md-sys-onPrimary shadow'
+                                        : 'bg-md-sys-surfaceContainerLowest/70 text-md-sys-on-surface/70 hover:bg-md-sys-surfaceContainerHigh/70'
                                 }`}
                             >
                                 {opt.label}
@@ -146,7 +145,7 @@ export const AnalyticsShell: React.FC = () => {
                         <button
                             key={view}
                             onClick={() => navigateTo(view)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wide border border-md-sys-outline/15 bg-md-sys-surface/60 text-md-sys-on-surface/75 hover:bg-md-sys-primaryContainer hover:text-md-sys-onPrimaryContainer transition-colors whitespace-nowrap"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wide bg-md-sys-surfaceContainerLowest/70 text-md-sys-on-surface/75 hover:bg-md-sys-primaryContainer hover:text-md-sys-onPrimaryContainer transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/25"
                         >
                             {icon}
                             {VIEW_LABELS[view]}
@@ -174,14 +173,14 @@ export const AnalyticsShell: React.FC = () => {
                     insights={data.insights}
                     socialData={data.socialData}
                     relationshipInsights={data.relationshipInsights}
+                    synergyMatrix={data.synergyMatrix}
                     filteredMatches={data.filteredMatches}
                 />
             ) : (
-                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar rounded-xl border border-md-sys-outline/10 bg-md-sys-surfaceContainerLowest/70 p-2">
+                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar rounded-xl bg-md-sys-surfaceContainerLowest/70 p-2">
                     {renderExpandedView()}
                 </div>
             )}
         </div>
     );
 };
-

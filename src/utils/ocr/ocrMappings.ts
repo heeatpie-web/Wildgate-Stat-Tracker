@@ -35,6 +35,7 @@ export const REACH_MODIFIER_MAP: Record<string, string> = {
   "LEECH SWARMS": "Leech Swarms",
   "LEGION PATROLS": "Legion Patrols",
   "LOW ALTITUDE FOG": "Low altitude fog",
+  "LOW LATITUDE FOG": "Low altitude fog",
   "MANY ASTEROIDS": "Many asteroids",
   "ROGUE TURRETS": "Rogue Turrets",
   "SANDSTORM": "Sandstorm",

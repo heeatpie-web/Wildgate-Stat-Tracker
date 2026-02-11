@@ -1,13 +1,6 @@
-/**
- * @module scan/smartAnalyze
- * Top-level orchestrator that routes screenshots through the best OCR pipeline:
- * 1. Tesseract (primary, with Chinese support)
- * 2. ML detection + Native OCR (fallback)
- * 3. Regional heuristic scan (last resort)
- */
 import Logger from '../logger';
 import type { SmartScanResult, ScanOptions } from './types';
-import { runMLDetection, runNativeOCR } from './ocrUtils';
+import { runNativeOCR } from './ocrUtils';
 import { processLobbyScreenshot } from './lobbyScan';
 import { processMatchScreenshot } from './matchScan';
 import { processSocialScreenshot } from './socialScan';
@@ -26,9 +19,6 @@ export const smartAnalyzeScreen = async (
 
     Logger.startTimer('smartOCR', 'OCR', 'Smart Hybrid Analysis');
 
-    // =====================================================================
-    // PRIMARY: Try new Tesseract OCR with Chinese support first
-    // =====================================================================
     onProgress?.('Analyzing with Tesseract (eng+chi_sim)...', 10);
 
     try {
@@ -48,30 +38,9 @@ export const smartAnalyzeScreen = async (
         Logger.warn('OCR', 'Tesseract OCR failed, falling back to ML + Native OCR', tesseractError);
     }
 
-    // =====================================================================
-    // FALLBACK: Original ML + Native OCR pipeline
-    // =====================================================================
-    onProgress?.('Fallback: Locating UI regions (ML)...', 30);
+    onProgress?.('Fallback: Regional scan...', 20);
 
     try {
-        const detections = await runMLDetection(imageDataUrl);
-        const classNames = ['LobbyRoster', 'KillFeed', 'Timer', 'ReachModifiers', 'SelfStats', 'ShipType', 'ShipName', 'IngameRoster', 'ProspectorIcon'];
-
-        detections.forEach(d => {
-            console.log(`[SmartScan] ML Found ${classNames[d.classId] || d.classId} (${(d.score * 100).toFixed(1)}%)`);
-        });
-
-        const hasLobbyRoster = detections.some(d => d.classId === 0 && d.score > 0.35);
-        const hasIngameRoster = detections.some(d => d.classId === 7 && d.score > 0.35);
-
-        if (hasLobbyRoster || hasIngameRoster) {
-            onProgress?.('Roster detected. Scanning...', 50);
-            const data = await processLobbyScreenshot(imageDataUrl, options);
-            return { mode: 'Lobby', lobbyData: data };
-        }
-
-        // Fallback Regional
-        onProgress?.('Fallback: Regional scan...', 20);
         const img = new Image();
         img.src = imageDataUrl;
         await new Promise(r => { img.onload = r; img.onerror = r; });
@@ -135,5 +104,7 @@ export const smartAnalyzeScreen = async (
 };
 
 export const terminateOCR = async () => {
-    // No longer needed for native OCR
 };
+
+
+

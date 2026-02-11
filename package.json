@@ -2,7 +2,7 @@
   "name": "wildgate-stat-tracker",
   "productName": "Wildgate Stat Tracker",
   "private": true,
-  "version": "2.12.0",
+  "version": "2.12.1",
   "type": "module",
   "main": "electron/main.cjs",
   "author": {
@@ -15,7 +15,7 @@
     "lint": "eslint .",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "electron:dev": "concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "electron:dev": "concurrently -k \"vite\" \"electron .\"",
     "electron:build": "vite build && electron-builder",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -27,7 +27,6 @@
     "discord-rpc": "^4.0.1",
     "electron-updater": "^6.7.3",
     "html2canvas": "^1.4.1",
-    "jimp": "^1.6.0",
     "lucide-react": "^0.344.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

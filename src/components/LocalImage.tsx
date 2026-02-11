@@ -78,3 +78,4 @@ export const LocalImage: React.FC<LocalImageProps> = ({ src, fallback, ...imgPro
 
     return <img src={dataUrl} {...imgProps} />;
 };
+

@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { MomentumData, VisualMode } from '../../types';
 import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, ReferenceLine } from 'recharts';
 import { Gauge, TrendingUp, TrendingDown, Minus } from 'lucide-react';
@@ -9,20 +9,20 @@ interface MomentumViewProps { data: MomentumData; visualMode: VisualMode; }
 export const MomentumView: React.FC<MomentumViewProps> = ({ data, visualMode }) => {
     const dense = visualMode === 'dense';
     const TrendIcon = data.trend === 'rising' ? TrendingUp : data.trend === 'falling' ? TrendingDown : Minus;
-    const trendColor = data.trend === 'rising' ? 'text-green-500' : data.trend === 'falling' ? 'text-red-500' : 'opacity-60';
-    const scoreColor = data.currentMomentum >= 60 ? '#22c55e' : data.currentMomentum >= 40 ? '#f97316' : '#ef4444';
+    const trendColor = data.trend === 'rising' ? 'text-success' : data.trend === 'falling' ? 'text-danger' : 'text-md-sys-on-surface/60';
+    const scoreColor = data.currentMomentum >= 60 ? 'var(--color-success)' : data.currentMomentum >= 40 ? 'var(--color-warning)' : 'var(--color-danger)';
 
     return (
         <div className="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar animate-fade-in p-1">
             {/* Editorial Summary */}
             {!dense && (
-                <div className="bg-md-sys-surface2 rounded-2xl border border-white/5 p-6">
+                <div className="md3-card rounded-2xl p-6">
                     <p className="text-sm leading-relaxed opacity-70">{generateMomentumEditorial(data)}</p>
                 </div>
             )}
 
             {/* Big score display */}
-            <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 relative overflow-hidden ${dense ? 'p-6' : 'p-8'}`}>
+            <div className={`md3-card rounded-2xl relative overflow-hidden ${dense ? 'p-6' : 'p-8'}`}>
                 <div className={`absolute -top-10 -right-10 w-40 h-40 rounded-full opacity-10 blur-3xl`} style={{ backgroundColor: scoreColor }}></div>
                 <div className="flex items-center justify-between">
                     <div>
@@ -42,7 +42,7 @@ export const MomentumView: React.FC<MomentumViewProps> = ({ data, visualMode }) 
                 </div>
 
                 {/* Simple gauge bar */}
-                <div className="mt-4 h-3 bg-md-sys-surface1 rounded-full overflow-hidden">
+                <div className="mt-4 h-3 md3-surface-low rounded-full overflow-hidden">
                     <div className="h-full rounded-full transition-all duration-500" style={{ width: `${data.currentMomentum}%`, backgroundColor: scoreColor }}></div>
                 </div>
                 <div className="flex justify-between mt-1 text-[8px] font-bold opacity-30">
@@ -51,26 +51,26 @@ export const MomentumView: React.FC<MomentumViewProps> = ({ data, visualMode }) 
             </div>
 
             {/* Formula explanation */}
-            <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 ${dense ? 'p-4' : 'p-6'}`}>
+            <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
                 <h3 className={`font-black uppercase opacity-60 mb-3 ${dense ? 'text-xs' : 'text-sm'}`}>Score Breakdown</h3>
                 <div className={`grid gap-3 ${dense ? 'grid-cols-3' : 'grid-cols-1 md:grid-cols-3'}`}>
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center text-green-500 text-sm font-black">40%</div>
+                        <div className="w-10 h-10 bg-success-soft rounded-xl flex items-center justify-center text-success text-sm font-black">40%</div>
                         <div><div className="text-xs font-black">Win Rate</div><div className="text-[9px] opacity-40">Rolling 10 match</div></div>
                     </div>
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center text-orange-500 text-sm font-black">30%</div>
+                        <div className="w-10 h-10 bg-warning-soft rounded-xl flex items-center justify-center text-warning text-sm font-black">30%</div>
                         <div><div className="text-xs font-black">Kill Efficiency</div><div className="text-[9px] opacity-40">Normalized vs max</div></div>
                     </div>
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center text-blue-500 text-sm font-black">30%</div>
+                        <div className="w-10 h-10 bg-info-soft rounded-xl flex items-center justify-center text-info text-sm font-black">30%</div>
                         <div><div className="text-xs font-black">Damage Output</div><div className="text-[9px] opacity-40">Normalized vs max</div></div>
                     </div>
                 </div>
             </div>
 
             {/* Timeline chart */}
-            <div className={`bg-md-sys-surface2 rounded-2xl border border-white/5 flex-1 min-h-[300px] ${dense ? 'p-4' : 'p-6'}`}>
+            <div className={`md3-card rounded-2xl flex-1 min-h-[300px] ${dense ? 'p-4' : 'p-6'}`}>
                 <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-xs' : 'text-sm'}`}><Gauge size={14} /> Momentum Over Time</h3>
                 {data.timeline.length < 2 ? (
                     <div className="h-48 flex items-center justify-center opacity-40 font-bold uppercase text-sm">Not enough data</div>
@@ -84,9 +84,9 @@ export const MomentumView: React.FC<MomentumViewProps> = ({ data, visualMode }) 
                                 </linearGradient>
                             </defs>
                             <CartesianGrid strokeOpacity={0.05} vertical={false} />
-                            <XAxis dataKey="index" tick={{ fontSize: 9 }} />
-                            <YAxis tick={{ fontSize: 9 }} domain={[0, 100]} />
-                            <Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }}
+                            <XAxis dataKey="index" tick={{ fontSize: 9 }} interval="preserveStartEnd" minTickGap={18} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 9 }} domain={[0, 100]} width={28} axisLine={false} tickLine={false} />
+                            <Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface-container-high)', borderRadius: '12px', border: '1px solid var(--md-sys-color-outline-variant)' }}
                                 formatter={(value: any) => [`${value}/100`, 'Momentum']} />
                             <ReferenceLine y={50} stroke="var(--md-sys-color-outline)" strokeOpacity={0.2} strokeDasharray="3 3" />
                             <Area type="monotone" dataKey="score" name="Momentum" stroke={scoreColor} strokeWidth={2} fill="url(#momentumGrad)" />
@@ -97,3 +97,7 @@ export const MomentumView: React.FC<MomentumViewProps> = ({ data, visualMode }) 
         </div>
     );
 };
+
+
+
+

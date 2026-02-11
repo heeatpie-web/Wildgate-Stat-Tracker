@@ -1,14 +1,9 @@
-/**
- * @module scan/lobbyScan
- * Processes lobby/crew hub screenshots to extract player names, team colors,
- * and ship types using ML region detection + Native OCR + color sampling.
- */
 import Logger from '../logger';
 import type { LobbyScanResult, TeamColor, ScanOptions, OCRLine } from './types';
 import { SHIP_TYPES, SHIP_NAME_KEYWORDS } from './types';
 import { sampleRegion } from './colorDetection';
 import { cropImageDataUrl, preprocessImage } from './imageUtils';
-import { groupWordsIntoLines, runNativeOCR, runMLDetection, detectModifiers } from './ocrUtils';
+import { groupWordsIntoLines, runNativeOCR, detectModifiers } from './ocrUtils';
 import { getElectronAPI } from '../electronAPI';
 import { normalizeOcrName } from '../stringUtils';
 
@@ -25,13 +20,11 @@ export const processLobbyScreenshot = async (
 
     try {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        // SAVE RAW INPUT
         ipc.invoke('save-ocr-debug', {
             dataUrl: imageDataUrl,
             filename: `lobby_input_raw_${timestamp}.png`
         });
 
-        // 1. Load Original Image
         const imgOriginal = new Image();
         imgOriginal.src = imageDataUrl;
         await new Promise((resolve, reject) => {
@@ -47,45 +40,17 @@ export const processLobbyScreenshot = async (
         let activeImage = imageDataUrl;
         let cropOffset = { x: 0, y: 0 };
         let cropRegion: [number, number, number, number] = [0, 0, 0, 0];
-        let mlSuccess = false;
+        onProgress?.('Focusing on roster area...', 15);
+        const safeBox: [number, number, number, number] = [
+            Math.floor(screenW * 0.05),
+            Math.floor(screenH * 0.10),
+            Math.floor(screenW * 0.95),
+            Math.floor(screenH * 0.95)
+        ];
 
-        // 2. ML Detection with Fallback Priority
-        try {
-            const detections = await runMLDetection(imageDataUrl);
-            const rosterBox = detections.find(d => (d.classId === 0 || d.classId === 7) && d.score > 0.35);
-
-            if (rosterBox) {
-                onProgress?.('Focusing on detected roster (ML)...', 15);
-                const padding = 30;
-                const imgW = (detections[0] as any)?.sourceWidth || screenW;
-                const imgH = (detections[0] as any)?.sourceHeight || screenH;
-
-                const x0 = Math.max(0, rosterBox.bbox[0] - padding);
-                const y0 = Math.max(0, rosterBox.bbox[1] - padding);
-                const x1 = Math.min(imgW, rosterBox.bbox[2] + padding);
-                const y1 = Math.min(imgH, rosterBox.bbox[3] + padding);
-
-                cropRegion = [x0, y0, x1, y1];
-                activeImage = await cropImageDataUrl(imageDataUrl, cropRegion);
-                cropOffset = { x: x0, y: y0 };
-                mlSuccess = true;
-            } else {
-                throw new Error("No ML roster detection");
-            }
-        } catch (mlErr) {
-            // Fallback: Safe Center Crop
-            onProgress?.('Focusing on roster area (Fallback)...', 15);
-            const safeBox: [number, number, number, number] = [
-                Math.floor(screenW * 0.05),
-                Math.floor(screenH * 0.10),
-                Math.floor(screenW * 0.95),
-                Math.floor(screenH * 0.95)
-            ];
-
-            cropRegion = safeBox;
-            activeImage = await cropImageDataUrl(imageDataUrl, safeBox);
-            cropOffset = { x: safeBox[0], y: safeBox[1] };
-        }
+        cropRegion = safeBox;
+        activeImage = await cropImageDataUrl(imageDataUrl, safeBox);
+        cropOffset = { x: safeBox[0], y: safeBox[1] };
 
         onProgress?.('Preprocessing image...', 20);
         const processedImage = await preprocessImage(activeImage, 2.0);
@@ -94,13 +59,11 @@ export const processLobbyScreenshot = async (
         ipc.invoke('save-ocr-debug', { dataUrl: processedImage, filename });
 
         onProgress?.('Scanning for players...', 30);
-        // Save for Native OCR
         const absPath = await ipc.invoke('save-ocr-debug', { dataUrl: processedImage, filename: `ocr_input_${processingTimestamp}.png` });
         const ret = await runNativeOCR(absPath);
         const fullTextRaw = ret.text;
         const detectedModifiers = detectModifiers(fullTextRaw);
 
-        // Color analysis setup
         const canvas = document.createElement('canvas');
         canvas.width = screenW; canvas.height = screenH;
         const ctx = canvas.getContext('2d');
@@ -179,7 +142,6 @@ export const processLobbyScreenshot = async (
 
         const results: LobbyScanResult[] = [];
 
-        // REGIONAL SPLIT
         const centerX = screenW / 2;
         const leftEntities = entities.filter(e => e.center.x < centerX);
         const rightEntities = entities.filter(e => e.center.x >= centerX);
@@ -194,7 +156,6 @@ export const processLobbyScreenshot = async (
             });
         };
 
-        // 1. Process My Crew (Left)
         leftEntities.forEach(e => {
             if (isIgnored(e.text)) return;
 
@@ -208,7 +169,6 @@ export const processLobbyScreenshot = async (
             });
         });
 
-        // 2. Process Enemy Crews (Right)
         const CLUSTER_THRESHOLD_Y = 30;
         const clusters: { lines: any[], centerY: number }[] = [];
 
@@ -288,3 +248,6 @@ export const processLobbyScreenshot = async (
         return { players: [], modifiers: [] };
     }
 };
+
+
+

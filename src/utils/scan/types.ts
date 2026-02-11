@@ -26,7 +26,7 @@ export interface LobbyScanResult {
 export interface ScanOptions {
     onProgress?: (status: string, percentage: number) => void;
     mergeWith?: LobbyScanResult[];
-    ocrMode?: 'local' | 'cloud' | 'both';
+    ocrMode?: 'local' | 'cloud' | 'both' | 'hybrid-plus';
     ocrCalibration?: OcrCalibration;
 }
 
@@ -43,12 +43,6 @@ export interface SmartScanResult {
     mode: 'Lobby' | 'Tactical' | 'MatchStats' | 'Social' | 'Unknown';
     lobbyData?: { players: LobbyScanResult[], modifiers: string[] };
     matchData?: ScanResult;
-}
-
-export interface MLDetection {
-    classId: number;
-    score: number;
-    bbox: [number, number, number, number];
 }
 
 export interface OCRLine {

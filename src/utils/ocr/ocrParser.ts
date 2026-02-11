@@ -1,9 +1,3 @@
-/**
- * OCR Parser
- * Text parsing, fuzzy matching, and data extraction utilities
- */
-
-// Simple Levenshtein distance implementation
 function distance(a: string, b: string): number {
   const matrix: number[][] = [];
   for (let i = 0; i <= b.length; i++) {
@@ -48,6 +42,10 @@ import {
   TEAM_COLOR_RANGES,
 } from './ocrMappings';
 
+function normalizeKey(input: string): string {
+  return input.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
 /**
  * Fuzzy match a string against a list of valid values
  * @param input - The OCR-extracted string
@@ -63,22 +61,16 @@ export function fuzzyMatch(
   if (!input || input.length < 2) return null;
 
   const normalizedInput = input.toUpperCase().trim();
-
-  // Exact match first
   const exactMatch = validValues.find(
     v => v.toUpperCase() === normalizedInput
   );
   if (exactMatch) return exactMatch;
-
-  // Fuzzy match
   let bestMatch: string | null = null;
   let bestDistance = maxDistance + 1;
 
   for (const value of validValues) {
     const normalizedValue = value.toUpperCase();
     const dist = distance(normalizedInput, normalizedValue);
-
-    // Scale max distance by string length for longer strings
     const scaledMax = Math.max(maxDistance, Math.floor(value.length / 4));
 
     if (dist < bestDistance && dist <= scaledMax) {
@@ -95,17 +87,9 @@ export function fuzzyMatch(
  */
 export function isNoiseText(text: string): boolean {
   const upper = text.toUpperCase().trim();
-
-  // Too short
   if (upper.length < 2) return true;
-
-  // Exact noise word match
   if (NOISE_WORDS.includes(upper)) return true;
-
-  // HUD pattern match
   if (HUD_PATTERNS.some(pattern => pattern.test(upper))) return true;
-
-  // Pure numbers or single characters
   if (/^\d+$/.test(upper)) return true;
   if (/^[A-Z]$/.test(upper)) return true;
 
@@ -117,15 +101,10 @@ export function isNoiseText(text: string): boolean {
  */
 export function cleanPlayerName(rawName: string): string {
   let cleaned = rawName
-    // Remove common OCR artifacts
     .replace(/[\[\](){}|\\\/]/g, '')
-    // Remove leading/trailing punctuation
     .replace(/^[.,;:!?'"]+|[.,;:!?'"]+$/g, '')
-    // Normalize whitespace
     .replace(/\s+/g, ' ')
     .trim();
-
-  // Remove trailing numbers that look like ping/level
   cleaned = cleaned.replace(/\s+\d{2,4}$/, '');
 
   return cleaned;
@@ -137,8 +116,6 @@ export function cleanPlayerName(rawName: string): string {
 export function extractModifiers(text: string): ExtractedModifier[] {
   const modifiers: ExtractedModifier[] = [];
   const upperText = text.toUpperCase();
-
-  // Check against modifier map
   for (const [ocrKey, modifierName] of Object.entries(REACH_MODIFIER_MAP)) {
     if (upperText.includes(ocrKey)) {
       modifiers.push({
@@ -148,8 +125,6 @@ export function extractModifiers(text: string): ExtractedModifier[] {
       });
     }
   }
-
-  // Fuzzy match against valid modifiers for anything missed
   const words = upperText.split(/\s+/);
   for (let i = 0; i < words.length - 1; i++) {
     const twoWordCombo = `${words[i]} ${words[i + 1]}`;
@@ -171,18 +146,13 @@ export function extractModifiers(text: string): ExtractedModifier[] {
  */
 export function extractShipType(text: string): string | null {
   const upper = text.toUpperCase();
-
-  // Direct map lookup
   for (const [ocrKey, shipName] of Object.entries(SHIP_MAP)) {
     if (upper.includes(ocrKey)) {
       return shipName;
     }
   }
-
-  // Keyword-based detection
   for (const keyword of SHIP_KEYWORDS) {
     if (upper.includes(keyword)) {
-      // Try to construct full ship name
       if (upper.includes('HUNTER')) return 'Hunter (4 Player)';
       if (upper.includes('BASTION')) return 'Bastion (4 Player)';
       if (upper.includes('PRIVATEER')) return 'Privateer (4 Player)';
@@ -200,13 +170,9 @@ export function extractShipType(text: string): string | null {
  */
 export function detectScreenshotType(text: string): ScreenshotType {
   const upper = text.toUpperCase();
-
-  // Check Crew Hub indicators
   const crewHubScore = SCREENSHOT_TYPE_INDICATORS.crew_hub.filter(
     indicator => upper.includes(indicator)
   ).length;
-
-  // Check Tactical Map indicators
   const tacticalScore = SCREENSHOT_TYPE_INDICATORS.tactical_map.filter(
     indicator => upper.includes(indicator)
   ).length;
@@ -265,13 +231,9 @@ export function rgbToHsl(r: number, g: number, b: number): { h: number; s: numbe
  */
 export function detectTeamColor(r: number, g: number, b: number): TeamColor {
   const { h, s, l } = rgbToHsl(r, g, b);
-
-  // Check saturation and luminance minimums
   if (s < 25 || l < 15 || l > 90) {
     return 'unknown';
   }
-
-  // Red wraps around 0/360
   if ((h >= 340 || h < 20) && s > 40) return 'red';
   if (h >= 15 && h < 45 && s > 40) return 'orange';
   if (h >= 45 && h < 75 && s > 40) return 'yellow';
@@ -288,15 +250,11 @@ export function detectTeamColor(r: number, g: number, b: number): TeamColor {
  */
 export function groupWordsIntoLines(words: OCRWord[], threshold: number = 15): OCRLine[] {
   if (!words || words.length === 0) return [];
-
-  // Sort by Y coordinate
   const sorted = [...words].sort((a, b) => a.bbox.y0 - b.bbox.y0);
   const lines: OCRLine[] = [];
 
   for (const word of sorted) {
     const midY = (word.bbox.y0 + word.bbox.y1) / 2;
-
-    // Find existing line that this word belongs to
     const existingLine = lines.find(line => {
       const lineMidY = (line.bbox.y0 + line.bbox.y1) / 2;
       return Math.abs(midY - lineMidY) < threshold;
@@ -304,7 +262,6 @@ export function groupWordsIntoLines(words: OCRWord[], threshold: number = 15): O
 
     if (existingLine) {
       existingLine.words.push(word);
-      // Expand bounding box
       existingLine.bbox.x0 = Math.min(existingLine.bbox.x0, word.bbox.x0);
       existingLine.bbox.y0 = Math.min(existingLine.bbox.y0, word.bbox.y0);
       existingLine.bbox.x1 = Math.max(existingLine.bbox.x1, word.bbox.x1);
@@ -317,14 +274,10 @@ export function groupWordsIntoLines(words: OCRWord[], threshold: number = 15): O
       });
     }
   }
-
-  // Sort words within each line by X and build text
   for (const line of lines) {
     line.words.sort((a, b) => a.bbox.x0 - b.bbox.x0);
     line.text = line.words.map(w => w.text).join(' ');
   }
-
-  // Sort lines by Y
   lines.sort((a, b) => a.bbox.y0 - b.bbox.y0);
 
   return lines;
@@ -342,23 +295,13 @@ export function parsePlayersFromLines(
 
   for (const line of lines) {
     const cleanedText = cleanPlayerName(line.text);
-
-    // Skip noise
     if (isNoiseText(cleanedText)) continue;
-
-    // Skip ship types
     if (extractShipType(cleanedText)) continue;
-
-    // Skip very short names
     if (cleanedText.length < 3) continue;
-
-    // Determine if teammate based on screen position
     const centerX = (line.bbox.x0 + line.bbox.x1) / 2;
     const isTeammate = isLeftSide !== undefined
       ? isLeftSide
       : centerX < screenWidth * 0.45;
-
-    // Calculate confidence from word confidences
     const avgConfidence = line.words.reduce((sum, w) => sum + w.confidence, 0) / line.words.length;
 
     players.push({
@@ -379,37 +322,43 @@ export function mergeOCRData(
   newData: Partial<OCRExtractedData>
 ): Partial<OCRExtractedData> {
   const merged: Partial<OCRExtractedData> = { ...existing };
-
-  // Merge player ship (prefer higher confidence)
   if (newData.playerShip) {
-    if (!merged.playerShip || newData.playerShip.confidence > merged.playerShip.confidence) {
+    if (!merged.playerShip || newData.playerShip.confidence >= (merged.playerShip.confidence || 0) + 3) {
       merged.playerShip = newData.playerShip;
     }
   }
-
-  // Merge reach modifiers (union, dedupe by name)
   if (newData.reachModifiers) {
-    const existingNames = new Set((merged.reachModifiers || []).map(m => m.name));
-    const newMods = newData.reachModifiers.filter(m => !existingNames.has(m.name));
-    merged.reachModifiers = [...(merged.reachModifiers || []), ...newMods];
+    const existingMods = new Map<string, ExtractedModifier>();
+    for (const mod of merged.reachModifiers || []) {
+      existingMods.set(normalizeKey(mod.name), mod);
+    }
+    for (const mod of newData.reachModifiers) {
+      const key = normalizeKey(mod.name);
+      const prev = existingMods.get(key);
+      if (!prev || mod.confidence > prev.confidence) {
+        existingMods.set(key, mod);
+      }
+    }
+    merged.reachModifiers = Array.from(existingMods.values());
   }
-
-  // Merge teammates (union, dedupe by name)
   if (newData.teammates) {
-    const existingNames = new Set((merged.teammates || []).map(t => t.name.toLowerCase()));
-    const newTeammates = newData.teammates.filter(
-      t => !existingNames.has(t.name.toLowerCase())
-    );
-    merged.teammates = [...(merged.teammates || []), ...newTeammates];
+    const existingPlayers = new Map<string, ExtractedPlayer>();
+    for (const player of merged.teammates || []) {
+      existingPlayers.set(normalizeKey(player.name), player);
+    }
+    for (const player of newData.teammates) {
+      const key = normalizeKey(player.name);
+      const prev = existingPlayers.get(key);
+      if (!prev || player.confidence > prev.confidence) {
+        existingPlayers.set(key, player);
+      }
+    }
+    merged.teammates = Array.from(existingPlayers.values());
   }
-
-  // Merge opponent teams — cross-reference by color or name to combine
-  // ship types (from map screen) with player lists (from crew hub)
   if (newData.opponentTeams) {
     const existingArr = [...(merged.opponentTeams || [])];
 
     for (const newTeam of newData.opponentTeams) {
-      // Try to find matching existing team by color first, then name
       let matchIdx = -1;
       if (newTeam.color && newTeam.color !== 'unknown') {
         matchIdx = existingArr.findIndex(t => t.color === newTeam.color);
@@ -421,32 +370,42 @@ export function mergeOCRData(
       }
 
       if (matchIdx >= 0) {
-        // Merge into existing team
         const existing = existingArr[matchIdx];
-        // Prefer longer/non-empty team name
         if ((newTeam.teamName?.length || 0) > (existing.teamName?.length || 0)) {
           existing.teamName = newTeam.teamName;
         }
-        // Fill in ship type if missing
         if (!existing.shipType && newTeam.shipType) {
           existing.shipType = newTeam.shipType;
         }
-        // Fill in color if missing
         if ((!existing.color || existing.color === 'unknown') && newTeam.color && newTeam.color !== 'unknown') {
           existing.color = newTeam.color;
         }
-        // Merge players (dedupe by name)
-        const existingNames = new Set(existing.players.map(p => p.name.toLowerCase()));
-        const newPlayers = newTeam.players.filter(p => !existingNames.has(p.name.toLowerCase()));
-        existing.players = [...existing.players, ...newPlayers];
-        // Keep higher confidence
+        const existingPlayers = new Map<string, ExtractedPlayer>();
+        for (const p of existing.players) {
+          existingPlayers.set(normalizeKey(p.name), p);
+        }
+        for (const p of newTeam.players) {
+          const key = normalizeKey(p.name);
+          const prev = existingPlayers.get(key);
+          if (!prev || p.confidence > prev.confidence) {
+            existingPlayers.set(key, p);
+          }
+        }
+        existing.players = Array.from(existingPlayers.values());
         existing.confidence = Math.max(existing.confidence, newTeam.confidence);
       } else {
-        // No match — add as new team
         existingArr.push({ ...newTeam, players: [...newTeam.players] });
       }
     }
     merged.opponentTeams = existingArr;
+  }
+  if (newData.hazards) {
+    const existing = new Set((merged.hazards || []).map(h => h.toLowerCase()));
+    const next = [...(merged.hazards || [])];
+    newData.hazards.forEach(h => {
+      if (!existing.has(h.toLowerCase())) next.push(h);
+    });
+    merged.hazards = next;
   }
 
   return merged;
@@ -456,43 +415,40 @@ export function mergeOCRData(
  * Calculate overall confidence score
  */
 export function calculateOverallConfidence(data: Partial<OCRExtractedData>): number {
-  const confidences: number[] = [];
+  const weighted: Array<{ value: number; weight: number }> = [];
 
   if (data.playerShip?.confidence) {
-    confidences.push(data.playerShip.confidence);
+    weighted.push({ value: data.playerShip.confidence, weight: 2.0 });
   }
 
   for (const mod of data.reachModifiers || []) {
-    confidences.push(mod.confidence);
+    weighted.push({ value: mod.confidence, weight: 1.0 });
   }
 
   for (const teammate of data.teammates || []) {
-    confidences.push(teammate.confidence);
+    weighted.push({ value: teammate.confidence, weight: 1.0 });
   }
 
   for (const team of data.opponentTeams || []) {
-    confidences.push(team.confidence);
+    weighted.push({ value: team.confidence, weight: 1.2 });
     for (const player of team.players) {
-      confidences.push(player.confidence);
+      weighted.push({ value: player.confidence, weight: 0.9 });
     }
   }
 
-  if (confidences.length === 0) return 0;
+  if (weighted.length === 0) return 0;
 
-  return confidences.reduce((sum, c) => sum + c, 0) / confidences.length;
+  const totalWeight = weighted.reduce((sum, w) => sum + w.weight, 0);
+  const total = weighted.reduce((sum, w) => sum + (w.value * w.weight), 0);
+  return totalWeight > 0 ? total / totalWeight : 0;
 }
 
 /**
  * Validate and clean extracted data
  */
 export function validateExtractedData(data: OCRExtractedData): OCRExtractedData {
-  // Filter out low-confidence teammates
   const validTeammates = data.teammates.filter(t => t.confidence >= 50);
-
-  // Filter out low-confidence modifiers
   const validModifiers = data.reachModifiers.filter(m => m.confidence >= 60);
-
-  // Clean opponent teams
   const validOpponentTeams = data.opponentTeams
     .filter(team => team.confidence >= 40)
     .map(team => ({
@@ -514,3 +470,4 @@ export function validateExtractedData(data: OCRExtractedData): OCRExtractedData 
     }),
   };
 }
+

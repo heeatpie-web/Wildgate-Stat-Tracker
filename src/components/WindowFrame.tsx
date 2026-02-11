@@ -1,5 +1,5 @@
 import React from 'react';
-import { Minus, Square, X, Maximize2, Minimize2 } from 'lucide-react';
+import { Minus, X, Maximize2, Minimize2 } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { APP_VERSION } from '../types';
 import { getElectronAPI } from '../utils/electronAPI';
@@ -25,18 +25,18 @@ export const WindowFrame: React.FC = () => {
 
     return (
         <div
-            className="h-8 bg-md-sys-surface2 flex items-center justify-between px-3 shrink-0 select-none"
+            className="h-9 premium-titlebar flex items-center justify-between px-3 shrink-0 select-none"
             style={{ WebkitAppRegion: 'drag' } as any}
         >
             {/* Left: App Identity */}
-            <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-gradient-to-br from-md-sys-primary to-md-sys-secondary flex items-center justify-center">
+            <div className="flex items-center gap-1.5">
+                <div className="w-4 h-4 rounded-[5px] bg-gradient-to-br from-md-sys-primary to-md-sys-tertiary flex items-center justify-center shadow-sm">
                     <span className="text-[8px] font-black text-white">W</span>
                 </div>
-                <span className="text-xs font-bold opacity-70">Wildgate Tracker</span>
-                <span className="text-[10px] font-mono opacity-40">{APP_VERSION}</span>
+                <span className="text-[11px] font-semibold tracking-[0.08em] uppercase opacity-90">Wildgate Tracker</span>
+                <span className="text-[9px] font-mono opacity-40">{APP_VERSION}</span>
                 {isAlwaysOnTop && (
-                    <span className="text-[9px] font-bold bg-md-sys-primary/20 text-md-sys-primary px-1.5 py-0.5 rounded">
+                    <span className="text-[9px] font-bold bg-md-sys-primary/20 text-md-sys-primary px-1.5 py-0.5 rounded-full border border-md-sys-primary/30">
                         Pinned
                     </span>
                 )}
@@ -49,14 +49,14 @@ export const WindowFrame: React.FC = () => {
             >
                 <button
                     onClick={handleMinimize}
-                    className="w-10 h-7 flex items-center justify-center hover:bg-md-sys-surface3 transition-colors rounded"
+                    className="md3-icon-btn w-9 h-7 rounded-lg"
                     title="Minimize"
                 >
                     <Minus size={14} className="opacity-70" />
                 </button>
                 <button
                     onClick={handleMaximize}
-                    className="w-10 h-7 flex items-center justify-center hover:bg-md-sys-surface3 transition-colors rounded"
+                    className="md3-icon-btn w-9 h-7 rounded-lg"
                     title={isMaximized ? "Restore" : "Maximize"}
                 >
                     {isMaximized ? (
@@ -67,7 +67,7 @@ export const WindowFrame: React.FC = () => {
                 </button>
                 <button
                     onClick={handleClose}
-                    className="w-10 h-7 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors rounded"
+                    className="md3-icon-btn group w-9 h-7 rounded-lg hover:bg-red-500 hover:text-white"
                     title="Close"
                 >
                     <X size={14} className="opacity-70 group-hover:opacity-100" />
@@ -76,3 +76,4 @@ export const WindowFrame: React.FC = () => {
         </div>
     );
 };
+

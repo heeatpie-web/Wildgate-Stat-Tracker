@@ -1,12 +1,4 @@
-/**
- * @module App
- * Root application component. Orchestrates:
- * - Hook integration (log monitor, Discord RPC, keyboard shortcuts, tilt monitor)
- * - View routing (recording, analytics, history, smart-captures)
- * - Modal management (wizard, settings, changelog, tutorial, OCR review)
- * - IPC listeners for auto-update and overlay hotkey (F9)
- */
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, Suspense } from 'react';
 import { useUIState } from './providers/UIStateProvider';
 import { useGameData } from './providers/GameDataProvider';
 import { useUserPreferences } from './providers/UserPreferencesProvider';
@@ -27,15 +19,15 @@ import { DevTools } from './components/DevTools';
 import { TelemetryPanel } from './components/TelemetryPanel';
 import Tutorial from './components/Tutorial';
 import { WindowResizer } from './components/WindowResizer';
-import AnalyticsPanel from './components/AnalyticsPanel';
-import HistoryTable from './components/HistoryTable';
+const AnalyticsPanel = React.lazy(() => import('./components/AnalyticsPanel'));
+const HistoryTable = React.lazy(() => import('./components/HistoryTable'));
 import { APP_VERSION, getShipCapacity } from './types';
 import { CHANGELOG } from './utils/changelog';
 import { Toast } from './components/Toast';
 import { IdMapper } from './components/IdMapper';
-import DevOCRPanel from './components/DevOCRPanel';
-import SmartCapturesPanel from './components/SmartCapturesPanel';
-import { MatchRecordingPage } from './components/MatchRecordingPage';
+const DevOCRPanel = React.lazy(() => import('./components/DevOCRPanel'));
+const SmartCapturesPanel = React.lazy(() => import('./components/SmartCapturesPanel'));
+const MatchRecordingPage = React.lazy(() => import('./components/MatchRecordingPage').then(m => ({ default: m.MatchRecordingPage })));
 import { OCRReviewModal } from './components/ocr/OCRReviewModal';
 import type { OCRExtractedData } from './utils/ocr/ocrTypes';
 import { useAppStore } from './store/useAppStore';
@@ -44,10 +36,8 @@ import { findClosestMatch, normalizeOcrName, similarityScore } from './utils/str
 import { StorageService } from './utils/storage';
 
 const App: React.FC = () => {
-    // OCR Review Modal state
     const [ocrReviewData, setOcrReviewData] = useState<OCRExtractedData | null>(null);
 
-    // 1. Hook Integration
     const {
         isOverlayMode, setIsOverlayMode,
         showTutorial, setShowTutorial,
@@ -83,10 +73,8 @@ const App: React.FC = () => {
 
     const { logFeed, logStatus } = useLogMonitor();
 
-    // 2. Global Effects
     useEffect(() => {
         const body = document.body;
-        // Theme & Appearance
         body.setAttribute('data-mode', appearanceMode === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : appearanceMode);
         body.setAttribute('data-theme', colorTheme);
         if (colorTheme === 'custom') body.style.setProperty('--app-hue', customHue);
@@ -101,7 +89,6 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const body = document.body;
-        // Overlay Mode Transparency
         if (isOverlayMode) {
             body.style.backgroundColor = 'transparent';
             document.documentElement.style.backgroundColor = 'transparent';
@@ -115,14 +102,12 @@ const App: React.FC = () => {
         }
     }, [isOverlayMode]);
 
-    // Update Status Listeners
     useEffect(() => {
         const api = getElectronAPI();
         if (!api) return;
         const unsubAvailable = api.on('update_available', () => setUpdateStatus('available'));
         const unsubDownloaded = api.on('update_downloaded', () => setUpdateStatus('downloaded'));
 
-        // F9 Hotkey Listener
         const unsubHotkey = api.on('hotkey-toggle-overlay', (forceState?: boolean) => {
             if (typeof forceState === 'boolean') {
                 setIsOverlayMode(forceState);
@@ -138,42 +123,32 @@ const App: React.FC = () => {
         };
     }, [setUpdateStatus, setIsOverlayMode]);
 
-    // Discord RPC
-    // Calculate session wins/matches for RPC
-    // Note: This logic assumes 'matches' contains all matches including historical ones.
-    // Ideally we filter by sessionStartTime, but sessionStartTime is constant for the session.
     const sessionMatches = matches.filter(m => m.timestamp >= sessionStartTime);
     const sessionWins = sessionMatches.filter(m => m.result === 'Win').length;
     useDiscordRPC(sessionWins, sessionMatches.length, activeMode, sessionStartTime);
 
-    // Keyboard Shortcuts
     useKeyboardShortcuts({
         onWin: () => { setPendingMatchData({}); setShowWizard('Win'); },
         onLoss: () => { setPendingMatchData({}); setShowWizard('Loss'); }
     }, showWizard);
 
-    // OCR Data Application Handler
     const handleApplyOCRData = useCallback((data: OCRExtractedData) => {
         const ocrCorrections = useAppStore.getState().ocrCorrections;
 
-        // Resolve an OCR name: apply corrections then fuzzy-match against known names
         const resolvePlayerName = (ocrName: string, existingList: string[]): string => {
             if (!ocrName || ocrName.length < 2) return ocrName;
             const normalized = normalizeOcrName(ocrName);
-            // 1. Apply learned OCR corrections
             const correction = ocrCorrections?.[ocrName] || ocrCorrections?.[normalized];
             if (correction && correction.count >= 2) {
                 console.log(`[OCR-Resolve] "${ocrName}" → correction: "${correction.correctedTo}" (seen ${correction.count}x)`);
                 return correction.correctedTo;
             }
-            // 2. Case-insensitive exact match against existing list + registry
             const allKnown = [...new Set([...existingList, ...pilotRegistry])];
             const exactCI = allKnown.find(n => n.toLowerCase() === normalized.toLowerCase());
             if (exactCI) {
                 console.log(`[OCR-Resolve] "${ocrName}" → exact match: "${exactCI}"`);
                 return exactCI;
             }
-            // 3. Fuzzy match (dynamic threshold based on name length)
             const fuzzy = findClosestMatch(normalized, allKnown);
             if (fuzzy) {
                 console.log(`[OCR-Resolve] "${ocrName}" → fuzzy match: "${fuzzy}" (from "${normalized}")`);
@@ -197,19 +172,16 @@ const App: React.FC = () => {
             };
         };
 
-        // Apply ship if detected
         if (data.playerShip?.shipType) {
             setActiveShip(data.playerShip.shipType, 'ocr');
         }
 
-        // Apply reach modifiers
         if (data.reachModifiers.length > 0) {
             const newModifiers = data.reachModifiers.map(m => m.name);
             const combined = [...new Set([...selectedReachModifiers, ...newModifiers])];
             setSelectedReachModifiers(combined, 'ocr');
         }
 
-        // Queue detected players for roster confirmation (no auto-add)
         const allPlayers = [
             ...data.teammates.map(t => t.name),
             ...data.opponentTeams.flatMap(team => team.players.map(p => p.name))
@@ -237,20 +209,18 @@ const App: React.FC = () => {
             }
         });
 
-        // Apply teammates (with dedup via fuzzy matching, capped by ship capacity)
         const currentShip = useAppStore.getState().activeShip;
-        const maxTeammates = getShipCapacity(currentShip) - 1; // -1 for the player themselves
+        const maxTeammates = getShipCapacity(currentShip) - 1;
         data.teammates.forEach(teammate => {
             const resolved = resolvePlayerName(teammate.name, selectedTeammates);
             if (resolved && !selectedTeammates.some(t => t.toLowerCase() === resolved.toLowerCase())) {
                 setSelectedTeammates((prev: string[]) => {
-                    if (prev.length >= maxTeammates) return prev; // Cap at ship capacity
+                    if (prev.length >= maxTeammates) return prev;
                     return prev.some(t => t.toLowerCase() === resolved.toLowerCase()) ? prev : [...prev, resolved];
                 });
             }
         });
 
-        // Apply opponents (with dedup via fuzzy matching)
         data.opponentTeams.forEach(team => {
             team.players.forEach(player => {
                 const resolved = resolvePlayerName(player.name, selectedOpponents);
@@ -260,12 +230,10 @@ const App: React.FC = () => {
             });
         });
 
-        // Apply artifact type if detected
         if (data.artifactType) {
             useAppStore.getState().setPendingArtifactType(data.artifactType);
         }
 
-        // Store structured opponent teams for match record
         const structuredTeams = data.opponentTeams.map(team => ({
             teamName: team.teamName || 'Unknown Team',
             shipType: team.shipType || '',
@@ -273,7 +241,6 @@ const App: React.FC = () => {
             players: team.players.map(p => resolvePlayerName(p.name, selectedOpponents)),
         }));
 
-        // Populate sessionTeams and sessionShipTypes for live roster grouping
         const newSessionTeams = { ...sessionTeams };
         const newShipTypes: Record<string, string> = {};
         structuredTeams.forEach(team => {
@@ -291,7 +258,6 @@ const App: React.FC = () => {
         setSessionTeams(newSessionTeams);
         setSessionShipTypes(newShipTypes, 'ocr');
 
-        // Store OCR debug metadata for match log display (Bug 3)
         const pendingMatch = useAppStore.getState().pendingMatchData || {};
         useAppStore.getState().setPendingMatchData({
             ...pendingMatch,
@@ -305,16 +271,13 @@ const App: React.FC = () => {
             }
         });
 
-        // Close modal and show success toast
         setOcrReviewData(null);
         setToast({ message: `Applied OCR data: ${data.teammates.length} teammates, ${data.reachModifiers.length} modifiers`, type: 'success' });
     }, [pilotRegistry, selectedTeammates, setSelectedTeammates, selectedOpponents, setSelectedOpponents, setActiveShip, selectedReachModifiers, setSelectedReachModifiers, setToast, addPendingReview, pendingReviews, sessionTeams, setSessionTeams, setSessionShipTypes]);
 
-    // Tutorial & Version Check
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         const lastSeen = localStorage.getItem('wg_last_seen_version');
-        if (lastSeen !== APP_VERSION && !showTutorial) { // Simple logic: if new version, show changelog
+        if (lastSeen !== APP_VERSION && !showTutorial) {
             setShowChangelog(true);
         }
     }, [showTutorial, setShowChangelog]);
@@ -332,7 +295,6 @@ const App: React.FC = () => {
         return () => window.removeEventListener('beforeunload', onBeforeUnload);
     }, []);
 
-    // View Router
     const renderActiveView = () => {
         switch (activeView) {
             case 'recording':
@@ -366,7 +328,12 @@ const App: React.FC = () => {
         }
     };
 
-    // 3. Render
+    const viewFallback = (
+        <div className="h-full w-full flex items-center justify-center text-sm font-semibold text-md-sys-on-surface/60">
+            Loading view...
+        </div>
+    );
+
     return (
         <div className={`app-container h-screen w-screen flex flex-col text-md-sys-onSurface ${!isOverlayMode ? 'bg-md-sys-background' : ''} font-sans transition-colors duration-300`} style={{ opacity: hiddenForScan ? 0 : 1 }}>
 
@@ -376,32 +343,26 @@ const App: React.FC = () => {
             ) : (
                 /* Full Dashboard Mode */
                 <>
-                    {/* Custom Title Bar */}
                     <WindowFrame />
 
-                    {/* Main Layout: Sidebar + Content */}
                     <div className="flex-1 flex overflow-hidden">
-                        {/* Sidebar Navigation */}
                         <Sidebar />
 
-                        {/* Content Area */}
-                        <div className="flex-1 flex flex-col overflow-hidden">
-                            {/* Header */}
+                        <div className="flex-1 flex flex-col overflow-hidden p-2 gap-2">
                             <Header />
 
-                            {/* Main View */}
-                            <main className="flex-1 overflow-hidden bg-md-sys-surface">
-                                {renderActiveView()}
+                            <main className="flex-1 overflow-hidden bg-md-sys-surface rounded-2xl">
+                                <Suspense fallback={viewFallback}>
+                                    {renderActiveView()}
+                                </Suspense>
                             </main>
                         </div>
                     </div>
 
-                    {/* Resize Handles (Edges & Corners) */}
                     <WindowResizer />
                 </>
             )}
 
-            {/* Modals & Overlays */}
             {toast && <Toast message={toast.message} type={toast.type || 'info'} onClose={() => setToast(null)} />}
 
             <RenameModal />
@@ -412,7 +373,6 @@ const App: React.FC = () => {
 
             {showTutorial && <Tutorial onComplete={() => setShowTutorial(false)} onSkip={() => setShowTutorial(false)} />}
 
-            {/* Changelog Modal */}
             {showChangelog && (
                 <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closeChangelog}>
                     <div className="bg-md-sys-surface1 p-8 rounded-[28px] max-w-lg w-full shadow-2xl border border-md-sys-outline/20 animate-scale-in" onClick={e => e.stopPropagation()}>
@@ -436,7 +396,6 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {/* Dev Tools */}
             <DevTools logFeed={logFeed} logStatus={logStatus} />
 
             {showIdMapper && (
@@ -448,7 +407,6 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {/* OCR Review Modal */}
             {ocrReviewData && (
                 <OCRReviewModal
                     data={ocrReviewData}

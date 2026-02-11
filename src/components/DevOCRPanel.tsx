@@ -140,7 +140,14 @@ const DevOCRPanel: React.FC = () => {
     const runOCR = async () => {
         if (!imageSrc) return;
         setLoading(true);
-        const modeLabel = ocrMode === 'both' ? 'Local+Cloud' : ocrMode === 'cloud' ? 'Cloud Vision' : 'Tesseract (Local)';
+        const effectiveOcrMode = ocrMode === 'hybrid-plus' ? 'both' : ocrMode;
+        const modeLabel = ocrMode === 'hybrid-plus'
+            ? 'Hybrid+ (fallback Local+Cloud)'
+            : ocrMode === 'both'
+                ? 'Local+Cloud'
+                : ocrMode === 'cloud'
+                    ? 'Cloud Vision'
+                    : 'Tesseract (Local)';
         setStatus(`Running OCR (${modeLabel})${activeUser ? ` with anchor: ${activeUser}` : ''}...`);
         setOcrResult(null);
         try {
@@ -148,7 +155,7 @@ const DevOCRPanel: React.FC = () => {
             const base64Data = imageSrc.replace(/^data:image\/\w+;base64,/, '');
 
             // Pass activeUser for anchor-based detection
-            const ocrResponse = await ocrProcessCapture(base64Data, activeUser || null, null, ocrMode);
+            const ocrResponse = await ocrProcessCapture(base64Data, activeUser || null, null, effectiveOcrMode);
 
             if (ocrResponse.success && ocrResponse.data) {
                 const ocrData = ocrResponse.data;
@@ -165,12 +172,12 @@ const DevOCRPanel: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col h-full bg-md-sys-surface1 p-6 gap-6 overflow-hidden items-center justify-center">
+        <div className="flex flex-col h-full md3-card p-6 gap-6 overflow-hidden items-center justify-center">
             {/* Header / Tabs */}
             <div className="flex gap-4 mb-4">
-                <button onClick={() => setTab('OCR')} className={`px-4 py-2 rounded-full font-bold ${tab === 'OCR' ? 'bg-md-sys-primary text-md-sys-on-primary' : 'bg-md-sys-surface3'}`}>OCR Lab</button>
-                <button onClick={() => setTab('Sim')} className={`px-4 py-2 rounded-full font-bold ${tab === 'Sim' ? 'bg-md-sys-primary text-md-sys-on-primary' : 'bg-md-sys-surface3'}`}>Match Simulator</button>
-                <button onClick={() => setTab('Utils')} className={`px-4 py-2 rounded-full font-bold ${tab === 'Utils' ? 'bg-md-sys-primary text-md-sys-on-primary' : 'bg-md-sys-surface3'}`}>Utilities</button>
+                <button onClick={() => setTab('OCR')} className={`md3-chip px-4 py-2 font-bold ${tab === 'OCR' ? 'bg-md-sys-primary text-md-sys-onPrimary' : ''}`}>OCR Lab</button>
+                <button onClick={() => setTab('Sim')} className={`md3-chip px-4 py-2 font-bold ${tab === 'Sim' ? 'bg-md-sys-primary text-md-sys-onPrimary' : ''}`}>Match Simulator</button>
+                <button onClick={() => setTab('Utils')} className={`md3-chip px-4 py-2 font-bold ${tab === 'Utils' ? 'bg-md-sys-primary text-md-sys-onPrimary' : ''}`}>Utilities</button>
             </div>
 
             {/* Content Area */}
@@ -179,35 +186,35 @@ const DevOCRPanel: React.FC = () => {
                     <SimulatorPanel />
                 </div>
             ) : tab === 'Utils' ? (
-                <div className="w-full max-w-2xl bg-md-sys-surface2 rounded-xl p-8 flex flex-col gap-6">
+                <div className="w-full max-w-2xl md3-card rounded-xl p-8 flex flex-col gap-6">
                     <h2 className="text-xl font-black uppercase text-md-sys-primary">Data Utilities</h2>
 
-                    <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
+                    <div className="md3-card p-6 rounded-xl border border-md-sys-outline/10">
                         <h3 className="font-bold mb-2">Retroactive Artifact Bundling</h3>
                         <p className="text-xs opacity-70 mb-4">Scan the 'ocr-debug' folder for screenshots that match the timestamps of your existing match history. Useful if feature was added late.</p>
                         <button
                             onClick={runRetroactiveBundling}
                             disabled={loading}
-                            className="px-6 py-3 bg-md-sys-primary text-md-sys-on-primary rounded-lg font-bold disabled:opacity-50 hover:brightness-110 transition-all flex items-center justify-center w-full"
+                            className="md3-btn-filled w-full font-bold disabled:opacity-50"
                         >
                             {loading ? 'Processing...' : 'Run Bundle Scan'}
                         </button>
-                        {status && <div className="mt-4 text-xs font-mono p-2 bg-black/20 rounded text-center">{status}</div>}
+                        {status && <div className="mt-4 text-xs font-mono p-2 md3-surface-high rounded text-center">{status}</div>}
                     </div>
 
-                    <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
+                    <div className="md3-card p-6 rounded-xl border border-md-sys-outline/10">
                         <h3 className="font-bold mb-2">Telemetry Decoder</h3>
                         <p className="text-xs opacity-70 mb-4">Convert the binary 'AccelByteTelemetryCache' file into a readable JSON file to verify raw game data.</p>
                         <button
                             onClick={runTelemetryDecode}
                             disabled={loading}
-                            className="px-6 py-3 bg-md-sys-surface3 text-md-sys-on-surface rounded-lg font-bold disabled:opacity-50 hover:brightness-110 transition-all flex items-center justify-center w-full"
+                            className="md3-btn-tonal w-full font-bold disabled:opacity-50"
                         >
                             {loading ? 'Processing...' : 'Decode Cache File'}
                         </button>
                     </div>
 
-                    <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
+                    <div className="md3-card p-6 rounded-xl border border-md-sys-outline/10">
                         <h3 className="font-bold mb-2">Simulated Archive Cleanup</h3>
                         <p className="text-xs opacity-70 mb-4">Clear all files in the 'telemetry_archive' folder. Use this to reset the simulator list.</p>
                         <button
@@ -229,13 +236,13 @@ const DevOCRPanel: React.FC = () => {
                                 }
                             }}
                             disabled={loading}
-                            className="px-6 py-3 bg-md-sys-error/10 text-md-sys-error border border-md-sys-error/20 rounded-lg font-bold disabled:opacity-50 hover:bg-md-sys-error hover:text-white transition-all flex items-center justify-center w-full"
+                            className="md3-btn-tonal w-full font-bold disabled:opacity-50 text-md-sys-error"
                         >
                             {loading ? 'Processing...' : 'Clear All Archives'}
                         </button>
                     </div>
 
-                    <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
+                    <div className="md3-card p-6 rounded-xl border border-md-sys-outline/10">
                         <h3 className="font-bold mb-2">OCR Preprocessed Image Cleanup</h3>
                         <p className="text-xs opacity-70 mb-4">Clear preprocessed OCR images (keeps raw captures for ML training). Use this to free disk space.</p>
                         <button
@@ -257,13 +264,13 @@ const DevOCRPanel: React.FC = () => {
                                 }
                             }}
                             disabled={loading}
-                            className="px-6 py-3 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg font-bold disabled:opacity-50 hover:bg-amber-500 hover:text-black transition-all flex items-center justify-center w-full"
+                            className="md3-btn-tonal w-full font-bold disabled:opacity-50 text-amber-400"
                         >
                             {loading ? 'Processing...' : 'Clear Preprocessed Images'}
                         </button>
                     </div>
 
-                    <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
+                    <div className="md3-card p-6 rounded-xl border border-md-sys-outline/10">
                         <h3 className="font-bold mb-2">ML Dataset Integration</h3>
                         <p className="text-xs opacity-70 mb-4">Move current OCR captures to ML training dataset folder for YOLO labeling.</p>
                         <button
@@ -285,7 +292,7 @@ const DevOCRPanel: React.FC = () => {
                                 setLoading(false);
                             }}
                             disabled={loading}
-                            className="px-6 py-3 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-lg font-bold disabled:opacity-50 hover:bg-blue-500 hover:text-white transition-all flex items-center justify-center w-full"
+                            className="md3-btn-tonal w-full font-bold disabled:opacity-50 text-blue-400"
                         >
                             {loading ? 'Processing...' : 'Open OCR Captures Folder'}
                         </button>
@@ -298,7 +305,7 @@ const DevOCRPanel: React.FC = () => {
                         <div className="flex justify-between items-center">
                             <h2 className="text-2xl font-black text-md-sys-primary tracking-wide uppercase">DevMode OCR Lab</h2>
                             <div className="flex gap-2">
-                                <button onClick={loadRecentFiles} className="px-3 py-1 bg-md-sys-surface3 rounded hover:bg-md-sys-surface4 text-xs font-bold">Refresh Files</button>
+                                <button onClick={loadRecentFiles} className="md3-btn-tonal text-xs font-bold">Refresh Files</button>
                                 <input
                                     type="file"
                                     accept="image/*"
@@ -334,14 +341,24 @@ const DevOCRPanel: React.FC = () => {
                                 <button
                                     onClick={runOCR}
                                     disabled={loading || !imageSrc}
-                                    className="p-4 bg-md-sys-primary text-md-sys-on-primary font-bold rounded-lg hover:brightness-110 disabled:opacity-50 shadow-lg shadow-md-sys-primary/20 text-lg"
+                                    className="md3-btn-filled w-full text-lg font-bold disabled:opacity-50"
                                 >
-                                    {loading ? 'Processing...' : `Run OCR (${ocrMode === 'both' ? 'Local+Cloud' : ocrMode === 'cloud' ? 'Cloud' : 'Local'})`}
+                                    {loading
+                                        ? 'Processing...'
+                                        : `Run OCR (${
+                                            ocrMode === 'hybrid-plus'
+                                                ? 'Hybrid+'
+                                                : ocrMode === 'both'
+                                                    ? 'Local+Cloud'
+                                                    : ocrMode === 'cloud'
+                                                        ? 'Cloud'
+                                                        : 'Local'
+                                        })`}
                                 </button>
 
                                 {/* Results Visualization */}
-                                <div className="flex-1 bg-md-sys-surface2 rounded-xl border border-md-sys-outline/10 flex flex-col min-h-0 overflow-hidden">
-                                    <div className="p-3 border-b border-md-sys-outline/10 flex justify-between items-center bg-md-sys-surface3/50 shrink-0">
+                                <div className="flex-1 md3-card rounded-xl border border-md-sys-outline/10 flex flex-col min-h-0 overflow-hidden">
+                                    <div className="p-3 border-b border-md-sys-outline/10 flex justify-between items-center md3-surface-high/50 shrink-0">
                                         <span className="font-bold text-xs uppercase opacity-70">Scan Results</span>
                                         {status && <span className="text-[10px] bg-md-sys-primary/20 text-md-sys-primary px-2 py-0.5 rounded font-bold animate-pulse">{status}</span>}
                                     </div>
@@ -383,7 +400,7 @@ const DevOCRPanel: React.FC = () => {
                                                 {ocrResult.playerShip && (
                                                     <div className="flex flex-col gap-1">
                                                         <span className="text-[10px] font-bold uppercase opacity-50">Detected Ship</span>
-                                                        <div className="bg-md-sys-surface1 p-2 rounded text-xs">
+                                                        <div className="md3-surface-high p-2 rounded text-xs">
                                                             <span className="font-bold">{ocrResult.playerShip.shipType}</span>
                                                             <span className="opacity-50 ml-2">({Math.round(ocrResult.playerShip.confidence)}%)</span>
                                                         </div>
@@ -409,7 +426,7 @@ const DevOCRPanel: React.FC = () => {
                                                     <div className="flex flex-col gap-1">
                                                         <span className="text-[10px] font-bold uppercase opacity-50">Teammates ({ocrResult.teammates.length})</span>
                                                         {ocrResult.teammates.map((t, idx) => (
-                                                            <div key={idx} className="bg-md-sys-surface1 p-2 rounded flex items-center gap-2">
+                                                            <div key={idx} className="md3-surface-high p-2 rounded flex items-center gap-2">
                                                                 <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                                                                 <span className="font-bold text-xs">{t.name}</span>
                                                                 <span className="text-[9px] opacity-40">{Math.round(t.confidence)}%</span>
@@ -429,7 +446,7 @@ const DevOCRPanel: React.FC = () => {
                                                                 'blue': 'bg-blue-500', 'purple': 'bg-purple-500'
                                                             };
                                                             return (
-                                                                <div key={idx} className="bg-md-sys-surface1 p-2 rounded">
+                                                                <div key={idx} className="md3-surface-high p-2 rounded">
                                                                     <div className="flex items-center gap-2 mb-1">
                                                                         <div className={`w-3 h-3 rounded-full ${colorMap[team.color] || 'bg-gray-500'}`}></div>
                                                                         <span className="font-bold text-xs">{team.teamName || 'Unknown Team'}</span>
@@ -466,7 +483,7 @@ const DevOCRPanel: React.FC = () => {
                                             </div>
                                         ) : (
                                             <div className="flex flex-col items-center justify-center h-full opacity-20 gap-2">
-                                                <div className="text-4xl">🔍</div>
+                                                <div className="text-4xl">OCR</div>
                                                 <div className="text-xs font-bold uppercase text-center">No Scan Data</div>
                                             </div>
                                         )}
@@ -474,7 +491,7 @@ const DevOCRPanel: React.FC = () => {
                                 </div>
 
                                 {/* Recent Files Sidebar */}
-                                <div className="h-48 bg-md-sys-surface2 rounded-xl p-2 flex flex-col shrink-0 border border-md-sys-outline/10 overflow-hidden">
+                                <div className="h-48 md3-card rounded-xl p-2 flex flex-col shrink-0 border border-md-sys-outline/10 overflow-hidden">
                                     <h3 className="text-xs font-bold uppercase opacity-50 px-2 py-1">Recent Captures</h3>
                                     <div className="overflow-auto flex-1 flex flex-col gap-1">
                                         {recentFiles.map((f, i) => {
@@ -489,7 +506,7 @@ const DevOCRPanel: React.FC = () => {
                                                 <button
                                                     key={i}
                                                     onClick={() => loadFile(f.path)}
-                                                    className={`text-left text-[10px] p-2 rounded truncate w-full flex items-center gap-2 transition-all ${isActive ? 'ring-1 ring-md-sys-primary bg-md-sys-primary/5' : ''} ${isRaw || isMatch ? 'bg-md-sys-primary/10 hover:bg-md-sys-primary/20 border border-md-sys-primary/20' : 'hover:bg-md-sys-surface3 opacity-70'}`}
+                                                    className={`text-left text-[10px] p-2 rounded truncate w-full flex items-center gap-2 transition-all ${isActive ? 'ring-1 ring-md-sys-primary bg-md-sys-primary/5' : ''} ${isRaw || isMatch ? 'bg-md-sys-primary/10 hover:bg-md-sys-primary/20 border border-md-sys-primary/20' : 'hover:md3-surface-high opacity-70'}`}
                                                     title={f.name}
                                                 >
                                                     <span className={`block w-2 h-2 rounded-full shrink-0 ${isRaw ? 'bg-md-sys-primary' : 'bg-md-sys-tertiary'}`}></span>
@@ -536,3 +553,4 @@ const DevOCRPanel: React.FC = () => {
 };
 
 export default DevOCRPanel;
+

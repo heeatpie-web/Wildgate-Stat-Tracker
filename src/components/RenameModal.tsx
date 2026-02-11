@@ -44,8 +44,8 @@ export const RenameModal: React.FC = () => {
     const sub = isShare ? 'Paste your share code below' : (isRename ? 'Enter a new callsign' : 'Identify yourself, prospector');
 
     return (
-        <div className="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setRenameModal(null)}>
-            <div className="bg-md-sys-surface1 p-8 rounded-2xl max-w-sm w-full shadow-2xl border border-md-sys-outline/20 animate-scale-in" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 md3-dialog-scrim z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setRenameModal(null)}>
+            <div className="md3-dialog p-8 rounded-2xl max-w-sm w-full shadow-2xl border border-md-sys-outline/20 animate-scale-in" onClick={e => e.stopPropagation()}>
                 <h3 className="text-2xl font-black uppercase mb-2">{title}</h3>
                 <p className="text-xs font-bold opacity-60 uppercase tracking-widest mb-6">{sub}</p>
 
@@ -54,15 +54,16 @@ export const RenameModal: React.FC = () => {
                     value={renameValue}
                     onChange={(e) => setRenameValue(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                    className="w-full bg-md-sys-surface2 p-4 rounded-2xl text-xl font-bold mb-6 outline-none border border-transparent focus:border-md-sys-primary transition-all"
+                    className="w-full md3-textfield--outlined p-4 rounded-2xl text-xl font-bold mb-6 outline-none transition-all"
                     placeholder={isShare ? "Paste code..." : "Callsign..."}
                 />
 
                 <div className="flex gap-2">
-                    <button onClick={() => setRenameModal(null)} className="flex-1 py-4 bg-md-sys-surface3 rounded-2xl font-black uppercase tracking-widest hover:bg-md-sys-outline/20">Cancel</button>
-                    <button onClick={handleSubmit} className="flex-1 py-4 bg-md-sys-primary text-md-sys-onPrimary rounded-2xl font-black uppercase tracking-widest hover:brightness-110 shadow-lg">Confirm</button>
+                    <button onClick={() => setRenameModal(null)} className="flex-1 md3-btn-outlined py-4 rounded-2xl font-black uppercase tracking-widest">Cancel</button>
+                    <button onClick={handleSubmit} className="flex-1 md3-btn-filled py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg">Confirm</button>
                 </div>
             </div>
         </div>
     );
 };
+

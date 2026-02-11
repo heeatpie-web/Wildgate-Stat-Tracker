@@ -21,6 +21,8 @@ interface UserPreferencesContextType {
     setColorblindMode: (mode: ColorblindMode) => void;
     disableAnimations: boolean;
     setDisableAnimations: (disabled: boolean) => void;
+    performanceMode: boolean;
+    setPerformanceMode: (enabled: boolean) => void;
     soundEnabled: boolean;
     setSoundEnabled: (enabled: boolean) => void;
     language: Language;
@@ -33,6 +35,8 @@ interface UserPreferencesContextType {
     setOverlayStyle: (style: OverlayStyle) => void;
     visualMode: VisualMode;
     setVisualMode: (mode: VisualMode) => void;
+    uiStyle: 'md3' | 'legacy';
+    setUiStyle: (style: 'md3' | 'legacy') => void;
 }
 
 const UserPreferencesContext = createContext<UserPreferencesContextType | null>(null);
@@ -52,24 +56,28 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
         customHue, setCustomHue,
         colorblindMode, setColorblindMode,
         disableAnimations, setDisableAnimations,
+        performanceMode, setPerformanceMode,
         soundEnabled, setSoundEnabled,
         language, setLanguage,
         showSessionTimer, setShowSessionTimer,
         customBgUrl, setCustomBgUrl,
         overlayStyle, setOverlayStyle,
-        visualMode, setVisualMode
+        visualMode, setVisualMode,
+        uiStyle, setUiStyle
     } = useAppStore(useShallow(s => ({
         appearanceMode: s.appearanceMode, setAppearanceMode: s.setAppearanceMode,
         colorTheme: s.colorTheme, setColorTheme: s.setColorTheme,
         customHue: s.customHue, setCustomHue: s.setCustomHue,
         colorblindMode: s.colorblindMode, setColorblindMode: s.setColorblindMode,
         disableAnimations: s.disableAnimations, setDisableAnimations: s.setDisableAnimations,
+        performanceMode: s.performanceMode, setPerformanceMode: s.setPerformanceMode,
         soundEnabled: s.soundEnabled, setSoundEnabled: s.setSoundEnabled,
         language: s.language, setLanguage: s.setLanguage,
         showSessionTimer: s.showSessionTimer, setShowSessionTimer: s.setShowSessionTimer,
         customBgUrl: s.customBgUrl, setCustomBgUrl: s.setCustomBgUrl,
         overlayStyle: s.overlayStyle, setOverlayStyle: s.setOverlayStyle,
         visualMode: s.visualMode, setVisualMode: s.setVisualMode,
+        uiStyle: s.uiStyle, setUiStyle: s.setUiStyle,
     })));
 
     // Side Effects moved from App.tsx
@@ -102,12 +110,27 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
 
     // 3. Apply Animations Setting
     useEffect(() => {
-        if (disableAnimations) {
+        if (disableAnimations || performanceMode) {
             document.body.classList.add('reduce-motion');
         } else {
             document.body.classList.remove('reduce-motion');
         }
-    }, [disableAnimations]);
+    }, [disableAnimations, performanceMode]);
+
+    useEffect(() => {
+        if (performanceMode) {
+            document.body.classList.add('perf-lite');
+        } else {
+            document.body.classList.remove('perf-lite');
+        }
+    }, [performanceMode]);
+
+    // 3.5 Apply UI style variant
+    useEffect(() => {
+        const root = document.documentElement;
+        root.setAttribute('data-ui', uiStyle);
+        document.body.setAttribute('data-ui', uiStyle);
+    }, [uiStyle]);
 
     // 4. Set Language on Body (for CSS targeting if needed)
     useEffect(() => {
@@ -120,16 +143,19 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
         customHue, setCustomHue,
         colorblindMode, setColorblindMode,
         disableAnimations, setDisableAnimations,
+        performanceMode, setPerformanceMode,
         soundEnabled, setSoundEnabled,
         language, setLanguage,
         showSessionTimer, setShowSessionTimer,
         customBgUrl, setCustomBgUrl,
         overlayStyle, setOverlayStyle,
-        visualMode, setVisualMode
+        visualMode, setVisualMode,
+        uiStyle, setUiStyle
     }), [appearanceMode, setAppearanceMode, colorTheme, setColorTheme, customHue, setCustomHue,
         colorblindMode, setColorblindMode, disableAnimations, setDisableAnimations,
+        performanceMode, setPerformanceMode,
         soundEnabled, setSoundEnabled, language, setLanguage, showSessionTimer, setShowSessionTimer,
-        customBgUrl, setCustomBgUrl, overlayStyle, setOverlayStyle, visualMode, setVisualMode]);
+        customBgUrl, setCustomBgUrl, overlayStyle, setOverlayStyle, visualMode, setVisualMode, uiStyle, setUiStyle]);
 
     return (
         <UserPreferencesContext.Provider value={value}>

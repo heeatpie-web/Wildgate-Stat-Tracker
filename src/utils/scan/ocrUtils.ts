@@ -1,16 +1,8 @@
-/**
- * @module scan/ocrUtils
- * OCR helper utilities: word-to-line grouping, modifier detection,
- * Windows OCR normalization, and ML detection wrappers.
- */
 import { UI_REACH_MODIFIERS } from '../constants';
 import { normalizeOcrText, cleanMissionName } from '../stringUtils';
-import type { OCRLine, MLDetection, WindowsOcrResult } from './types';
+import type { OCRLine, WindowsOcrResult } from './types';
 import { getElectronAPI } from '../electronAPI';
 
-/**
- * Groups raw OCR words into lines based on vertical proximity.
- */
 export const groupWordsIntoLines = (words: any[], threshold = 12): OCRLine[] => {
     if (!words || words.length === 0) return [];
 
@@ -105,10 +97,6 @@ export const runNativeOCR = async (imagePath: string): Promise<any> => {
     return mapWindowsOcrToTesseract(result);
 };
 
-/**
- * Run Google Cloud Vision OCR on an image file path.
- * Returns null if unavailable or on error.
- */
 export const runCloudOCR = async (imagePath: string): Promise<{ fullText: string; annotations: any[] } | null> => {
     try {
         const api = getElectronAPI();
@@ -120,23 +108,3 @@ export const runCloudOCR = async (imagePath: string): Promise<{ fullText: string
     }
 };
 
-export const runMLDetection = async (dataUrl: string): Promise<MLDetection[]> => {
-    try {
-        const api = getElectronAPI();
-        if (!api) return [];
-
-        let pathToScan = dataUrl;
-        if (dataUrl.startsWith('data:')) {
-            pathToScan = await api.invoke('save-ocr-debug', {
-                dataUrl: dataUrl,
-                filename: 'ml_temp_scan.png'
-            });
-        }
-
-        const res = await api.invoke('ml-scan', pathToScan);
-        return res.detections || [];
-    } catch (e) {
-        console.error("ML Detection failed", e);
-        return [];
-    }
-};

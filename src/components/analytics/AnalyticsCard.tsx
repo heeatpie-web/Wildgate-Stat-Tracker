@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { ChevronRight } from 'lucide-react';
 import { VisualMode } from '../../types';
 import { useUserPreferences } from '../../providers/UserPreferencesProvider';
@@ -20,10 +20,10 @@ export const AnalyticsCard: React.FC<AnalyticsCardProps> = ({ title, icon, child
 
     return (
         <div className={`
-                relative overflow-hidden group transition-all duration-300 border
-                ${isLegacy ? 'md3-card shadow-sm border-md-sys-outline/15' : 'md3-card bg-gradient-to-b from-md-sys-surface to-md-sys-surfaceContainerLowest border-md-sys-outline/10'}
+                relative overflow-hidden group transition-all duration-300
+                ${isLegacy ? 'md3-card shadow-sm border border-md-sys-outlineVariant/45' : 'md3-card bg-gradient-to-b from-md-sys-surface to-md-sys-surfaceContainerLowest'}
                 ${dense ? 'p-3 rounded-xl' : 'p-4 rounded-2xl'}
-                ${onExpand ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/15 hover:border-md-sys-primary/30 active:translate-y-0' : ''}
+                ${onExpand ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0' : ''}
                 ${className}
             `}
             onClick={onExpand}>

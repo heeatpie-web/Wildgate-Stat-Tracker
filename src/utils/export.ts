@@ -51,9 +51,13 @@ export const exportToCSV = (matches: Match[]) => {
   downloadBlob(blob, `wildgate_export_${getFormattedDate()}.csv`);
 };
 
-export const exportToJSON = (data: any) => {
+export const exportJSONFile = (data: any, filenamePrefix = 'wildgate_export') => {
   const blob = new Blob([JSON.stringify(data, null, 4)], { type: 'application/json' });
-  downloadBlob(blob, `wildgate_backup_${getFormattedDate()}.json`);
+  downloadBlob(blob, `${filenamePrefix}_${getFormattedDate()}.json`);
+};
+
+export const exportToJSON = (data: any) => {
+  exportJSONFile(data, 'wildgate_backup');
 };
 
 export const generateMatchImage = (match: Match) => {
@@ -64,23 +68,33 @@ export const generateMatchImage = (match: Match) => {
   
   if (!ctx) return;
 
+  const styles = getComputedStyle(document.body);
+  const mdBackground = styles.getPropertyValue('--md-sys-color-background').trim() || styles.backgroundColor;
+  const mdOutline = styles.getPropertyValue('--md-sys-color-outline-variant').trim();
+  const mdOnSurface = styles.getPropertyValue('--md-sys-color-on-surface').trim() || styles.color;
+  const mdSuccess = styles.getPropertyValue('--color-success').trim();
+  const mdDanger = styles.getPropertyValue('--color-danger').trim();
+  const mdInfo = styles.getPropertyValue('--color-info').trim();
+  const mdOnSurfaceVariant = styles.getPropertyValue('--md-sys-color-on-surface-variant').trim();
+  const mdWarn = styles.getPropertyValue('--color-warning').trim();
+
   // Background
-  ctx.fillStyle = "#161b29";
+  ctx.fillStyle = mdBackground || '#161b29';
   ctx.fillRect(0, 0, 600, 350);
 
   // Border based on result
-  ctx.strokeStyle = match.result === 'Win' ? "#00ff9d" : "#ff4757";
+  ctx.strokeStyle = match.result === 'Win' ? (mdSuccess || '#00ff9d') : (mdDanger || '#ff4757');
   ctx.lineWidth = 10;
   ctx.strokeRect(5, 5, 590, 340);
 
   // Title
-  ctx.fillStyle = "white";
+  ctx.fillStyle = mdOnSurface || "white";
   ctx.font = "bold 30px 'Segoe UI', Roboto, sans-serif";
   ctx.fillText(`${match.result.toUpperCase()} - ${match.subType}`, 40, 60);
 
   // Details
   ctx.font = "18px 'Segoe UI', Roboto, sans-serif";
-  ctx.fillStyle = "#e0e6ed";
+  ctx.fillStyle = mdOnSurfaceVariant || "#e0e6ed";
   
   let y = 100;
   ctx.fillText(`Prospector: ${match.player}`, 40, y);
@@ -91,9 +105,9 @@ export const generateMatchImage = (match: Match) => {
   y += 35;
 
   if (match.opponents && match.opponents.length > 0) {
-      ctx.fillStyle = "#ffaaaa";
+      ctx.fillStyle = mdWarn || "#ffaaaa";
       ctx.fillText(`Vs: ${match.opponents.join(', ')}`, 40, y);
-      ctx.fillStyle = "#e0e6ed";
+      ctx.fillStyle = mdOnSurfaceVariant || "#e0e6ed";
       y += 35;
   }
 
@@ -116,12 +130,12 @@ export const generateMatchImage = (match: Match) => {
     .join(' | ');
 
   if (kills) {
-    ctx.fillStyle = "#00d4ff";
+    ctx.fillStyle = mdInfo || "#00d4ff";
     ctx.fillText(`Kills: ${kills}`, 40, y);
   }
 
   // Date
-  ctx.fillStyle = "#8b9bb4";
+  ctx.fillStyle = mdOutline || "#8b9bb4";
   ctx.font = "12px sans-serif";
   ctx.fillText(match.date, 540 - ctx.measureText(match.date).width, 320);
 

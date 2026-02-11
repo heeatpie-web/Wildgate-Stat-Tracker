@@ -19,53 +19,69 @@ interface TutorialStep {
 
 const steps: TutorialStep[] = [
     {
+        title: 'Profile Selector',
+        description: 'Switch profiles to keep stats and match history separated per pilot/account.',
+        selector: 'profile-selector',
+    },
+    {
+        title: 'Game Mode',
+        description: 'This toggle switches between Artifact Brawl and Fleet Battle. Analytics and match entry follow the selected mode.',
+        selector: 'mode-toggle',
+    },
+    {
+        title: 'System Status',
+        description: 'This pulse shows key background health: telemetry online/offline, OCR activity, mission live/idle, and update state.',
+        selector: 'system-pulse',
+    },
+    {
+        title: 'Data Safety',
+        description: 'This indicates your local save safety. Hover it for last save/backup details and recovery state.',
+        selector: 'data-safety',
+    },
+    {
         title: 'Match Recording',
-        description: 'Start new matches, track ships and modifiers, and keep the live session up to date here.',
+        description: 'This is the main recording surface: live session controls, mission intel, and rapid match logging.',
         selector: 'view-recording',
         view: 'recording',
     },
     {
+        title: 'Smart Capture',
+        description: 'High-priority action. Captures the game window and extracts teammates/opponents/ship/modifiers via OCR for faster entry.',
+        selector: 'smart-capture',
+        view: 'recording',
+    },
+    {
         title: 'Quick Actions',
-        description: 'Log wins, losses, and key events fast from this action panel.',
+        description: 'Use this panel to log wins/losses quickly and keep your mission/session timer in one place.',
         selector: 'action-panel',
         view: 'recording',
     },
     {
         title: 'Analytics',
-        description: 'Review performance trends and drill into ships, pilots, and modifiers.',
+        description: 'Your performance cockpit. Use quick chips to jump into Momentum, Insights, Social, Pro, and more.',
         selector: 'view-analytics',
         view: 'analytics',
     },
     {
         title: 'History',
-        description: 'Browse, edit, and export previous matches from the full history table.',
+        description: 'Browse, edit, and export previous matches from the history table.',
         selector: 'view-history',
         view: 'history',
     },
     {
         title: 'Smart Captures',
-        description: 'Review OCR scans, fix detections, and promote captures into structured matches.',
+        description: 'Review captured screenshots, rerun OCR, and apply extracted data back into matches or your current session.',
         selector: 'view-smart-captures',
         view: 'smart-captures',
     },
     {
-        title: 'Profile Selector',
-        description: 'Switch pilots here to keep multiple players or accounts separate.',
-        selector: 'profile-selector',
-    },
-    {
-        title: 'Mode Toggle',
-        description: 'Swap between Smart and Manual input modes depending on how detailed you want to log.',
-        selector: 'mode-toggle',
-    },
-    {
         title: 'Overlay Mode',
-        description: 'Toggle the always-on-top overlay when you want a compact HUD during play.',
+        description: 'Switch to overlay when you want a compact HUD during play.',
         selector: 'overlay-button',
     },
     {
         title: 'Settings',
-        description: 'Configure backups, OCR behavior, and experimental tools from the settings panel.',
+        description: 'Configure OCR, backups, UI preferences, and advanced options here.',
         selector: 'nav-settings',
     },
 ];
@@ -242,7 +258,7 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
 
             <div
                 ref={tooltipRef}
-                className="absolute w-[320px] max-w-[calc(100vw-32px)] bg-md-sys-surface1 text-md-sys-on-surface rounded-2xl border border-md-sys-outline/20 shadow-2xl p-4 pointer-events-auto"
+                className="absolute w-[320px] max-w-[calc(100vw-32px)] md3-card text-md-sys-on-surface rounded-2xl border border-md-sys-outline/20 shadow-2xl p-4 pointer-events-auto"
                 style={tooltipInlineStyle}
             >
                 <div className="flex items-start justify-between gap-3">
@@ -254,7 +270,7 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
                     </div>
                     <button
                         onClick={onSkip}
-                        className="p-2 rounded-lg hover:bg-md-sys-surface2 transition-colors text-md-sys-outline"
+                        className="md3-icon-btn"
                         aria-label="Exit tutorial"
                     >
                         <X size={18} />
@@ -266,13 +282,13 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
                 <div className="flex gap-2 mt-4">
                     <button
                         onClick={stepIndex === 0 ? onSkip : handlePrev}
-                        className="px-4 py-2 rounded-lg font-bold transition-colors text-md-sys-on-surface hover:bg-md-sys-surface2"
+                        className="md3-btn-text"
                     >
                         {stepIndex === 0 ? 'Skip' : 'Back'}
                     </button>
                     <button
                         onClick={handleNext}
-                        className="flex-1 bg-md-sys-primary text-md-sys-onPrimary px-4 py-2 rounded-lg font-black uppercase tracking-widest hover:brightness-110 transition-all flex items-center justify-center gap-2"
+                        className="md3-btn-filled flex-1 font-black uppercase tracking-widest flex items-center justify-center gap-2"
                     >
                         {stepIndex === steps.length - 1 ? (
                             <>Finish</>
@@ -289,3 +305,4 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
 };
 
 export default Tutorial;
+

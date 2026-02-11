@@ -1,4 +1,15 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v2.12.1": [
+    "Fix: Resolved Smart Scan hook compile error by restoring async flow in useSmartScan (await now only inside async handlers).",
+    "Reliability: Hardened DB durability with recovery candidates (main DB + .prev + .tmp), plus fsync-backed atomic writes in Electron.",
+    "Reliability: Added write-ahead logging (WAL) with startup replay so interrupted writes can be recovered automatically.",
+    "Reliability: Added aggressive persistence guards (shorter debounce + page hide/background/interval flush) to reduce unsaved data windows.",
+    "Performance: Lazy-loaded heavy views (Analytics, History, Smart Captures, Dev OCR, Match Recording) to reduce initial bundle weight.",
+    "Fix: Recording default view no longer clips Ship & Loadout and Record panels at the bottom; left column now scrolls correctly.",
+    "Fix: Roster TM/VS quick-action buttons now stay contained within panel bounds on narrower layouts.",
+    "Improvement: Match History visual refresh with cleaner hierarchy, improved table readability, and upgraded mission detail modal styling.",
+    "Improvement: Updated app typography to Manrope + Sora for a more polished, premium UI feel."
+  ],
   "v2.12.0": [
     "Improvement: UI Consistency — Normalized border radii across 12 components (eliminated all ad-hoc rounded-[Npx] values).",
     "Improvement: UI Consistency — Replaced hardcoded white/black colors with design tokens across 8 files for light-mode compatibility.",

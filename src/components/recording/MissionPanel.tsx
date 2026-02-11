@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Clock, HeartCrack, Target, Crosshair, Zap, X, Camera, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Layout, Clock, HeartCrack, Target, Crosshair, Zap, X, Camera, Loader2, ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { WEAPONS, UI_REACH_MODIFIERS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT } from '../../types';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
@@ -96,8 +96,8 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
         if (!accordionMode) {
             // Normal header without collapse controls
             return (
-                <span className="text-xs font-semibold text-md-sys-on-surface/50 uppercase flex items-center gap-1.5">
-                    {icon} {title} {badge && <span className="text-[9px] opacity-60">{badge}</span>}
+                <span className="text-[11px] font-semibold text-md-sys-on-surface/60 flex items-center gap-1.5">
+                    {icon} {title} {badge && <span className="text-[10px] opacity-60">{badge}</span>}
                 </span>
             );
         }
@@ -106,16 +106,16 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
         return (
             <button
                 onClick={() => toggleSection(id)}
-                className={`w-full flex items-center justify-between py-1.5 px-2 rounded-lg transition-all ${
+                className={`w-full flex items-center justify-between py-2 px-3 rounded-xl transition-all ${
                     isExpanded
-                        ? 'bg-md-sys-primary/10 text-md-sys-primary'
+                        ? 'md3-surface-high text-md-sys-primary ring-1 ring-md-sys-primary/20'
                         : isTransparent
-                            ? 'bg-zinc-800/50 hover:bg-zinc-700/50 text-white/60 hover:text-white'
-                            : 'bg-md-sys-surface2 hover:bg-md-sys-surface3 text-md-sys-on-surface/50 hover:text-md-sys-on-surface'
+                            ? 'md3-surface hover:bg-md-sys-on-surface/[0.08] text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
+                            : 'md3-surface text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
                 }`}
             >
-                <span className="text-xs font-bold uppercase flex items-center gap-1.5">
-                    {icon} {title} {badge && <span className="text-[9px] opacity-60">{badge}</span>}
+                <span className="text-[11px] font-semibold flex items-center gap-1.5">
+                    {icon} {title} {badge && <span className="text-[10px] opacity-60">{badge}</span>}
                 </span>
                 {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
@@ -123,12 +123,14 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
     };
 
     return (
-        <div className={`${isTransparent ? 'bg-transparent p-0' : 'bg-md-sys-surface1 rounded-xl p-4'} h-full flex flex-col gap-4`}>
+        <div className={`${isTransparent ? 'bg-transparent p-0' : 'md3-card p-4'} h-full flex flex-col gap-5`}>
             {/* Header */}
             {!isTransparent && (
                 <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold flex items-center gap-2 text-md-sys-on-surface">
-                        <Layout size={14} className="text-md-sys-primary" />
+                    <span className="md3-title flex items-center gap-2 text-md-sys-on-surface">
+                        <span className="w-8 h-8 rounded-xl bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer flex items-center justify-center">
+                            <Layout size={14} />
+                        </span>
                         Mission Intel
                     </span>
                     <div className="flex items-center gap-2">
@@ -142,50 +144,49 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                     <SectionHeader id="stats" icon={<Clock size={12} />} title="Stats" />
                     {isSectionExpanded('stats') && (
                         <div className="grid grid-cols-2 gap-2">
-                            <div className={`${isTransparent ? 'bg-zinc-900/90 border border-white/20' : 'bg-md-sys-surface2'} ${accordionMode ? 'p-2' : 'p-3'} rounded-xl flex flex-col items-center justify-center shadow-lg`}>
+                            <div className={`${isTransparent ? 'md3-surface-high border border-md-sys-outline/10' : 'md3-surface-high border border-md-sys-outline/10'} ${accordionMode ? 'p-2' : 'p-3'} rounded-2xl flex flex-col items-center justify-center`}>
                                 <Clock size={accordionMode ? 12 : 16} className="text-md-sys-on-surface/50 mb-0.5" />
-                                <span className="text-[9px] font-semibold text-md-sys-on-surface/70 uppercase mb-0.5">Time</span>
-                                <div className="flex items-center gap-0.5">
+                                <span className="text-[10px] font-semibold text-md-sys-on-surface/60 mb-0.5">Time</span>
+                                <div className="flex items-center gap-0 relative z-10">
                                     <input
                                         type="number"
                                         placeholder="00"
                                         value={timeMin}
-                                        readOnly={false}
                                         onChange={(e) => setTimeMin(e.target.value)}
-                                        className={`${accordionMode ? 'w-8 text-base' : 'w-10 text-xl'} font-bold outline-none text-center rounded-lg py-0.5 placeholder:opacity-30
-                                            ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'bg-md-sys-surface3 text-md-sys-on-surface'}
+                                        className={`${accordionMode ? 'w-8 text-base' : 'w-12 text-lg'} font-bold tracking-tight outline-none text-center rounded-lg py-0.5 placeholder:opacity-30 pointer-events-auto
+                                            ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'md3-textfield--compact text-md-sys-on-surface'}
                                             `}
                                     />
-                                    <span className={`${accordionMode ? 'text-base' : 'text-xl'} font-bold text-md-sys-on-surface/50`}>:</span>
+                                    <span className={`${accordionMode ? 'text-base' : 'text-xl'} font-bold tracking-tight text-md-sys-on-surface/50`}>:</span>
                                     <input
                                         type="number"
                                         placeholder="00"
                                         value={timeSec}
-                                        readOnly={false}
                                         onChange={(e) => setTimeSec(e.target.value)}
-                                        className={`${accordionMode ? 'w-8 text-base' : 'w-10 text-xl'} font-bold outline-none text-center rounded-lg py-0.5 placeholder:opacity-30
-                                            ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'bg-md-sys-surface3 text-md-sys-on-surface'}
+                                        className={`${accordionMode ? 'w-8 text-base' : 'w-12 text-lg'} font-bold tracking-tight outline-none text-center rounded-lg py-0.5 placeholder:opacity-30 pointer-events-auto
+                                            ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'md3-textfield--compact text-md-sys-on-surface'}
                                             `}
                                     />
                                 </div>
                             </div>
-                            <div className={`relative ${isTransparent ? 'bg-zinc-900/90 border border-white/20' : 'bg-md-sys-surface2'} ${accordionMode ? 'p-2' : 'p-3'} rounded-xl flex flex-col items-center justify-center shadow-lg`}>
+                            <div className={`relative ${isTransparent ? 'md3-surface-high border border-md-sys-outline/10' : 'md3-surface-high border border-md-sys-outline/10'} ${accordionMode ? 'p-2' : 'p-3'} rounded-2xl flex flex-col items-center justify-center`}>
                                 {damageSource && damageSource !== 'manual' && (
-                                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-blue-500" title={`Auto-detected from ${damageSource}`} />
+                                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-info" title={`Auto-detected from ${damageSource}`} />
                                 )}
-                                <HeartCrack size={accordionMode ? 12 : 16} className="text-rose-400 mb-0.5" />
-                                <span className="text-[9px] font-semibold text-rose-400/90 uppercase mb-0.5">Dmg</span>
-                                <input
-                                    type="text"
-                                    placeholder="0"
-                                    maxLength={4}
-                                    value={damageTaken}
-                                    readOnly={false}
-                                    onChange={(e) => setDamageTaken(e.target.value.replace(/[^0-9]/g, ''))}
-                                    className={`${accordionMode ? 'w-12 text-base' : 'w-16 text-xl'} font-bold outline-none text-center rounded-lg py-0.5 placeholder:opacity-30
-                                        ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'bg-md-sys-surface3 text-md-sys-on-surface'}
-                                        `}
-                                />
+                                <HeartCrack size={accordionMode ? 12 : 16} className="text-danger mb-0.5" />
+                                <span className="text-[10px] font-semibold text-danger mb-0.5">Dmg</span>
+                                <div className="relative z-10">
+                                    <input
+                                        type="text"
+                                        placeholder="0"
+                                        maxLength={4}
+                                        value={damageTaken}
+                                        onChange={(e) => setDamageTaken(e.target.value.replace(/[^0-9]/g, ''))}
+                                        className={`${accordionMode ? 'w-14 text-base' : 'w-20 text-lg'} font-bold outline-none text-center rounded-lg py-0.5 placeholder:opacity-30 pointer-events-auto
+                                            ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'md3-textfield--compact text-md-sys-on-surface'}
+                                            `}
+                                    />
+                                </div>
                             </div>
                         </div>
                     )}
@@ -203,7 +204,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                             ].map((item) => (
                                 <div
                                     key={item.label}
-                                    className={`relative ${accordionMode ? 'h-10' : 'h-14'} rounded-xl ${isTransparent ? 'bg-zinc-900/80 border border-white/10' : 'bg-md-sys-surface2'} flex items-center justify-center gap-1 select-none overflow-hidden cursor-pointer`}
+                                    className={`relative ${accordionMode ? 'h-10' : 'h-14'} rounded-2xl ${isTransparent ? 'md3-surface-high border border-md-sys-outline/10' : 'md3-surface-high border border-md-sys-outline/10'} flex items-center justify-center gap-1 select-none overflow-hidden cursor-pointer`}
                                 >
                                     <div
                                         onClick={() => item.set(Math.max(0, item.val - 1))}
@@ -236,9 +237,9 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                         return (
                                             <div
                                                 key={w}
-                                                className={`relative ${accordionMode ? 'h-8' : 'h-10'} rounded-lg transition-all select-none overflow-hidden ${isActive
-                                                    ? 'bg-md-sys-primary/20 ring-1 ring-md-sys-primary/30'
-                                                    : (isTransparent ? 'bg-zinc-900/80 border border-white/10 text-white' : 'bg-md-sys-surface2')
+                                                className={`relative ${accordionMode ? 'h-9' : 'h-11'} rounded-xl transition-all select-none overflow-hidden ${isActive
+                                                    ? 'md3-surface-high ring-1 ring-md-sys-primary/30'
+                                                    : (isTransparent ? 'md3-surface-high border border-md-sys-outline/10 text-white' : 'md3-surface')
                                                     } cursor-pointer`}
                                             >
                                                 <div
@@ -249,11 +250,11 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                     onClick={() => setWeapons({ ...weapons, [w]: count + 1 })}
                                                     className="absolute inset-y-0 right-0 w-1/2 hover:bg-md-sys-on-surface/5 transition-colors z-10"
                                                 />
-                                                <div className="absolute inset-0 flex items-center justify-between px-3 pointer-events-none">
-                                                    <span className={`text-[10px] font-semibold uppercase truncate ${isActive ? 'text-md-sys-primary' : 'text-md-sys-on-surface/50'}`}>
+                                                <div className="absolute inset-0 flex items-center justify-between px-2.5 pointer-events-none">
+                                                    <span className={`text-[9px] font-semibold uppercase truncate leading-tight ${isActive ? 'text-md-sys-primary' : 'text-md-sys-on-surface/50'}`}>
                                                         {w.replace('Cannon', '').replace('Scatter', 'Sct').replace('Spec Ops', 'SO')}
                                                     </span>
-                                                    <span className={`${accordionMode ? 'text-xs' : 'text-sm'} font-bold ${isActive ? 'text-md-sys-primary' : 'text-md-sys-on-surface/30'}`}>
+                                                    <span className={`${accordionMode ? 'text-xs' : 'text-sm'} font-bold tabular-nums ${isActive ? 'text-md-sys-primary' : 'text-md-sys-on-surface/30'}`}>
                                                         {count}
                                                     </span>
                                                 </div>
@@ -298,8 +299,8 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                     ${isActive
                                                         ? 'bg-weapon-soft ring-1 ring-weapon'
                                                         : canAdd
-                                                            ? (isTransparent ? 'bg-zinc-900/80 border border-white/10 hover:bg-zinc-800' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3')
-                                                            : (isTransparent ? 'bg-black/40 opacity-40' : 'bg-md-sys-surface2 opacity-40')
+                                                            ? (isTransparent ? 'md3-surface-high border border-md-sys-outline/10 hover:bg-md-sys-on-surface/[0.08]' : 'md3-surface-high')
+                                                            : (isTransparent ? 'bg-black/40 opacity-40' : 'md3-surface opacity-40')
                                                     }
                                                     ${isActive || canAdd ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                                             >
@@ -308,7 +309,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                         {w}
                                                     </span>
                                                     {isActive && (
-                                                        <span className="text-xs font-bold text-weapon">✓</span>
+                                                        <Check size={14} className="text-weapon" />
                                                     )}
                                                 </div>
                                             </div>
@@ -353,8 +354,8 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                     ${isActive
                                                         ? 'bg-equipment-soft ring-1 ring-equipment'
                                                         : canAdd
-                                                            ? (isTransparent ? 'bg-zinc-900/80 border border-white/10 hover:bg-zinc-800' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3')
-                                                            : (isTransparent ? 'bg-black/40 opacity-40' : 'bg-md-sys-surface2 opacity-40')
+                                                            ? (isTransparent ? 'md3-surface-high border border-md-sys-outline/10 hover:bg-md-sys-on-surface/[0.08]' : 'md3-surface-high')
+                                                            : (isTransparent ? 'bg-black/40 opacity-40' : 'md3-surface opacity-40')
                                                     }
                                                     ${isActive || canAdd ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                                             >
@@ -363,7 +364,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                         {w}
                                                     </span>
                                                     {isActive && (
-                                                        <span className="text-xs font-bold text-equipment">✓</span>
+                                                        <Check size={14} className="text-equipment" />
                                                     )}
                                                 </div>
                                             </div>
@@ -381,25 +382,25 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                         <div className="flex items-center gap-1">
                             <SectionHeader id="modifiers" icon={<Zap size={12} />} title="Modifiers" badge={selectedReachModifiers.length > 0 ? `${selectedReachModifiers.length}` : undefined} />
                             {modifiersSource && modifiersSource !== 'manual' && (
-                                <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" title={`Auto-detected from ${modifiersSource}`} />
+                                <span className="w-2 h-2 rounded-full bg-info flex-shrink-0" title={`Auto-detected from ${modifiersSource}`} />
                             )}
                         </div>
                         {isSectionExpanded('modifiers') && (
                             <div className={`flex flex-wrap ${accordionMode ? 'gap-1' : 'gap-2'}`}>
                                 {showArtifactSelect ? (
-                                    <div className={`flex items-center gap-2 ${isTransparent ? 'bg-black/50' : 'bg-md-sys-surface2'} p-2 rounded-xl w-full`}>
+                                    <div className={`flex items-center gap-2 ${isTransparent ? 'bg-black/50' : 'md3-surface-high'} p-2 rounded-xl w-full`}>
                                         {['Healing', 'Ice', 'Weapon'].map(type => (
                                             <button
                                                 key={type}
                                                 onClick={() => { toggleReachModifier(`Artifact: ${type}`); setShowArtifactSelect(false); }}
-                                                className={`flex-1 ${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} rounded-lg text-xs font-bold uppercase bg-amber-500 text-black hover:brightness-110`}
+                                                className={`flex-1 md3-btn-tonal ${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} text-xs font-bold uppercase bg-amber-500 text-black hover:brightness-110`}
                                             >
                                                 {type}
                                             </button>
                                         ))}
                                         <button
                                             onClick={() => setShowArtifactSelect(false)}
-                                            className="p-2 rounded-lg hover:bg-md-sys-surface3 text-md-sys-on-surface/50"
+                                            className="md3-icon-btn"
                                         >
                                             <X size={14} />
                                         </button>
@@ -408,9 +409,9 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                     <>
                                         <button
                                             onClick={() => setShowArtifactSelect(true)}
-                                            className={`${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} rounded-lg text-xs font-semibold transition-all ${selectedReachModifiers.some((m: string) => m.startsWith("Artifact"))
-                                                ? 'bg-amber-500 text-black'
-                                                : 'bg-md-sys-surface2 text-md-sys-on-surface/60 hover:text-md-sys-on-surface hover:bg-md-sys-surface3'
+                                            className={`md3-chip ${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} text-xs font-semibold transition-all ${selectedReachModifiers.some((m: string) => m.startsWith("Artifact"))
+                                                ? 'artifact-btn-active ring-1 ring-amber-300/60 shadow-sm'
+                                                : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
                                                 }`}
                                         >
                                             {selectedReachModifiers.find((m: string) => m.startsWith("Artifact")) || "Artifact"}
@@ -427,9 +428,9 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                 <button
                                                     key={mod}
                                                     onClick={() => toggleReachModifier(mod)}
-                                                    className={`${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} rounded-lg text-xs font-semibold transition-all ${selectedReachModifiers.includes(mod)
-                                                        ? 'bg-md-sys-primary text-md-sys-onPrimary'
-                                                        : 'bg-md-sys-surface2 text-md-sys-on-surface/60 hover:text-md-sys-on-surface hover:bg-md-sys-surface3'
+                                                    className={`md3-chip ${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} text-xs font-semibold transition-all ${selectedReachModifiers.includes(mod)
+                                                        ? 'md3-chip--selected'
+                                                        : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
                                                         }`}
                                                 >
                                                     {mod}
@@ -449,7 +450,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                         onChange={(e) => setCurrentNote(e.target.value)}
                         placeholder="Match Notes..."
                         readOnly={false}
-                        className={`w-full h-20 bg-md-sys-surface2 rounded-xl p-3 text-sm outline-none resize-none placeholder:text-md-sys-on-surface/30 
+                        className={`w-full h-20 md3-textfield--outlined rounded-xl p-3 text-sm outline-none resize-none placeholder:text-md-sys-on-surface/30 
                         focus:ring-2 focus:ring-md-sys-primary/50`}
                     />
                 )}
@@ -457,3 +458,5 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
         </div>
     );
 };
+
+
