@@ -7,7 +7,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 // Allowed channels — any channel NOT listed here is blocked.
 const INVOKE_CHANNELS = [
-  'db-read', 'db-write', 'db-backup',
+  'db-read', 'db-write', 'db-backup', 'db-status',
   'persist-logs',
   'capture-screen', 'save-ocr-debug',
   'ocr-scan', 'ml-scan',

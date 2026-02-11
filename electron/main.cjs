@@ -103,6 +103,9 @@ const getDbCandidates = () => {
   const set = new Set([DB_PATH, ...LEGACY_DB_PATHS]);
   return Array.from(set);
 };
+const DB_PREV_PATH = DB_PATH.replace('.json', '.prev.json');
+const DB_WAL_PATH = DB_PATH.replace('.json', '.wal.json');
+const DB_BACKUP_DIR = path.join(app.getPath('documents'), 'Wildgate Stat Tracker/Backups');
 const LOG_FILE_PATH = path.join(app.getPath('userData'), 'app_logs.txt');
 
 // Artifact Bundling
@@ -422,12 +425,11 @@ ipcMain.handle('db-read', async () => {
 
 ipcMain.handle('db-write', async (event, data) => {
   const TEMP_PATH = DB_PATH + '.tmp';
-  const PREV_PATH = DB_PATH.replace('.json', '.prev.json');
-  try {
+    try {
     // Safety: keep previous version so we can always recover
     try {
       await fsPromises.access(DB_PATH);
-      await fsPromises.copyFile(DB_PATH, PREV_PATH);
+      await fsPromises.copyFile(DB_PATH, DB_PREV_PATH);
     } catch { /* No existing DB to back up — first write */ }
 
     await fsPromises.writeFile(TEMP_PATH, JSON.stringify(data, null, 2));
@@ -463,9 +465,57 @@ ipcMain.on('window-close', () => {
   if (win) win.close();
 });
 
+ipcMain.handle('db-status', async () => {
+  const toMtime = async (p) => {
+    try {
+      const st = await fsPromises.stat(p);
+      return st.mtimeMs;
+    } catch {
+      return null;
+    }
+  };
+
+  const latestBackupMtime = async () => {
+    try {
+      const files = await fsPromises.readdir(DB_BACKUP_DIR);
+      let latest = null;
+      for (const name of files) {
+        const full = path.join(DB_BACKUP_DIR, name);
+        const mt = await toMtime(full);
+        if (mt && (!latest || mt > latest)) latest = mt;
+      }
+      return latest;
+    } catch {
+      return null;
+    }
+  };
+
+  try {
+    const walMtime = await toMtime(DB_WAL_PATH);
+    return {
+      ok: true,
+      walExists: !!walMtime,
+      dbMtime: await toMtime(DB_PATH),
+      prevMtime: await toMtime(DB_PREV_PATH),
+      walMtime,
+      lastBackupMtime: await latestBackupMtime(),
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      walExists: false,
+      dbMtime: null,
+      prevMtime: null,
+      walMtime: null,
+      lastBackupMtime: null,
+      error: e.message,
+    };
+  }
+});
+
 ipcMain.handle('db-backup', () => {
   try {
-    const docPath = path.join(app.getPath('documents'), 'Wildgate Stat Tracker/Backups');
+    const docPath = DB_BACKUP_DIR;
     if (!fs.existsSync(docPath)) fs.mkdirSync(docPath, { recursive: true });
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -1386,3 +1436,4 @@ autoUpdater.on('update-not-available', (info) => { if (win) win.webContents.send
 autoUpdater.on('update-downloaded', (info) => { if (win) win.webContents.send('update_downloaded'); });
 autoUpdater.on('error', (err) => { if (win) win.webContents.send('update_error', err.message); });
 ipcMain.on('restart_app', () => autoUpdater.quitAndInstall());
+

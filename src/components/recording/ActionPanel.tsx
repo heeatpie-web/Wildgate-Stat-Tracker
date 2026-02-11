@@ -3,6 +3,7 @@ import {
     Trophy,
     Scale,
     Skull,
+    Timer,
     Loader2,
     Scan,
     ScanEye,
@@ -83,6 +84,24 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     };
 
     const isBusy = isScanning || isCapturing || isProcessing;
+
+    // Dedicated mission timer display so match time remains visible at a glance.
+    const [matchElapsed, setMatchElapsed] = React.useState('00:00');
+    React.useEffect(() => {
+        if (!isMatchInProgress || !matchStartTime) {
+            setMatchElapsed('00:00');
+            return;
+        }
+        const tick = () => {
+            const diff = Math.max(0, Math.floor((Date.now() - matchStartTime) / 1000));
+            const mm = Math.floor(diff / 60).toString().padStart(2, '0');
+            const ss = (diff % 60).toString().padStart(2, '0');
+            setMatchElapsed(`${mm}:${ss}`);
+        };
+        tick();
+        const id = setInterval(tick, 1000);
+        return () => clearInterval(id);
+    }, [isMatchInProgress, matchStartTime]);
 
     const handleNewSmartCapture = async () => {
         if (onSmartCaptureData) {
@@ -194,6 +213,31 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     </div>
                 )}
 
+                {isMatchInProgress ? (
+                    <div className="bg-success-soft border border-success-soft-strong rounded-xl px-3 py-2 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                            <span className="text-[9px] font-black uppercase text-success">Live Mission</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-sm text-success">{matchElapsed}</span>
+                            <button
+                                onClick={() => { setIsMatchInProgress(false); setMatchStartTime(null); }}
+                                className="text-[8px] px-1.5 py-0.5 bg-md-sys-errorContainer/40 text-md-sys-error rounded hover:bg-md-sys-error/20 font-bold uppercase"
+                                title="Stop timer"
+                            >x</button>
+                        </div>
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => { setIsMatchInProgress(true); setMatchStartTime(Date.now()); }}
+                        className="w-full bg-success-soft border border-success-soft-strong rounded-xl px-3 py-2 flex items-center justify-center gap-2 transition-all hover:brightness-105"
+                    >
+                        <Timer size={12} className="text-success" />
+                        <span className="text-[9px] font-black uppercase text-success">Start Match Timer</span>
+                    </button>
+                )}
+
                 <div className="mg-surface rounded-xl p-2 border border-md-sys-outline/10">
                     <SessionTimer
                         startTime={sessionStartTime}
@@ -288,6 +332,31 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     <button onClick={() => initiateSubmission('Loss')} className={`btn-loss flex flex-col ${isCompact ? 'gap-1 py-3 rounded-xl' : 'gap-1.5 py-4 rounded-2xl'} items-center font-black uppercase text-[10px] transition-all hover:translate-y-[-2px] hover:shadow-lg active:scale-95`}><Skull size={isCompact ? 18 : 20} /> Loss</button>
                     <button onClick={() => initiateSubmission('Draw')} className={`btn-draw flex flex-col ${isCompact ? 'gap-1 py-3 rounded-xl' : 'gap-1.5 py-4 rounded-2xl'} items-center font-black uppercase text-[10px] transition-all hover:translate-y-[-2px] hover:shadow-lg active:scale-95`}><Scale size={isCompact ? 18 : 20} /> Draw</button>
                 </div>
+
+                {isMatchInProgress ? (
+                    <div className="bg-success-soft border border-success-soft-strong rounded-xl px-3 py-2 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                            <span className="text-[10px] font-black uppercase text-success">Live Mission</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-sm text-success">{matchElapsed}</span>
+                            <button
+                                onClick={() => { setIsMatchInProgress(false); setMatchStartTime(null); }}
+                                className="text-[8px] px-1.5 py-0.5 bg-md-sys-errorContainer/40 text-md-sys-error rounded hover:bg-md-sys-error/20 font-bold uppercase"
+                                title="Stop timer"
+                            >x</button>
+                        </div>
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => { setIsMatchInProgress(true); setMatchStartTime(Date.now()); }}
+                        className="w-full bg-success-soft border border-success-soft-strong rounded-xl px-3 py-2 flex items-center justify-center gap-2 transition-all hover:brightness-105"
+                    >
+                        <Timer size={12} className="text-success" />
+                        <span className="text-[10px] font-black uppercase text-success">Start Match Timer</span>
+                    </button>
+                )}
 
                 {captureError && (
                     <div className="bg-md-sys-errorContainer/10 border border-md-sys-error/20 rounded-xl px-4 py-2.5 text-[10px] text-md-sys-error font-medium flex justify-between items-center mg-blur">
