@@ -1,10 +1,12 @@
 import React, { useRef } from 'react';
-import { User, PlusCircle, Edit, MinusCircle, HelpCircle, Moon, Pin, PinOff, Layers } from 'lucide-react';
+import { User, PlusCircle, Edit, MinusCircle, HelpCircle, Moon, Pin, PinOff, Layers, ChevronDown, Scan, Loader2 } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { APP_VERSION } from '../types';
 import SystemPulse from './SystemPulse';
+import { useSmartCapture } from '../hooks/useSmartCapture';
+import { useAppStore } from '../store/useAppStore';
 
 /**
  * Header - The main application navigation and system status bar.
@@ -14,6 +16,7 @@ export const Header: React.FC = () => {
     const {
         activeMode, setActiveMode,
         activeUser, setActiveUser,
+        activeView, setActiveView,
         setRenameModal, setRenameValue,
         setIsOverlayMode,
         setShowTutorial,
@@ -24,6 +27,8 @@ export const Header: React.FC = () => {
 
     const { players, deletePlayer } = useGameData();
     const { appearanceMode, setAppearanceMode } = useUserPreferences();
+    const [smartCaptureState, smartCaptureActions] = useSmartCapture();
+    const showSmartCaptureInHeader = useAppStore(s => s.showSmartCaptureInHeader);
 
     const devClicks = useRef(0);
 
@@ -41,6 +46,16 @@ export const Header: React.FC = () => {
         setToast({ message: `Profile deleted.`, type: 'success' });
     };
 
+    const handleTopbarSmartCapture = async () => {
+        try {
+            // Smart Capture is meaningful primarily for live session recording.
+            if (activeView !== 'recording') setActiveView('recording');
+            await smartCaptureActions.capture(activeUser || null);
+        } catch (e: any) {
+            setToast({ message: e?.message || 'Smart capture failed', type: 'error' });
+        }
+    };
+
     return (
         <header className="shrink-0 px-3 py-2 mg-surface app-drag-region relative z-10 rounded-2xl border border-md-sys-outline/10">
             {/*
@@ -49,17 +64,18 @@ export const Header: React.FC = () => {
             */}
             <div className="flex items-center justify-between gap-4">
                 {/* Left: Logo */}
-                <div className="flex items-center gap-2.5">
-                    <h1 className="text-lg font-bold tracking-tight text-md-sys-on-surface">
-                        WILDGATE STAT TRACKER
+                <div className="flex items-center gap-2">
+                    <h1 className="text-lg font-bold tracking-tight text-md-sys-on-surface flex items-baseline gap-1.5">
+                        <span>WILDGATE STAT TRACKER</span>
+                        <span
+                            onClick={() => { devClicks.current++; if (devClicks.current >= 5) setDevMode(true); }}
+                            className="text-[10px] font-mono opacity-45 hover:opacity-70 hover:text-md-sys-primary transition-colors cursor-pointer select-none"
+                            style={{ WebkitAppRegion: 'no-drag' } as any}
+                            title={devMode ? 'Dev mode enabled' : 'Version'}
+                        >
+                            {APP_VERSION}
+                        </span>
                     </h1>
-                    <span
-                        onClick={() => { devClicks.current++; if (devClicks.current >= 5) setDevMode(true); }}
-                        className="text-[9px] font-semibold px-2 py-1 text-secondary cursor-pointer rounded-full border border-md-sys-outline/10 bg-md-sys-surface-container-high/85 hover:bg-md-sys-surface-container-highest/90 transition-colors"
-                        style={{ WebkitAppRegion: 'no-drag' } as any}
-                    >
-                        {APP_VERSION}
-                    </span>
                     {devMode && (
                         <span className="text-[9px] font-bold bg-md-sys-error text-md-sys-onError px-1.5 py-0.5 rounded uppercase">DEV</span>
                     )}
@@ -78,13 +94,17 @@ export const Header: React.FC = () => {
                         className="flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-full bg-md-sys-surface-container-high/85 hover:bg-md-sys-surface-container-highest/90 border border-md-sys-outline/10 transition-colors"
                     >
                         <User size={14} className="text-md-sys-primary" />
-                        <select
-                            value={activeUser}
-                            onChange={(e) => setActiveUser(e.target.value)}
-                            className="bg-transparent text-body font-medium outline-none cursor-pointer min-w-[80px]"
-                        >
-                            {players.map(p => <option key={p} value={p}>{p}</option>)}
-                        </select>
+                        <div className="relative">
+                            <select
+                                value={activeUser}
+                                onChange={(e) => setActiveUser(e.target.value)}
+                                className="bg-transparent text-body font-medium outline-none cursor-pointer min-w-[110px] pr-6 border-0 appearance-none focus:outline-none focus-visible:outline-none"
+                                style={{ WebkitAppearance: 'none', appearance: 'none' } as any}
+                            >
+                                {players.map(p => <option key={p} value={p}>{p}</option>)}
+                            </select>
+                            <ChevronDown size={14} className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 opacity-50" />
+                        </div>
                         <div className="flex">
                             <button
                                 onClick={() => { setRenameValue(""); setRenameModal({ type: 'new' }); }}
@@ -138,6 +158,24 @@ export const Header: React.FC = () => {
 
                 {/* Right: Quick Actions */}
                 <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as any}>
+                    {showSmartCaptureInHeader && (
+                        <button
+                            onClick={handleTopbarSmartCapture}
+                            disabled={smartCaptureState.isCapturing || smartCaptureState.isProcessing}
+                            className="h-8 px-3 rounded-full flex items-center gap-1.5 border border-md-sys-primary/25 bg-md-sys-primary text-md-sys-onPrimary hover:brightness-105 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Smart Capture (screenshots + OCR)"
+                        >
+                            {(smartCaptureState.isCapturing || smartCaptureState.isProcessing)
+                                ? <Loader2 size={14} className="animate-spin" />
+                                : <Scan size={14} />}
+                            <span className="text-[10px] font-black uppercase tracking-wide">Smart Capture</span>
+                            {smartCaptureState.queueDepth > 0 && (
+                                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-black/20 text-[9px] font-black">
+                                    {smartCaptureState.queueDepth}
+                                </span>
+                            )}
+                        </button>
+                    )}
                     <button
                         onClick={() => setIsAlwaysOnTop(!isAlwaysOnTop)}
                         className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors border border-md-sys-outline/10 bg-md-sys-surface-container-high/85 hover:bg-md-sys-surface-container-highest/90 ${
