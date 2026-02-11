@@ -22,6 +22,7 @@ const { extractMapScreen, KNOWN_HAZARDS } = require('./mapScreenExtractor.cjs');
 const { mergeCaptures, isSameMatch } = require('./ocrMerger.cjs');
 const gcloudService = require('./gcloudService.cjs');
 const gcloudSyncService = require('./gcloudSyncService.cjs');
+const geminiService = require('./geminiService.cjs');
 
 // Dynamic imports (loaded when needed)
 let Tesseract = null;
@@ -65,7 +66,7 @@ function setCachedResult(hash, result) {
   console.log(`[OCR Cache] STORE ${hash.slice(0, 8)}... (${ocrResultCache.size}/${OCR_CACHE_MAX})`);
 }
 
-// Save debug image + fire-and-forget cloud upload for ML training
+// Save debug image + optional cloud upload
 async function saveDebugImage(buffer, prefix = 'capture') {
   ensureDebugDir();
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -73,7 +74,7 @@ async function saveDebugImage(buffer, prefix = 'capture') {
   const filepath = path.join(DEBUG_DIR, filename);
   await fsPromises.writeFile(filepath, buffer);
 
-  // Auto-upload to GCS for ML training (fire-and-forget)
+  // Auto-upload to GCS (fire-and-forget)
   if (gcloudSyncService.isInitialized) {
     gcloudSyncService.uploadFile(filepath, `screenshots/${filename}`)
       .then(result => {
@@ -374,15 +375,25 @@ function bboxIoU(a, b) {
  * Each annotation has boundingPoly.vertices [{x,y}, ...] — we convert to {x0,y0,x1,y1}.
  */
 function cloudAnnotationsToWords(annotations) {
-  if (!annotations || annotations.length <= 1) return [];
-  // Skip index 0 (full text block)
-  return annotations.slice(1).map(a => {
+  if (!annotations || annotations.length === 0) return [];
+  return annotations
+    .filter(a => a && a.text)
+    .filter(a => {
+      // Backward compatibility: some providers include a full-text blob in index 0.
+      // Keep only likely word-level tokens for spatial matching.
+      const t = (a.text || '').trim();
+      if (!t) return false;
+      if (t.length > 80) return false;
+      if (t.includes('\n') && t.length > 30) return false;
+      return true;
+    })
+    .map(a => {
     const verts = a.bounds || [];
     const xs = verts.map(v => v.x || 0);
     const ys = verts.map(v => v.y || 0);
     return {
       text: a.text || '',
-      confidence: a.confidence || 85, // Cloud Vision doesn't always return per-word confidence
+      confidence: typeof a.confidence === 'number' ? a.confidence : 85,
       bbox: {
         x0: Math.min(...xs),
         y0: Math.min(...ys),
@@ -391,7 +402,7 @@ function cloudAnnotationsToWords(annotations) {
       },
       source: 'cloud',
     };
-  });
+    });
 }
 
 /**
@@ -597,15 +608,23 @@ async function runCloudOCR(imagePath, timeoutMs = 3000) {
     return null;
   }
 
-  try {
-    const result = await Promise.race([
+  const executeOnce = async () => {
+    return await Promise.race([
       gcloudService.performOCR(imagePath),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Cloud OCR timeout')), timeoutMs)),
     ]);
-    return result;
+  };
+
+  try {
+    return await executeOnce();
   } catch (err) {
-    console.warn(`[OCR-Cloud] Failed (${err.message})`);
-    return null;
+    console.warn(`[OCR-Cloud] First attempt failed (${err.message}), retrying once...`);
+    try {
+      return await executeOnce();
+    } catch (retryErr) {
+      console.warn(`[OCR-Cloud] Retry failed (${retryErr.message})`);
+      return null;
+    }
   }
 }
 
@@ -630,12 +649,124 @@ function extractModifiers(text) {
   return modifiers;
 }
 
+function normalizeNameList(input) {
+  if (!Array.isArray(input)) return [];
+  return Array.from(new Set(input
+    .map(v => String(v || '').trim())
+    .filter(Boolean)));
+}
+
+function mergeGeminiRefinement(extractedData, geminiData) {
+  if (!geminiData || typeof geminiData !== 'object') {
+    return { data: extractedData, contributed: false };
+  }
+
+  const out = { ...extractedData };
+  let contributed = false;
+
+  // Ship refinement
+  const gemShip = geminiData.playerShip?.shipType || null;
+  if (gemShip && (!out.playerShip?.shipType || out.playerShip.shipType === 'Unknown')) {
+    out.playerShip = {
+      ...(out.playerShip || {}),
+      shipType: gemShip,
+      confidence: Math.max(75, out.playerShip?.confidence || 0),
+    };
+    contributed = true;
+  }
+
+  // Teammate refinement (append unique)
+  const gemTeammates = normalizeNameList(geminiData.teammates);
+  if (gemTeammates.length > 0) {
+    const existing = new Set((out.teammates || []).map(t => String(t.name || '').toLowerCase()));
+    const merged = [...(out.teammates || [])];
+    gemTeammates.forEach(name => {
+      if (!existing.has(name.toLowerCase())) {
+        merged.push({ name, confidence: 86, isTeammate: true });
+        existing.add(name.toLowerCase());
+        contributed = true;
+      }
+    });
+    out.teammates = merged;
+  }
+
+  // Opponent team refinement (append by teamName/color)
+  if (Array.isArray(geminiData.opponentTeams) && geminiData.opponentTeams.length > 0) {
+    const existingTeams = [...(out.opponentTeams || [])];
+    geminiData.opponentTeams.forEach(team => {
+      const teamName = String(team?.teamName || 'Unknown Team');
+      const color = String(team?.color || 'unknown');
+      const idx = existingTeams.findIndex(t =>
+        String(t.teamName || '').toLowerCase() === teamName.toLowerCase() ||
+        (color !== 'unknown' && String(t.color || '').toLowerCase() === color.toLowerCase())
+      );
+
+      const newPlayers = normalizeNameList(team?.players).map(name => ({
+        name,
+        confidence: 84,
+        isTeammate: false,
+      }));
+
+      if (idx === -1) {
+        existingTeams.push({
+          teamName,
+          shipType: team?.shipType || '',
+          color,
+          players: newPlayers,
+          confidence: 82,
+        });
+        if (newPlayers.length > 0 || team?.shipType) contributed = true;
+      } else {
+        const existingNames = new Set((existingTeams[idx].players || []).map(p => String(p.name || '').toLowerCase()));
+        newPlayers.forEach(p => {
+          if (!existingNames.has(p.name.toLowerCase())) {
+            (existingTeams[idx].players ||= []).push(p);
+            existingNames.add(p.name.toLowerCase());
+            contributed = true;
+          }
+        });
+        if (!existingTeams[idx].shipType && team?.shipType) {
+          existingTeams[idx].shipType = team.shipType;
+          contributed = true;
+        }
+      }
+    });
+    out.opponentTeams = existingTeams;
+  }
+
+  // Modifier refinement (append unique by name)
+  const gemMods = normalizeNameList(geminiData.reachModifiers);
+  if (gemMods.length > 0) {
+    const existingMods = new Set((out.reachModifiers || []).map(m => String(m.name || m || '').toLowerCase()));
+    const mergedMods = [...(out.reachModifiers || [])];
+    gemMods.forEach(name => {
+      if (!existingMods.has(name.toLowerCase())) {
+        mergedMods.push({ name, confidence: 82, rawText: name });
+        existingMods.add(name.toLowerCase());
+        contributed = true;
+      }
+    });
+    out.reachModifiers = mergedMods;
+  }
+
+  if (!out.artifactType && geminiData.artifactType) {
+    out.artifactType = geminiData.artifactType;
+    contributed = true;
+  }
+
+  if (contributed) {
+    out.overallConfidence = Math.min(99, Math.max(out.overallConfidence || 0, 82));
+  }
+
+  return { data: out, contributed };
+}
+
 /**
  * Main processing function
  * @param {string} imageBase64 - Base64 encoded image
  * @param {string} activeUser - Current user's display name (for anchor)
  * @param {Object} existingData - Previous capture data to merge with
- * @param {string} ocrMode - OCR engine mode: 'local', 'cloud', or 'both'
+ * @param {string} ocrMode - OCR engine mode: 'local', 'cloud', 'both', or 'hybrid-plus'
  * @returns {Object} Processed OCR result
  */
 async function processCapture(imageBase64, activeUser = null, existingData = null, ocrMode = 'both', options = {}) {
@@ -710,16 +841,16 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     let mergeStats = null;
     let mergeLog = null;
 
-    const useLocal = ocrMode === 'local' || ocrMode === 'both';
-    const useCloud = ocrMode === 'cloud' || ocrMode === 'both';
+    const useHybridMerge = ocrMode === 'both' || ocrMode === 'hybrid-plus';
+    const useGeminiRefine = ocrMode === 'hybrid-plus';
 
-    if (ocrMode === 'both') {
+    if (useHybridMerge) {
       // Run both in parallel
       console.log('[OCR] Running LOCAL + CLOUD in parallel...');
       const localStart = Date.now();
       const [localResult, cloudResult] = await Promise.allSettled([
         runOCR(processed.buffer),
-        rawDebugPath ? runCloudOCR(rawDebugPath) : Promise.resolve(null),
+        rawDebugPath ? runCloudOCR(rawDebugPath, 7000) : Promise.resolve(null),
       ]);
       const localDuration = Date.now() - localStart;
 
@@ -789,7 +920,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       if (!rawDebugPath) {
         rawDebugPath = await saveDebugImage(imageBuffer, 'raw_capture');
       }
-      const cloudOCR = await runCloudOCR(rawDebugPath, 5000); // longer timeout for cloud-only mode
+      const cloudOCR = await runCloudOCR(rawDebugPath, 10000); // longer timeout for cloud-only mode
       if (!cloudOCR) {
         throw new Error('Cloud OCR failed or unavailable (GCloud Vision not initialized?)');
       }
@@ -890,6 +1021,23 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       }
     }
 
+    // Optional Gemini refinement (runs after normal extraction/merge, preserves multi-screenshot workflow)
+    if (useGeminiRefine && rawDebugPath && geminiService.isInitialized) {
+      try {
+        console.log('[OCR-AI] Running Gemini structured refinement...');
+        const geminiData = await geminiService.extractStructured(rawDebugPath, activeUser, extractedData.rawText || '');
+        const refined = mergeGeminiRefinement(extractedData, geminiData);
+        extractedData = refined.data;
+        extractedData.aiContributed = refined.contributed;
+        extractedData.aiSource = refined.contributed ? 'gemini' : undefined;
+        if (refined.contributed) {
+          console.log('[OCR-AI] Gemini contributed structured refinements');
+        }
+      } catch (e) {
+        console.warn('[OCR-AI] Gemini refinement failed:', e.message);
+      }
+    }
+
     // Merge with existing data if provided
     if (existingData && isSameMatch(existingData, extractedData)) {
       console.log('[OCR] Merging with existing data');
@@ -984,6 +1132,11 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
  * Convert new Map Screen format to legacy format
  */
 function convertMapScreenToLegacy(mapScreenData, rawText) {
+  const hazardMods = (mapScreenData.hazards || []).map(h => ({
+    name: h,
+    confidence: 85,
+    rawText: h,
+  }));
   const playerShip = mapScreenData.yourShip ? {
     shipType: mapScreenData.yourShip.shipType,
     teamName: mapScreenData.yourShip.teamName,
@@ -1029,7 +1182,7 @@ function convertMapScreenToLegacy(mapScreenData, rawText) {
     enemyShips,
     teammates,
     opponentTeams,
-    reachModifiers: extractModifiers(rawText),
+    reachModifiers: [...extractModifiers(rawText), ...hazardMods],
     hazards: mapScreenData.hazards || [],
     overallConfidence,
     captureTimestamp: Date.now(),
@@ -1129,7 +1282,7 @@ function registerOCRHandlers(mainWindow) {
     }
   });
 
-  // Clear all preprocessed debug images (keep raw captures for ML training)
+  // Clear all preprocessed debug images
   ipcMain.handle('clear-ocr-preprocessed', async () => {
     try {
       ensureDebugDir();
@@ -1153,32 +1306,7 @@ function registerOCRHandlers(mainWindow) {
     }
   });
 
-  // Move raw capture to ML dataset directory for training
-  ipcMain.handle('move-to-ml-dataset', async (event, { sourcePath, targetDir = 'train' }) => {
-    try {
-      const projectRoot = path.resolve(__dirname, '..');
-      const datasetDir = path.join(projectRoot, 'dataset', 'images', targetDir);
-
-      // Ensure dataset directory exists
-      if (!fs.existsSync(datasetDir)) {
-        fs.mkdirSync(datasetDir, { recursive: true });
-      }
-
-      const filename = path.basename(sourcePath);
-      const targetPath = path.join(datasetDir, filename);
-
-      // Copy instead of move to keep original for OCR debug
-      await fsPromises.copyFile(sourcePath, targetPath);
-
-      console.log(`[OCR] Copied to ML dataset: ${targetPath}`);
-      return { success: true, targetPath };
-    } catch (error) {
-      console.error('[OCR] Failed to move to ML dataset:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  // Get OCR debug directory path (for ML labeling tool integration)
+  // Get OCR debug directory path
   ipcMain.handle('get-ocr-debug-dir', async () => {
     ensureDebugDir();
     return DEBUG_DIR;

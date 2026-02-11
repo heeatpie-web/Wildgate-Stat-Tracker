@@ -73,6 +73,7 @@ const KNOWN_HAZARDS = {
   'LEECH SWARMS': 'Leech Swarms',
   'LEGION PATROLS': 'Legion Patrols',
   'LOW ALTITUDE FOG': 'Low Altitude Fog',
+  'LOW LATITUDE FOG': 'Low Altitude Fog',
   'MANY ASTEROIDS': 'Many Asteroids',
   'ROGUE TURRETS': 'Rogue Turrets',
   'SANDSTORM': 'Sandstorm',
@@ -205,7 +206,9 @@ async function extractYourShip(imageBuffer, words, lines, text, imageWidth, imag
       }
     } else if (!shipType && lineText.length >= 3 && lineText.length <= 30) {
       // This might be the team name (appears before ship type)
-      teamName = formatTeamName(lineText);
+      if (looksLikeTeamName(lineText)) {
+        teamName = formatTeamName(lineText);
+      }
     }
   }
 
@@ -310,7 +313,9 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
       pendingColor = 'unknown';
     } else if (lineText.length >= 3 && lineText.length <= 30) {
       // This might be a team name (for next ship type line)
-      pendingTeamName = formatTeamName(lineText);
+      if (looksLikeTeamName(lineText)) {
+        pendingTeamName = formatTeamName(lineText);
+      }
     }
   }
 
@@ -542,9 +547,33 @@ function formatTeamName(name) {
   if (!name) return '';
 
   return name
-    .replace(/[^\w\s'-]/g, '')
+    .replace(/[^a-zA-Z0-9_.\-'\s]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * Heuristic: team names are usually multi-word and mostly uppercase
+ */
+function looksLikeTeamName(text) {
+  if (!text) return false;
+  const cleaned = text.replace(/\s+/g, ' ').trim();
+  if (cleaned.length < 4 || cleaned.length > 40) return false;
+
+  const words = cleaned.split(/\s+/);
+  if (words.length < 2) return false;
+
+  const letters = cleaned.match(/[A-Za-z]/g) || [];
+  const upperLetters = cleaned.match(/[A-Z]/g) || [];
+  const upperRatio = letters.length > 0 ? upperLetters.length / letters.length : 0;
+
+  const hasUnderscore = /_/.test(cleaned);
+  const hasMixedCase = /[a-z]/.test(cleaned) && /[A-Z]/.test(cleaned);
+
+  if (hasUnderscore) return false;
+  if (hasMixedCase && upperRatio < 0.9) return false;
+
+  return upperRatio >= 0.6;
 }
 
 module.exports = {
@@ -556,4 +585,5 @@ module.exports = {
   groupWordsIntoLines,
   KNOWN_HAZARDS,
   SHIP_TYPES,
+  looksLikeTeamName,
 };

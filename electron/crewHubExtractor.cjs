@@ -49,7 +49,7 @@ const NOISE_WORDS = new Set([
   'SWITCH', 'DISABLE', 'ENABLE', 'YOUR', 'TEAM', 'CHANGE', 'MAP', 'SEED',
   'ENEMY', 'CREWS', 'CHANNEL', 'INTO', 'SAME', 'WITH', 'THE', 'HOP',
   'HUNTER', 'BASTION', 'PRIVATEER', 'SCOUT', 'OUTLAW', 'SHIP',
-  'ON', 'OFF', 'TO', 'DODGE', 'BULLET', 'BULLETS',
+  'ON', 'OFF', 'TO',
 ]);
 
 /**
@@ -165,7 +165,7 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
   // Step 1: Find team name (look for "'s Crew" pattern)
   const teamNameMatch = text.match(/([A-Z][A-Z\s]{2,30})['']s\s*Crew/i);
   if (teamNameMatch) {
-    teamData.name = teamNameMatch[1].trim();
+    teamData.name = formatTeamName(teamNameMatch[1]);
     console.log('[CrewHub] Found team name:', teamData.name);
   }
 
@@ -182,6 +182,24 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
 
   // Step 3: Group words into lines by Y position (with X-proximity clustering)
   const groupedLines = groupWordsIntoLines(leftPanelWords, imageHeight, imageWidth);
+
+  // Step 3.5: Try to detect ship/team name (often all-caps, multi-word)
+  const teamNameCandidates = groupedLines
+    .map(line => line.words.map(w => w.text).join(' ').trim())
+    .filter(lineText => {
+      if (!lineText) return false;
+      if (/CREW|HUB|TEAM|VOICE|LOBBY|MATCH|PARTY|CHANNEL|PUSH|TALK/i.test(lineText)) return false;
+      if (lineText.split(/\s+/).length < 2) return false;
+      return isTeamName(lineText);
+    })
+    .map(lineText => formatTeamName(lineText))
+    .filter(name => name && name.length >= 4);
+
+  if (!teamData.name && teamNameCandidates.length > 0) {
+    const best = teamNameCandidates.sort((a, b) => b.length - a.length)[0];
+    teamData.name = best;
+    console.log('[CrewHub] Detected ship/team name in left panel:', teamData.name);
+  }
 
   // Step 4: Try to find activeUser first (anchor)
   let foundActiveUser = false;
@@ -203,19 +221,38 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
     }
   }
 
-  // Step 5: Extract player names
-  for (const line of groupedLines) {
-    const playerName = extractPlayerNameFromLine(line.words);
-    if (!playerName) continue;
+  const parsePlayersFromLines = (lineSet) => {
+    const out = [];
+    for (const line of lineSet) {
+      const playerName = extractPlayerNameFromLine(line.words);
+      if (!playerName) continue;
+      if (!isValidPlayerName(playerName)) continue;
+      if (teamData.name && playerName.toUpperCase().includes(teamData.name.toUpperCase())) continue;
+      if (/PARTY|CREW|HUB|VOICE|CHANNEL/i.test(playerName)) continue;
+      if (/'S$/i.test(playerName)) continue;
+      pushUniquePlayerName(out, playerName);
+    }
+    return out;
+  };
 
-    // Validate as player name
-    if (!isValidPlayerName(playerName)) continue;
+  // First pass: anchor-window around active user to reduce UI noise.
+  let parsedPlayers = [];
+  if (foundActiveUser && activeUserYPos !== null) {
+    const anchorLines = groupedLines.filter(line => Math.abs(line.y - activeUserYPos) <= imageHeight * 0.24);
+    parsedPlayers = parsePlayersFromLines(anchorLines);
+  }
 
-    // Skip team name if it matches
-    if (teamData.name && playerName.toUpperCase().includes(teamData.name.toUpperCase())) continue;
+  // Fallback pass: expand to full left panel if anchor-window under-captures.
+  if (parsedPlayers.length < 3) {
+    const expanded = parsePlayersFromLines(groupedLines);
+    if (expanded.length > parsedPlayers.length) {
+      parsedPlayers = expanded;
+    }
+  }
 
-    teamData.players.push(playerName);
-    console.log('[CrewHub] Found teammate:', playerName);
+  teamData.players.push(...parsedPlayers);
+  for (const name of parsedPlayers) {
+    console.log('[CrewHub] Found teammate:', name);
   }
 
   // Deduplicate
@@ -232,7 +269,6 @@ async function extractRightPanel(imageBuffer, words, lines, text, imageWidth, im
   console.log('[CrewHub] Extracting right panel (enemy teams)');
 
   const enemyTeams = [];
-  const teamMap = new Map(); // color -> { name, players }
 
   // Define right panel bounds
   const rightBounds = {
@@ -256,7 +292,6 @@ async function extractRightPanel(imageBuffer, words, lines, text, imageWidth, im
   // Group into lines (with X-proximity clustering)
   const groupedLines = groupWordsIntoLines(rightPanelWords, imageHeight, imageWidth);
 
-  // Known spectator team name patterns (these are NOT opponents)
   const SPECTATOR_PATTERNS = [
     /FIEND\s*(OR|0R)\s*FOE/i,
     /SPECTATOR/i,
@@ -267,120 +302,145 @@ async function extractRightPanel(imageBuffer, words, lines, text, imageWidth, im
     return SPECTATOR_PATTERNS.some(p => p.test(name));
   };
 
-  // Process each line, detecting team badge colors
-  let currentTeamColor = 'unknown';
-  let currentTeamName = '';
-  let currentIsSpectator = false;
+  const teams = [];
+  const MAX_PLAYER_TO_TEAM_Y_GAP = Math.max(70, Math.round(imageHeight * 0.12));
+  let currentTeamIdx = -1;
+  let spectatorBandActive = false;
 
   console.log('[CrewHub] Processing', groupedLines.length, 'lines in right panel');
 
   for (const line of groupedLines) {
     const lineText = line.words.map(w => w.text).join(' ').trim();
+    const lineY = line.y;
     const firstWord = line.words[0];
+    if (!lineText) continue;
 
-    console.log('[CrewHub] Line:', lineText.substring(0, 50), '| words:', line.words.length);
-
-    // Try to detect badge color for this line
+    let detectedColor = 'unknown';
     if (firstWord && firstWord.bbox && imageBuffer) {
       try {
-        // FIXED: Pass actual scale from preprocessing instead of hardcoded 1
         const colorResult = await detectBadgeColorNearText(imageBuffer, firstWord.bbox, scale);
         if (colorResult.color !== 'unknown' && colorResult.confidence > 40) {
-          currentTeamColor = colorResult.color;
-          // Detect spectator badges (dark/black team labels)
-          currentIsSpectator = (colorResult.color === 'spectator');
-          if (currentIsSpectator) {
-            console.log('[CrewHub] SPECTATOR detected (dark badge) for line:', lineText.substring(0, 30));
-          } else {
-            console.log('[CrewHub] Detected team color:', currentTeamColor, 'for line:', lineText.substring(0, 30));
-          }
+          detectedColor = colorResult.color;
         }
       } catch (e) {
-        // Color detection failed, continue with current color
+        // Continue without color detection for this line
       }
     }
 
-    // Check if this line is a team name (all caps, multiple words, no numbers)
-    if (isTeamName(lineText)) {
-      currentTeamName = lineText;
+    const formattedTeamName = formatTeamName(lineText);
+    const lineLooksLikeTeamHeader = isTeamName(lineText);
+    const lineIsSpectator = detectedColor === 'spectator' || isSpectatorTeamName(lineText);
 
-      // Also check team name text for spectator patterns
-      if (isSpectatorTeamName(lineText)) {
-        currentIsSpectator = true;
-        console.log('[CrewHub] SPECTATOR team name detected:', currentTeamName);
-      }
-
-      // Skip spectator teams entirely
-      if (currentIsSpectator) {
-        console.log('[CrewHub] Skipping spectator team:', currentTeamName);
+    if (lineLooksLikeTeamHeader) {
+      if (lineIsSpectator) {
+        spectatorBandActive = true;
+        currentTeamIdx = -1;
+        console.log('[CrewHub] Spectator header skipped:', lineText.substring(0, 40));
         continue;
       }
 
-      console.log('[CrewHub] Found team name:', currentTeamName, 'color:', currentTeamColor);
+      spectatorBandActive = false;
+      const nearExistingIdx = teams.findIndex(t =>
+        Math.abs((t.anchorY || 0) - lineY) < 24 &&
+        ((t.name && formattedTeamName && namesAreNearDuplicate(t.name, formattedTeamName)) ||
+         (detectedColor !== 'unknown' && t.color === detectedColor))
+      );
 
-      // Initialize team in map if not exists
-      const teamKey = currentTeamColor !== 'unknown' ? currentTeamColor : currentTeamName;
-      if (!teamMap.has(teamKey)) {
-        teamMap.set(teamKey, {
-          name: currentTeamName,
-          color: currentTeamColor,
-          players: [],
-          confidence: 70,
-        });
+      if (nearExistingIdx >= 0) {
+        const existing = teams[nearExistingIdx];
+        if (formattedTeamName.length > (existing.name || '').length) {
+          existing.name = formattedTeamName;
+        }
+        if ((existing.color === 'unknown' || !existing.color) && detectedColor !== 'unknown') {
+          existing.color = detectedColor;
+        }
+        existing.anchorY = lineY;
+        existing.lastY = lineY;
+        currentTeamIdx = nearExistingIdx;
       } else {
-        // Update team name if we found a better one
-        teamMap.get(teamKey).name = currentTeamName;
+        teams.push({
+          name: formattedTeamName || '',
+          color: detectedColor,
+          players: [],
+          confidence: detectedColor !== 'unknown' ? 75 : 68,
+          anchorY: lineY,
+          lastY: lineY,
+        });
+        currentTeamIdx = teams.length - 1;
       }
       continue;
     }
 
-    // Skip players belonging to spectator teams
-    if (currentIsSpectator) {
-      console.log('[CrewHub] Skipping spectator player:', lineText.substring(0, 30));
+    if (lineIsSpectator || spectatorBandActive) {
       continue;
     }
 
-    // Try to extract player name
     const playerName = extractPlayerNameFromLine(line.words);
-    if (!playerName) {
-      console.log('[CrewHub]   -> No player name extracted');
-      continue;
+    if (!playerName) continue;
+    if (!isValidPlayerName(playerName)) continue;
+    if (isTeamName(playerName)) continue;
+    if (/PARTY|CREW|HUB|VOICE|CHANNEL/i.test(playerName)) continue;
+
+    let targetTeamIdx = -1;
+
+    if (currentTeamIdx >= 0) {
+      const current = teams[currentTeamIdx];
+      if (current && lineY >= current.anchorY && (lineY - current.lastY) <= MAX_PLAYER_TO_TEAM_Y_GAP) {
+        targetTeamIdx = currentTeamIdx;
+      }
     }
 
-    // Validate as player name
-    if (!isValidPlayerName(playerName)) {
-      console.log('[CrewHub]   -> Invalid player name:', playerName);
-      continue;
+    if (targetTeamIdx < 0 && detectedColor !== 'unknown') {
+      targetTeamIdx = findNearestTeamIndexByColor(teams, detectedColor, lineY, MAX_PLAYER_TO_TEAM_Y_GAP);
     }
 
-    // Skip if it looks like a team name
-    if (isTeamName(playerName)) {
-      console.log('[CrewHub]   -> Looks like team name:', playerName);
-      continue;
+    if (targetTeamIdx < 0) {
+      targetTeamIdx = findNearestTeamIndexByY(teams, lineY, MAX_PLAYER_TO_TEAM_Y_GAP);
     }
 
-    // Add to current team
-    const teamKey = currentTeamColor !== 'unknown' ? currentTeamColor : currentTeamName || 'unknown';
-    if (!teamMap.has(teamKey)) {
-      teamMap.set(teamKey, {
-        name: currentTeamName || `Team ${teamMap.size + 1}`,
-        color: currentTeamColor,
+    if (targetTeamIdx < 0) {
+      teams.push({
+        name: '',
+        color: detectedColor,
         players: [],
-        confidence: 60,
+        confidence: detectedColor !== 'unknown' ? 65 : 58,
+        anchorY: lineY,
+        lastY: lineY,
       });
+      targetTeamIdx = teams.length - 1;
+      currentTeamIdx = targetTeamIdx;
     }
 
-    teamMap.get(teamKey).players.push(playerName);
-    console.log('[CrewHub] Found enemy player:', playerName, 'team:', teamKey);
+    const targetTeam = teams[targetTeamIdx];
+    targetTeam.lastY = lineY;
+    if ((targetTeam.color === 'unknown' || !targetTeam.color) && detectedColor !== 'unknown') {
+      targetTeam.color = detectedColor;
+    }
+    pushUniquePlayerName(targetTeam.players, playerName);
   }
 
-  // Convert map to array (up to 4 teams)
-  for (const [, team] of teamMap) {
-    if (team.players.length > 0) {
-      // Deduplicate players
-      team.players = [...new Set(team.players)];
-      enemyTeams.push(team);
+  // Final cleanup and naming
+  let unnamedCounter = 1;
+  for (const team of teams) {
+    if (!team.players || team.players.length === 0) continue;
+
+    const dedupedPlayers = [];
+    for (const p of team.players) pushUniquePlayerName(dedupedPlayers, p);
+    team.players = dedupedPlayers.filter(p => !isTeamName(p));
+    if (team.players.length === 0) continue;
+
+    if (!team.name) {
+      team.name = `Team ${unnamedCounter++}`;
     }
+
+    if (isSpectatorTeamName(team.name)) continue;
+
+    enemyTeams.push({
+      name: team.name,
+      color: team.color || 'unknown',
+      players: team.players,
+      confidence: team.confidence || 60,
+    });
   }
 
   // Sort by player count (most players first) and limit to 4 teams
@@ -645,20 +705,90 @@ function isValidPlayerName(name) {
  * Check if text looks like a team name (not a player name)
  */
 function isTeamName(text) {
-  if (!text || text.length < 4 || text.length > 30) return false;
+  if (!text) return false;
 
-  // Team names are typically:
-  // - All uppercase
-  // - Multiple words
-  // - No numbers
-  // - No underscores
+  const cleaned = text.replace(/\s+/g, ' ').trim();
+  if (cleaned.length < 4 || cleaned.length > 40) return false;
 
-  const isAllCaps = text === text.toUpperCase();
-  const hasMultipleWords = text.trim().split(/\s+/).length > 1;
-  const hasNumbers = /[0-9]/.test(text);
-  const hasUnderscore = /_/.test(text);
+  const words = cleaned.split(/\s+/);
+  if (words.length < 2) return false;
 
-  return isAllCaps && hasMultipleWords && !hasNumbers && !hasUnderscore;
+  const letters = cleaned.match(/[A-Za-z]/g) || [];
+  const upperLetters = cleaned.match(/[A-Z]/g) || [];
+  const upperRatio = letters.length > 0 ? upperLetters.length / letters.length : 0;
+
+  const hasNumbers = /[0-9]/.test(cleaned);
+  const hasUnderscore = /_/.test(cleaned);
+  const hasMixedCase = /[a-z]/.test(cleaned) && /[A-Z]/.test(cleaned);
+
+  // Avoid misclassifying player names
+  if (hasUnderscore) return false;
+  if (hasMixedCase && upperRatio < 0.9) return false;
+  if (hasNumbers && words.length < 3) return false;
+
+  return upperRatio >= 0.6;
+}
+
+function normalizeNameKey(input) {
+  return (input || '').toLowerCase().replace(/[^a-z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/g, '');
+}
+
+function namesAreNearDuplicate(a, b) {
+  const aKey = normalizeNameKey(a);
+  const bKey = normalizeNameKey(b);
+  if (!aKey || !bKey) return false;
+  if (aKey === bKey) return true;
+  if (aKey.includes(bKey) || bKey.includes(aKey)) return true;
+  return levenshteinDistance(aKey, bKey) <= 1;
+}
+
+function pushUniquePlayerName(players, candidate) {
+  if (!candidate) return;
+  const exists = players.some(p => namesAreNearDuplicate(p, candidate));
+  if (!exists) players.push(candidate);
+}
+
+function findNearestTeamIndexByColor(teams, color, lineY, maxGap) {
+  let bestIdx = -1;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < teams.length; i++) {
+    const t = teams[i];
+    if (!t || t.color !== color) continue;
+    const dist = lineY - (t.lastY || t.anchorY || 0);
+    if (dist < 0 || dist > maxGap) continue;
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
+function findNearestTeamIndexByY(teams, lineY, maxGap) {
+  let bestIdx = -1;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < teams.length; i++) {
+    const t = teams[i];
+    if (!t) continue;
+    const dist = lineY - (t.lastY || t.anchorY || 0);
+    if (dist < 0 || dist > maxGap) continue;
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
+/**
+ * Format team/ship names while preserving punctuation and spacing
+ */
+function formatTeamName(name) {
+  if (!name) return '';
+  return name
+    .replace(/[^a-zA-Z0-9_.\-'\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
@@ -722,4 +852,5 @@ module.exports = {
   fuzzyMatchName,
   levenshteinDistance,
   scoreAsPlayerName,
+  formatTeamName,
 };
