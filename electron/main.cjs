@@ -3,13 +3,30 @@ const { autoUpdater } = require('electron-updater');
 const DiscordRPC = require('discord-rpc');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
+const https = require('https');
 const fsPromises = require('fs').promises;
 const { registerOCRHandlers, processCapture, runOCR } = require('./ocrHandler.cjs');
 const gcloudService = require('./gcloudService.cjs');
 const gcloudSyncService = require('./gcloudSyncService.cjs');
+const geminiService = require('./geminiService.cjs');
 const isDev = !app.isPackaged;
+const DEV_SERVER_URL = process.env.WILDGATE_DEV_SERVER_URL || 'http://localhost:5173';
 const USER_DATA_ROOT = path.resolve(app.getPath('userData'));
 const ALLOWED_FILE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.webp', '.gif']);
+const ALLOWED_HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+const DEFAULT_EPIC_REQUEST_HOSTS = [
+  'api.accelbyte.io',
+  'services.accelbyte.io',
+  'epicgames.com',
+  'www.epicgames.com',
+];
+const EPIC_REQUEST_ALLOWED_HOSTS = new Set(
+  (process.env.WILDGATE_ALLOWED_API_HOSTS || DEFAULT_EPIC_REQUEST_HOSTS.join(','))
+    .split(',')
+    .map(v => v.trim().toLowerCase())
+    .filter(Boolean)
+);
 
 function isPathWithinRoot(targetPath, rootPath) {
   const relative = path.relative(rootPath, targetPath);
@@ -28,6 +45,26 @@ function isAllowedRendererPath(inputPath) {
   return roots.some(root => resolved === root || isPathWithinRoot(resolved, root));
 }
 
+function isAllowedEpicHost(hostname) {
+  const host = String(hostname || '').toLowerCase();
+  if (!host) return false;
+  return Array.from(EPIC_REQUEST_ALLOWED_HOSTS).some(allowed => host === allowed || host.endsWith(`.${allowed}`));
+}
+
+function sanitizeForwardHeaders(headers) {
+  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) return {};
+  const safe = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (typeof key !== 'string' || typeof value !== 'string') continue;
+    const cleanKey = key.trim();
+    if (!cleanKey) continue;
+    if (/[\r\n]/.test(cleanKey) || /[\r\n]/.test(value)) continue;
+    if (cleanKey.toLowerCase() === 'host') continue;
+    safe[cleanKey] = value;
+  }
+  return safe;
+}
+
 // Force app name to match productName so app.getPath('userData') resolves
 // to the same directory in both dev and production (e.g. "Wildgate Stat Tracker").
 // Without this, dev mode uses the package "name" field which differs from productName.
@@ -35,9 +72,197 @@ if (isDev) {
   app.setName('Wildgate Stat Tracker');
 }
 
+const DEV_T0_MS = isDev ? Date.now() : 0;
+function devMark(label) {
+  if (!isDev) return;
+  const dt = Date.now() - DEV_T0_MS;
+  console.log(`[dev-timing] +${dt}ms ${label}`);
+}
+
 let win;
 let tray = null;
 let previousBounds = { width: 1200, height: 850 };
+const DEFAULT_MIN_WINDOW_BOUNDS = { width: 1200, height: 768 };
+
+function buildDevSplashDataUrl(targetUrl) {
+  const safeUrl = String(targetUrl || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wildgate Stat Tracker (Dev)</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+        background: radial-gradient(circle at 30% 20%, rgba(56,189,248,0.20), transparent 45%),
+                    radial-gradient(circle at 70% 10%, rgba(251,146,60,0.16), transparent 55%),
+                    linear-gradient(180deg, rgba(8,12,18,1) 0%, rgba(5,8,12,1) 100%);
+        color: rgba(255,255,255,0.86);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .card {
+        width: min(560px, calc(100vw - 48px));
+        padding: 18px 18px 16px;
+        border-radius: 18px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.10);
+        backdrop-filter: blur(14px);
+        box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+      }
+      .row { display: flex; align-items: center; gap: 12px; }
+      .logo {
+        width: 34px; height: 34px; border-radius: 12px;
+        background: linear-gradient(135deg, rgba(56,189,248,1) 0%, rgba(251,146,60,1) 100%);
+        display: grid; place-items: center;
+        color: rgba(0,0,0,0.85);
+        font-weight: 900;
+      }
+      h1 { margin: 0; font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase; }
+      .sub { margin-top: 10px; font-size: 12px; opacity: 0.75; line-height: 1.35; }
+      .url {
+        margin-top: 10px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 11px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: rgba(0,0,0,0.32);
+        border: 1px solid rgba(255,255,255,0.08);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .spinner {
+        width: 14px; height: 14px;
+        border-radius: 999px;
+        border: 2px solid rgba(255,255,255,0.18);
+        border-top-color: rgba(255,255,255,0.72);
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .hint { margin-top: 10px; font-size: 11px; opacity: 0.55; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="row">
+        <div class="logo">W</div>
+        <div style="min-width:0;">
+          <h1>Starting Dev Renderer</h1>
+          <div class="sub row" style="margin-top:6px;">
+            <div class="spinner"></div>
+            <div>Waiting for Vite to be ready...</div>
+          </div>
+        </div>
+      </div>
+      <div class="url">${safeUrl}</div>
+      <div class="hint">If this takes too long, check the Vite terminal output.</div>
+    </div>
+  </body>
+</html>`;
+  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}
+
+function probeUrlReady(urlString, timeoutMs = 450) {
+  return new Promise((resolve) => {
+    try {
+      const u = new URL(urlString);
+      const transport = u.protocol === 'https:' ? https : http;
+      const port = u.port ? Number(u.port) : (u.protocol === 'https:' ? 443 : 80);
+      const req = transport.request(
+        {
+          method: 'GET',
+          hostname: u.hostname,
+          port,
+          path: u.pathname && u.pathname !== '/' ? u.pathname : '/',
+          timeout: timeoutMs,
+          headers: {
+            'Accept': 'text/html,*/*',
+            'User-Agent': 'WildgateStatTrackerDevProbe',
+            'Connection': 'close',
+          },
+        },
+        (res) => {
+          // Any response means the server is listening; no need to read the body.
+          res.resume();
+          resolve(true);
+        }
+      );
+
+      req.on('timeout', () => {
+        try { req.destroy(); } catch { }
+        resolve(false);
+      });
+      req.on('error', () => resolve(false));
+      req.end();
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+function startDevRendererWithRetry(win, targetUrl) {
+  const url = targetUrl || DEV_SERVER_URL;
+  const splashUrl = buildDevSplashDataUrl(url);
+
+  let stopped = false;
+  let inFlight = false;
+  let attempt = 0;
+  let retryTimer = null;
+
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    if (retryTimer) clearTimeout(retryTimer);
+    try { win.webContents.removeListener('did-finish-load', onFinishLoad); } catch { }
+  };
+
+  const onFinishLoad = () => {
+    try {
+      const current = win.webContents.getURL() || '';
+      if (current.startsWith(url)) {
+        devMark(`dev URL loaded (attempt ${attempt})`);
+        stop();
+      }
+    } catch { }
+  };
+
+  const tryLoad = async () => {
+    if (stopped || inFlight || !win || win.isDestroyed()) return;
+    inFlight = true;
+    attempt += 1;
+
+    try {
+      const ready = await probeUrlReady(url);
+      if (!ready) {
+        const delay = Math.min(2000, 150 + (attempt * 125));
+        inFlight = false;
+        retryTimer = setTimeout(tryLoad, delay);
+        return;
+      }
+
+      await win.loadURL(url);
+      // stop() happens on did-finish-load once the dev URL successfully loads.
+      inFlight = false;
+    } catch {
+      const delay = Math.min(2000, 150 + (attempt * 125));
+      inFlight = false;
+      retryTimer = setTimeout(tryLoad, delay);
+    }
+  };
+
+  win.webContents.on('did-finish-load', onFinishLoad);
+  win.on('closed', stop);
+  // Show a friendly splash instead of the Chromium "failed to load" page.
+  devMark('splash shown');
+  win.loadURL(splashUrl).catch(() => { });
+  retryTimer = setTimeout(tryLoad, 150);
+}
 
 function createTray() {
   try {
@@ -91,6 +316,12 @@ function createTray() {
 // Database Path
 const DB_FILENAME = 'wildgate_db.json';
 const DB_PATH = path.join(app.getPath('userData'), DB_FILENAME);
+const DB_TEMP_PATH = `${DB_PATH}.tmp`;
+const DB_PREV_PATH = DB_PATH.replace('.json', '.prev.json');
+const DB_WAL_PATH = DB_PATH.replace('.json', '.wal.json');
+const DB_BACKUP_DIR = path.join(app.getPath('documents'), 'Wildgate Stat Tracker', 'Backups');
+let lastAutoBackupAtMs = 0;
+
 const LEGACY_APP_NAMES = ['Wildgate Stat Tracker', 'wildgate-stat-tracker', 'Wildgate Tracker'];
 const LEGACY_APPDATA_ROOTS = [app.getPath('appData')];
 if (process.platform === 'win32') {
@@ -100,10 +331,63 @@ const LEGACY_DB_PATHS = LEGACY_APPDATA_ROOTS.flatMap(root =>
   LEGACY_APP_NAMES.map(name => path.join(root, name, DB_FILENAME))
 );
 const getDbCandidates = () => {
-  const set = new Set([DB_PATH, ...LEGACY_DB_PATHS]);
+  const set = new Set([DB_PATH, DB_PREV_PATH, DB_TEMP_PATH, DB_WAL_PATH, ...LEGACY_DB_PATHS]);
   return Array.from(set);
 };
 const LOG_FILE_PATH = path.join(app.getPath('userData'), 'app_logs.txt');
+
+async function listRecentBackups(limit = 12) {
+  try {
+    const entries = await fsPromises.readdir(DB_BACKUP_DIR);
+    const files = entries
+      .filter(f => f.toLowerCase().endsWith('.json') && f.toLowerCase().startsWith('backup_'))
+      .map(f => path.join(DB_BACKUP_DIR, f));
+    const stats = await Promise.all(files.map(async (p) => {
+      try {
+        const st = await fsPromises.stat(p);
+        return { p, m: st.mtimeMs || 0 };
+      } catch {
+        return null;
+      }
+    }));
+    return stats
+      .filter(Boolean)
+      .sort((a, b) => (b.m - a.m))
+      .slice(0, limit)
+      .map(x => x.p);
+  } catch {
+    return [];
+  }
+}
+
+async function pruneBackups(maxKeep = 40) {
+  try {
+    const recent = await listRecentBackups(9999);
+    const extra = recent.slice(maxKeep);
+    if (extra.length === 0) return;
+    await Promise.all(extra.map(async p => {
+      try { await fsPromises.unlink(p); } catch { /* ignore */ }
+    }));
+  } catch {
+    // ignore
+  }
+}
+
+async function createDbBackup(reason = 'auto') {
+  try {
+    if (!fs.existsSync(DB_BACKUP_DIR)) fs.mkdirSync(DB_BACKUP_DIR, { recursive: true });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupPath = path.join(DB_BACKUP_DIR, `backup_${timestamp}_${reason}.json`);
+    if (!fs.existsSync(DB_PATH)) {
+      return { success: false, error: 'No database file found to backup.' };
+    }
+    fs.copyFileSync(DB_PATH, backupPath);
+    void pruneBackups();
+    return { success: true, path: backupPath };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
 
 // Artifact Bundling
 ipcMain.handle('bundle-artifacts', async (event, { matchId, startTime, endTime }) => {
@@ -388,9 +672,87 @@ ipcMain.handle('ocr-scan', async (event, imagePath) => {
 });
 
 // Database Handlers
+async function fsyncDirBestEffort(dirPath) {
+  try {
+    const dirHandle = await fsPromises.open(dirPath, 'r');
+    try {
+      await dirHandle.sync();
+    } finally {
+      await dirHandle.close();
+    }
+  } catch {
+    // Not supported on all platforms/filesystems.
+  }
+}
+
+async function writeFileDurableAtomic(filePath, payload) {
+  const tempPath = `${filePath}.tmp`;
+  await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
+
+  const fileHandle = await fsPromises.open(tempPath, 'w');
+  try {
+    await fileHandle.writeFile(payload, 'utf-8');
+    await fileHandle.sync();
+  } finally {
+    await fileHandle.close();
+  }
+
+  await fsPromises.rename(tempPath, filePath);
+  await fsyncDirBestEffort(path.dirname(filePath));
+}
+
+async function writeWalDurable(data) {
+  const walPayload = JSON.stringify({
+    version: 1,
+    createdAt: Date.now(),
+    data
+  }, null, 2);
+  await writeFileDurableAtomic(DB_WAL_PATH, walPayload);
+}
+
+async function clearWalBestEffort() {
+  try {
+    await fsPromises.unlink(DB_WAL_PATH);
+    await fsyncDirBestEffort(path.dirname(DB_WAL_PATH));
+  } catch {
+    // Already gone or unavailable.
+  }
+}
+
+async function replayWalIfPresent() {
+  try {
+    await fsPromises.access(DB_WAL_PATH);
+  } catch {
+    return null;
+  }
+
+  try {
+    const walRaw = await fsPromises.readFile(DB_WAL_PATH, 'utf-8');
+    const wal = JSON.parse(walRaw);
+    if (!wal || typeof wal !== 'object' || !wal.data) throw new Error('Invalid WAL payload');
+    const payload = JSON.stringify(wal.data, null, 2);
+    await writeFileDurableAtomic(DB_PATH, payload);
+    await clearWalBestEffort();
+    console.log('[DB] WAL replay successful');
+    return wal.data;
+  } catch (e) {
+    console.error('[DB] WAL replay failed:', e);
+    return null;
+  }
+}
+
 ipcMain.handle('db-read', async () => {
   try {
+    const replayed = await replayWalIfPresent();
+    if (replayed) return replayed;
+
     const candidates = getDbCandidates();
+    // Extra safety: if the main DB is corrupt/missing, try the newest backups too.
+    try {
+      const backups = await listRecentBackups(12);
+      for (const b of backups) candidates.push(b);
+    } catch { /* ignore */ }
+
     for (const candidate of candidates) {
       try {
         await fsPromises.access(candidate);
@@ -400,10 +762,10 @@ ipcMain.handle('db-read', async () => {
       try {
         const content = await fsPromises.readFile(candidate, 'utf-8');
         const parsed = JSON.parse(content);
-        if (candidate !== DB_PATH) {
+        if (candidate !== DB_PATH && candidate !== DB_WAL_PATH) {
           await fsPromises.mkdir(path.dirname(DB_PATH), { recursive: true });
           await fsPromises.copyFile(candidate, DB_PATH);
-          console.log(`[DB] Migrated legacy DB from ${candidate} -> ${DB_PATH}`);
+          console.log(`[DB] Recovered/migrated DB from ${candidate} -> ${DB_PATH}`);
         }
         return parsed;
       } catch (e) {
@@ -421,25 +783,38 @@ ipcMain.handle('db-read', async () => {
 });
 
 ipcMain.handle('db-write', async (event, data) => {
-  const TEMP_PATH = DB_PATH + '.tmp';
-  const PREV_PATH = DB_PATH.replace('.json', '.prev.json');
   try {
-    // Safety: keep previous version so we can always recover
+    // 1) Persist WAL first so a crash before DB write can still recover.
+    await writeWalDurable(data);
+
+    // 2) Safety: keep previous DB version for manual recovery.
     try {
       await fsPromises.access(DB_PATH);
-      await fsPromises.copyFile(DB_PATH, PREV_PATH);
-    } catch { /* No existing DB to back up — first write */ }
+      await fsPromises.copyFile(DB_PATH, DB_PREV_PATH);
+    } catch { /* No existing DB to back up - first write */ }
 
-    await fsPromises.writeFile(TEMP_PATH, JSON.stringify(data, null, 2));
-    await fsPromises.rename(TEMP_PATH, DB_PATH);
+    // 3) Durable atomic DB commit.
+    const payload = JSON.stringify(data, null, 2);
+    await writeFileDurableAtomic(DB_PATH, payload);
+
+    // 4) WAL no longer needed after successful DB commit.
+    await clearWalBestEffort();
+
+    // 5) Throttled rolling backups (protect against userData corruption / accidental edits).
+    const now = Date.now();
+    if (now - lastAutoBackupAtMs > 5 * 60 * 1000) { // 5 minutes
+      lastAutoBackupAtMs = now;
+      void createDbBackup('rolling');
+    }
     return true;
   } catch (e) {
     console.error("DB Write Error", e);
     try {
-      await fsPromises.unlink(TEMP_PATH);
+      await fsPromises.unlink(DB_TEMP_PATH);
     } catch (unlinkErr) {
       console.error("Failed to cleanup temp file", unlinkErr);
     }
+    // Intentionally keep WAL for next startup replay.
     return false;
   }
 });
@@ -464,35 +839,60 @@ ipcMain.on('window-close', () => {
 });
 
 ipcMain.handle('db-backup', () => {
-  try {
-    const docPath = path.join(app.getPath('documents'), 'Wildgate Stat Tracker/Backups');
-    if (!fs.existsSync(docPath)) fs.mkdirSync(docPath, { recursive: true });
-
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupPath = path.join(docPath, `backup_${timestamp}.json`);
-
-    if (fs.existsSync(DB_PATH)) {
-      fs.copyFileSync(DB_PATH, backupPath);
-      return { success: true, path: backupPath };
-    }
-    return { success: false, error: 'No database file found to backup.' };
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
+  return createDbBackup('manual');
 });
 
-ipcMain.handle('epic-request', async (event, { url, method, headers, body }) => {
+ipcMain.handle('epic-request', async (event, payload = {}) => {
   try {
+    const {
+      url,
+      method = 'GET',
+      headers = {},
+      body = undefined,
+    } = payload || {};
+
+    if (typeof url !== 'string' || !url.trim()) {
+      return { ok: false, status: 400, statusText: 'Bad Request', error: 'Invalid URL' };
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return { ok: false, status: 400, statusText: 'Bad Request', error: 'Malformed URL' };
+    }
+
+    if (parsed.protocol !== 'https:') {
+      return { ok: false, status: 400, statusText: 'Bad Request', error: 'HTTPS required' };
+    }
+
+    if (!isAllowedEpicHost(parsed.hostname)) {
+      return { ok: false, status: 403, statusText: 'Forbidden', error: `Host not allowed: ${parsed.hostname}` };
+    }
+
+    const normalizedMethod = String(method || 'GET').toUpperCase();
+    if (!ALLOWED_HTTP_METHODS.has(normalizedMethod)) {
+      return { ok: false, status: 400, statusText: 'Bad Request', error: `Method not allowed: ${normalizedMethod}` };
+    }
+
+    let requestBody = undefined;
+    if (body !== undefined && body !== null) {
+      if (typeof body === 'string') requestBody = body;
+      else if (typeof body === 'object') requestBody = JSON.stringify(body);
+      else return { ok: false, status: 400, statusText: 'Bad Request', error: 'Invalid request body type' };
+    }
+
+    const safeHeaders = sanitizeForwardHeaders(headers);
     const fetchOptions = {
-      method,
+      method: normalizedMethod,
       headers: {
         'User-Agent': 'AccelByte-SDK',
-        ...headers
+        ...safeHeaders
       },
-      body: body ? body : undefined
+      body: requestBody
     };
 
-    const response = await fetch(url, fetchOptions);
+    const response = await fetch(parsed.toString(), fetchOptions);
     const text = await response.text();
 
     let data;
@@ -1059,6 +1459,8 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1200,
     height: 850,
+    minWidth: DEFAULT_MIN_WINDOW_BOUNDS.width,
+    minHeight: DEFAULT_MIN_WINDOW_BOUNDS.height,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -1072,10 +1474,12 @@ function createWindow() {
     backgroundColor: '#00000000',
   });
 
+  devMark('window created');
+
   win.on('show', () => win.webContents.send('window-visibility-change', true));
   win.on('hide', () => win.webContents.send('window-visibility-change', false));
 
-  if (isDev) win.loadURL('http://localhost:5173');
+  if (isDev) startDevRendererWithRetry(win, DEV_SERVER_URL);
   else win.loadFile(path.join(__dirname, '../dist/index.html'));
 
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -1106,6 +1510,7 @@ function createWindow() {
       win.center();
       // Reset click-through when exiting overlay
       win.setIgnoreMouseEvents(false);
+      win.setMinimumSize(DEFAULT_MIN_WINDOW_BOUNDS.width, DEFAULT_MIN_WINDOW_BOUNDS.height);
     }
   });
 
@@ -1181,6 +1586,7 @@ ipcMain.handle('sync-training-sample', async (event, sampleId) => {
 });
 
 app.whenReady().then(async () => {
+  devMark('app whenReady');
   createTray();
   createWindow();
   cleanupOldArchives();
@@ -1195,6 +1601,7 @@ app.whenReady().then(async () => {
   if (fs.existsSync(GCLOUD_KEY)) {
     gcloudService.initialize(GCLOUD_KEY);
     await gcloudSyncService.initialize(GCLOUD_KEY, GCLOUD_BUCKET);
+    geminiService.initialize(GCLOUD_KEY);
   } else {
     console.warn('[GCloud] Key file not found, GCloud services disabled');
   }
@@ -1352,6 +1759,52 @@ ipcMain.handle('read-file-base64', async (event, filePath) => {
   }
 });
 
+ipcMain.handle('db-status', async () => {
+  try {
+    const toMtime = async (p) => {
+      try {
+        const s = await fsPromises.stat(p);
+        return s.mtimeMs || s.birthtimeMs || null;
+      } catch {
+        return null;
+      }
+    };
+
+    const backupDir = path.join(app.getPath('documents'), 'Wildgate Stat Tracker/Backups');
+    let lastBackupMtime = null;
+    try {
+      const files = await fsPromises.readdir(backupDir);
+      const jsonFiles = files.filter(f => f.endsWith('.json'));
+      for (const f of jsonFiles) {
+        const m = await toMtime(path.join(backupDir, f));
+        if (m && (!lastBackupMtime || m > lastBackupMtime)) lastBackupMtime = m;
+      }
+    } catch {
+      // No backup directory yet.
+    }
+
+    const walExists = !!(await toMtime(DB_WAL_PATH));
+    return {
+      ok: true,
+      walExists,
+      dbMtime: await toMtime(DB_PATH),
+      prevMtime: await toMtime(DB_PREV_PATH),
+      walMtime: await toMtime(DB_WAL_PATH),
+      lastBackupMtime,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e?.message || String(e),
+      walExists: false,
+      dbMtime: null,
+      prevMtime: null,
+      walMtime: null,
+      lastBackupMtime: null
+    };
+  }
+});
+
 ipcMain.handle('open-path', async (event, targetPath) => {
   try {
     if (!isAllowedRendererPath(targetPath)) {
@@ -1368,6 +1821,7 @@ ipcMain.handle('open-path', async (event, targetPath) => {
 ipcMain.handle('get-gcloud-status', async () => {
   return {
     visionReady: gcloudService.isInitialized || false,
+    geminiReady: geminiService.isInitialized || false,
     storageReady: gcloudSyncService.isInitialized || false,
     storageStats: gcloudSyncService.getStats(),
   };
@@ -1386,3 +1840,4 @@ autoUpdater.on('update-not-available', (info) => { if (win) win.webContents.send
 autoUpdater.on('update-downloaded', (info) => { if (win) win.webContents.send('update_downloaded'); });
 autoUpdater.on('error', (err) => { if (win) win.webContents.send('update_error', err.message); });
 ipcMain.on('restart_app', () => autoUpdater.quitAndInstall());
+

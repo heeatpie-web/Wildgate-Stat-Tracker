@@ -41,16 +41,48 @@ class GCloudService {
 
     try {
       const [result] = await this.client.documentTextDetection(imagePath);
-      const annotations = result.textAnnotations || [];
-      const fullText = annotations.length > 0 ? annotations[0].description || '' : '';
+      const textAnnotations = result.textAnnotations || [];
+      const fullText = textAnnotations.length > 0 ? textAnnotations[0].description || '' : '';
+
+      const wordAnnotations = [];
+      const pages = result.fullTextAnnotation?.pages || [];
+      for (const page of pages) {
+        for (const block of page.blocks || []) {
+          for (const paragraph of block.paragraphs || []) {
+            for (const word of paragraph.words || []) {
+              const symbols = word.symbols || [];
+              const text = symbols.map(s => s.text || '').join('');
+              if (!text) continue;
+
+              let symbolConfSum = 0;
+              for (const sym of symbols) {
+                symbolConfSum += typeof sym.confidence === 'number' ? sym.confidence : 0.85;
+              }
+              const avgSymbolConfidence = symbols.length > 0
+                ? symbolConfSum / symbols.length
+                : (typeof word.confidence === 'number' ? word.confidence : 0.85);
+
+              wordAnnotations.push({
+                text,
+                confidence: Math.round(Math.min(99, Math.max(1, avgSymbolConfidence * 100))),
+                bounds: word.boundingBox?.vertices || [],
+              });
+            }
+          }
+        }
+      }
+
+      const annotations = wordAnnotations.length > 0
+        ? wordAnnotations
+        : textAnnotations.slice(1).map(a => ({
+            text: a.description,
+            confidence: 85,
+            bounds: a.boundingPoly?.vertices || [],
+          }));
 
       return {
         fullText,
-        annotations: annotations.map(a => ({
-          text: a.description,
-          confidence: a.confidence,
-          bounds: a.boundingPoly?.vertices || [],
-        })),
+        annotations,
       };
     } catch (error) {
       console.error('[GCloudService] OCR Error:', error);
