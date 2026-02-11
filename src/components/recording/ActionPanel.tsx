@@ -67,20 +67,29 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         pendingData,
         queueDepth,
         capturedScreenshots,
+        savedCaptures,
+        processingProgress,
         qualityHint
     } = smartCaptureState;
     const {
         capture: triggerSmartCapture,
+        processAllStored,
         clearError: clearCaptureError,
         dismissPendingData,
         reanalyzeCaptures
     } = smartCaptureActions;
+
+    const pendingOcrCount = savedCaptures.filter(c => !c.ocrProcessed).length;
 
     const handleReviewBucket = () => {
         if (pendingData && onSmartCaptureData) {
             onSmartCaptureData(pendingData);
             dismissPendingData();
         }
+    };
+
+    const handleProcessQueue = async () => {
+        await processAllStored(activeUser || null);
     };
 
     const isBusy = isScanning || isCapturing || isProcessing;
@@ -209,15 +218,17 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     </div>
                 )}
 
-                {capturedScreenshots.length > 0 && (
+                {(capturedScreenshots.length > 0 || pendingOcrCount > 0) && (
                     <div className="flex gap-2 animate-in slide-in-from-top-1">
                         <button
-                            onClick={handleReviewBucket}
-                            disabled={isBusy || !pendingData}
+                            onClick={pendingData ? handleReviewBucket : handleProcessQueue}
+                            disabled={isBusy}
                             className="flex-1 bg-md-sys-primary/10 hover:bg-md-sys-primary/20 text-md-sys-primary border border-md-sys-primary/20 text-[10px] uppercase font-bold py-2.5 rounded-xl transition-all disabled:opacity-40 flex items-center justify-center gap-2"
                         >
-                            <span className="px-1.5 py-0.5 bg-md-sys-primary text-md-sys-onPrimary text-[8px] font-bold rounded-full">{capturedScreenshots.length}</span>
-                            Review & Apply
+                            <span className="px-1.5 py-0.5 bg-md-sys-primary text-md-sys-onPrimary text-[8px] font-bold rounded-full">
+                                {pendingData ? capturedScreenshots.length : pendingOcrCount}
+                            </span>
+                            {pendingData ? 'Review & Apply' : 'Process Queue'}
                         </button>
                         <button onClick={reanalyzeCaptures} disabled={isBusy} className="md3-icon-btn mg-surface" title="Re-merge"><RefreshCw size={14} /></button>
                     </div>
@@ -268,6 +279,12 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     <button onClick={() => initiateSubmission('Draw')} className="btn-draw text-[10px] py-2.5 rounded-xl font-black uppercase flex flex-col items-center justify-center gap-1 shadow-sm transition-all"><Scale size={16} /> Draw</button>
                 </div>
 
+                {processingProgress && (
+                    <div className="text-[10px] font-semibold text-md-sys-on-surface/65 px-1">
+                        OCR queue: {processingProgress.current}/{processingProgress.total}
+                    </div>
+                )}
+
                 <StatusOverlay />
             </div>
         );
@@ -306,18 +323,25 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                             Smart Capture
                         </div>
                         <div className="text-[10px] text-md-sys-on-surface/55 truncate">
-                            {isCapturing ? 'Capturing window...' : isProcessing ? `Processing (${ocrModeLabel})...` : 'Use the top bar button for fastest access'}
+                            {isCapturing
+                                ? 'Capturing window...'
+                                : isProcessing
+                                    ? `Processing (${ocrModeLabel})...`
+                                    : pendingOcrCount > 0
+                                        ? `${pendingOcrCount} capture${pendingOcrCount === 1 ? '' : 's'} queued for OCR`
+                                        : 'Use the top bar button for fastest access'}
                         </div>
                     </div>
 
-                    {capturedScreenshots.length > 0 && (
+                    {(capturedScreenshots.length > 0 || pendingOcrCount > 0) && (
                         <button
-                            onClick={handleReviewBucket}
+                            onClick={pendingData ? handleReviewBucket : handleProcessQueue}
+                            disabled={isBusy}
                             className={`bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer rounded-xl font-bold text-[10px] uppercase tracking-widest relative overflow-visible ${isCompact ? 'h-[40px] px-3' : 'h-[44px] px-4'}`}
                         >
-                            Review
+                            {pendingData ? 'Review' : 'Process'}
                             <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-md-sys-primary text-md-sys-onPrimary rounded-full text-[9px] flex items-center justify-center shadow-md animate-in zoom-in-50">
-                                {capturedScreenshots.length}
+                                {pendingData ? capturedScreenshots.length : pendingOcrCount}
                             </span>
                         </button>
                     )}
@@ -384,6 +408,12 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     }`}>
                         <div className="uppercase tracking-wide text-[9px] opacity-70 mb-0.5">Capture Quality</div>
                         {qualityHint.message}
+                    </div>
+                )}
+
+                {processingProgress && (
+                    <div className="text-[10px] font-semibold text-md-sys-on-surface/65 px-1">
+                        OCR queue: {processingProgress.current}/{processingProgress.total}
                     </div>
                 )}
 
