@@ -126,7 +126,7 @@ export const IdMapper: React.FC = () => {
 
             {/* Search */}
             <div className="md3-surface-high p-2 rounded-lg flex items-center gap-2">
-                <Users size={14} className="opacity-50" />
+                <Users size={14} className="opacity-60" />
                 <input
                     type="text"
                     placeholder="Search IDs or Names..."
@@ -135,7 +135,7 @@ export const IdMapper: React.FC = () => {
                     className="flex-1 bg-transparent text-label-sm outline-none font-medium placeholder:opacity-40"
                 />
                 {searchTerm && (
-                    <button onClick={() => setSearchTerm('')} className="opacity-50 hover:opacity-100">
+                    <button onClick={() => setSearchTerm('')} className="opacity-60 hover:opacity-100">
                         <X size={12} />
                     </button>
                 )}
@@ -186,10 +186,10 @@ export const IdMapper: React.FC = () => {
                                         <div key={id} className="flex items-center gap-3 md3-surface-high p-2 rounded-md">
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-label-sm font-mono opacity-50 bg-black/20 px-1 rounded">{meta.type}</span>
+                                                    <span className="text-label-sm font-mono opacity-40 bg-black/20 px-1 rounded">{meta.type}</span>
                                                     <RoleBadge role={role} />
                                                 </div>
-                                                <div className="text-label-sm font-mono truncate select-all opacity-70 mt-0.5" title={id}>{id.slice(0, 20)}...</div>
+                                                <div className="text-label-sm font-mono truncate select-all opacity-60 mt-0.5" title={id}>{id.slice(0, 20)}...</div>
                                                 <div className="flex gap-3 text-label-sm opacity-40 mt-1">
                                                     <span>Seen {profile?.sightings || 1}x</span>
                                                     <span>{formatLastSeen(meta.lastSeen)}</span>
@@ -206,7 +206,7 @@ export const IdMapper: React.FC = () => {
                                             <button
                                                 onClick={() => handleSave(id)}
                                                 disabled={!nameInputs[id]}
-                                                className="md3-icon-btn text-success disabled:opacity-30"
+                                                className="md3-icon-btn text-success disabled:opacity-disabled"
                                             >
                                                 <Save size={14} />
                                             </button>
@@ -296,7 +296,7 @@ export const IdMapper: React.FC = () => {
                                                             <span className="font-bold truncate">{profile.name || id.slice(0, 12) + '...'}</span>
                                                             <RoleBadge role={role} />
                                                         </div>
-                                                        <div className="flex gap-3 text-label-sm opacity-50 mt-0.5">
+                                                        <div className="flex gap-3 text-label-sm opacity-60 mt-0.5">
                                                             <span>{profile.sightings || 0}x seen</span>
                                                             <span>{lastSeen}</span>
                                                             {topTeam && <span className="capitalize">{topTeam}</span>}
@@ -331,7 +331,7 @@ export const IdMapper: React.FC = () => {
                                         <div key={p.id} className="flex items-center gap-2 text-label-sm">
                                             <span className="w-4 text-danger font-bold">{i + 1}</span>
                                             <span className="flex-1 truncate font-medium">{p.name || p.id.slice(0, 12) + '...'}</span>
-                                            <span className="text-danger/70">{Object.values(p.playedAgainst).reduce((a, b) => a + b, 0)} games</span>
+                                            <span className="text-danger/60">{Object.values(p.playedAgainst).reduce((a, b) => a + b, 0)} games</span>
                                         </div>
                                     ))}
                                 </div>
@@ -351,7 +351,7 @@ export const IdMapper: React.FC = () => {
                                         <div key={p.id} className="flex items-center gap-2 text-label-sm">
                                             <span className="w-4 text-success font-bold">{i + 1}</span>
                                             <span className="flex-1 truncate font-medium">{p.name || p.id.slice(0, 12) + '...'}</span>
-                                            <span className="text-success/70">{Object.values(p.playedWith).reduce((a, b) => a + b, 0)} games</span>
+                                            <span className="text-success/60">{Object.values(p.playedWith).reduce((a, b) => a + b, 0)} games</span>
                                         </div>
                                     ))}
                                 </div>

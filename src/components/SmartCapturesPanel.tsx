@@ -1504,7 +1504,7 @@ const SmartMatchDetail: React.FC<{
                         
                         <button
                             onClick={handleAddScreenshot}
-                            className="aspect-video md3-surface-high rounded-lg border-2 border-dashed border-md-sys-outline/5 hover:border-md-sys-primary/30 hover:bg-md-sys-primary/5 transition-all flex flex-col items-center justify-center gap-1 opacity-30 hover:opacity-100 hover:text-md-sys-primary"
+                            className="aspect-video md3-surface-high rounded-lg border-2 border-dashed border-md-sys-outline/5 hover:border-md-sys-primary/30 hover:bg-md-sys-primary/5 transition-all flex flex-col items-center justify-center gap-1 opacity-40 hover:opacity-100 hover:text-md-sys-primary"
                         >
                             <Upload size={16} />
                             <span className="text-label-xs font-bold uppercase">Add</span>
@@ -1571,7 +1571,7 @@ const SmartMatchDetail: React.FC<{
                                                     ) : match.result === 'Loss' && (
                                                         <button
                                                             onClick={() => onUpdate({ ...match, eliminatedByTeam: team.teamName })}
-                                                            className="ml-auto text-label-xs px-1.5 py-0.5 bg-md-sys-on-surface/5 hover:bg-danger-soft opacity-30 hover:opacity-100 hover:text-danger rounded font-bold transition-colors"
+                                                            className="ml-auto text-label-xs px-1.5 py-0.5 bg-md-sys-on-surface/5 hover:bg-danger-soft opacity-40 hover:opacity-100 hover:text-danger rounded font-bold transition-colors"
                                                             type="button"
                                                         >
                                                             Mark as eliminator
@@ -1610,7 +1610,7 @@ const SmartMatchDetail: React.FC<{
                                     {match.eliminatedByTeam && (
                                         <button
                                             onClick={() => onUpdate({ ...match, eliminatedByTeam: undefined })}
-                                            className="text-label-xs opacity-30 hover:opacity-60 transition-colors"
+                                            className="text-label-xs opacity-40 hover:opacity-60 transition-colors"
                                             type="button"
                                         >
                                             Clear eliminator selection

@@ -27,7 +27,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ socialData, filteredMatc
             {/* Editorial Summary */}
             {!dense && (
                 <div className="md3-card rounded-2xl p-6 mb-4">
-                    <p className="text-body leading-relaxed opacity-70">{generateSocialEditorial(socialData)}</p>
+                    <p className="text-body leading-relaxed opacity-60">{generateSocialEditorial(socialData)}</p>
                 </div>
             )}
 

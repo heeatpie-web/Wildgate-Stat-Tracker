@@ -16,11 +16,11 @@ Status: ACTIVE
 9. [COMPLETE] Structure Hardening Sprint Phase 2 — builder refactors handlers (artifactHandlers.cjs), debugger validates.
 10. [COMPLETE] Structure Hardening Sprint Phase 3 — builder adds tests (artifactService, useMatchSubmission, useSmartCapture); build + 88 tests pass.
 11. [COMPLETE] Dev Splash Retry Noise Reduction — builder implemented throttling + dedupe; build + tests pass.
-12. [IN_PROGRESS] Opacity Normalization (3-Tier System) — builder normalizes text-related opacity across 18 component files per intake (full/60/40; disabled → opacity-disabled).
+12. [COMPLETE] Opacity Normalization (3-Tier System) — builder normalized text-related opacity across 25+ component files (full/60/40; disabled→opacity-disabled); build + tests pass.
 
 ## Active Step
-- COMPLETE: Steps 1-11 (OCR cycle, Legacy Ingest, Structure Hardening Phases 1-3, Dev Splash)
-- IN_PROGRESS: Step 12 (Opacity Normalization)
+- COMPLETE: Steps 1-12 (OCR cycle, Legacy Ingest, Structure Hardening, Dev Splash, Opacity Normalization)
+- PENDING: none
 
 ## PM Approval
 - Date (UTC): 2026-02-12T22:25:00Z
@@ -29,6 +29,12 @@ Status: ACTIVE
 - Scope for next phase:
   - OCR lane B only (UX clarity for OCR/security rejection messages and correction flow usability).
   - No expansion outside assigned lane files without explicit PM scope update.
+
+## PM Approval — Step 12 Opacity Normalization (continue)
+- Date (UTC): 2026-02-13
+- Approved by: `project-manager`
+- Approval: Step 12 batch 2 (8/18 files) **APPROVED**. Builder may continue with remaining 10 files per intake (3-tier text opacity; text only; disabled → opacity-disabled).
+- Release-manager gate: **GO** (build + tests PASS; visual-only).
 
 ## Notes
 - Single-step mode is default.

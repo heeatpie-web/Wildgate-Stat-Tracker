@@ -465,7 +465,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                 <Trash2 size={13} /> Delete
                             </button>
                             <div className="flex-1" />
-                            <button onClick={() => setSelectedMatches([])} className="text-label-sm font-semibold text-md-sys-on-surface/40 hover:text-md-sys-on-surface/70 transition-colors">
+                            <button onClick={() => setSelectedMatches([])} className="text-label-sm font-semibold text-md-sys-on-surface/40 hover:text-md-sys-on-surface/60 transition-colors">
                                 Clear selection
                             </button>
                         </div>
@@ -676,7 +676,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                                                 )}
                                                             </div>
                                                         ) : (
-                                                            <span className="text-md-sys-on-surface/20 italic text-label-sm">--</span>
+                                                            <span className="text-md-sys-on-surface/40 italic text-label-sm">--</span>
                                                         )}
                                                     </td>
 
@@ -687,7 +687,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                                                 <span key={i} onClick={(e) => { e.stopPropagation(); onDrillDown?.(t, 'Teammate'); }} className="px-2 py-0.5 rounded-md bg-info/8 text-info/80 hover:bg-info/15 cursor-pointer transition-colors text-label-sm font-medium">
                                                                     {t}
                                                                 </span>
-                                                            )) : <span className="text-md-sys-on-surface/25 italic text-label-sm">None</span>}
+                                                            )) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
                                                         </div>
                                                     </td>
 
@@ -698,7 +698,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                                                 <span key={i} onClick={(e) => { e.stopPropagation(); onDrillDown?.(o, 'Opponent'); }} className="px-2 py-0.5 rounded-md bg-danger/8 text-danger/80 hover:bg-danger/15 cursor-pointer transition-colors text-label-sm font-medium">
                                                                     {o}
                                                                 </span>
-                                                            )) : <span className="text-md-sys-on-surface/25 italic text-label-sm">None</span>}
+                                                            )) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
                                                         </div>
                                                     </td>
 
@@ -793,7 +793,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                             value={noteText}
                             onChange={(e) => setNoteText(e.target.value)}
                             placeholder="Add notes about strategy, mistakes, or key moments..."
-                            className="w-full h-32 rounded-control p-4 text-body font-medium outline-none resize-none transition-all border border-md-sys-outline/10 focus:border-md-sys-primary/40 focus:ring-2 focus:ring-md-sys-primary/10 text-md-sys-on-surface placeholder:text-md-sys-on-surface/25"
+                            className="w-full h-32 rounded-control p-4 text-body font-medium outline-none resize-none transition-all border border-md-sys-outline/10 focus:border-md-sys-primary/40 focus:ring-2 focus:ring-md-sys-primary/10 text-md-sys-on-surface placeholder:text-md-sys-on-surface/40"
                             style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 40%)' }}
                         />
                         <div className="flex gap-2.5">
@@ -1002,7 +1002,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                             </div>
                         )}
 
-                        <div className="text-center text-label-sm font-mono text-md-sys-on-surface/20 uppercase tracking-widest mt-2 pt-3 border-t border-md-sys-outline/5">
+                        <div className="text-center text-label-sm font-mono text-md-sys-on-surface/40 uppercase tracking-widest mt-2 pt-3 border-t border-md-sys-outline/5">
                             ID: {selectedMatchForDetails.id} - {new Date(selectedMatchForDetails.timestamp).toLocaleString()}
                         </div>
                     </div>

@@ -110,7 +110,7 @@ export const MatchRecordingPage: React.FC = () => {
                     )}
                 </div>
 
-                <div className="p-2 border-t border-md-sys-outline/5 text-center text-label-sm opacity-30 font-bold uppercase">
+                <div className="p-2 border-t border-md-sys-outline/5 text-center text-label-sm opacity-40 font-bold uppercase">
                     {filteredMatches.length} match{filteredMatches.length !== 1 ? 'es' : ''}
                 </div>
             </div>
@@ -121,7 +121,7 @@ export const MatchRecordingPage: React.FC = () => {
                     <MatchDetail match={selectedMatch} onUpdate={updateMatch} onViewCaptures={() => setActiveView('smart-captures')} />
                 ) : (
                     <div className="h-full flex items-center justify-center">
-                        <div className="text-center opacity-30">
+                        <div className="text-center opacity-40">
                             <FileText size={48} className="mx-auto mb-3" />
                             <p className="text-body font-bold">Select a match to view details</p>
                         </div>
@@ -159,12 +159,12 @@ const MatchListItem: React.FC<{
                 </div>
                 <div className="flex items-center gap-1 mt-0.5">
                     {match.hero && <span className="text-label-sm opacity-60">{match.hero}</span>}
-                    {match.hero && match.ship && <span className="text-label-xs opacity-30">·</span>}
+                    {match.hero && match.ship && <span className="text-label-xs opacity-40">·</span>}
                     {match.ship && <span className="text-label-sm opacity-60">{match.ship.split('(')[0].trim()}</span>}
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-label-xs opacity-30">{new Date(match.timestamp).toLocaleDateString()}</span>
-                    <span className="text-label-xs opacity-30">{new Date(match.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="text-label-xs opacity-40">{new Date(match.timestamp).toLocaleDateString()}</span>
+                    <span className="text-label-xs opacity-40">{new Date(match.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     {totalKills > 0 && <span className="text-label-xs text-success/60">{totalKills}K</span>}
                 </div>
             </div>
@@ -227,7 +227,7 @@ const MatchDetail: React.FC<{
                 </div>
             ) : (
                 <div className="flex items-center gap-1 flex-1 group cursor-pointer" onClick={() => startEdit(field, value || '')}>
-                    <span className="text-label-sm">{value || <span className="opacity-30 italic">—</span>}</span>
+                    <span className="text-label-sm">{value || <span className="opacity-40 italic">—</span>}</span>
                     <Edit3 size={10} className="opacity-0 group-hover:opacity-40 transition-opacity" />
                 </div>
             )}
@@ -394,7 +394,7 @@ const MatchDetail: React.FC<{
                     <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
                         {match.timelineEvents.map((evt: any, i: number) => (
                             <div key={i} className="flex items-center gap-2 text-label-sm">
-                                <span className="text-label-xs opacity-30 w-16 flex-shrink-0">
+                                <span className="text-label-xs opacity-40 w-16 flex-shrink-0">
                                     {new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                                 </span>
                                 <span className="px-1.5 py-0.5 rounded bg-md-sys-on-surface/5 text-label-xs font-bold uppercase">{evt.type}</span>
@@ -460,7 +460,7 @@ const MatchDetail: React.FC<{
             {/* Lightbox */}
             {lightboxSrc && (
                 <div className="fixed inset-0 z-[10000] bg-black/90 flex items-center justify-center p-8" onClick={() => setLightboxSrc(null)}>
-                    <button onClick={() => setLightboxSrc(null)} className="absolute top-4 right-4 text-md-sys-on-surface/50 hover:text-md-sys-on-surface">
+                    <button onClick={() => setLightboxSrc(null)} className="absolute top-4 right-4 text-md-sys-on-surface/60 hover:text-md-sys-on-surface">
                         <X size={24} />
                     </button>
                     <img src={lightboxSrc.startsWith('data:') ? lightboxSrc : `file://${lightboxSrc.replace(/\\/g, '/')}`} alt="Screenshot" className="max-w-full max-h-full object-contain rounded-lg" />
@@ -475,7 +475,7 @@ const Section: React.FC<{ title: string; icon: React.ReactNode; children: React.
     <div className="bg-md-sys-surface2 rounded-xl p-3">
         <div className="flex items-center gap-1.5 mb-2">
             <span className="opacity-40">{icon}</span>
-            <span className="text-label-sm uppercase font-bold opacity-50 tracking-wider">{title}</span>
+            <span className="text-label-sm uppercase font-bold opacity-40 tracking-wider">{title}</span>
         </div>
         {children}
     </div>

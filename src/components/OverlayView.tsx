@@ -100,10 +100,10 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                             <LayoutTemplate size={10} />
                             <span className="text-label-sm font-bold uppercase">Dashboard</span>
                         </button>
-                        <button onClick={handleMinimize} className="w-7 h-7 flex items-center justify-center hover:bg-md-sys-on-surface/10 text-md-sys-on-surface/50 rounded-md transition-colors" title="Minimize">
+                        <button onClick={handleMinimize} className="w-7 h-7 flex items-center justify-center hover:bg-md-sys-on-surface/10 text-md-sys-on-surface/60 rounded-md transition-colors" title="Minimize">
                             <Minus size={12} />
                         </button>
-                        <button onClick={handleClose} className="w-7 h-7 flex items-center justify-center hover:bg-md-sys-error hover:text-md-sys-on-error text-md-sys-on-surface/50 rounded-md transition-colors" title="Close">
+                        <button onClick={handleClose} className="w-7 h-7 flex items-center justify-center hover:bg-md-sys-error hover:text-md-sys-on-error text-md-sys-on-surface/60 rounded-md transition-colors" title="Close">
                             <X size={12} />
                         </button>
                     </div>
@@ -156,7 +156,7 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                         className="flex items-center justify-between px-3 py-2 bg-black/40 cursor-move active:cursor-grabbing border-b border-md-sys-outlineVariant/20"
                         style={{ WebkitAppRegion: 'drag' } as any}
                     >
-                        <div className="flex items-center gap-2 text-md-sys-on-surface/70 group-hover:text-md-sys-on-surface transition-colors">
+                        <div className="flex items-center gap-2 text-md-sys-on-surface/60 group-hover:text-md-sys-on-surface transition-colors">
                             <GripHorizontal size={14} />
                             <span className="text-label-sm font-bold uppercase tracking-widest">
                                 HUD

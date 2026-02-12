@@ -36,7 +36,7 @@ export const Section: React.FC<{
 export const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: string }> = ({ icon, label, value }) => (
     <div className="md3-surface rounded-xl sc-bordered p-3 flex flex-col items-center gap-0.5">
         <span className="text-md-sys-on-surface/60">{icon}</span>
-        <span className="text-label-xs font-semibold text-md-sys-on-surface/50">{label}</span>
+        <span className="text-label-xs font-semibold text-md-sys-on-surface/60">{label}</span>
         <span className="text-body font-bold text-md-sys-on-surface">{value}</span>
     </div>
 );
@@ -59,7 +59,7 @@ export const EditableStatCard: React.FC<{
             onClick={() => { if (!editing) { setEditing(true); setDraft(value === '--' ? '' : value); } }}
         >
             <span className="text-md-sys-on-surface/60">{icon}</span>
-            <span className="text-label-xs font-semibold text-md-sys-on-surface/50">{label}</span>
+            <span className="text-label-xs font-semibold text-md-sys-on-surface/60">{label}</span>
             {editing ? (
                 <input
                     type={type || 'text'}
@@ -109,7 +109,7 @@ export const ModifierAdder: React.FC<{ existing: string[]; onAdd: (mod: string) 
                         {m}
                     </button>
                 ))}
-                {available.length === 0 && <span className="text-label-xs opacity-30 text-center py-1">No modifiers available</span>}
+                {available.length === 0 && <span className="text-label-xs opacity-40 text-center py-1">No modifiers available</span>}
             </div>
         </div>
     );
@@ -133,10 +133,10 @@ export const KillAdder: React.FC<{ existingShips: string[]; onAdd: (ship: string
                     className="text-left text-label-sm px-1.5 py-0.5 rounded hover:bg-success-soft text-success transition-colors flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getShipColor(s) }} />
                     {s.replace(/ \(\d Player\)/, '')}
-                    {existingShips.includes(s) && <span className="opacity-30 ml-auto">+1</span>}
+                    {existingShips.includes(s) && <span className="opacity-40 ml-auto">+1</span>}
                 </button>
             ))}
-            <button onClick={() => setOpen(false)} className="text-label-xs opacity-30 hover:opacity-60 text-center mt-1">Cancel</button>
+            <button onClick={() => setOpen(false)} className="text-label-xs opacity-40 hover:opacity-60 text-center mt-1">Cancel</button>
         </div>
     );
 };

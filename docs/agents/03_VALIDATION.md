@@ -1305,3 +1305,90 @@ node scripts/security_negative_tests.cjs
 
 ### Verdict
 **PASS** — Phase 2 handler registration pattern in place; no IPC contract change. Debugger to run capture/submission/artifact regression per plan when convenient.
+
+---
+
+## Step 12 — Opacity Normalization pilot (Builder) (2026-02-13)
+
+- Date (UTC): 2026-02-13
+- Role: builder
+- Task: Pilot 3-tier text opacity normalization on one component (HistoryTable).
+
+### Changes
+- `src/components/HistoryTable.tsx`: `text-md-sys-on-surface/70` → `/60` (1); `text-md-sys-on-surface/20` → `/40` (1); `text-md-sys-on-surface/25` → `/40` (2). No bg/border or hover-state opacity changed.
+
+### Commands
+- `npm run build`: **PASS** (exit 0, built in 25.00s)
+- `npm test`: **PASS** (10 files, 88 tests, 0 failures)
+
+### Verdict
+**PASS** — Pilot complete. Step 12 IN_PROGRESS; 1/18 files done. Remaining 17 files per intake to be processed in follow-up.
+
+### Step 12 Opacity Normalization — Batch 2 (2026-02-13)
+- Task: 3-tier text opacity across next batch (AnalyticsShell, AnalyticsCard, PlayerHub, SmartCapturesPanel, IdMapper, SessionTimer, Wizard).
+- Edits: disabled:opacity-30/50 → disabled:opacity-disabled; opacity-30/50/70 → opacity-40 or opacity-60 per tier; placeholder:opacity-30 → placeholder:opacity-40. Hover/group-hover left unchanged.
+- Commands: `npm run build` PASS; `npx vitest run` 88 tests, 10 files PASS.
+- **PASS** — Step 12 progress; more files remaining for full 18-file goal.
+
+---
+
+## Step 12 — Opacity Normalization batch 2 (Builder) (2026-02-13)
+
+- Role: builder
+- Task: Continue 3-tier text opacity across more components.
+
+### Files changed (batch 2)
+- HistoryTable: placeholder/25→40, text/20→40
+- DevOCRPanel: disabled:opacity-50 → disabled:opacity-disabled (6)
+- MatchRecordingPage, OverlayView, SquadronPanel, Wizard: text /50 or /70 → /60
+- IdMapper: text-danger/70→/60
+- OCRReviewModal: text-white/50→/60
+
+### Commands
+- `npm run build`: **PASS** (13.19s)
+- `npm test`: **PASS** (10 files, 88 tests)
+
+### Verdict
+**PASS** — 8 files updated this batch. Step 12 IN_PROGRESS; ~8 unique component files normalized so far (remaining per intake to be done in follow-up).
+
+---
+
+## Step 12 — Opacity Normalization batch 3 (Builder) (2026-02-13)
+
+- Role: builder
+- Task: 3-tier text opacity (opacity-N and slash) across remaining components.
+
+### Files changed (batch 3)
+- SystemPulse: text/74,/90 → /60, full
+- ProView: text/75,/55 → /60
+- DevOCRPanel: opacity-70/80→60, opacity-50/30→40 (labels, scan results, details, recent captures)
+- Analytics (editorial): StreakTimeline, Synergy, VisualEssay, TimePattern, Social, PlacementDist, PeriodComparison, KillEfficiency, Environment — opacity-70→60; Environment opacity-30→40; VisualEssay icon opacity-30→40
+- TelemetryPanel: opacity-80/70→60, opacity-30→40
+- SmartCaptureWidgets: opacity-30→40 (3)
+- MatchRecordingPage: opacity-30/50→40 (multiple)
+- MissionPanel: placeholder:opacity-30→40 (3)
+- SimulatorPanel: disabled:opacity-30→opacity-disabled; opacity-70/50/30→60/40
+- Tutorial, ResetConfirmModal: opacity-80→60
+- DenseEditorialToggle: opacity-50/80→40/60
+
+### Commands
+- `npm run build`: **PASS** (12.04s)
+- `npm test`: **PASS** (10 files, 88 tests)
+
+### Verdict
+**PASS** — Batch 3 complete. Step 12 scope satisfied (25+ component files normalized to 3-tier). Ready to mark Step 12 COMPLETE.
+
+---
+
+## Step 12 — Debugger regression check (in progress)
+
+- Date (UTC): 2026-02-13 (current session)
+- Role: debugger
+- Scope: Step 12 (Opacity Normalization) IN_PROGRESS per plan; verify no regressions.
+
+### Commands
+- `npm run build`: **PASS** (15.96s)
+- `npm test`: **PASS** (10 files, 88 tests)
+
+### Verdict
+**PASS** — Build and test green with Step 12 in progress. Ready to re-run when builder completes remaining files.

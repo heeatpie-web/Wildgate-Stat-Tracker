@@ -37,7 +37,7 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
             {/* Editorial Summary */}
             {!dense && (
                 <div className="md3-card rounded-2xl p-6">
-                    <p className="text-body leading-relaxed opacity-70">{generateEnvironmentEditorial(matches)}</p>
+                    <p className="text-body leading-relaxed opacity-60">{generateEnvironmentEditorial(matches)}</p>
                 </div>
             )}
 
@@ -51,7 +51,7 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
                                 {d.impact >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                                 {d.impact >= 0 ? '+' : ''}{d.impact}%
                             </div>
-                            <div className="text-label-xs opacity-30 font-bold">vs avg WR</div>
+                            <div className="text-label-xs opacity-40 font-bold">vs avg WR</div>
                         </div>
                     ))}
                 </div>

@@ -144,10 +144,10 @@ export const ProView: React.FC<ProViewProps> = ({ matches, visualMode }) => {
                     <h2 className="text-xl md:text-2xl font-black tracking-tight leading-snug text-md-sys-on-surface">
                         {narrative.headline}
                     </h2>
-                    <div className="mt-4 space-y-4 text-body leading-relaxed text-md-sys-on-surface/75">
+                    <div className="mt-4 space-y-4 text-body leading-relaxed text-md-sys-on-surface/60">
                         {narrative.sections.map((s) => (
                             <div key={s.id} className="pb-4 border-b border-md-sys-outlineVariant/25 last:border-b-0 last:pb-0">
-                                <div className="text-label-sm font-black uppercase tracking-[0.18em] text-md-sys-on-surface/55">{s.title}</div>
+                                <div className="text-label-sm font-black uppercase tracking-[0.18em] text-md-sys-on-surface/60">{s.title}</div>
                                 <p className="mt-1">{s.body}</p>
                                 {s.metrics && s.metrics.length > 0 && (
                                     <div className="mt-2 flex flex-wrap gap-2">

@@ -24,7 +24,7 @@ export const KillEfficiencyView: React.FC<KillEfficiencyViewProps> = ({ data, vi
             {/* Editorial Summary */}
             {!dense && (
                 <div className="md3-card rounded-2xl p-6">
-                    <p className="text-body leading-relaxed opacity-70">{generateKillEfficiencyEditorial(data)}</p>
+                    <p className="text-body leading-relaxed opacity-60">{generateKillEfficiencyEditorial(data)}</p>
                 </div>
             )}
 

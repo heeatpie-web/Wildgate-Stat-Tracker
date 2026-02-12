@@ -17,7 +17,7 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logFeed, logStat
         <div className="fixed top-24 right-6 w-[400px] h-[600px] md3-card rounded-3xl shadow-2xl border border-md-sys-outline/20 flex flex-col overflow-hidden z-[5000] animate-slide-up mg-blur bg-md-sys-surface-container-high/90">
             {/* Improved Compact Header */}
             <div className="px-4 py-3 border-b border-md-sys-outline/10 flex justify-between items-center bg-md-sys-surface-container-lowest/50">
-                <span className="text-label-sm font-black uppercase tracking-tighter opacity-80 flex items-center gap-2 text-md-sys-on-surface">
+                <span className="text-label-sm font-black uppercase tracking-tighter opacity-60 flex items-center gap-2 text-md-sys-on-surface">
                     <Terminal size={14} className="text-md-sys-primary" />
                     Tactical Console
                 </span>
@@ -42,13 +42,13 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logFeed, logStat
 
                 <div className="grid grid-cols-2 gap-4">
                     <div className="flex justify-between items-center">
-                        <span className="text-label-xs font-black uppercase opacity-30">Buffer</span>
+                        <span className="text-label-xs font-black uppercase opacity-40">Buffer</span>
                         <span className="text-label-xs font-mono opacity-60">
                             {logStatus.size ? `${(logStatus.size / 1024).toFixed(1)} KB` : '0 KB'}
                         </span>
                     </div>
                     <div className="flex justify-between items-center">
-                        <span className="text-label-xs font-black uppercase opacity-30">Last Pulse</span>
+                        <span className="text-label-xs font-black uppercase opacity-40">Last Pulse</span>
                         <span className="text-label-xs font-mono opacity-60">
                             {logStatus.lastCheck ? new Date(logStatus.lastCheck).toLocaleTimeString([], { hour12: false }) : '--:--:--'}
                         </span>
@@ -86,9 +86,9 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logFeed, logStat
                                         <div className="w-1.5 h-1.5 rounded-full bg-md-sys-primary/50" />
                                         <span className="text-md-sys-primary font-black uppercase tracking-tighter">{entry.EventName || 'TELEMETRY_EVENT'}</span>
                                     </div>
-                                    <span className="opacity-30 text-label-xs font-mono">{new Date(entry.ClientTimestamp * 1000).toLocaleTimeString([], { hour12: false })}</span>
+                                    <span className="opacity-40 text-label-xs font-mono">{new Date(entry.ClientTimestamp * 1000).toLocaleTimeString([], { hour12: false })}</span>
                                 </div>
-                                <pre className="opacity-70 overflow-hidden text-ellipsis whitespace-pre-wrap leading-relaxed text-label-xs">
+                                <pre className="opacity-60 overflow-hidden text-ellipsis whitespace-pre-wrap leading-relaxed text-label-xs">
                                     {JSON.stringify(entry.Payload || entry, null, 2)}
                                 </pre>
                             </div>

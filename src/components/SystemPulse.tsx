@@ -132,8 +132,8 @@ const SystemPulse: React.FC = () => {
                     title={indicator.tooltip}
                     className={[
                         'system-pulse-chip h-7 px-2.5 rounded-xl inline-flex items-center gap-1.5 transition-colors text-label-sm uppercase tracking-[0.06em]',
-                        'bg-md-sys-surface-container-high/80 text-md-sys-on-surface/74',
-                        indicator.active ? 'bg-md-sys-surface-container-highest/92 text-md-sys-on-surface/90' : '',
+                        'bg-md-sys-surface-container-high/80 text-md-sys-on-surface/60',
+                        indicator.active ? 'bg-md-sys-surface-container-highest/92 text-md-sys-on-surface' : '',
                     ].join(' ')}
                 >
                     <span className={indicator.color}>{indicator.icon}</span>

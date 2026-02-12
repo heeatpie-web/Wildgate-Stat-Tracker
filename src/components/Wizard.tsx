@@ -159,12 +159,12 @@ export const Wizard: React.FC = () => {
                                         <div className="flex items-center w-full justify-between">
                                             <button
                                                 onClick={() => setKills({ ...kills, [shortName]: Math.max(0, currentVal - 1) })}
-                                                className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-md-sys-error/10 text-md-sys-on-surface/50 hover:text-md-sys-error transition-all"
+                                                className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-md-sys-error/10 text-md-sys-on-surface/60 hover:text-md-sys-error transition-all"
                                             >-</button>
                                             <span className="font-mono font-bold text-body">{currentVal}</span>
                                             <button
                                                 onClick={() => setKills({ ...kills, [shortName]: currentVal + 1 })}
-                                                className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-success/10 text-md-sys-on-surface/50 hover:text-success transition-all"
+                                                className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-success/10 text-md-sys-on-surface/60 hover:text-success transition-all"
                                             >+</button>
                                         </div>
                                     </div>
@@ -220,7 +220,7 @@ export const Wizard: React.FC = () => {
                                 </div>
                                 <input
                                     type="text"
-                                    className={`w-full ${inputBaseClass} py-3 text-body placeholder:opacity-30`}
+                                    className={`w-full ${inputBaseClass} py-3 text-body placeholder:opacity-40`}
                                     placeholder="Manual Pilot Search..."
                                     value={pendingKilledBy || ''}
                                     onChange={e => setPendingKilledBy(e.target.value)}
@@ -252,7 +252,7 @@ export const Wizard: React.FC = () => {
 
                 {/* Footer Cancel */}
                 <div className="p-4 flex justify-center border-t border-md-sys-outline/5">
-                    <button onClick={() => setShowWizard(null)} className="text-label-sm font-bold uppercase tracking-widest opacity-30 hover:opacity-100 transition-opacity">Abort Submission</button>
+                    <button onClick={() => setShowWizard(null)} className="text-label-sm font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-opacity">Abort Submission</button>
                 </div>
             </div>
 

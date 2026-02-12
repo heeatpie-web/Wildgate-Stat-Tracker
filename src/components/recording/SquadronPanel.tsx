@@ -64,7 +64,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
                 onClick={() => setActiveShip(s)}
                 className={`relative min-h-[32px] py-1.5 px-1.5 text-label-sm leading-tight text-center font-semibold transition-all whitespace-normal rounded-xl ${activeShip === s
                   ? 'md3-chip md3-chip--selected'
-                  : 'md3-chip text-md-sys-on-surface/70 hover:bg-md-sys-on-surface/5'
+                  : 'md3-chip text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
                   }`}
               >
                 {s.split('(')[0].trim()}
@@ -138,7 +138,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
             onClick={() => setActiveShip(s)}
             className={`relative min-h-[40px] py-2 px-2 md3-label leading-tight text-center font-semibold transition-all whitespace-normal justify-center ${activeShip === s
               ? 'md3-chip md3-chip--selected'
-              : 'md3-chip text-md-sys-on-surface/70 hover:bg-md-sys-on-surface/5'
+              : 'md3-chip text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
               }`}
           >
             {s.split('(')[0].trim()}

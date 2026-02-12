@@ -253,7 +253,7 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
                 <div className="text-label-sm font-bold uppercase opacity-60 leading-none mb-1">Session Record</div>
                 <div className="font-bold text-xl leading-none flex items-center gap-1">
                     <span className="text-md-sys-primary">{sessionWins}</span>
-                    <span className="opacity-30 text-body">/</span>
+                    <span className="opacity-40 text-body">/</span>
                     <span>{sessionMatches.length}</span>
                 </div>
             </div>

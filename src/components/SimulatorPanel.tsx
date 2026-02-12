@@ -228,7 +228,7 @@ const SimulatorPanel: React.FC = () => {
                             <button
                                 onClick={() => handleLoadArchive(selectedArchive)}
                                 disabled={!selectedArchive || loading}
-                                className="md3-btn-filled text-label-sm font-black uppercase tracking-wider disabled:opacity-30 font-sans"
+                                className="md3-btn-filled text-label-sm font-black uppercase tracking-wider disabled:opacity-disabled font-sans"
                             >
                                 {loading ? '...' : 'Load'}
                             </button>
@@ -240,7 +240,7 @@ const SimulatorPanel: React.FC = () => {
                         <button
                             onClick={loadLatestArchive}
                             disabled={loading || archiveFiles.length === 0}
-                            className="md3-btn-tonal text-label-sm font-black uppercase tracking-wider disabled:opacity-30 font-sans"
+                            className="md3-btn-tonal text-label-sm font-black uppercase tracking-wider disabled:opacity-disabled font-sans"
                         >
                             Load Latest
                         </button>
@@ -289,11 +289,11 @@ const SimulatorPanel: React.FC = () => {
                     </div>
 
                     <div className="bg-black/20 p-2 rounded font-mono text-label-sm h-24 overflow-y-auto">
-                        <div className="opacity-50 mb-1">Current Event: {progress}/{events.length}</div>
+                        <div className="opacity-40 mb-1">Current Event: {progress}/{events.length}</div>
                         {events[progress] ? (
                             <div className="text-md-sys-primary">{JSON.stringify(events[progress], null, 2)}</div>
                         ) : (
-                            <div className="opacity-30">Waiting...</div>
+                            <div className="opacity-40">Waiting...</div>
                         )}
                     </div>
                 </>

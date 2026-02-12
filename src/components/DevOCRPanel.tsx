@@ -388,11 +388,11 @@ const DevOCRPanel: React.FC = () => {
 
                     <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
                         <h3 className="font-bold mb-2">Retroactive Artifact Bundling</h3>
-                        <p className="text-label-sm opacity-70 mb-4">Scan the 'ocr-debug' folder for screenshots that match the timestamps of your existing match history. Useful if feature was added late.</p>
+                        <p className="text-label-sm opacity-60 mb-4">Scan the 'ocr-debug' folder for screenshots that match the timestamps of your existing match history. Useful if feature was added late.</p>
                         <button
                             onClick={runRetroactiveBundling}
                             disabled={loading}
-                            className="px-6 py-3 bg-md-sys-primary text-md-sys-on-primary rounded-lg font-bold disabled:opacity-50 hover:brightness-110 transition-all flex items-center justify-center w-full"
+                            className="px-6 py-3 bg-md-sys-primary text-md-sys-on-primary rounded-lg font-bold disabled:opacity-disabled hover:brightness-110 transition-all flex items-center justify-center w-full"
                         >
                             {loading ? 'Processing...' : 'Run Bundle Scan'}
                         </button>
@@ -401,11 +401,11 @@ const DevOCRPanel: React.FC = () => {
 
                     <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
                         <h3 className="font-bold mb-2">Telemetry Decoder</h3>
-                        <p className="text-label-sm opacity-70 mb-4">Convert the binary 'AccelByteTelemetryCache' file into a readable JSON file to verify raw game data.</p>
+                        <p className="text-label-sm opacity-60 mb-4">Convert the binary 'AccelByteTelemetryCache' file into a readable JSON file to verify raw game data.</p>
                         <button
                             onClick={runTelemetryDecode}
                             disabled={loading}
-                            className="px-6 py-3 bg-md-sys-surface3 text-md-sys-on-surface rounded-lg font-bold disabled:opacity-50 hover:brightness-110 transition-all flex items-center justify-center w-full"
+                            className="px-6 py-3 bg-md-sys-surface3 text-md-sys-on-surface rounded-lg font-bold disabled:opacity-disabled hover:brightness-110 transition-all flex items-center justify-center w-full"
                         >
                             {loading ? 'Processing...' : 'Decode Cache File'}
                         </button>
@@ -413,7 +413,7 @@ const DevOCRPanel: React.FC = () => {
 
                     <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
                         <h3 className="font-bold mb-2">Simulated Archive Cleanup</h3>
-                        <p className="text-label-sm opacity-70 mb-4">Clear all files in the 'telemetry_archive' folder. Use this to reset the simulator list.</p>
+                        <p className="text-label-sm opacity-60 mb-4">Clear all files in the 'telemetry_archive' folder. Use this to reset the simulator list.</p>
                         <button
                             onClick={async () => {
                                 if (window.confirm("Clear all archived telemetry files?")) {
@@ -433,7 +433,7 @@ const DevOCRPanel: React.FC = () => {
                                 }
                             }}
                             disabled={loading}
-                            className="px-6 py-3 bg-md-sys-error/10 text-md-sys-error border border-md-sys-error/20 rounded-lg font-bold disabled:opacity-50 hover:bg-md-sys-error hover:text-white transition-all flex items-center justify-center w-full"
+                            className="px-6 py-3 bg-md-sys-error/10 text-md-sys-error border border-md-sys-error/20 rounded-lg font-bold disabled:opacity-disabled hover:bg-md-sys-error hover:text-white transition-all flex items-center justify-center w-full"
                         >
                             {loading ? 'Processing...' : 'Clear All Archives'}
                         </button>
@@ -441,7 +441,7 @@ const DevOCRPanel: React.FC = () => {
 
                     <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
                         <h3 className="font-bold mb-2">OCR Preprocessed Image Cleanup</h3>
-                        <p className="text-label-sm opacity-70 mb-4">Clear preprocessed OCR images (keeps raw captures for ML training). Use this to free disk space.</p>
+                        <p className="text-label-sm opacity-60 mb-4">Clear preprocessed OCR images (keeps raw captures for ML training). Use this to free disk space.</p>
                         <button
                             onClick={async () => {
                                 if (window.confirm("Clear all preprocessed OCR images? Raw captures will be kept for ML training.")) {
@@ -461,7 +461,7 @@ const DevOCRPanel: React.FC = () => {
                                 }
                             }}
                             disabled={loading}
-                            className="px-6 py-3 bg-warning-soft text-warning border border-warning-soft rounded-lg font-bold disabled:opacity-50 hover:bg-warning hover:text-black transition-all flex items-center justify-center w-full"
+                            className="px-6 py-3 bg-warning-soft text-warning border border-warning-soft rounded-lg font-bold disabled:opacity-disabled hover:bg-warning hover:text-black transition-all flex items-center justify-center w-full"
                         >
                             {loading ? 'Processing...' : 'Clear Preprocessed Images'}
                         </button>
@@ -469,7 +469,7 @@ const DevOCRPanel: React.FC = () => {
 
                     <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
                         <h3 className="font-bold mb-2">ML Dataset Integration</h3>
-                        <p className="text-label-sm opacity-70 mb-4">Move current OCR captures to ML training dataset folder for YOLO labeling.</p>
+                        <p className="text-label-sm opacity-60 mb-4">Move current OCR captures to ML training dataset folder for YOLO labeling.</p>
                         <button
                             onClick={async () => {
                                 setLoading(true);
@@ -489,7 +489,7 @@ const DevOCRPanel: React.FC = () => {
                                 setLoading(false);
                             }}
                             disabled={loading}
-                            className="px-6 py-3 bg-info-soft text-info border border-info-soft rounded-lg font-bold disabled:opacity-50 hover:bg-info hover:text-white transition-all flex items-center justify-center w-full"
+                            className="px-6 py-3 bg-info-soft text-info border border-info-soft rounded-lg font-bold disabled:opacity-disabled hover:bg-info hover:text-white transition-all flex items-center justify-center w-full"
                         >
                             {loading ? 'Processing...' : 'Open OCR Captures Folder'}
                         </button>
@@ -623,7 +623,7 @@ const DevOCRPanel: React.FC = () => {
                                 <button
                                     onClick={runOCR}
                                     disabled={loading || !imageSrc}
-                                    className="p-4 bg-md-sys-primary text-md-sys-on-primary font-bold rounded-lg hover:brightness-110 disabled:opacity-50 shadow-lg shadow-md-sys-primary/20 text-lg"
+                                    className="p-4 bg-md-sys-primary text-md-sys-on-primary font-bold rounded-lg hover:brightness-110 disabled:opacity-disabled shadow-lg shadow-md-sys-primary/20 text-lg"
                                 >
                                     {loading ? 'Processing...' : `Run OCR (${ocrMode === 'both' ? 'Local+Cloud' : ocrMode === 'cloud' ? 'Cloud' : 'Local'})`}
                                 </button>
@@ -631,7 +631,7 @@ const DevOCRPanel: React.FC = () => {
                                 {/* Results Visualization */}
                                 <div className="flex-1 bg-md-sys-surface2 rounded-xl border border-md-sys-outline/10 flex flex-col min-h-0 overflow-hidden">
                                     <div className="p-3 border-b border-md-sys-outline/10 flex justify-between items-center bg-md-sys-surface3/50 shrink-0">
-                                        <span className="font-bold text-label-sm uppercase opacity-70">Scan Results</span>
+                                        <span className="font-bold text-label-sm uppercase opacity-60">Scan Results</span>
                                         {status && <span className="text-label-sm bg-md-sys-primary/20 text-md-sys-primary px-2 py-0.5 rounded font-bold animate-pulse">{status}</span>}
                                     </div>
 
@@ -656,7 +656,7 @@ const DevOCRPanel: React.FC = () => {
                                                 {ocrResult.mergeStats && (
                                                     <div className="bg-info-soft border border-info-soft p-2 rounded text-label-sm font-mono">
                                                         <div className="font-bold text-info mb-1">Merge Stats</div>
-                                                        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 opacity-80">
+                                                        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 opacity-60">
                                                             <span>Total words:</span><span>{ocrResult.mergeStats.total}</span>
                                                             <span>Agreed:</span><span className="text-success">{ocrResult.mergeStats.agreed}</span>
                                                             <span>Cloud preferred:</span><span className="text-info">{ocrResult.mergeStats.cloudPreferred}</span>
@@ -671,10 +671,10 @@ const DevOCRPanel: React.FC = () => {
                                                 {/* Ship Info */}
                                                 {ocrResult.playerShip && (
                                                     <div className="flex flex-col gap-1">
-                                                        <span className="text-label-sm font-bold uppercase opacity-50">Detected Ship</span>
+                                                        <span className="text-label-sm font-bold uppercase opacity-40">Detected Ship</span>
                                                         <div className="bg-md-sys-surface1 p-2 rounded text-label-sm">
                                                             <span className="font-bold">{ocrResult.playerShip.shipType}</span>
-                                                            <span className="opacity-50 ml-2">({Math.round(ocrResult.playerShip.confidence)}%)</span>
+                                                            <span className="opacity-40 ml-2">({Math.round(ocrResult.playerShip.confidence)}%)</span>
                                                         </div>
                                                     </div>
                                                 )}
@@ -686,7 +686,7 @@ const DevOCRPanel: React.FC = () => {
                                                         <div className="flex flex-wrap gap-1">
                                                             {ocrResult.reachModifiers.map((mod, idx) => (
                                                                 <span key={idx} className="bg-info-soft text-info px-2 py-0.5 rounded text-label-sm font-bold">
-                                                                    {mod.name} <span className="opacity-50">({Math.round(mod.confidence)}%)</span>
+                                                                    {mod.name} <span className="opacity-40">({Math.round(mod.confidence)}%)</span>
                                                                 </span>
                                                             ))}
                                                         </div>
@@ -696,7 +696,7 @@ const DevOCRPanel: React.FC = () => {
                                                 {/* Teammates */}
                                                 {ocrResult.teammates.length > 0 && (
                                                     <div className="flex flex-col gap-1">
-                                                        <span className="text-label-sm font-bold uppercase opacity-50">Teammates ({ocrResult.teammates.length})</span>
+                                                        <span className="text-label-sm font-bold uppercase opacity-40">Teammates ({ocrResult.teammates.length})</span>
                                                         {ocrResult.teammates.map((t, idx) => (
                                                             <div key={idx} className="bg-md-sys-surface1 p-2 rounded flex items-center gap-2">
                                                                 <div className="w-2 h-2 rounded-full bg-info"></div>
@@ -710,7 +710,7 @@ const DevOCRPanel: React.FC = () => {
                                                 {/* Opponent Teams */}
                                                 {ocrResult.opponentTeams.length > 0 && (
                                                     <div className="flex flex-col gap-1">
-                                                        <span className="text-label-sm font-bold uppercase opacity-50">Opponent Teams ({ocrResult.opponentTeams.length})</span>
+                                                        <span className="text-label-sm font-bold uppercase opacity-40">Opponent Teams ({ocrResult.opponentTeams.length})</span>
                                                         {ocrResult.opponentTeams.map((team, idx) => {
                                                             const colorMap: Record<string, string> = {
                                                                 'red': 'bg-red-500', 'orange': 'bg-orange-500',
@@ -726,7 +726,7 @@ const DevOCRPanel: React.FC = () => {
                                                                     </div>
                                                                     <div className="pl-5 flex flex-col gap-0.5">
                                                                         {team.players.map((p, pIdx) => (
-                                                                            <span key={pIdx} className="text-label-sm opacity-70">{p.name}</span>
+                                                                            <span key={pIdx} className="text-label-sm opacity-60">{p.name}</span>
                                                                         ))}
                                                                     </div>
                                                                 </div>
@@ -764,7 +764,7 @@ const DevOCRPanel: React.FC = () => {
 
                                 {/* Recent Files Sidebar */}
                                 <div className="h-48 bg-md-sys-surface2 rounded-xl p-2 flex flex-col shrink-0 border border-md-sys-outline/10 overflow-hidden">
-                                    <h3 className="text-label-sm font-bold uppercase opacity-50 px-2 py-1">Recent Captures</h3>
+                                    <h3 className="text-label-sm font-bold uppercase opacity-40 px-2 py-1">Recent Captures</h3>
                                     <div className="overflow-auto flex-1 flex flex-col gap-1">
                                         {recentFiles.map((f, i) => {
                                             const isRaw = f.name.includes('raw_capture');
@@ -778,7 +778,7 @@ const DevOCRPanel: React.FC = () => {
                                                 <button
                                                     key={i}
                                                     onClick={() => loadFile(f.path)}
-                                                    className={`text-left text-label-sm p-2 rounded truncate w-full flex items-center gap-2 transition-all ${isActive ? 'ring-1 ring-md-sys-primary bg-md-sys-primary/5' : ''} ${isRaw || isMatch ? 'bg-md-sys-primary/10 hover:bg-md-sys-primary/20 border border-md-sys-primary/20' : 'hover:bg-md-sys-surface3 opacity-70'}`}
+                                                    className={`text-left text-label-sm p-2 rounded truncate w-full flex items-center gap-2 transition-all ${isActive ? 'ring-1 ring-md-sys-primary bg-md-sys-primary/5' : ''} ${isRaw || isMatch ? 'bg-md-sys-primary/10 hover:bg-md-sys-primary/20 border border-md-sys-primary/20' : 'hover:bg-md-sys-surface3 opacity-60'}`}
                                                     title={f.name}
                                                 >
                                                     <span className={`block w-2 h-2 rounded-full shrink-0 ${isRaw ? 'bg-md-sys-primary' : 'bg-md-sys-tertiary'}`}></span>
@@ -786,12 +786,12 @@ const DevOCRPanel: React.FC = () => {
                                                         <span className="truncate font-bold">
                                                             {isMatch ? f.name.split('/')[0] : (isRaw ? 'Raw Capture' : f.name)}
                                                         </span>
-                                                        <span className="opacity-50 text-label-xs truncate">{displayTime}</span>
+                                                        <span className="opacity-40 text-label-xs truncate">{displayTime}</span>
                                                     </div>
                                                 </button>
                                             );
                                         })}
-                                        {recentFiles.length === 0 && <div className="text-center opacity-30 text-label-sm p-4">No recent captures</div>}
+                                        {recentFiles.length === 0 && <div className="text-center opacity-40 text-label-sm p-4">No recent captures</div>}
                                     </div>
                                 </div>
                             </div>

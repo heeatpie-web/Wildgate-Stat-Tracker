@@ -144,7 +144,7 @@ export const AnalyticsShell: React.FC = () => {
                                     setExporting(false);
                                 }}
                                 disabled={exporting || data.filteredMatches.length === 0}
-                                className="md3-icon-btn text-md-sys-on-surface/60 hover:text-md-sys-primary disabled:opacity-30 transition-colors"
+                                className="md3-icon-btn text-md-sys-on-surface/60 hover:text-md-sys-primary disabled:opacity-disabled transition-colors"
                                 title="Export analytics as PNG"
                             >
                                 <Download size={16} className={exporting ? 'animate-pulse' : ''} />

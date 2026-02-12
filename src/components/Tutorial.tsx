@@ -272,7 +272,7 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
                     </button>
                 </div>
 
-                <p className="text-body opacity-80 leading-relaxed mt-2">{step.description}</p>
+                <p className="text-body opacity-60 leading-relaxed mt-2">{step.description}</p>
 
                 <div className="flex gap-2 mt-4">
                     <button

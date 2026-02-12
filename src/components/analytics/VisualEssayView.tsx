@@ -21,7 +21,7 @@ interface VisualEssayViewProps {
 const TrendIcon: React.FC<{ trend?: 'up' | 'down' | 'stable' }> = ({ trend }) => {
     if (trend === 'up') return <TrendingUp size={12} className="text-green-400" />;
     if (trend === 'down') return <TrendingDown size={12} className="text-red-400" />;
-    return <Minus size={12} className="opacity-30" />;
+    return <Minus size={12} className="opacity-40" />;
 };
 
 const SectionCard: React.FC<{ section: EssaySection; index: number }> = ({ section, index }) => (
@@ -33,7 +33,7 @@ const SectionCard: React.FC<{ section: EssaySection; index: number }> = ({ secti
             <h3 className="text-body font-bold uppercase tracking-wide">{section.title}</h3>
         </div>
 
-        <p className="text-body leading-relaxed opacity-70">{section.body}</p>
+        <p className="text-body leading-relaxed opacity-60">{section.body}</p>
 
         {section.metrics && section.metrics.length > 0 && (
             <div className="flex gap-3 pt-2 border-t border-md-sys-outlineVariant/30">

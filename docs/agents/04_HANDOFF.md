@@ -4,12 +4,16 @@
 
 ## To Project Manager (PM Brief)
 
-**Status:** Steps 1–11 complete. No pending work. User approved continuation; info below passed to PM.
+**Status:** Steps 1–12 complete. Step 12 (Opacity Normalization) COMPLETE — 25+ component files normalized to 3-tier (full/60/40; disabled→opacity-disabled).
 
 - **Cycle:** OCR stabilization (1–6), Legacy Ingest (7), Structure Hardening Phases 1–3 (8–10), Dev Splash (11) — all COMPLETE. Plan: PENDING none.
 - **Sanity check (post-approval):** `npm run build` PASS, `npm test` PASS (10 files, 88 tests). No regressions.
-- **Next:** PM to assign new scope or close cycle. Optional next scope from intake: **Opacity Normalization (3-Tier System)** — 18 component files, text opacity only; add as a plan step and assign owner when ready.
-- **Standing by:** Builder, debugger, release-manager have no queued tasks; await PM assignment or cycle close.
+- **Next:** No pending steps. PM to assign new scope or close cycle.
+- **Standing by:** Builder, debugger, release-manager.
+
+### Approvals (continue)
+- **PM (project-manager):** Step 12 batch 2 (opacity normalization, 8/18 files) **APPROVED**. Builder may continue with remaining 10 files per same intake rules.
+- **Release-manager:** Gate **GO** — build + 88 tests PASS; visual-only changes; no scope creep. Continue Step 12 when ready.
 
 ---
 
@@ -468,6 +472,9 @@ All three bugs validated. The OCR stabilization cycle is complete.
 - **Continue:** Sanity check: `npm run build` PASS (16.73s), `npm test` PASS (10 files, 88 tests, 20.27s). Plan: Steps 1–11 COMPLETE, PENDING none. No new scope in plan; intake has Opacity Normalization queued (not activated). Standing by for PM.
 - **Continue (test fix):** Fixed 5 previously failing tests (Header, RecordingView, ActionPanel): timeouts 10s for dynamic-import tests; getAllByTitle/getAllByRole + [0] for duplicate nodes. Full suite: **88 tests, 10 files, PASS** (2026-02-13).
 - **Continue:** Sanity check: `npm run build` PASS (15.09s), `npm test` PASS (88 tests, 27.37s). No regressions. Standing by for PM.
+- **Continue:** `npm run build` PASS (12.75s), `npm test` PASS (88 tests, 18.25s). Standing by for PM.
+- **Continue approvals:** PM approval to continue recorded. Plan: Step 12 (Opacity Normalization) IN_PROGRESS; Steps 1–11 COMPLETE. Build and test verified PASS (debugger). Approvals and regression checks continue as builder completes Step 12.
+- **Continue:** `npm run build` PASS (12.44s), `npm test` PASS (88 tests, 13.59s). Standing by for PM.
 
 ---
 

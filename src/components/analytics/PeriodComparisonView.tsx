@@ -52,7 +52,7 @@ export const PeriodComparisonView: React.FC<PeriodComparisonViewProps> = ({ data
             {/* Editorial Summary */}
             {!dense && (
                 <div className="md3-card rounded-2xl p-6">
-                    <p className="text-body leading-relaxed opacity-70">{generatePeriodComparisonEditorial(data)}</p>
+                    <p className="text-body leading-relaxed opacity-60">{generatePeriodComparisonEditorial(data)}</p>
                 </div>
             )}
 

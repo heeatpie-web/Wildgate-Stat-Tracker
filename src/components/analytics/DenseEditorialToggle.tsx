@@ -31,7 +31,7 @@ export const InlineNarrativeToggle: React.FC<{ visualMode: VisualMode; onChange:
     return (
         <button
             onClick={() => onChange(isEditorial ? 'dense' : 'editorial')}
-            className={`md3-chip flex items-center gap-1.5 px-3 py-1.5 text-label-sm font-black uppercase transition-all ${isEditorial ? 'md3-chip--selected' : 'md3-surface-high opacity-50 hover:opacity-80'}`}
+            className={`md3-chip flex items-center gap-1.5 px-3 py-1.5 text-label-sm font-black uppercase transition-all ${isEditorial ? 'md3-chip--selected' : 'md3-surface-high opacity-40 hover:opacity-60'}`}
         >
             <Newspaper size={11} />
             {isEditorial ? 'Narrative On' : 'Narrative'}

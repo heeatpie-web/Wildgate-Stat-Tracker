@@ -36,7 +36,7 @@ export const AnalyticsCard: React.FC<AnalyticsCardProps> = ({ title, icon, child
                     <span className="opacity-60">{icon}</span>
                     <span>{title}</span>
                 </div>
-                {onExpand && <ChevronRight size={dense ? 12 : 14} className="opacity-30 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300" />}
+                {onExpand && <ChevronRight size={dense ? 12 : 14} className="opacity-40 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300" />}
             </div>
 
             <div className="relative z-10">

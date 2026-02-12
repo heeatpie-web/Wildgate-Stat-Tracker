@@ -24,7 +24,7 @@ export const PlacementDistView: React.FC<PlacementDistViewProps> = ({ data, visu
             {/* Editorial Summary */}
             {!dense && (
                 <div className="md3-card rounded-2xl p-6">
-                    <p className="text-body leading-relaxed opacity-70">{generatePlacementEditorial(data)}</p>
+                    <p className="text-body leading-relaxed opacity-60">{generatePlacementEditorial(data)}</p>
                 </div>
             )}
 

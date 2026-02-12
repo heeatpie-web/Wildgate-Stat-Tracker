@@ -1,5 +1,68 @@
 # 02 Execution Log
 
+## Peer Message Log — Continue approvals (release-manager)
+- Date (UTC): 2026-02-13
+- Role: release-manager
+- Action: Reconfirmed approvals per user request "continue approvals."
+- Outcome: PM business signoff APPROVED; Steps 1–11 COMPLETE, all release gates GO. Step 12 (Opacity Normalization) IN_PROGRESS; Step 12 release gate will be added when builder/debugger evidence is in 03_VALIDATION.md. Logged in 04_HANDOFF.md under "Continue If Approved."
+
+## Change Entry — Step 12: Opacity Normalization batch 2 (builder)
+- Date (UTC): 2026-02-13
+- Owner: builder
+- Task: Step 12 — Opacity Normalization (3-tier); continue with next files.
+- Files changed:
+  - `src/components/HistoryTable.tsx` — placeholder/25→40, text/20→40.
+  - `src/components/DevOCRPanel.tsx` — disabled:opacity-50 → disabled:opacity-disabled (6).
+  - `src/components/MatchRecordingPage.tsx` — text-md-sys-on-surface/50→/60.
+  - `src/components/OverlayView.tsx` — text/50→/60 (minimize, close), text/70→/60.
+  - `src/components/recording/SquadronPanel.tsx` — text-md-sys-on-surface/70→/60 (2).
+  - `src/components/Wizard.tsx` — text-md-sys-on-surface/50→/60 (2).
+  - `src/components/IdMapper.tsx` — text-danger/70→/60.
+  - `src/components/ocr/OCRReviewModal.tsx` — text-white/50→/60.
+- Why changed:
+  - Continue Step 12; 3-tier text opacity and disabled normalization per intake.
+- Risk/regression notes:
+  - Build and npm test PASS (88/88). 8 files this batch; cumulative 8+ files touched for Step 12.
+
+## Change Entry — Step 12: Opacity Normalization batch 3 (builder)
+- Date (UTC): 2026-02-13
+- Owner: builder
+- Task: Step 12 — 3-tier opacity; batch 3 (opacity-N classes and slash values).
+- Files changed: SystemPulse, ProView, DevOCRPanel (opacity-70/80/50/30→60/40), StreakTimelineView, SynergyView, VisualEssayView, TimePatternView, SocialView, PlacementDistView, PeriodComparisonView, KillEfficiencyView, EnvironmentView, TelemetryPanel, SmartCaptureWidgets, MatchRecordingPage, MissionPanel (placeholder:opacity-30→40), SimulatorPanel (disabled:opacity-30→opacity-disabled; opacity-50/30/70→40/60), Tutorial, ResetConfirmModal, DenseEditorialToggle.
+- Risk/regression notes: Build and npm test PASS (88/88). Step 12 scope satisfied (25+ component files normalized).
+
+## Change Entry — Step 12: Opacity Normalization batch 2 (builder) (2026-02-13)
+- Date (UTC): 2026-02-13
+- Owner: builder
+- Task: Step 12 — Opacity Normalization (3-tier); next batch of component files.
+- Files changed:
+  - `src/components/analytics/AnalyticsShell.tsx` — disabled:opacity-30 → disabled:opacity-disabled (1).
+  - `src/components/analytics/AnalyticsCard.tsx` — opacity-30 → opacity-40 on chevron (1).
+  - `src/components/PlayerHub.tsx` — text/20 → /40, disabled:opacity-30 → disabled:opacity-disabled (2).
+  - `src/components/SmartCapturesPanel.tsx` — opacity-30 → opacity-40 in three places (3).
+  - `src/components/IdMapper.tsx` — opacity-50/70 → 60 or 40, disabled:opacity-30 → disabled:opacity-disabled (6).
+  - `src/components/SessionTimer.tsx` — opacity-30 → opacity-40 (1).
+  - `src/components/Wizard.tsx` — placeholder:opacity-30 → placeholder:opacity-40, opacity-30 → opacity-40 (2).
+- Why changed:
+  - Next item: continue Step 12 (18 files); only text-related opacity, hover/group-hover unchanged per intake.
+- Risk/regression notes:
+  - Visual only; npm run build PASS, npm test 88/88 PASS.
+
+## Change Entry — Step 12: Opacity Normalization pilot (builder)
+- Date (UTC): 2026-02-13
+- Owner: builder
+- Task: Step 12 — Opacity Normalization (3-tier); pilot on one file per intake.
+- Files changed:
+  - `docs/agents/01_PLAN.md` — added Step 12 (IN_PROGRESS).
+  - `src/components/HistoryTable.tsx` — text opacity normalized to 3-tier: `text-md-sys-on-surface/70` → `/60`, `/20` and `/25` → `/40` (4 edits).
+- Why changed:
+  - Continue: PM optional scope from handoff; intake goal is 18 files, 3-tier (full / 60 / 40; disabled → opacity-disabled).
+- What changed:
+  - Plan: Step 12 added. Active step IN_PROGRESS.
+  - HistoryTable: only TEXT-related opacity; left bg/blur (opacity-10, opacity-15), hover (opacity-0/100), bar (opacity-70) unchanged per constraints.
+- Risk/regression notes:
+  - Visual only; build and npm test PASS (88/88). Remaining 17 files to be processed in follow-up batches.
+
 ## Change Entry — Test suite fix: 5 previously failing tests (builder) (2026-02-13)
 - Date (UTC): 2026-02-13
 - Owner: builder

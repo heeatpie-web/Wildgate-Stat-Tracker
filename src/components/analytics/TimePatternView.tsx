@@ -28,7 +28,7 @@ export const TimePatternView: React.FC<TimePatternViewProps> = ({ data, visualMo
             {/* Editorial Summary */}
             {!dense && (
                 <div className="md3-card rounded-2xl p-6">
-                    <p className="text-body leading-relaxed opacity-70">{generateTimePatternEditorial(data)}</p>
+                    <p className="text-body leading-relaxed opacity-60">{generateTimePatternEditorial(data)}</p>
                 </div>
             )}
 

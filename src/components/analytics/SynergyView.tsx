@@ -51,7 +51,7 @@ export const SynergyView: React.FC<SynergyViewProps> = ({ synergyMatrix, visualM
             {/* Editorial Summary */}
             {!dense && (
                 <div className="md3-card rounded-2xl p-6">
-                    <p className="text-body leading-relaxed opacity-70">{generateSynergyEditorial(synergyMatrix)}</p>
+                    <p className="text-body leading-relaxed opacity-60">{generateSynergyEditorial(synergyMatrix)}</p>
                 </div>
             )}
 

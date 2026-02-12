@@ -294,7 +294,7 @@ const PlayerHub: React.FC = () => {
                                 {pilot.note && (
                                     <span className="w-1.5 h-1.5 rounded-full bg-md-sys-primary/40 shrink-0" title="Has note" />
                                 )}
-                                <ChevronRight size={14} className="text-md-sys-on-surface/20 group-hover:text-md-sys-on-surface/40 shrink-0" />
+                                <ChevronRight size={14} className="text-md-sys-on-surface/40 group-hover:text-md-sys-on-surface/40 shrink-0" />
                             </button>
                             ))}
                         </div>
@@ -447,7 +447,7 @@ const PlayerHub: React.FC = () => {
                                     <button
                                         onClick={handleMerge}
                                         disabled={!mergeKeepName || mergeTarget === selected.name}
-                                        className="px-4 py-2 bg-warning text-black rounded-xl text-label-sm font-bold disabled:opacity-30"
+                                        className="px-4 py-2 bg-warning text-black rounded-xl text-label-sm font-bold disabled:opacity-disabled"
                                     >
                                         Merge
                                     </button>

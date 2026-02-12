@@ -152,7 +152,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                         placeholder="00"
                                         value={timeMin}
                                         onChange={(e) => setTimeMin(e.target.value)}
-                                        className={`${accordionMode ? 'w-8 text-base' : 'w-12 text-lg'} font-bold tracking-tight outline-none text-center rounded-control py-0.5 placeholder:opacity-30 pointer-events-auto
+                                        className={`${accordionMode ? 'w-8 text-base' : 'w-12 text-lg'} font-bold tracking-tight outline-none text-center rounded-control py-0.5 placeholder:opacity-40 pointer-events-auto
                                             ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'md3-textfield--compact text-md-sys-on-surface'}
                                             `}
                                     />
@@ -162,7 +162,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                         placeholder="00"
                                         value={timeSec}
                                         onChange={(e) => setTimeSec(e.target.value)}
-                                        className={`${accordionMode ? 'w-8 text-base' : 'w-12 text-lg'} font-bold tracking-tight outline-none text-center rounded-control py-0.5 placeholder:opacity-30 pointer-events-auto
+                                        className={`${accordionMode ? 'w-8 text-base' : 'w-12 text-lg'} font-bold tracking-tight outline-none text-center rounded-control py-0.5 placeholder:opacity-40 pointer-events-auto
                                             ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'md3-textfield--compact text-md-sys-on-surface'}
                                             `}
                                     />
@@ -181,7 +181,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                         maxLength={4}
                                         value={damageTaken}
                                         onChange={(e) => setDamageTaken(e.target.value.replace(/[^0-9]/g, ''))}
-                                        className={`${accordionMode ? 'w-14 text-base' : 'w-20 text-lg'} font-bold outline-none text-center rounded-control py-0.5 placeholder:opacity-30 pointer-events-auto
+                                        className={`${accordionMode ? 'w-14 text-base' : 'w-20 text-lg'} font-bold outline-none text-center rounded-control py-0.5 placeholder:opacity-40 pointer-events-auto
                                             ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'md3-textfield--compact text-md-sys-on-surface'}
                                             `}
                                     />
