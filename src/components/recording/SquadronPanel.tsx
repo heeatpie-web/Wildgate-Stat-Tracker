@@ -15,7 +15,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
     const cls =
       source === 'telemetry'
         ? 'text-info bg-info/15'
-        : 'text-sky-300 bg-sky-500/15';
+        : 'text-info bg-info-soft';
     const srcLabel = source === 'telemetry' ? 'Telemetry' : 'OCR';
     return (
       <span className={`md3-chip md3-label ${cls}`}>
@@ -25,13 +25,9 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
   };
 
   if (density === 'compact') {
-    const ships = SHIPS.map(s => ({ value: s, label: s.split('(')[0].trim() }));
-    const heroes = [...CHARACTERS].sort().map(c => ({ value: c, label: c }));
-    const shipValue = (activeShip && SHIPS.includes(activeShip)) ? activeShip : (ships[0]?.value || '');
-    const heroValue = (activeHero && heroes.some(h => h.value === activeHero)) ? activeHero : (heroes[0]?.value || '');
 
     return (
-      <div className="md3-card p-3 flex flex-col gap-3">
+      <div className="md3-card p-3 flex flex-col gap-3 mg-surface shadow-lg">
         <span className="md3-title flex items-center gap-2 text-md-sys-on-surface">
           <span className="w-8 h-8 rounded-xl bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer flex items-center justify-center">
             <Rocket size={14} />
@@ -44,57 +40,69 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
         </span>
 
         {(telemetryDetectedShip && shipSource !== 'telemetry') && (
-          <div className="text-[10px] font-semibold text-md-sys-on-surface/55">
+          <div className="text-label-sm font-semibold text-md-sys-on-surface/55">
             <span className="text-info font-black uppercase tracking-wide mr-2">Telemetry</span>
             Detected ship: <span className="font-black">{telemetryDetectedShip.split('(')[0].trim()}</span>
             {activeShip && telemetryDetectedShip !== activeShip ? <span className="opacity-60"> (manual override)</span> : null}
           </div>
         )}
         {(telemetryDetectedHero && heroSource !== 'telemetry') && (
-          <div className="text-[10px] font-semibold text-md-sys-on-surface/55">
+          <div className="text-label-sm font-semibold text-md-sys-on-surface/55">
             <span className="text-info font-black uppercase tracking-wide mr-2">Telemetry</span>
             Detected prospector: <span className="font-black">{telemetryDetectedHero}</span>
             {activeHero && telemetryDetectedHero !== activeHero ? <span className="opacity-60"> (manual override)</span> : null}
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-2">
-          <label className="text-[10px] font-semibold text-md-sys-on-surface/60 flex items-center">
-            Ship
-          </label>
-          <select
-            value={shipValue}
-            onChange={(e) => setActiveShip(e.target.value)}
-            className="h-9 md3-surface rounded-xl px-3 text-xs font-semibold text-md-sys-on-surface/80 outline-none border border-md-sys-outline/10 focus:ring-2 focus:ring-md-sys-primary/30"
-          >
-            {ships.map(s => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
+        {/* Ship Pill Buttons */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-label-sm font-semibold text-md-sys-on-surface/60">Ship</span>
+          <div className="grid grid-cols-2 gap-1.5">
+            {SHIPS.map(s => (
+              <button
+                key={s}
+                onClick={() => setActiveShip(s)}
+                className={`relative min-h-[32px] py-1.5 px-1.5 text-label-sm leading-tight text-center font-semibold transition-all whitespace-normal rounded-xl ${activeShip === s
+                  ? 'md3-chip md3-chip--selected'
+                  : 'md3-chip text-md-sys-on-surface/70 hover:bg-md-sys-on-surface/5'
+                  }`}
+              >
+                {s.split('(')[0].trim()}
+                {telemetryDetectedShip === s && (
+                  <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-info" title="Detected from telemetry" />
+                )}
+              </button>
             ))}
-          </select>
+          </div>
+        </div>
 
-          <label className="text-[10px] font-semibold text-md-sys-on-surface/60 flex items-center">
-            Prospector
-          </label>
-          <select
-            value={heroValue}
-            onChange={(e) => setActiveHero(e.target.value)}
-            className="h-9 md3-surface rounded-xl px-3 text-xs font-semibold text-md-sys-on-surface/80 outline-none border border-md-sys-outline/10 focus:ring-2 focus:ring-md-sys-primary/30"
-          >
-            {heroes.map(h => (
-              <option key={h.value} value={h.value}>
-                {h.label}
-              </option>
+        {/* Prospector Pill Buttons */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-label-sm font-semibold text-md-sys-on-surface/60">Prospector</span>
+          <div className="grid grid-cols-4 gap-1.5">
+            {[...CHARACTERS].sort().map(c => (
+              <button
+                key={c}
+                onClick={() => setActiveHero(c)}
+                className={`relative min-h-[28px] py-1 px-1 text-label-sm leading-tight text-center font-semibold transition-all whitespace-normal rounded-xl ${activeHero === c
+                  ? 'md3-chip md3-chip--selected'
+                  : 'md3-chip text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
+                  }`}
+              >
+                {c}
+                {telemetryDetectedHero === c && (
+                  <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-info" title="Detected from telemetry" />
+                )}
+              </button>
             ))}
-          </select>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="md3-card p-4 flex flex-col gap-4">
+    <div className="md3-card p-4 flex flex-col gap-4 mg-surface shadow-lg" style={{ backgroundImage: 'radial-gradient(circle at top right, rgba(56,189,248,0.05), transparent 40%)' }}>
       {/* Header */}
       <span className="md3-title flex items-center gap-2 text-md-sys-on-surface">
         <span className="w-8 h-8 rounded-xl bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer flex items-center justify-center">
@@ -108,14 +116,14 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
       </span>
 
       {(telemetryDetectedShip && shipSource !== 'telemetry') && (
-        <div className="text-[10px] font-semibold text-md-sys-on-surface/55">
+        <div className="text-label-sm font-semibold text-md-sys-on-surface/55">
           <span className="text-info font-black uppercase tracking-wide mr-2">Telemetry</span>
           Detected ship: <span className="font-black">{telemetryDetectedShip.split('(')[0].trim()}</span>
           {activeShip && telemetryDetectedShip !== activeShip ? <span className="opacity-60"> (manual override)</span> : null}
         </div>
       )}
       {(telemetryDetectedHero && heroSource !== 'telemetry') && (
-        <div className="text-[10px] font-semibold text-md-sys-on-surface/55">
+        <div className="text-label-sm font-semibold text-md-sys-on-surface/55">
           <span className="text-info font-black uppercase tracking-wide mr-2">Telemetry</span>
           Detected prospector: <span className="font-black">{telemetryDetectedHero}</span>
           {activeHero && telemetryDetectedHero !== activeHero ? <span className="opacity-60"> (manual override)</span> : null}
@@ -125,14 +133,14 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
       {/* Ship Grid */}
       <div className="grid grid-cols-2 gap-2">
         {SHIPS.map(s => (
-            <button
-              key={s}
-              onClick={() => setActiveShip(s)}
-              className={`relative min-h-[40px] py-2 px-2 md3-label leading-tight text-center font-semibold transition-all whitespace-normal justify-center ${activeShip === s
-                ? 'md3-chip md3-chip--selected'
-                : 'md3-chip text-md-sys-on-surface/70 hover:bg-md-sys-on-surface/5'
-                }`}
-            >
+          <button
+            key={s}
+            onClick={() => setActiveShip(s)}
+            className={`relative min-h-[40px] py-2 px-2 md3-label leading-tight text-center font-semibold transition-all whitespace-normal justify-center ${activeShip === s
+              ? 'md3-chip md3-chip--selected'
+              : 'md3-chip text-md-sys-on-surface/70 hover:bg-md-sys-on-surface/5'
+              }`}
+          >
             {s.split('(')[0].trim()}
             {telemetryDetectedShip === s && (
               <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-info" title="Detected from telemetry" />

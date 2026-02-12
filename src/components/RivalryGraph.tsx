@@ -52,11 +52,11 @@ export const RivalryGraph: React.FC<RivalryGraphProps> = ({ matches, currentUser
     return { nodes, links, center };
   }, [matches, currentUser]);
 
-  if (nodes.length === 0) return <div className="text-center p-10 opacity-40 uppercase font-black text-xs">No rivalry data yet</div>;
+  if (nodes.length === 0) return <div className="text-center p-10 opacity-40 uppercase font-black text-label-sm">No rivalry data yet</div>;
 
   return (
     <div className="w-full h-[600px] flex items-center justify-center md3-card rounded-2xl overflow-hidden relative">
-      <h3 className="absolute top-6 left-6 text-xs font-black uppercase opacity-60">Rivalry Network</h3>
+      <h3 className="absolute top-6 left-6 text-label-sm font-black uppercase opacity-60">Rivalry Network</h3>
       <svg width="600" height="600" viewBox="0 0 600 600" className="w-full h-full max-w-[600px] max-h-[600px]">
         {/* Links */}
         {links.map((link, i) => (

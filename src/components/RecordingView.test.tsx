@@ -39,25 +39,25 @@ describe('RecordingView', () => {
     setViewport(1920, 1080);
   });
 
-  it('renders standard (wide + tall) layout with both SquadronPanel and ActionPanel (no compact tabs)', async () => {
+  it('renders standard (wide + tall) layout with SquadronPanel primary and ActionPanel compact (no tab bar)', async () => {
     setViewport(1600, 1000);
     const { RecordingView } = await import('./RecordingView');
 
     render(<RecordingView />);
 
-    // Both panels visible simultaneously in standard density.
+    // Both panels visible simultaneously.
     expect(screen.getByTestId('SquadronPanel')).toBeInTheDocument();
     expect(screen.getByTestId('ActionPanel')).toBeInTheDocument();
 
-    // Compact tab bar should not exist.
+    // Compact tab bar should not exist in standard layout.
     expect(screen.queryByRole('button', { name: /actions/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /loadout/i })).toBeNull();
 
-    // RecordingView only passes density="compact" in compact mode.
+    // SquadronPanel uses standard density; ActionPanel always compact in this layout.
     const squadProps = screen.getByTestId('SquadronPanel').getAttribute('data-props') || '';
     const actionProps = screen.getByTestId('ActionPanel').getAttribute('data-props') || '';
     expect(squadProps).not.toContain('"density":"compact"');
-    expect(actionProps).not.toContain('"density":"compact"');
+    expect(actionProps).toContain('"density":"compact"');
   });
 
   it('renders compact left panel tabs on short heights and swaps Actions vs Loadout without scrolling the panel', async () => {

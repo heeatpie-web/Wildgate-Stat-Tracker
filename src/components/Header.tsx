@@ -1,25 +1,34 @@
-import React, { useRef } from 'react';
-import { User, PlusCircle, Edit, MinusCircle, HelpCircle, Moon, Pin, PinOff, Layers, ChevronDown, Scan, Loader2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+    User,
+    PlusCircle,
+    Edit,
+    MinusCircle,
+    HelpCircle,
+    Moon,
+    Layers,
+    Scan,
+    Loader2,
+    Settings
+} from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
-import { APP_VERSION } from '../types';
 import SystemPulse from './SystemPulse';
 import { useAppStore } from '../store/useAppStore';
 
 /**
- * Header - The main application navigation and system status bar.
- * Contains the logo, profile selector, mode toggle, and the new SystemPulse consolidated status indicator.
+ * Header - compact top command bar with profile hub and global actions.
+ * Fleet Battle mode controls are intentionally removed in this cycle.
  */
 export const Header: React.FC = () => {
     const {
-        activeMode, setActiveMode,
         activeUser, setActiveUser,
         activeView, setActiveView,
         setRenameModal, setRenameValue,
         setIsOverlayMode,
         setShowTutorial,
-        isAlwaysOnTop, setIsAlwaysOnTop,
+        setShowSettings,
         setToast, setShowWelcome,
         devMode, setDevMode,
         visionStatus
@@ -28,26 +37,40 @@ export const Header: React.FC = () => {
     const { players, deletePlayer } = useGameData();
     const { appearanceMode, setAppearanceMode } = useUserPreferences();
     const showSmartCaptureInHeader = useAppStore(s => s.showSmartCaptureInHeader);
+    const tutorialCompleted = useAppStore(s => s.tutorialCompleted);
 
     const devClicks = useRef(0);
+    const profileMenuRef = useRef<HTMLDivElement | null>(null);
+    const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+
+    useEffect(() => {
+        const onPointerDown = (event: MouseEvent) => {
+            if (!profileMenuRef.current) return;
+            if (!profileMenuRef.current.contains(event.target as Node)) {
+                setProfileMenuOpen(false);
+            }
+        };
+        window.addEventListener('mousedown', onPointerDown);
+        return () => window.removeEventListener('mousedown', onPointerDown);
+    }, []);
 
     const handleDeleteProfile = () => {
         if (!activeUser) return;
         const confirmation = prompt(`To delete profile "${activeUser}", type "YES I WANT TO DELETE THIS" below:`);
-        if (confirmation !== "YES I WANT TO DELETE THIS") {
-            setToast({ message: "Profile deletion cancelled.", type: 'warning' });
+        if (confirmation !== 'YES I WANT TO DELETE THIS') {
+            setToast({ message: 'Profile deletion cancelled.', type: 'warning' });
             return;
         }
         deletePlayer(activeUser);
         const remaining = players.filter(p => p !== activeUser);
         setActiveUser(remaining.length > 0 ? remaining[0] : '');
         if (remaining.length === 0) setShowWelcome(true);
-        setToast({ message: `Profile deleted.`, type: 'success' });
+        setToast({ message: 'Profile deleted.', type: 'success' });
+        setProfileMenuOpen(false);
     };
 
     const handleTopbarSmartCapture = async () => {
         try {
-            // Smart Capture is meaningful primarily for live session recording.
             if (activeView !== 'recording') setActiveView('recording');
             window.dispatchEvent(new CustomEvent('smart-capture-request', {
                 detail: { activeUser: activeUser || null, source: 'header' }
@@ -57,130 +80,55 @@ export const Header: React.FC = () => {
         }
     };
 
+    const avatarLabel = (activeUser || '?').slice(0, 1).toUpperCase();
+    const smartCaptureBusy = visionStatus === 'capturing' || visionStatus === 'processing';
+
     return (
-        <header className="shrink-0 px-3 py-2 mg-surface app-drag-region relative z-10 rounded-2xl border border-md-sys-outline/10">
-            {/*
-              Topbar "lit pill" style: keep this consistent with SystemPulse.
-              We do it inline to avoid adding new global CSS for a small change.
-            */}
+        <header className="shrink-0 px-4 py-3 app-drag-region relative z-10 rounded-2xl mg-surface-high border border-md-sys-outline/12 shadow-md bg-[radial-gradient(circle_at_10%_-50%,rgba(56,189,248,0.16),transparent_45%),radial-gradient(circle_at_100%_130%,rgba(251,146,60,0.10),transparent_42%),var(--mg-surface)]">
             <div className="flex items-center justify-between gap-4">
-                {/* Left: Logo */}
-                <div className="flex items-center gap-2">
-                    <h1 className="text-lg font-bold tracking-tight text-md-sys-on-surface flex items-baseline gap-1.5">
-                        <span>WILDGATE STAT TRACKER</span>
-                        <span
-                            onClick={() => { devClicks.current++; if (devClicks.current >= 5) setDevMode(true); }}
-                            className="text-[10px] font-mono opacity-45 hover:opacity-70 hover:text-md-sys-primary transition-colors cursor-pointer select-none"
-                            style={{ WebkitAppRegion: 'no-drag' } as any}
-                            title={devMode ? 'Dev mode enabled' : 'Version'}
-                        >
-                            {APP_VERSION}
-                        </span>
-                    </h1>
+                <div className="flex items-center gap-3 shrink-0">
+                    <button
+                        onClick={() => {
+                            devClicks.current += 1;
+                            if (devClicks.current >= 5) setDevMode(true);
+                        }}
+                        className="text-left"
+                        style={{ WebkitAppRegion: 'no-drag' } as any}
+                        title={devMode ? 'Dev mode enabled' : 'Wildgate Stat Tracker'}
+                    >
+                        <div className="text-label-sm uppercase tracking-[0.16em] font-bold text-md-sys-on-surface whitespace-nowrap">
+                            Wildgate Stat Tracker
+                        </div>
+                    </button>
                     {devMode && (
-                        <span className="text-[9px] font-bold bg-md-sys-error text-md-sys-onError px-1.5 py-0.5 rounded uppercase">DEV</span>
+                        <span className="text-label-xs font-bold bg-md-sys-error text-md-sys-onError px-1.5 py-0.5 rounded uppercase">
+                            DEV
+                        </span>
                     )}
                 </div>
 
-                {/* System Monitoring Pulse */}
                 <div data-tour="system-pulse" style={{ WebkitAppRegion: 'no-drag' } as any}>
                     <SystemPulse />
                 </div>
 
-                {/* Center: Profile + Mode */}
-                <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
-                    {/* Profile Selector */}
-                    <div
-                        data-tour="profile-selector"
-                        className="flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-full bg-md-sys-surface-container-high/85 hover:bg-md-sys-surface-container-highest/90 border border-md-sys-outline/10 transition-colors"
-                    >
-                        <User size={14} className="text-md-sys-primary" />
-                        <div className="relative">
-                            <select
-                                value={activeUser}
-                                onChange={(e) => setActiveUser(e.target.value)}
-                                className="bg-transparent text-body font-medium outline-none cursor-pointer min-w-[110px] pr-6 border-0 appearance-none focus:outline-none focus-visible:outline-none"
-                                style={{ WebkitAppearance: 'none', appearance: 'none' } as any}
-                            >
-                                {players.map(p => <option key={p} value={p}>{p}</option>)}
-                            </select>
-                            <ChevronDown size={14} className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 opacity-50" />
-                        </div>
-                        <div className="flex">
-                            <button
-                                onClick={() => { setRenameValue(""); setRenameModal({ type: 'new' }); }}
-                                className="md3-icon-btn w-7 h-7 rounded-full hover:bg-md-sys-on-surface/10"
-                                title="New Profile"
-                            >
-                                <PlusCircle size={14} className="text-md-sys-primary" />
-                            </button>
-                            <button
-                                onClick={() => { if (activeUser) { setRenameValue(activeUser); setRenameModal({ type: 'rename', oldName: activeUser }); } }}
-                                className="md3-icon-btn w-7 h-7 rounded-full disabled:opacity-30 hover:bg-md-sys-on-surface/10"
-                                disabled={!activeUser}
-                            >
-                                <Edit size={14} className="text-secondary" />
-                            </button>
-                            <button
-                                onClick={handleDeleteProfile}
-                                className="md3-icon-btn w-7 h-7 rounded-full hover:bg-md-sys-error/10 hover:text-md-sys-error disabled:opacity-30"
-                                disabled={!activeUser}
-                            >
-                                <MinusCircle size={14} />
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Mode Toggle */}
-                    <div
-                        data-tour="mode-toggle"
-                        className="flex p-0.5 rounded-full bg-md-sys-surface-container-high/85 hover:bg-md-sys-surface-container-highest/90 border border-md-sys-outline/10 transition-colors"
-                    >
-                        <button
-                            onClick={() => setActiveMode('Artifact Brawl')}
-                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${activeMode === 'Artifact Brawl'
-                                ? 'bg-md-sys-primary text-md-sys-onPrimary'
-                                : 'text-secondary hover:bg-md-sys-on-surface/10'
-                                }`}
-                        >
-                            Artifact Brawl
-                        </button>
-                        <button
-                            onClick={() => setActiveMode('Fleet Battle')}
-                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${activeMode === 'Fleet Battle'
-                                ? 'bg-md-sys-primary text-md-sys-onPrimary'
-                                : 'text-secondary hover:bg-md-sys-on-surface/10'
-                                }`}
-                        >
-                            Fleet Battle
-                        </button>
-                    </div>
-                </div>
-
-                {/* Right: Quick Actions */}
-                <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as any}>
+                <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as any}>
                     {showSmartCaptureInHeader && (
                         <button
                             onClick={handleTopbarSmartCapture}
-                            disabled={visionStatus === 'capturing' || visionStatus === 'processing'}
-                            className="h-8 px-3 rounded-full flex items-center gap-1.5 border border-md-sys-primary/25 bg-md-sys-primary text-md-sys-onPrimary hover:brightness-105 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={smartCaptureBusy}
+                            className="md3-btn-filled inline-flex items-center justify-center whitespace-nowrap min-w-[138px] h-8 px-3 gap-2 shadow-lg shadow-primary/20 disabled:opacity-disabled disabled:pointer-events-none"
                             title="Smart Capture (screenshots + OCR)"
                         >
-                            {(visionStatus === 'capturing' || visionStatus === 'processing')
-                                ? <Loader2 size={14} className="animate-spin" />
-                                : <Scan size={14} />}
-                            <span className="text-[10px] font-black uppercase tracking-wide">Smart Capture</span>
+                            {smartCaptureBusy ? <Loader2 size={14} className="animate-spin" /> : <Scan size={14} />}
+                            <span
+                                className="text-label-sm font-bold uppercase tracking-[0.12em]"
+                                style={{ color: 'var(--md-sys-color-on-primary)' }}
+                            >
+                                Smart Capture
+                            </span>
                         </button>
                     )}
-                    <button
-                        onClick={() => setIsAlwaysOnTop(!isAlwaysOnTop)}
-                        className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors border border-md-sys-outline/10 bg-md-sys-surface-container-high/85 hover:bg-md-sys-surface-container-highest/90 ${
-                            isAlwaysOnTop ? 'text-md-sys-primary ring-2 ring-md-sys-primary/25' : 'text-secondary'
-                        }`}
-                        title="Pin Window"
-                    >
-                        {isAlwaysOnTop ? <Pin size={16} /> : <PinOff size={16} />}
-                    </button>
+
                     <button
                         onClick={() => setIsOverlayMode(true)}
                         data-tour="overlay-button"
@@ -188,15 +136,19 @@ export const Header: React.FC = () => {
                         title="Switch to Overlay Mode"
                     >
                         <Layers size={14} />
-                        <span className="text-[10px] font-bold uppercase tracking-wide">Overlay</span>
+                        <span className="text-label-sm font-bold uppercase tracking-wide">Overlay</span>
                     </button>
-                    <button
-                        onClick={() => setShowTutorial(true)}
-                        className="w-8 h-8 rounded-full flex items-center justify-center transition-colors border border-md-sys-outline/10 bg-md-sys-surface-container-high/85 hover:bg-md-sys-surface-container-highest/90 text-secondary"
-                        title="Help"
-                    >
-                        <HelpCircle size={16} />
-                    </button>
+
+                    {!tutorialCompleted && (
+                        <button
+                            onClick={() => setShowTutorial(true)}
+                            className="w-8 h-8 rounded-full flex items-center justify-center transition-colors border border-md-sys-outline/10 bg-md-sys-surface-container-high/85 hover:bg-md-sys-surface-container-highest/90 text-secondary"
+                            title="Tutorial"
+                        >
+                            <HelpCircle size={16} />
+                        </button>
+                    )}
+
                     <button
                         onClick={() => setAppearanceMode(appearanceMode === 'light' ? 'dark' : (appearanceMode === 'dark' ? 'twilight' : 'light'))}
                         className="w-8 h-8 rounded-full flex items-center justify-center transition-colors border border-md-sys-outline/10 bg-md-sys-surface-container-high/85 hover:bg-md-sys-surface-container-highest/90 text-secondary"
@@ -204,9 +156,95 @@ export const Header: React.FC = () => {
                     >
                         <Moon size={16} />
                     </button>
+
+                    <div ref={profileMenuRef} className="relative" data-tour="profile-selector">
+                        <button
+                            onClick={() => setProfileMenuOpen(v => !v)}
+                            className="w-9 h-9 rounded-full border border-md-sys-outline/15 bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer font-bold text-label-sm flex items-center justify-center hover:brightness-110 transition-all"
+                            title={activeUser ? `Profile: ${activeUser}` : 'Profile'}
+                        >
+                            {activeUser ? avatarLabel : <User size={14} />}
+                        </button>
+
+                        {profileMenuOpen && (
+                            <div className="absolute right-0 mt-2 w-[290px] md3-card rounded-2xl border border-md-sys-outline/15 shadow-2xl p-4 z-30">
+                                <div className="text-label-sm font-bold uppercase tracking-[0.14em] text-md-sys-on-surface/60 mb-3">
+                                    Profile Hub
+                                </div>
+
+                                <select
+                                    value={activeUser}
+                                    onChange={(e) => setActiveUser(e.target.value)}
+                                    className="w-full md3-textfield--outlined rounded-xl px-3 py-2.5 text-body outline-none mb-3"
+                                >
+                                    {players.map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
+
+                                <div className="grid grid-cols-3 gap-2 mb-3">
+                                    <button
+                                        onClick={() => {
+                                            setRenameValue('');
+                                            setRenameModal({ type: 'new' });
+                                            setProfileMenuOpen(false);
+                                        }}
+                                        className="md3-btn-tonal h-9 text-label-sm font-bold uppercase flex items-center justify-center gap-1"
+                                        title="New Profile"
+                                    >
+                                        <PlusCircle size={12} />
+                                        New
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            if (!activeUser) return;
+                                            setRenameValue(activeUser);
+                                            setRenameModal({ type: 'rename', oldName: activeUser });
+                                            setProfileMenuOpen(false);
+                                        }}
+                                        className="md3-btn-tonal h-9 text-label-sm font-bold uppercase flex items-center justify-center gap-1 disabled:opacity-disabled disabled:pointer-events-none"
+                                        disabled={!activeUser}
+                                        title="Rename Profile"
+                                    >
+                                        <Edit size={12} />
+                                        Rename
+                                    </button>
+                                    <button
+                                        onClick={handleDeleteProfile}
+                                        className="h-9 rounded-xl text-label-sm font-bold uppercase flex items-center justify-center gap-1 border border-md-sys-error/30 text-md-sys-error hover:bg-md-sys-error/10 disabled:opacity-disabled disabled:pointer-events-none"
+                                        disabled={!activeUser}
+                                        title="Delete Profile"
+                                    >
+                                        <MinusCircle size={12} />
+                                        Delete
+                                    </button>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        onClick={() => {
+                                            setShowSettings(true);
+                                            setProfileMenuOpen(false);
+                                        }}
+                                        className="md3-btn-outlined h-9 text-label-sm font-bold uppercase flex items-center justify-center gap-1"
+                                    >
+                                        <Settings size={12} />
+                                        Settings
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setShowTutorial(true);
+                                            setProfileMenuOpen(false);
+                                        }}
+                                        className="md3-btn-outlined h-9 text-label-sm font-bold uppercase flex items-center justify-center gap-1"
+                                    >
+                                        <HelpCircle size={12} />
+                                        Tutorial
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </header>
     );
 };
-

@@ -1,0 +1,15 @@
+{
+  "generatedAt": "2026-02-12T19:42:02.169Z",
+  "sourceReport": "dataset/ocr-corpus/reports/latest.json",
+  "summary": {
+    "totalSamples": 15,
+    "teammateRecall": 15.52,
+    "opponentRecall": 14.71,
+    "modifierRecall": 70.27,
+    "teamGroupingAccuracy": 66.67,
+    "teamColorAccuracy": null,
+    "truthColorTeams": 11,
+    "missingPredTeamColor": 0,
+    "sessionUsablePassRate": 0
+  }
+}

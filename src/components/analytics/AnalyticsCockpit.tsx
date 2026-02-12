@@ -26,7 +26,7 @@ const SectionShell: React.FC<{
     children: React.ReactNode;
 }> = ({ id, title, subtitle, icon, onOpen, children }) => {
     return (
-        <section id={id} className="md3-card rounded-2xl p-4 md:p-6">
+        <section id={id} className="mg-surface-high rounded-2xl p-4 md:p-6">
             <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -34,16 +34,16 @@ const SectionShell: React.FC<{
                             {icon}
                         </div>
                         <div className="min-w-0">
-                            <h3 className="text-sm md:text-base font-black tracking-tight text-md-sys-on-surface truncate">{title}</h3>
+                            <h3 className="text-body md:text-base font-bold tracking-tight text-md-sys-on-surface truncate">{title}</h3>
                             {subtitle && (
-                                <div className="text-[10px] uppercase tracking-widest font-bold opacity-50 truncate">{subtitle}</div>
+                                <div className="text-label-sm uppercase tracking-widest font-bold opacity-60 truncate">{subtitle}</div>
                             )}
                         </div>
                     </div>
                 </div>
                 <button
                     onClick={onOpen}
-                    className="md3-btn-outlined px-3 py-2 text-[10px] font-black uppercase tracking-wide whitespace-nowrap"
+                    className="md3-btn-outlined px-3 py-2 text-label-sm font-bold uppercase tracking-wide whitespace-nowrap"
                 >
                     Open Drilldown
                 </button>

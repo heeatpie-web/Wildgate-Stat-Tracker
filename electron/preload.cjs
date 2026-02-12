@@ -23,8 +23,11 @@ const INVOKE_CHANNELS = [
   'clear-ocr-preprocessed', 'get-ocr-debug-dir', 'list-ocr-debug-files',
   'scan-epic-ids',
   'read-file-base64', 'open-path',
+  'ocr-corpus-load', 'ocr-corpus-save', 'ocr-corpus-eval', 'ocr-corpus-promote-baseline',
+  'ocr-corpus-import-images', 'ocr-corpus-run-pipeline',
   'get-gcloud-status',
   'test-gcloud-upload',
+  'gcloud-backfill-screenshots',
 ];
 
 const SEND_CHANNELS = [
@@ -39,6 +42,7 @@ const SEND_CHANNELS = [
 const RECEIVE_CHANNELS = [
   'log-status', 'log-data',
   'window-maximized-changed',
+  'window-restored',
   'update_available', 'update_downloaded',
   'hotkey-toggle-overlay',
 ];

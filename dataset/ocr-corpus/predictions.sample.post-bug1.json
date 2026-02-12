@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "generatedAt": "2026-02-12T19:14:48.311Z",
+  "sourceTruth": "dataset/ocr-corpus/ground-truth.sample.json",
+  "ocrMode": "both",
+  "samples": [
+    {
+      "sampleId": "sample_001",
+      "teammates": [
+        "ECRET",
+        "UMPERS",
+        "liesToes",
+        "RiaDeo",
+        "monspy5",
+        "akus",
+        "EACHER",
+        "amberelocke",
+        "AlixThus",
+        "Ymon784",
+        "Xiphori"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "Team 1",
+          "teamColor": "unknown",
+          "players": [
+            "liblolan15"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "sample_002",
+      "teammates": [
+        "NigthmareGM",
+        "URDER",
+        "HTER",
+        "combat_Barbi3",
+        "littleleaves",
+        "HANAVG",
+        "O果汁一半I",
+        "EANR",
+        "AlixThus",
+        "PermanentWinner",
+        "ScareQro",
+        "Sala",
+        "RTY2"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": ". SPAGHURDER",
+          "teamColor": "unknown",
+          "players": [
+            "ACRI907fg",
+            "gaowangi3410",
+            "wunoeRspaommot"
+          ]
+        },
+        {
+          "teamName": "Team 1",
+          "teamColor": "unknown",
+          "players": [
+            "ss.ese"
+          ]
+        }
+      ],
+      "modifiers": []
+    }
+  ]
+}

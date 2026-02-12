@@ -140,20 +140,20 @@ export const DrillDownOverlay: React.FC = () => {
                 {/* Header */}
                 <div className="flex justify-between items-start mb-8 flex-shrink-0">
                     <div>
-                        <div className="text-sm font-black uppercase opacity-40 tracking-[0.2em] mb-1">Deep Dive Analysis - {drillDownTarget.type}</div>
+                        <div className="text-body font-black uppercase opacity-40 tracking-[0.2em] mb-1">Deep Dive Analysis - {drillDownTarget.type}</div>
                         <h2 className="text-5xl font-black">{drillDownTarget.name}</h2>
                         <div className="flex gap-4 mt-4">
-                            <div className="md3-surface-high px-4 py-2 rounded-xl text-xs font-black uppercase"><span className="opacity-60">Matches:</span> {targetMatches.length}</div>
-                            <div className="md3-surface-high px-4 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2">
+                            <div className="md3-surface-high px-4 py-2 rounded-xl text-label-sm font-black uppercase"><span className="opacity-60">Matches:</span> {targetMatches.length}</div>
+                            <div className="md3-surface-high px-4 py-2 rounded-xl text-label-sm font-black uppercase flex items-center gap-2">
                                 <span className="opacity-60">Win Rate:</span>
-                                <span className={wr >= 50 ? 'text-green-500' : 'text-red-500'}>{wr}%</span>
+                                <span className={wr >= 50 ? 'text-success' : 'text-danger'}>{wr}%</span>
                                 {trendDiff !== 0 && (
-                                    <span className={`text-[10px] ${trendDiff > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                    <span className={`text-label-sm ${trendDiff > 0 ? 'text-success' : 'text-danger'}`}>
                                         ({trendDiff > 0 ? '+' : ''}{trendDiff}%)
                                     </span>
                                 )}
                             </div>
-                            {avgDmg > 0 && <div className="md3-surface-high px-4 py-2 rounded-xl text-xs font-black uppercase"><span className="opacity-60">Avg Dmg:</span> {avgDmg}</div>}
+                            {avgDmg > 0 && <div className="md3-surface-high px-4 py-2 rounded-xl text-label-sm font-black uppercase"><span className="opacity-60">Avg Dmg:</span> {avgDmg}</div>}
                         </div>
                     </div>
                     <button onClick={() => setDrillDownTarget(null)} className="md3-icon-btn"><X size={24} /></button>
@@ -165,61 +165,61 @@ export const DrillDownOverlay: React.FC = () => {
                         {/* Recent Form */}
                         <div className="md3-card p-6 rounded-xl relative overflow-hidden flex flex-col justify-between">
                             <div>
-                                <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2">Recent Form (Last 10)</h4>
+                                <h4 className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-2">Recent Form (Last 10)</h4>
                                 <div className="text-4xl font-black mb-1 flex items-baseline gap-2">
                                     {recentWR}%
-                                    {trendDiff !== 0 && <span className={`text-lg ${trendDiff > 0 ? 'text-green-500' : 'text-red-500'}`}>{trendDiff > 0 ? <TrendingUp size={20} /> : <TrendingUp size={20} className="rotate-180" />}</span>}
+                                    {trendDiff !== 0 && <span className={`text-lg ${trendDiff > 0 ? 'text-success' : 'text-danger'}`}>{trendDiff > 0 ? <TrendingUp size={20} /> : <TrendingUp size={20} className="rotate-180" />}</span>}
                                 </div>
-                                <div className="text-xs font-bold opacity-40">vs {wr}% Lifetime</div>
+                                <div className="text-label-sm font-bold opacity-40">vs {wr}% Lifetime</div>
                             </div>
-                            <div className={`absolute -right-4 -bottom-4 w-24 h-24 rounded-full opacity-10 blur-2xl ${recentWR >= 50 ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                            <div className={`absolute -right-4 -bottom-4 w-24 h-24 rounded-full opacity-10 blur-2xl ${recentWR >= 50 ? 'bg-success' : 'bg-danger'}`}></div>
                         </div>
 
                         {/* Best Synergies */}
                         <div className="md3-card p-6 rounded-xl relative overflow-hidden col-span-1">
-                            <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-4">{['Ship', 'Hero'].includes(drillDownTarget.type) ? 'Top Wingmen' : 'Best Synergies'}</h4>
+                            <h4 className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-4">{['Ship', 'Hero'].includes(drillDownTarget.type) ? 'Top Wingmen' : 'Best Synergies'}</h4>
                             <div className="flex flex-col gap-2">
                                 {topSynergies.length > 0 ? topSynergies.map(([name, stat], i) => (
-                                    <div key={name} className="flex justify-between items-center text-xs">
+                                    <div key={name} className="flex justify-between items-center text-label-sm">
                                         <div className="font-bold truncate max-w-[70%]">{i + 1}. {name}</div>
                                         <div className="font-mono opacity-60">{Math.round((stat.wins / stat.total) * 100)}%</div>
                                     </div>
-                                )) : <div className="text-xs opacity-40 font-bold uppercase">No Data</div>}
+                                )) : <div className="text-label-sm opacity-40 font-bold uppercase">No Data</div>}
                             </div>
-                            <div className="absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-blue-500 opacity-5 blur-2xl"></div>
+                            <div className="absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-info opacity-5 blur-2xl"></div>
                         </div>
 
                         {/* Worst Nemeses */}
                         <div className="md3-card p-6 rounded-xl relative overflow-hidden col-span-1">
-                            <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-4">{['Ship', 'Hero'].includes(drillDownTarget.type) ? 'Worst Nightmares' : (drillDownTarget.type === 'Opponent' ? 'Weakness' : 'Worst Combo')}</h4>
+                            <h4 className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-4">{['Ship', 'Hero'].includes(drillDownTarget.type) ? 'Worst Nightmares' : (drillDownTarget.type === 'Opponent' ? 'Weakness' : 'Worst Combo')}</h4>
                             <div className="flex flex-col gap-2">
                                 {topNemeses.length > 0 ? topNemeses.map(([name, stat], i) => (
-                                    <div key={name} className="flex justify-between items-center text-xs">
+                                    <div key={name} className="flex justify-between items-center text-label-sm">
                                         <div className="font-bold truncate max-w-[70%]">{i + 1}. {name}</div>
-                                        <div className="font-mono opacity-60 text-red-400">{Math.round((stat.wins / stat.total) * 100)}%</div>
+                                        <div className="font-mono opacity-60 text-danger">{Math.round((stat.wins / stat.total) * 100)}%</div>
                                     </div>
-                                )) : <div className="text-xs opacity-40 font-bold uppercase">No Data</div>}
+                                )) : <div className="text-label-sm opacity-40 font-bold uppercase">No Data</div>}
                             </div>
-                            <div className="absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-red-500 opacity-5 blur-2xl"></div>
+                            <div className="absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-danger opacity-5 blur-2xl"></div>
                         </div>
 
                         {/* Environment Affinity */}
                         <div className="md3-card p-6 rounded-xl relative overflow-hidden col-span-1">
-                            <h4 className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-4">Environment Affinity</h4>
+                            <h4 className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-4">Environment Affinity</h4>
                             <div className="flex flex-col gap-1">
                                 {topEnvs.length > 0 ? (
                                     <>
-                                        <div className="text-[10px] uppercase opacity-40 font-bold mb-1">Best</div>
+                                        <div className="text-label-sm uppercase opacity-40 font-bold mb-1">Best</div>
                                         {topEnvs.map(([name, stat]) => (
-                                            <div key={name} className="flex justify-between items-center text-xs">
+                                            <div key={name} className="flex justify-between items-center text-label-sm">
                                                 <div className="font-bold truncate max-w-[70%]">{name}</div>
-                                                <div className="font-mono text-green-400">{Math.round((stat.wins / stat.total) * 100)}%</div>
+                                                <div className="font-mono text-success">{Math.round((stat.wins / stat.total) * 100)}%</div>
                                             </div>
                                         ))}
                                     </>
-                                ) : <div className="text-xs opacity-40 font-bold uppercase">No Data</div>}
+                                ) : <div className="text-label-sm opacity-40 font-bold uppercase">No Data</div>}
                             </div>
-                            <div className="absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-amber-500 opacity-5 blur-2xl"></div>
+                            <div className="absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-warning opacity-5 blur-2xl"></div>
                         </div>
                     </div>
 
@@ -228,7 +228,7 @@ export const DrillDownOverlay: React.FC = () => {
                         <div className="h-64 w-full md3-card rounded-xl flex items-center justify-center opacity-40 font-bold uppercase tracking-widest flex-shrink-0">Not enough data for trend analysis</div>
                     ) : (
                         <div className="h-80 w-full md3-card rounded-xl p-6 border border-md-sys-outline/5 shadow-inner flex-shrink-0">
-                            <h4 className="text-xs font-black uppercase tracking-widest mb-6 opacity-60">Rolling Win Rate Over Time</h4>
+                            <h4 className="text-label-sm font-black uppercase tracking-widest mb-6 opacity-60">Rolling Win Rate Over Time</h4>
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={trendData}>
                                     <defs><linearGradient id="colorWin" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={wr >= 50 ? "var(--color-success)" : "var(--color-danger)"} stopOpacity={0.3} /><stop offset="95%" stopColor={wr >= 50 ? "var(--color-success)" : "var(--color-danger)"} stopOpacity={0} /></linearGradient></defs>

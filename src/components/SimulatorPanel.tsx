@@ -203,7 +203,7 @@ const SimulatorPanel: React.FC = () => {
         <div className="flex flex-col gap-4 p-4 md3-card rounded-xl border-2 border-md-sys-error">
             <div className="flex justify-between items-center">
                 <h3 className="font-black text-md-sys-error uppercase">Simulation Mode Active</h3>
-                <button onClick={toggleSimMode} className="md3-btn-tonal text-xs font-bold hover:bg-md-sys-error hover:text-white">
+                <button onClick={toggleSimMode} className="md3-btn-tonal text-label-sm font-bold hover:bg-md-sys-error hover:text-white">
                     Exit
                 </button>
             </div>
@@ -211,12 +211,12 @@ const SimulatorPanel: React.FC = () => {
             <div className="flex flex-col gap-3 md3-card p-3 rounded-xl border border-md-sys-outline/10">
                 <div className="flex items-center justify-between gap-4">
                     <div className="flex flex-col gap-1 flex-1">
-                        <span className="text-[10px] font-black uppercase opacity-40">Archive Selection</span>
+                        <span className="text-label-sm font-black uppercase opacity-40">Archive Selection</span>
                         <div className="flex gap-2">
                             <select
                                 value={selectedArchive}
                                 onChange={(e) => setSelectedArchive(e.target.value)}
-                                className="md3-textfield md3-textfield--outlined flex-1 text-xs font-bold"
+                                className="md3-textfield md3-textfield--outlined flex-1 text-label-sm font-bold"
                             >
                                 <option value="">Select an archive...</option>
                                 {archiveFiles.map(f => (
@@ -228,7 +228,7 @@ const SimulatorPanel: React.FC = () => {
                             <button
                                 onClick={() => handleLoadArchive(selectedArchive)}
                                 disabled={!selectedArchive || loading}
-                                className="md3-btn-filled text-xs font-black uppercase tracking-wider disabled:opacity-30 font-sans"
+                                className="md3-btn-filled text-label-sm font-black uppercase tracking-wider disabled:opacity-30 font-sans"
                             >
                                 {loading ? '...' : 'Load'}
                             </button>
@@ -236,11 +236,11 @@ const SimulatorPanel: React.FC = () => {
                     </div>
 
                     <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-black uppercase opacity-40">Quick Action</span>
+                        <span className="text-label-sm font-black uppercase opacity-40">Quick Action</span>
                         <button
                             onClick={loadLatestArchive}
                             disabled={loading || archiveFiles.length === 0}
-                            className="md3-btn-tonal text-xs font-black uppercase tracking-wider disabled:opacity-30 font-sans"
+                            className="md3-btn-tonal text-label-sm font-black uppercase tracking-wider disabled:opacity-30 font-sans"
                         >
                             Load Latest
                         </button>
@@ -250,9 +250,9 @@ const SimulatorPanel: React.FC = () => {
                 <div className="h-[1px] bg-md-sys-outline/10 w-full" />
 
                 <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-black uppercase opacity-40 whitespace-nowrap">Manual JSON</span>
-                    <input type="file" accept=".json" onChange={handleFileUpload} className="text-[10px] file:md3-btn-tonal file:border-none file:px-2 file:py-1 file:rounded file:text-[10px] file:font-bold file:mr-2" />
-                    <div className="text-[10px] font-mono opacity-70 ml-auto">{status}</div>
+                    <span className="text-label-sm font-black uppercase opacity-40 whitespace-nowrap">Manual JSON</span>
+                    <input type="file" accept=".json" onChange={handleFileUpload} className="text-label-sm file:md3-btn-tonal file:border-none file:px-2 file:py-1 file:rounded file:text-label-sm file:font-bold file:mr-2" />
+                    <div className="text-label-sm font-mono opacity-70 ml-auto">{status}</div>
                 </div>
             </div>
 
@@ -269,12 +269,12 @@ const SimulatorPanel: React.FC = () => {
 
                         <div className="flex flex-col items-center min-w-[100px]">
                             <span className="text-2xl font-black font-mono">{currentSimTime}</span>
-                            <span className="text-[10px] uppercase tracking-wider opacity-60">Match Time</span>
+                            <span className="text-label-sm uppercase tracking-wider opacity-60">Match Time</span>
                         </div>
 
                         <div className="flex gap-1">
                             {[1, 5, 10, 50].map(s => (
-                                <button key={s} onClick={() => setPlaybackSpeed(s)} className={`md3-chip text-xs ${playbackSpeed === s ? 'bg-md-sys-primary text-md-sys-onPrimary' : ''}`}>
+                                <button key={s} onClick={() => setPlaybackSpeed(s)} className={`md3-chip text-label-sm ${playbackSpeed === s ? 'bg-md-sys-primary text-md-sys-onPrimary' : ''}`}>
                                     {s}x
                                 </button>
                             ))}
@@ -288,7 +288,7 @@ const SimulatorPanel: React.FC = () => {
                         />
                     </div>
 
-                    <div className="bg-black/20 p-2 rounded font-mono text-[10px] h-24 overflow-y-auto">
+                    <div className="bg-black/20 p-2 rounded font-mono text-label-sm h-24 overflow-y-auto">
                         <div className="opacity-50 mb-1">Current Event: {progress}/{events.length}</div>
                         {events[progress] ? (
                             <div className="text-md-sys-primary">{JSON.stringify(events[progress], null, 2)}</div>

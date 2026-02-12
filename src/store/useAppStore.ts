@@ -28,12 +28,27 @@ const customStorage: PersistStorage<AppState> = {
 
       if (!data) return null;
       const settings = data.settings || {};
+      const players = Array.isArray(data.players)
+        ? data.players.filter((p: any): p is string => typeof p === 'string' && p.trim().length > 0)
+        : [];
+      const persistedActiveUser = typeof settings.activeUser === 'string' ? settings.activeUser.trim() : '';
+      const matchedActiveUser = persistedActiveUser
+        ? players.find(p => p.toLowerCase() === persistedActiveUser.toLowerCase())
+        : undefined;
+      // Safety: keep active profile aligned with known players to avoid stale/malformed values.
+      const resolvedActiveUser = matchedActiveUser || (players.length > 0 ? players[0] : persistedActiveUser);
+
+      // Recovery: reset stale 'processing' ocrState back to 'queued'
+      // (OCR was interrupted by app close/crash)
+      const recoveredMatches = (data.matches || []).map((m: any) =>
+        m.ocrState === 'processing' ? { ...m, ocrState: 'queued' } : m
+      );
 
       return {
         state: {
           // Data
-          matches: data.matches || [],
-          players: data.players || [],
+          matches: recoveredMatches,
+          players,
           pilotRegistry: data.pilotRegistry || [],
           favorites: data.favorites || [],
           pilotNotes: data.pilotNotes || {},
@@ -62,7 +77,6 @@ const customStorage: PersistStorage<AppState> = {
           isAlwaysOnTop: settings.alwaysOnTop ?? false,
           overlayStyle: settings.overlayStyle || 'compact',
           visualMode: settings.visualMode || 'dense',
-          uiStyle: settings.uiStyle || 'md3',
           ocrMode: settings.ocrMode || 'both',
           captureMode: settings.captureMode || 'auto',
           lockOcrTeams: settings.lockOcrTeams || false,
@@ -80,6 +94,7 @@ const customStorage: PersistStorage<AppState> = {
             saturationMin: 35,
             luminanceMin: 30,
           },
+          tutorialCompleted: settings.tutorialCompleted ?? false,
 
           // LIVE SESSION (Temporary persistence allowed for refresh safety)
           timelineEvents: data.timelineEvents || [],
@@ -99,7 +114,7 @@ const customStorage: PersistStorage<AppState> = {
 
           // Defaults for non-persisted
           activeMode: 'Artifact Brawl',
-          activeUser: data.settings?.activeUser || (data.players && data.players.length > 0 ? data.players[0] : ''),
+          activeUser: resolvedActiveUser || '',
           detectedUnknowns: {}, // Do not persist unknowns
 
         } as any,
@@ -146,12 +161,12 @@ const customStorage: PersistStorage<AppState> = {
         alwaysOnTop: state.isAlwaysOnTop,
         overlayStyle: state.overlayStyle,
         visualMode: state.visualMode,
-        uiStyle: state.uiStyle,
         ocrMode: state.ocrMode,
                 captureMode: state.captureMode,
                 lockOcrTeams: state.lockOcrTeams,
                 ocrBestGuessThresholds: state.ocrBestGuessThresholds,
                 ocrCalibration: state.ocrCalibration,
+                tutorialCompleted: state.tutorialCompleted,
         activeUser: state.activeUser
       },
       layouts: state.layouts,
@@ -204,12 +219,12 @@ export const useAppStore = create<AppState>()(
         isAlwaysOnTop: state.isAlwaysOnTop,
         overlayStyle: state.overlayStyle,
         visualMode: state.visualMode,
-        uiStyle: state.uiStyle,
         ocrMode: state.ocrMode,
         captureMode: state.captureMode,
         lockOcrTeams: state.lockOcrTeams,
         ocrBestGuessThresholds: state.ocrBestGuessThresholds,
         ocrCalibration: state.ocrCalibration,
+        tutorialCompleted: state.tutorialCompleted,
         activeUser: state.activeUser,
         layouts: state.layouts,
         timelineEvents: state.timelineEvents,

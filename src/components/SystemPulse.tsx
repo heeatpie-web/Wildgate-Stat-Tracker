@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
-import { RefreshCw, ScanEye, Terminal, Timer } from 'lucide-react';
+import { RefreshCw, ScanEye, Terminal, Timer, ShieldCheck } from 'lucide-react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
+import { getElectronAPI } from '../utils/electronAPI';
 
 /**
  * SystemPulse
@@ -19,64 +20,129 @@ import { useUIState } from '../providers/UIStateProvider';
 const SystemPulse: React.FC = () => {
     const { updateStatus, enableAutoLogRecording } = useUIState();
     const { isMatchInProgress, pendingReviews } = useGameData();
+    const [safety, setSafety] = React.useState<{
+        ok: boolean;
+        walExists: boolean;
+        dbMtime: number | null;
+        prevMtime: number | null;
+        walMtime: number | null;
+        lastBackupMtime: number | null;
+        error?: string;
+    } | null>(null);
 
     const pendingReviewCount = pendingReviews?.length || 0;
 
-    const dataColor = enableAutoLogRecording ? 'text-md-sys-primary' : 'text-md-sys-on-surface/35';
-    const visionColor = pendingReviewCount > 0 ? 'text-md-sys-tertiary' : 'text-md-sys-on-surface/35';
-    const missionColor = isMatchInProgress ? 'text-success' : 'text-md-sys-on-surface/35';
-
-    const updateClass = useMemo(() => {
+    const updateActivity = useMemo(() => {
         switch (updateStatus) {
-            case 'checking':
-                return 'text-md-sys-primary animate-spin';
             case 'available':
             case 'downloaded':
-                return 'text-md-sys-secondary animate-pulse';
+                return 'active';
+            case 'checking':
+                return 'checking';
             default:
-                return 'text-md-sys-on-surface/35';
+                return 'idle';
         }
     }, [updateStatus]);
 
-    const isActive =
-        enableAutoLogRecording ||
-        pendingReviewCount > 0 ||
-        isMatchInProgress ||
-        updateStatus === 'available' ||
-        updateStatus === 'downloaded' ||
-        updateStatus === 'checking';
+    React.useEffect(() => {
+        let mounted = true;
+        const api = getElectronAPI();
+        if (!api) return;
+        const load = async () => {
+            try {
+                const res = await api.invoke('db-status');
+                if (mounted) setSafety(res);
+            } catch {
+                if (mounted) setSafety(null);
+            }
+        };
+        void load();
+        const id = window.setInterval(() => { void load(); }, 20000);
+        return () => {
+            mounted = false;
+            window.clearInterval(id);
+        };
+    }, []);
 
-    const tooltip =
-        `Data: ${enableAutoLogRecording ? 'On' : 'Off'} | ` +
-        `Vision: ${pendingReviewCount > 0 ? `${pendingReviewCount} pending` : 'Idle'} | ` +
-        `Mission: ${isMatchInProgress ? 'Live' : 'Idle'} | ` +
-        `Updates: ${updateStatus || 'idle'}`;
+    const fmtTs = (ts: number | null | undefined) => {
+        if (!ts) return 'n/a';
+        try {
+            return new Date(ts).toLocaleString();
+        } catch {
+            return 'n/a';
+        }
+    };
+
+    const safetyState = (() => {
+        if (!safety) return { color: 'bg-md-sys-outline/40', label: 'No data' };
+        if (!safety.ok) return { color: 'bg-danger', label: 'Error' };
+        if (safety.walExists) return { color: 'bg-warning', label: 'Recovery queued' };
+        return { color: 'bg-success', label: 'Protected' };
+    })();
+
+    const indicators = [
+        {
+            id: 'data',
+            label: safetyState.label === 'Protected' ? '' : safetyState.label,
+            icon: <ShieldCheck size={12} />,
+            active: enableAutoLogRecording,
+            color: enableAutoLogRecording ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
+            dot: safetyState.color,
+            tooltip: safety
+                ? `Data: ${safetyState.label}\nLast Save: ${fmtTs(safety.dbMtime)}\nWAL Pending: ${safety.walExists ? 'Yes' : 'No'}\nWAL Time: ${fmtTs(safety.walMtime)}\nPrevious Snapshot: ${fmtTs(safety.prevMtime)}\nLast Backup: ${fmtTs(safety.lastBackupMtime)}${safety.error ? `\nError: ${safety.error}` : ''}`
+                : 'Data: unavailable',
+        },
+        {
+            id: 'vision',
+            label: pendingReviewCount > 0 ? `${pendingReviewCount}` : '',
+            icon: <ScanEye size={12} />,
+            active: pendingReviewCount > 0,
+            color: pendingReviewCount > 0 ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
+            dot: pendingReviewCount > 0 ? 'bg-md-sys-tertiary animate-pulse' : 'bg-md-sys-outline/40',
+            tooltip: `OCR: ${pendingReviewCount > 0 ? `${pendingReviewCount} pending review` : 'Idle'}\nCaptures waiting to be reviewed.`,
+        },
+        {
+            id: 'mission',
+            label: isMatchInProgress ? 'Live' : '',
+            icon: <Timer size={12} />,
+            active: isMatchInProgress,
+            color: isMatchInProgress ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
+            dot: isMatchInProgress ? 'bg-success animate-pulse' : 'bg-md-sys-outline/40',
+            tooltip: `Match: ${isMatchInProgress ? 'In Progress' : 'Idle'}`,
+        },
+        {
+            id: 'updates',
+            label: updateActivity !== 'idle' ? (updateStatus === 'available' ? 'New' : updateStatus === 'downloaded' ? 'Ready' : '') : '',
+            icon: <RefreshCw size={12} className={updateActivity === 'checking' ? 'animate-spin' : ''} />,
+            active: updateActivity !== 'idle',
+            color: updateActivity !== 'idle' ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
+            dot: updateActivity !== 'idle' ? 'bg-md-sys-secondary animate-pulse' : 'bg-md-sys-outline/40',
+            tooltip: `Updates: ${updateStatus === 'available' ? 'New version available' : updateStatus === 'downloaded' ? 'Restart to apply' : updateStatus === 'checking' ? 'Checking...' : 'Up to date'}`,
+        },
+    ] as const;
 
     return (
         <div
-            className={[
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-full',
-                'bg-md-sys-surface-container-high/85 text-md-sys-on-surface',
-                'border border-md-sys-outline/10',
-                'transition-colors duration-200',
-                isActive ? 'bg-md-sys-surface-container-highest/90' : '',
-            ].join(' ')}
-            title={tooltip}
+            className="flex items-center gap-1"
             aria-label="System status"
         >
-            <Terminal size={14} className={`${dataColor} transition-colors`} aria-label="Data status" />
-            <div className="w-px h-3 bg-md-sys-outline/10 mx-0.5" />
-
-            <ScanEye size={14} className={`${visionColor} transition-colors`} aria-label="Vision status" />
-            <div className="w-px h-3 bg-md-sys-outline/10 mx-0.5" />
-
-            <Timer size={14} className={`${missionColor} transition-colors`} aria-label="Mission status" />
-            <div className="w-px h-3 bg-md-sys-outline/10 mx-0.5" />
-
-            <RefreshCw size={14} className={`${updateClass} transition-colors`} aria-label="Update status" />
+            {indicators.map((indicator) => (
+                <div
+                    key={indicator.id}
+                    title={indicator.tooltip}
+                    className={[
+                        'system-pulse-chip h-7 px-2.5 rounded-xl inline-flex items-center gap-1.5 transition-colors text-label-sm uppercase tracking-[0.06em]',
+                        'bg-md-sys-surface-container-high/80 text-md-sys-on-surface/74',
+                        indicator.active ? 'bg-md-sys-surface-container-highest/92 text-md-sys-on-surface/90' : '',
+                    ].join(' ')}
+                >
+                    <span className={indicator.color}>{indicator.icon}</span>
+                    {indicator.label && <span>{indicator.label}</span>}
+                    <span className={`w-1.5 h-1.5 rounded-full ${indicator.dot}`} />
+                </div>
+            ))}
         </div>
     );
 };
 
 export default SystemPulse;
-

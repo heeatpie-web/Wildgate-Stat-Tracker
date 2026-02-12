@@ -90,9 +90,9 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
   const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 80) return 'text-green-400';
-    if (confidence >= 60) return 'text-yellow-400';
-    return 'text-red-400';
+    if (confidence >= 80) return 'text-success';
+    if (confidence >= 60) return 'text-warning';
+    return 'text-danger';
   };
   const updateShip = (shipType: string) => {
     setEditedData(prev => ({
@@ -213,15 +213,15 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
 
   return (
     <div className="fixed inset-0 md3-dialog-scrim backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="md3-dialog shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="md3-dialog rounded-modal shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="md3-surface-high p-2 rounded-xl">
-              <Ship className="text-purple-400" size={20} />
+            <div className="md3-surface-high p-2 rounded-card">
+              <Ship className="text-accent" size={20} />
             </div>
             <div>
-              <h2 className="md3-dialog-title text-base">Review Captured Data</h2>
-              <p className="text-xs opacity-50">
+              <h2 className="text-title font-bold">Review Captured Data</h2>
+              <p className="text-label-sm opacity-60">
                 {editedData.screenshotType === 'crew_hub' ? 'Crew Hub' :
                  editedData.screenshotType === 'tactical_map' ? 'Tactical Map' : 'Unknown Screen'}
                 {' - '}
@@ -235,40 +235,40 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
             onClick={onCancel}
             className="md3-icon-btn"
           >
-            <X size={20} className="opacity-70" />
+            <X size={18} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar md3-dialog-content">
           <div className="grid grid-cols-4 gap-2">
-            <div className="md3-surface-high rounded-xl p-2 text-center">
-              <div className="text-[9px] uppercase opacity-50">Ship</div>
-              <div className={`text-xs font-bold ${getConfidenceColor(confidenceSummary.shipConf)}`}>{Math.round(confidenceSummary.shipConf)}%</div>
+            <div className="md3-surface-high rounded-card p-2 text-center">
+              <div className="text-label-xs uppercase opacity-60">Ship</div>
+              <div className={`text-label-sm font-bold ${getConfidenceColor(confidenceSummary.shipConf)}`}>{Math.round(confidenceSummary.shipConf)}%</div>
             </div>
-            <div className="md3-surface-high rounded-xl p-2 text-center">
-              <div className="text-[9px] uppercase opacity-50">Team</div>
-              <div className={`text-xs font-bold ${getConfidenceColor(confidenceSummary.teammateConf)}`}>{Math.round(confidenceSummary.teammateConf)}%</div>
+            <div className="md3-surface-high rounded-card p-2 text-center">
+              <div className="text-label-xs uppercase opacity-60">Team</div>
+              <div className={`text-label-sm font-bold ${getConfidenceColor(confidenceSummary.teammateConf)}`}>{Math.round(confidenceSummary.teammateConf)}%</div>
             </div>
-            <div className="md3-surface-high rounded-xl p-2 text-center">
-              <div className="text-[9px] uppercase opacity-50">Opponents</div>
-              <div className={`text-xs font-bold ${getConfidenceColor(confidenceSummary.opponentPlayerConf)}`}>{Math.round(confidenceSummary.opponentPlayerConf)}%</div>
+            <div className="md3-surface-high rounded-card p-2 text-center">
+              <div className="text-label-xs uppercase opacity-60">Opponents</div>
+              <div className={`text-label-sm font-bold ${getConfidenceColor(confidenceSummary.opponentPlayerConf)}`}>{Math.round(confidenceSummary.opponentPlayerConf)}%</div>
             </div>
-            <div className="md3-surface-high rounded-xl p-2 text-center">
-              <div className="text-[9px] uppercase opacity-50">Modifiers</div>
-              <div className={`text-xs font-bold ${getConfidenceColor(confidenceSummary.modConf)}`}>{Math.round(confidenceSummary.modConf)}%</div>
+            <div className="md3-surface-high rounded-card p-2 text-center">
+              <div className="text-label-xs uppercase opacity-60">Modifiers</div>
+              <div className={`text-label-sm font-bold ${getConfidenceColor(confidenceSummary.modConf)}`}>{Math.round(confidenceSummary.modConf)}%</div>
             </div>
           </div>
           {screenshots && screenshots.length > 0 && (
-            <div className="md3-card rounded-2xl overflow-hidden">
+            <div className="md3-card rounded-card overflow-hidden">
               <button
                 onClick={() => toggleSection('screenshots')}
                 className="w-full p-3 flex items-center justify-between hover:bg-md-sys-on-surface/5 transition-colors"
               >
                 <div className="flex items-center gap-2">
-                  <Image size={16} className="text-sky-400" />
+                  <Image size={16} className="text-info" />
                   <span className="font-semibold">
                     Reference Screenshots ({screenshots.length})
                   </span>
-                  <span className="text-[10px] opacity-40">Click to compare</span>
+                  <span className="text-label-sm opacity-40">Click to compare</span>
                 </div>
                 {expandedSections.screenshots ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </button>
@@ -290,7 +290,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                           <Eye size={16} className="text-white" />
                         </div>
-                        <span className="absolute bottom-1 left-1 text-[9px] bg-black/60 px-1 rounded font-bold text-white/70">
+                        <span className="absolute bottom-1 left-1 text-label-xs bg-black/60 px-1 rounded font-bold text-white/60">
                           {i + 1}
                         </span>
                       </button>
@@ -301,13 +301,13 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
             </div>
           )}
           {editedData.playerShip && (
-            <div className="md3-card rounded-2xl overflow-hidden">
+            <div className="md3-card rounded-card overflow-hidden">
               <button
                 onClick={() => toggleSection('ship')}
                 className="w-full p-3 flex items-center justify-between hover:bg-md-sys-on-surface/5 transition-colors"
               >
                 <div className="flex items-center gap-2">
-                  <Ship size={16} className="text-blue-400" />
+                  <Ship size={16} className="text-info" />
                   <span className="font-semibold">Your Ship</span>
                 </div>
                 {expandedSections.ship ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -320,10 +320,10 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                       <button
                         key={ship}
                         onClick={() => updateShip(ship)}
-                        className={`md3-chip text-xs font-medium transition-all ${
+                        className={`md3-chip text-label-sm font-medium transition-all ${
                           editedData.playerShip?.shipType === ship
                             ? 'bg-md-sys-primary text-md-sys-onPrimary'
-                            : 'text-md-sys-on-surface/70 hover:bg-md-sys-on-surface/10'
+                            : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/10'
                         }`}
                       >
                         {ship.replace(/ \(\d Player\)/, '')}
@@ -331,7 +331,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                     ))}
                   </div>
                   {editedData.playerShip && (
-                    <p className="text-xs opacity-50">
+                    <p className="text-label-sm opacity-60">
                       Selected: {editedData.playerShip.shipType}
                       <span className={`ml-2 ${getConfidenceColor(editedData.playerShip.confidence)}`}>
                         ({editedData.playerShip.confidence.toFixed(0)}%)
@@ -342,13 +342,13 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
               )}
             </div>
           )}
-          <div className="md3-card rounded-2xl overflow-hidden">
+          <div className="md3-card rounded-card overflow-hidden">
             <button
               onClick={() => toggleSection('modifiers')}
               className="w-full p-3 flex items-center justify-between hover:bg-md-sys-on-surface/5 transition-colors"
             >
               <div className="flex items-center gap-2">
-                <MapPin size={16} className="text-amber-400" />
+                <MapPin size={16} className="text-warning" />
                 <span className="font-semibold">
                   Reach Modifiers ({editedData.reachModifiers.length})
                 </span>
@@ -366,15 +366,15 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                       <button
                         key={modifier}
                         onClick={() => toggleModifier(modifier)}
-                        className={`md3-chip text-xs font-medium transition-all flex items-center gap-1 ${
+                        className={`md3-chip text-label-sm font-medium transition-all flex items-center gap-1 ${
                           isSelected
-                            ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50'
-                            : 'text-md-sys-on-surface/70 hover:bg-md-sys-on-surface/10'
+                            ? 'bg-warning-soft text-warning border border-warning-soft'
+                            : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/10'
                         }`}
                       >
                         {modifier}
                         {extracted && (
-                          <span className={`text-[10px] ${getConfidenceColor(extracted.confidence)}`}>
+                          <span className={`text-label-sm ${getConfidenceColor(extracted.confidence)}`}>
                             {extracted.confidence.toFixed(0)}%
                           </span>
                         )}
@@ -384,16 +384,16 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                 </div>
                 {extraModifiers.length > 0 && (
                   <div className="mt-3">
-                    <div className="text-[10px] uppercase font-bold opacity-40 mb-1">Other Detected</div>
+                    <div className="text-label-sm uppercase font-bold opacity-40 mb-1">Other Detected</div>
                     <div className="flex flex-wrap gap-2">
                       {extraModifiers.map(mod => (
                         <button
                           key={mod.name}
                           onClick={() => toggleModifier(mod.name)}
-                          className="md3-chip text-xs font-medium hover:bg-md-sys-on-surface/10 transition-all flex items-center gap-1"
+                          className="md3-chip text-label-sm font-medium hover:bg-md-sys-on-surface/10 transition-all flex items-center gap-1"
                         >
                           {mod.name}
-                          <span className={`text-[10px] ${getConfidenceColor(mod.confidence)}`}>
+                          <span className={`text-label-sm ${getConfidenceColor(mod.confidence)}`}>
                             {mod.confidence.toFixed(0)}%
                           </span>
                         </button>
@@ -404,13 +404,13 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
               </div>
             )}
           </div>
-          <div className="md3-card rounded-2xl overflow-hidden">
+          <div className="md3-card rounded-card overflow-hidden">
             <button
               onClick={() => toggleSection('teammates')}
               className="w-full p-3 flex items-center justify-between hover:bg-md-sys-on-surface/5 transition-colors"
             >
               <div className="flex items-center gap-2">
-                <Users size={16} className="text-green-400" />
+                <Users size={16} className="text-success" />
                 <span className="font-semibold">
                   Teammates ({editedData.teammates.length})
                 </span>
@@ -421,28 +421,28 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
             {expandedSections.teammates && (
               <div className="p-3 pt-0 space-y-2">
                 {editedData.teammates.length === 0 ? (
-                  <p className="text-xs opacity-40 italic">No teammates detected</p>
+                  <p className="text-label-sm opacity-40 italic">No teammates detected</p>
                 ) : (
                   editedData.teammates.map((teammate, index) => (
                     <div
                       key={index}
-                      className="flex items-center gap-2 md3-surface-high rounded-xl p-2"
+                      className="flex items-center gap-2 md3-surface-high rounded-card p-2"
                     >
                       <input
                         type="text"
                         value={teammate.name}
                         onChange={(e) => updateTeammate(index, e.target.value)}
                         list="pilot-suggestions"
-                        className="md3-textfield md3-textfield--outlined flex-1 text-sm"
+                        className="md3-textfield md3-textfield--outlined flex-1 text-body"
                       />
-                      <span className={`text-xs ${getConfidenceColor(teammate.confidence)}`}>
+                      <span className={`text-label-sm ${getConfidenceColor(teammate.confidence)}`}>
                         {teammate.confidence.toFixed(0)}%
                       </span>
                       <button
                         onClick={() => removeTeammate(index)}
-                        className="md3-icon-btn text-red-400"
+                        className="md3-icon-btn text-danger"
                       >
-                        <Trash2 size={14} className="text-red-400" />
+                        <Trash2 size={14} className="text-danger" />
                       </button>
                     </div>
                   ))
@@ -455,13 +455,13 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
               </div>
             )}
           </div>
-          <div className="md3-card rounded-2xl overflow-hidden">
+          <div className="md3-card rounded-card overflow-hidden">
             <button
               onClick={() => toggleSection('opponents')}
               className="w-full p-3 flex items-center justify-between hover:bg-md-sys-on-surface/5 transition-colors"
             >
               <div className="flex items-center gap-2">
-                <Users size={16} className="text-red-400" />
+                <Users size={16} className="text-danger" />
                 <span className="font-semibold">
                   Opponents ({editedData.opponentTeams.reduce((sum, t) => sum + t.players.length, 0)})
                 </span>
@@ -472,10 +472,10 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
             {expandedSections.opponents && (
               <div className="p-3 pt-0 space-y-3">
                 {editedData.opponentTeams.length === 0 ? (
-                  <p className="text-xs opacity-40 italic">No opponents detected</p>
+                  <p className="text-label-sm opacity-40 italic">No opponents detected</p>
                 ) : (
                   editedData.opponentTeams.map((team, teamIndex) => (
-                    <div key={teamIndex} className="md3-surface-high rounded-xl p-2">
+                    <div key={teamIndex} className="md3-surface-high rounded-card p-2">
                       <div className="flex items-center gap-2 mb-2">
                         <div
                           className={`w-3 h-3 rounded-full ${
@@ -486,10 +486,10 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                             'bg-gray-500'
                           }`}
                         />
-                        <span className="text-sm font-medium opacity-80">
+                        <span className="text-body font-medium opacity-60">
                           {team.teamName || 'Unknown Team'}
                         </span>
-                        <span className="text-xs opacity-40">
+                        <span className="text-label-sm opacity-40">
                           {team.shipType}
                         </span>
                       </div>
@@ -499,17 +499,17 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                             key={playerIndex}
                             className="flex items-center gap-2 pl-5"
                           >
-                            <span className="flex-1 text-sm opacity-70">
+                            <span className="flex-1 text-body opacity-60">
                               {player.name}
                             </span>
-                            <span className={`text-xs ${getConfidenceColor(player.confidence)}`}>
+                            <span className={`text-label-sm ${getConfidenceColor(player.confidence)}`}>
                               {player.confidence.toFixed(0)}%
                             </span>
                             <button
                               onClick={() => removeOpponent(teamIndex, playerIndex)}
-                              className="md3-icon-btn text-red-400"
+                              className="md3-icon-btn text-danger"
                             >
-                              <Trash2 size={12} className="text-red-400" />
+                              <Trash2 size={12} className="text-danger" />
                             </button>
                           </div>
                         ))}
@@ -524,9 +524,25 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
             <div className="md3-banner md3-banner--warn">
               <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
               <div>
-                <p className="text-sm font-medium">Low Confidence Results</p>
-                <p className="text-xs opacity-70 mt-0.5">
-                  Some extracted data may be inaccurate. Please review carefully before applying.
+                <p className="text-body font-medium">Low Confidence Results</p>
+                <p className="text-label-sm opacity-60 mt-0.5">
+                  OCR struggled with this screenshot. Review each field before applying &mdash;
+                  consider retaking the capture with better lighting or zoom.
+                </p>
+              </div>
+            </div>
+          )}
+          {editedData.teammates.length === 0 &&
+           editedData.opponentTeams.length === 0 &&
+           editedData.reachModifiers.length === 0 &&
+           !editedData.playerShip && (
+            <div className="md3-banner md3-banner--warn">
+              <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-body font-medium">No Data Extracted</p>
+                <p className="text-label-sm opacity-60 mt-0.5">
+                  Nothing could be read from this screenshot. Make sure you are capturing a
+                  Crew Hub or Tactical Map screen, and that the image is not cropped or obscured.
                 </p>
               </div>
             </div>
@@ -589,7 +605,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
               alt={`Screenshot ${lightboxIdx + 1}`}
               className="max-w-full max-h-[85vh] object-contain rounded-lg"
             />
-            <div className="text-center mt-2 text-xs text-white/50 font-bold">
+              <div className="text-center mt-2 text-label-sm text-white/60 font-bold">
               Screenshot {lightboxIdx + 1} of {screenshots.length}
             </div>
           </div>

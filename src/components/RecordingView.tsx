@@ -33,24 +33,22 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
     }, [density]);
 
     const LeftTabBar = density === 'compact' ? (
-        <div className="grid grid-cols-2 gap-2 md3-surface rounded-2xl p-2 border border-md-sys-outline/10">
+        <div className="grid grid-cols-2 gap-1 md3-surface rounded-xl p-0.5 border border-md-sys-outline/10 h-8">
             <button
                 onClick={() => setLeftTab('actions')}
-                className={`h-9 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                    leftTab === 'actions'
+                className={`h-7 rounded-lg text-label-xs font-black uppercase tracking-widest transition-all ${leftTab === 'actions'
                         ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-md'
                         : 'md3-surface text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
-                }`}
+                    }`}
             >
                 Actions
             </button>
             <button
                 onClick={() => setLeftTab('loadout')}
-                className={`h-9 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                    leftTab === 'loadout'
+                className={`h-7 rounded-lg text-label-xs font-black uppercase tracking-widest transition-all ${leftTab === 'loadout'
                         ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-md'
                         : 'md3-surface text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
-                }`}
+                    }`}
             >
                 Loadout
             </button>
@@ -58,7 +56,7 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
     ) : null;
 
     const LeftPanel = (
-        <div className="min-h-0 flex flex-col gap-3 overflow-hidden">
+        <div className="recording-left-shell min-h-0 flex flex-col gap-3 overflow-hidden rounded-2xl p-3">
             {LeftTabBar}
             {density === 'standard' ? (
                 <>
@@ -66,7 +64,7 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
                         <SquadronPanel />
                     </div>
                     <div data-tour="action-panel" className="shrink-0">
-                        <ActionPanel onSmartCaptureData={onSmartCaptureData} />
+                        <ActionPanel onSmartCaptureData={onSmartCaptureData} density="compact" />
                     </div>
                 </>
             ) : (
@@ -109,7 +107,7 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
         <div
             data-tour="view-recording"
             className="h-full min-h-0 grid gap-4 p-4 pb-6 overflow-hidden"
-            style={{ gridTemplateColumns: 'minmax(300px, 380px) minmax(0, 1fr) minmax(0, 1.25fr)' }}
+            style={{ gridTemplateColumns: 'minmax(240px, 300px) minmax(320px, 1fr) minmax(420px, 1.65fr)' }}
         >
             {/* Left Column: Recording panel (must not scroll). */}
             <div className="min-h-0 overflow-hidden">

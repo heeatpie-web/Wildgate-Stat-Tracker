@@ -125,10 +125,10 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
     if (variant === 'hero') {
         return (
             <div className="flex flex-col items-center justify-center animate-pulse-slow">
-                <span className="font-mono font-black text-6xl tracking-tighter text-white drop-shadow-2xl">
+                <span className="font-mono font-black text-6xl tracking-tighter text-md-sys-on-surface drop-shadow-2xl">
                     {isMatchInProgress ? matchElapsedDisplay : elapsedDisplay}
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-60 mt-2">
+                <span className="text-label-sm font-bold uppercase tracking-[0.3em] opacity-60 mt-2">
                     {isMatchInProgress ? "Mission Time" : "Session Time"}
                 </span>
             </div>
@@ -143,7 +143,7 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
                     <button
                         onClick={togglePause}
                         className={`md3-icon-btn md3-icon-btn--small transition-all ${isPaused
-                            ? 'bg-amber-500 text-black hover:brightness-110'
+                            ? 'bg-warning text-black hover:brightness-110'
                             : 'md3-icon-btn--tonal'
                             }`}
                         title={isPaused ? "Resume" : "Pause"}
@@ -152,14 +152,14 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
                         {isPaused ? <Play size={14} /> : <Pause size={14} />}
                     </button>
                     <div className="flex flex-col min-w-[60px]">
-                        <span className={`font-mono font-bold text-sm leading-none ${isMatchInProgress ? 'text-success' : (isPaused ? 'text-amber-500' : 'text-md-sys-on-surface')}`}>
+                        <span className={`font-mono font-bold text-body leading-none ${isMatchInProgress ? 'text-success' : (isPaused ? 'text-warning' : 'text-md-sys-on-surface')}`}>
                             {isMatchInProgress ? matchElapsedDisplay : elapsedDisplay}
                         </span>
-                        <span className={`text-[7px] font-black uppercase ${isMatchInProgress ? 'text-success/70' : (isPaused ? 'text-amber-500/70' : 'text-md-sys-on-surface/40')}`}>
+                        <span className={`text-label-xs font-bold uppercase ${isMatchInProgress ? 'text-success/60' : (isPaused ? 'text-warning/60' : 'text-md-sys-on-surface/40')}`}>
                             {isMatchInProgress ? 'Mission' : (isPaused ? 'Session Paused' : 'Session')}
                         </span>
                         {isMatchInProgress && (
-                            <span className="text-[7px] font-semibold text-md-sys-on-surface/50">
+                            <span className="text-label-xs font-semibold text-md-sys-on-surface/60">
                                 S: {elapsedDisplay}
                             </span>
                         )}
@@ -186,12 +186,12 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
                     )}
 
                     <div className="flex flex-col items-end">
-                    <span className="font-bold text-xs leading-tight">
-                        <span className="text-success">{sessionWins}</span>
-                        <span className="text-md-sys-on-surface/30 px-0.5">/</span>
-                        <span className="text-md-sys-on-surface/60">{sessionMatches.length}</span>
-                    </span>
-                    <span className="text-[7px] font-semibold text-md-sys-on-surface/40 uppercase">W/L</span>
+                        <span className="font-bold text-label-sm leading-tight">
+                            <span className="text-success">{sessionWins}</span>
+                            <span className="text-md-sys-on-surface/40 px-0.5">/</span>
+                            <span className="text-md-sys-on-surface/60">{sessionMatches.length}</span>
+                        </span>
+                        <span className="text-label-xs font-semibold text-md-sys-on-surface/40 uppercase">W/L</span>
                     </div>
                 </div>
             </div>
@@ -204,7 +204,7 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
             <div className="flex items-center gap-2">
                 <button
                     onClick={togglePause}
-                    className={`p-2 rounded-full transition-all ${isPaused ? 'bg-amber-500 text-black hover:brightness-110' : 'md3-btn-tonal text-md-sys-on-surface hover:bg-md-sys-primary hover:text-md-sys-onPrimary'}`}
+                    className={`p-2 rounded-full transition-all ${isPaused ? 'bg-warning text-black hover:brightness-110' : 'md3-btn-tonal text-md-sys-on-surface hover:bg-md-sys-primary hover:text-md-sys-onPrimary'}`}
                     title={isPaused ? "Resume Session" : "Pause Session"}
                 >
                     {isPaused ? <Play size={20} /> : <Pause size={20} />}
@@ -215,21 +215,21 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
                 {!isMatchInProgress ? (
                     <button
                         onClick={onStartMatch}
-                        className="md3-btn-tonal rounded-full hover:bg-green-600 hover:text-white transition-all flex items-center gap-2 px-4"
+                        className="md3-btn-tonal rounded-full hover:bg-success hover:text-md-sys-on-surface transition-all flex items-center gap-2 px-4"
                         title="Start New Mission"
                     >
                         <Swords size={20} />
-                        <span className="text-[10px] font-black uppercase tracking-wider">Start Mission</span>
+                        <span className="text-label-sm font-bold uppercase tracking-wider">Start Mission</span>
                     </button>
                 ) : (
-                    <div className="flex items-center gap-3 md3-surface-high rounded-full px-4 py-1.5 border border-green-500/30 animate-pulse-slow">
+                    <div className="flex items-center gap-3 md3-surface-high rounded-full px-4 py-1.5 border border-md-sys-primary/30 animate-pulse-slow">
                         <div className="flex flex-col items-center">
-                            <span className="text-[8px] font-black uppercase text-green-500">Live Mission</span>
-                            <span className="font-mono font-black text-sm text-green-500">{matchElapsedDisplay}</span>
+                            <span className="text-label-xs font-bold uppercase text-md-sys-primary">Live Mission</span>
+                            <span className="font-mono font-bold text-body text-md-sys-primary">{matchElapsedDisplay}</span>
                         </div>
                         <button
                             onClick={onResetMatch}
-                            className="p-1 text-md-sys-on-surface/40 hover:text-red-500 transition-colors"
+                            className="p-1 text-md-sys-on-surface/40 hover:text-danger transition-colors"
                             title="Reset Mission Timer"
                         >
                             <RotateCcw size={14} />
@@ -241,19 +241,19 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
             <div className="h-8 w-px bg-md-sys-outline/10"></div>
 
             <div className="flex flex-col items-end">
-                <div className="text-[10px] font-black uppercase opacity-60 leading-none mb-1 flex items-center gap-1">
-                    {isPaused ? <span className="text-amber-500 flex items-center gap-1">Paused</span> : "Session Time"}
+                <div className="text-label-sm font-bold uppercase opacity-60 leading-none mb-1 flex items-center gap-1">
+                    {isPaused ? <span className="text-warning flex items-center gap-1">Paused</span> : "Session Time"}
                 </div>
-                <div className={`font-mono font-black text-xl leading-none tracking-tight ${isPaused ? 'opacity-50' : 'text-md-sys-primary'}`}>
+                <div className={`font-mono font-bold text-xl leading-none tracking-tight ${isPaused ? 'opacity-60' : 'text-md-sys-primary'}`}>
                     {elapsedDisplay}
                 </div>
             </div>
             <div className="h-8 w-px bg-md-sys-outline/10"></div>
             <div>
-                <div className="text-[10px] font-black uppercase opacity-60 leading-none mb-1">Session Record</div>
-                <div className="font-black text-xl leading-none flex items-center gap-1">
-                    <span className="text-green-500">{sessionWins}</span>
-                    <span className="opacity-30 text-sm">/</span>
+                <div className="text-label-sm font-bold uppercase opacity-60 leading-none mb-1">Session Record</div>
+                <div className="font-bold text-xl leading-none flex items-center gap-1">
+                    <span className="text-md-sys-primary">{sessionWins}</span>
+                    <span className="opacity-30 text-body">/</span>
                     <span>{sessionMatches.length}</span>
                 </div>
             </div>

@@ -18,33 +18,8 @@ import type { OCRExtractedData } from '../utils/ocr/ocrTypes';
 import { useSmartCapture, type SavedCapture } from '../hooks/useSmartCapture';
 import { LocalImage } from './LocalImage';
 import { exportJSONFile } from '../utils/export';
-
-type ModeFilter = 'all' | 'Artifact Brawl' | 'Fleet Battle';
-
-const IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.bmp', '.webp'];
-const countImages = (paths: string[]) => paths.filter(p => IMAGE_EXTS.some(ext => p.toLowerCase().endsWith(ext))).length;
-
-const RESULT_COLORS: Record<string, string> = {
-    Win: 'bg-success',
-    Loss: 'bg-danger',
-    Draw: 'bg-neutral',
-};
-
-type QueueStatusKey = 'Resolved' | 'NeedsOCR' | 'LowConf' | 'MissingData' | 'OK';
-
-const getQueueStatus = (m: Match): { key: QueueStatusKey; missingShip: boolean; missingPlayers: boolean; hasArtifacts: boolean; hasOcr: boolean; confidence: number } => {
-    const hasArtifacts = (m.artifacts?.length || 0) > 0;
-    const hasOcr = !!m.ocrDebug;
-    const confidence = m.ocrDebug?.confidence ?? 0;
-    const missingShip = !m.ship;
-    const missingPlayers = (m.teammates?.length || 0) === 0 && (m.opponents?.length || 0) === 0 && (m.opponentTeams?.length || 0) === 0;
-
-    if (m.ocrReviewedAt) return { key: 'Resolved', missingShip, missingPlayers, hasArtifacts, hasOcr, confidence };
-    if (hasArtifacts && !hasOcr) return { key: 'NeedsOCR', missingShip, missingPlayers, hasArtifacts, hasOcr, confidence };
-    if (hasOcr && confidence > 0 && confidence < 80) return { key: 'LowConf', missingShip, missingPlayers, hasArtifacts, hasOcr, confidence };
-    if (missingShip || missingPlayers) return { key: 'MissingData', missingShip, missingPlayers, hasArtifacts, hasOcr, confidence };
-    return { key: 'OK', missingShip, missingPlayers, hasArtifacts, hasOcr, confidence };
-};
+import { Section, StatCard, EditableStatCard, ModifierAdder, KillAdder, InlinePlayerAdd } from './smart-captures/SmartCaptureWidgets';
+import { type ModeFilter, IMAGE_EXTS, countImages, RESULT_COLORS, type QueueStatusKey, getQueueStatus, OCR_STATE_META } from './smart-captures/smartCaptureUtils';
 
 const SmartCapturesPanel: React.FC = () => {
     const { matches, updateMatch, pilotRegistry, setSelectedTeammates, setSelectedOpponents, setActiveShip, setSessionTeams, setSessionShipTypes, setSelectedReachModifiers, selectedTeammates, selectedOpponents, sessionTeams } = useGameData();
@@ -174,7 +149,7 @@ const SmartCapturesPanel: React.FC = () => {
         if (!selectedMatchId) return;
         const m = matches.find(x => x.id === selectedMatchId);
         if (!m) return;
-        updateMatch({ ...m, ocrReviewedAt: Date.now() });
+        updateMatch({ ...m, ocrReviewedAt: Date.now(), ocrState: 'saved' });
         setToast({ message: 'Marked as resolved', type: 'success' });
         if (queueOnly) {
             setTimeout(() => goNextQueue(), 0);
@@ -234,7 +209,7 @@ const SmartCapturesPanel: React.FC = () => {
             const m = byId.get(id);
             if (!m) return;
             if (m.ocrReviewedAt) return;
-            updateMatch({ ...m, ocrReviewedAt: now });
+            updateMatch({ ...m, ocrReviewedAt: now, ocrState: 'saved' });
         });
     }, [matches, updateMatch]);
 
@@ -274,6 +249,7 @@ const SmartCapturesPanel: React.FC = () => {
                 const imagePaths = (match.artifacts || []).filter(p => IMAGE_EXTS.some(ext => p.toLowerCase().endsWith(ext)));
                 if (imagePaths.length === 0) continue;
 
+                updateMatch({ ...match, ocrState: 'processing' });
                 const settled = await Promise.allSettled(imagePaths.map(p => rerunOCROnArtifact(p, activeUser, ocrMode)));
                 const results = settled.map((s, i) => {
                     if (s.status === 'fulfilled') return { ...s.value, imagePath: imagePaths[i] };
@@ -348,6 +324,7 @@ const SmartCapturesPanel: React.FC = () => {
                         mergeStats: combined.mergeStats as any,
                         timestamp: Date.now(),
                     },
+                    ocrState: 'reviewing',
                 };
 
                 updateMatch(updated);
@@ -363,34 +340,27 @@ const SmartCapturesPanel: React.FC = () => {
 
     return (
         <div data-tour="view-smart-captures" className="h-full min-h-0 p-3">
-            <div className="h-full min-h-0 grid grid-cols-1 lg:grid-cols-[360px,1fr] gap-3">
+            <div className="h-full min-h-0 grid grid-cols-1 lg:grid-cols-[380px,1fr] gap-3">
                 
-                <div className="min-h-0 flex flex-col md3-card rounded-2xl overflow-hidden p-0">
+                <div className="min-h-0 flex flex-col mg-surface-high rounded-card overflow-hidden p-0" style={{ backgroundImage: 'radial-gradient(circle at bottom left, rgba(139,92,246,0.06), transparent 50%)' }}>
                     <div className="px-4 pt-4 pb-3 space-y-3 border-b border-md-sys-outline/10">
                         <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-9 h-9 rounded-2xl bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer flex items-center justify-center sc-bordered">
-                                    <ScanEye size={14} className="opacity-80" />
+                                <div className="w-9 h-9 rounded-card bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer flex items-center justify-center">
+                                    <ScanEye size={14} className="opacity-60" />
                                 </div>
                                 <div className="min-w-0">
-                                    <div className="text-[13px] font-black tracking-wide text-md-sys-on-surface">Smart Captures</div>
-                                    <div className="text-[10px] text-md-sys-on-surface/55">Work queue for OCR, artifacts, and session sync</div>
+                                    <div className="text-body font-bold tracking-wide text-md-sys-on-surface">Smart Captures</div>
+                                    <div className="text-label-sm text-md-sys-on-surface/60 whitespace-nowrap">{workQueueOpenCount > 0 ? `${workQueueOpenCount} open` : 'No open items'} · {visibleMatches.length} visible</div>
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-2 shrink-0">
-                                <div
-                                    className="px-2 py-1 rounded-lg md3-surface-high sc-bordered text-[9px] font-extrabold text-md-sys-on-surface/65"
-                                    title="Work queue (open / total)"
-                                >
-                                    {workQueueOpenCount}/{allWorkQueueMatches.length}
-                                </div>
-
+                            <div className="flex items-center gap-1 shrink-0">
                                 <button
                                     type="button"
                                     onClick={() => captureActions.captureOnly()}
                                     disabled={captureState.isCapturing}
-                                    className="md3-btn-tonal px-2.5 py-1.5 text-[9px] font-extrabold disabled:opacity-40 inline-flex items-center gap-1.5"
+                                    className="md3-btn-tonal px-2 py-1.5 text-label-xs font-bold disabled:opacity-disabled inline-flex items-center gap-1"
                                     title="Quick Capture (no OCR)"
                                 >
                                     {captureState.isCapturing ? <Loader2 size={10} className="animate-spin" /> : <Camera size={10} />}
@@ -400,10 +370,10 @@ const SmartCapturesPanel: React.FC = () => {
                                 <button
                                     type="button"
                                     onClick={() => setLockOcrTeams(!lockOcrTeams)}
-                                    className={`px-2.5 py-1.5 rounded-xl text-[9px] font-extrabold uppercase tracking-wide border transition-colors ${
+                                    className={`px-2 py-1.5 rounded-control text-label-xs font-bold uppercase tracking-wide border transition-colors ${
                                         lockOcrTeams
                                             ? 'bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer border-md-sys-primary/30'
-                                            : 'md3-surface-high text-md-sys-on-surface/65 border-md-sys-outline/15 hover:bg-md-sys-on-surface/5'
+                                            : 'md3-surface-high text-md-sys-on-surface/60 border-md-sys-outline/15 hover:bg-md-sys-on-surface/5'
                                     }`}
                                     title="Lock Team Mapping (OCR)"
                                 >
@@ -413,7 +383,7 @@ const SmartCapturesPanel: React.FC = () => {
                                 <button
                                     type="button"
                                     onClick={() => setToolsOpen(v => !v)}
-                                    className="md3-icon-btn md3-surface-high sc-bordered"
+                                    className="md3-icon-btn md3-surface-high"
                                     title={toolsOpen ? 'Hide Tools' : 'Show Tools'}
                                 >
                                     <ChevronDown size={14} className={`transition-transform ${toolsOpen ? 'rotate-180' : ''}`} />
@@ -428,37 +398,26 @@ const SmartCapturesPanel: React.FC = () => {
                                 placeholder="Search players, heroes, ships..."
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                className="w-full h-10 md3-surface rounded-xl pl-9 pr-3 text-xs outline-none placeholder:opacity-40"
+                                className="w-full h-10 md3-surface rounded-control pl-9 pr-3 text-label-sm outline-none placeholder:opacity-40"
                             />
                         </div>
 
-                        <div className="sc-seg sc-bordered">
-                            {([
-                                { key: 'all' as const, label: 'All' },
-                                { key: 'Artifact Brawl' as const, label: 'Artifact' },
-                                { key: 'Fleet Battle' as const, label: 'Fleet' },
-                            ] as const).map(({ key, label }) => (
+                        <div className="flex items-center gap-2">
+                            <div className="sc-seg sc-bordered flex-1">
+                                <button type="button" className="sc-seg-btn" data-active={!queueOnly} onClick={() => setQueueOnly(false)}>All Matches</button>
+                                <button type="button" className="sc-seg-btn" data-active={queueOnly} onClick={() => setQueueOnly(true)}>Queue{workQueueOpenCount > 0 ? ` (${workQueueOpenCount})` : ''}</button>
+                            </div>
+                            {queueOnly && (
                                 <button
-                                    key={key}
-                                    onClick={() => setModeFilter(key)}
-                                    className="sc-seg-btn"
-                                    data-active={modeFilter === key}
                                     type="button"
+                                    onClick={() => setShowResolved(!showResolved)}
+                                    className={`px-2.5 py-2 rounded-full text-label-xs font-bold transition-colors ${
+                                        showResolved ? 'bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer' : 'text-md-sys-on-surface/40 hover:bg-md-sys-on-surface/5'
+                                    }`}
                                 >
-                                    {label}
+                                    {showResolved ? 'Showing resolved' : 'Show resolved'}
                                 </button>
-                            ))}
-                        </div>
-
-                        <div className="flex items-center justify-between gap-2">
-                            <div className="sc-seg sc-bordered">
-                                <button type="button" className="sc-seg-btn" data-active={queueOnly} onClick={() => setQueueOnly(true)}>Queue</button>
-                                <button type="button" className="sc-seg-btn" data-active={!queueOnly} onClick={() => setQueueOnly(false)}>All</button>
-                            </div>
-                            <div className="sc-seg sc-bordered">
-                                <button type="button" className="sc-seg-btn" data-active={!showResolved} onClick={() => setShowResolved(false)}>Open</button>
-                                <button type="button" className="sc-seg-btn" data-active={showResolved} onClick={() => setShowResolved(true)}>All</button>
-                            </div>
+                            )}
                         </div>
                     </div>
 
@@ -468,7 +427,7 @@ const SmartCapturesPanel: React.FC = () => {
                             <button
                                 onClick={goPrevQueue}
                                 disabled={workQueueMatches.length === 0}
-                                className="md3-btn-tonal px-3 py-1.5 text-[10px] font-extrabold disabled:opacity-40 flex-1 inline-flex items-center justify-center"
+                                className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled flex-1 inline-flex items-center justify-center"
                                 type="button"
                                 title="Prev (P)"
                             >
@@ -477,7 +436,7 @@ const SmartCapturesPanel: React.FC = () => {
                             <button
                                 onClick={resolveSelected}
                                 disabled={!selectedMatchId}
-                                className="md3-btn-filled px-3 py-1.5 text-[10px] font-extrabold disabled:opacity-40 flex-1 inline-flex items-center justify-center"
+                                className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled flex-1 inline-flex items-center justify-center"
                                 type="button"
                                 title="Resolve (E)"
                             >
@@ -486,7 +445,7 @@ const SmartCapturesPanel: React.FC = () => {
                             <button
                                 onClick={goNextQueue}
                                 disabled={workQueueMatches.length === 0}
-                                className="md3-btn-tonal px-3 py-1.5 text-[10px] font-extrabold disabled:opacity-40 flex-1 inline-flex items-center justify-center"
+                                className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled flex-1 inline-flex items-center justify-center"
                                 type="button"
                                 title="Next (N)"
                             >
@@ -494,7 +453,7 @@ const SmartCapturesPanel: React.FC = () => {
                             </button>
                         </div>
                         {queueIndex.total > 0 && queueIndex.idx >= 0 && (
-                            <div className="mt-2 text-center text-[10px] font-bold text-md-sys-on-surface/50">
+                            <div className="mt-2 text-center text-label-sm font-bold text-md-sys-on-surface/60">
                                 {queueIndex.idx + 1}/{queueIndex.total}
                             </div>
                         )}
@@ -503,19 +462,19 @@ const SmartCapturesPanel: React.FC = () => {
 
                 {toolsOpen && (
                     <div className="px-4 py-3 border-b border-md-sys-outline/10 space-y-2">
-                        <div className="md3-surface-high rounded-2xl sc-bordered p-2">
+                        <div className="md3-surface-high rounded-card sc-bordered p-2">
                             <div className="flex items-center justify-between gap-2">
-                                <div className="text-[10px] font-extrabold text-md-sys-on-surface/70 uppercase tracking-[0.18em]">
+                                <div className="text-label-sm font-bold text-md-sys-on-surface/60 uppercase tracking-[0.18em]">
                                     Bulk Actions
                                 </div>
-                                <div className="text-[10px] font-bold text-md-sys-on-surface/50">
+                                <div className="text-label-sm font-bold text-md-sys-on-surface/60">
                                     Selected: {selectedIds.size}
                                 </div>
                             </div>
                             <div className="mt-2 grid grid-cols-2 gap-2">
                                 <button
                                     type="button"
-                                    className="md3-btn-tonal px-2 py-1.5 text-[9px] font-extrabold disabled:opacity-40"
+                                    className="md3-btn-tonal px-2 py-1.5 text-label-xs font-bold disabled:opacity-disabled"
                                     onClick={() => selectVisible('all')}
                                     disabled={bulkBusy || visibleMatches.length === 0}
                                     title="Select all visible matches"
@@ -524,7 +483,7 @@ const SmartCapturesPanel: React.FC = () => {
                                 </button>
                                 <button
                                     type="button"
-                                    className="md3-btn-tonal px-2 py-1.5 text-[9px] font-extrabold disabled:opacity-40"
+                                    className="md3-btn-tonal px-2 py-1.5 text-label-xs font-bold disabled:opacity-disabled"
                                     onClick={bulkResolveVisible}
                                     disabled={bulkBusy || visibleMatches.length === 0}
                                     title="Resolve every currently visible match row"
@@ -535,7 +494,7 @@ const SmartCapturesPanel: React.FC = () => {
                             <div className="mt-2 grid grid-cols-3 gap-2">
                                 <button
                                     type="button"
-                                    className="md3-btn-filled px-2 py-1.5 text-[9px] font-extrabold disabled:opacity-40"
+                                    className="md3-btn-filled px-2 py-1.5 text-label-xs font-bold disabled:opacity-disabled"
                                     onClick={() => { resolveMatches(Array.from(selectedIds)); setToast({ message: 'Resolved selected', type: 'success' }); }}
                                     disabled={bulkBusy || selectedIds.size === 0}
                                     title="Mark selected matches as resolved"
@@ -544,7 +503,7 @@ const SmartCapturesPanel: React.FC = () => {
                                 </button>
                                 <button
                                     type="button"
-                                    className="md3-btn-tonal px-2 py-1.5 text-[9px] font-extrabold disabled:opacity-40"
+                                    className="md3-btn-tonal px-2 py-1.5 text-label-xs font-bold disabled:opacity-disabled"
                                     onClick={bulkRerunOcrSelected}
                                     disabled={bulkBusy || selectedIds.size === 0}
                                     title="Rerun OCR on screenshots for selected matches"
@@ -553,7 +512,7 @@ const SmartCapturesPanel: React.FC = () => {
                                 </button>
                                 <button
                                     type="button"
-                                    className="md3-btn-outlined px-2 py-1.5 text-[9px] font-extrabold disabled:opacity-40"
+                                    className="md3-btn-outlined px-2 py-1.5 text-label-xs font-bold disabled:opacity-disabled"
                                     onClick={bulkExportSelectedJson}
                                     disabled={bulkBusy || selectedIds.size === 0}
                                     title="Export selected matches JSON"
@@ -565,12 +524,12 @@ const SmartCapturesPanel: React.FC = () => {
                                 <div className="mt-2 flex items-center justify-between gap-2">
                                     <button
                                         type="button"
-                                        className="md3-btn-text px-2 py-1 text-[9px] font-bold"
+                                        className="md3-btn-text px-2 py-1 text-label-xs font-bold"
                                         onClick={() => setSelectedIds(new Set())}
                                     >
                                         Clear Selection
                                     </button>
-                                    <span className="text-[9px] font-semibold opacity-50">
+                                    <span className="text-label-xs font-semibold opacity-60">
                                         {bulkBusy ? 'Working...' : 'Actions apply to selected rows'}
                                     </span>
                                 </div>
@@ -582,11 +541,11 @@ const SmartCapturesPanel: React.FC = () => {
                 {toolsOpen && captureState.savedCaptures.length > 0 && (
                     <div className="px-4 py-3 space-y-2 border-b border-md-sys-outline/10">
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-semibold opacity-60 flex items-center gap-1">
+                            <span className="text-label-sm font-semibold opacity-60 flex items-center gap-1">
                                 <Camera size={10} /> Capture Queue ({captureState.savedCaptures.length})
                             </span>
                             {captureState.processingProgress && (
-                                <span className="text-[9px] font-semibold opacity-50">
+                                <span className="text-label-xs font-semibold opacity-60">
                                     Processing {captureState.processingProgress.current}/{captureState.processingProgress.total}
                                 </span>
                             )}
@@ -595,7 +554,7 @@ const SmartCapturesPanel: React.FC = () => {
                                     <button
                                         onClick={() => captureActions.processAllStored(activeUser)}
                                         disabled={captureState.isProcessing}
-                                        className="md3-btn-tonal px-2 py-1 text-[9px] font-bold transition-colors disabled:opacity-40 flex items-center gap-1"
+                                        className="md3-btn-tonal px-2 py-1 text-label-xs font-bold transition-colors disabled:opacity-disabled flex items-center gap-1"
                                     >
                                         {captureState.isProcessing ? <Loader2 size={8} className="animate-spin" /> : <Zap size={8} />}
                                         OCR All
@@ -605,14 +564,14 @@ const SmartCapturesPanel: React.FC = () => {
                         </div>
                         <div className="space-y-1 max-h-32 overflow-y-auto custom-scrollbar">
                             {captureState.savedCaptures.map((cap, i) => (
-                                <div key={cap.filePath} className="flex items-center gap-2 py-2 px-2.5 rounded-xl md3-surface-high sc-bordered">
+                                <div key={cap.filePath} className="flex items-center gap-2 py-2 px-2.5 rounded-control md3-surface-high sc-bordered">
                                     <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cap.ocrProcessed ? 'bg-success' : 'bg-warning'}`} />
-                                    <span className="text-[10px] flex-1 truncate opacity-70">{cap.filename}</span>
+                                    <span className="text-label-sm flex-1 truncate opacity-60">{cap.filename}</span>
                                     {!cap.ocrProcessed ? (
                                         <button
                                             onClick={() => captureActions.processStoredImage(cap.filePath, activeUser)}
                                             disabled={captureState.isProcessing}
-                                            className="md3-btn-tonal px-2 py-0.5 text-[9px] font-bold transition-colors disabled:opacity-40"
+                                            className="md3-btn-tonal px-2 py-0.5 text-label-xs font-bold transition-colors disabled:opacity-disabled"
                                         >
                                             OCR
                                         </button>
@@ -627,14 +586,14 @@ const SmartCapturesPanel: React.FC = () => {
 
                 {toolsOpen && ocrIssueMatches.length > 0 && (
                     <div className="px-4 py-3 border-b border-md-sys-outline/10">
-                        <div className="md3-surface rounded-xl sc-bordered p-2">
-                            <div className="text-[9px] uppercase font-semibold opacity-60 mb-1 tracking-wider">Priority</div>
+                        <div className="md3-surface rounded-card sc-bordered p-2">
+                            <div className="text-label-xs uppercase font-semibold opacity-60 mb-1 tracking-wider">Priority</div>
                             <div className="space-y-1 max-h-24 overflow-y-auto custom-scrollbar">
                                 {ocrIssueMatches.map(m => (
                                     <button
                                         key={`issue-${m.id}`}
                                         onClick={() => setSelectedMatchId(m.id)}
-                                        className="w-full text-left text-[10px] px-2 py-1 rounded-lg hover:bg-md-sys-on-surface/5 flex items-center justify-between"
+                                        className="w-full text-left text-label-sm px-2 py-1 rounded-lg hover:bg-md-sys-on-surface/5 flex items-center justify-between"
                                     >
                                         <span className="truncate">{new Date(m.timestamp).toLocaleDateString()} {m.ship || 'No ship'}</span>
                                         <span className="text-danger font-bold">{Math.round(m.ocrDebug?.confidence || 0)}%</span>
@@ -645,33 +604,27 @@ const SmartCapturesPanel: React.FC = () => {
                     </div>
                 )}
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-2 md3-list min-h-0">
-                    <div className="sticky top-0 z-10 mb-2 md3-surface-high rounded-2xl sc-bordered p-2">
-                        <div className="flex items-center justify-between gap-2">
-                            <div className="text-[10px] font-extrabold text-md-sys-on-surface/70 uppercase tracking-[0.18em]">
-                                Matches
-                            </div>
-                            <div className="text-[10px] font-bold text-md-sys-on-surface/50">
-                                Selected: {selectedIds.size}
+                <div className="flex-1 overflow-y-auto custom-scrollbar px-2 py-1.5 flex flex-col gap-1 min-h-0">
+                    {selectedIds.size > 0 && (
+                        <div className="sticky top-0 z-10 mb-2 rounded-lg p-2 flex items-center justify-between gap-2" style={{ background: 'color-mix(in srgb, var(--md-sys-color-primary), transparent 90%)' }}>
+                            <span className="text-label-xs font-bold text-md-sys-primary">{selectedIds.size} selected</span>
+                            <button
+                                type="button"
+                                className="text-label-xs font-bold text-md-sys-primary/60 hover:text-md-sys-primary transition-colors"
+                                onClick={() => setSelectedIds(new Set())}
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    )}
+                    {visibleMatches.length === 0 ? (
+                        <div className="flex-1 flex flex-col items-center justify-center gap-3 py-12 text-md-sys-on-surface/40">
+                            <ScanEye size={32} className="opacity-40" />
+                            <div className="text-center">
+                                <p className="text-body font-bold text-md-sys-on-surface/60">No matches found</p>
+                                <p className="text-label-sm mt-1 text-md-sys-on-surface/40">{searchQuery ? 'Try a different search' : queueOnly ? 'Queue is clear' : 'Record some matches to get started'}</p>
                             </div>
                         </div>
-                        {selectedIds.size > 0 && (
-                            <div className="mt-2 flex items-center justify-between gap-2">
-                                <button
-                                    type="button"
-                                    className="md3-btn-text px-2 py-1 text-[9px] font-bold"
-                                    onClick={() => setSelectedIds(new Set())}
-                                >
-                                    Clear Selection
-                                </button>
-                                <span className="text-[9px] font-semibold opacity-50">
-                                    Open Tools for bulk actions
-                                </span>
-                            </div>
-                        )}
-                    </div>
-                    {visibleMatches.length === 0 ? (
-                        <div className="p-4 text-center text-xs opacity-40">No matches found</div>
                     ) : (
                         visibleMatches.map(match => (
                             <MatchListItem
@@ -686,13 +639,13 @@ const SmartCapturesPanel: React.FC = () => {
                     )}
                 </div>
 
-                <div className="px-4 py-2.5 text-center text-[10px] text-md-sys-on-surface/50 font-semibold border-t border-md-sys-outline/10">
+                <div className="px-4 py-2.5 text-center text-label-sm text-md-sys-on-surface/60 font-semibold border-t border-md-sys-outline/10">
                     {visibleMatches.length} match{visibleMatches.length !== 1 ? 'es' : ''}
                 </div>
                 </div>
 
             
-                <div className="min-h-0 md3-card rounded-2xl p-0 overflow-hidden">
+                <div className="min-h-0 mg-surface-high rounded-card p-0 overflow-hidden" style={{ backgroundImage: 'radial-gradient(circle at top right, rgba(56,189,248,0.06), transparent 40%), radial-gradient(circle at bottom left, rgba(251,146,60,0.05), transparent 50%)' }}>
                     <div className="h-full min-h-0 overflow-y-auto custom-scrollbar">
                         {selectedMatch ? (
                             <SmartMatchDetail
@@ -706,7 +659,7 @@ const SmartCapturesPanel: React.FC = () => {
                                 onPrev={goPrevQueue}
                                 onResolve={() => {
                                     if (!selectedMatch) return;
-                                    updateMatch({ ...selectedMatch, ocrReviewedAt: Date.now() });
+                                    updateMatch({ ...selectedMatch, ocrReviewedAt: Date.now(), ocrState: 'saved' });
                                     if (queueOnly) {
                                         setTimeout(() => goNextQueue(), 0);
                                     }
@@ -749,18 +702,38 @@ const SmartCapturesPanel: React.FC = () => {
                                         setSelectedReachModifiers(canonical, 'ocr');
                                     }
                                     setToast({ message: 'Applied reprocessed data to current session', type: 'success' });
-                                    // Apply implies this match was "worked".
+                                    // Apply implies this match was "worked" — also persist data to the match record.
                                     if (selectedMatch) {
-                                        updateMatch({ ...selectedMatch, ocrReviewedAt: Date.now() });
+                                        const matchUpdates: Partial<Match> = { ocrReviewedAt: Date.now(), ocrState: 'saved' as const };
+                                        if (data.playerShip?.shipType) matchUpdates.ship = data.playerShip.shipType;
+                                        if (data.teammates?.length > 0) {
+                                            matchUpdates.teammates = data.teammates.map(t => t.name);
+                                        }
+                                        if (data.opponentTeams?.length > 0) {
+                                            matchUpdates.opponents = data.opponentTeams.flatMap(t => t.players.map(p => p.name));
+                                            matchUpdates.opponentTeams = data.opponentTeams.map(t => ({
+                                                teamName: t.teamName || 'Unknown Team',
+                                                shipType: t.shipType || '',
+                                                color: t.color || 'unknown',
+                                                players: t.players.map(p => p.name),
+                                            }));
+                                        }
+                                        const mods = data.reachModifiers ?? [];
+                                        const haz = data.hazards ?? [];
+                                        if (mods.length > 0 || haz.length > 0) {
+                                            const rawMods = [...mods.map(m => m.name), ...haz];
+                                            matchUpdates.reachModifiers = Array.from(new Set(rawMods.map(m => normalizeModifierName(m)).filter(Boolean)));
+                                        }
+                                        updateMatch({ ...selectedMatch, ...matchUpdates });
                                         if (queueOnly) setTimeout(() => goNextQueue(), 0);
                                     }
                                 }}
                             />
                         ) : (
                             <div className="h-full flex items-center justify-center">
-                                <div className="text-center opacity-30">
+                                <div className="text-center opacity-40">
                                     <ScanEye size={48} className="mx-auto mb-3" />
-                                    <p className="text-sm font-bold">Select a match to analyze</p>
+                                    <p className="text-body font-bold">Select a match to analyze</p>
                                 </div>
                             </div>
                         )}
@@ -785,21 +758,27 @@ const MatchListItem: React.FC<{
     const when = new Date(match.timestamp);
 
     const statusChip = (() => {
-        if (qs.key === 'Resolved') return { label: 'Resolved', cls: 'bg-success-soft text-success' };
-        if (qs.key === 'NeedsOCR') return { label: 'Needs OCR', cls: 'bg-warning-soft text-warning' };
-        if (qs.key === 'LowConf') return { label: 'Low conf', cls: 'bg-warning-soft text-warning' };
-        if (qs.key === 'MissingData') return { label: 'Missing data', cls: 'bg-danger-soft text-danger' };
+        // Use explicit OCR state machine when available
+        if (match.ocrState && match.ocrState !== 'saved') {
+            const meta = OCR_STATE_META[match.ocrState];
+            return { label: meta.label, cls: meta.cls, description: meta.description };
+        }
+        // Legacy fallback
+        if (qs.key === 'Resolved') return { label: 'Resolved', cls: 'bg-success-soft text-success', description: '' };
+        if (qs.key === 'NeedsOCR') return { label: 'Needs OCR', cls: 'bg-warning-soft text-warning', description: '' };
+        if (qs.key === 'LowConf') return { label: 'Low conf', cls: 'bg-warning-soft text-warning', description: '' };
+        if (qs.key === 'MissingData') return { label: 'Missing data', cls: 'bg-danger-soft text-danger', description: '' };
         return null;
     })();
 
     return (
         <button
             onClick={onClick}
-            className={`group w-full text-left px-3 py-2 rounded-xl transition-all flex items-center gap-2 sc-bordered ${
+            className={`group w-full text-left rounded-control transition-all flex items-center gap-2.5 relative overflow-hidden ${
                 isSelected
-                    ? 'md3-surface-high ring-1 ring-md-sys-primary/20'
-                    : 'md3-surface hover:bg-md-sys-on-surface/5'
-            } ${qs.key === 'Resolved' ? 'opacity-70' : ''}`}
+                    ? 'mg-surface-high border-l-4 border-md-sys-primary pl-2.5 pr-3.5 py-3.5'
+                    : 'hover:bg-md-sys-on-surface/5 px-3.5 py-3.5'
+            } ${qs.key === 'Resolved' ? 'opacity-60' : ''}`}
         >
             <input
                 type="checkbox"
@@ -815,63 +794,52 @@ const MatchListItem: React.FC<{
                 title="Select row"
             />
 
-            <div className={`w-1.5 h-10 rounded-full flex-shrink-0 ${RESULT_COLORS[match.result] || 'bg-md-sys-outline'}`} />
+            <div className={`w-1 h-8 rounded-full flex-shrink-0 ${RESULT_COLORS[match.result] || 'bg-md-sys-outline/30'}`} />
 
             <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0 flex items-center gap-2">
-                        <span className="text-[10px] font-black uppercase tracking-wide text-md-sys-on-surface/70">
+                <div className="flex items-center gap-2 min-w-0">
+                    <span className={`text-body font-bold truncate ${match.ship ? 'text-md-sys-on-surface' : 'text-md-sys-on-surface/40 italic'}`}>
+                        {shipLabel}
+                    </span>
+                    {heroLabel && (
+                        <span className="text-label-sm text-md-sys-on-surface/60 truncate">
+                            {heroLabel}
+                        </span>
+                    )}
+                </div>
+
+                <div className="mt-0.5 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-label-xs text-md-sys-on-surface/40">
+                        <span className={`font-bold uppercase ${match.result === 'Win' ? 'text-success' : match.result === 'Loss' ? 'text-danger' : 'text-md-sys-on-surface/60'}`}>
                             {match.result}
                         </span>
-                        <span className={`text-[11px] font-bold truncate ${match.ship ? 'text-md-sys-on-surface' : 'text-md-sys-on-surface/45 italic'}`}>
-                            {shipLabel}
-                        </span>
-                        {heroLabel && (
-                            <span className="text-[10px] font-semibold text-md-sys-on-surface/55 truncate">
-                                {heroLabel}
-                            </span>
-                        )}
+                        <span>{when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+                        <span className="font-mono">{when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        {totalKills > 0 && <span className="text-success/60">{totalKills}K</span>}
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                        {statusChip && (
+                    <div className="flex items-center gap-1 shrink-0">
+                        {statusChip && qs.key !== 'Resolved' && (
                             <span
-                                className={`text-[9px] px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide max-w-[120px] truncate whitespace-nowrap ${statusChip.cls}`}
-                                title={qs.key === 'MissingData'
+                                className={`text-label-xs px-1.5 py-0.5 rounded-full font-bold ${statusChip.cls} ${match.ocrState === 'processing' ? 'animate-pulse' : ''}`}
+                                title={statusChip.description || (qs.key === 'MissingData'
                                     ? `Missing: ${qs.missingShip ? 'ship ' : ''}${qs.missingPlayers ? 'players' : ''}`.trim()
-                                    : undefined}
+                                    : undefined)}
                             >
                                 {statusChip.label}
                             </span>
                         )}
-                        {qs.hasOcr && (
-                            <span
-                                className={`text-[9px] px-2 py-0.5 rounded-full font-semibold ${(qs.confidence || 0) >= 80 ? 'bg-success-soft text-success' : (qs.confidence || 0) >= 60 ? 'bg-warning-soft text-warning' : 'bg-danger-soft text-danger'}`}
-                                title="OCR confidence"
-                            >
-                                {Math.round(qs.confidence || 0)}%
-                            </span>
-                        )}
                         {hasArtifacts && (
-                            <span className="text-[9px] px-2 py-0.5 rounded-full md3-surface-high font-semibold">
-                                {countImages(match.artifacts!)} img
+                            <span className="text-label-xs text-md-sys-on-surface/40 font-mono">
+                                {countImages(match.artifacts!)}img
                             </span>
                         )}
+                        {qs.key === 'Resolved' ? (
+                            <Check size={12} className="text-success/60" />
+                        ) : (
+                            <ChevronRight size={12} className={`${isSelected ? 'text-md-sys-primary/60' : 'opacity-20'}`} />
+                        )}
                     </div>
-                </div>
-
-                <div className="mt-1 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-[9px] font-semibold text-md-sys-on-surface/50">
-                        <span>{when.toLocaleDateString()}</span>
-                        <span className="font-mono">{when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        {totalKills > 0 && <span className="text-success opacity-70">{totalKills}K</span>}
-                    </div>
-
-                    {qs.key === 'Resolved' ? (
-                        <Check size={12} className="flex-shrink-0 text-success opacity-70" />
-                    ) : (
-                        <ChevronRight size={12} className={`flex-shrink-0 ${isSelected ? 'opacity-60 text-md-sys-primary' : 'opacity-25'}`} />
-                    )}
                 </div>
             </div>
         </button>
@@ -958,7 +926,7 @@ const SmartMatchDetail: React.FC<{
 
     const renderEditableField = (field: string, value: string, label: string) => (
         <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase font-bold opacity-40 w-20">{label}</span>
+            <span className="text-label-sm uppercase font-bold opacity-40 w-20">{label}</span>
             {editingField === field ? (
                 <div className="flex items-center gap-1 flex-1">
                     <input
@@ -966,7 +934,7 @@ const SmartMatchDetail: React.FC<{
                         value={editValue}
                         onChange={e => setEditValue(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') saveEdit(field); if (e.key === 'Escape') setEditingField(null); }}
-                        className="flex-1 md3-surface rounded px-2 py-1 text-xs outline-none"
+                        className="flex-1 md3-surface rounded px-2 py-1 text-label-sm outline-none"
                         autoFocus
                     />
                     <button onClick={() => saveEdit(field)} className="p-0.5 hover:text-success"><Check size={12} /></button>
@@ -974,7 +942,7 @@ const SmartMatchDetail: React.FC<{
                 </div>
             ) : (
                 <div className="flex items-center gap-1 flex-1 group cursor-pointer" onClick={() => startEdit(field, value || '')}>
-                    <span className="text-xs">{value || <span className="opacity-30 italic">--</span>}</span>
+                    <span className="text-label-sm">{value || <span className="opacity-40 italic">--</span>}</span>
                     <Edit3 size={10} className="opacity-0 group-hover:opacity-40 transition-opacity" />
                 </div>
             )}
@@ -1017,7 +985,7 @@ const SmartMatchDetail: React.FC<{
                                 value={editPlayerValue}
                                 onChange={e => setEditPlayerValue(e.target.value)}
                                 onKeyDown={e => { if (e.key === 'Enter') savePlayerEdit(); if (e.key === 'Escape') setEditingPlayerIdx(null); }}
-                                className="md3-surface rounded px-2 py-1 text-xs outline-none w-24"
+                                className="md3-surface rounded px-2 py-1 text-label-sm outline-none w-24"
                                 autoFocus
                             />
                             <button onClick={savePlayerEdit} className="hover:text-success"><Check size={10} /></button>
@@ -1026,7 +994,7 @@ const SmartMatchDetail: React.FC<{
                     ) : (
                         <span
                             key={idx}
-                            className={`px-2 py-0.5 ${chipClass} rounded-md text-xs font-bold flex items-center gap-1 group cursor-pointer`}
+                            className={`px-2 py-0.5 ${chipClass} rounded-md text-label-sm font-bold flex items-center gap-1 group cursor-pointer`}
                             onClick={() => { setEditingPlayerIdx({ type, idx }); setEditPlayerValue(p); }}
                         >
                             {p}
@@ -1047,7 +1015,7 @@ const SmartMatchDetail: React.FC<{
                             onChange={e => setNewPlayerName(e.target.value)}
                             onKeyDown={e => { if (e.key === 'Enter') addPlayer(); if (e.key === 'Escape') { setAddingPlayer(null); setNewPlayerName(''); } }}
                             placeholder="Name..."
-                            className="md3-surface rounded px-2 py-1 text-xs outline-none w-24"
+                            className="md3-surface rounded px-2 py-1 text-label-sm outline-none w-24"
                             autoFocus
                         />
                         <button onClick={addPlayer} className="hover:text-success"><Check size={10} /></button>
@@ -1064,7 +1032,12 @@ const SmartMatchDetail: React.FC<{
             </div>
         );
     };
+    const [confirmDeleteIdx, setConfirmDeleteIdx] = useState<number | null>(null);
     const handleRemoveScreenshot = async (index: number) => {
+        if (confirmDeleteIdx !== index) {
+            setConfirmDeleteIdx(index);
+            return;
+        }
         const file = artifacts.imageFiles[index];
         if (!file) return;
         const result = await removeMatchArtifact(match.id, file.filename);
@@ -1076,6 +1049,7 @@ const SmartMatchDetail: React.FC<{
                 onUpdate({ ...match, artifacts: newArtifacts });
             }
         }
+        setConfirmDeleteIdx(null);
     };
 
     const handleAddScreenshot = async () => {
@@ -1084,7 +1058,7 @@ const SmartMatchDetail: React.FC<{
             const updated = await getMatchArtifactsStructured(match.id);
             setArtifacts(updated);
             const currentArtifacts = match.artifacts || [];
-            onUpdate({ ...match, artifacts: [...currentArtifacts, ...result.added] });
+            onUpdate({ ...match, artifacts: [...currentArtifacts, ...result.added], ocrState: match.ocrState || 'queued' });
         }
     };
     const handleRerunAnalysis = async () => {
@@ -1093,6 +1067,7 @@ const SmartMatchDetail: React.FC<{
         setRerunResults(null);
         setReviewData(null);
         setProcessingComplete(false);
+        onUpdate({ ...match, ocrState: 'processing' });
         const imageExts = ['.png', '.jpg', '.jpeg', '.bmp', '.webp'];
         const imagePaths = match.artifacts.filter(p => imageExts.some(ext => p.toLowerCase().endsWith(ext)));
         if (imagePaths.length === 0) { setRerunning(false); return; }
@@ -1167,8 +1142,10 @@ const SmartMatchDetail: React.FC<{
             };
             setReviewData(combinedData);
             setProcessingComplete(true);
+            onUpdate({ ...match, ocrState: 'reviewing' });
         } else {
             setProcessingComplete(true);
+            onUpdate({ ...match, ocrState: 'error' });
         }
     };
 
@@ -1277,7 +1254,7 @@ const SmartMatchDetail: React.FC<{
         if (data.artifactType) {
             updates.artifactSource = data.artifactType;
         }
-        onUpdate({ ...match, ...updates });
+        onUpdate({ ...match, ...updates, ocrState: 'saved' });
         setReviewData(null);
         setRerunResults(null);
         setProcessingComplete(false);
@@ -1291,7 +1268,7 @@ const SmartMatchDetail: React.FC<{
     const TEAM_TEXT_MAP: Record<string, string> = {
         red: 'text-danger', orange: 'text-warning', yellow: 'text-warning',
         green: 'text-success', blue: 'text-info', cyan: 'text-info',
-        purple: 'text-accent', unknown: 'text-md-sys-on-surface/50',
+        purple: 'text-accent', unknown: 'text-md-sys-on-surface/60',
     };
     const hasResult = match.result === 'Win' || match.result === 'Loss' || match.result === 'Draw';
     const hasArtifacts = (artifacts.images && artifacts.images.length > 0) || (match.artifacts && match.artifacts.length > 0);
@@ -1348,79 +1325,94 @@ const SmartMatchDetail: React.FC<{
     return (
         <div className="p-4 lg:p-5 space-y-3">
             
-            <div className="md3-surface-high rounded-2xl sc-bordered p-4">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-lg font-bold text-md-sys-on-surface">Match #{match.id}</span>
-                        <button
-                            onClick={() => {
-                                const next = match.mode === 'Artifact Brawl' ? 'Fleet Battle' : 'Artifact Brawl';
-                                onUpdate({ ...match, mode: next });
-                            }}
-                            className="md3-chip px-2.5 py-1 text-[10px] font-semibold text-md-sys-on-surface/80 hover:bg-md-sys-on-surface/5 transition-colors cursor-pointer"
-                            title="Click to toggle mode"
-                        >
-                            {match.mode}
-                        </button>
-                        <button
-                            onClick={() => {
-                                const types = ['Combat', 'Artifact'];
-                                const idx = types.indexOf(match.subType || 'Combat');
-                                const next = types[(idx + 1) % types.length];
-                                onUpdate({ ...match, subType: next });
-                            }}
-                            className={`md3-chip px-2.5 py-1 text-[10px] font-semibold transition-all cursor-pointer ${match.subType === 'Artifact' ? 'md3-chip--selected' : 'text-md-sys-on-surface/70 hover:bg-md-sys-on-surface/5'}`}
-                            title="Click to toggle sub-type"
-                        >
-                            {match.subType || 'Combat'}
-                        </button>
+            <div className="sticky top-0 z-20">
+                <div className="md3-surface-high rounded-card p-4 space-y-3" style={{ backdropFilter: 'blur(12px)' }}>
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-body font-bold text-md-sys-on-surface">Match #{match.id}</span>
+                                <button
+                                    onClick={() => {
+                                        const next = match.mode === 'Artifact Brawl' ? 'Fleet Battle' : 'Artifact Brawl';
+                                        onUpdate({ ...match, mode: next });
+                                    }}
+                                    className="md3-chip px-2 py-0.5 text-label-xs font-bold text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5 transition-colors cursor-pointer"
+                                    title="Click to toggle mode"
+                                >
+                                    {match.mode}
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        const types = ['Combat', 'Artifact'];
+                                        const idx = types.indexOf(match.subType || 'Combat');
+                                        const next = types[(idx + 1) % types.length];
+                                        onUpdate({ ...match, subType: next });
+                                    }}
+                                    className={`md3-chip px-2 py-0.5 text-label-xs font-bold transition-all cursor-pointer ${match.subType === 'Artifact' ? 'md3-chip--selected' : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'}`}
+                                    title="Click to toggle sub-type"
+                                >
+                                    {match.subType || 'Combat'}
+                                </button>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1 text-label-xs text-md-sys-on-surface/40">
+                                <span>{new Date(match.timestamp).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                                <span className="font-mono">{new Date(match.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-3 mt-1 text-[10px] opacity-50">
-                            <span>{new Date(match.timestamp).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                            <span>{new Date(match.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                    </div>
-                    {!hasResult && hasArtifacts && (
-                        <button
-                            onClick={() => screenshotsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                            className="md3-btn-tonal px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5"
-                            title="Jump to bundled screenshots for this match"
-                        >
-                            <Image size={12} />
-                            Review Artifacts
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            <div className="sticky top-0 z-20 -mt-1">
-                <div className="mg-surface rounded-xl p-2">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-1.5">
-                            <button onClick={() => onUpdate({ ...match, result: 'Win' })} className="md3-btn-tonal px-2.5 py-1 text-[10px] font-bold">Win (1)</button>
-                            <button onClick={() => onUpdate({ ...match, result: 'Loss' })} className="md3-btn-tonal px-2.5 py-1 text-[10px] font-bold">Loss (2)</button>
-                            <button onClick={() => onUpdate({ ...match, result: 'Draw' })} className="md3-btn-tonal px-2.5 py-1 text-[10px] font-bold">Draw (3)</button>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            {queueOnly && (
-                                <div className="flex items-center gap-1.5">
-                                    <button onClick={onPrev} className="md3-btn-tonal px-2.5 py-1 text-[10px] font-bold" title="Prev (P)">Prev</button>
-                                    <button onClick={onResolve} className="md3-btn-filled px-2.5 py-1 text-[10px] font-bold" title="Resolve (E)">Resolve</button>
-                                    <button onClick={onNext} className="md3-btn-tonal px-2.5 py-1 text-[10px] font-bold" title="Next (N)">Next</button>
-                                </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                            {!hasResult && hasArtifacts && (
+                                <button
+                                    onClick={() => screenshotsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                                    className="md3-btn-tonal px-2.5 py-1.5 text-label-xs font-bold transition-colors flex items-center gap-1.5"
+                                    title="Jump to bundled screenshots"
+                                >
+                                    <Image size={12} />
+                                    Review
+                                </button>
                             )}
                             {match.artifacts && match.artifacts.length > 0 && (
-                                <button onClick={handleRerunAnalysis} disabled={rerunning} className="md3-btn-outlined px-2.5 py-1 text-[10px] font-bold disabled:opacity-40">
-                                    {rerunning ? 'Analyzing...' : 'Re-run (R)'}
+                                <button onClick={handleRerunAnalysis} disabled={rerunning} className="md3-btn-outlined px-2.5 py-1.5 text-label-xs font-bold disabled:opacity-disabled flex items-center gap-1">
+                                    <RefreshCw size={10} className={rerunning ? 'animate-spin' : ''} />
+                                    {rerunning ? 'OCR...' : 'Re-run'}
                                 </button>
                             )}
                             {reviewData && (
-                                <button onClick={() => setReviewData(reviewData)} className="md3-btn-filled px-2.5 py-1 text-[10px] font-bold">
-                                    Finalize (F)
+                                <button onClick={() => setReviewData(reviewData)} className="md3-btn-filled px-2.5 py-1.5 text-label-xs font-bold">
+                                    Finalize
                                 </button>
                             )}
                         </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                            {(['Win', 'Loss', 'Draw'] as const).map(r => (
+                                <button
+                                    key={r}
+                                    onClick={() => onUpdate({ ...match, result: r })}
+                                    className={`px-3 py-1.5 rounded-lg text-label-sm font-bold transition-all flex items-center gap-1.5 ${
+                                        match.result === r
+                                            ? r === 'Win' ? 'bg-success/20 text-success border border-success/30'
+                                            : r === 'Loss' ? 'bg-danger/20 text-danger border border-danger/30'
+                                            : 'bg-info/20 text-info border border-info/30'
+                                            : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5 border border-transparent'
+                                    }`}
+                                    type="button"
+                                >
+                                    {r === 'Win' && <Trophy size={12} />}
+                                    {r === 'Loss' && <Skull size={12} />}
+                                    {r === 'Draw' && <AlertTriangle size={12} />}
+                                    {r}
+                                </button>
+                            ))}
+                        </div>
+                        {queueOnly && (
+                            <div className="flex items-center gap-1.5">
+                                <button onClick={onPrev} className="md3-btn-tonal px-2.5 py-1.5 text-label-xs font-bold" title="Prev (P)">Prev</button>
+                                <button onClick={onResolve} className="md3-btn-filled px-2.5 py-1.5 text-label-xs font-bold" title="Resolve (E)">Resolve</button>
+                                <button onClick={onNext} className="md3-btn-tonal px-2.5 py-1.5 text-label-xs font-bold" title="Next (N)">Next</button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -1428,31 +1420,6 @@ const SmartMatchDetail: React.FC<{
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
                 <div className="lg:col-span-7 lg:col-start-1 space-y-3 min-w-0">
-                    
-                    <div className="md3-surface-high rounded-2xl sc-bordered p-4">
-                        <div className="text-[10px] font-semibold text-md-sys-on-surface/60 tracking-wider mb-3">Match Result</div>
-                        <div className="grid grid-cols-3 gap-2">
-                            {(['Win', 'Loss', 'Draw'] as const).map(r => (
-                                <button
-                                    key={r}
-                                    onClick={() => onUpdate({ ...match, result: r })}
-                                    className={`py-2.5 text-sm font-semibold transition-all ${
-                                        match.result === r
-                                            ? 'md3-btn-tonal'
-                                            : 'md3-btn-outlined text-md-sys-on-surface/70'
-                                    }`}
-                                    type="button"
-                                >
-                                    <div className="flex items-center justify-center gap-1.5">
-                                        {r === 'Win' && <Trophy size={14} />}
-                                        {r === 'Loss' && <Skull size={14} />}
-                                        {r === 'Draw' && <AlertTriangle size={14} />}
-                                        {r}
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
 
                     
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -1487,14 +1454,14 @@ const SmartMatchDetail: React.FC<{
                                     const dir = artifacts.images[0]?.replace(/[\/][^\/]+$/, '');
                                     if (dir) getElectronAPI()?.invoke('open-path', dir);
                                 }}
-                                className="flex items-center gap-1.5 text-[10px] font-semibold text-md-sys-on-surface/60 hover:text-md-sys-primary transition-colors"
+                                className="flex items-center gap-1.5 text-label-sm font-semibold text-md-sys-on-surface/60 hover:text-md-sys-primary transition-colors"
                             >
                                 <FolderOpen size={12} /> Open Folder in Explorer
                             </button>
                             <button
                                 onClick={handleRerunAnalysis}
                                 disabled={rerunning}
-                                className="md3-btn-tonal px-3 py-1 text-[10px] font-semibold disabled:opacity-50 flex items-center gap-1.5"
+                                className="md3-btn-tonal px-3 py-1 text-label-sm font-semibold disabled:opacity-disabled flex items-center gap-1.5"
                                 title="Run OCR analysis on the bundled screenshots"
                             >
                                 <RefreshCw size={12} className={rerunning ? 'animate-spin' : ''} />
@@ -1521,10 +1488,15 @@ const SmartMatchDetail: React.FC<{
                                 {artifacts.imageFiles[i] && (
                                     <button
                                         onClick={(e) => { e.stopPropagation(); handleRemoveScreenshot(i); }}
-                                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-danger-soft-strong text-danger flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                        title="Remove screenshot"
+                                        onMouseLeave={() => { if (confirmDeleteIdx === i) setConfirmDeleteIdx(null); }}
+                                        className={`absolute bottom-1 right-1 rounded-full flex items-center justify-center transition-all ${
+                                            confirmDeleteIdx === i
+                                                ? 'w-auto h-6 px-2 gap-1 bg-danger text-white opacity-100 text-label-xs font-bold'
+                                                : 'w-5 h-5 bg-danger-soft-strong text-danger opacity-0 group-hover:opacity-100'
+                                        }`}
+                                        title={confirmDeleteIdx === i ? 'Click again to confirm' : 'Remove screenshot'}
                                     >
-                                        <X size={10} />
+                                        {confirmDeleteIdx === i ? <><Trash2 size={10} /> Delete?</> : <X size={10} />}
                                     </button>
                                 )}
                             </div>
@@ -1535,7 +1507,7 @@ const SmartMatchDetail: React.FC<{
                             className="aspect-video md3-surface-high rounded-lg border-2 border-dashed border-md-sys-outline/5 hover:border-md-sys-primary/30 hover:bg-md-sys-primary/5 transition-all flex flex-col items-center justify-center gap-1 opacity-30 hover:opacity-100 hover:text-md-sys-primary"
                         >
                             <Upload size={16} />
-                            <span className="text-[9px] font-bold uppercase">Add</span>
+                            <span className="text-label-xs font-bold uppercase">Add</span>
                         </button>
                     </div>
                 </Section>
@@ -1546,14 +1518,14 @@ const SmartMatchDetail: React.FC<{
                     <Section title="Players" icon={<Users size={14} />} collapsible collapsed={!!collapsedSections.players} onToggle={() => toggleSection('players')}>
                         <div className="space-y-3">
                             <div>
-                                <span className="text-[10px] uppercase font-bold opacity-40 block mb-1">Teammates</span>
+                                <span className="text-label-sm uppercase font-bold opacity-40 block mb-1">Teammates</span>
                                 {renderPlayerChips(match.teammates || [], 'teammate')}
                             </div>
 
                             
                             {match.opponentTeams && match.opponentTeams.length > 0 ? (
                                 <div className="space-y-2">
-                                    <span className="text-[10px] uppercase font-bold opacity-40 block">Enemy Teams</span>
+                                    <span className="text-label-sm uppercase font-bold opacity-40 block">Enemy Teams</span>
                                     {match.opponentTeams.map((team, ti) => {
                                         const updateTeam = (patch: Partial<OpponentTeam>) => {
                                             const teams = [...(match.opponentTeams || [])];
@@ -1573,33 +1545,33 @@ const SmartMatchDetail: React.FC<{
                                                             const idx = COLORS.indexOf(team.color);
                                                             updateTeam({ color: COLORS[(idx + 1) % COLORS.length] });
                                                         }}
-                                                        className={`w-2.5 h-2.5 rounded-full ${TEAM_COLOR_MAP[team.color] || 'bg-gray-500'} hover:ring-2 ring-white/30 transition-all cursor-pointer`}
+                                                        className={`w-2.5 h-2.5 rounded-full ${TEAM_COLOR_MAP[team.color] || 'bg-gray-500'} hover:ring-2 ring-md-sys-on-surface/20 transition-all cursor-pointer`}
                                                         title="Click to cycle color"
                                                         type="button"
                                                     />
                                                     <input
                                                         value={team.teamName}
                                                         onChange={(e) => updateTeam({ teamName: e.target.value })}
-                                                        className={`text-xs font-bold bg-transparent outline-none w-28 ${TEAM_TEXT_MAP[team.color] || 'text-gray-400'}`}
+                                                        className={`text-label-sm font-bold bg-transparent outline-none w-28 ${TEAM_TEXT_MAP[team.color] || 'text-gray-400'}`}
                                                         title="Edit team name"
                                                     />
                                                     <select
                                                         value={team.shipType || ''}
                                                         onChange={(e) => updateTeam({ shipType: e.target.value })}
-                                                        className="text-[10px] md3-surface rounded px-1 py-0.5 font-bold outline-none"
+                                                        className="text-label-sm md3-surface rounded px-1 py-0.5 font-bold outline-none"
                                                         title="Ship type"
                                                     >
                                                         <option value="">No ship</option>
                                                         {SHIPS.map(s => <option key={s} value={s}>{s}</option>)}
                                                     </select>
                                                     {match.eliminatedByTeam === team.teamName ? (
-                                                        <span className="ml-auto text-[9px] px-1.5 py-0.5 bg-danger-soft text-danger rounded font-bold flex items-center gap-1">
+                                                        <span className="ml-auto text-label-xs px-1.5 py-0.5 bg-danger-soft text-danger rounded font-bold flex items-center gap-1">
                                                             <Skull size={10} /> Eliminated you
                                                         </span>
                                                     ) : match.result === 'Loss' && (
                                                         <button
                                                             onClick={() => onUpdate({ ...match, eliminatedByTeam: team.teamName })}
-                                                            className="ml-auto text-[9px] px-1.5 py-0.5 bg-md-sys-on-surface/5 hover:bg-danger-soft opacity-30 hover:opacity-100 hover:text-danger rounded font-bold transition-colors"
+                                                            className="ml-auto text-label-xs px-1.5 py-0.5 bg-md-sys-on-surface/5 hover:bg-danger-soft opacity-30 hover:opacity-100 hover:text-danger rounded font-bold transition-colors"
                                                             type="button"
                                                         >
                                                             Mark as eliminator
@@ -1616,7 +1588,7 @@ const SmartMatchDetail: React.FC<{
                                                 </div>
                                                 <div className="flex flex-wrap gap-1 pl-4 items-center">
                                                     {team.players.map((p, pi) => (
-                                                        <span key={pi} className="px-2 py-0.5 bg-danger-soft text-danger rounded-md text-xs font-bold flex items-center gap-1 group/player">
+                                                        <span key={pi} className="px-2 py-0.5 bg-danger-soft text-danger rounded-md text-label-sm font-bold flex items-center gap-1 group/player">
                                                             {p}
                                                             <button
                                                                 onClick={() => {
@@ -1638,7 +1610,7 @@ const SmartMatchDetail: React.FC<{
                                     {match.eliminatedByTeam && (
                                         <button
                                             onClick={() => onUpdate({ ...match, eliminatedByTeam: undefined })}
-                                            className="text-[9px] opacity-30 hover:opacity-60 transition-colors"
+                                            className="text-label-xs opacity-30 hover:opacity-60 transition-colors"
                                             type="button"
                                         >
                                             Clear eliminator selection
@@ -1647,7 +1619,7 @@ const SmartMatchDetail: React.FC<{
                                 </div>
                             ) : (
                                 <div>
-                                    <span className="text-[10px] uppercase font-bold opacity-40 block mb-1">Opponents</span>
+                                    <span className="text-label-sm uppercase font-bold opacity-40 block mb-1">Opponents</span>
                                     {renderPlayerChips(match.opponents || [], 'opponent')}
                                 </div>
                             )}
@@ -1658,7 +1630,7 @@ const SmartMatchDetail: React.FC<{
             <Section title="Reach Modifiers" icon={<ShieldCheck size={14} />} collapsible collapsed={!!collapsedSections.modifiers} onToggle={() => toggleSection('modifiers')}>
                 <div className="flex flex-wrap gap-1.5 items-center">
                     {(match.reachModifiers || []).map((mod, i) => (
-                        <span key={i} className="px-2 py-0.5 bg-warning-soft text-warning rounded-md text-[10px] font-bold flex items-center gap-1 group">
+                        <span key={i} className="px-2 py-0.5 bg-warning-soft text-warning rounded-md text-label-sm font-bold flex items-center gap-1 group">
                             {mod}
                             <button
                                 onClick={() => {
@@ -1681,13 +1653,13 @@ const SmartMatchDetail: React.FC<{
 
             
             <Section title="Loadout" icon={<Crosshair size={14} />} collapsible collapsed={!!collapsedSections.loadout} onToggle={() => toggleSection('loadout')}>
-                <div className="space-y-2 text-xs">
+                <div className="space-y-2 text-label-sm">
                     <div className="flex gap-2 items-center">
                         <span className="opacity-40 w-20 shrink-0">Hero:</span>
                         <select
                             value={match.hero || ''}
                             onChange={(e) => onUpdate({ ...match, hero: e.target.value })}
-                            className="md3-surface rounded px-2 py-1 text-xs font-bold outline-none flex-1"
+                            className="md3-surface rounded px-2 py-1 text-label-sm font-bold outline-none flex-1"
                         >
                             <option value="">--</option>
                             {CHARACTERS.map(c => <option key={c} value={c}>{c}</option>)}
@@ -1698,7 +1670,7 @@ const SmartMatchDetail: React.FC<{
                         <select
                             value={match.ship || ''}
                             onChange={(e) => onUpdate({ ...match, ship: e.target.value })}
-                            className="md3-surface rounded px-2 py-1 text-xs font-bold outline-none flex-1"
+                            className="md3-surface rounded px-2 py-1 text-label-sm font-bold outline-none flex-1"
                         >
                             <option value="">--</option>
                             {SHIPS.map(s => <option key={s} value={s}>{s}</option>)}
@@ -1709,7 +1681,7 @@ const SmartMatchDetail: React.FC<{
                             <span className="opacity-40 w-20 shrink-0">Weapons:</span>
                             <div className="flex flex-wrap gap-1">
                                 {match.loadout.weapons.map((w, i) => (
-                                    <span key={i} className="px-2 py-0.5 bg-info-soft text-info rounded-md text-[10px] font-bold">{w}</span>
+                                    <span key={i} className="px-2 py-0.5 bg-info-soft text-info rounded-md text-label-sm font-bold">{w}</span>
                                 ))}
                             </div>
                         </div>
@@ -1719,7 +1691,7 @@ const SmartMatchDetail: React.FC<{
                             <span className="opacity-40 w-20 shrink-0">Equipment:</span>
                             <div className="flex flex-wrap gap-1">
                                 {match.loadout.equipment.map((eq, i) => (
-                                    <span key={i} className="px-2 py-0.5 bg-accent-soft text-accent rounded-md text-[10px] font-bold">{eq}</span>
+                                    <span key={i} className="px-2 py-0.5 bg-accent-soft text-accent rounded-md text-label-sm font-bold">{eq}</span>
                                 ))}
                             </div>
                         </div>
@@ -1729,26 +1701,26 @@ const SmartMatchDetail: React.FC<{
 
             
             <Section title="Points of Interest" icon={<Target size={14} />} collapsible collapsed={!!collapsedSections.poi} onToggle={() => toggleSection('poi')}>
-                <div className="flex items-center gap-4 text-xs">
+                <div className="flex items-center gap-4 text-label-sm">
                     <div className="flex items-center gap-1.5">
                         <span className="opacity-40">Easy:</span>
                         <input type="number" min="0" value={match.poiEasy || 0}
                             onChange={(e) => onUpdate({ ...match, poiEasy: parseInt(e.target.value) || 0 })}
-                            className="w-12 md3-surface rounded px-2 py-0.5 text-xs font-bold outline-none text-center"
+                            className="w-12 md3-surface rounded px-2 py-0.5 text-label-sm font-bold outline-none text-center"
                         />
                     </div>
                     <div className="flex items-center gap-1.5">
                         <span className="opacity-40">Medium:</span>
                         <input type="number" min="0" value={match.poiMedium || 0}
                             onChange={(e) => onUpdate({ ...match, poiMedium: parseInt(e.target.value) || 0 })}
-                            className="w-12 md3-surface rounded px-2 py-0.5 text-xs font-bold outline-none text-center"
+                            className="w-12 md3-surface rounded px-2 py-0.5 text-label-sm font-bold outline-none text-center"
                         />
                     </div>
                     <div className="flex items-center gap-1.5">
                         <span className="opacity-40">Epic:</span>
                         <input type="number" min="0" value={match.poiEpic || 0}
                             onChange={(e) => onUpdate({ ...match, poiEpic: parseInt(e.target.value) || 0 })}
-                            className="w-12 md3-surface rounded px-2 py-0.5 text-xs font-bold outline-none text-center"
+                            className="w-12 md3-surface rounded px-2 py-0.5 text-label-sm font-bold outline-none text-center"
                         />
                     </div>
                 </div>
@@ -1761,7 +1733,7 @@ const SmartMatchDetail: React.FC<{
                     
                     {match.ocrDebug && (
                 <Section title="OCR Metadata" icon={<ScanEye size={14} />} collapsible collapsed={!!collapsedSections.ocrMeta} onToggle={() => toggleSection('ocrMeta')}>
-                    <div className="space-y-2 text-xs">
+                    <div className="space-y-2 text-label-sm">
                         <div className="flex flex-wrap gap-3">
                             {match.ocrDebug.confidence != null && (
                                 <div className="flex items-center gap-1">
@@ -1774,7 +1746,7 @@ const SmartMatchDetail: React.FC<{
                             {match.ocrDebug.source && (
                                 <div className="flex items-center gap-1">
                                     <span className="opacity-40">Source:</span>
-                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${match.ocrDebug.source === 'cloud' ? 'bg-info-soft-strong text-info' : match.ocrDebug.source === 'merged' ? 'bg-accent-soft-strong text-accent' : 'bg-success-soft-strong text-success'}`}>
+                                    <span className={`px-1.5 py-0.5 rounded text-label-sm font-bold uppercase ${match.ocrDebug.source === 'cloud' ? 'bg-info-soft-strong text-info' : match.ocrDebug.source === 'merged' ? 'bg-accent-soft-strong text-accent' : 'bg-success-soft-strong text-success'}`}>
                                         {match.ocrDebug.source}
                                     </span>
                                 </div>
@@ -1782,12 +1754,12 @@ const SmartMatchDetail: React.FC<{
                             {match.ocrDebug.timestamp && (
                                 <div className="flex items-center gap-1">
                                     <span className="opacity-40">Captured:</span>
-                                    <span className="font-mono text-[10px]">{new Date(match.ocrDebug.timestamp).toLocaleTimeString()}</span>
+                                    <span className="font-mono text-label-sm">{new Date(match.ocrDebug.timestamp).toLocaleTimeString()}</span>
                                 </div>
                             )}
                         </div>
                         {match.ocrDebug.mergeStats && (
-                            <div className="grid grid-cols-3 gap-1 text-[9px] font-mono opacity-60 md3-surface-high p-2 rounded-lg">
+                            <div className="grid grid-cols-3 gap-1 text-label-xs font-mono opacity-60 md3-surface-high p-2 rounded-lg">
                                 <span>agreed: {match.ocrDebug.mergeStats.agreed}</span>
                                 <span>cloud: {match.ocrDebug.mergeStats.cloudPreferred}</span>
                                 <span>local: {match.ocrDebug.mergeStats.localOnly}</span>
@@ -1798,8 +1770,8 @@ const SmartMatchDetail: React.FC<{
                         )}
                         {match.ocrDebug.rawText && (
                             <details className="mt-1">
-                                <summary className="text-[10px] opacity-40 cursor-pointer hover:opacity-60">Raw OCR Text</summary>
-                                <pre className="mt-1 p-2 bg-black/30 rounded-lg text-[9px] font-mono opacity-60 max-h-40 overflow-auto whitespace-pre-wrap break-all">
+                                <summary className="text-label-sm opacity-40 cursor-pointer hover:opacity-60">Raw OCR Text</summary>
+                                <pre className="mt-1 p-2 bg-md-sys-on-surface/5 rounded-lg text-label-xs font-mono opacity-60 max-h-40 overflow-auto whitespace-pre-wrap break-all">
                                     {match.ocrDebug.rawText}
                                 </pre>
                             </details>
@@ -1816,20 +1788,20 @@ const SmartMatchDetail: React.FC<{
                             const events = Array.isArray(tFile) ? tFile : (tFile.telemetry || []);
                             return (
                                 <details key={fi} className="md3-surface-high rounded-lg">
-                                    <summary className="px-3 py-1.5 text-xs font-bold cursor-pointer hover:opacity-80">
+                                    <summary className="px-3 py-1.5 text-label-sm font-bold cursor-pointer hover:opacity-80">
                                         Telemetry File {fi + 1} ({events.length} events)
                                     </summary>
                                     <div className="px-3 pb-2 space-y-1">
                                         {events.slice(0, 50).map((evt: any, i: number) => (
-                                            <div key={i} className="flex items-center gap-2 text-[10px]">
-                                                <span className="text-[9px] opacity-30 w-16 flex-shrink-0 font-mono">
+                                            <div key={i} className="flex items-center gap-2 text-label-sm">
+                                                <span className="text-label-xs opacity-40 w-16 flex-shrink-0 font-mono">
                                                     {(evt.ClientTimestamp || evt.timestamp) ? new Date(evt.ClientTimestamp || evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--'}
                                                 </span>
-                                                <span className="px-1 py-0.5 rounded bg-md-sys-on-surface/5 text-[9px] font-bold uppercase">{evt.EventName || evt.type || 'event'}</span>
+                                                <span className="px-1 py-0.5 rounded bg-md-sys-on-surface/5 text-label-xs font-bold uppercase">{evt.EventName || evt.type || 'event'}</span>
                                             </div>
                                         ))}
                                         {events.length > 50 && (
-                                            <div className="text-[9px] opacity-30 text-center">...and {events.length - 50} more</div>
+                                            <div className="text-label-xs opacity-40 text-center">...and {events.length - 50} more</div>
                                         )}
                                     </div>
                                 </details>
@@ -1845,7 +1817,7 @@ const SmartMatchDetail: React.FC<{
                     <Section title="Kill Breakdown" icon={<Crosshair size={14} />} collapsible collapsed={!!collapsedSections.kills} onToggle={() => toggleSection('kills')}>
                 <div className="flex flex-wrap gap-1.5 items-center">
                     {Object.entries(match.kills || {}).filter(([, v]) => v > 0).map(([ship, count]) => (
-                        <div key={ship} className="flex items-center gap-1 px-2 py-1 rounded-lg md3-surface-high text-xs group">
+                        <div key={ship} className="flex items-center gap-1 px-2 py-1 rounded-lg md3-surface-high text-label-sm group">
                             <input
                                 type="number" min="0" value={count}
                                 onChange={(e) => {
@@ -1900,7 +1872,7 @@ const SmartMatchDetail: React.FC<{
                         <button
                             onClick={handleRerunAnalysis}
                             disabled={rerunning}
-                            className="md3-btn-filled px-4 py-2 font-bold text-xs disabled:opacity-50 transition-all flex items-center gap-2"
+                            className="md3-btn-filled px-4 py-2 font-bold text-label-sm disabled:opacity-disabled transition-all flex items-center gap-2"
                         >
                             <RefreshCw size={14} className={rerunning ? 'animate-spin' : ''} />
                             {rerunning ? 'Analyzing...' : `Re-analyze ${countImages(match.artifacts)} Screenshot${countImages(match.artifacts) !== 1 ? 's' : ''}`}
@@ -1909,18 +1881,18 @@ const SmartMatchDetail: React.FC<{
                         
                         {rerunning && rerunProgress.total > 0 && (
                             <div className="md3-surface-high rounded-lg p-3 space-y-2">
-                                <div className="flex items-center justify-between text-xs">
+                                <div className="flex items-center justify-between text-label-sm">
                                     <span className="font-bold">{rerunProgress.status}</span>
-                                    <span className="opacity-50">{rerunProgress.current}/{rerunProgress.total}</span>
+                                    <span className="opacity-60">{rerunProgress.current}/{rerunProgress.total}</span>
                                 </div>
-                                <div className="w-full bg-black/30 rounded-full h-1.5">
+                                <div className="w-full bg-md-sys-on-surface/10 rounded-full h-1.5">
                                     <div
                                         className="bg-md-sys-primary h-1.5 rounded-full transition-all duration-500"
                                         style={{ width: `${(rerunProgress.current / rerunProgress.total) * 100}%` }}
                                     />
                                 </div>
                                 {rerunProgress.cloudStatus && (
-                                    <div className="flex items-center gap-1.5 text-[10px] opacity-60">
+                                    <div className="flex items-center gap-1.5 text-label-sm opacity-60">
                                         <span>{rerunProgress.cloudStatus}</span>
                                     </div>
                                 )}
@@ -1929,17 +1901,17 @@ const SmartMatchDetail: React.FC<{
 
                         
                         {processingComplete && reviewData && !rerunning && (
-                            <div className="md3-banner md3-banner--info rounded-xl p-4 space-y-2 animate-pulse-once">
+                            <div className="md3-banner md3-banner--info rounded-card p-4 space-y-2 animate-pulse-once">
                                 <div className="flex items-center gap-2">
                                     <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                                    <span className="text-sm font-semibold text-accent">Processing Complete</span>
+                                    <span className="text-body font-semibold text-accent">Processing Complete</span>
                                 </div>
-                                <p className="text-xs opacity-60">
+                                <p className="text-label-sm opacity-60">
                                     {rerunProgress.status}
-                                    {rerunProgress.cloudStatus && <span className="ml-2 text-[10px] opacity-60">- {rerunProgress.cloudStatus}</span>}
+                                    {rerunProgress.cloudStatus && <span className="ml-2 text-label-sm opacity-60">- {rerunProgress.cloudStatus}</span>}
                                 </p>
                                 {rerunDiff && (
-                                    <div className="grid grid-cols-2 gap-2 text-[10px]">
+                                    <div className="grid grid-cols-2 gap-2 text-label-sm">
                                         <div className="md3-surface rounded-lg p-2">Team +{rerunDiff.addedTeam} / -{rerunDiff.removedTeam}</div>
                                         <div className="md3-surface rounded-lg p-2">Opp +{rerunDiff.addedOpp} / -{rerunDiff.removedOpp}</div>
                                         <div className="md3-surface rounded-lg p-2 col-span-2">Ship: {rerunDiff.shipChanged ? 'changed' : 'unchanged'}</div>
@@ -1948,7 +1920,7 @@ const SmartMatchDetail: React.FC<{
                                 <div className="flex gap-2 mt-1 flex-wrap">
                                     <button
                                         onClick={() => setReviewData(reviewData)}
-                                        className="flex-1 min-w-[160px] md3-btn-filled px-4 py-2.5 font-semibold text-sm transition-all flex items-center justify-center gap-2"
+                                        className="flex-1 min-w-[160px] md3-btn-filled px-4 py-2.5 font-semibold text-body transition-all flex items-center justify-center gap-2"
                                     >
                                         <ScanEye size={16} />
                                         Finalize Entry
@@ -1956,7 +1928,7 @@ const SmartMatchDetail: React.FC<{
                                     {onApplyToSession && (
                                         <button
                                             onClick={() => { onApplyToSession(reviewData); setProcessingComplete(false); }}
-                                            className="flex-1 min-w-[160px] md3-btn-tonal px-4 py-2.5 text-info font-semibold text-sm transition-all flex items-center justify-center gap-2"
+                                            className="flex-1 min-w-[160px] md3-btn-tonal px-4 py-2.5 text-info font-semibold text-body transition-all flex items-center justify-center gap-2"
                                             title="Feed this data into your current recording session (teammates, opponents, ship, modifiers)"
                                         >
                                             <Zap size={16} />
@@ -1966,7 +1938,7 @@ const SmartMatchDetail: React.FC<{
                                     <button
                                         onClick={handleCopyRerunJson}
                                         disabled={!rerunResults || rerunResults.length === 0}
-                                        className="flex-1 min-w-[160px] md3-btn-outlined px-4 py-2.5 font-bold text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                                        className="flex-1 min-w-[160px] md3-btn-outlined px-4 py-2.5 font-bold text-body transition-all flex items-center justify-center gap-2 disabled:opacity-disabled"
                                         title="View rerun OCR JSON (combined + per-screenshot)"
                                     >
                                         <FileText size={16} />
@@ -1978,16 +1950,16 @@ const SmartMatchDetail: React.FC<{
 
                         
                         {processingComplete && !reviewData && !rerunning && (
-                            <div className="md3-banner md3-banner--error rounded-xl p-3 space-y-1">
-                                <span className="text-xs font-semibold text-danger">Processing Complete - No Data Extracted</span>
-                                <p className="text-[10px] opacity-40">None of the screenshots produced usable OCR data. Try with clearer screenshots or a different OCR mode.</p>
+                            <div className="md3-banner md3-banner--error rounded-card p-3 space-y-1">
+                                <span className="text-label-sm font-semibold text-danger">Processing Complete - No Data Extracted</span>
+                                <p className="text-label-sm opacity-40">None of the screenshots produced usable OCR data. Try with clearer screenshots or a different OCR mode.</p>
                                 {rerunProgress.cloudStatus && (
-                                    <span className="text-[10px] opacity-50">{rerunProgress.cloudStatus}</span>
+                                    <span className="text-label-sm opacity-60">{rerunProgress.cloudStatus}</span>
                                 )}
                                 {rerunResults && rerunResults.length > 0 && (
                                     <button
                                         onClick={handleCopyRerunJson}
-                                        className="mt-2 md3-btn-outlined px-3 py-1.5 font-bold text-[10px] transition-all inline-flex items-center gap-1.5"
+                                        className="mt-2 md3-btn-outlined px-3 py-1.5 font-bold text-label-sm transition-all inline-flex items-center gap-1.5"
                                     >
                                         <FileText size={12} />
                                         View JSON
@@ -1997,23 +1969,23 @@ const SmartMatchDetail: React.FC<{
                         )}
 
                         {rerunResults && (
-                            <details className="text-xs">
-                                <summary className="text-[10px] opacity-40 cursor-pointer hover:opacity-60 font-bold uppercase">
+                            <details className="text-label-sm">
+                                <summary className="text-label-sm opacity-40 cursor-pointer hover:opacity-60 font-bold uppercase">
                                     Per-Screenshot Results ({rerunResults.filter(r => r.success).length}/{rerunResults.length} succeeded)
                                 </summary>
                                 <div className="space-y-2 mt-2">
                                     {rerunResults.map((r, i) => (
-                                        <div key={i} className={`p-3 rounded-lg text-xs ${r.success ? 'bg-success-soft' : 'bg-danger-soft'}`}>
+                                        <div key={i} className={`p-3 rounded-lg text-label-sm ${r.success ? 'bg-success-soft' : 'bg-danger-soft'}`}>
                                             <div className="font-bold mb-1 flex items-center gap-2">
                                                 <span>Screenshot {i + 1}: {r.success ? `${r.data?.screenshotType || 'Detected'} (${Math.round(r.data?.overallConfidence || 0)}%)` : `Error: ${r.error}`}</span>
                                                 {r.success && r.data?.ocrSource && (
-                                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${r.data.ocrSource === 'cloud' ? 'bg-info-soft-strong text-info' : r.data.ocrSource === 'merged' ? 'bg-accent-soft-strong text-accent' : 'bg-success-soft-strong text-success'}`}>
+                                                    <span className={`px-1.5 py-0.5 rounded text-label-xs font-bold uppercase ${r.data.ocrSource === 'cloud' ? 'bg-info-soft-strong text-info' : r.data.ocrSource === 'merged' ? 'bg-accent-soft-strong text-accent' : 'bg-success-soft-strong text-success'}`}>
                                                         {r.data.ocrSource}
                                                     </span>
                                                 )}
                                             </div>
                                             {r.success && r.data && (
-                                                <div className="space-y-1 opacity-70">
+                                                <div className="space-y-1 opacity-60">
                                                     {r.data.playerShip && <div>Ship: {r.data.playerShip.shipType}</div>}
                                                     {r.data.teammates?.length > 0 && <div>Teammates: {r.data.teammates.map((t: any) => t.name).join(', ')}</div>}
                                                     {r.data.opponentTeams?.length > 0 && (
@@ -2037,7 +2009,7 @@ const SmartMatchDetail: React.FC<{
                 <div className="fixed inset-0 z-[10000] md3-dialog-scrim backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setJsonExport(null)}>
                     <div className="md3-dialog w-full max-w-2xl max-h-[80vh] overflow-hidden sc-bordered" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between p-4 border-b border-md-sys-outline/10">
-                            <div className="text-sm font-bold">{jsonExport.title}</div>
+                            <div className="text-body font-bold">{jsonExport.title}</div>
                             <button onClick={() => setJsonExport(null)} className="md3-icon-btn">
                                 <X size={16} />
                             </button>
@@ -2047,7 +2019,7 @@ const SmartMatchDetail: React.FC<{
                                 ref={jsonRef}
                                 value={jsonExport.content}
                                 readOnly
-                                className="w-full h-[50vh] md3-textfield--outlined rounded-xl p-3 text-xs font-mono outline-none resize-none"
+                                className="w-full h-[50vh] md3-textfield--outlined rounded-control p-3 text-label-sm font-mono outline-none resize-none"
                             />
                             <div className="flex gap-2 mt-3">
                                 <button
@@ -2057,25 +2029,25 @@ const SmartMatchDetail: React.FC<{
                                             jsonRef.current.select();
                                         }
                                     }}
-                                    className="md3-btn-filled px-4 py-2 text-xs font-bold"
+                                    className="md3-btn-filled px-4 py-2 text-label-sm font-bold"
                                 >
                                     Select All
                                 </button>
                                 <button
                                     onClick={handleCopyJsonExport}
-                                    className="md3-btn-outlined px-4 py-2 text-xs font-bold"
+                                    className="md3-btn-outlined px-4 py-2 text-label-sm font-bold"
                                 >
                                     Copy JSON
                                 </button>
                                 <button
                                     onClick={() => exportJSONFile(jsonExport.payload, buildJsonPrefix(jsonExport.title))}
-                                    className="md3-btn-tonal px-4 py-2 text-xs font-bold"
+                                    className="md3-btn-tonal px-4 py-2 text-label-sm font-bold"
                                 >
                                     Download JSON
                                 </button>
                                 <button
                                     onClick={() => setJsonExport(null)}
-                                    className="md3-btn-text px-4 py-2 text-xs font-bold"
+                                    className="md3-btn-text px-4 py-2 text-label-sm font-bold"
                                 >
                                     Close
                                 </button>
@@ -2099,176 +2071,12 @@ const SmartMatchDetail: React.FC<{
             
             {lightboxSrc && (
                 <div className="fixed inset-0 z-[10000] bg-black/90 flex items-center justify-center p-8" onClick={() => setLightboxSrc(null)}>
-                    <button onClick={() => setLightboxSrc(null)} className="absolute top-4 right-4 text-white/50 hover:text-white">
+                    <button onClick={() => setLightboxSrc(null)} className="absolute top-4 right-4 text-md-sys-on-surface/60 hover:text-md-sys-on-surface">
                         <X size={24} />
                     </button>
                     <LocalImage src={lightboxSrc} alt="Screenshot" className="max-w-full max-h-full object-contain rounded-lg" />
                 </div>
             )}
-        </div>
-    );
-};
-const Section: React.FC<{
-    title: string;
-    icon: React.ReactNode;
-    children: React.ReactNode;
-    collapsible?: boolean;
-    collapsed?: boolean;
-    onToggle?: () => void;
-}> = ({ title, icon, children, collapsible = false, collapsed = false, onToggle }) => (
-    <div className="md3-surface-high rounded-2xl sc-bordered p-4">
-        <button
-            type="button"
-            onClick={collapsible ? onToggle : undefined}
-            className={`w-full flex items-center justify-between gap-2 ${collapsible ? 'cursor-pointer' : 'cursor-default'} ${collapsed ? '' : 'mb-3'}`}
-        >
-            <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-2xl bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer flex items-center justify-center sc-bordered">
-                    {icon}
-                </div>
-                <span className="text-[10px] font-black text-md-sys-on-surface/65 tracking-[0.22em] uppercase">{title}</span>
-            </div>
-            {collapsible && (
-                <span className="text-md-sys-on-surface/40">
-                    {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                </span>
-            )}
-        </button>
-        {!collapsed && children}
-    </div>
-);
-
-const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: string }> = ({ icon, label, value }) => (
-    <div className="md3-surface rounded-xl sc-bordered p-3 flex flex-col items-center gap-0.5">
-        <span className="text-md-sys-on-surface/60">{icon}</span>
-        <span className="text-[9px] font-semibold text-md-sys-on-surface/50">{label}</span>
-        <span className="text-sm font-bold text-md-sys-on-surface">{value}</span>
-    </div>
-);
-
-const EditableStatCard: React.FC<{
-    icon: React.ReactNode; label: string; value: string;
-    onSave?: (v: string) => void; placeholder?: string; type?: string; readOnly?: boolean;
-}> = ({ icon, label, value, onSave, placeholder, type, readOnly }) => {
-    const [editing, setEditing] = React.useState(false);
-    const [draft, setDraft] = React.useState(value);
-    React.useEffect(() => { setDraft(value); }, [value]);
-
-    if (readOnly || !onSave) {
-        return <StatCard icon={icon} label={label} value={value} />;
-    }
-
-    return (
-        <div
-            className="md3-surface rounded-xl sc-bordered p-3 flex flex-col items-center gap-0.5 cursor-pointer hover:ring-1 ring-md-sys-primary/20 transition-all"
-            onClick={() => { if (!editing) { setEditing(true); setDraft(value === '--' ? '' : value); } }}
-        >
-            <span className="text-md-sys-on-surface/60">{icon}</span>
-            <span className="text-[9px] font-semibold text-md-sys-on-surface/50">{label}</span>
-            {editing ? (
-                <input
-                    type={type || 'text'}
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onBlur={() => { onSave(draft); setEditing(false); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { onSave(draft); setEditing(false); } if (e.key === 'Escape') setEditing(false); }}
-                    className="text-sm font-black md3-surface rounded px-2 w-20 text-center outline-none"
-                    placeholder={placeholder}
-                    autoFocus
-                />
-            ) : (
-                <span className="text-sm font-semibold text-md-sys-on-surface">{value}</span>
-            )}
-        </div>
-    );
-};
-
-const ModifierAdder: React.FC<{ existing: string[]; onAdd: (mod: string) => void }> = ({ existing, onAdd }) => {
-    const [open, setOpen] = React.useState(false);
-    const [search, setSearch] = React.useState('');
-    const available = UI_REACH_MODIFIERS.filter(m => !existing.includes(m) && m.toLowerCase().includes(search.toLowerCase()));
-
-    if (!open) {
-        return (
-            <button onClick={() => setOpen(true)} className="md3-icon-btn bg-warning-soft text-warning hover:bg-warning-soft-strong">
-                <Plus size={10} />
-            </button>
-        );
-    }
-
-    return (
-        <div className="flex flex-col gap-1 md3-surface-high rounded-lg p-2 min-w-[180px]">
-            <div className="flex items-center gap-1">
-                <input
-                    value={search} onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search modifiers..."
-                    className="flex-1 bg-transparent text-[10px] outline-none"
-                    autoFocus
-                />
-                <button onClick={() => { setOpen(false); setSearch(''); }} className="md3-icon-btn w-5 h-5 text-danger"><X size={10} /></button>
-            </div>
-            <div className="max-h-32 overflow-y-auto flex flex-col gap-0.5">
-                {available.slice(0, 10).map(m => (
-                    <button key={m} onClick={() => { onAdd(m); setOpen(false); setSearch(''); }}
-                        className="text-left text-[10px] px-1.5 py-0.5 rounded hover:bg-warning-soft text-warning transition-colors">
-                        {m}
-                    </button>
-                ))}
-                {available.length === 0 && <span className="text-[9px] opacity-30 text-center py-1">No modifiers available</span>}
-            </div>
-        </div>
-    );
-};
-
-const KillAdder: React.FC<{ existingShips: string[]; onAdd: (ship: string) => void }> = ({ existingShips, onAdd }) => {
-    const [open, setOpen] = React.useState(false);
-
-    if (!open) {
-        return (
-            <button onClick={() => setOpen(true)} className="md3-icon-btn bg-success-soft text-success hover:bg-success-soft-strong">
-                <Plus size={10} />
-            </button>
-        );
-    }
-
-    return (
-        <div className="flex flex-col gap-0.5 md3-surface-high rounded-lg p-2 min-w-[160px]">
-            {SHIPS.map(s => (
-                <button key={s} onClick={() => { onAdd(s); setOpen(false); }}
-                    className="text-left text-[10px] px-1.5 py-0.5 rounded hover:bg-success-soft text-success transition-colors flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getShipColor(s) }} />
-                    {s.replace(/ \(\d Player\)/, '')}
-                    {existingShips.includes(s) && <span className="opacity-30 ml-auto">+1</span>}
-                </button>
-            ))}
-            <button onClick={() => setOpen(false)} className="text-[9px] opacity-30 hover:opacity-60 text-center mt-1">Cancel</button>
-        </div>
-    );
-};
-
-const InlinePlayerAdd: React.FC<{ onAdd: (name: string) => void }> = ({ onAdd }) => {
-    const [adding, setAdding] = React.useState(false);
-    const [name, setName] = React.useState('');
-
-    if (!adding) {
-        return (
-            <button onClick={() => setAdding(true)} className="md3-icon-btn bg-danger-soft text-danger hover:bg-danger-soft-strong">
-                <Plus size={10} />
-            </button>
-        );
-    }
-
-    return (
-        <div className="flex items-center gap-1">
-            <input
-                value={name} onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) { onAdd(name.trim()); setName(''); setAdding(false); } if (e.key === 'Escape') { setAdding(false); setName(''); } }}
-                placeholder="Name..."
-                className="md3-textfield--outlined px-2 py-0.5 text-xs outline-none w-24"
-                autoFocus
-            />
-            <button onClick={() => { if (name.trim()) { onAdd(name.trim()); setName(''); setAdding(false); } }} className="md3-icon-btn w-5 h-5 text-success"><Check size={10} /></button>
-            <button onClick={() => { setAdding(false); setName(''); }} className="md3-icon-btn w-5 h-5 text-danger"><X size={10} /></button>
         </div>
     );
 };

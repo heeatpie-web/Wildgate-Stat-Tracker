@@ -1,4 +1,4 @@
-﻿import React, { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { Match, VisualMode, MomentumData, SessionSummaryData, PeriodComparisonData, TimePatternData, KillEfficiencyData } from '../../types';
 import { synthesizeNarrative, type EssaySection } from '../../utils/analyticsEditorial';
 import { TrendingUp, TrendingDown, Minus, BookOpen } from 'lucide-react';
@@ -27,21 +27,21 @@ const TrendIcon: React.FC<{ trend?: 'up' | 'down' | 'stable' }> = ({ trend }) =>
 const SectionCard: React.FC<{ section: EssaySection; index: number }> = ({ section, index }) => (
     <div className="md3-card rounded-2xl p-6 space-y-4 animate-fade-in" style={{ animationDelay: `${index * 80}ms` }}>
         <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-md-sys-primary/20 flex items-center justify-center text-md-sys-primary text-[10px] font-black">
+            <div className="w-6 h-6 rounded-full bg-md-sys-primary/20 flex items-center justify-center text-md-sys-primary text-label-sm font-black">
                 {index + 1}
             </div>
-            <h3 className="text-sm font-bold uppercase tracking-wide">{section.title}</h3>
+            <h3 className="text-body font-bold uppercase tracking-wide">{section.title}</h3>
         </div>
 
-        <p className="text-sm leading-relaxed opacity-70">{section.body}</p>
+        <p className="text-body leading-relaxed opacity-70">{section.body}</p>
 
         {section.metrics && section.metrics.length > 0 && (
             <div className="flex gap-3 pt-2 border-t border-md-sys-outlineVariant/30">
                 {section.metrics.map((m, i) => (
                     <div key={i} className="flex items-center gap-1.5 md3-surface-high px-3 py-1.5 rounded-lg">
                         <TrendIcon trend={m.trend} />
-                        <span className="text-xs font-bold">{m.value}</span>
-                        <span className="text-[9px] opacity-40 uppercase">{m.label}</span>
+                        <span className="text-label-sm font-bold">{m.value}</span>
+                        <span className="text-label-xs opacity-40 uppercase">{m.label}</span>
                     </div>
                 ))}
             </div>
@@ -71,7 +71,7 @@ export const VisualEssayView: React.FC<VisualEssayViewProps> = ({
             <div className="bg-gradient-to-br from-md-sys-primary/10 to-transparent rounded-2xl border border-md-sys-primary/20 p-6 text-center space-y-2">
                 <BookOpen size={24} className="mx-auto text-md-sys-primary opacity-60" />
                 <h1 className="text-xl font-black uppercase tracking-tight">{essay.headline}</h1>
-                <p className="text-[10px] uppercase tracking-widest opacity-40 font-bold">
+                <p className="text-label-sm uppercase tracking-widest opacity-40 font-bold">
                     {matches.length} matches analyzed
                 </p>
                 {momentumSparkline.length > 3 && (
@@ -87,7 +87,7 @@ export const VisualEssayView: React.FC<VisualEssayViewProps> = ({
             ))}
 
             {/* Footer */}
-            <div className="text-center text-[9px] uppercase tracking-widest opacity-20 font-bold py-4">
+            <div className="text-center text-label-xs uppercase tracking-widest opacity-20 font-bold py-4">
                 End of Analysis
             </div>
         </div>

@@ -25,7 +25,6 @@ export const useAnalyticsData = (timeRange: AnalyticsTimeRange, lastN: number = 
     const { matches, playerProfiles } = useGameData();
     const { activeMode } = useUIState();
 
-    const now = Date.now();
     const rangeStart = useMemo(() => {
         if (timeRange === 'today') {
             const startOfDay = new Date();
@@ -87,22 +86,28 @@ export const useAnalyticsData = (timeRange: AnalyticsTimeRange, lastN: number = 
         return streak;
     }, [filteredMatches]);
 
-    const insights = useMemo(() => (wantInsights ? calculateInsights(filteredMatches) : []), [filteredMatches, wantInsights]);
-    const socialData = useMemo(() => (wantSocial ? calculateSocialData(filteredMatches) : null), [filteredMatches, wantSocial]);
-    const synergyMatrix = useMemo(() => (wantSynergy ? calculateSynergyMatrix(filteredMatches) : {}), [filteredMatches, wantSynergy]);
-    const relationshipInsights = useMemo(() => (wantSocial ? calculateRelationshipAnalytics(playerProfiles as any, {}) : []), [playerProfiles, wantSocial]);
+    // Deps intentionally omit want* flags: the guard still prevents computing
+    // until the view is first needed, but once computed the cache persists across
+    // view switches (only invalidated when filteredMatches actually changes).
+    const insights = useMemo(() => (wantInsights ? calculateInsights(filteredMatches) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filteredMatches]);
+    const socialData = useMemo(() => (wantSocial ? calculateSocialData(filteredMatches) : null), [filteredMatches]); // eslint-disable-line react-hooks/exhaustive-deps
+    const synergyMatrix = useMemo(() => (wantSynergy ? calculateSynergyMatrix(filteredMatches) : {}), [filteredMatches]); // eslint-disable-line react-hooks/exhaustive-deps
+    const relationshipInsights = useMemo(() => (wantSocial ? calculateRelationshipAnalytics(playerProfiles as any, {}) : []), [playerProfiles]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // New V2 analytics
-    const timePatterns = useMemo(() => (wantTimePatterns ? calculateTimePatterns(filteredMatches) : null), [filteredMatches, wantTimePatterns]);
-    const streakHistory = useMemo(() => (wantStreaks ? calculateStreakHistory(filteredMatches) : { timeline: [], longestWinStreak: 0, longestLossStreak: 0, currentStreak: 0, averageStreakLength: 0 } as StreakData), [filteredMatches, wantStreaks]);
-    const sessionSummary = useMemo(() => (wantSession ? calculateSessionSummary(filteredMatches) : null), [filteredMatches, wantSession]);
-    const periodComparison = useMemo(() => (wantPeriod ? calculatePeriodComparison(filteredMatches) : null), [filteredMatches, wantPeriod]);
-    const killEfficiency = useMemo(() => (wantKillEfficiency ? calculateKillEfficiency(filteredMatches) : null), [filteredMatches, wantKillEfficiency]);
-    const placementData = useMemo(() => (wantPlacement ? calculatePlacementDistribution(filteredMatches) : { distribution: [], avgPlacement: 0, medianPlacement: 0, topQuartileRate: 0 } as PlacementData), [filteredMatches, wantPlacement]);
-    const momentum = useMemo(() => (wantMomentum ? calculatePerformanceMomentum(filteredMatches) : null), [filteredMatches, wantMomentum]);
+    const timePatterns = useMemo(() => (wantTimePatterns ? calculateTimePatterns(filteredMatches) : null), [filteredMatches]); // eslint-disable-line react-hooks/exhaustive-deps
+    const streakHistory = useMemo(() => (wantStreaks ? calculateStreakHistory(filteredMatches) : { timeline: [], longestWinStreak: 0, longestLossStreak: 0, currentStreak: 0, averageStreakLength: 0 } as StreakData), [filteredMatches]); // eslint-disable-line react-hooks/exhaustive-deps
+    const sessionSummary = useMemo(() => (wantSession ? calculateSessionSummary(filteredMatches) : null), [filteredMatches]); // eslint-disable-line react-hooks/exhaustive-deps
+    const periodComparison = useMemo(() => (wantPeriod ? calculatePeriodComparison(filteredMatches) : null), [filteredMatches]); // eslint-disable-line react-hooks/exhaustive-deps
+    const killEfficiency = useMemo(() => (wantKillEfficiency ? calculateKillEfficiency(filteredMatches) : null), [filteredMatches]); // eslint-disable-line react-hooks/exhaustive-deps
+    const placementData = useMemo(() => (wantPlacement ? calculatePlacementDistribution(filteredMatches) : { distribution: [], avgPlacement: 0, medianPlacement: 0, topQuartileRate: 0 } as PlacementData), [filteredMatches]); // eslint-disable-line react-hooks/exhaustive-deps
+    const momentum = useMemo(() => (wantMomentum ? calculatePerformanceMomentum(filteredMatches) : null), [filteredMatches]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const avgSortiesPerDay = useMemo(() => {
         if (filteredMatches.length === 0) return 0;
+        const now = Date.now();
         let start = rangeStart;
         let end = now;
         if (timeRange === 'all') {
@@ -114,7 +119,7 @@ export const useAnalyticsData = (timeRange: AnalyticsTimeRange, lastN: number = 
         }
         const spanDays = Math.max(1, Math.ceil((end - start) / 86400000));
         return Math.round(filteredMatches.length / spanDays);
-    }, [filteredMatches, timeRange, rangeStart, now]);
+    }, [filteredMatches, timeRange, rangeStart]);
 
     return {
         filteredMatches,

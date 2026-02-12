@@ -27,6 +27,7 @@ import { Toast } from './components/Toast';
 import { IdMapper } from './components/IdMapper';
 const DevOCRPanel = React.lazy(() => import('./components/DevOCRPanel'));
 const SmartCapturesPanel = React.lazy(() => import('./components/SmartCapturesPanel'));
+const PlayerHub = React.lazy(() => import('./components/PlayerHub'));
 const MatchRecordingPage = React.lazy(() => import('./components/MatchRecordingPage').then(m => ({ default: m.MatchRecordingPage })));
 import { OCRReviewModal } from './components/ocr/OCRReviewModal';
 import type { OCRExtractedData } from './utils/ocr/ocrTypes';
@@ -37,6 +38,7 @@ import { StorageService } from './utils/storage';
 
 const App: React.FC = () => {
     const [ocrReviewData, setOcrReviewData] = useState<OCRExtractedData | null>(null);
+    const setTutorialCompleted = useAppStore(s => s.setTutorialCompleted);
 
     const {
         isOverlayMode, setIsOverlayMode,
@@ -66,26 +68,9 @@ const App: React.FC = () => {
         setSessionShipTypes
     } = useGameData();
 
-    const {
-        disableAnimations,
-        appearanceMode, colorTheme, customHue, colorblindMode
-    } = useUserPreferences();
+    useUserPreferences();
 
     const { logFeed, logStatus } = useLogMonitor();
-
-    useEffect(() => {
-        const body = document.body;
-        body.setAttribute('data-mode', appearanceMode === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : appearanceMode);
-        body.setAttribute('data-theme', colorTheme);
-        if (colorTheme === 'custom') body.style.setProperty('--app-hue', customHue);
-        else body.style.removeProperty('--app-hue');
-
-        body.classList.remove('cb-protanopia', 'cb-deuteranopia', 'cb-tritanopia');
-        if (colorblindMode !== 'none') body.classList.add(`cb-${colorblindMode}`);
-
-        if (disableAnimations) body.classList.add('no-animate');
-        else body.classList.remove('no-animate');
-    }, [appearanceMode, colorTheme, customHue, colorblindMode, disableAnimations]);
 
     useEffect(() => {
         const body = document.body;
@@ -101,6 +86,14 @@ const App: React.FC = () => {
             getElectronAPI()?.send('toggle-overlay', false);
         }
     }, [isOverlayMode]);
+
+    // Apply persisted always-on-top setting on startup
+    useEffect(() => {
+        const api = getElectronAPI();
+        if (!api) return;
+        const aot = useAppStore.getState().isAlwaysOnTop;
+        if (aot) api.send('set-always-on-top', true);
+    }, []);
 
     useEffect(() => {
         const api = getElectronAPI();
@@ -122,6 +115,21 @@ const App: React.FC = () => {
             unsubHotkey();
         };
     }, [setUpdateStatus, setIsOverlayMode]);
+
+    // Window restore/maximize animation
+    const appRef = React.useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const api = getElectronAPI();
+        if (!api) return;
+        const unsub = api.on('window-restored', () => {
+            const el = appRef.current;
+            if (!el) return;
+            el.classList.remove('window-restore-anim');
+            void el.offsetWidth; // force reflow to restart animation
+            el.classList.add('window-restore-anim');
+        });
+        return unsub;
+    }, []);
 
     const sessionMatches = matches.filter(m => m.timestamp >= sessionStartTime);
     const sessionWins = sessionMatches.filter(m => m.result === 'Win').length;
@@ -301,25 +309,31 @@ const App: React.FC = () => {
                 return <RecordingView onSmartCaptureData={setOcrReviewData} />;
             case 'analytics':
                 return (
-                    <div className="h-full p-3 overflow-auto">
+                    <div className="h-full overflow-hidden p-3">
                         <AnalyticsPanel />
                     </div>
                 );
             case 'history':
                 return (
-                    <div className="h-full overflow-hidden">
+                    <div className="h-full overflow-hidden p-3">
                         <HistoryTable />
                     </div>
                 );
             case 'smart-captures':
                 return (
-                    <div className="h-full p-4 overflow-auto">
+                    <div className="h-full overflow-hidden p-3">
                         <SmartCapturesPanel />
+                    </div>
+                );
+            case 'players':
+                return (
+                    <div className="h-full overflow-hidden p-3">
+                        <PlayerHub />
                     </div>
                 );
             case 'dev-ocr':
                 return (
-                    <div className="h-full overflow-hidden">
+                    <div className="h-full overflow-hidden p-3">
                         <DevOCRPanel />
                     </div>
                 );
@@ -329,13 +343,13 @@ const App: React.FC = () => {
     };
 
     const viewFallback = (
-        <div className="h-full w-full flex items-center justify-center text-sm font-semibold text-md-sys-on-surface/60">
+        <div className="h-full w-full flex items-center justify-center text-body font-semibold text-md-sys-on-surface/60">
             Loading view...
         </div>
     );
 
     return (
-        <div className={`app-container h-screen w-screen flex flex-col text-md-sys-onSurface ${!isOverlayMode ? 'bg-md-sys-background' : ''} font-sans transition-colors duration-300`} style={{ opacity: hiddenForScan ? 0 : 1 }}>
+        <div ref={appRef} className={`app-container h-screen w-screen flex flex-col text-md-sys-onSurface ${!isOverlayMode ? 'bg-md-sys-background' : ''} font-sans transition-colors duration-300`} style={{ opacity: hiddenForScan ? 0 : 1 }}>
 
             {isOverlayMode ? (
                 /* Compact Overlay Mode */
@@ -348,7 +362,7 @@ const App: React.FC = () => {
                     <div className="flex-1 flex overflow-hidden">
                         <Sidebar />
 
-                        <div className="flex-1 flex flex-col overflow-hidden p-2 gap-2">
+                        <div className="flex-1 flex flex-col overflow-hidden p-3 gap-3">
                             <Header />
 
                             <main className="flex-1 overflow-hidden bg-md-sys-surface rounded-2xl">
@@ -371,7 +385,15 @@ const App: React.FC = () => {
             <ResetConfirmModal />
             <Wizard />
 
-            {showTutorial && <Tutorial onComplete={() => setShowTutorial(false)} onSkip={() => setShowTutorial(false)} />}
+            {showTutorial && (
+                <Tutorial
+                    onComplete={() => {
+                        setTutorialCompleted(true);
+                        setShowTutorial(false);
+                    }}
+                    onSkip={() => setShowTutorial(false)}
+                />
+            )}
 
             {showChangelog && (
                 <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closeChangelog}>
@@ -379,7 +401,7 @@ const App: React.FC = () => {
                         <div className="flex justify-between items-center mb-6">
                             <div>
                                 <h2 className="text-3xl font-black uppercase tracking-tighter bg-gradient-to-r from-md-sys-primary to-md-sys-secondary bg-clip-text text-transparent">Update {APP_VERSION}</h2>
-                                <p className="text-xs font-bold opacity-60 uppercase tracking-widest mt-1">What's New</p>
+                                <p className="text-label-sm font-bold opacity-60 uppercase tracking-widest mt-1">What's New</p>
                             </div>
                             <div className="w-12 h-12 rounded-full bg-md-sys-surface2 flex items-center justify-center text-2xl">Update</div>
                         </div>
@@ -387,7 +409,7 @@ const App: React.FC = () => {
                             {CHANGELOG[APP_VERSION]?.map((item, i) => (
                                 <div key={i} className="flex gap-3 items-start">
                                     <div className="w-2 h-2 rounded-full bg-md-sys-primary mt-2 flex-shrink-0"></div>
-                                    <div className="text-sm font-medium opacity-80 leading-relaxed">{item}</div>
+                                    <div className="text-body font-medium opacity-80 leading-relaxed">{item}</div>
                                 </div>
                             ))}
                         </div>
@@ -402,7 +424,7 @@ const App: React.FC = () => {
                 <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-8" onClick={() => setShowIdMapper(false)}>
                     <div className="max-w-xl w-full" onClick={e => e.stopPropagation()}>
                         <IdMapper />
-                        <button onClick={() => setShowIdMapper(false)} className="mt-4 w-full py-2 bg-md-sys-surface1 rounded-lg text-xs hover:bg-md-sys-surface2">Close</button>
+                        <button onClick={() => setShowIdMapper(false)} className="mt-4 w-full py-2 bg-md-sys-surface1 rounded-lg text-label-sm hover:bg-md-sys-surface2">Close</button>
                     </div>
                 </div>
             )}

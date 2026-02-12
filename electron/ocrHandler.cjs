@@ -47,23 +47,29 @@ function getImageHash(buffer) {
   return crypto.createHash('md5').update(buffer).digest('hex');
 }
 
-function getCachedResult(hash) {
-  const entry = ocrResultCache.get(hash);
+function buildCacheKey(imageHash, activeUser = null, ocrMode = 'both') {
+  const normalizedUser = String(activeUser || '').trim().toLowerCase();
+  const normalizedMode = String(ocrMode || 'both').trim().toLowerCase();
+  return `${imageHash}|u:${normalizedUser}|m:${normalizedMode}`;
+}
+
+function getCachedResult(cacheKey) {
+  const entry = ocrResultCache.get(cacheKey);
   if (entry) {
-    console.log(`[OCR Cache] HIT for ${hash.slice(0, 8)}...`);
+    console.log(`[OCR Cache] HIT for ${cacheKey.split('|')[0].slice(0, 8)}...`);
     return entry.result;
   }
   return null;
 }
 
-function setCachedResult(hash, result) {
+function setCachedResult(cacheKey, result) {
   // Evict oldest if at capacity
   if (ocrResultCache.size >= OCR_CACHE_MAX) {
     const oldestKey = ocrResultCache.keys().next().value;
     ocrResultCache.delete(oldestKey);
   }
-  ocrResultCache.set(hash, { result, timestamp: Date.now() });
-  console.log(`[OCR Cache] STORE ${hash.slice(0, 8)}... (${ocrResultCache.size}/${OCR_CACHE_MAX})`);
+  ocrResultCache.set(cacheKey, { result, timestamp: Date.now() });
+  console.log(`[OCR Cache] STORE ${cacheKey.split('|')[0].slice(0, 8)}... (${ocrResultCache.size}/${OCR_CACHE_MAX})`);
 }
 
 // Save debug image + optional cloud upload
@@ -649,6 +655,34 @@ function extractModifiers(text) {
   return modifiers;
 }
 
+function mergeModifierLists(primary = [], fallback = []) {
+  const merged = [];
+  const byName = new Map();
+
+  [...primary, ...fallback].forEach(mod => {
+    const name = String(mod?.name || mod || '').trim();
+    if (!name) return;
+    const key = name.toLowerCase();
+    const confidence = typeof mod?.confidence === 'number' ? mod.confidence : 80;
+    const rawText = String(mod?.rawText || name);
+
+    if (!byName.has(key)) {
+      const entry = { name, confidence, rawText };
+      byName.set(key, entry);
+      merged.push(entry);
+      return;
+    }
+
+    const existing = byName.get(key);
+    if (confidence > existing.confidence) {
+      existing.confidence = confidence;
+      existing.rawText = rawText;
+    }
+  });
+
+  return merged;
+}
+
 function normalizeNameList(input) {
   if (!Array.isArray(input)) return [];
   return Array.from(new Set(input
@@ -771,8 +805,9 @@ function mergeGeminiRefinement(extractedData, geminiData) {
  */
 async function processCapture(imageBase64, activeUser = null, existingData = null, ocrMode = 'both', options = {}) {
   const captureStart = Date.now();
+  let tempOcrPath = null;
   try {
-    const { sourceImagePath = null, skipDebugSave = false } = options;
+    const { sourceImagePath = null, skipDebugSave = false, forceUncached = false } = options;
     console.log('[OCR] Starting processCapture');
     console.log('[OCR] activeUser:', activeUser);
     console.log('[OCR] hasExistingData:', !!existingData);
@@ -787,10 +822,12 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     const imageBuffer = Buffer.from(imageBase64, 'base64');
     console.log('[OCR] Buffer created, size:', imageBuffer.length);
 
-    // ─── Check OCR cache (skip for re-analysis which needs fresh extraction) ───
+    // Check OCR cache only for non-cloud, non-reanalysis, non-forced runs.
     const imageHash = getImageHash(imageBuffer);
-    if (!options.sourceImagePath) {
-      const cached = getCachedResult(imageHash);
+    const cacheKey = buildCacheKey(imageHash, activeUser, ocrMode);
+    const shouldBypassCache = !!sourceImagePath || forceUncached || ocrMode === 'cloud' || !!existingData;
+    if (!shouldBypassCache) {
+      const cached = getCachedResult(cacheKey);
       if (cached) {
         console.log(`[OCR] Cache hit — returning in ${Date.now() - captureStart}ms`);
         return cached;
@@ -807,21 +844,28 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     // and use the original file path for cloud OCR instead.
     // When skipDebugSave is true (normal smart capture where saveScreenshot already ran),
     // save a temporary file for cloud OCR but don't keep it in ocr-debug/ to avoid duplication.
+    const useHybridMerge = ocrMode === 'both' || ocrMode === 'hybrid-plus';
+    const useGeminiRefine = ocrMode === 'hybrid-plus';
+    const needsFilePath = useHybridMerge || ocrMode === 'cloud' || useGeminiRefine;
     let rawDebugPath = null;
     if (sourceImagePath) {
       rawDebugPath = sourceImagePath;
       console.log('[OCR] Reusing source image for cloud OCR (skipping duplicate upload)');
-    } else if (skipDebugSave) {
+    } else if (skipDebugSave && needsFilePath) {
       // Write a temp file for cloud OCR only — don't save to ocr-debug/ folder
       try {
         const tmpDir = require('os').tmpdir();
         const tmpPath = path.join(tmpDir, `wg_ocr_${Date.now()}.png`);
         await fsPromises.writeFile(tmpPath, imageBuffer);
+        tempOcrPath = tmpPath;
         rawDebugPath = tmpPath;
         console.log('[OCR] Saved temp image for cloud OCR (skipping ocr-debug save)');
       } catch (e) {
         console.warn('[OCR] Failed to save temp image:', e.message);
       }
+    } else if (skipDebugSave && !needsFilePath) {
+      // Local-only runs do not need any on-disk image path.
+      console.log('[OCR] skipDebugSave active in local-only mode (no temp/debug image written)');
     } else {
       try {
         rawDebugPath = await saveDebugImage(imageBuffer, 'raw_capture');
@@ -840,9 +884,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     let ocrSource = 'local';
     let mergeStats = null;
     let mergeLog = null;
-
-    const useHybridMerge = ocrMode === 'both' || ocrMode === 'hybrid-plus';
-    const useGeminiRefine = ocrMode === 'hybrid-plus';
+    let localOCRForFallback = null;
 
     if (useHybridMerge) {
       // Run both in parallel
@@ -856,6 +898,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
 
       const localOCR = localResult.status === 'fulfilled' ? localResult.value : null;
       const cloudOCR = cloudResult.status === 'fulfilled' ? cloudResult.value : null;
+      if (localOCR) localOCRForFallback = localOCR;
 
       if (localResult.status === 'rejected') {
         console.error('[OCR] Local Tesseract failed:', localResult.reason?.message);
@@ -938,6 +981,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       // Local only (default / fallback)
       console.log('[OCR] Running LOCAL-ONLY mode...');
       ocrResult = await runOCR(processed.buffer);
+      localOCRForFallback = ocrResult;
       ocrSource = 'local';
       console.log(`[OCR] Local-only done, text length: ${ocrResult.text?.length || 0}`);
     }
@@ -982,6 +1026,20 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
 
       // Convert to legacy format
       extractedData = convertMapScreenToLegacy(extractedData, ocrResult.text);
+
+      // Bug 1 mitigation: when merged OCR is used, preserve high-confidence local modifier detections.
+      // This avoids cloud noise degrading modifier recall while keeping merged name/roster benefits.
+      if (ocrSource === 'merged' && localOCRForFallback?.text) {
+        const localModifiers = extractModifiers(localOCRForFallback.text);
+        const currentModifiers = extractedData.reachModifiers || [];
+        const currentUniqueCount = new Set(currentModifiers.map(m => String(m?.name || '').trim().toLowerCase()).filter(Boolean)).size;
+        const mergedModifiers = mergeModifierLists(currentModifiers, localModifiers);
+        const mergedUniqueCount = new Set(mergedModifiers.map(m => String(m?.name || '').trim().toLowerCase()).filter(Boolean)).size;
+        if (mergedUniqueCount > currentUniqueCount) {
+          console.log(`[OCR-Merge] Modifier fallback restored ${mergedUniqueCount - currentUniqueCount} modifier(s) from local OCR`);
+        }
+        extractedData.reachModifiers = mergedModifiers;
+      }
 
     } else {
       console.log('[OCR] Unknown screen type, attempting both extractors');
@@ -1065,9 +1123,9 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       data: extractedData,
     };
 
-    // ─── Store in cache (skip re-analysis results to avoid stale cache) ───
-    if (!options.sourceImagePath) {
-      setCachedResult(imageHash, finalResult);
+    // Store only cache-safe runs.
+    if (!shouldBypassCache) {
+      setCachedResult(cacheKey, finalResult);
     }
 
     console.log(`[OCR] Total processCapture time: ${Date.now() - captureStart}ms`);
@@ -1080,6 +1138,15 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       success: false,
       error: error.message || 'Unknown OCR error',
     };
+  } finally {
+    if (tempOcrPath) {
+      try {
+        await fsPromises.unlink(tempOcrPath);
+        console.log('[OCR] Cleaned up temp OCR image');
+      } catch (cleanupErr) {
+        console.warn('[OCR] Temp OCR image cleanup failed:', cleanupErr.message);
+      }
+    }
   }
 }
 

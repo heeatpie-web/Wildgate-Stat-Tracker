@@ -103,16 +103,16 @@ export const RosterPanel: React.FC = () => {
 
 
     return (
-        <div className="md3-card p-4 h-full flex flex-col gap-4">
+        <div className="md3-card recording-inside-panel flex flex-col overflow-visible mg-surface shadow-lg p-3 gap-3 h-full">
             <div className="flex items-center justify-between">
-                <span className="md3-title flex items-center gap-2 text-md-sys-on-surface">
-                    <span className="w-8 h-8 rounded-xl bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer flex items-center justify-center">
+                <h3 className="text-body font-bold text-md-sys-on-surface uppercase tracking-tight flex items-center gap-2">
+                    <span className="w-8 h-8 rounded-control bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer flex items-center justify-center">
                         <Users size={14} />
                     </span>
                     Roster Manager
-                </span>
+                </h3>
                 <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-semibold px-2 py-1 rounded-lg md3-surface-high text-md-sys-on-surface/70">
+                    <span className="text-label-sm font-semibold px-2 py-1 rounded-control mg-surface text-md-sys-on-surface/60">
                         {pilotRegistry.length} pilots
                     </span>
                 </div>
@@ -123,13 +123,13 @@ export const RosterPanel: React.FC = () => {
                 const ago = Math.round((Date.now() - last.timestamp) / 1000);
                 const agoLabel = ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`;
                 return (
-                    <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-                        <span className="text-xs text-amber-300">
+                    <div className="flex items-center justify-between bg-warning-soft border border-warning-soft rounded-control px-3 py-2">
+                        <span className="text-label-sm text-warning">
                             Merged <strong>{last.sourceName}</strong> -&gt; <strong>{last.targetName}</strong> ({agoLabel})
                         </span>
                         <button
                             onClick={() => undoLastMerge()}
-                            className="flex items-center gap-1 px-2 py-1 bg-amber-500/20 hover:bg-amber-500 hover:text-black text-amber-300 rounded text-[10px] font-bold transition-colors"
+                            className="flex items-center gap-1 px-2 py-1 bg-warning-soft hover:bg-warning hover:text-black text-warning rounded text-label-sm font-bold transition-colors"
                         >
                             <Undo2 size={10} /> Undo
                         </button>
@@ -138,10 +138,10 @@ export const RosterPanel: React.FC = () => {
             })()}
 
             <div className="grid grid-cols-2 gap-3">
-                <div className="md3-surface-high rounded-xl p-3 border border-md-sys-outline/10 flex flex-col gap-2 min-h-[104px]">
+                <div className="mg-surface rounded-card p-3 border border-md-sys-outline/10 flex flex-col gap-2 min-h-[104px]">
                     <div className="flex items-center justify-between">
-                        <span className={`text-xs font-bold ${hasTeammates ? 'text-md-sys-primary' : 'text-md-sys-on-surface/50'}`}>Teammates</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full md3-surface">{selectedTeammates.length}</span>
+                        <span className={`text-label-sm font-bold ${hasTeammates ? 'text-md-sys-primary' : 'text-md-sys-on-surface/60'}`}>Teammates</span>
+                        <span className="text-label-sm px-1.5 py-0.5 rounded-full md3-surface">{selectedTeammates.length}</span>
                     </div>
                     {hasTeammates ? (
                         <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto custom-scrollbar pr-1">
@@ -149,18 +149,18 @@ export const RosterPanel: React.FC = () => {
                                 <button
                                     key={p}
                                     onClick={() => toggleTeammate(p)}
-                                    className="md3-chip md3-chip--selected px-2 py-1 text-[10px] font-semibold"
+                                    className="md3-chip md3-chip--selected px-2 py-1 text-label-sm font-semibold"
                                 >
                                     {p}
                                 </button>
                             ))}
                         </div>
                     ) : (
-                        <div className="text-[10px] text-md-sys-on-surface/45">No teammates selected.</div>
+                        <div className="text-label-sm text-md-sys-on-surface/40">No teammates selected.</div>
                     )}
                 </div>
-                <div className="md3-surface-high rounded-xl p-3 border border-md-sys-outline/10 flex flex-col gap-2 min-h-[104px]">
-                    <span className={`text-xs font-bold ${hasOpponents ? 'text-danger' : 'text-md-sys-on-surface/50'}`}>
+                <div className="mg-surface rounded-card p-3 border border-md-sys-outline/10 flex flex-col gap-2 min-h-[104px]">
+                    <span className={`text-label-sm font-bold ${hasOpponents ? 'text-danger' : 'text-md-sys-on-surface/60'}`}>
                         Hostiles
                     </span>
                     {hasOpponents && (() => {
@@ -194,7 +194,7 @@ export const RosterPanel: React.FC = () => {
                                             />
                                             {shipType && (
                                                 <span
-                                                    className="text-[9px] px-1 py-0.5 rounded font-bold shrink-0"
+                                                    className="text-label-xs px-1 py-0.5 rounded font-bold shrink-0"
                                                     style={{ backgroundColor: getShipColor(shipType) + '20', color: getShipColor(shipType) }}
                                                 >
                                                     {shipType.replace(/ \(\d Player\)/, '')}
@@ -204,7 +204,7 @@ export const RosterPanel: React.FC = () => {
                                                 <button
                                                     key={p}
                                                     onClick={() => toggleOpponent(p)}
-                                                    className="px-2 py-0.5 bg-rose-500/20 text-rose-400 rounded-lg text-[10px] font-semibold hover:bg-rose-500 hover:text-white transition-colors"
+                                                    className="px-2 py-0.5 bg-danger-soft text-danger rounded-control text-label-sm font-semibold hover:bg-danger hover:text-white transition-colors"
                                                 >
                                                     {p}
                                                 </button>
@@ -218,7 +218,7 @@ export const RosterPanel: React.FC = () => {
                                             <button
                                                 key={p}
                                                 onClick={() => toggleOpponent(p)}
-                                                className="px-2 py-0.5 bg-rose-500/20 text-rose-400 rounded-lg text-[10px] font-semibold hover:bg-rose-500 hover:text-white transition-colors"
+                                                className="px-2 py-0.5 bg-danger-soft text-danger rounded-control text-label-sm font-semibold hover:bg-danger hover:text-white transition-colors"
                                             >
                                                 {p}
                                             </button>
@@ -232,7 +232,7 @@ export const RosterPanel: React.FC = () => {
                                     <button
                                         key={p}
                                         onClick={() => toggleOpponent(p)}
-                                        className="px-2 py-1 bg-rose-500/20 text-rose-400 rounded-lg text-[10px] font-semibold hover:bg-rose-500 hover:text-white transition-colors"
+                                        className="px-2 py-1 bg-danger-soft text-danger rounded-control text-label-sm font-semibold hover:bg-danger hover:text-white transition-colors"
                                     >
                                         {p}
                                     </button>
@@ -240,27 +240,27 @@ export const RosterPanel: React.FC = () => {
                             </div>
                         );
                     })()}
-                    {!hasOpponents && <div className="text-[10px] text-md-sys-on-surface/45">No hostiles selected.</div>}
+                    {!hasOpponents && <div className="text-label-sm text-md-sys-on-surface/40">No hostiles selected.</div>}
                 </div>
             </div>
 
-            <div className="flex-1 md3-surface-high border border-md-sys-outline/10 rounded-xl p-3 flex flex-col gap-3 min-h-0">
+            <div className="flex-1 mg-surface border border-md-sys-outline/10 rounded-card p-3 flex flex-col gap-3 min-h-0">
                 <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
                         <span className="md3-label text-md-sys-on-surface/60">Player List</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full md3-surface">{sorted.length}</span>
+                        <span className="text-label-sm px-1.5 py-0.5 rounded-full md3-surface">{sorted.length}</span>
                     </div>
                     <div className="flex gap-1">
                         <button
                             onClick={() => setSortMode('pinned')}
-                            className={`md3-icon-btn md3-icon-btn--small ${sortMode === 'pinned' ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'md3-surface text-md-sys-on-surface/50 hover:bg-md-sys-on-surface/5'}`}
+                            className={`md3-icon-btn md3-icon-btn--small ${sortMode === 'pinned' ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'md3-surface text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'}`}
                             title="Pinned First"
                         >
                             <Star size={12} />
                         </button>
                         <button
                             onClick={() => setSortMode('alpha')}
-                            className={`md3-icon-btn md3-icon-btn--small ${sortMode === 'alpha' ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'md3-surface text-md-sys-on-surface/50 hover:bg-md-sys-on-surface/5'}`}
+                            className={`md3-icon-btn md3-icon-btn--small ${sortMode === 'alpha' ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'md3-surface text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'}`}
                             title="Alphabetical"
                         >
                             <Filter size={12} />
@@ -270,18 +270,18 @@ export const RosterPanel: React.FC = () => {
 
                 <div className="grid grid-cols-[1fr_auto] gap-2">
                     <div className="relative">
-                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-md-sys-on-surface/35" />
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-md-sys-on-surface/40" />
                         <input
                             type="text"
                             placeholder="Search players..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full h-10 md3-surface py-2.5 pl-9 pr-3 text-xs outline-none placeholder:text-md-sys-on-surface/35 rounded-xl"
+                            className="w-full h-10 md3-surface py-2.5 pl-9 pr-3 text-label-sm outline-none placeholder:text-md-sys-on-surface/40 rounded-control"
                         />
                     </div>
                     <button
                         onClick={() => setSearchTerm('')}
-                        className="h-10 px-3 rounded-xl md3-surface border border-md-sys-outline/20 text-[10px] font-bold uppercase tracking-wide flex items-center justify-center gap-1.5 leading-none hover:bg-md-sys-on-surface/5"
+                        className="h-10 px-3 rounded-control md3-surface border border-md-sys-outline/20 text-label-sm font-bold uppercase tracking-wide flex items-center justify-center gap-1.5 leading-none hover:bg-md-sys-on-surface/5"
                         title="Clear search"
                     >
                         <X size={12} />
@@ -291,7 +291,7 @@ export const RosterPanel: React.FC = () => {
 
                 <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar pr-1 flex flex-col gap-1.5">
                     {sorted.length === 0 && (
-                        <div className="text-center text-xs text-md-sys-on-surface/45 py-8">
+                        <div className="text-center text-label-sm text-md-sys-on-surface/40 py-8">
                             No available players match your search.
                         </div>
                     )}
@@ -299,14 +299,14 @@ export const RosterPanel: React.FC = () => {
                         const teamColor = Object.entries(sessionTeams || {}).find(([_, members]) => (members as string[]).includes(p))?.[0];
 
                         return (
-                            <div key={p} className="group md3-surface rounded-xl px-3 py-2.5 border border-md-sys-outline/10 flex items-center justify-between gap-2 min-w-0">
+                            <div key={p} className="group md3-surface rounded-control px-3 py-2.5 border border-md-sys-outline/5 flex items-center justify-between gap-2 min-w-0">
                                 <div className="flex items-center gap-2 overflow-hidden min-w-0">
                                     <button
                                         onClick={() => onToggleFavorite(p)}
                                         className="w-4 h-4 shrink-0 inline-flex items-center justify-center rounded hover:bg-md-sys-on-surface/10"
                                         title={favorites.includes(p) ? 'Unpin' : 'Pin'}
                                     >
-                                        <Star size={10} className={favorites.includes(p) ? 'fill-amber-400 text-amber-400' : 'text-md-sys-on-surface/30'} />
+                                        <Star size={10} className={favorites.includes(p) ? 'fill-amber-400 text-warning' : 'text-md-sys-on-surface/40'} />
                                     </button>
                                     {teamColor && (
                                         <div
@@ -317,7 +317,7 @@ export const RosterPanel: React.FC = () => {
                                     )}
                                     <button
                                         onClick={() => setDrillDownTarget({ name: p, type: 'Teammate' })}
-                                        className="text-xs font-medium text-left hover:text-md-sys-primary truncate"
+                                        className="text-label-sm font-medium text-left hover:text-md-sys-primary truncate"
                                         title={pilotNotes[p]}
                                     >
                                         {p}
@@ -327,10 +327,10 @@ export const RosterPanel: React.FC = () => {
                                     <button onClick={() => openEditModal(p)} className="md3-icon-btn md3-icon-btn--small w-7 h-7 min-w-7 hover:bg-md-sys-primary hover:text-md-sys-onPrimary" title="Edit">
                                         <Edit2 size={12} />
                                     </button>
-                                    <button onClick={() => toggleTeammate(p)} className="h-7 w-8 rounded-lg text-[9px] font-bold bg-green-500/15 text-green-500 hover:bg-green-500 hover:text-white transition-colors flex items-center justify-center shrink-0" title="Add as Teammate">
+                                    <button onClick={() => toggleTeammate(p)} className="h-7 w-8 rounded-control text-label-xs font-bold bg-success-soft text-success hover:bg-success hover:text-white transition-colors flex items-center justify-center shrink-0" title="Add as Teammate">
                                         TM
                                     </button>
-                                    <button onClick={() => toggleOpponent(p)} className="h-7 w-8 rounded-lg text-[9px] font-bold bg-rose-500/15 text-rose-500 hover:bg-rose-500 hover:text-white transition-colors flex items-center justify-center shrink-0" title="Add as Hostile">
+                                    <button onClick={() => toggleOpponent(p)} className="h-7 w-8 rounded-control text-label-xs font-bold bg-danger-soft text-danger hover:bg-danger hover:text-white transition-colors flex items-center justify-center shrink-0" title="Add as Hostile">
                                         VS
                                     </button>
                                 </div>
@@ -346,11 +346,11 @@ export const RosterPanel: React.FC = () => {
                         value={newPilotName}
                         onChange={(e) => setNewPilotName(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleAddNewPilot()}
-                        className="w-full h-10 md3-surface text-xs outline-none rounded-xl px-3"
+                        className="w-full h-10 md3-surface text-label-sm outline-none rounded-control px-3"
                     />
                     <button
                         onClick={handleAddNewPilot}
-                        className="md3-btn-filled h-10 px-3 shrink-0 flex items-center justify-center gap-1 rounded-xl text-md-sys-onPrimary text-[10px] font-bold uppercase tracking-wide leading-none"
+                        className="md3-btn-filled h-10 px-3 shrink-0 flex items-center justify-center gap-1 rounded-control text-md-sys-onPrimary text-label-sm font-bold uppercase tracking-wide leading-none"
                         title="Add Player"
                         aria-label="Add Player"
                     >
@@ -365,7 +365,7 @@ export const RosterPanel: React.FC = () => {
                                 setNewPilotName("");
                             }
                         }}
-                        className="h-10 w-10 shrink-0 rounded-xl text-[9px] font-bold flex items-center justify-center bg-green-500/20 text-green-500 hover:bg-green-500 hover:text-white transition-colors"
+                        className="h-10 w-10 shrink-0 rounded-control text-label-xs font-bold flex items-center justify-center bg-success-soft text-success hover:bg-success hover:text-white transition-colors"
                         title="Add as Teammate"
                     >
                         TM
@@ -378,7 +378,7 @@ export const RosterPanel: React.FC = () => {
                                 setNewPilotName("");
                             }
                         }}
-                        className="h-10 w-10 shrink-0 rounded-xl text-[9px] font-bold flex items-center justify-center bg-rose-500/20 text-rose-500 hover:bg-rose-500 hover:text-white transition-colors"
+                        className="h-10 w-10 shrink-0 rounded-control text-label-xs font-bold flex items-center justify-center bg-danger-soft text-danger hover:bg-danger hover:text-white transition-colors"
                         title="Add as Hostile"
                     >
                         VS
@@ -390,7 +390,7 @@ export const RosterPanel: React.FC = () => {
 
             {editingPilot && createPortal(
                 <div className="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4" onClick={() => setEditingPilot(null)}>
-                    <div className="md3-surface-low p-5 rounded-xl max-w-sm w-full shadow-2xl flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+                    <div className="md3-surface-low p-5 rounded-modal max-w-sm w-full shadow-2xl flex flex-col gap-4" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center">
                             <h3 className="text-base font-bold">Edit Pilot</h3>
                             <button onClick={() => setEditingPilot(null)} className="md3-icon-btn">
@@ -401,26 +401,26 @@ export const RosterPanel: React.FC = () => {
                         {!showMerge ? (
                             <div className="flex flex-col gap-3">
                                 <div>
-                                    <label className="text-[10px] font-semibold text-md-sys-on-surface/50 uppercase block mb-1">Name</label>
+                                    <label className="text-label-sm font-semibold text-md-sys-on-surface/60 uppercase block mb-1">Name</label>
                                     <input
                                         value={editRename}
                                         onChange={(e) => setEditRename(e.target.value)}
-                                        className="w-full md3-textfield--outlined text-sm font-medium outline-none"
+                                        className="w-full md3-textfield--outlined text-body font-medium outline-none"
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-semibold text-md-sys-on-surface/50 uppercase block mb-1">Notes</label>
+                                    <label className="text-label-sm font-semibold text-md-sys-on-surface/60 uppercase block mb-1">Notes</label>
                                     <textarea
                                         value={editNote}
                                         onChange={(e) => setEditNote(e.target.value)}
-                                        className="w-full md3-textfield--outlined text-sm outline-none min-h-[80px] resize-none"
+                                        className="w-full md3-textfield--outlined text-body outline-none min-h-[80px] resize-none"
                                         placeholder="Add notes..."
                                     />
                                 </div>
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => onToggleFavorite(editingPilot)}
-                                        className={`flex-1 py-2.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5 transition-all ${favorites.includes(editingPilot) ? 'md3-btn-tonal bg-amber-500 text-black' : 'md3-btn-outlined text-md-sys-on-surface/70'
+                                        className={`flex-1 py-2.5 rounded-control font-semibold text-body flex items-center justify-center gap-1.5 transition-all ${favorites.includes(editingPilot) ? 'md3-btn-tonal bg-warning text-black' : 'md3-btn-outlined text-md-sys-on-surface/60'
                                             }`}
                                     >
                                         <Star size={14} className={favorites.includes(editingPilot) ? 'fill-black' : ''} />
@@ -428,7 +428,7 @@ export const RosterPanel: React.FC = () => {
                                     </button>
                                     <button
                                         onClick={() => setShowMerge(true)}
-                                        className="flex-1 py-2.5 md3-btn-outlined rounded-lg font-semibold text-sm text-md-sys-on-surface/70"
+                                        className="flex-1 py-2.5 md3-btn-outlined rounded-control font-semibold text-body text-md-sys-on-surface/60"
                                     >
                                         Merge
                                     </button>
@@ -436,13 +436,13 @@ export const RosterPanel: React.FC = () => {
                                 <div className="flex flex-col gap-2 pt-3 border-t border-md-sys-outline/10">
                                     <button
                                         onClick={() => { if (window.confirm('Delete this pilot from registry?')) { onDeletePilot(editingPilot); setEditingPilot(null); } }}
-                                        className="w-full py-2.5 md3-btn-outlined text-rose-400 border-rose-500/40 font-semibold text-sm flex items-center justify-center gap-1.5 hover:bg-rose-500/10"
+                                        className="w-full py-2.5 md3-btn-outlined text-danger border-danger-soft font-semibold text-body flex items-center justify-center gap-1.5 hover:bg-danger-soft"
                                     >
                                         <Trash2 size={14} /> Delete
                                     </button>
                                     <button
                                         onClick={saveEdit}
-                                        className="w-full py-3 md3-btn-filled rounded-lg font-semibold text-sm"
+                                        className="w-full py-3 md3-btn-filled rounded-control font-semibold text-body"
                                     >
                                         Save Changes
                                     </button>
@@ -451,25 +451,23 @@ export const RosterPanel: React.FC = () => {
                         ) : mergeKeepName ? (
                             /* Step 3: Choose which name to keep */
                             <div className="flex flex-col gap-3">
-                                <div className="bg-amber-500/10 p-3 rounded-lg">
-                                    <p className="text-xs text-amber-300">
+                                <div className="bg-warning-soft p-3 rounded-control">
+                                    <p className="text-label-sm text-warning">
                                         Merging <strong>{editingPilot}</strong> and <strong>{mergeTarget}</strong>. Which name should the merged pilot use?
                                     </p>
                                 </div>
                                 <div className="flex flex-col gap-2">
                                     <button
                                         onClick={() => setMergeKeepName(editingPilot)}
-                                        className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-all border-2 ${
-                                            mergeKeepName === editingPilot ? 'border-md-sys-primary bg-md-sys-primary/10 text-md-sys-primary' : 'border-md-sys-outline/40 md3-btn-outlined text-md-sys-on-surface/60'
-                                        }`}
+                                        className={`w-full py-2.5 rounded-control text-body font-semibold transition-all border-2 ${mergeKeepName === editingPilot ? 'border-md-sys-primary bg-md-sys-primary/10 text-md-sys-primary' : 'border-md-sys-outline/40 md3-btn-outlined text-md-sys-on-surface/60'
+                                            }`}
                                     >
                                         {editingPilot}
                                     </button>
                                     <button
                                         onClick={() => setMergeKeepName(mergeTarget)}
-                                        className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-all border-2 ${
-                                            mergeKeepName === mergeTarget ? 'border-md-sys-primary bg-md-sys-primary/10 text-md-sys-primary' : 'border-md-sys-outline/40 md3-btn-outlined text-md-sys-on-surface/60'
-                                        }`}
+                                        className={`w-full py-2.5 rounded-control text-body font-semibold transition-all border-2 ${mergeKeepName === mergeTarget ? 'border-md-sys-primary bg-md-sys-primary/10 text-md-sys-primary' : 'border-md-sys-outline/40 md3-btn-outlined text-md-sys-on-surface/60'
+                                            }`}
                                     >
                                         {mergeTarget}
                                     </button>
@@ -477,13 +475,13 @@ export const RosterPanel: React.FC = () => {
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => setMergeKeepName(null)}
-                                        className="flex-1 py-2.5 md3-btn-outlined rounded-lg font-semibold text-sm"
+                                        className="flex-1 py-2.5 md3-btn-outlined rounded-control font-semibold text-body"
                                     >
                                         Back
                                     </button>
                                     <button
                                         onClick={handleMerge}
-                                        className="flex-1 py-2.5 md3-btn-filled rounded-lg font-semibold text-sm"
+                                        className="flex-1 py-2.5 md3-btn-filled rounded-control font-semibold text-body"
                                     >
                                         Merge as "{mergeKeepName}"
                                     </button>
@@ -492,21 +490,21 @@ export const RosterPanel: React.FC = () => {
                         ) : (
                             /* Step 2: Search and select merge target */
                             <div className="flex flex-col gap-3">
-                                <div className="bg-amber-500/10 p-3 rounded-lg">
-                                    <p className="text-xs text-amber-300">
+                                <div className="bg-warning-soft p-3 rounded-control">
+                                    <p className="text-label-sm text-warning">
                                         Merging will combine all data from <strong>{editingPilot}</strong> with the selected pilot.
                                     </p>
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-semibold text-md-sys-on-surface/50 uppercase block mb-1">Search Target Pilot</label>
+                                    <label className="text-label-sm font-semibold text-md-sys-on-surface/60 uppercase block mb-1">Search Target Pilot</label>
                                     <div className="relative">
-                                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-md-sys-on-surface/30" />
+                                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-md-sys-on-surface/40" />
                                         <input
                                             type="text"
                                             placeholder="Type to search pilots..."
                                             value={mergeSearch}
                                             onChange={(e) => { setMergeSearch(e.target.value); setMergeTarget(''); }}
-                                            className="w-full md3-textfield--outlined pl-9 text-sm font-medium outline-none"
+                                            className="w-full md3-textfield--outlined pl-9 text-body font-medium outline-none"
                                             autoFocus
                                         />
                                     </div>
@@ -517,35 +515,34 @@ export const RosterPanel: React.FC = () => {
                                         .sort()
                                         .slice(0, 8);
                                     return mergeFiltered.length > 0 ? (
-                                        <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto custom-scrollbar md3-surface rounded-lg p-1">
+                                        <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto custom-scrollbar md3-surface rounded-control p-1">
                                             {mergeFiltered.map(p => (
                                                 <button
                                                     key={p}
                                                     onClick={() => { setMergeTarget(p); setMergeSearch(p); }}
-                                                    className={`w-full text-left px-3 py-2 rounded-md text-sm hover:bg-md-sys-on-surface/5 transition-colors ${
-                                                        mergeTarget === p ? 'bg-md-sys-primary/10 text-md-sys-primary font-bold' : ''
-                                                    }`}
+                                                    className={`w-full text-left px-3 py-2 rounded-md text-body hover:bg-md-sys-on-surface/5 transition-colors ${mergeTarget === p ? 'bg-md-sys-primary/10 text-md-sys-primary font-bold' : ''
+                                                        }`}
                                                 >
                                                     {p}
-                                                    {favorites.includes(p) && <Star size={10} className="inline ml-1 fill-amber-400 text-amber-400" />}
+                                                    {favorites.includes(p) && <Star size={10} className="inline ml-1 fill-amber-400 text-warning" />}
                                                 </button>
                                             ))}
                                         </div>
                                     ) : (
-                                        <p className="text-xs text-md-sys-on-surface/30 text-center py-2">No pilots found</p>
+                                        <p className="text-label-sm text-md-sys-on-surface/40 text-center py-2">No pilots found</p>
                                     );
                                 })()}
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => { setShowMerge(false); setMergeSearch(''); setMergeTarget(''); }}
-                                        className="flex-1 py-2.5 md3-btn-outlined rounded-lg font-semibold text-sm"
+                                        className="flex-1 py-2.5 md3-btn-outlined rounded-control font-semibold text-body"
                                     >
                                         Cancel
                                     </button>
                                     <button
                                         disabled={!mergeTarget}
                                         onClick={() => setMergeKeepName(mergeTarget)}
-                                        className="flex-1 py-2.5 md3-btn-filled rounded-lg font-semibold text-sm disabled:opacity-30"
+                                        className="flex-1 py-2.5 md3-btn-filled rounded-control font-semibold text-body disabled:opacity-disabled disabled:pointer-events-none"
                                     >
                                         Next
                                     </button>

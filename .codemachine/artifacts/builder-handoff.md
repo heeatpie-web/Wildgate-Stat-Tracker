@@ -3,28 +3,38 @@
 This file is written by the `code-builder` agent.
 
 ## Changes Made
-- Converted `.codemachine/inputs/specifications.md` from placeholder to a concrete scoped spec with acceptance criteria.
-- Reconstructed missing handoffs (PM/UI/Backend) into:
-  - `.codemachine/artifacts/pm-handoff.md`
-  - `.codemachine/artifacts/ui-handoff.md`
-  - `.codemachine/artifacts/backend-handoff.md`
-- Implemented initial runtime changes for the READY plan (Electron dev splash reliability + Recording layout compaction/no-scroll work).
-- Added Step 1 baseline notes to `PLAN.md` (dev splash behavior, Recording panel scroll issue, narrow layout overflow).
-- Dev splash reliability improvements in `electron/main.cjs`:
-  - Added dev-only timing logs (`app whenReady`, `window created`, `splash shown`, `dev URL loaded`).
-  - Probed the Vite dev server before calling `loadURL(DEV_SERVER_URL)` to avoid the Chromium "failed to load" flicker while Vite boots.
-- Recording Step 3 layout groundwork:
-  - `src/components/RecordingView.tsx`: removed left-panel scrolling and added compact behavior for short heights (tabs swap "Actions" vs "Loadout" instead of scrolling). Narrow widths stack panels with page-level scroll only.
-  - `src/components/recording/SquadronPanel.tsx`: added `density="compact"` variant that uses dropdowns (instead of full grids) to reduce vertical footprint.
-  - `src/components/recording/ActionPanel.tsx`: added `density="compact"` to tighten spacing at shorter heights.
-- Raised the standard window minimum size in `electron/main.cjs` to prioritize a no-scroll Recording panel at desktop sizes; overlay mode still drops min size to allow small overlay windows.
+- Ran required session health check before work: `powershell -File ./codemachine-fixed.ps1 doctor`.
+- Implemented Step 3 header pass (plus Step 4 CTA cleanup) in:
+  - `src/components/Header.tsx`
+  - `src/components/SystemPulse.tsx`
+  - `src/components/recording/ActionPanel.tsx`
+- Header updates:
+  - Removed Fleet Battle mode toggle from top bar.
+  - Rebuilt profile controls into an avatar-triggered compact profile hub (switch/new/rename/delete + settings/tutorial shortcuts).
+  - Kept Smart Capture as the primary header CTA with MD3 filled styling and busy-state handling.
+  - Kept top bar actions compact and removed prior ring-heavy treatment on pin state.
+- Status indicator consolidation updates:
+  - Reworked `SystemPulse` into segmented “data indicator” style pills with per-signal light-up dots (`Data`, `Vision`, `Mission`, `Updates`) and active-state animation.
+- Tutorial visibility/state updates:
+  - Added persisted `tutorialCompleted` setting to store slice and persistence flow:
+    - `src/store/slices/createSettingsSlice.ts`
+    - `src/store/useAppStore.ts`
+  - Updated tutorial completion wiring in `src/App.tsx` so `onComplete` marks tutorial as completed once.
+  - Top-bar tutorial button now displays only until first completion.
+  - Added tutorial relaunch entry in settings UI so tutorial remains accessible after top-bar suppression (`src/components/SettingsModal.tsx`).
+  - Removed obsolete tutorial step referencing the removed mode toggle in `src/components/Tutorial.tsx`.
+- Recording CTA hierarchy update:
+  - Demoted in-panel Smart Capture in default recording panel to a secondary text action so header remains the single primary entry point.
 
 ## Verification
-- `npm run electron:dev` smoke (12s run, log-based): dev timing logs emitted; `splash shown` at ~+302ms and `dev URL loaded` at ~+5007ms (attempt 1).
-- `npm test` (Vitest): pass (52 tests).
+- `npm test` (Vitest): pass (55 tests).
 - `npm run build` (`tsc` + `vite build`): pass.
 
 ## Follow Ups
-- The git worktree is very dirty with many modified/deleted/untracked files unrelated to `.codemachine/**`; confirm which set of changes is intended before making further app code changes.
-- If we proceed with Wave 02, implement persisted match provenance (backend handoff) first, then wire UI chips/badges to it (Smart Captures, History, Recording detail).
-- Manual smoke: confirm Recording left panel has no scrollbars and no clipped primary controls at `1920x1080` and `1366x768`, and the compact tabs make both Actions and Loadout reachable without scrolling.
+- Manual viewport QA still needed for Step 3 acceptance:
+  - `1366x768`
+  - `1920x1080`
+  - `2560x1440`
+  - `390x844`
+- Confirm with product/design whether post-completion tutorial should remain hidden by default (current behavior) or have an explicit “always show help button” preference.
+- Remaining READY-plan steps are still open (Smart Captures layout overhaul, OCR state machine staging, apply-to-queue behavior hardening, cloud-settings disabled-reason messaging, overlay trap verification, persistence-on-close rules, capture-quality UX refinement).

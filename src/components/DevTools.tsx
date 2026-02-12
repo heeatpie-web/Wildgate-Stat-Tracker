@@ -56,23 +56,23 @@ export const DevTools: React.FC<DevToolsProps> = ({ logFeed = [], logStatus = {}
         <>
             <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-[200]">
                 <div className="bg-md-sys-surface1 p-2 rounded-xl shadow-2xl border border-md-sys-outline/10 flex flex-col gap-2">
-                    <div className="text-[10px] font-black uppercase text-center opacity-40 p-1">Dev Tools</div>
-                    <button onClick={() => setShowIdMapper(!showIdMapper)} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${showIdMapper ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3 text-md-sys-primary'}`}>
+                    <div className="text-label-sm font-black uppercase text-center opacity-40 p-1">Dev Tools</div>
+                    <button onClick={() => setShowIdMapper(!showIdMapper)} className={`px-4 py-2 rounded-lg text-label-sm font-bold transition-all ${showIdMapper ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3 text-md-sys-primary'}`}>
                         ID Mapper
                     </button>
-                    <button onClick={handleDevMock} className="px-4 py-2 bg-md-sys-surface2 hover:bg-md-sys-surface3 rounded-lg text-xs font-bold text-md-sys-primary">
+                    <button onClick={handleDevMock} className="px-4 py-2 bg-md-sys-surface2 hover:bg-md-sys-surface3 rounded-lg text-label-sm font-bold text-md-sys-primary">
                         Mock Data
                     </button>
-                    <button onClick={() => setShowResetConfirm(true)} className="px-4 py-2 bg-md-sys-error-container hover:brightness-110 rounded-lg text-xs font-bold text-md-sys-on-error-container">
+                    <button onClick={() => setShowResetConfirm(true)} className="px-4 py-2 bg-md-sys-error-container hover:brightness-110 rounded-lg text-label-sm font-bold text-md-sys-on-error-container">
                         Reset All
                     </button>
-                    <button onClick={() => setDevMode(false)} className="px-4 py-2 bg-md-sys-surface3 hover:bg-md-sys-outline/20 rounded-lg text-xs font-bold">
+                    <button onClick={() => setDevMode(false)} className="px-4 py-2 bg-md-sys-surface3 hover:bg-md-sys-outline/20 rounded-lg text-label-sm font-bold">
                         Exit Dev Mode
                     </button>
-                    <button onClick={() => setShowLogStream(!showLogStream)} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${showLogStream ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3 text-md-sys-primary'}`}>
+                    <button onClick={() => setShowLogStream(!showLogStream)} className={`px-4 py-2 rounded-lg text-label-sm font-bold transition-all ${showLogStream ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3 text-md-sys-primary'}`}>
                         {showLogStream ? 'Hide Telemetry' : 'Show Telemetry'}
                     </button>
-                    <button onClick={() => setActiveView('dev-ocr')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeView === 'dev-ocr' ? 'bg-purple-600 text-white shadow-lg scale-105' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3 text-purple-500'}`}>
+                    <button onClick={() => setActiveView('dev-ocr')} className={`px-4 py-2 rounded-lg text-label-sm font-bold transition-all ${activeView === 'dev-ocr' ? 'bg-purple-600 text-white shadow-lg scale-105' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3 text-purple-500'}`}>
                         Dev OCR Lab
                     </button>
                 </div>

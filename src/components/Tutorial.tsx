@@ -20,13 +20,8 @@ interface TutorialStep {
 const steps: TutorialStep[] = [
     {
         title: 'Profile Selector',
-        description: 'Switch profiles to keep stats and match history separated per pilot/account.',
+        description: 'Open the profile hub to switch profiles and manage pilot settings.',
         selector: 'profile-selector',
-    },
-    {
-        title: 'Game Mode',
-        description: 'This toggle switches between Artifact Brawl and Fleet Battle. Analytics and match entry follow the selected mode.',
-        selector: 'mode-toggle',
     },
     {
         title: 'System Status',
@@ -263,7 +258,7 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
             >
                 <div className="flex items-start justify-between gap-3">
                     <div>
-                        <div className="text-[11px] uppercase tracking-[0.2em] text-md-sys-primary font-bold">
+                        <div className="text-label-sm uppercase tracking-[0.2em] text-md-sys-primary font-bold">
                             Step {stepIndex + 1} of {steps.length}
                         </div>
                         <h2 className="text-lg font-black mt-1">{step.title}</h2>
@@ -277,7 +272,7 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
                     </button>
                 </div>
 
-                <p className="text-sm opacity-80 leading-relaxed mt-2">{step.description}</p>
+                <p className="text-body opacity-80 leading-relaxed mt-2">{step.description}</p>
 
                 <div className="flex gap-2 mt-4">
                     <button

@@ -96,8 +96,8 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
         if (!accordionMode) {
             // Normal header without collapse controls
             return (
-                <span className="text-[11px] font-semibold text-md-sys-on-surface/60 flex items-center gap-1.5">
-                    {icon} {title} {badge && <span className="text-[10px] opacity-60">{badge}</span>}
+                <span className="text-label-sm font-semibold text-md-sys-on-surface/60 flex items-center gap-1.5">
+                    {icon} {title} {badge && <span className="text-label-sm opacity-60">{badge}</span>}
                 </span>
             );
         }
@@ -106,16 +106,15 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
         return (
             <button
                 onClick={() => toggleSection(id)}
-                className={`w-full flex items-center justify-between py-2 px-3 rounded-xl transition-all ${
-                    isExpanded
-                        ? 'md3-surface-high text-md-sys-primary ring-1 ring-md-sys-primary/20'
-                        : isTransparent
-                            ? 'md3-surface hover:bg-md-sys-on-surface/[0.08] text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
-                            : 'md3-surface text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
-                }`}
+                className={`w-full flex items-center justify-between py-2 px-3 rounded-control transition-all ${isExpanded
+                    ? 'mg-surface text-md-sys-primary ring-1 ring-md-sys-primary/20'
+                    : isTransparent
+                        ? 'md3-surface hover:bg-md-sys-on-surface/[0.08] text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
+                        : 'md3-surface text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
+                    }`}
             >
-                <span className="text-[11px] font-semibold flex items-center gap-1.5">
-                    {icon} {title} {badge && <span className="text-[10px] opacity-60">{badge}</span>}
+                <span className="text-label-sm font-semibold flex items-center gap-1.5">
+                    {icon} {title} {badge && <span className="text-label-sm opacity-60">{badge}</span>}
                 </span>
                 {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
@@ -123,16 +122,16 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
     };
 
     return (
-        <div className={`${isTransparent ? 'bg-transparent p-0' : 'md3-card p-4'} h-full flex flex-col gap-5`}>
+        <div className={`${isTransparent ? 'bg-transparent p-0' : 'md3-card recording-inside-panel flex flex-col overflow-visible mg-surface shadow-lg p-3 gap-3'} h-full`}>
             {/* Header */}
             {!isTransparent && (
                 <div className="flex items-center justify-between">
-                    <span className="md3-title flex items-center gap-2 text-md-sys-on-surface">
-                        <span className="w-8 h-8 rounded-xl bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer flex items-center justify-center">
+                    <h3 className="text-body font-bold text-md-sys-on-surface uppercase tracking-tight flex items-center gap-2">
+                        <span className="w-8 h-8 rounded-control bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer flex items-center justify-center">
                             <Layout size={14} />
                         </span>
                         Mission Intel
-                    </span>
+                    </h3>
                     <div className="flex items-center gap-2">
                     </div>
                 </div>
@@ -144,37 +143,37 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                     <SectionHeader id="stats" icon={<Clock size={12} />} title="Stats" />
                     {isSectionExpanded('stats') && (
                         <div className="grid grid-cols-2 gap-2">
-                            <div className={`${isTransparent ? 'md3-surface-high border border-md-sys-outline/10' : 'md3-surface-high border border-md-sys-outline/10'} ${accordionMode ? 'p-2' : 'p-3'} rounded-2xl flex flex-col items-center justify-center`}>
-                                <Clock size={accordionMode ? 12 : 16} className="text-md-sys-on-surface/50 mb-0.5" />
-                                <span className="text-[10px] font-semibold text-md-sys-on-surface/60 mb-0.5">Time</span>
+                            <div className={`${isTransparent ? 'mg-surface border border-md-sys-outline/10' : 'mg-surface border border-md-sys-outline/10'} ${accordionMode ? 'p-2' : 'p-3'} rounded-card flex flex-col items-center justify-center`}>
+                                <Clock size={accordionMode ? 12 : 16} className="text-md-sys-on-surface/60 mb-0.5" />
+                                <span className="text-label-sm font-semibold text-md-sys-on-surface/60 mb-0.5">Time</span>
                                 <div className="flex items-center gap-0 relative z-10">
                                     <input
                                         type="number"
                                         placeholder="00"
                                         value={timeMin}
                                         onChange={(e) => setTimeMin(e.target.value)}
-                                        className={`${accordionMode ? 'w-8 text-base' : 'w-12 text-lg'} font-bold tracking-tight outline-none text-center rounded-lg py-0.5 placeholder:opacity-30 pointer-events-auto
+                                        className={`${accordionMode ? 'w-8 text-base' : 'w-12 text-lg'} font-bold tracking-tight outline-none text-center rounded-control py-0.5 placeholder:opacity-30 pointer-events-auto
                                             ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'md3-textfield--compact text-md-sys-on-surface'}
                                             `}
                                     />
-                                    <span className={`${accordionMode ? 'text-base' : 'text-xl'} font-bold tracking-tight text-md-sys-on-surface/50`}>:</span>
+                                    <span className={`${accordionMode ? 'text-base' : 'text-xl'} font-bold tracking-tight text-md-sys-on-surface/60`}>:</span>
                                     <input
                                         type="number"
                                         placeholder="00"
                                         value={timeSec}
                                         onChange={(e) => setTimeSec(e.target.value)}
-                                        className={`${accordionMode ? 'w-8 text-base' : 'w-12 text-lg'} font-bold tracking-tight outline-none text-center rounded-lg py-0.5 placeholder:opacity-30 pointer-events-auto
+                                        className={`${accordionMode ? 'w-8 text-base' : 'w-12 text-lg'} font-bold tracking-tight outline-none text-center rounded-control py-0.5 placeholder:opacity-30 pointer-events-auto
                                             ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'md3-textfield--compact text-md-sys-on-surface'}
                                             `}
                                     />
                                 </div>
                             </div>
-                            <div className={`relative ${isTransparent ? 'md3-surface-high border border-md-sys-outline/10' : 'md3-surface-high border border-md-sys-outline/10'} ${accordionMode ? 'p-2' : 'p-3'} rounded-2xl flex flex-col items-center justify-center`}>
+                            <div className={`relative ${isTransparent ? 'mg-surface border border-md-sys-outline/10' : 'mg-surface border border-md-sys-outline/10'} ${accordionMode ? 'p-2' : 'p-3'} rounded-card flex flex-col items-center justify-center`}>
                                 {damageSource && damageSource !== 'manual' && (
                                     <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-info" title={`Auto-detected from ${damageSource}`} />
                                 )}
                                 <HeartCrack size={accordionMode ? 12 : 16} className="text-danger mb-0.5" />
-                                <span className="text-[10px] font-semibold text-danger mb-0.5">Dmg</span>
+                                <span className="text-label-sm font-semibold text-danger mb-0.5">Dmg</span>
                                 <div className="relative z-10">
                                     <input
                                         type="text"
@@ -182,7 +181,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                         maxLength={4}
                                         value={damageTaken}
                                         onChange={(e) => setDamageTaken(e.target.value.replace(/[^0-9]/g, ''))}
-                                        className={`${accordionMode ? 'w-14 text-base' : 'w-20 text-lg'} font-bold outline-none text-center rounded-lg py-0.5 placeholder:opacity-30 pointer-events-auto
+                                        className={`${accordionMode ? 'w-14 text-base' : 'w-20 text-lg'} font-bold outline-none text-center rounded-control py-0.5 placeholder:opacity-30 pointer-events-auto
                                             ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'md3-textfield--compact text-md-sys-on-surface'}
                                             `}
                                     />
@@ -204,7 +203,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                             ].map((item) => (
                                 <div
                                     key={item.label}
-                                    className={`relative ${accordionMode ? 'h-10' : 'h-14'} rounded-2xl ${isTransparent ? 'md3-surface-high border border-md-sys-outline/10' : 'md3-surface-high border border-md-sys-outline/10'} flex items-center justify-center gap-1 select-none overflow-hidden cursor-pointer`}
+                                    className={`relative ${accordionMode ? 'h-10' : 'h-14'} rounded-card ${isTransparent ? 'mg-surface border border-md-sys-outline/10' : 'mg-surface border border-md-sys-outline/10'} flex items-center justify-center gap-1 select-none overflow-hidden cursor-pointer`}
                                 >
                                     <div
                                         onClick={() => item.set(Math.max(0, item.val - 1))}
@@ -216,7 +215,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                     />
                                     <div className={`w-1 h-4 rounded-full ${item.color}`} />
                                     <span className={`${accordionMode ? 'text-lg' : 'text-2xl'} font-bold text-md-sys-on-surface`}>{item.val}</span>
-                                    <span className="text-[8px] font-semibold text-md-sys-on-surface/50 uppercase">{item.label}</span>
+                                    <span className="text-label-xs font-semibold text-md-sys-on-surface/60 uppercase">{item.label}</span>
                                 </div>
                             ))}
                         </div>
@@ -237,9 +236,9 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                         return (
                                             <div
                                                 key={w}
-                                                className={`relative ${accordionMode ? 'h-9' : 'h-11'} rounded-xl transition-all select-none overflow-hidden ${isActive
-                                                    ? 'md3-surface-high ring-1 ring-md-sys-primary/30'
-                                                    : (isTransparent ? 'md3-surface-high border border-md-sys-outline/10 text-white' : 'md3-surface')
+                                                className={`relative ${accordionMode ? 'h-9' : 'h-11'} rounded-control transition-all select-none overflow-hidden ${isActive
+                                                    ? 'mg-surface ring-1 ring-md-sys-primary/30'
+                                                    : (isTransparent ? 'mg-surface border border-md-sys-outline/10 text-white' : 'mg-surface')
                                                     } cursor-pointer`}
                                             >
                                                 <div
@@ -251,10 +250,10 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                     className="absolute inset-y-0 right-0 w-1/2 hover:bg-md-sys-on-surface/5 transition-colors z-10"
                                                 />
                                                 <div className="absolute inset-0 flex items-center justify-between px-2.5 pointer-events-none">
-                                                    <span className={`text-[9px] font-semibold uppercase truncate leading-tight ${isActive ? 'text-md-sys-primary' : 'text-md-sys-on-surface/50'}`}>
+                                                    <span className={`text-label-xs font-semibold uppercase truncate leading-tight ${isActive ? 'text-md-sys-primary' : 'text-md-sys-on-surface/60'}`}>
                                                         {w.replace('Cannon', '').replace('Scatter', 'Sct').replace('Spec Ops', 'SO')}
                                                     </span>
-                                                    <span className={`${accordionMode ? 'text-xs' : 'text-sm'} font-bold tabular-nums ${isActive ? 'text-md-sys-primary' : 'text-md-sys-on-surface/30'}`}>
+                                                    <span className={`${accordionMode ? 'text-label-sm' : 'text-body'} font-bold tabular-nums ${isActive ? 'text-md-sys-primary' : 'text-md-sys-on-surface/40'}`}>
                                                         {count}
                                                     </span>
                                                 </div>
@@ -295,17 +294,17 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                         setWeapons({ ...weapons, [w]: 1 });
                                                     }
                                                 }}
-                                                className={`relative ${accordionMode ? 'h-8' : 'h-10'} rounded-lg transition-all select-none overflow-hidden
+                                                className={`relative ${accordionMode ? 'h-8' : 'h-10'} rounded-control transition-all select-none overflow-hidden
                                                     ${isActive
                                                         ? 'bg-weapon-soft ring-1 ring-weapon'
                                                         : canAdd
-                                                            ? (isTransparent ? 'md3-surface-high border border-md-sys-outline/10 hover:bg-md-sys-on-surface/[0.08]' : 'md3-surface-high')
-                                                            : (isTransparent ? 'bg-black/40 opacity-40' : 'md3-surface opacity-40')
+                                                            ? (isTransparent ? 'mg-surface border border-md-sys-outline/10 hover:bg-md-sys-on-surface/[0.08]' : 'mg-surface')
+                                                            : (isTransparent ? 'bg-black/40 opacity-40' : 'mg-surface opacity-40')
                                                     }
                                                     ${isActive || canAdd ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                                             >
                                                 <div className="absolute inset-0 flex items-center justify-between px-3 pointer-events-none">
-                                                    <span className={`text-[10px] font-semibold uppercase truncate ${isActive ? 'text-weapon' : 'text-md-sys-on-surface/50'}`}>
+                                                    <span className={`text-label-sm font-semibold uppercase truncate ${isActive ? 'text-weapon' : 'text-md-sys-on-surface/60'}`}>
                                                         {w}
                                                     </span>
                                                     {isActive && (
@@ -350,17 +349,17 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                         setWeapons({ ...weapons, [w]: 1 });
                                                     }
                                                 }}
-                                                className={`relative ${accordionMode ? 'h-8' : 'h-10'} rounded-lg transition-all select-none overflow-hidden
+                                                className={`relative ${accordionMode ? 'h-8' : 'h-10'} rounded-control transition-all select-none overflow-hidden
                                                     ${isActive
                                                         ? 'bg-equipment-soft ring-1 ring-equipment'
                                                         : canAdd
-                                                            ? (isTransparent ? 'md3-surface-high border border-md-sys-outline/10 hover:bg-md-sys-on-surface/[0.08]' : 'md3-surface-high')
-                                                            : (isTransparent ? 'bg-black/40 opacity-40' : 'md3-surface opacity-40')
+                                                            ? (isTransparent ? 'mg-surface border border-md-sys-outline/10 hover:bg-md-sys-on-surface/[0.08]' : 'mg-surface')
+                                                            : (isTransparent ? 'bg-black/40 opacity-40' : 'mg-surface opacity-40')
                                                     }
                                                     ${isActive || canAdd ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                                             >
                                                 <div className="absolute inset-0 flex items-center justify-between px-3 pointer-events-none">
-                                                    <span className={`text-[10px] font-semibold uppercase truncate ${isActive ? 'text-equipment' : 'text-md-sys-on-surface/50'}`}>
+                                                    <span className={`text-label-sm font-semibold uppercase truncate ${isActive ? 'text-equipment' : 'text-md-sys-on-surface/60'}`}>
                                                         {w}
                                                     </span>
                                                     {isActive && (
@@ -388,12 +387,12 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                         {isSectionExpanded('modifiers') && (
                             <div className={`flex flex-wrap ${accordionMode ? 'gap-1' : 'gap-2'}`}>
                                 {showArtifactSelect ? (
-                                    <div className={`flex items-center gap-2 ${isTransparent ? 'bg-black/50' : 'md3-surface-high'} p-2 rounded-xl w-full`}>
+                                    <div className={`flex items-center gap-2 ${isTransparent ? 'bg-black/50' : 'mg-surface'} p-2 rounded-control w-full`}>
                                         {['Healing', 'Ice', 'Weapon'].map(type => (
                                             <button
                                                 key={type}
                                                 onClick={() => { toggleReachModifier(`Artifact: ${type}`); setShowArtifactSelect(false); }}
-                                                className={`flex-1 md3-btn-tonal ${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} text-xs font-bold uppercase bg-amber-500 text-black hover:brightness-110`}
+                                                className={`flex-1 md3-btn-tonal ${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} text-label-sm font-bold uppercase bg-warning text-black hover:brightness-110`}
                                             >
                                                 {type}
                                             </button>
@@ -409,7 +408,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                     <>
                                         <button
                                             onClick={() => setShowArtifactSelect(true)}
-                                            className={`md3-chip ${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} text-xs font-semibold transition-all ${selectedReachModifiers.some((m: string) => m.startsWith("Artifact"))
+                                            className={`md3-chip ${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} text-label-sm font-semibold transition-all ${selectedReachModifiers.some((m: string) => m.startsWith("Artifact"))
                                                 ? 'artifact-btn-active ring-1 ring-amber-300/60 shadow-sm'
                                                 : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
                                                 }`}
@@ -428,7 +427,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                 <button
                                                     key={mod}
                                                     onClick={() => toggleReachModifier(mod)}
-                                                    className={`md3-chip ${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} text-xs font-semibold transition-all ${selectedReachModifiers.includes(mod)
+                                                    className={`md3-chip ${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} text-label-sm font-semibold transition-all ${selectedReachModifiers.includes(mod)
                                                         ? 'md3-chip--selected'
                                                         : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
                                                         }`}
@@ -450,7 +449,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                         onChange={(e) => setCurrentNote(e.target.value)}
                         placeholder="Match Notes..."
                         readOnly={false}
-                        className={`w-full h-20 md3-textfield--outlined rounded-xl p-3 text-sm outline-none resize-none placeholder:text-md-sys-on-surface/30 
+                        className={`w-full h-20 md3-textfield--outlined rounded-control p-3 text-body outline-none resize-none placeholder:text-md-sys-on-surface/40 
                         focus:ring-2 focus:ring-md-sys-primary/50`}
                     />
                 )}

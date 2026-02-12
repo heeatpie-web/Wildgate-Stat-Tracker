@@ -127,9 +127,9 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
     if (allItems.length === 0) {
         return (
             <div className="md3-dialog-scrim fixed inset-0 z-[10010] flex items-center justify-center p-4">
-                <div className="md3-dialog w-full max-w-sm text-center">
+                <div className="md3-dialog rounded-modal w-full max-w-sm text-center">
                     <div className="md3-dialog-title">All Caught Up!</div>
-                    <div className="md3-dialog-content text-md-sys-on-surface/70">
+                    <div className="md3-dialog-content text-md-sys-on-surface/60">
                         No uncertain data pending review.
                     </div>
                     <div className="md3-dialog-actions">
@@ -142,25 +142,30 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
 
     return (
         <div className="md3-dialog-scrim fixed inset-0 z-[10010] flex items-center justify-center p-4" onClick={onClose}>
-            <div className="md3-dialog w-full max-w-lg overflow-hidden max-h-[80vh]" onClick={e => e.stopPropagation()}>
+            <div className="md3-dialog rounded-modal w-full max-w-lg overflow-hidden max-h-[80vh]" onClick={e => e.stopPropagation()}>
                 <div className="md3-banner md3-banner--warn">
                     <div className="flex items-center gap-2">
                         <AlertTriangle size={20} />
-                        <h2 className="md3-dialog-title text-base">Review Queue</h2>
+                        <h2 className="text-title font-bold">Review Queue</h2>
                     </div>
-                    <span className="md3-chip text-[11px] font-mono">{allItems.length} Remaining</span>
+                    <div className="flex items-center gap-2">
+                        <span className="md3-chip text-label-sm font-mono">{allItems.length} Remaining</span>
+                        <button onClick={onClose} className="md3-icon-btn" title="Close">
+                            <X size={18} />
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar md3-dialog-content">
                     {allItems.map(review => (
-                        <div key={review.id} className="md3-card rounded-xl p-3 border border-md-sys-outline-variant/30 animate-fade-in">
+                        <div key={review.id} className="md3-card rounded-card p-3 border border-md-sys-outline-variant/30 animate-fade-in">
                             <div className="flex justify-between items-start mb-2">
                                 <div>
-                                    <div className="text-xs font-black uppercase text-md-sys-on-surface/40 tracking-wider mb-1">
+                                    <div className="text-label-sm font-black uppercase text-md-sys-on-surface/40 tracking-wider mb-1">
                                         {review.context || 'Unknown Context'}
                                     </div>
                                     {!review.isUnknown && (
-                                        <div className="text-xs text-md-sys-on-surface/70 font-mono mb-2">
+                                        <div className="text-label-sm text-md-sys-on-surface/60 font-mono mb-2">
                                             Confidence: {Math.round(review.originalConfidence)}%
                                         </div>
                                     )}
@@ -168,16 +173,16 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                 <div className="flex gap-1">
                                     {editingId === review.id ? (
                                         <>
-                                            <button onClick={() => handleSaveEdit(review)} className="md3-icon-btn text-emerald-400" title="Save"><Check size={16} /></button>
+                                            <button onClick={() => handleSaveEdit(review)} className="md3-icon-btn text-success" title="Save"><Check size={16} /></button>
                                             <button onClick={() => setEditingId(null)} className="md3-icon-btn" title="Cancel"><X size={16} /></button>
                                         </>
                                     ) : (
                                         <>
                                             {/* For Unknowns, Check button enters edit mode essentially */}
-                                            <button onClick={() => review.isUnknown ? startEdit(review) : handleConfirm(review)} className="md3-icon-btn text-emerald-400" title="Confirm/Identify"><Check size={16} /></button>
-                                            <button onClick={() => startEdit(review)} className="md3-icon-btn text-sky-400" title="Edit"><Edit2 size={16} /></button>
+                                            <button onClick={() => review.isUnknown ? startEdit(review) : handleConfirm(review)} className="md3-icon-btn text-success" title="Confirm/Identify"><Check size={16} /></button>
+                                            <button onClick={() => startEdit(review)} className="md3-icon-btn text-info" title="Edit"><Edit2 size={16} /></button>
                                             {!review.isUnknown && (
-                                                <button onClick={() => handleDelete(review)} className="md3-icon-btn text-red-400" title="Delete (Junk)"><Trash2 size={16} /></button>
+                                                <button onClick={() => handleDelete(review)} className="md3-icon-btn text-danger" title="Delete (Junk)"><Trash2 size={16} /></button>
                                             )}
                                         </>
                                     )}
@@ -202,10 +207,10 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                             {!editingId && review.type === 'roster_candidate' && (
                                 <div className="mt-2 space-y-2">
                                     {review.bestScore != null && (
-                                        <div className="text-xs text-md-sys-on-surface/60">
+                                        <div className="text-label-sm text-md-sys-on-surface/60">
                                             Best match: <span className="font-semibold">{review.bestMatch || 'None'}</span> ({Math.round(review.bestScore)}%)
                                             {review.bestScore >= 90 && (
-                                                <span className="ml-2 text-green-400 font-bold">Auto-Merge Suggested</span>
+                                                <span className="ml-2 text-success font-bold">Auto-Merge Suggested</span>
                                             )}
                                         </div>
                                     )}
@@ -219,7 +224,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                                         removePendingReview(review.id);
                                                         setToast({ message: `Merged into "${s.name}"`, type: 'success' });
                                                     }}
-                                                    className="md3-chip text-[10px] font-bold hover:bg-md-sys-primary hover:text-md-sys-onPrimary transition-colors"
+                                                    className="md3-chip text-label-sm font-bold hover:bg-md-sys-primary hover:text-md-sys-onPrimary transition-colors"
                                                 >
                                                     Merge with {s.name} ({Math.round(s.score)}%)
                                                 </button>

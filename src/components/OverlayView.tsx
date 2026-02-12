@@ -20,10 +20,58 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
 
     const isTransparent = overlayStyle === 'transparent';
 
+    /**
+     * Track whether the mouse is currently hovering over an interactive panel.
+     * This ref prevents stale closures from causing the stuck state.
+     */
+    const isHoveringRef = React.useRef(false);
+
     // Notify main process of overlay style for click-through behavior
     useEffect(() => {
         getElectronAPI()?.send('set-overlay-style', overlayStyle);
     }, [overlayStyle]);
+
+    /**
+     * Safety cleanup: when exiting overlay or unmounting, always reset
+     * ignore-mouse-events to false so the window remains interactive.
+     */
+    useEffect(() => {
+        return () => {
+            getElectronAPI()?.send('set-ignore-mouse-events', false);
+        };
+    }, []);
+
+    /**
+     * Safety interval: periodically checks if the mouse should be captured.
+     * Recovers from edge cases where onMouseEnter/Leave events get lost
+     * (e.g., window focus changes, Electron forwarding race conditions).
+     */
+    useEffect(() => {
+        if (!isTransparent) return;
+
+        const safetyInterval = setInterval(() => {
+            if (showWizard) {
+                getElectronAPI()?.send('set-ignore-mouse-events', false);
+                return;
+            }
+            if (isHoveringRef.current) {
+                getElectronAPI()?.send('set-ignore-mouse-events', false);
+            } else {
+                getElectronAPI()?.send('set-ignore-mouse-events', true, { forward: true });
+            }
+        }, 1500);
+
+        return () => clearInterval(safetyInterval);
+    }, [isTransparent, showWizard]);
+
+    useEffect(() => {
+        if (!isTransparent) return;
+        if (showWizard) {
+            getElectronAPI()?.send('set-ignore-mouse-events', false);
+            return;
+        }
+        getElectronAPI()?.send('set-ignore-mouse-events', isHoveringRef.current ? false : true, isHoveringRef.current ? undefined : { forward: true });
+    }, [isTransparent, showWizard]);
 
     // Standard Mini Mode (Opaque)
     if (!isTransparent) {
@@ -38,7 +86,7 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                         <div className="w-5 h-5 rounded-md flex items-center justify-center bg-md-sys-primary/20">
                             <LayoutTemplate size={12} className="text-md-sys-primary" />
                         </div>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-md-sys-on-surface/60">
+                        <span className="text-label-sm font-black uppercase tracking-widest text-md-sys-on-surface/60">
                             Mini-Mode
                         </span>
                     </div>
@@ -50,12 +98,12 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                             title="Back to Dashboard"
                         >
                             <LayoutTemplate size={10} />
-                            <span className="text-[10px] font-bold uppercase">Dashboard</span>
+                            <span className="text-label-sm font-bold uppercase">Dashboard</span>
                         </button>
-                        <button onClick={handleMinimize} className="w-7 h-7 flex items-center justify-center hover:bg-white/10 text-white/50 rounded-md transition-colors" title="Minimize">
+                        <button onClick={handleMinimize} className="w-7 h-7 flex items-center justify-center hover:bg-md-sys-on-surface/10 text-md-sys-on-surface/50 rounded-md transition-colors" title="Minimize">
                             <Minus size={12} />
                         </button>
-                        <button onClick={handleClose} className="w-7 h-7 flex items-center justify-center hover:bg-red-500 hover:text-white text-white/50 rounded-md transition-colors" title="Close">
+                        <button onClick={handleClose} className="w-7 h-7 flex items-center justify-center hover:bg-md-sys-error hover:text-md-sys-on-error text-md-sys-on-surface/50 rounded-md transition-colors" title="Close">
                             <X size={12} />
                         </button>
                     </div>
@@ -70,15 +118,22 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
         );
     }
 
+    /**
+     * Transparent HUD Mode — click-through management.
+     * Uses both onMouseEnter/Leave AND onMouseMove as a fallback
+     * to prevent the stuck state where the window becomes unresponsive.
+     */
+    const enableInteraction = () => {
+        isHoveringRef.current = true;
+        if (!showWizard) {
+            getElectronAPI()?.send('set-ignore-mouse-events', false);
+        }
+    };
 
-
-    // ... (in component)
-
-    // Transparent HUD Mode
-    const setIgnoreFn = (ignore: boolean) => {
-        if (showWizard) return; // Allow Wizard to manage mouse events
-        if (isTransparent) {
-            getElectronAPI()?.send('set-ignore-mouse-events', ignore, { forward: true });
+    const disableInteraction = () => {
+        isHoveringRef.current = false;
+        if (!showWizard && isTransparent) {
+            getElectronAPI()?.send('set-ignore-mouse-events', true, { forward: true });
         }
     };
 
@@ -90,31 +145,34 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                 {/* Unified HUD Window - Wider for 2 Columns */}
                 <div
                     className="pointer-events-auto mt-2 w-full min-w-[300px] max-w-2xl flex flex-col bg-zinc-900/90 backdrop-blur-md border border-md-sys-outlineVariant/25 rounded-2xl shadow-2xl overflow-hidden"
-                    onMouseEnter={() => setIgnoreFn(false)}
-                    onMouseLeave={() => setIgnoreFn(true)}
+                    onMouseEnter={enableInteraction}
+                    onMouseLeave={disableInteraction}
+                    onPointerEnter={enableInteraction}
+                    onPointerLeave={disableInteraction}
+                    onMouseMove={enableInteraction}
                 >
                     {/* Header Bar (Drag Handle & Controls) */}
                     <div
                         className="flex items-center justify-between px-3 py-2 bg-black/40 cursor-move active:cursor-grabbing border-b border-md-sys-outlineVariant/20"
                         style={{ WebkitAppRegion: 'drag' } as any}
                     >
-                        <div className="flex items-center gap-2 text-white/70 group-hover:text-white transition-colors">
+                        <div className="flex items-center gap-2 text-md-sys-on-surface/70 group-hover:text-md-sys-on-surface transition-colors">
                             <GripHorizontal size={14} />
-                            <span className="text-[10px] font-bold uppercase tracking-widest">
+                            <span className="text-label-sm font-bold uppercase tracking-widest">
                                 HUD
                             </span>
                         </div>
                         <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as any}>
                             <button
                                 onClick={() => setIsOverlayMode(false)}
-                                className="flex items-center gap-1 px-2 py-0.5 bg-blue-500/80 hover:bg-blue-500 text-white rounded transition-colors"
+                                className="flex items-center gap-1 px-2 py-0.5 bg-info/80 hover:bg-info text-white rounded transition-colors"
                                 title="Exit to Dashboard"
                             >
                                 <LayoutTemplate size={12} />
-                                <span className="text-[9px] font-bold uppercase">Dashboard</span>
+                                <span className="text-label-xs font-bold uppercase">Dashboard</span>
                             </button>
-                            <button onClick={handleMinimize} className="p-1 hover:bg-md-sys-on-surface/10 rounded text-white/40 hover:text-white transition-colors" title="Minimize"><Minus size={12} /></button>
-                            <button onClick={handleClose} className="p-1 hover:bg-red-500/80 rounded text-white/40 hover:text-white transition-colors" title="Close"><X size={12} /></button>
+                            <button onClick={handleMinimize} className="p-1 hover:bg-md-sys-on-surface/10 rounded text-md-sys-on-surface/40 hover:text-md-sys-on-surface transition-colors" title="Minimize"><Minus size={12} /></button>
+                            <button onClick={handleClose} className="p-1 hover:bg-md-sys-error/80 rounded text-md-sys-on-surface/40 hover:text-md-sys-on-error transition-colors" title="Close"><X size={12} /></button>
                         </div>
                     </div>
 
@@ -133,7 +191,7 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                 </div>
             </div>
             {/* Resize Handle - specific for Custom/Transparent mode */}
-            <div onMouseEnter={() => setIgnoreFn(false)} onMouseLeave={() => setIgnoreFn(true)} className="pointer-events-auto">
+            <div onMouseEnter={enableInteraction} onMouseLeave={disableInteraction} className="pointer-events-auto">
                 <WindowResizer />
             </div>
         </div>

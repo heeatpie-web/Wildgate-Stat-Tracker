@@ -12,15 +12,15 @@ import { getMatchArtifactsStructured } from '../utils/artifactService';
 type ModeFilter = 'all' | 'Artifact Brawl' | 'Fleet Battle';
 
 const RESULT_COLORS: Record<string, string> = {
-    Win: 'bg-green-500',
-    Loss: 'bg-red-500',
+    Win: 'bg-success',
+    Loss: 'bg-danger',
     Draw: 'bg-slate-500',
 };
 
 const SOURCE_BADGE: Record<string, { label: string; color: string }> = {
-    ocr: { label: 'OCR', color: 'bg-blue-500/20 text-blue-400' },
-    telemetry: { label: 'Telemetry', color: 'bg-purple-500/20 text-purple-400' },
-    manual: { label: 'Manual', color: 'bg-amber-500/20 text-amber-400' },
+    ocr: { label: 'OCR', color: 'bg-info-soft text-info' },
+    telemetry: { label: 'Telemetry', color: 'bg-accent-soft text-accent' },
+    manual: { label: 'Manual', color: 'bg-warning-soft text-warning' },
 };
 
 export const MatchRecordingPage: React.FC = () => {
@@ -68,9 +68,9 @@ export const MatchRecordingPage: React.FC = () => {
     return (
         <div className="h-full flex">
             {/* Left Panel — Match List */}
-            <div className="w-80 flex-shrink-0 border-r border-white/5 flex flex-col bg-md-sys-surface1/50">
+            <div className="w-80 flex-shrink-0 border-r border-md-sys-outline/5 flex flex-col bg-md-sys-surface1/50">
                 {/* Search & Filter Bar */}
-                <div className="p-3 border-b border-white/5 space-y-2">
+                <div className="p-3 border-b border-md-sys-outline/5 space-y-2">
                     <div className="relative">
                         <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 opacity-40" />
                         <input
@@ -78,7 +78,7 @@ export const MatchRecordingPage: React.FC = () => {
                             placeholder="Search players, heroes, ships..."
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
-                            className="w-full pl-8 pr-3 py-1.5 bg-md-sys-surface3 rounded-lg text-xs outline-none placeholder:opacity-40"
+                            className="w-full pl-8 pr-3 py-1.5 bg-md-sys-surface3 rounded-lg text-label-sm outline-none placeholder:opacity-40"
                         />
                     </div>
                     <div className="flex gap-1">
@@ -86,7 +86,7 @@ export const MatchRecordingPage: React.FC = () => {
                             <button
                                 key={mode}
                                 onClick={() => setModeFilter(mode)}
-                                className={`px-2 py-0.5 text-[10px] rounded-full font-bold uppercase transition-colors ${modeFilter === mode ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'bg-white/5 hover:bg-white/10 opacity-60'}`}
+                                className={`px-2 py-0.5 text-label-sm rounded-full font-bold uppercase transition-colors ${modeFilter === mode ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'bg-md-sys-on-surface/5 hover:bg-md-sys-on-surface/10 opacity-60'}`}
                             >
                                 {mode === 'all' ? 'All' : mode}
                             </button>
@@ -97,7 +97,7 @@ export const MatchRecordingPage: React.FC = () => {
                 {/* Match List */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     {filteredMatches.length === 0 ? (
-                        <div className="p-4 text-center text-xs opacity-40">No matches found</div>
+                        <div className="p-4 text-center text-label-sm opacity-40">No matches found</div>
                     ) : (
                         filteredMatches.map(match => (
                             <MatchListItem
@@ -110,7 +110,7 @@ export const MatchRecordingPage: React.FC = () => {
                     )}
                 </div>
 
-                <div className="p-2 border-t border-white/5 text-center text-[10px] opacity-30 font-bold uppercase">
+                <div className="p-2 border-t border-md-sys-outline/5 text-center text-label-sm opacity-30 font-bold uppercase">
                     {filteredMatches.length} match{filteredMatches.length !== 1 ? 'es' : ''}
                 </div>
             </div>
@@ -123,7 +123,7 @@ export const MatchRecordingPage: React.FC = () => {
                     <div className="h-full flex items-center justify-center">
                         <div className="text-center opacity-30">
                             <FileText size={48} className="mx-auto mb-3" />
-                            <p className="text-sm font-bold">Select a match to view details</p>
+                            <p className="text-body font-bold">Select a match to view details</p>
                         </div>
                     </div>
                 )}
@@ -144,28 +144,28 @@ const MatchListItem: React.FC<{
     return (
         <button
             onClick={onClick}
-            className={`w-full text-left px-3 py-2.5 border-b border-white/5 transition-colors flex items-center gap-2.5 ${isSelected ? 'bg-md-sys-primary/10 border-l-2 border-l-md-sys-primary' : 'hover:bg-white/5 border-l-2 border-l-transparent'}`}
+            className={`w-full text-left px-3 py-2.5 border-b border-md-sys-outline/5 transition-colors flex items-center gap-2.5 ${isSelected ? 'bg-md-sys-primary/10 border-l-2 border-l-md-sys-primary' : 'hover:bg-md-sys-on-surface/5 border-l-2 border-l-transparent'}`}
         >
             {/* Result Badge */}
             <div className={`w-2 h-8 rounded-full flex-shrink-0 ${RESULT_COLORS[match.result] || 'bg-slate-500'}`} />
 
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-black uppercase">{match.result}</span>
+                    <span className="text-label-sm font-black uppercase">{match.result}</span>
                     {match.subType && match.subType !== 'Combat' && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/10 font-bold uppercase">{match.subType}</span>
+                        <span className="text-label-xs px-1.5 py-0.5 rounded bg-md-sys-on-surface/10 font-bold uppercase">{match.subType}</span>
                     )}
-                    {hasArtifact && <span className="text-[9px]">💎</span>}
+                    {hasArtifact && <span className="text-label-xs">💎</span>}
                 </div>
                 <div className="flex items-center gap-1 mt-0.5">
-                    {match.hero && <span className="text-[10px] opacity-60">{match.hero}</span>}
-                    {match.hero && match.ship && <span className="text-[8px] opacity-30">·</span>}
-                    {match.ship && <span className="text-[10px] opacity-60">{match.ship.split('(')[0].trim()}</span>}
+                    {match.hero && <span className="text-label-sm opacity-60">{match.hero}</span>}
+                    {match.hero && match.ship && <span className="text-label-xs opacity-30">·</span>}
+                    {match.ship && <span className="text-label-sm opacity-60">{match.ship.split('(')[0].trim()}</span>}
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[9px] opacity-30">{new Date(match.timestamp).toLocaleDateString()}</span>
-                    <span className="text-[9px] opacity-30">{new Date(match.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    {totalKills > 0 && <span className="text-[9px] text-emerald-400/60">{totalKills}K</span>}
+                    <span className="text-label-xs opacity-30">{new Date(match.timestamp).toLocaleDateString()}</span>
+                    <span className="text-label-xs opacity-30">{new Date(match.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    {totalKills > 0 && <span className="text-label-xs text-success/60">{totalKills}K</span>}
                 </div>
             </div>
 
@@ -211,7 +211,7 @@ const MatchDetail: React.FC<{
 
     const renderEditableField = (field: string, value: string, label: string) => (
         <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase font-bold opacity-40 w-20">{label}</span>
+            <span className="text-label-sm uppercase font-bold opacity-40 w-20">{label}</span>
             {editingField === field ? (
                 <div className="flex items-center gap-1 flex-1">
                     <input
@@ -219,15 +219,15 @@ const MatchDetail: React.FC<{
                         value={editValue}
                         onChange={e => setEditValue(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') saveEdit(field); if (e.key === 'Escape') setEditingField(null); }}
-                        className="flex-1 bg-md-sys-surface3 px-2 py-0.5 rounded text-xs outline-none"
+                        className="flex-1 bg-md-sys-surface3 px-2 py-0.5 rounded text-label-sm outline-none"
                         autoFocus
                     />
-                    <button onClick={() => saveEdit(field)} className="p-0.5 hover:text-green-400"><Check size={12} /></button>
-                    <button onClick={() => setEditingField(null)} className="p-0.5 hover:text-red-400"><X size={12} /></button>
+                    <button onClick={() => saveEdit(field)} className="p-0.5 hover:text-success"><Check size={12} /></button>
+                    <button onClick={() => setEditingField(null)} className="p-0.5 hover:text-danger"><X size={12} /></button>
                 </div>
             ) : (
                 <div className="flex items-center gap-1 flex-1 group cursor-pointer" onClick={() => startEdit(field, value || '')}>
-                    <span className="text-xs">{value || <span className="opacity-30 italic">—</span>}</span>
+                    <span className="text-label-sm">{value || <span className="opacity-30 italic">—</span>}</span>
                     <Edit3 size={10} className="opacity-0 group-hover:opacity-40 transition-opacity" />
                 </div>
             )}
@@ -238,23 +238,23 @@ const MatchDetail: React.FC<{
         <div className="p-4 space-y-4">
             {/* Header */}
             <div className="flex items-start gap-4">
-                <div className={`px-3 py-1.5 rounded-xl text-sm font-black uppercase ${RESULT_COLORS[match.result]} text-white`}>
+                <div className={`px-3 py-1.5 rounded-xl text-body font-black uppercase ${RESULT_COLORS[match.result]} text-white`}>
                     {match.result}
                 </div>
                 <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                        {match.hero && <span className="text-sm font-bold">{match.hero}</span>}
+                        {match.hero && <span className="text-body font-bold">{match.hero}</span>}
                         {match.ship && (
-                            <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: getShipColor(match.ship) + '30', color: getShipColor(match.ship) }}>
+                            <span className="text-label-sm px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: getShipColor(match.ship) + '30', color: getShipColor(match.ship) }}>
                                 {match.ship}
                             </span>
                         )}
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-white/5 font-bold uppercase">{match.mode}</span>
+                        <span className="text-label-sm px-2 py-0.5 rounded-full bg-md-sys-on-surface/5 font-bold uppercase">{match.mode}</span>
                         {match.subType && match.subType !== 'Combat' && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 font-bold">{match.subType}</span>
+                            <span className="text-label-sm px-2 py-0.5 rounded-full bg-warning-soft text-warning font-bold">{match.subType}</span>
                         )}
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-[10px] opacity-40">
+                    <div className="flex items-center gap-3 mt-1 text-label-sm opacity-40">
                         <span>{new Date(match.timestamp).toLocaleString()}</span>
                         <span>ID: {match.id}</span>
                     </div>
@@ -264,9 +264,9 @@ const MatchDetail: React.FC<{
             {/* Stats Summary */}
             <div className="grid grid-cols-4 gap-2">
                 <StatCard icon={<Clock size={14} />} label="Time" value={match.time || '—'} />
-                <StatCard icon={<HeartCrack size={14} className="text-rose-400" />} label="Damage" value={match.damageTaken?.toString() || '0'} />
-                <StatCard icon={<Target size={14} className="text-emerald-400" />} label="Kills" value={totalKills.toString()} />
-                {match.placement && <StatCard icon={<Trophy size={14} className="text-yellow-400" />} label="Place" value={`#${match.placement}`} />}
+                <StatCard icon={<HeartCrack size={14} className="text-danger" />} label="Damage" value={match.damageTaken?.toString() || '0'} />
+                <StatCard icon={<Target size={14} className="text-success" />} label="Kills" value={totalKills.toString()} />
+                {match.placement && <StatCard icon={<Trophy size={14} className="text-warning" />} label="Place" value={`#${match.placement}`} />}
             </div>
 
             {/* Kill Breakdown */}
@@ -274,7 +274,7 @@ const MatchDetail: React.FC<{
                 <Section title="Kill Breakdown" icon={<Crosshair size={14} />}>
                     <div className="flex flex-wrap gap-1.5">
                         {Object.entries(match.kills || {}).filter(([, v]) => v > 0).map(([ship, count]) => (
-                            <div key={ship} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-md-sys-surface3 text-xs">
+                            <div key={ship} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-md-sys-surface3 text-label-sm">
                                 <span className="font-bold">{count}</span>
                                 <span className="opacity-60">{ship}</span>
                             </div>
@@ -308,7 +308,7 @@ const MatchDetail: React.FC<{
                     {onViewCaptures && (
                         <button
                             onClick={onViewCaptures}
-                            className="mt-2 flex items-center gap-1.5 text-[10px] font-bold text-md-sys-primary hover:underline"
+                            className="mt-2 flex items-center gap-1.5 text-label-sm font-bold text-md-sys-primary hover:underline"
                         >
                             <ScanEye size={12} /> View in Smart Captures
                         </button>
@@ -333,20 +333,20 @@ const MatchDetail: React.FC<{
                 <Section title="Players" icon={<Users size={14} />}>
                     {match.teammates?.length > 0 && (
                         <div className="mb-2">
-                            <span className="text-[10px] uppercase font-bold opacity-40 block mb-1">Teammates</span>
+                            <span className="text-label-sm uppercase font-bold opacity-40 block mb-1">Teammates</span>
                             <div className="flex flex-wrap gap-1">
                                 {match.teammates.map(t => (
-                                    <span key={t} className="px-2 py-0.5 bg-green-500/10 text-green-400 rounded-md text-xs font-bold">{t}</span>
+                                    <span key={t} className="px-2 py-0.5 bg-success-soft text-success rounded-md text-label-sm font-bold">{t}</span>
                                 ))}
                             </div>
                         </div>
                     )}
                     {match.opponents?.length > 0 && (
                         <div>
-                            <span className="text-[10px] uppercase font-bold opacity-40 block mb-1">Opponents</span>
+                            <span className="text-label-sm uppercase font-bold opacity-40 block mb-1">Opponents</span>
                             <div className="flex flex-wrap gap-1">
                                 {match.opponents.map(o => (
-                                    <span key={o} className="px-2 py-0.5 bg-red-500/10 text-red-400 rounded-md text-xs font-bold">{o}</span>
+                                    <span key={o} className="px-2 py-0.5 bg-danger-soft text-danger rounded-md text-label-sm font-bold">{o}</span>
                                 ))}
                             </div>
                         </div>
@@ -358,9 +358,9 @@ const MatchDetail: React.FC<{
             {match.killedBy && (
                 <Section title="Killed By" icon={<Skull size={14} />}>
                     <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold">{match.killedBy}</span>
+                        <span className="text-body font-bold">{match.killedBy}</span>
                         {match.killedByShip && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-bold">{match.killedByShip}</span>
+                            <span className="text-label-sm px-2 py-0.5 rounded-full bg-danger-soft text-danger font-bold">{match.killedByShip}</span>
                         )}
                     </div>
                 </Section>
@@ -371,7 +371,7 @@ const MatchDetail: React.FC<{
                 <Section title="Modifiers" icon={<AlertTriangle size={14} />}>
                     <div className="flex flex-wrap gap-1">
                         {match.reachModifiers.map((mod, i) => (
-                            <span key={i} className="px-2 py-0.5 bg-amber-500/10 text-amber-400 rounded-md text-xs font-bold">{mod}</span>
+                            <span key={i} className="px-2 py-0.5 bg-warning-soft text-warning rounded-md text-label-sm font-bold">{mod}</span>
                         ))}
                     </div>
                 </Section>
@@ -381,9 +381,9 @@ const MatchDetail: React.FC<{
             {(match.poiEasy || match.poiMedium || match.poiEpic) ? (
                 <Section title="POI Objectives" icon={<Target size={14} />}>
                     <div className="flex gap-3">
-                        {match.poiEasy ? <POIBadge label="Easy" count={match.poiEasy} color="bg-emerald-500" /> : null}
-                        {match.poiMedium ? <POIBadge label="Med" count={match.poiMedium} color="bg-amber-500" /> : null}
-                        {match.poiEpic ? <POIBadge label="Epic" count={match.poiEpic} color="bg-purple-500" /> : null}
+                        {match.poiEasy ? <POIBadge label="Easy" count={match.poiEasy} color="bg-success" /> : null}
+                        {match.poiMedium ? <POIBadge label="Med" count={match.poiMedium} color="bg-warning" /> : null}
+                        {match.poiEpic ? <POIBadge label="Epic" count={match.poiEpic} color="bg-accent" /> : null}
                     </div>
                 </Section>
             ) : null}
@@ -393,11 +393,11 @@ const MatchDetail: React.FC<{
                 <Section title="Timeline" icon={<Clock size={14} />}>
                     <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
                         {match.timelineEvents.map((evt: any, i: number) => (
-                            <div key={i} className="flex items-center gap-2 text-xs">
-                                <span className="text-[9px] opacity-30 w-16 flex-shrink-0">
+                            <div key={i} className="flex items-center gap-2 text-label-sm">
+                                <span className="text-label-xs opacity-30 w-16 flex-shrink-0">
                                     {new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                                 </span>
-                                <span className="px-1.5 py-0.5 rounded bg-white/5 text-[9px] font-bold uppercase">{evt.type}</span>
+                                <span className="px-1.5 py-0.5 rounded bg-md-sys-on-surface/5 text-label-xs font-bold uppercase">{evt.type}</span>
                                 <span className="opacity-60">{evt.label}</span>
                             </div>
                         ))}
@@ -408,7 +408,7 @@ const MatchDetail: React.FC<{
             {/* OCR Debug Info */}
             {(match.ocrDebug || (match.artifacts && match.artifacts.length > 0)) && (
                 <Section title="OCR Metadata" icon={<ShieldCheck size={14} />}>
-                    <div className="space-y-2 text-xs">
+                    <div className="space-y-2 text-label-sm">
                         {match.artifacts && match.artifacts.length > 0 && (
                             <div className="flex items-center gap-2">
                                 <span className="opacity-40">Artifacts:</span>
@@ -421,7 +421,7 @@ const MatchDetail: React.FC<{
                                     {match.ocrDebug.confidence != null && (
                                         <div className="flex items-center gap-1">
                                             <span className="opacity-40">Confidence:</span>
-                                            <span className={`font-bold ${match.ocrDebug.confidence >= 80 ? 'text-green-400' : match.ocrDebug.confidence >= 60 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                            <span className={`font-bold ${match.ocrDebug.confidence >= 80 ? 'text-success' : match.ocrDebug.confidence >= 60 ? 'text-warning' : 'text-danger'}`}>
                                                 {Math.round(match.ocrDebug.confidence)}%
                                             </span>
                                         </div>
@@ -429,12 +429,12 @@ const MatchDetail: React.FC<{
                                     {match.ocrDebug.source && (
                                         <div className="flex items-center gap-1">
                                             <span className="opacity-40">Source:</span>
-                                            <span className="font-bold uppercase text-[10px]">{match.ocrDebug.source}</span>
+                                            <span className="font-bold uppercase text-label-sm">{match.ocrDebug.source}</span>
                                         </div>
                                     )}
                                 </div>
                                 {match.ocrDebug.mergeStats && (
-                                    <div className="grid grid-cols-3 gap-1 text-[9px] font-mono opacity-60">
+                                    <div className="grid grid-cols-3 gap-1 text-label-xs font-mono opacity-60">
                                         <span>agreed: {match.ocrDebug.mergeStats.agreed}</span>
                                         <span>cloud: {match.ocrDebug.mergeStats.cloudPreferred}</span>
                                         <span>local: {match.ocrDebug.mergeStats.localOnly}</span>
@@ -445,8 +445,8 @@ const MatchDetail: React.FC<{
                                 )}
                                 {match.ocrDebug.rawText && (
                                     <details className="mt-1">
-                                        <summary className="text-[10px] opacity-40 cursor-pointer hover:opacity-60">Raw OCR Text</summary>
-                                        <pre className="mt-1 p-2 bg-black/30 rounded-lg text-[9px] font-mono opacity-60 max-h-40 overflow-auto whitespace-pre-wrap break-all">
+                                        <summary className="text-label-sm opacity-40 cursor-pointer hover:opacity-60">Raw OCR Text</summary>
+                                        <pre className="mt-1 p-2 bg-black/30 rounded-lg text-label-xs font-mono opacity-60 max-h-40 overflow-auto whitespace-pre-wrap break-all">
                                             {match.ocrDebug.rawText}
                                         </pre>
                                     </details>
@@ -460,7 +460,7 @@ const MatchDetail: React.FC<{
             {/* Lightbox */}
             {lightboxSrc && (
                 <div className="fixed inset-0 z-[10000] bg-black/90 flex items-center justify-center p-8" onClick={() => setLightboxSrc(null)}>
-                    <button onClick={() => setLightboxSrc(null)} className="absolute top-4 right-4 text-white/50 hover:text-white">
+                    <button onClick={() => setLightboxSrc(null)} className="absolute top-4 right-4 text-md-sys-on-surface/50 hover:text-md-sys-on-surface">
                         <X size={24} />
                     </button>
                     <img src={lightboxSrc.startsWith('data:') ? lightboxSrc : `file://${lightboxSrc.replace(/\\/g, '/')}`} alt="Screenshot" className="max-w-full max-h-full object-contain rounded-lg" />
@@ -475,7 +475,7 @@ const Section: React.FC<{ title: string; icon: React.ReactNode; children: React.
     <div className="bg-md-sys-surface2 rounded-xl p-3">
         <div className="flex items-center gap-1.5 mb-2">
             <span className="opacity-40">{icon}</span>
-            <span className="text-[10px] uppercase font-bold opacity-50 tracking-wider">{title}</span>
+            <span className="text-label-sm uppercase font-bold opacity-50 tracking-wider">{title}</span>
         </div>
         {children}
     </div>
@@ -484,15 +484,15 @@ const Section: React.FC<{ title: string; icon: React.ReactNode; children: React.
 const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: string }> = ({ icon, label, value }) => (
     <div className="bg-md-sys-surface2 rounded-xl p-2.5 flex flex-col items-center gap-0.5">
         <span className="opacity-40">{icon}</span>
-        <span className="text-[9px] uppercase font-bold opacity-40">{label}</span>
-        <span className="text-sm font-black">{value}</span>
+        <span className="text-label-xs uppercase font-bold opacity-40">{label}</span>
+        <span className="text-body font-black">{value}</span>
     </div>
 );
 
 const POIBadge: React.FC<{ label: string; count: number; color: string }> = ({ label, count, color }) => (
     <div className="flex items-center gap-1.5">
         <div className={`w-2 h-2 rounded-full ${color}`} />
-        <span className="text-xs font-bold">{count}</span>
-        <span className="text-[9px] opacity-40 uppercase">{label}</span>
+        <span className="text-label-sm font-bold">{count}</span>
+        <span className="text-label-xs opacity-40 uppercase">{label}</span>
     </div>
 );

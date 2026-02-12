@@ -16,6 +16,17 @@ export * from './utils/constants';
 /** Supported UI languages. Translations live in utils/translations.ts. */
 export type Language = 'en' | 'es' | 'mx' | 'pt' | 'br' | 'zh';
 
+/**
+ * Explicit OCR pipeline state for a match's artifacts.
+ * - `queued`     — Has screenshots but OCR hasn't run yet.
+ * - `processing` — OCR is currently running on the screenshots.
+ * - `reviewing`  — OCR complete; awaiting human review/confirmation.
+ * - `ready`      — Reviewed and ready to save/apply.
+ * - `saved`      — Data applied and match resolved.
+ * - `error`      — OCR processing failed.
+ */
+export type OcrState = 'queued' | 'processing' | 'reviewing' | 'ready' | 'saved' | 'error';
+
 /** Maps ship type names to kill counts for a single match. */
 export interface KillMap {
   [shipName: string]: number;
@@ -76,6 +87,8 @@ export interface Match {
     mergeStats?: { total: number; agreed: number; cloudPreferred: number; localOnly: number; cloudOnly: number; conflicts: number };
     timestamp?: number;
   };
+  /** Explicit OCR pipeline state for this match's artifacts. */
+  ocrState?: OcrState;
   /** Marks OCR review "work queue" completion for this match (Smart Captures). */
   ocrReviewedAt?: number;
 }

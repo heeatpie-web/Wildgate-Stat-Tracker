@@ -90,6 +90,8 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
   const captureQueueRef = useRef<Array<{ activeUser?: string | null }>>([]);
   const isProcessingQueueRef = useRef(false);
+  const captureInFlightRef = useRef(false);
+  const lastCaptureAtRef = useRef(0);
 
   // In "auto" mode, don't kick off OCR immediately for each keypress.
   // Instead, treat captures as a burst and OCR after a short quiet period.
@@ -565,7 +567,11 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       setError('Smart Capture is only available in the desktop app');
       return null;
     }
+    if (captureInFlightRef.current) {
+      return null;
+    }
 
+    captureInFlightRef.current = true;
     setError(null);
     setVisionStatus('capturing');
 
@@ -598,6 +604,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       return null;
     } finally {
       setVisionStatus('idle');
+      captureInFlightRef.current = false;
     }
   }, [playSuccess, playSoundError, setVisionStatus, assessCaptureQuality]);
 
@@ -723,6 +730,10 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       setError('Smart Capture is only available in the desktop app');
       return;
     }
+    const now = Date.now();
+    if (captureInFlightRef.current) return;
+    if (now - lastCaptureAtRef.current < 650) return;
+    lastCaptureAtRef.current = now;
 
     setError(null);
 
@@ -739,6 +750,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       setError('Smart Capture is only available in the desktop app');
       return;
     }
+    if (captureInFlightRef.current) return;
 
     setError(null);
 

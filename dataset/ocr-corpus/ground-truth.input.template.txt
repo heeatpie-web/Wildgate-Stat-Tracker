@@ -1,0 +1,19 @@
+# OCR ground truth input template (no JSON required)
+# Rules:
+# - Use "key: value" lines.
+# - Separate samples with a line containing only "---".
+# - teammates/modifiers are comma-separated lists.
+# - opponentTeams uses "Team Name: p1, p2; Another Team: p3, p4".
+# - optional team color: "Team Name [Purple]: p1, p2".
+
+sampleId: sample_001
+imagePath: dataset/images/val/capture_2026-02-04T03-16-23-241Z.png
+teammates: AlixThus, Charlie
+opponentTeams: MURDER SPAGHURDER [Purple]: NightmareGMC, SHTER; MEANR THAN AVG [Green]: littleleaves
+modifiers: Void Storm, Ion Squall
+---
+sampleId: sample_002
+imagePath: dataset/images/train/capture_2026-02-04T08-21-06-645Z.png
+teammates: Hunter, Sal
+opponentTeams: DODGE THE BULLET [Orange]: gaowang134, JACR1907
+modifiers: Solar Flare

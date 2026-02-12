@@ -1,12 +1,13 @@
-﻿import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { AnalyticsView, AnalyticsTimeRange, DrillDownTarget } from '../../types';
-import { Activity, ArrowLeft, Gauge, Lightbulb, Handshake, BarChart3, Globe, Flame, PenSquare } from 'lucide-react';
+import { Activity, ArrowLeft, Gauge, Lightbulb, Handshake, BarChart3, Globe, Flame, PenSquare, Download } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
 import { useUserPreferences } from '../../providers/UserPreferencesProvider';
 import { TRANSLATIONS } from '../../utils/translations';
 import { useAnalyticsData } from './useAnalyticsData';
 import { InlineNarrativeToggle } from './DenseEditorialToggle';
+import { exportAnalyticsAsImage } from './analyticsExport';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { ProView } from './ProView';
 import { EnvironmentView } from './EnvironmentView';
@@ -56,6 +57,21 @@ const QUICK_VIEWS: { view: AnalyticsView; icon: React.ReactNode }[] = [
     { view: 'streaks', icon: <Flame size={12} /> },
 ];
 
+const DETAIL_QUICK_VIEWS: AnalyticsView[] = [
+    'session',
+    'momentum',
+    'period',
+    'timePatterns',
+    'streaks',
+    'killEfficiency',
+    'placement',
+    'insights',
+    'social',
+    'pro',
+    'environment',
+    'synergy',
+];
+
 export const AnalyticsShell: React.FC = () => {
     const { setDrillDownTarget } = useGameData();
     const { activeMode: currentMode, activeUser: currentUser } = useUIState();
@@ -65,6 +81,8 @@ export const AnalyticsShell: React.FC = () => {
     const [currentView, setCurrentView] = useState<AnalyticsView>('overview');
     const [timeRange, setTimeRange] = useState<AnalyticsTimeRange>('all');
     const [lastN] = useState(20);
+    const [exporting, setExporting] = useState(false);
+    const contentRef = useRef<HTMLDivElement>(null);
 
     const data = useAnalyticsData(timeRange, lastN, currentView);
 
@@ -94,11 +112,11 @@ export const AnalyticsShell: React.FC = () => {
         }
     };
 
-    const modeBadge = currentMode === 'Artifact Brawl' ? 'bg-orange-500/15 text-orange-300 border-orange-500/30' : 'bg-sky-500/15 text-sky-300 border-sky-500/30';
+    const modeBadge = currentMode === 'Artifact Brawl' ? 'bg-warning-soft text-warning border-warning-soft' : 'bg-info-soft text-info border-info-soft';
 
     return (
-        <div className="h-full flex flex-col gap-3 overflow-hidden p-3 rounded-2xl bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.10),transparent_35%),radial-gradient(circle_at_top_left,rgba(251,146,60,0.08),transparent_40%)]">
-            <div className="flex-shrink-0 rounded-2xl bg-md-sys-surfaceContainerLowest/80 backdrop-blur p-3 md:p-4">
+        <div className="h-full flex flex-col gap-3 overflow-hidden p-3 rounded-2xl analytics-shell-gradient shadow-lg">
+            <div className="flex-shrink-0 rounded-2xl mg-surface-high backdrop-blur p-3 md:p-4">
                 <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
@@ -108,17 +126,31 @@ export const AnalyticsShell: React.FC = () => {
                                 </button>
                             )}
                             <div className="min-w-0">
-                                <h2 className="text-base md:text-lg font-black tracking-tight flex items-center gap-2 text-md-sys-on-surface">
+                                <h2 className="text-base md:text-lg font-bold tracking-tight flex items-center gap-2 text-md-sys-on-surface">
                                     <Activity className="text-md-sys-primary" size={18} />
                                     <span className="truncate">{currentView === 'overview' ? 'Analytics Cockpit' : VIEW_LABELS[currentView]}</span>
                                 </h2>
-                                <div className="mt-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
+                                <div className="mt-1 flex items-center gap-2 text-label-sm font-semibold uppercase tracking-wider">
                                     <span className={`px-2 py-0.5 rounded-full border ${modeBadge}`}>{currentMode}</span>
-                                    <span className="text-md-sys-on-surface/50">{currentView === 'overview' ? 'Performance Overview' : 'Deep Dive View'}</span>
+                                    <span className="text-md-sys-on-surface/60">{currentView === 'overview' ? 'Performance Overview' : 'Deep Dive View'}</span>
                                 </div>
                             </div>
                         </div>
-                        <InlineNarrativeToggle visualMode={visualMode} onChange={setVisualMode} />
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={async () => {
+                                    setExporting(true);
+                                    await exportAnalyticsAsImage(contentRef.current);
+                                    setExporting(false);
+                                }}
+                                disabled={exporting || data.filteredMatches.length === 0}
+                                className="md3-icon-btn text-md-sys-on-surface/60 hover:text-md-sys-primary disabled:opacity-30 transition-colors"
+                                title="Export analytics as PNG"
+                            >
+                                <Download size={16} className={exporting ? 'animate-pulse' : ''} />
+                            </button>
+                            <InlineNarrativeToggle visualMode={visualMode} onChange={setVisualMode} />
+                        </div>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
@@ -126,11 +158,10 @@ export const AnalyticsShell: React.FC = () => {
                             <button
                                 key={opt.value}
                                 onClick={() => setTimeRange(opt.value)}
-                                className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/25 ${
-                                    timeRange === opt.value
-                                        ? 'bg-md-sys-primary text-md-sys-onPrimary shadow'
-                                        : 'bg-md-sys-surfaceContainerLowest/70 text-md-sys-on-surface/70 hover:bg-md-sys-surfaceContainerHigh/70'
-                                }`}
+                                className={`px-3 py-1.5 rounded-full text-label-sm font-bold uppercase tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/25 ${timeRange === opt.value
+                                    ? 'bg-md-sys-primary text-md-sys-onPrimary shadow'
+                                    : 'bg-md-sys-surfaceContainerLowest/70 text-md-sys-on-surface/60 hover:bg-md-sys-surfaceContainerHigh/70'
+                                    }`}
                             >
                                 {opt.label}
                             </button>
@@ -139,13 +170,13 @@ export const AnalyticsShell: React.FC = () => {
                 </div>
             </div>
 
-            {currentView === 'overview' && (
+            {currentView === 'overview' && data.filteredMatches.length > 0 && (
                 <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar px-1 flex-shrink-0">
                     {QUICK_VIEWS.map(({ view, icon }) => (
                         <button
                             key={view}
                             onClick={() => navigateTo(view)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wide bg-md-sys-surfaceContainerLowest/70 text-md-sys-on-surface/75 hover:bg-md-sys-primaryContainer hover:text-md-sys-onPrimaryContainer transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/25"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-label-sm font-bold uppercase tracking-wide bg-md-sys-surfaceContainerLowest/70 text-md-sys-on-surface/60 hover:bg-md-sys-primaryContainer hover:text-md-sys-onPrimaryContainer transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/25"
                         >
                             {icon}
                             {VIEW_LABELS[view]}
@@ -154,7 +185,18 @@ export const AnalyticsShell: React.FC = () => {
                 </div>
             )}
 
-            {currentView === 'overview' ? (
+            {data.filteredMatches.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center gap-4 text-md-sys-on-surface/40 animate-fade-in">
+                    <div className="w-16 h-16 rounded-2xl bg-md-sys-primaryContainer/30 flex items-center justify-center">
+                        <Activity size={28} className="text-md-sys-primary/40" />
+                    </div>
+                    <div className="text-center">
+                        <h3 className="text-body font-bold text-md-sys-on-surface/60">No match data yet</h3>
+                        <p className="text-label-sm mt-1 text-md-sys-on-surface/40">Record some matches to unlock analytics</p>
+                    </div>
+                </div>
+            ) : currentView === 'overview' ? (
+                <div ref={contentRef}>
                 <AnalyticsDashboard
                     visualMode={visualMode}
                     onNavigate={navigateTo}
@@ -176,8 +218,35 @@ export const AnalyticsShell: React.FC = () => {
                     synergyMatrix={data.synergyMatrix}
                     filteredMatches={data.filteredMatches}
                 />
+                </div>
             ) : (
-                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar rounded-xl bg-md-sys-surfaceContainerLowest/70 p-2">
+                <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar rounded-xl mg-surface-high p-3">
+                    {/* Inline back-navigation breadcrumb */}
+                    <div className="flex items-center gap-2 mb-3 px-1">
+                        <button
+                            onClick={goBack}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-label-sm font-bold uppercase tracking-wide bg-md-sys-surfaceContainerHigh/70 text-md-sys-on-surface/60 hover:bg-md-sys-primaryContainer hover:text-md-sys-onPrimaryContainer transition-colors"
+                        >
+                            <ArrowLeft size={12} />
+                            Overview
+                        </button>
+                        <span className="text-label-sm font-semibold text-md-sys-on-surface/40">/</span>
+                        <span className="text-label-sm font-bold uppercase tracking-wide text-md-sys-primary">{VIEW_LABELS[currentView]}</span>
+                    </div>
+                    <div className="flex gap-2 overflow-x-auto pb-2 mb-2 no-scrollbar px-1">
+                        {DETAIL_QUICK_VIEWS.map((view) => (
+                            <button
+                                key={view}
+                                onClick={() => navigateTo(view)}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-label-sm font-bold uppercase tracking-wide whitespace-nowrap transition-colors ${currentView === view
+                                    ? 'bg-md-sys-primary text-md-sys-onPrimary'
+                                    : 'bg-md-sys-surfaceContainerLowest/70 text-md-sys-on-surface/60 hover:bg-md-sys-primaryContainer hover:text-md-sys-onPrimaryContainer'
+                                    }`}
+                            >
+                                {VIEW_LABELS[view]}
+                            </button>
+                        ))}
+                    </div>
                     {renderExpandedView()}
                 </div>
             )}

@@ -63,7 +63,7 @@ export const LocalImage: React.FC<LocalImageProps> = ({ src, fallback, ...imgPro
     if (failed) {
         return fallback ? <>{fallback}</> : (
             <div className="flex flex-col items-center justify-center w-full h-full opacity-30">
-                <span className="text-xs">Image unavailable</span>
+                <span className="text-label-sm">Image unavailable</span>
             </div>
         );
     }

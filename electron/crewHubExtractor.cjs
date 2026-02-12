@@ -21,13 +21,13 @@ const LAYOUT = {
   // Left panel: Your team
   LEFT_PANEL: {
     xMin: 0,
-    xMax: 0.40, // Left 40%
+    xMax: 0.36, // tighten to avoid enemy-column bleed into teammate parsing
     yMin: 0.10,
     yMax: 0.80,
   },
   // Right panel: Enemy crews
   RIGHT_PANEL: {
-    xMin: 0.55, // Right 45%
+    xMin: 0.45, // start earlier to capture enemy headers/players near center seam
     xMax: 1.0,
     yMin: 0.10,
     yMax: 0.90,
@@ -223,7 +223,11 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
 
   const parsePlayersFromLines = (lineSet) => {
     const out = [];
+    const teammateColumnMaxX = imageWidth * 0.34;
     for (const line of lineSet) {
+      // Guardrail: teammate names should stay in the left player column.
+      // This avoids ingesting enemy names when OCR line grouping crosses panel seams.
+      if (getLineCenterX(line.words) > teammateColumnMaxX) continue;
       const playerName = extractPlayerNameFromLine(line.words);
       if (!playerName) continue;
       if (!isValidPlayerName(playerName)) continue;
@@ -377,7 +381,7 @@ async function extractRightPanel(imageBuffer, words, lines, text, imageWidth, im
 
     const playerName = extractPlayerNameFromLine(line.words);
     if (!playerName) continue;
-    if (!isValidPlayerName(playerName)) continue;
+    if (!isValidOpponentName(playerName)) continue;
     if (isTeamName(playerName)) continue;
     if (/PARTY|CREW|HUB|VOICE|CHANNEL/i.test(playerName)) continue;
 
@@ -446,8 +450,21 @@ async function extractRightPanel(imageBuffer, words, lines, text, imageWidth, im
   // Sort by player count (most players first) and limit to 4 teams
   enemyTeams.sort((a, b) => b.players.length - a.players.length);
   if (enemyTeams.length > 4) {
-    console.warn('[CrewHub] More than 4 enemy teams detected, keeping top 4');
-    return enemyTeams.slice(0, 4);
+    console.warn('[CrewHub] More than 4 enemy teams detected, preserving overflow players in top 4 buckets');
+    const kept = enemyTeams.slice(0, 4);
+    const overflow = enemyTeams.slice(4);
+
+    for (const spill of overflow) {
+      let target = kept.find(t => t.color !== 'unknown' && spill.color !== 'unknown' && t.color === spill.color);
+      if (!target) {
+        target = kept.reduce((best, t) => (t.players.length < best.players.length ? t : best), kept[0]);
+      }
+      for (const p of spill.players || []) {
+        pushUniquePlayerName(target.players, p);
+      }
+    }
+
+    return kept;
   }
 
   return enemyTeams;
@@ -579,6 +596,17 @@ function extractPlayerNameFromLine(words) {
   return name.length >= 3 ? name : null;
 }
 
+function getLineCenterX(words) {
+  if (!Array.isArray(words) || words.length === 0) return 0;
+  const xs = words
+    .map(w => w?.bbox)
+    .filter(Boolean)
+    .flatMap(b => [b.x0, b.x1])
+    .filter(v => Number.isFinite(v));
+  if (xs.length === 0) return 0;
+  return (Math.min(...xs) + Math.max(...xs)) / 2;
+}
+
 /**
  * Score how likely a word is to be a player name (0-100)
  */
@@ -697,6 +725,17 @@ function isValidPlayerName(name) {
       return false;
     }
   }
+
+  return true;
+}
+
+function isValidOpponentName(name) {
+  if (!name || name.length < 3 || name.length > 28) return false;
+
+  if (!/[a-zA-Z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/.test(name)) return false;
+  if (NOISE_WORDS.has(name.toUpperCase())) return false;
+  if (/PARTY|CREW|HUB|VOICE|CHANNEL|SPECTATOR|OBSERVER/i.test(name)) return false;
+  if (/^[|=\-~#%&*]+$/.test(name)) return false;
 
   return true;
 }

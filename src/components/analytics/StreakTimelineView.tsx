@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { StreakData, VisualMode } from '../../types';
 import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, ReferenceLine } from 'recharts';
 import { TrendingUp, Flame, TrendingDown } from 'lucide-react';
@@ -20,41 +20,41 @@ export const StreakTimelineView: React.FC<StreakTimelineViewProps> = ({ data, vi
             {/* Editorial Summary */}
             {!dense && (
                 <div className="md3-card rounded-2xl p-6">
-                    <p className="text-sm leading-relaxed opacity-70">{generateStreakEditorial(data)}</p>
+                    <p className="text-body leading-relaxed opacity-70">{generateStreakEditorial(data)}</p>
                 </div>
             )}
 
             {/* KPI Row */}
             <div className={`grid gap-4 ${dense ? 'grid-cols-4' : 'grid-cols-2 md:grid-cols-4'}`}>
                 <div className={`md3-card rounded-2xl ${dense ? 'p-3' : 'p-6'}`}>
-                    <div className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">Current</div>
-                    <div className={`font-black ${data.currentStreak > 0 ? 'text-green-500' : data.currentStreak < 0 ? 'text-red-500' : 'text-md-sys-on-surface'} ${dense ? 'text-2xl' : 'text-3xl'}`}>
+                    <div className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-1">Current</div>
+                    <div className={`font-black ${data.currentStreak > 0 ? 'text-success' : data.currentStreak < 0 ? 'text-danger' : 'text-md-sys-on-surface'} ${dense ? 'text-2xl' : 'text-3xl'}`}>
                         {data.currentStreak > 0 ? `+${data.currentStreak}` : data.currentStreak}
                     </div>
-                    <div className="text-[9px] font-bold opacity-40">{data.currentStreak > 0 ? 'Win Streak' : data.currentStreak < 0 ? 'Loss Streak' : 'Neutral'}</div>
+                    <div className="text-label-xs font-bold opacity-40">{data.currentStreak > 0 ? 'Win Streak' : data.currentStreak < 0 ? 'Loss Streak' : 'Neutral'}</div>
                 </div>
                 <div className={`md3-card rounded-2xl ${dense ? 'p-3' : 'p-6'}`}>
-                    <div className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1 flex items-center gap-1"><TrendingUp size={10} /> Best Win</div>
-                    <div className={`font-black text-green-500 ${dense ? 'text-2xl' : 'text-3xl'}`}>{data.longestWinStreak}</div>
-                    <div className="text-[9px] font-bold opacity-40">Longest Win Streak</div>
+                    <div className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-1 flex items-center gap-1"><TrendingUp size={10} /> Best Win</div>
+                    <div className={`font-black text-success ${dense ? 'text-2xl' : 'text-3xl'}`}>{data.longestWinStreak}</div>
+                    <div className="text-label-xs font-bold opacity-40">Longest Win Streak</div>
                 </div>
                 <div className={`md3-card rounded-2xl ${dense ? 'p-3' : 'p-6'}`}>
-                    <div className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1 flex items-center gap-1"><TrendingDown size={10} /> Worst Loss</div>
-                    <div className={`font-black text-red-500 ${dense ? 'text-2xl' : 'text-3xl'}`}>{data.longestLossStreak}</div>
-                    <div className="text-[9px] font-bold opacity-40">Longest Loss Streak</div>
+                    <div className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-1 flex items-center gap-1"><TrendingDown size={10} /> Worst Loss</div>
+                    <div className={`font-black text-danger ${dense ? 'text-2xl' : 'text-3xl'}`}>{data.longestLossStreak}</div>
+                    <div className="text-label-xs font-bold opacity-40">Longest Loss Streak</div>
                 </div>
                 <div className={`md3-card rounded-2xl ${dense ? 'p-3' : 'p-6'}`}>
-                    <div className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1 flex items-center gap-1"><Flame size={10} /> Average</div>
+                    <div className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-1 flex items-center gap-1"><Flame size={10} /> Average</div>
                     <div className={`font-black text-md-sys-primary ${dense ? 'text-2xl' : 'text-3xl'}`}>{data.averageStreakLength}</div>
-                    <div className="text-[9px] font-bold opacity-40">Avg Streak Length</div>
+                    <div className="text-label-xs font-bold opacity-40">Avg Streak Length</div>
                 </div>
             </div>
 
             {/* Streak Timeline */}
             <div className={`md3-card rounded-2xl flex-1 min-h-[300px] ${dense ? 'p-4' : 'p-6'}`}>
-                <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-xs' : 'text-sm'}`}><Flame size={14} /> Streak Timeline</h3>
+                <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-label-sm' : 'text-body'}`}><Flame size={14} /> Streak Timeline</h3>
                 {chartData.length < 2 ? (
-                    <div className="h-48 flex items-center justify-center opacity-40 font-bold uppercase text-sm">Not enough data</div>
+                    <div className="h-48 flex items-center justify-center opacity-40 font-bold uppercase text-body">Not enough data</div>
                 ) : (
                     <ResponsiveContainer width="100%" height={dense ? 250 : 350}>
                         <AreaChart data={chartData}>

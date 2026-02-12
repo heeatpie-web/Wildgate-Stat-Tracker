@@ -73,8 +73,8 @@ interface UIStateContextType {
     setShowWizard: (result: 'Win' | 'Loss' | 'Draw' | null) => void;
     devMode: boolean;
     setDevMode: (enabled: boolean) => void;
-    activeView: 'recording' | 'analytics' | 'history' | 'smart-captures' | 'dev-ocr';
-    setActiveView: (view: 'recording' | 'analytics' | 'history' | 'smart-captures' | 'dev-ocr') => void;
+    activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr';
+    setActiveView: (view: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr') => void;
     hiddenForScan: boolean;
     setHiddenForScan: (hidden: boolean) => void;
     showIdMapper: boolean;

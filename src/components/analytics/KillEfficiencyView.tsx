@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { KillEfficiencyData, VisualMode } from '../../types';
 import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts';
 import { Crosshair, TrendingUp, TrendingDown, Minus } from 'lucide-react';
@@ -24,37 +24,37 @@ export const KillEfficiencyView: React.FC<KillEfficiencyViewProps> = ({ data, vi
             {/* Editorial Summary */}
             {!dense && (
                 <div className="md3-card rounded-2xl p-6">
-                    <p className="text-sm leading-relaxed opacity-70">{generateKillEfficiencyEditorial(data)}</p>
+                    <p className="text-body leading-relaxed opacity-70">{generateKillEfficiencyEditorial(data)}</p>
                 </div>
             )}
 
             {/* KPI Row */}
             <div className={`grid gap-4 ${dense ? 'grid-cols-3' : 'grid-cols-1 md:grid-cols-3'}`}>
                 <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
-                    <div className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">Overall Avg Kills</div>
+                    <div className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-1">Overall Avg Kills</div>
                     <div className={`font-black text-orange-500 ${dense ? 'text-3xl' : 'text-4xl'}`}>{data.overallAvgKills}</div>
-                    <div className="text-[9px] font-bold opacity-40">Per match</div>
+                    <div className="text-label-xs font-bold opacity-40">Per match</div>
                 </div>
                 <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
-                    <div className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">Trend</div>
+                    <div className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-1">Trend</div>
                     <div className={`font-black flex items-center gap-2 ${trendColor} ${dense ? 'text-2xl' : 'text-3xl'}`}>
                         <TrendIcon size={dense ? 20 : 24} />
                         {data.trendDirection === 'up' ? 'Rising' : data.trendDirection === 'down' ? 'Falling' : 'Stable'}
                     </div>
-                    <div className="text-[9px] font-bold opacity-40">Last 10 vs previous 10</div>
+                    <div className="text-label-xs font-bold opacity-40">Last 10 vs previous 10</div>
                 </div>
                 <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
-                    <div className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">Best Ship</div>
+                    <div className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-1">Best Ship</div>
                     <div className={`font-black text-md-sys-primary ${dense ? 'text-xl' : 'text-2xl'} truncate`}>{shipData[0]?.name || '--'}</div>
-                    <div className="text-[9px] font-bold opacity-40">{shipData[0]?.avgKills || 0} avg kills</div>
+                    <div className="text-label-xs font-bold opacity-40">{shipData[0]?.avgKills || 0} avg kills</div>
                 </div>
             </div>
 
             {/* Rolling average chart */}
             <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
-                <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-xs' : 'text-sm'}`}><Crosshair size={14} /> Rolling 10-Match Avg Kills</h3>
+                <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-label-sm' : 'text-body'}`}><Crosshair size={14} /> Rolling 10-Match Avg Kills</h3>
                 {data.timeline.length < 2 ? (
-                    <div className="h-48 flex items-center justify-center opacity-40 font-bold uppercase text-sm">Not enough data</div>
+                    <div className="h-48 flex items-center justify-center opacity-40 font-bold uppercase text-body">Not enough data</div>
                 ) : (
                     <ResponsiveContainer width="100%" height={dense ? 200 : 300}>
                         <AreaChart data={data.timeline}>
@@ -72,7 +72,7 @@ export const KillEfficiencyView: React.FC<KillEfficiencyViewProps> = ({ data, vi
             {/* Breakdown charts */}
             <div className={`grid gap-4 ${dense ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2'}`}>
                 <div className={`md3-card rounded-2xl min-h-[250px] ${dense ? 'p-4' : 'p-6'}`}>
-                    <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-xs' : 'text-sm'}`}>By Ship</h3>
+                    <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-label-sm' : 'text-body'}`}>By Ship</h3>
                     <ResponsiveContainer width="100%" height={dense ? 180 : 250}>
                         <BarChart data={shipData} layout="vertical" margin={{ left: 10 }}>
                             <XAxis type="number" hide />
@@ -83,7 +83,7 @@ export const KillEfficiencyView: React.FC<KillEfficiencyViewProps> = ({ data, vi
                     </ResponsiveContainer>
                 </div>
                 <div className={`md3-card rounded-2xl min-h-[250px] ${dense ? 'p-4' : 'p-6'}`}>
-                    <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-xs' : 'text-sm'}`}>By Hero</h3>
+                    <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-label-sm' : 'text-body'}`}>By Hero</h3>
                     <ResponsiveContainer width="100%" height={dense ? 180 : 250}>
                         <BarChart data={heroData} layout="vertical" margin={{ left: 10 }}>
                             <XAxis type="number" hide />

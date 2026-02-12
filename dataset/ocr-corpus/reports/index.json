@@ -1,0 +1,191 @@
+{
+  "version": 1,
+  "runs": [
+    {
+      "generatedAt": "2026-02-12T19:41:22.451Z",
+      "latestReport": "both-post-bug2c-vs-baseline.json",
+      "historyReport": "history/2026-02-12T19-41-22-451Z.json",
+      "teammateRecall": 15.52,
+      "opponentRecall": 14.71,
+      "modifierRecall": 70.27,
+      "teamGroupingAccuracy": 66.67,
+      "teamColorAccuracy": null,
+      "sessionUsablePassRate": 0
+    },
+    {
+      "generatedAt": "2026-02-12T19:36:54.344Z",
+      "latestReport": "both-post-bug2b-vs-baseline.json",
+      "historyReport": "history/2026-02-12T19-36-54-344Z.json",
+      "teammateRecall": 15.52,
+      "opponentRecall": 14.71,
+      "modifierRecall": 70.27,
+      "teamGroupingAccuracy": 66.67,
+      "teamColorAccuracy": null,
+      "sessionUsablePassRate": 0
+    },
+    {
+      "generatedAt": "2026-02-12T19:34:16.583Z",
+      "latestReport": "latest.json",
+      "historyReport": "history/2026-02-12T19-34-16-583Z.json",
+      "teammateRecall": 15.52,
+      "opponentRecall": 14.71,
+      "modifierRecall": 70.27,
+      "teamGroupingAccuracy": 66.67,
+      "teamColorAccuracy": null,
+      "sessionUsablePassRate": 0
+    },
+    {
+      "generatedAt": "2026-02-12T19:32:36.655Z",
+      "latestReport": "both-post-bug2-vs-baseline.json",
+      "historyReport": "history/2026-02-12T19-32-36-655Z.json",
+      "teammateRecall": 15.52,
+      "opponentRecall": 14.71,
+      "modifierRecall": 70.27,
+      "teamGroupingAccuracy": 66.67,
+      "teamColorAccuracy": null,
+      "sessionUsablePassRate": 0
+    },
+    {
+      "generatedAt": "2026-02-12T19:20:20.338Z",
+      "latestReport": "latest.json",
+      "historyReport": "history/2026-02-12T19-20-20-338Z.json",
+      "teammateRecall": 15.52,
+      "opponentRecall": 14.71,
+      "modifierRecall": 70.27,
+      "teamGroupingAccuracy": 66.67,
+      "teamColorAccuracy": null,
+      "sessionUsablePassRate": 0
+    },
+    {
+      "generatedAt": "2026-02-12T19:15:10.833Z",
+      "latestReport": "latest.json",
+      "historyReport": "history/2026-02-12T19-15-10-833Z.json",
+      "teammateRecall": 15.52,
+      "opponentRecall": 14.71,
+      "modifierRecall": 66.22,
+      "teamGroupingAccuracy": 66.67,
+      "teamColorAccuracy": null,
+      "sessionUsablePassRate": 0
+    },
+    {
+      "generatedAt": "2026-02-12T19:12:59.912Z",
+      "latestReport": "both-post-bug1-vs-baseline.json",
+      "historyReport": "history/2026-02-12T19-12-59-912Z.json",
+      "teammateRecall": 15.52,
+      "opponentRecall": 14.71,
+      "modifierRecall": 66.22,
+      "teamGroupingAccuracy": 66.67,
+      "teamColorAccuracy": null,
+      "sessionUsablePassRate": 0
+    },
+    {
+      "generatedAt": "2026-02-12T19:05:08.569Z",
+      "latestReport": "both-vs-baseline.json",
+      "historyReport": "history/2026-02-12T19-05-08-569Z.json",
+      "teammateRecall": 15.52,
+      "opponentRecall": 14.71,
+      "modifierRecall": 56.76,
+      "teamGroupingAccuracy": 66.67,
+      "teamColorAccuracy": null,
+      "sessionUsablePassRate": 0
+    },
+    {
+      "generatedAt": "2026-02-12T19:02:10.625Z",
+      "latestReport": "local-vs-baseline.json",
+      "historyReport": "history/2026-02-12T19-02-10-625Z.json",
+      "teammateRecall": 8.62,
+      "opponentRecall": 14.71,
+      "modifierRecall": 70.27,
+      "teamGroupingAccuracy": 66.67,
+      "teamColorAccuracy": null,
+      "sessionUsablePassRate": 0
+    },
+    {
+      "generatedAt": "2026-02-12T19:00:33.252Z",
+      "latestReport": "latest.json",
+      "historyReport": "history/2026-02-12T19-00-33-252Z.json",
+      "teammateRecall": 15.52,
+      "opponentRecall": 14.71,
+      "modifierRecall": 56.76,
+      "teamGroupingAccuracy": 66.67,
+      "teamColorAccuracy": null,
+      "sessionUsablePassRate": 0
+    },
+    {
+      "generatedAt": "2026-02-12T18:52:29.918Z",
+      "latestReport": "latest.json",
+      "historyReport": "history/2026-02-12T18-52-29-918Z.json",
+      "teammateRecall": 8.62,
+      "opponentRecall": 14.71,
+      "modifierRecall": 70.27,
+      "teamGroupingAccuracy": 66.67,
+      "teamColorAccuracy": null,
+      "sessionUsablePassRate": 0
+    },
+    {
+      "generatedAt": "2026-02-12T18:30:22.869Z",
+      "latestReport": "latest.json",
+      "historyReport": "history/2026-02-12T18-30-22-869Z.json",
+      "teammateRecall": 50,
+      "opponentRecall": 0,
+      "modifierRecall": 0,
+      "teamGroupingAccuracy": 0,
+      "teamColorAccuracy": null,
+      "sessionUsablePassRate": 0
+    },
+    {
+      "generatedAt": "2026-02-12T18:23:13.107Z",
+      "latestReport": "latest.json",
+      "historyReport": "history/2026-02-12T18-23-13-107Z.json",
+      "teammateRecall": 0,
+      "opponentRecall": 0,
+      "modifierRecall": 0,
+      "teamGroupingAccuracy": 0,
+      "teamColorAccuracy": null,
+      "sessionUsablePassRate": 0
+    },
+    {
+      "generatedAt": "2026-02-12T18:11:09.892Z",
+      "latestReport": "sample-report.json",
+      "historyReport": "history/2026-02-12T18-11-09-892Z.json",
+      "teammateRecall": 50,
+      "opponentRecall": 60,
+      "modifierRecall": 100,
+      "teamGroupingAccuracy": 50,
+      "teamColorAccuracy": 50,
+      "sessionUsablePassRate": 0
+    },
+    {
+      "generatedAt": "2026-02-12T18:10:48.170Z",
+      "latestReport": "sample-report.json",
+      "historyReport": "history/2026-02-12T18-10-48-170Z.json",
+      "teammateRecall": 50,
+      "opponentRecall": 60,
+      "modifierRecall": 100,
+      "teamGroupingAccuracy": 50,
+      "teamColorAccuracy": 33.33,
+      "sessionUsablePassRate": 0
+    },
+    {
+      "generatedAt": "2026-02-12T18:09:03.928Z",
+      "latestReport": "sample-report.json",
+      "historyReport": "history/2026-02-12T18-09-03-928Z.json",
+      "teammateRecall": 50,
+      "opponentRecall": 60,
+      "modifierRecall": 100,
+      "teamGroupingAccuracy": 50,
+      "teamColorAccuracy": 33.33,
+      "sessionUsablePassRate": 0
+    },
+    {
+      "generatedAt": "2026-02-12T02:17:00.857Z",
+      "latestReport": "latest.json",
+      "historyReport": "history/2026-02-12T02-17-00-857Z.json",
+      "teammateRecall": 0,
+      "opponentRecall": 0,
+      "modifierRecall": 0,
+      "teamGroupingAccuracy": 0,
+      "sessionUsablePassRate": 0
+    }
+  ]
+}

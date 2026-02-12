@@ -37,12 +37,12 @@ export interface SettingsSlice {
   enableAutoBackup: boolean;
   overlayStyle: OverlayStyle;
   visualMode: VisualMode;
-  uiStyle: 'md3' | 'legacy';
   ocrMode: OcrMode;
   captureMode: CaptureMode;
   lockOcrTeams: boolean;
   ocrBestGuessThresholds: OcrBestGuessThresholds;
   ocrCalibration: OcrCalibration;
+  tutorialCompleted: boolean;
 
   setActiveMode: (mode: GameMode) => void;
   setActiveUser: (user: string) => void;
@@ -62,13 +62,13 @@ export interface SettingsSlice {
   setEnableAutoBackup: (enabled: boolean) => void;
   setOverlayStyle: (style: OverlayStyle) => void;
   setVisualMode: (mode: VisualMode) => void;
-  setUiStyle: (style: 'md3' | 'legacy') => void;
   setOcrMode: (mode: OcrMode) => void;
   setCaptureMode: (mode: CaptureMode) => void;
   setLockOcrTeams: (enabled: boolean) => void;
   setOcrBestGuessThresholds: (update: Partial<OcrBestGuessThresholds>) => void;
   setOcrCalibration: (update: Partial<OcrCalibration>) => void;
   resetOcrCalibration: () => void;
+  setTutorialCompleted: (completed: boolean) => void;
 }
 
 export const createSettingsSlice: StateCreator<SettingsSlice> = (set) => ({
@@ -90,7 +90,6 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set) => ({
   enableAutoBackup: true,
   overlayStyle: 'compact',
   visualMode: 'dense',
-  uiStyle: 'md3',
   ocrMode: 'both',
   captureMode: 'auto',
   lockOcrTeams: false,
@@ -108,6 +107,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set) => ({
     saturationMin: 35,
     luminanceMin: 30
   },
+  tutorialCompleted: false,
 
   setActiveMode: (mode) => set({ activeMode: mode }),
   setActiveUser: (user) => set({ activeUser: user }),
@@ -127,7 +127,6 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set) => ({
   setEnableAutoBackup: (enabled) => set({ enableAutoBackup: enabled }),
   setOverlayStyle: (style) => set({ overlayStyle: style }),
   setVisualMode: (mode) => set({ visualMode: mode }),
-  setUiStyle: (style) => set({ uiStyle: style }),
   setOcrMode: (mode) => set({ ocrMode: mode }),
   setCaptureMode: (mode) => set({ captureMode: mode }),
   setLockOcrTeams: (enabled) => set({ lockOcrTeams: enabled }),
@@ -153,5 +152,6 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set) => ({
       luminanceMin: 30
     }
   }),
+  setTutorialCompleted: (completed) => set({ tutorialCompleted: completed }),
 });
 

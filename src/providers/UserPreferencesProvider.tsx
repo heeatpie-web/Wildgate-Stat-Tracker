@@ -35,8 +35,6 @@ interface UserPreferencesContextType {
     setOverlayStyle: (style: OverlayStyle) => void;
     visualMode: VisualMode;
     setVisualMode: (mode: VisualMode) => void;
-    uiStyle: 'md3' | 'legacy';
-    setUiStyle: (style: 'md3' | 'legacy') => void;
 }
 
 const UserPreferencesContext = createContext<UserPreferencesContextType | null>(null);
@@ -62,8 +60,7 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
         showSessionTimer, setShowSessionTimer,
         customBgUrl, setCustomBgUrl,
         overlayStyle, setOverlayStyle,
-        visualMode, setVisualMode,
-        uiStyle, setUiStyle
+        visualMode, setVisualMode
     } = useAppStore(useShallow(s => ({
         appearanceMode: s.appearanceMode, setAppearanceMode: s.setAppearanceMode,
         colorTheme: s.colorTheme, setColorTheme: s.setColorTheme,
@@ -77,29 +74,54 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
         customBgUrl: s.customBgUrl, setCustomBgUrl: s.setCustomBgUrl,
         overlayStyle: s.overlayStyle, setOverlayStyle: s.setOverlayStyle,
         visualMode: s.visualMode, setVisualMode: s.setVisualMode,
-        uiStyle: s.uiStyle, setUiStyle: s.setUiStyle,
     })));
 
     // Side Effects moved from App.tsx
 
-    // 1. Apply Theme Classes
+    // 1. Apply theme + accent directly on body (CSS tokens key off body[data-mode]/[data-theme]).
     useEffect(() => {
+        const body = document.body;
         const root = document.documentElement;
+        const media = window.matchMedia('(prefers-color-scheme: dark)');
+        const resolvedMode = appearanceMode === 'system' ? (media.matches ? 'dark' : 'light') : appearanceMode;
 
-        // Remove existing theme classes
-        root.classList.remove('theme-light', 'theme-dark', 'theme-twilight');
-        root.classList.add(`theme-${appearanceMode}`);
+        body.setAttribute('data-mode', resolvedMode);
+        body.setAttribute('data-theme', colorTheme);
 
-        // Apply color theme
+        // Keep root attributes in sync for components that read from documentElement.
+        root.setAttribute('data-mode', resolvedMode);
         root.setAttribute('data-theme', colorTheme);
 
-        // Apply Custom Hue if not using a preset
-        if (customHue !== '0') {
-            root.style.setProperty('--md-sys-primary-hue', customHue);
+        // Custom hue is wired through --app-hue when theme is "custom".
+        if (colorTheme === 'custom') {
+            body.style.setProperty('--app-hue', customHue);
         } else {
-            root.style.removeProperty('--md-sys-primary-hue');
+            body.style.removeProperty('--app-hue');
         }
 
+        // Keep class hooks in sync for any class-based theme selectors.
+        body.classList.toggle('theme-light', resolvedMode === 'light');
+        body.classList.toggle('theme-dark', resolvedMode === 'dark');
+        body.classList.toggle('theme-twilight', resolvedMode === 'twilight');
+        root.classList.toggle('theme-light', resolvedMode === 'light');
+        root.classList.toggle('theme-dark', resolvedMode === 'dark');
+        root.classList.toggle('theme-twilight', resolvedMode === 'twilight');
+
+        // In system mode, react immediately to OS theme changes.
+        if (appearanceMode !== 'system') return;
+        const onSystemThemeChange = () => {
+            const mode = media.matches ? 'dark' : 'light';
+            body.setAttribute('data-mode', mode);
+            root.setAttribute('data-mode', mode);
+            body.classList.toggle('theme-light', mode === 'light');
+            body.classList.toggle('theme-dark', mode === 'dark');
+            body.classList.toggle('theme-twilight', false);
+            root.classList.toggle('theme-light', mode === 'light');
+            root.classList.toggle('theme-dark', mode === 'dark');
+            root.classList.toggle('theme-twilight', false);
+        };
+        media.addEventListener('change', onSystemThemeChange);
+        return () => media.removeEventListener('change', onSystemThemeChange);
     }, [appearanceMode, colorTheme, customHue]);
 
     // 2. Apply Colorblind Mode
@@ -125,13 +147,6 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
         }
     }, [performanceMode]);
 
-    // 3.5 Apply UI style variant
-    useEffect(() => {
-        const root = document.documentElement;
-        root.setAttribute('data-ui', uiStyle);
-        document.body.setAttribute('data-ui', uiStyle);
-    }, [uiStyle]);
-
     // 4. Set Language on Body (for CSS targeting if needed)
     useEffect(() => {
         document.documentElement.lang = language;
@@ -149,13 +164,12 @@ export const UserPreferencesProvider: React.FC<{ children: React.ReactNode }> = 
         showSessionTimer, setShowSessionTimer,
         customBgUrl, setCustomBgUrl,
         overlayStyle, setOverlayStyle,
-        visualMode, setVisualMode,
-        uiStyle, setUiStyle
+        visualMode, setVisualMode
     }), [appearanceMode, setAppearanceMode, colorTheme, setColorTheme, customHue, setCustomHue,
         colorblindMode, setColorblindMode, disableAnimations, setDisableAnimations,
         performanceMode, setPerformanceMode,
         soundEnabled, setSoundEnabled, language, setLanguage, showSessionTimer, setShowSessionTimer,
-        customBgUrl, setCustomBgUrl, overlayStyle, setOverlayStyle, visualMode, setVisualMode, uiStyle, setUiStyle]);
+        customBgUrl, setCustomBgUrl, overlayStyle, setOverlayStyle, visualMode, setVisualMode]);
 
     return (
         <UserPreferencesContext.Provider value={value}>

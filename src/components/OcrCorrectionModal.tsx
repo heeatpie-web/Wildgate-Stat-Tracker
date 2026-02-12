@@ -125,15 +125,15 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
     if (!isOpen) return null;
 
     const getConfidenceColor = (conf: number) => {
-        if (conf >= 80) return 'text-green-400';
-        if (conf >= 40) return 'text-yellow-400';
-        return 'text-red-400';
+        if (conf >= 80) return 'text-success';
+        if (conf >= 40) return 'text-warning';
+        return 'text-danger';
     };
 
     const getConfidenceBg = (conf: number) => {
-        if (conf >= 80) return 'bg-green-500/20 border-green-500/30';
-        if (conf >= 40) return 'bg-yellow-500/20 border-yellow-500/30';
-        return 'bg-red-500/20 border-red-500/30';
+        if (conf >= 80) return 'bg-success-soft border-success-soft';
+        if (conf >= 40) return 'bg-warning-soft border-warning-soft';
+        return 'bg-danger-soft border-danger-soft';
     };
 
     return (
@@ -142,28 +142,31 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
             onClick={onClose}
         >
             <div
-                className="md3-dialog w-full max-w-2xl max-h-[85vh] flex flex-col animate-scale-in"
+                className="md3-dialog rounded-modal w-full max-w-2xl max-h-[85vh] flex flex-col animate-scale-in"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <User size={20} className="text-md-sys-primary" />
-                        <h2 className="md3-dialog-title text-base">Review Detected Players</h2>
-                        <span className="md3-chip text-[11px] font-mono">
+                        <h2 className="text-title font-bold">Review Detected Players</h2>
+                        <span className="md3-chip text-label-sm font-mono">
                             {detectedPlayers.length} found
                         </span>
                     </div>
                     <button onClick={onClose} className="md3-icon-btn" title="Close">
-                        <X size={20} />
+                        <X size={18} />
                     </button>
                 </div>
 
                 {/* Player List */}
                 <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar md3-dialog-content">
                     {detectedPlayers.length === 0 ? (
-                        <div className="text-center opacity-50 py-8">
-                            No players detected in this session
+                        <div className="text-center opacity-60 py-8">
+                            <p className="text-body font-medium">No players detected</p>
+                            <p className="text-label-sm mt-1">
+                                Capture a Crew Hub or Tactical Map screenshot first, then return here to review.
+                            </p>
                         </div>
                     ) : (
                         detectedPlayers.map((player, idx) => {
@@ -175,11 +178,11 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                             return (
                                 <div
                                     key={`${player.name}-${idx}`}
-                                    className={`md3-card p-3 rounded-xl border transition-all ${
+                                    className={`md3-card p-3 rounded-card border transition-all ${
                                         isIgnored
                                             ? 'bg-md-sys-on-surface/5 border-md-sys-outline-variant/30 opacity-50'
                                             : hasCorrected
-                                                ? 'bg-green-500/10 border-green-500/30'
+                                                ? 'bg-success-soft border-success-soft'
                                                 : getConfidenceBg(conf)
                                     }`}
                                 >
@@ -200,17 +203,17 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2">
                                                     <span className="font-bold truncate">{player.name}</span>
-                                                    <span className={`text-xs ${getConfidenceColor(conf)}`}>
+                                                    <span className={`text-label-sm ${getConfidenceColor(conf)}`}>
                                                         ({conf}%)
                                                     </span>
                                                     {priorCorrection && (
-                                                        <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">
+                                                        <span className="text-label-sm bg-info-soft text-info px-1.5 py-0.5 rounded">
                                                             Previously linked
                                                         </span>
                                                     )}
                                                 </div>
                                                 {player.shipType && (
-                                                    <div className="flex items-center gap-1 text-xs opacity-50 mt-0.5">
+                                                    <div className="flex items-center gap-1 text-label-sm opacity-60 mt-0.5">
                                                         <Ship size={10} />
                                                         {player.shipType}
                                                     </div>
@@ -219,10 +222,10 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                                         </div>
 
                                         {/* Actions */}
-                                                {isIgnored ? (
+                                            {isIgnored ? (
                                             <button
                                                 onClick={() => handleUnignore(player.name)}
-                                                className="md3-btn-text text-xs"
+                                                className="md3-btn-text text-label-sm"
                                             >
                                                 Undo Ignore
                                             </button>
@@ -231,13 +234,13 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                                                 {/* Correction Dropdown */}
                                                 <div className="relative">
                                                     <div className="md3-textfield md3-textfield--outlined flex items-center gap-1 px-2 py-1">
-                                                        <Search size={12} className="opacity-50" />
+                                                        <Search size={12} className="opacity-60" />
                                                         <input
                                                             type="text"
                                                             placeholder="Link to..."
                                                             value={searchQuery[player.name] || corrections[player.name] || ''}
                                                             onChange={e => setSearchQuery(prev => ({ ...prev, [player.name]: e.target.value }))}
-                                                            className="bg-transparent text-sm w-28 outline-none"
+                                                            className="bg-transparent text-body w-28 outline-none"
                                                         />
                                                     </div>
 
@@ -248,13 +251,13 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                                                                 <button
                                                                     key={p}
                                                                     onClick={() => handleCorrection(player.name, p)}
-                                                                    className="w-full text-left px-3 py-1.5 text-sm hover:bg-md-sys-on-surface/10 truncate"
+                                                                    className="w-full text-left px-3 py-1.5 text-body hover:bg-md-sys-on-surface/10 truncate"
                                                                 >
                                                                     {p}
                                                                 </button>
                                                             ))}
                                                             {getFilteredRegistry(player.name).length === 0 && (
-                                                                <div className="px-3 py-2 text-xs opacity-50">No matches</div>
+                                                                <div className="px-3 py-2 text-label-sm opacity-60">No matching pilots found. Use "+ New" to add this name.</div>
                                                             )}
                                                         </div>
                                                     )}
@@ -264,7 +267,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                                                 {!pilotRegistry.includes(player.name) && !hasCorrected && (
                                                     <button
                                                         onClick={() => handleAcceptNewPlayer(player.name)}
-                                                        className="md3-btn-text text-xs text-emerald-400 whitespace-nowrap"
+                                                        className="md3-btn-text text-label-sm text-success whitespace-nowrap"
                                                     >
                                                         + New
                                                     </button>
@@ -273,14 +276,14 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                                                 {/* Ignore */}
                                                 <button
                                                     onClick={() => handleIgnore(player.name)}
-                                                    className="md3-btn-text text-xs text-red-400"
+                                                    className="md3-btn-text text-label-sm text-danger"
                                                 >
                                                     Ignore
                                                 </button>
 
                                                 {/* Checkmark if corrected */}
                                                 {hasCorrected && (
-                                                    <Check size={16} className="text-green-400" />
+                                                    <Check size={16} className="text-success" />
                                                 )}
                                             </div>
                                         )}
@@ -288,8 +291,8 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
 
                                     {/* Show correction target */}
                                     {hasCorrected && hasCorrected !== player.name && (
-                                        <div className="mt-2 text-xs text-emerald-400 flex items-center gap-1">
-                                            <span className="opacity-50">Linked to:</span>
+                                        <div className="mt-2 text-label-sm text-success flex items-center gap-1">
+                                            <span className="opacity-60">Linked to:</span>
                                             <span className="font-semibold">{hasCorrected}</span>
                                         </div>
                                     )}
@@ -298,6 +301,14 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                         })
                     )}
                 </div>
+
+                {/* All-resolved hint */}
+                {detectedPlayers.length > 0 &&
+                 detectedPlayers.every(p => corrections[p.name] || ignored.has(p.name)) && (
+                    <div className="px-3 py-2 text-center text-label-sm text-success font-medium">
+                        All players reviewed. Press "Apply Corrections" to save.
+                    </div>
+                )}
 
                 {/* Footer */}
                 <div className="md3-dialog-actions w-full justify-between">

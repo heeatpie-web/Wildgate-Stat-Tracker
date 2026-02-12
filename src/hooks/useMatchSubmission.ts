@@ -119,7 +119,7 @@ export const useMatchSubmission = () => {
             pendingMatchData, showWizard,
             pendingPlacement, pendingArtifactType, pendingKilledBy, pendingKilledByShip,
             timeMin, timeSec, activeUser, activeMode,
-            currentLoadout, timelineEvents, sessionStartTime,
+            currentLoadout, timelineEvents, matchStartTime,
             sessionTeams, sessionShipTypes,
             activeHero, activeShip,
             selectedReachModifiers
@@ -179,8 +179,12 @@ export const useMatchSubmission = () => {
             await StorageService.flush();
             const parts = finalTime.split(':').map(Number);
             const totalDurationSecs = ((parts[0] || 0) * 60) + (parts[1] || 0);
-            const matchStart = sessionStartTime || (Date.now() - (totalDurationSecs * 1000));
             const matchEnd = Date.now();
+            // Use the actual telemetry/manual match start when available.
+            // Falling back to duration keeps artifact bundling bounded to the current report.
+            const matchStart = (typeof matchStartTime === 'number' && matchStartTime > 0)
+                ? matchStartTime
+                : (matchEnd - (totalDurationSecs * 1000));
 
             bundleMatchArtifacts(newMatch.id, matchStart, matchEnd).then(artifacts => {
                 if (artifacts.length > 0) {

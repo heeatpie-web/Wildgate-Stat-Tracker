@@ -10,6 +10,13 @@ export default {
       sans: ['Inter', 'Roboto', 'sans-serif'],
     },
     extend: {
+      fontSize: {
+        'label-xs': ['9px', { lineHeight: '12px', letterSpacing: '0.02em', fontWeight: '600' }],
+        'label-sm': ['11px', { lineHeight: '16px', letterSpacing: '0.01em', fontWeight: '600' }],
+        'body':     ['13px', { lineHeight: '18px', letterSpacing: '0',      fontWeight: '400' }],
+        'title':    ['15px', { lineHeight: '20px', letterSpacing: '-0.01em', fontWeight: '700' }],
+        'heading':  ['20px', { lineHeight: '26px', letterSpacing: '-0.02em', fontWeight: '800' }],
+      },
       animation: {
         'fade-in': 'fadeIn 0.2s ease-out forwards',
         'slide-up': 'slideUp 0.3s cubic-bezier(0.2, 0.0, 0, 1.0) forwards',
@@ -20,7 +27,20 @@ export default {
         slideUp: { '0%': { transform: 'translateY(20px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
         scaleIn: { '0%': { transform: 'scale(0.9)', opacity: '0' }, '100%': { transform: 'scale(1)', opacity: '1' } },
       },
+      borderRadius: {
+        modal: 'var(--md-sys-shape-corner-large)',    // 16px – modals/dialogs
+        card: 'var(--md-sys-shape-corner-medium)',     // 12px – cards/sections
+        control: 'var(--md-sys-shape-corner-small)',   // 8px  – buttons/inputs
+        pill: 'var(--md-sys-shape-corner-full)',       // 9999px – badges/pills
+      },
       colors: {
+        status: {
+          success: 'var(--color-success)',
+          warning: 'var(--color-warning)',
+          danger: 'var(--color-danger)',
+          info: 'var(--color-info)',
+          accent: 'var(--color-accent)',
+        },
         md: {
           sys: {
             primary: 'var(--md-sys-color-primary)',

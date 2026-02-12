@@ -168,27 +168,49 @@ All modals: `p-2 hover:bg-md-sys-surface2 rounded-lg transition-colors` with `<X
 
 ---
 
+## 9. CRITICAL: Surface System Confusion (`mg-*` vs `md3-*`)
+
+Two surface systems are used interchangeably within the same components without clear rules:
+
+- `mg-surface*` (glassmorphic, 57 occurrences across 13 files)
+- `md3-surface*` (solid MD3, 108 occurrences across 24 files)
+- `md3-card` (99 occurrences across 30 files)
+
+### Rule (now codified in UI_MASTERPLAN.md)
+- `mg-surface*` = glassmorphic panels (recording, overlays, wizard, cockpit)
+- `md3-surface*` = solid containers (forms, settings, modals, lists)
+- `md3-card` = discrete content cards (analytics, players, drill-downs)
+- `md3-card` + `mg-surface*` = intentional glass card (allowed combo)
+- Never mix `mg-surface*` and `md3-surface*` on the same element.
+
+---
+
 ## Action Plan (Prioritized)
 
-### Phase 1: Define design tokens (tailwind config)
-Add to `tailwind.config.js`:
+### Phase 1: Define design tokens (tailwind config) -- DONE
+Added to `tailwind.config.js`:
 ```js
 borderRadius: {
-  modal: '16px',    // modals, dialogs
-  card: '12px',     // cards, sections
-  control: '8px',   // buttons, inputs
-  pill: '9999px',   // badges, pills
+  modal: 'var(--md-sys-shape-corner-large)',    // 16px
+  card: 'var(--md-sys-shape-corner-medium)',     // 12px
+  control: 'var(--md-sys-shape-corner-small)',   // 8px
+  pill: 'var(--md-sys-shape-corner-full)',       // 9999px
 }
 ```
+Also added: semantic status colors, opacity hierarchy utilities, border-status utilities.
 
-### Phase 2: Normalize border radii across modals + cards
-Single pass through all modal/card containers.
+### Phase 2: Surface system clarification -- DONE
+Rules codified in `docs/agents/UI_MASTERPLAN.md` section 3.
 
-### Phase 3: Fix light-mode-breaking colors
+### Phase 3: Normalize border radii across modals + cards
+Single pass through all modal/card containers using `rounded-modal`, `rounded-card`, `rounded-control`.
+
+### Phase 4: Fix light-mode-breaking colors
 Replace `text-white/*` with `text-md-sys-on-surface/*` or opacity utilities.
+Replace hardcoded Tailwind colors with semantic utilities (`text-danger`, `bg-success-soft`, etc.).
 
-### Phase 4: Consolidate font sizes
+### Phase 5: Consolidate font sizes
 Eliminate `text-[8px]`, `text-[11px]`; standardize on `text-[9px]`, `text-[10px]`, `text-xs`, `text-sm`.
 
-### Phase 5: Normalize font weights + opacity hierarchy
+### Phase 6: Normalize font weights + opacity hierarchy
 Establish 3-tier weight and opacity scales.

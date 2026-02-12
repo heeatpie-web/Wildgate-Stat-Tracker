@@ -43,27 +43,27 @@ export const TiltMeter: React.FC<TiltMeterProps> = ({ recentMatches }) => {
     else if (tiltScore > 20) explanation = "Focused";
     else explanation = "Zen Master";
 
-    const color = tiltScore > 80 ? 'bg-red-600' : tiltScore > 50 ? 'bg-orange-500' : tiltScore > 20 ? 'bg-yellow-500' : 'bg-green-500';
+    const color = tiltScore > 80 ? 'bg-danger' : tiltScore > 50 ? 'bg-warning' : tiltScore > 20 ? 'bg-warning' : 'bg-success';
 
     return (
         <div className="md3-card p-6 rounded-xl flex items-center gap-6 shadow-lg border border-md-sys-outline/10">
             <div className="relative w-24 h-24 flex-shrink-0">
                 <svg className="w-full h-full transform -rotate-90">
                     <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-md-sys-surface3" />
-                    <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" strokeDasharray={`${tiltScore * 2.51} 251`} className={tiltScore > 80 ? "text-red-500" : "text-green-500"} />
+                    <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" strokeDasharray={`${tiltScore * 2.51} 251`} className={tiltScore > 80 ? "text-danger" : "text-success"} />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <span className="text-2xl font-black">{tiltScore}%</span>
-                    <span className="text-[9px] font-bold uppercase opacity-60">Tilt</span>
+                    <span className="text-label-xs font-bold uppercase opacity-60">Tilt</span>
                 </div>
             </div>
             
             <div className="flex-1">
                 <div className="flex justify-between items-center mb-2">
-                    <h3 className="text-sm font-black uppercase flex items-center gap-2"><Zap size={16}/> Mental State Analysis</h3>
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase text-white ${color}`}>{explanation}</span>
+                    <h3 className="text-body font-bold uppercase flex items-center gap-2"><Zap size={16}/> Mental State Analysis</h3>
+                    <span className={`px-3 py-1 rounded-full text-label-sm font-bold uppercase text-white ${color}`}>{explanation}</span>
                 </div>
-                <div className="text-xs opacity-70 leading-relaxed font-medium">
+                <div className="text-label-sm opacity-60 leading-relaxed font-medium">
                     {tiltScore > 50 
                         ? "Warning: Performance decay detected. Recent rapid losses indicate high frustration risk. Recommended: 5m break."
                         : "Mental state is optimal. Recent performance indicates stable focus and decision making."}

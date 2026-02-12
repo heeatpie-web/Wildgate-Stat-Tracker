@@ -1,0 +1,508 @@
+{
+  "version": 1,
+  "generatedAt": "2026-02-12T19:33:47.461Z",
+  "sourceTruth": "dataset/ocr-corpus/ground-truth.json",
+  "ocrMode": "both",
+  "samples": [
+    {
+      "sampleId": "crew_2026-02-04T03-16-23",
+      "teammates": [
+        "ECRET",
+        "RiaDeo",
+        "amberelocke",
+        "AlixThus",
+        "Xiphori"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "Team 1",
+          "teamColor": "unknown",
+          "players": [
+            "liblolan15"
+          ]
+        },
+        {
+          "teamName": "VOICE OPTIONS",
+          "teamColor": "unknown",
+          "players": [
+            "590BODOO"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "crew_2026-02-08T22-47-59",
+      "teammates": [
+        "BruiserBingie",
+        "Dam",
+        "NSINKABLE",
+        "trollkultur",
+        "mikesauge",
+        "Laughterless",
+        "JayMG6684",
+        "OndraocásekggSSAlixThus",
+        "Ledurricane",
+        "Vikkheyyy",
+        "fartingPuppy12"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "Team 1",
+          "teamColor": "unknown",
+          "players": [
+            "7UNSINKABLE"
+          ]
+        },
+        {
+          "teamName": "VOICE OPTIONS 0",
+          "teamColor": "unknown",
+          "players": [
+            "3DEE76C0"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "crew_2026-02-11T05-22-26",
+      "teammates": [
+        "goblinopolis11",
+        "Demo49",
+        "ToneGUN",
+        "ITTLEBALL",
+        "Clenche",
+        "AROLINA",
+        "LAYERIN",
+        "fartingPuppy"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "Team 1",
+          "teamColor": "unknown",
+          "players": [
+            "D262.0E",
+            "IrksomeGames",
+            "Tiblolan",
+            "86FC690",
+            "dinoduck72E",
+            "Dodgy_Jedi",
+            "LowHangingNASA"
+          ]
+        },
+        {
+          "teamName": "Team 2",
+          "teamColor": "unknown",
+          "players": [
+            "chrismario1"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "crew_2026-02-11T06-40-39",
+      "teammates": [
+        "forgotten",
+        "Two",
+        "UNGUS",
+        "GoGetter321",
+        "Clenched22",
+        "Margau",
+        "AlixThus",
+        "Xiphori"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "Team 1",
+          "teamColor": "unknown",
+          "players": [
+            "Oguri_"
+          ]
+        },
+        {
+          "teamName": "I",
+          "teamColor": "unknown",
+          "players": [
+            "RancidAloner"
+          ]
+        },
+        {
+          "teamName": "MUNGUS",
+          "teamColor": "unknown",
+          "players": [
+            "N4A215E80"
+          ]
+        },
+        {
+          "teamName": "THE MUNGUS",
+          "teamColor": "unknown",
+          "players": [
+            "jacklyn12"
+          ]
+        }
+      ],
+      "modifiers": []
+    },
+    {
+      "sampleId": "map_2026-02-08T03-11-12",
+      "teammates": [
+        "Xiphorix",
+        "iGermDawgMill4",
+        "LLAlixThus__________—0",
+        "Io-"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "Enemy Team 1",
+          "teamColor": "red",
+          "players": []
+        },
+        {
+          "teamName": "ALPHA DECAY",
+          "teamColor": "orange",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Few Asteroids",
+        "Few Ships",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Rogue Turrets"
+      ]
+    },
+    {
+      "sampleId": "map_2026-02-08T05-20-30",
+      "teammates": [
+        "JETone",
+        "fartingPuppy",
+        "DarkOPizza",
+        "AlixThus0"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "W",
+          "teamColor": "red",
+          "players": []
+        },
+        {
+          "teamName": "NL BIG",
+          "teamColor": "orange",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Ancient Vault",
+        "Lava Epics",
+        "Leech Swarms",
+        "Low Altitude Fog",
+        "Rogue Turrets",
+        "Few Asteroids",
+        "Few Ships"
+      ]
+    },
+    {
+      "sampleId": "map_2026-02-08T21-46-49",
+      "teammates": [
+        "lamthemilkmantTv",
+        "JefartingPuppy",
+        "ooo",
+        "o!oOoO",
+        "SyLLAlixThus__________—0"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "Enemy Team 1",
+          "teamColor": "red",
+          "players": []
+        },
+        {
+          "teamName": "L518 RAIDING",
+          "teamColor": "orange",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Artifact: Weapon",
+        "Few Ships",
+        "Lava Epics",
+        "Leech Swarms",
+        "Legion Patrols"
+      ]
+    },
+    {
+      "sampleId": "map_2026-02-08T22-15-17",
+      "teammates": [
+        "tamthemilkmantTv",
+        "JefartingPuppy",
+        "SSAlixThus"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "POLTERHEIST",
+          "teamColor": "red",
+          "players": []
+        },
+        {
+          "teamName": "E A",
+          "teamColor": "orange",
+          "players": []
+        },
+        {
+          "teamName": "Enemy Team 3",
+          "teamColor": "yellow",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Artifact: Healing",
+        "Ancient Vault",
+        "Gloaming Expanse",
+        "Haunted Storm",
+        "Lava Epics",
+        "Legion Patrols",
+        "Rogue Turrets",
+        "Few Asteroids"
+      ]
+    },
+    {
+      "sampleId": "map_2026-02-08T22-47-16",
+      "teammates": [
+        "SQlamthemilkmantTv",
+        "JefartingPuppy",
+        "RRAlixThus0",
+        "SyLL__________"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "Enemy Team 1",
+          "teamColor": "red",
+          "players": []
+        },
+        {
+          "teamName": "Enemy Team 2",
+          "teamColor": "orange",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Few Ships",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Rogue Turrets",
+        "Artifact: Healing"
+      ]
+    },
+    {
+      "sampleId": "map_2026-02-11T05-21-48",
+      "teammates": [
+        "odTone",
+        "RCiefartingPuppyQj",
+        "nNNYClenched22",
+        "PIERAlixThus———0"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "GUN JUMPERS",
+          "teamColor": "red",
+          "players": []
+        },
+        {
+          "teamName": "JL LITTLE",
+          "teamColor": "orange",
+          "players": []
+        },
+        {
+          "teamName": "Enemy Team 3",
+          "teamColor": "yellow",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Epic Loot",
+        "Few Asteroids",
+        "Leech Swarms",
+        "Legion Patrols",
+        "Rogue Turrets",
+        "Artifact: Ice",
+        "Few Ships"
+      ]
+    },
+    {
+      "sampleId": "map_2026-02-11T05-47-13",
+      "teammates": [
+        "odTone",
+        "ME-on",
+        "nNSNClenched22oO",
+        "RRAlixThus0",
+        "Io-"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "Enemy Team 1",
+          "teamColor": "red",
+          "players": []
+        },
+        {
+          "teamName": "Enemy Team 2",
+          "teamColor": "orange",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Artifact: Ice",
+        "Ancient Vault",
+        "Fast Gate",
+        "Gloaming Expanse",
+        "Few Ships",
+        "Legion Patrols"
+      ]
+    },
+    {
+      "sampleId": "map_2026-02-11T06-09-33",
+      "teammates": [
+        "odTone",
+        "nNiNm—Clenched22JoO",
+        "RRAlixThus"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "KEYMASTER",
+          "teamColor": "red",
+          "players": []
+        },
+        {
+          "teamName": "Enemy Team 2",
+          "teamColor": "orange",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Ancient Vault",
+        "Easy Loot",
+        "Ice Storm",
+        "Artifact: Weapon",
+        "Few Ships",
+        "Legion Patrols"
+      ]
+    },
+    {
+      "sampleId": "map_2026-02-12T05-02-33",
+      "teammates": [
+        "Xiphori",
+        "RCodfartingPuppy",
+        "NSTone",
+        "AlixThus0",
+        "IoATE"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "POCO",
+          "teamColor": "red",
+          "players": []
+        },
+        {
+          "teamName": "Enemy Team 2",
+          "teamColor": "orange",
+          "players": []
+        },
+        {
+          "teamName": "SS LIZARD",
+          "teamColor": "yellow",
+          "players": []
+        },
+        {
+          "teamName": "SHIPPY MCSHIPFACE",
+          "teamColor": "yellowGreen",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Ancient Vault",
+        "Lava Epics",
+        "Legion Patrols",
+        "Low Altitude Fog",
+        "Rogue Turrets",
+        "Fast Gate"
+      ]
+    },
+    {
+      "sampleId": "map_2026-02-12T05-52-48",
+      "teammates": [
+        "RCTone",
+        "iAzureArtemis",
+        "ofAlixThus0"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "POCO",
+          "teamColor": "red",
+          "players": []
+        },
+        {
+          "teamName": "LITTLE",
+          "teamColor": "orange",
+          "players": []
+        }
+      ],
+      "modifiers": [
+        "Few Ships",
+        "Legion Patrols",
+        "Artifact: Ice",
+        "Lava Epics"
+      ]
+    },
+    {
+      "sampleId": "crew_2026-02-12T05-53-04",
+      "teammates": [
+        "Oguri_",
+        "Twotone",
+        "OCO",
+        "forgotten",
+        "smile",
+        "ITTLEBALL",
+        "XMatzu117X",
+        "4ssAlixThusmstch",
+        "jzNe",
+        "Ombat_Barbi3",
+        "SEE",
+        "Tone1",
+        "Azuredrtemis"
+      ],
+      "opponentTeams": [
+        {
+          "teamName": "Team 1",
+          "teamColor": "unknown",
+          "players": [
+            "poco"
+          ]
+        },
+        {
+          "teamName": "Team 2",
+          "teamColor": "unknown",
+          "players": [
+            "NigthmareGM"
+          ]
+        },
+        {
+          "teamName": "VOICE OPTIONS",
+          "teamColor": "unknown",
+          "players": [
+            "2C34AC40"
+          ]
+        },
+        {
+          "teamName": "S",
+          "teamColor": "unknown",
+          "players": [
+            "sandiakun7v710"
+          ]
+        }
+      ],
+      "modifiers": []
+    }
+  ]
+}

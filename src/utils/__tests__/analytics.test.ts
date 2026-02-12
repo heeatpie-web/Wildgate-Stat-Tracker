@@ -60,6 +60,53 @@ describe('calculateInsights', () => {
     }
   });
 
+  it('handles string-typed damageTaken without NaN or concatenation', () => {
+    const matches = Array.from({ length: 10 }, (_, i) =>
+      createMatch({
+        result: i % 2 === 0 ? 'Win' : 'Loss',
+        damageTaken: '350' as any, // string coercion edge case
+        time: '10:00',
+      })
+    );
+    const insights = calculateInsights(matches);
+    // Should not crash and should produce valid insights
+    expect(insights.length).toBeGreaterThanOrEqual(0);
+    for (const insight of insights) {
+      expect(insight.value).not.toContain('NaN');
+      expect(insight.title).not.toContain('NaN');
+    }
+  });
+
+  it('handles zero-damage matches mixed with normal matches', () => {
+    const matches = [
+      ...Array.from({ length: 6 }, (_, i) =>
+        createMatch({ result: 'Win', damageTaken: 400 + i * 50, time: '10:00' })
+      ),
+      ...Array.from({ length: 4 }, () =>
+        createMatch({ result: 'Loss', damageTaken: 0, time: '05:00' })
+      ),
+    ];
+    const insights = calculateInsights(matches);
+    expect(insights.length).toBeGreaterThan(0);
+    for (const insight of insights) {
+      expect(typeof insight.priority).toBe('number');
+      expect(Number.isFinite(insight.priority)).toBe(true);
+    }
+  });
+
+  it('handles undefined damageTaken gracefully', () => {
+    const matches = Array.from({ length: 8 }, (_, i) =>
+      createMatch({
+        result: i % 2 === 0 ? 'Win' : 'Loss',
+        damageTaken: undefined,
+        time: '10:00',
+      })
+    );
+    const insights = calculateInsights(matches);
+    // Should not crash — undefined damage is treated as 0
+    expect(Array.isArray(insights)).toBe(true);
+  });
+
   it('insights are sorted by priority (descending)', () => {
     const matches = Array.from({ length: 15 }, (_, i) =>
       createMatch({

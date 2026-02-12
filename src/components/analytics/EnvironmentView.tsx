@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { Match, PIE_COLORS, VisualMode } from '../../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, LabelList } from 'recharts';
 import { Zap, Trophy, TrendingUp, TrendingDown } from 'lucide-react';
@@ -37,7 +37,7 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
             {/* Editorial Summary */}
             {!dense && (
                 <div className="md3-card rounded-2xl p-6">
-                    <p className="text-sm leading-relaxed opacity-70">{generateEnvironmentEditorial(matches)}</p>
+                    <p className="text-body leading-relaxed opacity-70">{generateEnvironmentEditorial(matches)}</p>
                 </div>
             )}
 
@@ -46,12 +46,12 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
                 <div className={`grid gap-2 ${dense ? 'grid-cols-3 lg:grid-cols-6' : 'grid-cols-2 md:grid-cols-3'}`}>
                     {data.slice(0, 6).map(d => (
                         <div key={d.name} className={`md3-card rounded-xl ${dense ? 'p-2' : 'p-3'} text-center`}>
-                            <div className="text-[9px] font-black uppercase opacity-40 truncate mb-1">{d.name}</div>
-                            <div className={`text-sm font-black flex items-center justify-center gap-1 ${d.impact >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                            <div className="text-label-xs font-black uppercase opacity-40 truncate mb-1">{d.name}</div>
+                            <div className={`text-body font-black flex items-center justify-center gap-1 ${d.impact >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                                 {d.impact >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                                 {d.impact >= 0 ? '+' : ''}{d.impact}%
                             </div>
-                            <div className="text-[8px] opacity-30 font-bold">vs avg WR</div>
+                            <div className="text-label-xs opacity-30 font-bold">vs avg WR</div>
                         </div>
                     ))}
                 </div>
@@ -59,7 +59,7 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
 
             <div className={`grid gap-4 ${dense ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
                 <div className={`md3-card rounded-2xl flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
-                    <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-sm' : 'text-base'}`}><Zap size={16} /> Hazard Frequency</h3>
+                    <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><Zap size={16} /> Hazard Frequency</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart><Pie data={data} dataKey="total" nameKey="name" cx="50%" cy="50%" outerRadius="80%" innerRadius="50%" paddingAngle={2}>
                             {data.map((entry, index) => <Cell key={`cell-${index}`} fill={getColor(entry.name)} stroke="var(--md-sys-color-surface2)" strokeWidth={2} />)}
@@ -67,7 +67,7 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
                     </ResponsiveContainer>
                 </div>
                 <div className={`md3-card rounded-2xl flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
-                    <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-sm' : 'text-base'}`}><Trophy size={16} /> Win Rate by Hazard</h3>
+                    <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><Trophy size={16} /> Win Rate by Hazard</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={data} layout="vertical" margin={{ left: 30, right: 16 }}>
                             <XAxis type="number" hide domain={[0, 100]} />
@@ -82,7 +82,7 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
                 </div>
                 {/* Stacked Win/Loss Breakdown */}
                 <div className={`md3-card rounded-2xl flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
-                    <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-sm' : 'text-base'}`}><Trophy size={16} /> Win/Loss Breakdown</h3>
+                    <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><Trophy size={16} /> Win/Loss Breakdown</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={data} layout="vertical" margin={{ left: 30, right: 16 }}>
                             <XAxis type="number" hide />

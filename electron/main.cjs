@@ -1,6 +1,7 @@
 const { app, BrowserWindow, shell, ipcMain, globalShortcut, Menu, Tray } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const DiscordRPC = require('discord-rpc');
+const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -13,6 +14,8 @@ const geminiService = require('./geminiService.cjs');
 const isDev = !app.isPackaged;
 const DEV_SERVER_URL = process.env.WILDGATE_DEV_SERVER_URL || 'http://localhost:5173';
 const USER_DATA_ROOT = path.resolve(app.getPath('userData'));
+const OCR_CORPUS_DIR = path.join(USER_DATA_ROOT, 'ocr-corpus');
+const OCR_CORPUS_REPORTS_DIR = path.join(OCR_CORPUS_DIR, 'reports');
 const ALLOWED_FILE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.webp', '.gif']);
 const ALLOWED_HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const DEFAULT_EPIC_REQUEST_HOSTS = [
@@ -65,6 +68,81 @@ function sanitizeForwardHeaders(headers) {
   return safe;
 }
 
+function getCorpusFilePath(name) {
+  const allowed = new Set(['ground-truth.json', 'predictions.latest.json', 'baseline.json', 'reports/latest.json', 'reports/index.json']);
+  if (!allowed.has(name)) return null;
+  return path.join(OCR_CORPUS_DIR, name);
+}
+
+async function ensureCorpusDefaults() {
+  await fsPromises.mkdir(OCR_CORPUS_DIR, { recursive: true });
+  await fsPromises.mkdir(OCR_CORPUS_REPORTS_DIR, { recursive: true });
+
+  const defaults = [
+    {
+      file: path.join(OCR_CORPUS_DIR, 'ground-truth.json'),
+      content: JSON.stringify({ version: 1, samples: [] }, null, 2)
+    },
+    {
+      file: path.join(OCR_CORPUS_DIR, 'predictions.latest.json'),
+      content: JSON.stringify({ version: 1, generatedAt: '', samples: [] }, null, 2)
+    },
+    {
+      file: path.join(OCR_CORPUS_DIR, 'baseline.json'),
+      content: JSON.stringify({
+        generatedAt: '',
+        sourceReport: '',
+        summary: {
+          totalSamples: 0,
+          teammateRecall: 0,
+          opponentRecall: 0,
+          modifierRecall: 0,
+          teamGroupingAccuracy: 0,
+          sessionUsablePassRate: 0
+        }
+      }, null, 2)
+    }
+  ];
+
+  for (const d of defaults) {
+    try {
+      await fsPromises.access(d.file);
+    } catch {
+      await fsPromises.writeFile(d.file, d.content, 'utf8');
+    }
+  }
+}
+
+function runNodeScript(scriptPath, args = []) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [scriptPath, ...args], {
+      cwd: app.getAppPath(),
+      windowsHide: true
+    });
+
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', chunk => { stdout += String(chunk || ''); });
+    child.stderr.on('data', chunk => { stderr += String(chunk || ''); });
+    child.on('close', code => {
+      resolve({ code, stdout, stderr });
+    });
+    child.on('error', err => {
+      resolve({ code: 1, stdout, stderr: err.message || String(err) });
+    });
+  });
+}
+
+function sampleIdFromPath(filePath) {
+  const base = path.basename(filePath, path.extname(filePath));
+  return base.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function normalizeStringList(list) {
+  if (!Array.isArray(list)) return [];
+  return list.map(v => String(v || '').trim()).filter(Boolean);
+}
+
 // Force app name to match productName so app.getPath('userData') resolves
 // to the same directory in both dev and production (e.g. "Wildgate Stat Tracker").
 // Without this, dev mode uses the package "name" field which differs from productName.
@@ -85,13 +163,12 @@ let previousBounds = { width: 1200, height: 850 };
 const DEFAULT_MIN_WINDOW_BOUNDS = { width: 1200, height: 768 };
 
 function buildDevSplashDataUrl(targetUrl) {
-  const safeUrl = String(targetUrl || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const html = `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Wildgate Stat Tracker (Dev)</title>
+    <title>Wildgate Stat Tracker</title>
     <style>
       :root { color-scheme: dark; }
       body {
@@ -125,17 +202,30 @@ function buildDevSplashDataUrl(targetUrl) {
       }
       h1 { margin: 0; font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase; }
       .sub { margin-top: 10px; font-size: 12px; opacity: 0.75; line-height: 1.35; }
-      .url {
-        margin-top: 10px;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        font-size: 11px;
-        padding: 10px 12px;
-        border-radius: 12px;
-        background: rgba(0,0,0,0.32);
-        border: 1px solid rgba(255,255,255,0.08);
+      .progress-wrap { margin-top: 12px; }
+      .progress-track {
+        width: 100%;
+        height: 8px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.10);
         overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        border: 1px solid rgba(255,255,255,0.14);
+      }
+      .progress-fill {
+        width: 0%;
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(56,189,248,1) 0%, rgba(251,146,60,1) 100%);
+        box-shadow: 0 0 16px rgba(56,189,248,0.35);
+        transition: width 180ms ease;
+      }
+      .meta {
+        margin-top: 8px;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        font-size: 11px;
+        opacity: 0.78;
       }
       .spinner {
         width: 14px; height: 14px;
@@ -145,7 +235,6 @@ function buildDevSplashDataUrl(targetUrl) {
         animation: spin 0.9s linear infinite;
       }
       @keyframes spin { to { transform: rotate(360deg); } }
-      .hint { margin-top: 10px; font-size: 11px; opacity: 0.55; }
     </style>
   </head>
   <body>
@@ -153,19 +242,49 @@ function buildDevSplashDataUrl(targetUrl) {
       <div class="row">
         <div class="logo">W</div>
         <div style="min-width:0;">
-          <h1>Starting Dev Renderer</h1>
+          <h1>Wildgate Stat Tracker</h1>
           <div class="sub row" style="margin-top:6px;">
             <div class="spinner"></div>
-            <div>Waiting for Vite to be ready...</div>
+            <div id="splash-status">Booting app shell...</div>
+          </div>
+          <div class="progress-wrap">
+            <div class="progress-track">
+              <div id="splash-progress-fill" class="progress-fill"></div>
+            </div>
+            <div class="meta">
+              <div id="splash-detail">Initializing</div>
+              <div id="splash-pct">0%</div>
+            </div>
           </div>
         </div>
       </div>
-      <div class="url">${safeUrl}</div>
-      <div class="hint">If this takes too long, check the Vite terminal output.</div>
     </div>
+    <script>
+      window.__setSplashProgress = function (pct, status, detail) {
+        var v = Math.max(0, Math.min(100, Number(pct) || 0));
+        var fill = document.getElementById('splash-progress-fill');
+        var pctNode = document.getElementById('splash-pct');
+        var statusNode = document.getElementById('splash-status');
+        var detailNode = document.getElementById('splash-detail');
+        if (fill) fill.style.width = v + '%';
+        if (pctNode) pctNode.textContent = Math.round(v) + '%';
+        if (statusNode && typeof status === 'string' && status.trim()) statusNode.textContent = status;
+        if (detailNode && typeof detail === 'string' && detail.trim()) detailNode.textContent = detail;
+      };
+      window.__setSplashProgress(2, 'Booting app shell...', 'Preparing startup');
+    </script>
   </body>
 </html>`;
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}
+
+function setSplashProgress(targetWin, pct, status, detail = '') {
+  if (!targetWin || targetWin.isDestroyed()) return;
+  const safePct = Math.max(0, Math.min(100, Number(pct) || 0));
+  const statusArg = JSON.stringify(String(status || 'Loading...'));
+  const detailArg = JSON.stringify(String(detail || ''));
+  const js = `window.__setSplashProgress && window.__setSplashProgress(${safePct}, ${statusArg}, ${detailArg});`;
+  targetWin.webContents.executeJavaScript(js, true).catch(() => { });
 }
 
 function probeUrlReady(urlString, timeoutMs = 450) {
@@ -236,16 +355,19 @@ function startDevRendererWithRetry(win, targetUrl) {
     if (stopped || inFlight || !win || win.isDestroyed()) return;
     inFlight = true;
     attempt += 1;
+    setSplashProgress(win, Math.min(92, 18 + attempt * 3), 'Connecting renderer...', `Checking dev server (attempt ${attempt})`);
 
     try {
       const ready = await probeUrlReady(url);
       if (!ready) {
+        setSplashProgress(win, Math.min(92, 16 + attempt * 2), 'Waiting for dev server...', `Retrying connection (attempt ${attempt})`);
         const delay = Math.min(2000, 150 + (attempt * 125));
         inFlight = false;
         retryTimer = setTimeout(tryLoad, delay);
         return;
       }
 
+      setSplashProgress(win, 95, 'Loading interface...', 'Renderer is responding');
       await win.loadURL(url);
       // stop() happens on did-finish-load once the dev URL successfully loads.
       inFlight = false;
@@ -260,7 +382,13 @@ function startDevRendererWithRetry(win, targetUrl) {
   win.on('closed', stop);
   // Show a friendly splash instead of the Chromium "failed to load" page.
   devMark('splash shown');
-  win.loadURL(splashUrl).catch(() => { });
+  win.loadURL(splashUrl).then(() => {
+    setSplashProgress(win, 12, 'Preparing renderer...', 'Splash ready');
+    // Show splash immediately after it renders so startup feels responsive.
+    if (win && !win.isDestroyed() && !win.isVisible()) {
+      win.show();
+    }
+  }).catch(() => { });
   retryTimer = setTimeout(tryLoad, 150);
 }
 
@@ -1472,12 +1600,20 @@ function createWindow() {
     transparent: true,
     frame: false,
     backgroundColor: '#00000000',
+    show: false, // Prevent white flash by waiting for content
   });
 
   devMark('window created');
 
+  win.once('ready-to-show', () => {
+    win.show();
+    // if (isDev) win.webContents.openDevTools({ mode: 'detach' });
+  });
+
   win.on('show', () => win.webContents.send('window-visibility-change', true));
   win.on('hide', () => win.webContents.send('window-visibility-change', false));
+  win.on('restore', () => win.webContents.send('window-restored'));
+  win.on('maximize', () => win.webContents.send('window-restored'));
 
   if (isDev) startDevRendererWithRetry(win, DEV_SERVER_URL);
   else win.loadFile(path.join(__dirname, '../dist/index.html'));
@@ -1585,29 +1721,42 @@ ipcMain.handle('sync-training-sample', async (event, sampleId) => {
   return await gcloudSyncService.syncSample(trainingDir, sampleId);
 });
 
+// GCloud one-time backfill: upload all local screenshots, deduped against bucket contents
+ipcMain.handle('gcloud-backfill-screenshots', async () => {
+  return await gcloudSyncService.backfillScreenshots(app.getPath('userData'));
+});
+
 app.whenReady().then(async () => {
   devMark('app whenReady');
   createTray();
   createWindow();
+  if (isDev) setSplashProgress(win, 20, 'Preparing services...', 'Starting startup tasks');
   cleanupOldArchives();
+  if (isDev) setSplashProgress(win, 35, 'Preparing OCR...', 'Registering OCR handlers');
   registerOCRHandlers(win);  // Register new OCR IPC handlers (pass win for hide-during-capture)
+  if (isDev) setSplashProgress(win, 50, 'OCR ready', 'Checking cloud integrations');
 
   // Initialize GCloud services (only if key file exists on this machine)
   const GCLOUD_KEY =
     process.env.WILDGATE_GCLOUD_KEY ||
     process.env.GOOGLE_APPLICATION_CREDENTIALS ||
     path.join(app.getPath('documents'), 'GCloudInfo', 'service-account.json');
-  const GCLOUD_BUCKET = process.env.WILDGATE_GCLOUD_BUCKET || 'wildgate-training';
+  const GCLOUD_BUCKET = process.env.WILDGATE_GCLOUD_BUCKET || 'wildgate-training-heeatpie';
   if (fs.existsSync(GCLOUD_KEY)) {
+    if (isDev) setSplashProgress(win, 60, 'Initializing cloud OCR...', 'Connecting to Google Cloud');
     gcloudService.initialize(GCLOUD_KEY);
     await gcloudSyncService.initialize(GCLOUD_KEY, GCLOUD_BUCKET);
     geminiService.initialize(GCLOUD_KEY);
+    if (isDev) setSplashProgress(win, 75, 'Cloud services ready', 'Finalizing app startup');
   } else {
     console.warn('[GCloud] Key file not found, GCloud services disabled');
+    if (isDev) setSplashProgress(win, 72, 'Cloud OCR disabled', 'No credentials found');
   }
   if (!isDev) autoUpdater.checkForUpdates();
+  if (isDev) setSplashProgress(win, 84, 'Initializing presence...', 'Connecting Discord RPC');
   rpc.login({ clientId }).catch(console.error);
 
+  if (isDev) setSplashProgress(win, 90, 'Registering hotkeys...', 'Almost there');
   globalShortcut.register('F9', () => {
     if (win) {
       if (win.isVisible() && !win.isMinimized()) {
@@ -1756,6 +1905,233 @@ ipcMain.handle('read-file-base64', async (event, filePath) => {
     return data.toString('base64');
   } catch (e) {
     return null;
+  }
+});
+
+ipcMain.handle('ocr-corpus-load', async (event, name) => {
+  try {
+    await ensureCorpusDefaults();
+    const target = getCorpusFilePath(name);
+    if (!target) return { success: false, error: 'Unsupported corpus file' };
+    try {
+      const content = await fsPromises.readFile(target, 'utf8');
+      return { success: true, content };
+    } catch {
+      return { success: true, content: '' };
+    }
+  } catch (e) {
+    return { success: false, error: e.message || String(e) };
+  }
+});
+
+ipcMain.handle('ocr-corpus-save', async (event, name, content) => {
+  try {
+    await ensureCorpusDefaults();
+    const target = getCorpusFilePath(name);
+    if (!target) return { success: false, error: 'Unsupported corpus file' };
+    const payload = String(content ?? '');
+    JSON.parse(payload); // validate JSON before writing
+    await fsPromises.mkdir(path.dirname(target), { recursive: true });
+    await fsPromises.writeFile(target, payload, 'utf8');
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message || String(e) };
+  }
+});
+
+ipcMain.handle('ocr-corpus-eval', async () => {
+  try {
+    await ensureCorpusDefaults();
+    const evalScript = path.join(app.getAppPath(), 'scripts', 'ocr_corpus_eval.cjs');
+    if (!fs.existsSync(evalScript)) {
+      return { success: false, error: `Missing eval script at ${evalScript}` };
+    }
+
+    const outPath = path.join(OCR_CORPUS_REPORTS_DIR, 'latest.json');
+    const result = await runNodeScript(evalScript, [
+      '--truth', path.join(OCR_CORPUS_DIR, 'ground-truth.json'),
+      '--pred', path.join(OCR_CORPUS_DIR, 'predictions.latest.json'),
+      '--baseline', path.join(OCR_CORPUS_DIR, 'baseline.json'),
+      '--out', outPath
+    ]);
+
+    if (result.code !== 0) {
+      return { success: false, error: result.stderr || result.stdout || 'Eval failed' };
+    }
+
+    let report = null;
+    try {
+      report = JSON.parse(await fsPromises.readFile(outPath, 'utf8'));
+    } catch { }
+
+    return {
+      success: true,
+      output: result.stdout,
+      report
+    };
+  } catch (e) {
+    return { success: false, error: e.message || String(e) };
+  }
+});
+
+ipcMain.handle('ocr-corpus-promote-baseline', async () => {
+  try {
+    await ensureCorpusDefaults();
+    const promoteScript = path.join(app.getAppPath(), 'scripts', 'ocr_promote_baseline.cjs');
+    if (!fs.existsSync(promoteScript)) {
+      return { success: false, error: `Missing baseline script at ${promoteScript}` };
+    }
+
+    const result = await runNodeScript(promoteScript, [
+      '--report', path.join(OCR_CORPUS_REPORTS_DIR, 'latest.json'),
+      '--baseline', path.join(OCR_CORPUS_DIR, 'baseline.json')
+    ]);
+
+    if (result.code !== 0) {
+      return { success: false, error: result.stderr || result.stdout || 'Promote baseline failed' };
+    }
+    return { success: true, output: result.stdout };
+  } catch (e) {
+    return { success: false, error: e.message || String(e) };
+  }
+});
+
+ipcMain.handle('ocr-corpus-import-images', async () => {
+  try {
+    await ensureCorpusDefaults();
+    const { dialog } = require('electron');
+    const picked = await dialog.showOpenDialog(win, {
+      title: 'Import OCR Corpus Images',
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'bmp', 'webp'] }],
+      properties: ['openFile', 'multiSelections']
+    });
+    if (picked.canceled || picked.filePaths.length === 0) {
+      return { success: true, imported: 0, skipped: 0, canceled: true };
+    }
+
+    const corpusImagesDir = path.join(OCR_CORPUS_DIR, 'images');
+    await fsPromises.mkdir(corpusImagesDir, { recursive: true });
+    const truthPath = path.join(OCR_CORPUS_DIR, 'ground-truth.json');
+    const truth = JSON.parse(await fsPromises.readFile(truthPath, 'utf8'));
+    const samples = Array.isArray(truth.samples) ? truth.samples : [];
+    const existingIds = new Set(samples.map(s => s.sampleId));
+
+    let imported = 0;
+    let skipped = 0;
+
+    for (const src of picked.filePaths) {
+      const ext = path.extname(src).toLowerCase();
+      if (!ALLOWED_FILE_EXTENSIONS.has(ext)) {
+        skipped += 1;
+        continue;
+      }
+      const baseId = sampleIdFromPath(src);
+      let sampleId = baseId;
+      let counter = 1;
+      while (existingIds.has(sampleId)) {
+        sampleId = `${baseId}_${counter}`;
+        counter += 1;
+      }
+
+      const targetName = `${sampleId}${ext}`;
+      const targetPath = path.join(corpusImagesDir, targetName);
+      await fsPromises.copyFile(src, targetPath);
+      const relPath = path.relative(OCR_CORPUS_DIR, targetPath).replace(/\\/g, '/');
+
+      samples.push({
+        sampleId,
+        imagePath: relPath,
+        teammates: [],
+        opponentTeams: [],
+        modifiers: []
+      });
+      existingIds.add(sampleId);
+      imported += 1;
+    }
+
+    const nextTruth = {
+      version: typeof truth.version === 'number' ? truth.version : 1,
+      samples
+    };
+    await fsPromises.writeFile(truthPath, JSON.stringify(nextTruth, null, 2), 'utf8');
+    return { success: true, imported, skipped, canceled: false };
+  } catch (e) {
+    return { success: false, error: e.message || String(e) };
+  }
+});
+
+ipcMain.handle('ocr-corpus-run-pipeline', async (event, opts = {}) => {
+  try {
+    await ensureCorpusDefaults();
+    const truthPath = path.join(OCR_CORPUS_DIR, 'ground-truth.json');
+    const predPath = path.join(OCR_CORPUS_DIR, 'predictions.latest.json');
+    const truth = JSON.parse(await fsPromises.readFile(truthPath, 'utf8'));
+    const samples = Array.isArray(truth.samples) ? truth.samples : [];
+
+    const ocrMode = opts?.ocrMode || 'both';
+    const activeUser = opts?.activeUser || null;
+
+    const predictions = [];
+    const failures = [];
+
+    for (const sample of samples) {
+      try {
+        const rawPath = String(sample.imagePath || '').trim();
+        if (!rawPath) throw new Error('Missing imagePath');
+        const resolvedPath = path.isAbsolute(rawPath)
+          ? rawPath
+          : path.resolve(OCR_CORPUS_DIR, rawPath);
+
+        const imageBuffer = await fsPromises.readFile(resolvedPath);
+        const base64 = imageBuffer.toString('base64');
+        const result = await processCapture(base64, activeUser, null, ocrMode, {
+          sourceImagePath: resolvedPath,
+          skipDebugSave: true
+        });
+
+        if (!result?.success || !result?.data) {
+          throw new Error(result?.error || 'OCR returned no data');
+        }
+
+        const data = result.data;
+        predictions.push({
+          sampleId: sample.sampleId,
+          screenshotType: data.screenshotType || 'unknown',
+          teammates: normalizeStringList((data.teammates || []).map(t => (typeof t === 'string' ? t : t?.name))),
+          opponentTeams: Array.isArray(data.opponentTeams)
+            ? data.opponentTeams.map(team => ({
+                teamName: String(team?.teamName || '').trim(),
+                players: normalizeStringList((team?.players || []).map(p => (typeof p === 'string' ? p : p?.name)))
+              }))
+            : [],
+          modifiers: normalizeStringList((data.reachModifiers || []).map(m => (typeof m === 'string' ? m : m?.name)))
+        });
+      } catch (err) {
+        failures.push({
+          sampleId: sample.sampleId,
+          error: err?.message || String(err)
+        });
+      }
+    }
+
+    const payload = {
+      version: 1,
+      generatedAt: new Date().toISOString(),
+      ocrMode,
+      samples: predictions,
+      failures
+    };
+
+    await fsPromises.writeFile(predPath, JSON.stringify(payload, null, 2), 'utf8');
+    return {
+      success: true,
+      processed: predictions.length,
+      failed: failures.length,
+      total: samples.length,
+      failures
+    };
+  } catch (e) {
+    return { success: false, error: e.message || String(e) };
   }
 });
 

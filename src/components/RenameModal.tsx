@@ -5,7 +5,7 @@ import { Match } from '../types';
 import { parseShareCode } from '../utils/export';
 
 export const RenameModal: React.FC = () => {
-    const { renameModal, setRenameModal, renameValue, setRenameValue, setToast } = useUIState();
+    const { renameModal, setRenameModal, renameValue, setRenameValue, setToast, activeUser, setActiveUser } = useUIState();
     const { addPlayer, renamePilot, addMatch } = useGameData();
 
     if (!renameModal) return null;
@@ -22,7 +22,12 @@ export const RenameModal: React.FC = () => {
         if (renameModal.type === 'new') {
             handleRegisterUser(renameValue.trim());
         } else if (renameModal.type === 'rename' && renameModal.oldName) {
-            renamePilot(renameModal.oldName, renameValue.trim());
+            const nextName = renameValue.trim();
+            renamePilot(renameModal.oldName, nextName);
+            if (activeUser === renameModal.oldName) {
+                // Keep active profile in sync when the current profile is renamed.
+                setActiveUser(nextName);
+            }
             setToast({ message: "Profile renamed successfully.", type: 'success' });
         } else if (renameModal.type === 'share_code') {
             try {
@@ -45,22 +50,22 @@ export const RenameModal: React.FC = () => {
 
     return (
         <div className="fixed inset-0 md3-dialog-scrim z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setRenameModal(null)}>
-            <div className="md3-dialog p-8 rounded-2xl max-w-sm w-full shadow-2xl border border-md-sys-outline/20 animate-scale-in" onClick={e => e.stopPropagation()}>
-                <h3 className="text-2xl font-black uppercase mb-2">{title}</h3>
-                <p className="text-xs font-bold opacity-60 uppercase tracking-widest mb-6">{sub}</p>
+            <div className="md3-dialog p-5 rounded-modal max-w-sm w-full shadow-2xl border border-md-sys-outline/20 animate-scale-in" onClick={e => e.stopPropagation()}>
+                <h3 className="text-title font-bold uppercase mb-2">{title}</h3>
+                <p className="text-label-sm font-bold opacity-60 uppercase tracking-widest mb-6">{sub}</p>
 
                 <input
                     autoFocus
                     value={renameValue}
                     onChange={(e) => setRenameValue(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                    className="w-full md3-textfield--outlined p-4 rounded-2xl text-xl font-bold mb-6 outline-none transition-all"
+                    className="w-full md3-textfield--outlined p-4 rounded-card text-xl font-bold mb-6 outline-none transition-all"
                     placeholder={isShare ? "Paste code..." : "Callsign..."}
                 />
 
                 <div className="flex gap-2">
-                    <button onClick={() => setRenameModal(null)} className="flex-1 md3-btn-outlined py-4 rounded-2xl font-black uppercase tracking-widest">Cancel</button>
-                    <button onClick={handleSubmit} className="flex-1 md3-btn-filled py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg">Confirm</button>
+                    <button onClick={() => setRenameModal(null)} className="flex-1 md3-btn-outlined py-4 rounded-card font-bold uppercase tracking-widest">Cancel</button>
+                    <button onClick={handleSubmit} className="flex-1 md3-btn-filled py-4 rounded-card font-bold uppercase tracking-widest shadow-lg">Confirm</button>
                 </div>
             </div>
         </div>

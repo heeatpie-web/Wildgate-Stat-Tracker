@@ -5,180 +5,198 @@ This file is produced by the workflow Planner.
 Status: READY
 
 ## Project Name & Goal
-Wildgate Stat Tracker UX/Perf Pass
+Wildgate Full UI Overhaul + OCR/Overlay Workflow Reliability
 
-Goal: fix the listed UX/performance issues while keeping automated checks green (`npm test`, `npm run build`).
+Goal: modernize the UI while preserving the current theme direction, fix broken/high-friction workflows, and make OCR processing/review behavior clear and reliable.
 
-Hard requirements (confirmed by Alec):
-1. Dev launch: splash is acceptable and must be visible within `<= 2s` of `npm run electron:dev` starting, then transition to the Vite renderer when ready.
-2. Smart Capture: header CTA is controlled by a Settings toggle (show/hide globally), but Smart Capture must always remain accessible inside the Recording tab even when the header CTA is hidden.
-3. Responsive: support phone-sized widths inside the Electron window (not a phone browser/PWA).
-4. Recording: no scrolling in the Recording panel (the left-side Recording controls area) at minimum 16:9 height `768px`. Prioritize 16:9 `1080p` through `4k`. Other areas of the Recording view may scroll if needed, but the Recording panel itself must not.
+## Locked Requirements (Confirmed)
+1. Keep the current style/theme direction.
+2. Visual language should be loosely MD3 + Apple with a glassmorphism emphasis.
+3. Tutorial control remains visible until tutorial is completed once.
+4. Top-bar user editing should be compacted; prefer profile picture entry point that opens profile editing/settings.
+5. Combine top status indicators with the data indicator pattern and preserve/improve the light-up behavior.
+6. Remove artifact brawl/fleet battle toggle (fleet battle support deferred).
+7. Recording page should expose one primary Smart Capture entry point (remove duplicates).
+8. Overlay must be interactive (no lock/trap behavior).
+9. OCR apply flow routes to Smart Captures review queue.
+10. Match outcome is strongly encouraged but not required.
+11. OCR state flow target:
+    - `Queued` (automatic)
+    - `Processing` (automatic)
+    - `Reviewing` (manual entry with optional automatic transitions where safe)
+    - `Ready to Save` (manual)
+    - If app window closes while ready/pending finalization, auto-apply/persist safely.
+12. Cloud processing settings currently disabled/greyed out must be fixed.
+13. Capture quality indicator should be improved for clarity and usefulness.
 
-Definition of Done (acceptance):
-1. `npm run electron:dev` reliably shows a window quickly (splash OK) and transitions to the app once Vite is ready.
-2. Recording view never clips key controls; the Recording panel does not introduce scrollbars at `1366x768` and `1920x1080`.
-3. Smart Capture is discoverable from the header when enabled, and always usable from Recording even when disabled.
-4. Detailed analytics narrative is structured and metric-rich while graphs remain visible.
-5. Smart Captures panel is clearer: better spacing/hierarchy, clustered OCR actions, reduced selection noise, and readable primary labels.
-6. Provenance is clear (telemetry/OCR/manual) including overrides.
-7. `npm test` and `npm run build` pass.
+## Definition of Done (Acceptance)
+1. Header is fully refreshed and visually modern while staying within current theme.
+2. Top bar has clearer hierarchy, less clutter, compact profile access, and improved status indicator behavior.
+3. Tutorial visibility logic is correct (visible until completed once, then suppressed per preference/state).
+4. Fleet battle toggle is removed from UI and dependent logic is stable.
+5. Recording page uses one Smart Capture entry point with clear placement and no redundant CTA confusion.
+6. Overlay is fully interactive, usable, and no longer blocks app interaction.
+7. OCR pipeline shows staged, meaningful progress and explicit state/status messaging.
+8. `Apply Data` reliably sends records to Smart Captures review queue.
+9. Match outcome encouragement UX is prominent but skippable.
+10. Cloud processing settings are enabled/functional when prerequisites are met and clearly explain disabled reasons when not.
+11. Capture quality indicator communicates quality/state in a readable way.
+12. Smart capture processing/review state survives close/reopen without silent loss.
+13. `npm test` and `npm run build` pass.
 
-## Tech Stack
-- Electron (`electron/main.cjs`, `electron/preload.cjs`)
-- Vite + React 18 + TypeScript (`src/`)
-- Tailwind CSS + app-specific classes (`src/index.css`)
-- Zustand store (`src/store/`)
-- Charts: Recharts
-- Tests: Vitest + Testing Library
+## Tech Stack Decisions
+- Keep: Electron + React 18 + TypeScript + Tailwind + Zustand.
+- Use CSS variable token pass in `src/index.css` to enforce consistent styling primitives.
+- Keep architecture stable; no framework replacement in this cycle.
+- Introduce explicit OCR processing state model in store/UI to avoid ambiguous progress behavior.
 
-## File Structure
-Relevant areas (non-exhaustive):
-```text
-electron/
-  main.cjs
-  preload.cjs
-src/
-  App.tsx
-  index.css
-  components/
-    Header.tsx
-    RecordingView.tsx
-    SettingsModal.tsx
-    SmartCapturesPanel.tsx
-    MatchRecordingPage.tsx
-    analytics/
-      AnalyticsShell.tsx
-      AnalyticsCockpit.tsx
-      ProView.tsx
-      VisualEssayView.tsx
-    recording/
-      ActionPanel.tsx
-  hooks/
-    useSmartCapture.ts
-  store/
-    useAppStore.ts
-    slices/
-      createSettingsSlice.ts
-      createDataSlice.ts
-  utils/
-    analyticsEditorial.ts
-    telemetryProcessor.ts
-```
+## Target Areas
+- `src/components/Header.tsx`
+- `src/components/WindowFrame.tsx`
+- `src/components/SettingsModal.tsx`
+- `src/components/RecordingView.tsx`
+- `src/components/recording/ActionPanel.tsx`
+- `src/components/SmartCapturesPanel.tsx`
+- `src/components/ocr/OCRReviewModal.tsx`
+- `src/components/OverlayView.tsx`
+- `src/components/AnalyticsPanel.tsx`
+- `src/components/analytics/*`
+- `src/store/slices/createDataSlice.ts`
+- `src/store/slices/createUISlice.ts`
+- `src/store/slices/createSettingsSlice.ts`
+- `src/hooks/useSmartCapture.ts`
+- `src/index.css`
 
 ## Implementation Steps
-Each step should be doable in one Builder turn and end with a quick verification run.
 
-Standard QA viewports (use throughout):
-- Desktop priority: `1920x1080`, `2560x1440`, `3840x2160`
-- Desktop minimum: `1366x768`
-- Narrow/responsive: `390x844`
+## Master Plan (Phased Rollout)
+Phase A: Foundation + Global UX Shell
+- Step 1 (Baseline), Step 2 (Design tokens), Step 3 (Header rebuild).
+- Outcome: visual system and top-level navigation language are stable before deep feature work.
 
-### Step 1: Baseline Measurements (Builder)
+Phase B: Core Workflows
+- Step 4 (Recording IA), Step 6 (Smart Captures layout), Step 7 (OCR state machine), Step 8 (Apply-to-queue flow).
+- Outcome: primary daily workflows become clear and reliable.
+
+Phase C: Reliability + Interaction Integrity
+- Step 9 (Cloud settings fix), Step 10 (Overlay trap fix), Step 11 (Persistence/close handling), Step 12 (Capture quality indicator).
+- Outcome: broken/ambiguous behaviors are removed and edge-case safety is improved.
+
+Phase D: Analytics UX Completion
+- Step 5 (Analytics simplification), integrated after design tokens and primary workflow cleanup to avoid UI drift.
+- Outcome: analytics navigation and graph discovery align with the new UX model.
+
+Phase E: Ship Gate
+- Step 13 (Regression/build/test), Step 14 (Documentation/release notes).
+- Outcome: release-ready quality gate with updated docs.
+
+Standard QA viewports:
+- `1366x768`
+- `1920x1080`
+- `2560x1440`
+- `390x844`
+
+### Step 1: Baseline Capture (Builder)
 Deliverable:
-- Add a short note (in PR description or `PLAN.md` comments) capturing current behavior for:
-  - Dev splash timing
-  - Recording scrollbars/clipping at `1366x768` and `1920x1080`
-  - Narrow `390x844` behavior
+- Capture before-state notes/screens for header, recording, analytics, smart captures, overlay, OCR flow, settings cloud options, and capture quality indicator.
 Verification:
-- Run once and document what fails today.
+- Baseline artifact notes saved in PR/worklog.
 
-<!--
-Baseline notes (captured 2026-02-11):
-- Dev splash timing: `electron/main.cjs` shows a dev splash `data:` URL first and only loads the Vite URL once it is reachable (probed). Local dev run (`npm run electron:dev`, 2026-02-11) logged:
-  - `app whenReady`: +64ms
-  - `window created`: +302ms
-  - `splash shown`: +302ms
-  - `dev URL loaded`: +5007ms (attempt 1)
-- Recording scrollbars/clipping: `src/components/RecordingView.tsx` sets the left Recording panel column to `overflow-y-auto` (scrolls) which violates the "no scrolling in Recording panel" requirement; at 1366x768 this is expected to show scrollbars once the panel content exceeds height.
-- Narrow 390x844: Recording uses a 3-column flex layout with min widths ~220 + 280 + 300 (plus gaps/padding), so it will overflow/clamp horizontally at phone-sized widths and is not usable without a compact/stacked layout.
--->
-
-### Step 2: Dev Splash Reliability (Builder)
-Files:
-- `electron/main.cjs`
+### Step 2: Design Token + Style Pass (Designer -> Builder)
 Deliverable:
-- Ensure splash loads first and dev URL retries until Vite is ready (no "failed to load" flicker).
-- Add dev-only timing logs: app ready, window created, splash shown, dev URL loaded.
+- Add/adjust shared styling tokens for glassmorphism, spacing, surface hierarchy, borders, and emphasis while preserving current theme.
 Verification:
-- `npm run electron:dev` shows splash within `<= 2s` and transitions when Vite is ready.
+- Header and one panel visibly reflect token system.
 
-### Step 3: Recording "No Scroll" Layout Architecture (Designer -> Builder)
-Files:
-- `src/components/RecordingView.tsx`
-- `src/components/recording/*` (as needed)
+### Step 3: Header Rebuild + Indicator Consolidation (Designer -> Builder)
 Deliverable:
-- Ensure the Recording panel never needs scrolling at `1366x768` and up.
-- Implement two recording layouts with that constraint:
-  - Standard (1080p+): 3 columns, all primary controls visible; Recording panel does not scroll.
-  - Compact (768 height and/or narrow widths): compact density and/or collapsible sections in the Recording panel, but still no Recording panel scroll; content swaps instead of scrolling.
-- If anything must scroll in the Recording view, it must be outside the Recording panel.
+- Rework top bar layout, move version number to cleaner location, compact user/profile editing behind avatar entry, remove outdated ring styles.
+- Consolidate status indicator logic with data indicator style and preserve light-up behavior.
+- Keep tutorial affordance visible until first completion.
+- Remove fleet battle toggle from top bar.
 Verification:
-- `1920x1080` and `1366x768`: Recording panel has no scrollbars and no clipped primary controls.
-- `390x844`: Compact layout usable.
+- Header is balanced and readable at desktop + narrow widths; no clipped controls.
 
-### Step 4: Smart Capture Header Toggle (Builder)
-Files:
-- `src/store/slices/createSettingsSlice.ts`
-- `src/components/SettingsModal.tsx`
-- `src/components/Header.tsx`
+### Step 4: Recording IA Cleanup (Designer -> Builder)
 Deliverable:
-- Add persisted setting `showSmartCaptureInHeader` (default on).
-- Add Settings toggle with copy: off hides from header; Recording still has access.
-- Wire header CTA visibility to the setting.
+- Keep only one Smart Capture CTA in Recording flow.
+- Improve control sizing and hierarchy for session timer/start mission areas.
+- Preserve requested column emphasis behavior from prior plan pass.
 Verification:
-- Toggle works after "Save & Apply".
-- Recording still has a Smart Capture entry point with header toggle off.
+- Recording flow is clearer; no duplicate Smart Capture confusion.
 
-### Step 5: De-emphasize In-Recording Smart Capture (Designer -> Builder)
-Files:
-- `src/components/recording/ActionPanel.tsx`
+### Step 5: Analytics UX Simplification (Designer -> Builder)
 Deliverable:
-- Make in-panel Smart Capture secondary styling or tucked under "More", without removing functionality.
+- Reduce navigation friction, clarify labels, improve graph discoverability/toggle behavior.
 Verification:
-- Smart Capture remains usable entirely from Recording.
+- Fewer click steps to reach key graph views.
 
-### Step 6: Analytics Detailed Narrative + Graph Co-Visibility (Designer -> Builder)
-Files:
-- `src/utils/analyticsEditorial.ts`
-- `src/components/analytics/*`
+### Step 6: Smart Captures Layout Overhaul (Designer -> Builder)
 Deliverable:
-- Expand narrative into structured, metric-rich sections.
-- Keep graphs visible alongside narrative (desktop) and still present when stacked (narrow).
+- Rework spacing, hierarchy, action grouping, match label readability, and review queue clarity.
 Verification:
-- "Detailed Analysis" is not a short blurb; contains multiple sections with numbers; graphs remain visible.
+- Primary actions and queue states are immediately scannable.
 
-### Step 7: Smart Captures Panel Hierarchy + OCR Action Clustering (Designer -> Builder)
-Files:
-- `src/components/SmartCapturesPanel.tsx`
-- `src/index.css`
+### Step 7: OCR State Machine + Progress Transparency (Builder)
 Deliverable:
-- Cluster OCR actions (single + bulk) into one clear toolbar zone.
-- Reduce selection UI noise (show affordance on hover/focus or when selection mode is active).
-- Improve primary labeling (avoid arbitrary IDs when possible).
+- Implement explicit staged OCR states (`Queued`, `Processing`, `Reviewing`, `Ready to Save`, `Saved/Error`).
+- Update progress UI to reflect real stage transitions and explain current activity.
 Verification:
-- Panel feels less cramped; rows are readable; actions are easy to find.
+- Pipeline state is understandable and no jumpy ambiguous 75% behavior remains.
 
-### Step 8: Provenance + Overrides (Designer -> Builder)
-Files:
-- `src/components/recording/*`
-- `src/components/MatchRecordingPage.tsx`
-- `src/components/SmartCapturesPanel.tsx`
+### Step 8: Apply-to-Queue + Outcome Nudge (Builder)
 Deliverable:
-- Standardize a "source badge" and apply to key values so telemetry/OCR/manual and overrides are obvious.
+- Route `Apply Data` to Smart Captures review queue.
+- Add strong non-blocking outcome prompt before final save.
 Verification:
-- Users can quickly see provenance and when a manual override is in effect.
+- Applied entries appear in queue every time; outcome prompt is present but skippable.
 
-### Step 9: Regression Pass (Testing Agent/Builder)
+### Step 9: Cloud Processing Settings Fix (Builder)
 Deliverable:
-- Run `npm test` and fix failures.
-- Run `npm run build` and fix failures.
-- Manual smoke at standard QA viewports, focusing on Recording panel no-scroll policy and dev splash.
+- Resolve disabled/greyed-out cloud options issue.
+- Add clear reason messaging when prerequisites are missing.
+Verification:
+- Cloud options are actionable when configured and informative when unavailable.
 
-### Step 10: Documentation Notes (Docs Agent)
+### Step 10: Overlay Interaction Fix + Redesign (Builder)
 Deliverable:
-- Update `README.md` or `docs/` with:
-  - Smart Capture header toggle behavior
-  - Recording Standard vs Compact behavior and the "no scroll in Recording panel" rule
-  - Analytics Detailed Analysis behavior
-  - Provenance badge meaning
+- Eliminate interaction trap; keep overlay fully interactive.
+- Improve overlay control density/sizing and transparency-mode UX.
+Verification:
+- Overlay can be opened/used/closed repeatedly with no lock-ups.
+
+### Step 11: Persistence + Auto-Apply on Close Rule (Builder)
+Deliverable:
+- Persist review/processing states safely across app close/reopen.
+- Honor approved behavior for close handling around ready-to-save states.
+Verification:
+- No silent data loss during mid-process close/reopen scenarios.
+
+### Step 12: Capture Quality Indicator Refresh (Builder)
+Deliverable:
+- Redesign capture quality indicator for clearer confidence/health messaging and actionable feedback.
+Verification:
+- Users can quickly understand capture quality and needed next action.
+
+### Step 13: Regression + Build/Test Gate (Builder)
+Deliverable:
+- Run `npm test`.
+- Run `npm run build`.
+- Fix regressions across touched areas.
+Verification:
+- Tests and build pass.
+
+### Step 14: Documentation/Release Notes (Docs Agent)
+Deliverable:
+- Update docs for header changes, tutorial behavior, overlay interaction, OCR stage meanings, apply/review flow, cloud settings behavior, and removed fleet toggle.
+
+## Risks & Mitigations
+1. Risk: Wide UI touch surface introduces regressions.
+   Mitigation: Stepwise delivery + viewport checks each step + dedicated regression gate.
+2. Risk: OCR stage UI diverges from true backend state.
+   Mitigation: Single canonical store state machine used by all OCR UI.
+3. Risk: Close-time auto behavior causes unintended saves.
+   Mitigation: constrain auto-apply to approved states and log transition outcomes.
+
+## Handoff
+Plan is ready for approval and handoff to `@builder`.

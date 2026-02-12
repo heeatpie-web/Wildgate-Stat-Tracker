@@ -139,6 +139,84 @@ class GCloudSyncService {
   }
 
   /**
+   * One-time backfill: upload all local screenshots to GCS, skipping files already in the bucket.
+   * Scans screenshots/, ocr-debug/, and match_artifacts/ under the given userData root.
+   * @param {string} userDataPath - Absolute path to the app's userData directory.
+   * @returns {Promise<{success: boolean, uploaded: number, skipped: number, errors: number, details: string[]}>}
+   */
+  async backfillScreenshots(userDataPath) {
+    if (!this.isInitialized || !this.storage || !this.bucketName) {
+      return { success: false, uploaded: 0, skipped: 0, errors: 0, details: ['Not initialized'] };
+    }
+
+    const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.webp']);
+    const details = [];
+    let uploaded = 0;
+    let skipped = 0;
+    let errors = 0;
+
+    // 1. List all existing files in the bucket under screenshots/ and match_artifacts/
+    const remoteFiles = new Set();
+    try {
+      for (const prefix of ['screenshots/', 'match_artifacts/']) {
+        const [files] = await this.storage.bucket(this.bucketName).getFiles({ prefix });
+        for (const f of files) {
+          remoteFiles.add(f.name);
+        }
+      }
+      details.push(`Found ${remoteFiles.size} existing files in bucket`);
+    } catch (err) {
+      details.push(`Warning: Could not list bucket contents: ${err.message}`);
+    }
+
+    // 2. Collect local files to upload
+    const filesToUpload = []; // { localPath, remotePath }
+
+    const scanDir = async (dirPath, remotePrefix) => {
+      if (!fs.existsSync(dirPath)) return;
+      const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
+        if (entry.isDirectory()) {
+          // Recurse into subdirectories (e.g. match_artifacts/123/)
+          await scanDir(fullPath, `${remotePrefix}${entry.name}/`);
+        } else if (entry.isFile()) {
+          const ext = path.extname(entry.name).toLowerCase();
+          if (!IMAGE_EXTS.has(ext)) continue;
+          const remotePath = `${remotePrefix}${entry.name}`;
+          if (remoteFiles.has(remotePath)) {
+            skipped++;
+          } else {
+            filesToUpload.push({ localPath: fullPath, remotePath });
+          }
+        }
+      }
+    };
+
+    await scanDir(path.join(userDataPath, 'screenshots'), 'screenshots/');
+    await scanDir(path.join(userDataPath, 'ocr-debug'), 'screenshots/');
+    await scanDir(path.join(userDataPath, 'match_artifacts'), 'match_artifacts/');
+
+    details.push(`Local scan: ${filesToUpload.length} to upload, ${skipped} already in bucket`);
+
+    // 3. Upload missing files (sequential to avoid hammering the API)
+    for (const { localPath, remotePath } of filesToUpload) {
+      const result = await this.uploadFile(localPath, remotePath, 2);
+      if (result.success) {
+        uploaded++;
+      } else {
+        errors++;
+        details.push(`Failed: ${remotePath} — ${result.error}`);
+      }
+    }
+
+    details.push(`Backfill complete: ${uploaded} uploaded, ${skipped} skipped, ${errors} errors`);
+    console.log(`[GCloudSync] Backfill: ${uploaded} uploaded, ${skipped} skipped, ${errors} errors`);
+
+    return { success: errors === 0, uploaded, skipped, errors, details };
+  }
+
+  /**
    * Test upload: write a tiny test file and upload it to verify credentials and bucket access.
    * @returns {Promise<{success: boolean, error?: string}>}
    */

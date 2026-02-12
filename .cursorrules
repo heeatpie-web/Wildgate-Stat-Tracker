@@ -1,0 +1,15 @@
+# Cursor Project Rules
+
+Use `AGENTS.md` in this repository as the primary workflow contract.
+
+For UI/interface tasks, also follow `docs/agents/UI_MASTERPLAN.md`.
+
+Required process for tasks:
+1. Normalize request in `docs/agents/00_INTAKE.md`.
+2. Keep a step plan in `docs/agents/01_PLAN.md` with one `IN_PROGRESS` step.
+3. Track edits in `docs/agents/02_EXECUTION_LOG.md`.
+4. Record test/check evidence in `docs/agents/03_VALIDATION.md`.
+5. Summarize outcome in `docs/agents/04_HANDOFF.md`.
+
+If blocked, log in `docs/agents/BLOCKERS.md`.
+If design/workflow exceptions are made, log in `docs/agents/DECISIONS.md`.

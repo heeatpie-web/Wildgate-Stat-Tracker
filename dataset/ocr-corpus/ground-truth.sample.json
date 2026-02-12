@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "samples": [
+    {
+      "sampleId": "sample_001",
+      "imagePath": "dataset/images/val/capture_2026-02-04T03-16-23-241Z.png",
+      "teammates": ["AlixThus", "Charlie"],
+      "opponentTeams": [
+        {
+          "teamName": "MURDER SPAGHURDER",
+          "teamColor": "Purple",
+          "players": ["NightmareGMC", "SHTER"]
+        },
+        {
+          "teamName": "MEANR THAN AVG",
+          "teamColor": "Green",
+          "players": ["littleleaves"]
+        }
+      ],
+      "modifiers": ["Void Storm", "Ion Squall"]
+    },
+    {
+      "sampleId": "sample_002",
+      "imagePath": "dataset/images/train/capture_2026-02-04T08-21-06-645Z.png",
+      "teammates": ["Hunter", "Sal"],
+      "opponentTeams": [
+        {
+          "teamName": "DODGE THE BULLET",
+          "teamColor": "Orange",
+          "players": ["gaowang134", "JACR1907"]
+        }
+      ],
+      "modifiers": ["Solar Flare"]
+    }
+  ]
+}

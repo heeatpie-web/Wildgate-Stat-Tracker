@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { Match, Insight, DrillDownTarget, VisualMode } from '../../types';
 import { RelationshipInsight } from '../../utils/analytics';
 import { Skull, Handshake, Ghost, Swords, Users, Rocket, Lightbulb, Crown, Flame, Zap, User, Target, AlertTriangle } from 'lucide-react';
@@ -37,28 +37,28 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ insights, relationsh
         <div className="flex-1 overflow-y-auto custom-scrollbar">
             {relationshipInsights.length > 0 && (
                 <div className="mb-6">
-                    <h3 className="text-sm font-black uppercase opacity-60 mb-4 flex items-center gap-2">
+                    <h3 className="text-body font-black uppercase opacity-60 mb-4 flex items-center gap-2">
                         <Users size={16} /> Player Relationships
                     </h3>
                     <div className={`grid gap-4 ${dense ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-2'}`}>
                         {relationshipInsights.map((rel, i) => (
                             <div key={i} onClick={() => onDrillDown(rel.playerName, rel.type === 'ally' ? 'Teammate' : 'Opponent')}
-                                className={`md3-card rounded-2xl relative overflow-hidden hover:scale-[1.02] transition-transform cursor-pointer ${dense ? 'p-4' : 'p-6'}`}>
+                                className={`md3-card rounded-2xl relative overflow-hidden transition-all cursor-pointer hover:border-md-sys-primary/20 ${dense ? 'p-4' : 'p-6'}`}>
                                 <div className={`absolute -top-4 -right-4 w-20 h-20 opacity-10 rounded-full blur-2xl ${
-                                    rel.type === 'nemesis' ? 'bg-red-500' : rel.type === 'ally' ? 'bg-green-500' : rel.type === 'stalker' ? 'bg-purple-500' : 'bg-orange-500'
+                                    rel.type === 'nemesis' ? 'bg-danger' : rel.type === 'ally' ? 'bg-success' : rel.type === 'stalker' ? 'bg-accent' : 'bg-warning'
                                 }`}></div>
                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white mb-3 ${
-                                    rel.type === 'nemesis' ? 'bg-red-600' : rel.type === 'ally' ? 'bg-green-600' : rel.type === 'stalker' ? 'bg-purple-600' : 'bg-orange-600'
+                                    rel.type === 'nemesis' ? 'bg-danger' : rel.type === 'ally' ? 'bg-success' : rel.type === 'stalker' ? 'bg-accent' : 'bg-warning'
                                 }`}>
                                     {rel.type === 'nemesis' ? <Skull size={18} /> : rel.type === 'ally' ? <Handshake size={18} /> : rel.type === 'stalker' ? <Ghost size={18} /> : <Swords size={18} />}
                                 </div>
-                                <div className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-0.5">
+                                <div className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-0.5">
                                     {rel.type === 'nemesis' ? 'Nemesis' : rel.type === 'ally' ? 'Loyal Ally' : rel.type === 'stalker' ? 'Stalker' : 'Frenemy'}
                                 </div>
                                 <div className={`font-black leading-tight truncate ${dense ? 'text-lg' : 'text-xl'}`}>{rel.playerName}</div>
-                                <div className="text-[10px] font-bold opacity-40">{rel.encounters} encounters</div>
+                                <div className="text-label-sm font-bold opacity-40">{rel.encounters} encounters</div>
                                 {rel.topShip && (
-                                    <div className="text-[9px] font-black opacity-40 mt-1 flex items-center gap-1">
+                                    <div className="text-label-xs font-black opacity-40 mt-1 flex items-center gap-1">
                                         <Rocket size={10} className="text-md-sys-primary" /> {rel.topShip}
                                     </div>
                                 )}
@@ -69,17 +69,17 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ insights, relationsh
             )}
             <div className={`grid gap-4 pb-4 ${dense ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 md:grid-cols-2'}`}>
                 {enrichedInsights.map((stat, i) => (
-                    <div key={i} className={`md3-card relative overflow-hidden hover:scale-[1.02] transition-transform cursor-pointer group rounded-2xl ${dense ? '!p-6' : '!p-8'}`}>
+                    <div key={i} className={`md3-card relative overflow-hidden transition-all cursor-pointer group rounded-2xl hover:border-md-sys-primary/20 ${dense ? '!p-6' : '!p-8'}`}>
                         <div className={`absolute -top-6 -right-6 w-32 h-32 opacity-10 rounded-full ${stat.color} blur-2xl`}></div>
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white mb-4 ${stat.color}`}>{stat.icon}</div>
-                        <div className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">{stat.title}</div>
-                        <div className="text-[10px] font-bold uppercase opacity-40 mb-4">{stat.subtitle}</div>
+                        <div className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-1">{stat.title}</div>
+                        <div className="text-label-sm font-bold uppercase opacity-40 mb-4">{stat.subtitle}</div>
                         <div className={`font-black leading-tight mb-2 tracking-tight ${dense ? 'text-2xl' : 'text-3xl'}`}>{stat.value}</div>
-                        <div className="text-[10px] font-bold px-2 py-1 md3-surface-low rounded-lg inline-block">{stat.subValue}</div>
+                        <div className="text-label-sm font-bold px-2 py-1 md3-surface-low rounded-lg inline-block">{stat.subValue}</div>
                     </div>
                 ))}
                 {enrichedInsights.length === 0 && relationshipInsights.length === 0 && (
-                    <div className="col-span-full text-center opacity-60 text-sm font-bold uppercase p-12">Not enough data to generate insights.</div>
+                    <div className="col-span-full text-center opacity-60 text-body font-bold uppercase p-12">Not enough data to generate insights.</div>
                 )}
             </div>
             <div className="md3-card rounded-2xl p-6">

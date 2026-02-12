@@ -70,3 +70,4 @@ export default defineConfig({
   },
   plugins: [react()],
 });
+// Force restart: 1
