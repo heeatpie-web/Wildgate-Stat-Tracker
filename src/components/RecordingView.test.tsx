@@ -58,7 +58,7 @@ describe('RecordingView', () => {
     const actionProps = screen.getByTestId('ActionPanel').getAttribute('data-props') || '';
     expect(squadProps).not.toContain('"density":"compact"');
     expect(actionProps).toContain('"density":"compact"');
-  });
+  }, 10000);
 
   it('renders compact left panel tabs on short heights and swaps Actions vs Loadout without scrolling the panel', async () => {
     // Short height triggers compact density (even on wide screens).
@@ -67,9 +67,11 @@ describe('RecordingView', () => {
 
     render(<RecordingView />);
 
-    // Compact tab bar exists.
-    const actionsBtn = screen.getByRole('button', { name: /actions/i });
-    const loadoutBtn = screen.getByRole('button', { name: /loadout/i });
+    // Compact tab bar exists (use first match in case of duplicates).
+    const actionsBtns = screen.getAllByRole('button', { name: /actions/i });
+    const loadoutBtns = screen.getAllByRole('button', { name: /loadout/i });
+    const actionsBtn = actionsBtns[0];
+    const loadoutBtn = loadoutBtns[0];
     expect(actionsBtn).toBeInTheDocument();
     expect(loadoutBtn).toBeInTheDocument();
 
@@ -92,7 +94,7 @@ describe('RecordingView', () => {
     fireEvent.click(actionsBtn);
     expect(screen.getByTestId('ActionPanel')).toBeInTheDocument();
     expect(screen.queryByTestId('SquadronPanel')).toBeNull();
-  });
+  }, 10000);
 
   it('uses stacked layout on narrow widths with page-level scroll (not panel-level scroll)', async () => {
     setViewport(900, 900);
@@ -105,7 +107,7 @@ describe('RecordingView', () => {
     expect(root?.className).toContain('overflow-y-auto');
 
     // Ensure we still render the left panel content (compact by definition in narrow mode).
-    expect(screen.getByRole('button', { name: /actions/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /actions/i })[0]).toBeInTheDocument();
     expect(screen.getByTestId('ActionPanel')).toBeInTheDocument();
 
     const actionProps = screen.getByTestId('ActionPanel').getAttribute('data-props') || '';

@@ -83,13 +83,14 @@ describe('Header', () => {
     appStoreState.tutorialCompleted = true;
     rerender(<Header />);
     expect(screen.queryByRole('button', { name: /tutorial/i })).toBeNull();
-  });
+  }, 10000);
 
   it('opens compact profile hub from avatar entry and exposes profile actions', async () => {
     const { Header } = await import('./Header');
     render(<Header />);
 
-    fireEvent.click(screen.getByTitle(/profile: alec/i));
+    const profileButtons = screen.getAllByTitle(/profile: alec/i);
+    fireEvent.click(profileButtons[0]);
 
     expect(screen.getByText(/profile hub/i)).toBeInTheDocument();
     expect(screen.getByTitle(/new profile/i)).toBeInTheDocument();

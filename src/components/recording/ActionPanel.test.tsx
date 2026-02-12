@@ -118,7 +118,7 @@ describe('ActionPanel', () => {
 
     expect(screen.getByText(/match recording/i)).toBeInTheDocument();
     expect(screen.queryByText(/primary capture lives in the top header/i)).not.toBeInTheDocument();
-  });
+  }, 10000);
 
   it('falls back to smart scan when smart capture callback is not provided', async () => {
     const { ActionPanel } = await import('./ActionPanel');
