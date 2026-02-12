@@ -11,6 +11,10 @@ const { registerOCRHandlers, processCapture, runOCR } = require('./ocrHandler.cj
 const gcloudService = require('./gcloudService.cjs');
 const gcloudSyncService = require('./gcloudSyncService.cjs');
 const geminiService = require('./geminiService.cjs');
+const artifactHelpers = require('./helpers/artifactHelpers.cjs');
+const telemetryArchiveHelpers = require('./helpers/telemetryArchiveHelpers.cjs');
+const dbHelpers = require('./helpers/dbHelpers.cjs');
+const { registerArtifactHandlers } = require('./handlers/artifactHandlers.cjs');
 const isDev = !app.isPackaged;
 const DEV_SERVER_URL = process.env.WILDGATE_DEV_SERVER_URL || 'http://localhost:5173';
 const USER_DATA_ROOT = path.resolve(app.getPath('userData'));
@@ -337,6 +341,19 @@ function setSplashProgress(targetWin, pct, status, detail = '') {
   targetWin.webContents.executeJavaScript(js, true).catch(() => { });
 }
 
+/** Last splash payload sent (for deduplication). Keyed by win.id so multiple windows don't share state. */
+const lastSplashByWin = new Map();
+
+function setSplashProgressDedupe(targetWin, pct, status, detail = '') {
+  if (!targetWin || targetWin.isDestroyed()) return;
+  const key = targetWin.id;
+  const prev = lastSplashByWin.get(key);
+  const same = prev && prev.pct === pct && prev.status === status && prev.detail === detail;
+  if (same) return;
+  lastSplashByWin.set(key, { pct, status, detail });
+  setSplashProgress(targetWin, pct, status, detail);
+}
+
 function probeUrlReady(urlString, timeoutMs = 450) {
   return new Promise((resolve) => {
     try {
@@ -388,6 +405,7 @@ function startDevRendererWithRetry(win, targetUrl) {
     if (stopped) return;
     stopped = true;
     if (retryTimer) clearTimeout(retryTimer);
+    try { lastSplashByWin.delete(win.id); } catch { }
     try { win.webContents.removeListener('did-finish-load', onFinishLoad); } catch { }
   };
 
@@ -401,27 +419,37 @@ function startDevRendererWithRetry(win, targetUrl) {
     } catch { }
   };
 
+  const HEARTBEAT_INTERVAL = 5; // Update splash every N attempts to avoid spam
   const tryLoad = async () => {
     if (stopped || inFlight || !win || win.isDestroyed()) return;
     inFlight = true;
     attempt += 1;
-    setSplashProgress(win, Math.min(92, 18 + attempt * 3), 'Connecting renderer...', `Checking dev server (attempt ${attempt})`);
+    const isFirst = attempt === 1;
+    const isHeartbeat = attempt % HEARTBEAT_INTERVAL === 0;
+    if (isFirst || isHeartbeat) {
+      setSplashProgressDedupe(win, Math.min(92, 18 + attempt * 3), 'Connecting renderer...', `Checking dev server (attempt ${attempt})`);
+    }
 
     try {
       const ready = await probeUrlReady(url);
       if (!ready) {
-        setSplashProgress(win, Math.min(92, 16 + attempt * 2), 'Waiting for dev server...', `Retrying connection (attempt ${attempt})`);
+        if (isFirst || isHeartbeat) {
+          setSplashProgressDedupe(win, Math.min(92, 16 + attempt * 2), 'Waiting for dev server...', `Retrying connection (attempt ${attempt})`);
+        }
         const delay = Math.min(2000, 150 + (attempt * 125));
         inFlight = false;
         retryTimer = setTimeout(tryLoad, delay);
         return;
       }
 
-      setSplashProgress(win, 95, 'Loading interface...', 'Renderer is responding');
+      setSplashProgressDedupe(win, 95, 'Loading interface...', 'Renderer is responding');
       await win.loadURL(url);
       // stop() happens on did-finish-load once the dev URL successfully loads.
       inFlight = false;
     } catch {
+      if (isFirst || isHeartbeat) {
+        setSplashProgressDedupe(win, Math.min(92, 16 + attempt * 2), 'Waiting for dev server...', `Retrying connection (attempt ${attempt})`);
+      }
       const delay = Math.min(2000, 150 + (attempt * 125));
       inFlight = false;
       retryTimer = setTimeout(tryLoad, delay);
@@ -514,276 +542,8 @@ const getDbCandidates = () => {
 };
 const LOG_FILE_PATH = path.join(app.getPath('userData'), 'app_logs.txt');
 
-async function listRecentBackups(limit = 12) {
-  try {
-    const entries = await fsPromises.readdir(DB_BACKUP_DIR);
-    const files = entries
-      .filter(f => f.toLowerCase().endsWith('.json') && f.toLowerCase().startsWith('backup_'))
-      .map(f => path.join(DB_BACKUP_DIR, f));
-    const stats = await Promise.all(files.map(async (p) => {
-      try {
-        const st = await fsPromises.stat(p);
-        return { p, m: st.mtimeMs || 0 };
-      } catch {
-        return null;
-      }
-    }));
-    return stats
-      .filter(Boolean)
-      .sort((a, b) => (b.m - a.m))
-      .slice(0, limit)
-      .map(x => x.p);
-  } catch {
-    return [];
-  }
-}
-
-async function pruneBackups(maxKeep = 40) {
-  try {
-    const recent = await listRecentBackups(9999);
-    const extra = recent.slice(maxKeep);
-    if (extra.length === 0) return;
-    await Promise.all(extra.map(async p => {
-      try { await fsPromises.unlink(p); } catch { /* ignore */ }
-    }));
-  } catch {
-    // ignore
-  }
-}
-
-async function createDbBackup(reason = 'auto') {
-  try {
-    if (!fs.existsSync(DB_BACKUP_DIR)) fs.mkdirSync(DB_BACKUP_DIR, { recursive: true });
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupPath = path.join(DB_BACKUP_DIR, `backup_${timestamp}_${reason}.json`);
-    if (!fs.existsSync(DB_PATH)) {
-      return { success: false, error: 'No database file found to backup.' };
-    }
-    fs.copyFileSync(DB_PATH, backupPath);
-    void pruneBackups();
-    return { success: true, path: backupPath };
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
-}
-
-// Artifact Bundling
-ipcMain.handle('bundle-artifacts', async (event, { matchId, startTime, endTime }) => {
-  try {
-    const matchDir = path.join(app.getPath('userData'), 'match_artifacts', matchId.toString());
-    if (!fs.existsSync(matchDir)) fs.mkdirSync(matchDir, { recursive: true });
-
-    const bundledImages = [];
-    const bundledNames = new Set(); // Deduplicate by filename
-    const bundledSizes = new Set(); // Deduplicate by file size (catches same image with different names)
-
-    // Helper: scan a directory for images matching the time window
-    const scanDir = async (dir) => {
-      if (!fs.existsSync(dir)) return;
-      const files = await fsPromises.readdir(dir);
-      const imageExts = ['.png', '.jpg', '.jpeg', '.bmp', '.webp'];
-      for (const file of files) {
-        if (bundledNames.has(file)) continue;
-        const ext = path.extname(file).toLowerCase();
-        if (!imageExts.includes(ext)) continue;
-        const srcPath = path.join(dir, file);
-        const stat = await fsPromises.stat(srcPath);
-        const birthtime = stat.birthtimeMs || stat.mtimeMs;
-        if (birthtime >= startTime - 5000 && birthtime <= endTime + 30000) {
-          // Deduplicate by size — same screenshot saved to screenshots/ and ocr-debug/ will have identical size
-          const sizeKey = `${stat.size}`;
-          if (bundledSizes.has(sizeKey)) continue;
-          const destPath = path.join(matchDir, file);
-          await fsPromises.copyFile(srcPath, destPath);
-          bundledImages.push(destPath);
-          bundledNames.add(file);
-          bundledSizes.add(sizeKey);
-
-          // Upload to GCloud (fire-and-forget)
-          if (gcloudSyncService.isInitialized) {
-            gcloudSyncService.uploadFile(destPath, `match_artifacts/${matchId}/${file}`)
-              .then(r => { if (!r.success) console.warn(`[GCloud] Artifact upload failed: ${r.error}`); })
-              .catch(err => console.warn(`[GCloud] Artifact upload error: ${err.message}`));
-          }
-        }
-      }
-    };
-
-    // Primary: screenshots saved by saveScreenshot (smart capture flow)
-    await scanDir(path.join(app.getPath('userData'), 'screenshots'));
-    // Fallback: legacy ocr-debug images (old capture flow)
-    await scanDir(path.join(app.getPath('userData'), 'ocr-debug'));
-
-    // Also bundle matching telemetry JSON files (not included in returned array — accessible via get-match-artifacts)
-    let telemetryCount = 0;
-    const telemetryDir = path.join(app.getPath('userData'), 'telemetry_archive');
-    if (fs.existsSync(telemetryDir)) {
-      const telemetryFiles = (await fsPromises.readdir(telemetryDir)).filter(f => f.endsWith('.json'));
-      for (const file of telemetryFiles) {
-        try {
-          const srcPath = path.join(telemetryDir, file);
-          const content = JSON.parse(await fsPromises.readFile(srcPath, 'utf-8'));
-          const events = Array.isArray(content) ? content : (content.telemetry || []);
-          const hasOverlap = events.some(e => {
-            const t = e.ClientTimestamp || e.timestamp || e.EventTimestamp;
-            return t && t >= startTime - 5000 && t <= endTime + 30000;
-          });
-          if (hasOverlap) {
-            const destPath = path.join(matchDir, file);
-            await fsPromises.copyFile(srcPath, destPath);
-            telemetryCount++;
-          }
-        } catch (e) { /* skip unparseable files */ }
-      }
-    }
-
-    console.log(`[Artifacts] Bundled ${bundledImages.length} images + ${telemetryCount} telemetry files for match ${matchId}`);
-    return bundledImages;
-  } catch (e) {
-    console.error("Artifact Bundling Error", e);
-    return [];
-  }
-});
-
-ipcMain.handle('get-match-artifacts', async (event, matchId) => {
-  try {
-    const matchDir = path.join(app.getPath('userData'), 'match_artifacts', matchId.toString());
-    if (!fs.existsSync(matchDir)) return { images: [], imageFiles: [], telemetry: [] };
-
-    const files = await fsPromises.readdir(matchDir);
-    const images = [];
-    const imageFiles = [];
-    const telemetry = [];
-
-    for (const f of files) {
-      const fullPath = path.join(matchDir, f);
-      const ext = path.extname(f).toLowerCase();
-      if (ext === '.json') {
-        try {
-          const content = JSON.parse(await fsPromises.readFile(fullPath, 'utf-8'));
-          telemetry.push(content);
-        } catch (e) { /* skip unparseable */ }
-      } else if (['.png', '.jpg', '.jpeg', '.bmp', '.webp'].includes(ext)) {
-        images.push(fullPath);
-        imageFiles.push({ filename: f, path: fullPath });
-      }
-    }
-    return { images, imageFiles, telemetry };
-  } catch (e) {
-    return { images: [], imageFiles: [], telemetry: [] };
-  }
-});
-
-ipcMain.handle('list-match-artifacts', async () => {
-  try {
-    const baseDir = path.join(app.getPath('userData'), 'match_artifacts');
-    if (!fs.existsSync(baseDir)) return [];
-
-    const entries = await fsPromises.readdir(baseDir, { withFileTypes: true });
-    const imageExts = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.webp']);
-    const results = [];
-
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const dirName = entry.name;
-      if (!/^\d+$/.test(dirName)) continue;
-
-      const dirPath = path.join(baseDir, dirName);
-      let files = [];
-      try {
-        files = await fsPromises.readdir(dirPath);
-      } catch {
-        continue;
-      }
-
-      const images = files
-        .filter(f => imageExts.has(path.extname(f).toLowerCase()))
-        .map(f => path.join(dirPath, f));
-
-      results.push({ id: Number(dirName), images });
-    }
-
-    return results;
-  } catch (e) {
-    console.error('[Artifacts] list-match-artifacts error:', e.message || e);
-    return [];
-  }
-});
-
-ipcMain.handle('remove-match-artifact', async (event, { matchId, filename }) => {
-  try {
-    const matchDir = path.join(app.getPath('userData'), 'match_artifacts', matchId.toString());
-    const filePath = path.join(matchDir, filename);
-    if (fs.existsSync(filePath)) {
-      await fsPromises.unlink(filePath);
-      console.log(`[Artifacts] Removed ${filename} from match ${matchId}`);
-      return { success: true };
-    }
-    return { success: false, error: 'File not found' };
-  } catch (e) {
-    console.error('[Artifacts] Remove error:', e.message);
-    return { success: false, error: e.message };
-  }
-});
-
-ipcMain.handle('add-match-artifact', async (event, { matchId }) => {
-  try {
-    const { dialog } = require('electron');
-    const result = await dialog.showOpenDialog(win, {
-      title: 'Add Screenshot to Match',
-      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'bmp', 'webp'] }],
-      properties: ['openFile', 'multiSelections'],
-    });
-    if (result.canceled || result.filePaths.length === 0) return { success: false, canceled: true };
-
-    const matchDir = path.join(app.getPath('userData'), 'match_artifacts', matchId.toString());
-    if (!fs.existsSync(matchDir)) fs.mkdirSync(matchDir, { recursive: true });
-
-    const added = [];
-    for (const srcPath of result.filePaths) {
-      const ext = path.extname(srcPath).toLowerCase();
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const destName = `added_${timestamp}_${path.basename(srcPath)}`;
-      const destPath = path.join(matchDir, destName);
-      await fsPromises.copyFile(srcPath, destPath);
-      added.push(destPath);
-      console.log(`[Artifacts] Added ${destName} to match ${matchId}`);
-    }
-    return { success: true, added };
-  } catch (e) {
-    console.error('[Artifacts] Add error:', e.message);
-    return { success: false, error: e.message };
-  }
-});
-
-// ─── Screenshot-first: save capture to disk without OCR ───
-ipcMain.handle('save-screenshot', async (event, { imageBase64, matchId }) => {
-  try {
-    if (!imageBase64 || imageBase64.length < 100) {
-      return { success: false, error: 'Invalid image data' };
-    }
-    const imageBuffer = Buffer.from(imageBase64, 'base64');
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `capture_${timestamp}.png`;
-
-    let destDir;
-    if (matchId) {
-      destDir = path.join(app.getPath('userData'), 'match_artifacts', matchId.toString());
-    } else {
-      destDir = path.join(app.getPath('userData'), 'screenshots');
-    }
-    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
-
-    const filePath = path.join(destDir, filename);
-    await fsPromises.writeFile(filePath, imageBuffer);
-    console.log(`[Screenshot] Saved ${filename} (${(imageBuffer.length / 1024).toFixed(1)}KB) to ${destDir}`);
-
-    return { success: true, filePath, filename, size: imageBuffer.length };
-  } catch (e) {
-    console.error('[Screenshot] Save error:', e.message);
-    return { success: false, error: e.message };
-  }
-});
+// Artifact handlers (Phase 2: electron/handlers/*)
+registerArtifactHandlers(ipcMain, { app, getWin: () => win, artifactHelpers, gcloudSyncService });
 
 ipcMain.handle('rerun-ocr-on-artifact', async (event, { imagePath, activeUser, ocrMode }) => {
   try {
@@ -927,7 +687,7 @@ ipcMain.handle('db-read', async () => {
     const candidates = getDbCandidates();
     // Extra safety: if the main DB is corrupt/missing, try the newest backups too.
     try {
-      const backups = await listRecentBackups(12);
+      const backups = await dbHelpers.listRecentBackups(DB_BACKUP_DIR, 12);
       for (const b of backups) candidates.push(b);
     } catch { /* ignore */ }
 
@@ -982,7 +742,7 @@ ipcMain.handle('db-write', async (event, data) => {
     const now = Date.now();
     if (now - lastAutoBackupAtMs > 5 * 60 * 1000) { // 5 minutes
       lastAutoBackupAtMs = now;
-      void createDbBackup('rolling');
+      void dbHelpers.createDbBackup(DB_PATH, DB_BACKUP_DIR, 'rolling');
     }
     return true;
   } catch (e) {
@@ -1017,7 +777,7 @@ ipcMain.on('window-close', () => {
 });
 
 ipcMain.handle('db-backup', () => {
-  return createDbBackup('manual');
+  return dbHelpers.createDbBackup(DB_PATH, DB_BACKUP_DIR, 'manual');
 });
 
 ipcMain.handle('epic-request', async (event, payload = {}) => {
@@ -1096,121 +856,6 @@ ipcMain.handle('epic-request', async (event, payload = {}) => {
 let LOG_PATH = '';
 let logMonitorInterval = null;
 let lastLogContent = null;
-
-// Telemetry Archive Setup
-const TELEMETRY_ARCHIVE_DIR = path.join(app.getPath('userData'), 'telemetry_archive');
-const ARCHIVE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-function ensureArchiveDir() {
-  if (!fs.existsSync(TELEMETRY_ARCHIVE_DIR)) {
-    fs.mkdirSync(TELEMETRY_ARCHIVE_DIR, { recursive: true });
-  }
-}
-
-function cleanupOldArchives() {
-  try {
-    ensureArchiveDir();
-    const files = fs.readdirSync(TELEMETRY_ARCHIVE_DIR);
-    const now = Date.now();
-    let cleaned = 0;
-
-    files.forEach(file => {
-      const filePath = path.join(TELEMETRY_ARCHIVE_DIR, file);
-      const stat = fs.statSync(filePath);
-      if (now - stat.mtimeMs > ARCHIVE_MAX_AGE_MS) {
-        fs.unlinkSync(filePath);
-        cleaned++;
-      }
-    });
-
-    if (cleaned > 0) console.log(`Cleaned up ${cleaned} old telemetry archives.`);
-  } catch (e) {
-    console.error('Archive cleanup error:', e);
-  }
-}
-
-async function archiveTelemetry(data) {
-  try {
-    ensureArchiveDir();
-
-    // 1. Extract a grouping ID (MatchId or sessionId)
-    let matchId = 'session_global';
-    const scanForId = (obj) => {
-      if (!obj || typeof obj !== 'object') return;
-      if (obj.matchId || obj.MatchId) { matchId = obj.matchId || obj.MatchId; return; }
-      if (obj.sessionId || obj.SessionId) { matchId = obj.sessionId || obj.SessionId; return; }
-      if (Array.isArray(obj)) { for (const item of obj) { scanForId(item); if (matchId !== 'session_global') break; } }
-      else { for (const key in obj) { scanForId(obj[key]); if (matchId !== 'session_global') break; } }
-    };
-    scanForId(data);
-
-    // 2. Sanitize match ID for filename
-    const safeMatchId = matchId.toString().replace(/[^a-z0-9_-]/gi, '_');
-
-    // 3. Append to a combined file for this match/session
-    const archivePath = path.join(TELEMETRY_ARCHIVE_DIR, `match_${safeMatchId}.json`);
-
-    let combinedData = [];
-    if (fs.existsSync(archivePath)) {
-      try {
-        const content = fs.readFileSync(archivePath, 'utf8');
-        combinedData = JSON.parse(content);
-        if (!Array.isArray(combinedData)) combinedData = [combinedData];
-      } catch (e) { combinedData = []; }
-    }
-
-    // Wrap single event in array if needed
-    let newEvents = [];
-    if (data.telemetry && Array.isArray(data.telemetry)) newEvents = data.telemetry;
-    else if (Array.isArray(data)) newEvents = data;
-    else newEvents = [data];
-
-    // Deduplicate by signature within this combined file
-    const existingSignatures = new Set(combinedData.map(e => `${e.ClientTimestamp}_${e.EventName}`));
-    newEvents.forEach(e => {
-      const sig = `${e.ClientTimestamp}_${e.EventName}`;
-      if (!existingSignatures.has(sig)) {
-        combinedData.push(e);
-      }
-    });
-
-    // Sort and Write
-    combinedData.sort((a, b) => (a.ClientTimestamp || 0) - (b.ClientTimestamp || 0));
-    await fsPromises.writeFile(archivePath, JSON.stringify(combinedData, null, 2));
-
-    // console.log(`[Archive] Combined telemetry for match ${matchId} (${combinedData.length} events total)`);
-  } catch (e) {
-    console.error('Failed to archive telemetry:', e);
-  }
-}
-
-async function loadArchivedTelemetry() {
-  try {
-    ensureArchiveDir();
-    const files = await fsPromises.readdir(TELEMETRY_ARCHIVE_DIR);
-    const allEvents = [];
-
-    await Promise.all(files.map(async (file) => {
-      try {
-        const filePath = path.join(TELEMETRY_ARCHIVE_DIR, file);
-        const content = JSON.parse(await fsPromises.readFile(filePath, 'utf-8'));
-        if (content.telemetry && Array.isArray(content.telemetry)) {
-          allEvents.push(...content.telemetry);
-        } else if (Array.isArray(content)) {
-          allEvents.push(...content);
-        } else if (content.EventName) {
-          allEvents.push(content);
-        }
-      } catch (e) { /* Skip corrupted files */ }
-    }));
-
-    console.log(`Loaded ${allEvents.length} events from ${files.length} archived files.`);
-    return allEvents;
-  } catch (e) {
-    console.error('Failed to load archived telemetry:', e);
-    return [];
-  }
-}
 
 // Optimization: Use Buffer for fast byte shifting + Async Chunking if needed
 async function decodeLog() {
@@ -1343,7 +988,7 @@ ipcMain.on('start-log-monitoring', () => {
           const currentStr = JSON.stringify(data);
           // Also Send Data
           win.webContents.send('log-data', data);
-          archiveTelemetry(data);
+          telemetryArchiveHelpers.archiveTelemetry(telemetryArchiveHelpers.getArchiveDir(app), data);
 
           // --- PERSISTENCE: Append-Only History ---
           (async () => {
@@ -1408,7 +1053,7 @@ ipcMain.on('start-log-monitoring', () => {
 });
 
 ipcMain.handle('load-archived-telemetry', async () => {
-  return loadArchivedTelemetry();
+  return telemetryArchiveHelpers.loadArchivedTelemetry(telemetryArchiveHelpers.getArchiveDir(app));
 });
 
 ipcMain.on('stop-log-monitoring', () => {
@@ -1524,7 +1169,7 @@ ipcMain.handle('scan-epic-ids', async () => {
   if (data && !error) findIds(data);
 
   try {
-    const archivedEvents = await loadArchivedTelemetry();
+    const archivedEvents = await telemetryArchiveHelpers.loadArchivedTelemetry(telemetryArchiveHelpers.getArchiveDir(app));
     archivedEvents.forEach(e => {
       const clientCtx = e.context?.client || e.Payload?.context?.client;
       if (clientCtx?.accountId && clientCtx?.platformAccountId && clientCtx.accountId !== clientCtx.platformAccountId) {
@@ -1781,7 +1426,7 @@ app.whenReady().then(async () => {
   createTray();
   createWindow();
   if (isDev) setSplashProgress(win, 20, 'Preparing services...', 'Starting startup tasks');
-  cleanupOldArchives();
+  telemetryArchiveHelpers.cleanupOldArchives(telemetryArchiveHelpers.getArchiveDir(app));
   if (isDev) setSplashProgress(win, 35, 'Preparing OCR...', 'Registering OCR handlers');
   registerOCRHandlers(win);  // Register new OCR IPC handlers (pass win for hide-during-capture)
   if (isDev) setSplashProgress(win, 50, 'OCR ready', 'Checking cloud integrations');
@@ -1885,27 +1530,9 @@ ipcMain.handle('decode-telemetry-cache', async () => {
 
 ipcMain.handle('list-telemetry-archives', async () => {
   try {
-    const archiveDir = path.join(app.getPath('userData'), 'telemetry_archive');
+    const archiveDir = telemetryArchiveHelpers.getArchiveDir(app);
     console.log('[Simulator] Listing archives in:', archiveDir);
-    if (!fs.existsSync(archiveDir)) {
-      console.log('[Simulator] Archive directory does not exist:', archiveDir);
-      return [];
-    }
-
-    const files = (await fsPromises.readdir(archiveDir))
-      .filter(f => f.endsWith('.json'));
-
-    const fileStats = await Promise.all(files.map(async (file) => {
-      const fullPath = path.join(archiveDir, file);
-      const stats = await fsPromises.stat(fullPath);
-      return {
-        filename: file,
-        date: stats.mtimeMs,
-        size: stats.size
-      };
-    }));
-
-    return fileStats.sort((a, b) => b.date - a.date); // Newest first
+    return await telemetryArchiveHelpers.listArchiveFiles(archiveDir);
   } catch (e) {
     console.error('Failed to list telemetry archives:', e);
     return [];
@@ -1931,13 +1558,9 @@ ipcMain.handle('load-telemetry-archive-file', async (event, filename) => {
 
 ipcMain.handle('clear-telemetry-archives', async () => {
   try {
-    const archiveDir = path.join(app.getPath('userData'), 'telemetry_archive');
-    if (!fs.existsSync(archiveDir)) return { success: true, count: 0 };
-
-    const files = (await fsPromises.readdir(archiveDir)).filter(f => f.endsWith('.json'));
-    await Promise.all(files.map(file => fsPromises.unlink(path.join(archiveDir, file))));
-
-    return { success: true, count: files.length };
+    const archiveDir = telemetryArchiveHelpers.getArchiveDir(app);
+    const result = await telemetryArchiveHelpers.clearArchiveFiles(archiveDir);
+    return result;
   } catch (e) {
     console.error('Failed to clear telemetry archives:', e);
     return { success: false, message: e.message };

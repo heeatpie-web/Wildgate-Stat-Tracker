@@ -95,3 +95,7 @@ Use this row format when claiming:
 | `docs/agents/03_VALIDATION.md` | builder | 2026-02-12T20:38:18Z | 2026-02-12T20:38:39Z | RM-REQ-001: append npm test RC evidence |
 | `docs/agents/02_EXECUTION_LOG.md` | builder | 2026-02-12T20:38:18Z | 2026-02-12T20:38:39Z | log RM-REQ-001 builder completion |
 | `docs/WORKLOCKS.md` | builder | 2026-02-12T20:38:18Z | 2026-02-12T20:38:39Z | claim/release lifecycle for RM-REQ-001 |
+| `scripts/ocr_corpus_ingest_legacy.cjs` | builder | 2026-02-12T20:58:26Z | 2026-02-12T21:00:25Z | Step 7: fix legacy ingest script GCloud initialization |
+| `package.json` | builder | 2026-02-12T20:58:26Z | 2026-02-12T21:00:25Z | Step 7: verify npm script exists for legacy ingest |
+| `docs/agents/02_EXECUTION_LOG.md` | builder | 2026-02-12T20:58:26Z | 2026-02-12T21:00:25Z | Step 7: log legacy ingest implementation |
+| `docs/WORKLOCKS.md` | builder | 2026-02-12T20:58:26Z | 2026-02-12T21:00:25Z | Step 7: claim/release lock lifecycle |

@@ -27,6 +27,7 @@
     "ocr:eval": "node scripts/ocr_corpus_eval.cjs --truth dataset/ocr-corpus/ground-truth.json --pred dataset/ocr-corpus/predictions.latest.json --baseline dataset/ocr-corpus/baseline.json --out dataset/ocr-corpus/reports/latest.json",
     "ocr:eval:sample": "node scripts/ocr_corpus_eval.cjs --truth dataset/ocr-corpus/ground-truth.sample.json --pred dataset/ocr-corpus/predictions.sample.json --baseline dataset/ocr-corpus/baseline.sample.json --out dataset/ocr-corpus/reports/sample-report.json",
     "ocr:baseline:promote": "node scripts/ocr_promote_baseline.cjs --report dataset/ocr-corpus/reports/latest.json --baseline dataset/ocr-corpus/baseline.json",
+    "ocr:ingest:legacy": "electron scripts/ocr_corpus_ingest_legacy.cjs",
     "dev:qa": "npm run snap:views && npm run test && npm run build",
     "test": "vitest run",
     "test:watch": "vitest"

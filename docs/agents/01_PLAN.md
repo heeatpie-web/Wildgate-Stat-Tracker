@@ -2,7 +2,7 @@
 
 Status: ACTIVE
 
-## Steps
+## Steps (OCR Stabilization Cycle 01)
 1. [COMPLETE] Bind `ui-designer` role to an explicit active agent tab and unblock lane B.
 2. [COMPLETE] Builder fixes Bug 1: cloud-local merge modifier regression in OCR pipeline.
 3. [COMPLETE] Builder fixes Bug 2: Crew Hub enemy/teammate misclassification (panel boundary issue).
@@ -10,9 +10,17 @@ Status: ACTIVE
 5. [COMPLETE] Debugger validates each fix with abuse/negative checks and full predict+eval deltas.
 6. [COMPLETE] PM publishes cycle handoff with baseline comparison and next-safe increment.
 
+## Steps (Post-Cycle Activation)
+7. [COMPLETE] One-Time Screenshot Integration + GCloud Upload — builder implemented ingest script + GCloud init fix; debugger validated.
+8. [COMPLETE] Structure Hardening Sprint Phase 1 — builder extracted artifactHelpers.cjs; build + tests pass.
+9. [COMPLETE] Structure Hardening Sprint Phase 2 — builder refactors handlers (artifactHandlers.cjs), debugger validates.
+10. [COMPLETE] Structure Hardening Sprint Phase 3 — builder adds tests (artifactService, useMatchSubmission, useSmartCapture); build + 88 tests pass.
+11. [COMPLETE] Dev Splash Retry Noise Reduction — builder implemented throttling + dedupe; build + tests pass.
+12. [IN_PROGRESS] Opacity Normalization (3-Tier System) — builder normalizes text-related opacity across 18 component files per intake (full/60/40; disabled → opacity-disabled).
+
 ## Active Step
-- COMPLETE: Steps 1-6
-- Cycle complete — ready for batch commit/push
+- COMPLETE: Steps 1-11 (OCR cycle, Legacy Ingest, Structure Hardening Phases 1-3, Dev Splash)
+- IN_PROGRESS: Step 12 (Opacity Normalization)
 
 ## PM Approval
 - Date (UTC): 2026-02-12T22:25:00Z
@@ -167,9 +175,10 @@ Delegation acceptance condition:
 
 ### Task
 - Name: One-Time Screenshot Integration + GCloud Upload
-- Status: QUEUED (not started)
+- Status: ACTIVE (PM activated 2026-02-13T02:10Z)
 - Priority: Next migration batch after current active step gate
 - Owner for queue activation: `project-manager`
+- Assigned roles: `builder` (implementation), `debugger` (validation), `project-manager` (gate)
 
 ### Goal
 - Run a one-time migration that ingests screenshots from missing sources into the OCR corpus and uploads them to GCloud without duplicates.
@@ -269,17 +278,17 @@ Delegation acceptance condition:
 1. Restore truth from backup file created during apply.
 2. Use ingest report to delete uploaded `_ingest/<batch-id>/...` objects if rollback required.
 
-### Queued Role Prompts (Do Not Start Until PM Activates)
+### Active Role Prompts (PM Activated 2026-02-13T02:10Z)
 
-#### `project-manager` prompt (queued)
+#### `project-manager` prompt (ACTIVE)
 ```md
 Role: project-manager
-Task: One-Time Screenshot Integration + GCloud Upload (queued only — do not execute yet)
+Task: One-Time Screenshot Integration + GCloud Upload (ACTIVE — execute now)
 
 Objective
-- Prepare activation and scope controls for one-time ingest+upload migration.
+- Execute activation and scope controls for one-time ingest+upload migration.
 
-Required outputs (planning only)
+Required outputs
 1. Confirm source paths and naming policy:
    - `dataset/images/`
    - `userData/training_data/`
@@ -290,13 +299,14 @@ Required outputs (planning only)
    - idempotent second run + eval evidence logged.
 
 Constraints
-- Queued only now; do not start implementation.
+- Execute immediately — this is the current active task (Step 7).
+- Gate builder completion before authorizing next task.
 ```
 
-#### `builder` prompt (queued)
+#### `builder` prompt (ACTIVE)
 ```md
 Role: builder
-Task: Implement one-time legacy ingest + optional upload (queued only — do not execute yet)
+Task: Implement one-time legacy ingest + optional upload (ACTIVE — execute now)
 
 Objective
 - Build migration script and wiring with dedupe safety and reporting.
@@ -321,13 +331,14 @@ When activated, implement:
 6. Reuse existing GCloud upload path where possible.
 
 Constraints
-- Queued only now; do not start coding until PM activation.
+- Execute after Step 7 (Screenshot Integration) completes.
+- Follow phase gate rules: complete Phase 1 before starting Phase 2.
 ```
 
-#### `debugger` prompt (queued)
+#### `debugger` prompt (ACTIVE)
 ```md
 Role: debugger
-Task: Abuse/edge validation for legacy ingest (queued only — do not execute yet)
+Task: Abuse/edge validation for legacy ingest (ACTIVE — execute after builder completes)
 
 Objective
 - Validate robustness, idempotency, and failure behavior for migration.
@@ -345,7 +356,8 @@ Evidence required
 - If broken, open blocker in `docs/agents/BLOCKERS.md` with repro + likely fault module.
 
 Constraints
-- Queued only now; do not run tests until PM activation.
+- Execute after builder completes implementation and reports completion.
+- Run abuse/edge cases and verify idempotency before signing off.
 ```
 
 #### `verifier` prompt (queued; optional)
@@ -369,16 +381,19 @@ Deliverables
 - Go/No-Go recommendation to project-manager
 
 Constraints
-- Queued only now; do not execute until PM activation.
+- Execute after builder and debugger complete their work.
+- Provide independent signoff before PM closes the task.
 ```
 
 ## Queued Agent Task (PM Approved Queue Item)
 
 ### Task
 - Name: Structure Hardening Sprint (3 Phases)
-- Status: QUEUED (not started)
+- Status: ACTIVE (PM activated 2026-02-13T02:10Z)
 - Priority: After active OCR fix/validation gate
 - Owner for queue activation: `project-manager`
+- Assigned roles: `builder` (implementation), `debugger` (validation), `project-manager` (phase gates)
+- Current phase: Phase 1 (pending Step 7 completion)
 
 ### Goal
 - Reduce structural risk by modularizing the Electron main process, standardizing state ownership, and adding coverage for high-risk flows.
@@ -447,34 +462,34 @@ Constraints
 1. Revert phase branch/patch set to previous checkpoint tag.
 2. Restore compatibility adapters and previous handler wiring from checkpoint.
 
-### Queued Role Prompts (Do Not Start Until PM Activates)
+### Active Role Prompts (PM Activated 2026-02-13T02:10Z)
 
-#### `project-manager` prompt (queued)
+#### `project-manager` prompt (ACTIVE — execute after Step 7)
 ```md
 Role: project-manager
-Task: Structure Hardening Sprint, Phase 1 (queued only — do not execute yet)
+Task: Structure Hardening Sprint, Phase 1 (ACTIVE — execute after Step 7 completes)
 
 Objective
-- Prepare Phase 1 execution boundaries and activation checklist without starting implementation.
+- Execute Phase 1 execution boundaries and activation checklist.
 
-Required outputs (planning only)
+Required outputs
 1. Confirm phase scope lock:
    - Extract helper logic from `electron/main.cjs` into focused modules.
    - IPC channel alignment check between preload and main.
    - Submission-path state reset/ownership consistency checks.
 2. Define file ownership lanes for builder/debugger/verifier.
 3. Define activation gate and stop conditions for Phase 1.
-4. Publish phase-ready checklist in `docs/agents/04_HANDOFF.md` (queued status).
+4. Publish phase-ready checklist in `docs/agents/04_HANDOFF.md`.
 
 Constraints
-- Do not authorize code edits yet.
-- Keep this queued until PM flips plan status to IN_PROGRESS.
+- Execute after Step 7 (Screenshot Integration) completes.
+- Gate Phase 1 completion before authorizing Phase 2.
 ```
 
-#### `builder` prompt (queued)
+#### `builder` prompt (ACTIVE — execute after Step 7)
 ```md
 Role: builder
-Task: Structure Hardening Sprint, Phase 1 implementation pack (queued only — do not execute yet)
+Task: Structure Hardening Sprint, Phase 1 implementation pack (ACTIVE — execute after Step 7 completes)
 
 Objective
 - Prepare the implementation plan for Phase 1, no code changes until activation.
@@ -493,13 +508,14 @@ Validation expectations
 - No regressions in capture/submission/artifact flow
 
 Constraints
-- Queued only now; do not start coding until PM activation.
+- Execute after Step 7 (Screenshot Integration) completes.
+- Follow phase gate rules: complete Phase 1 before starting Phase 2.
 ```
 
-#### `debugger` prompt (queued)
+#### `debugger` prompt (ACTIVE — execute after Step 7)
 ```md
 Role: debugger
-Task: Structure Hardening Sprint, Phase 1 validation plan (queued only — do not execute yet)
+Task: Structure Hardening Sprint, Phase 1 validation plan (ACTIVE — execute after Step 7 completes)
 
 Objective
 - Prepare Phase 1 regression checks and evidence template; no execution yet.
@@ -515,13 +531,14 @@ Required evidence
 - If failure: open blocker in `docs/agents/BLOCKERS.md` with repro + likely fault module.
 
 Constraints
-- Queued only now; do not run validation until PM activation.
+- Execute after builder completes Phase 1 implementation.
+- Run regression checks and verify no behavioral drift.
 ```
 
-#### `verifier` prompt (queued; optional)
+#### `verifier` prompt (ACTIVE — execute after Step 7; optional)
 ```md
 Role: verifier (or debugger if verifier unassigned)
-Task: Independent verification for Structure Hardening Phase 1 (queued only — do not execute yet)
+Task: Independent verification for Structure Hardening Phase 1 (ACTIVE — execute after Step 7 completes)
 
 Objective
 - Prepare independent verification checklist and acceptance gate for Phase 1.
@@ -543,9 +560,11 @@ Constraints
 
 ### Task
 - Name: Dev Splash Retry Noise Reduction
-- Status: QUEUED (not started)
+- Status: ACTIVE (PM activated 2026-02-13T02:10Z)
 - Priority: After active OCR/security gates and queued structure phase activation window
 - Owner for queue activation: `project-manager`
+- Assigned roles: `builder` (implementation), `debugger` (validation), `project-manager` (gate)
+- Execution order: After Step 7 completion
 
 ### Goal
 - Reduce startup splash churn in dev mode where repeated "checking/retrying dev connection" updates flood up to many attempts and create noisy UX.
@@ -573,12 +592,12 @@ Constraints
 3. Startup logs remain actionable without UI spam.
 4. Validation evidence recorded in `docs/agents/03_VALIDATION.md`.
 
-### Queued Role Prompts (Do Not Start Until PM Activates)
+### Active Role Prompts (PM Activated 2026-02-13T02:10Z)
 
-#### `project-manager` prompt (queued)
+#### `project-manager` prompt (ACTIVE — execute after Step 7)
 ```md
 Role: project-manager
-Task: Dev Splash Retry Noise Reduction (queued only — do not execute yet)
+Task: Dev Splash Retry Noise Reduction (ACTIVE — execute after Step 7 completes)
 
 Objective
 - Prepare activation checklist and boundaries for a low-risk messaging-only improvement.
@@ -594,13 +613,14 @@ Required outputs (planning only)
 4. Add Go/No-Go entry point in `docs/agents/04_HANDOFF.md` when ready.
 
 Constraints
-- Queued only now; do not authorize implementation yet.
+- Execute after Step 7 (Screenshot Integration) completes.
+- Gate completion before authorizing next queued task.
 ```
 
-#### `builder` prompt (queued)
+#### `builder` prompt (ACTIVE — execute after Step 7)
 ```md
 Role: builder
-Task: Dev Splash Retry Noise Reduction implementation (queued only — do not execute yet)
+Task: Dev Splash Retry Noise Reduction implementation (ACTIVE — execute after Step 7 completes)
 
 Objective
 - Reduce duplicate retry/checking splash updates while preserving retry robustness.
@@ -620,13 +640,14 @@ Validation expectations
 - Splash updates become significantly less noisy.
 
 Constraints
-- Queued only now; do not start coding until PM activation.
+- Execute after Step 7 (Screenshot Integration) completes.
+- Follow phase gate rules: complete Phase 1 before starting Phase 2.
 ```
 
-#### `debugger` prompt (queued)
+#### `debugger` prompt (ACTIVE — execute after Step 7)
 ```md
 Role: debugger
-Task: Dev Splash Retry Noise Reduction validation (queued only — do not execute yet)
+Task: Dev Splash Retry Noise Reduction validation (ACTIVE — execute after Step 7 completes)
 
 Objective
 - Validate behavior and non-regression for dev startup.
@@ -645,13 +666,14 @@ Evidence required
 - If broken, log blocker in `docs/agents/BLOCKERS.md` with repro and likely fault area.
 
 Constraints
-- Queued only now; no execution until PM activation.
+- Execute after builder completes implementation.
+- Verify reduced splash spam and preserved retry robustness.
 ```
 
-#### `verifier` prompt (queued; optional)
+#### `verifier` prompt (ACTIVE — execute after Step 7; optional)
 ```md
 Role: verifier (or debugger if verifier unassigned)
-Task: Independent check for Dev Splash Retry Noise Reduction (queued only — do not execute yet)
+Task: Independent check for Dev Splash Retry Noise Reduction (ACTIVE — execute after Step 7 completes)
 
 Objective
 - Independently verify behavior parity and reduced message churn.
@@ -685,12 +707,33 @@ Use this only after all active/approved queued tasks complete and evidence is po
 7. Run one final `git status` to confirm clean state.
 8. Push once to remote after PM approval.
 
+## Active Task Delegation (Post-Cycle Activation)
+
+### Step 7: One-Time Screenshot Integration + GCloud Upload
+**Status**: COMPLETE (builder + debugger; awaiting PM gate)  
+**Assigned to**: `builder` (primary), `debugger` (validation), `project-manager` (gate)  
+**Priority**: High — corpus expansion and GCloud sync  
+**Builder completion**: Script implemented; GCloud init fix (keyPath + bucketName) applied and dry-run verified (2026-02-12T21:19Z).  
+**Debugger completion (2026-02-13T02:20Z)**: Abuse/edge validation PASS — dry-run, apply+upload, idempotency (second run 0 new), unsupported extensions and corrupt JSON handling verified. Evidence in `docs/agents/03_VALIDATION.md`.  
+**Next action**: PM gates Step 7 completion; then Steps 8–11 may proceed.
+
+### Step 8-10: Structure Hardening Sprint (3 Phases)
+**Status**: ACTIVE (pending Step 7 completion)  
+**Assigned to**: `builder` (implementation), `debugger` (validation), `project-manager` (phase gates)  
+**Current phase**: Phase 1 (Quick Wins)  
+**Next action**: After Step 7 completes, `builder` begins Phase 1 extraction
+
+### Step 11: Dev Splash Retry Noise Reduction
+**Status**: ACTIVE (pending Step 7 completion)  
+**Assigned to**: `builder` (implementation), `debugger` (validation), `project-manager` (gate)  
+**Next action**: After Step 7 completes, `builder` implements throttling logic
+
 ## PM Active Communications (Current Cycle)
 
 ### Broadcast (All Roles)
-- Steps 1-4 are complete in substance.
-- RC remains NO-GO until release artifacts close RM-REQ-001/002/003.
-- No new feature scope; evidence-first updates only.
+- OCR Stabilization Cycle 01 is COMPLETE and released.
+- All queued tasks are now ACTIVE and delegated.
+- Execute Step 7 first, then proceed with Steps 8-11 in sequence.
 - Escalate unresolved peer dependencies after 45 minutes via `docs/agents/BLOCKERS.md`.
 
 ### Directed Requests

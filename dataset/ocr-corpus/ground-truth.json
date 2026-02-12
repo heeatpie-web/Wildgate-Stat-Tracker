@@ -677,6 +677,54 @@
         }
       ],
       "modifiers": []
+    },
+    {
+      "sampleId": "capture_2026-02-04T08-20-08-907Z",
+      "imagePath": "dataset\\images\\train\\capture_2026-02-04T08-20-08-907Z.png",
+      "imageHash": "8666f4467e35543d2a6fbd81de528733b5873461475eff54cdd707d17f16357c",
+      "teammates": [],
+      "opponentTeams": [],
+      "modifiers": []
+    },
+    {
+      "sampleId": "capture_2026-02-04T08-21-06-645Z",
+      "imagePath": "dataset\\images\\train\\capture_2026-02-04T08-21-06-645Z.png",
+      "imageHash": "af403469ccbcbe16b7058f75abb14db3a4f0a9163d5de17b40579179bfb29b98",
+      "teammates": [],
+      "opponentTeams": [],
+      "modifiers": []
+    },
+    {
+      "sampleId": "capture_2026-02-04T08-22-04-350Z",
+      "imagePath": "dataset\\images\\train\\capture_2026-02-04T08-22-04-350Z.png",
+      "imageHash": "00334add844cd024498bb4967b5127d062fa71249096b6ff02d938f6c82a8f42",
+      "teammates": [],
+      "opponentTeams": [],
+      "modifiers": []
+    },
+    {
+      "sampleId": "capture_2026-02-04T08-22-46-561Z",
+      "imagePath": "dataset\\images\\train\\capture_2026-02-04T08-22-46-561Z.png",
+      "imageHash": "880e8d6bfe3c396f211696e3f7e27fd678de3874ecf56ce0348c994cf389c214",
+      "teammates": [],
+      "opponentTeams": [],
+      "modifiers": []
+    },
+    {
+      "sampleId": "capture_2026-02-04T08-24-00-719Z",
+      "imagePath": "dataset\\images\\train\\capture_2026-02-04T08-24-00-719Z.png",
+      "imageHash": "4a5f565d82f247fd8a234e3f9d71041c09c9171a512956925cae94fffad1e68b",
+      "teammates": [],
+      "opponentTeams": [],
+      "modifiers": []
+    },
+    {
+      "sampleId": "legacy_7e6c8c7c",
+      "imagePath": "dataset\\images\\train\\train_1770245363831.png",
+      "imageHash": "721bb5bf970faa283b7d7f2b49dcde2624af07547bda6df891f9e2c6f0cae5d9",
+      "teammates": [],
+      "opponentTeams": [],
+      "modifiers": []
     }
   ]
 }
