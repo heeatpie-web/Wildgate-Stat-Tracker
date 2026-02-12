@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-02-12T20:09:30.680Z",
+  "generatedAt": "2026-02-12T19:53:21.985Z",
   "sourceTruth": "dataset/ocr-corpus/ground-truth.json",
   "ocrMode": "both",
   "samples": [
@@ -148,9 +148,7 @@
       "sampleId": "map_2026-02-08T03-11-12",
       "teammates": [
         "Xiphori",
-        "Germ",
-        "Dawg",
-        "als",
+        "GermDawgMill4",
         "AlixThus"
       ],
       "opponentTeams": [
@@ -178,7 +176,7 @@
       "sampleId": "map_2026-02-08T05-20-30",
       "teammates": [
         "Tone",
-        "性onn",
+        "fartingPuppy",
         "DarkOPizza",
         "AlixThus"
       ],
@@ -208,11 +206,11 @@
     {
       "sampleId": "map_2026-02-08T21-46-49",
       "teammates": [
-        "iglamthemilkmantTvQQ",
-        "fartingPuppy",
-        "Ondra-ocasek",
+        "lamthemilkmantTv",
+        "JefartingPuppy",
+        "ooOooO",
         "AlixThus",
-        "gon"
+        "iSyLL"
       ],
       "opponentTeams": [
         {
@@ -237,11 +235,9 @@
     {
       "sampleId": "map_2026-02-08T22-15-17",
       "teammates": [
-        "iglamthemilkmantTvQQ",
-        "fartingPuppy",
-        "Ondra-ocasek",
-        "AlixThus",
-        "gon"
+        "tamthemilkmantTv",
+        "JefartingPuppy",
+        "AlixThus"
       ],
       "opponentTeams": [
         {
@@ -274,11 +270,10 @@
     {
       "sampleId": "map_2026-02-08T22-47-16",
       "teammates": [
-        "iglamthemilkmantTvQQ",
-        "fartingPuppy",
-        "Ondra-ocasek",
+        "SQlamthemilkmantTv",
+        "JefartingPuppy",
         "AlixThus",
-        "gon"
+        "SyLL"
       ],
       "opponentTeams": [
         {
@@ -304,10 +299,9 @@
       "sampleId": "map_2026-02-11T05-21-48",
       "teammates": [
         "Tone",
-        "JEfartingPuppy",
+        "RiefartingPuppyQj",
         "Clenched22",
-        "AlixThus",
-        "A.M"
+        "AlixThus"
       ],
       "opponentTeams": [
         {
@@ -340,10 +334,9 @@
       "sampleId": "map_2026-02-11T05-47-13",
       "teammates": [
         "Tone",
-        "JEfartingPuppy",
+        "MEon",
         "Clenched22",
-        "AlixThus",
-        "A.M"
+        "AlixThus"
       ],
       "opponentTeams": [
         {
@@ -370,7 +363,7 @@
       "sampleId": "map_2026-02-11T06-09-33",
       "teammates": [
         "Tone",
-        "JEfartingPuppyA",
+        "iNmJ",
         "Clenched22",
         "AlixThus"
       ],
@@ -398,13 +391,11 @@
     {
       "sampleId": "map_2026-02-12T05-02-33",
       "teammates": [
-        "CATEyimrsiQQ",
         "Xiphori",
-        "凡是fartingPuppyfarti",
-        "ARSARESTone",
-        "TAR",
+        "RofartingPuppy",
+        "Tone",
         "AlixThus",
-        "gon"
+        "ATE"
       ],
       "opponentTeams": [
         {
@@ -440,13 +431,9 @@
     {
       "sampleId": "map_2026-02-12T05-52-48",
       "teammates": [
-        "Barbiz",
-        "woSE8",
         "Tone",
-        "ity",
         "AzureArtemis",
-        "AlixThus",
-        "10onTEE"
+        "AlixThus"
       ],
       "opponentTeams": [
         {
@@ -512,184 +499,6 @@
           "teamColor": "unknown",
           "players": [
             "104"
-          ]
-        }
-      ],
-      "modifiers": []
-    },
-    {
-      "sampleId": "map_2026-02-08T03-50-46",
-      "teammates": [
-        "poli8",
-        "Xiphori",
-        "Germ",
-        "Dawg",
-        "PurpleWhiteFo639",
-        "AlixThus",
-        "ANoO"
-      ],
-      "opponentTeams": [
-        {
-          "teamName": "POCO",
-          "teamColor": "red",
-          "players": []
-        },
-        {
-          "teamName": "Enemy Team 2",
-          "teamColor": "orange",
-          "players": []
-        }
-      ],
-      "modifiers": [
-        "Artifact: Weapon",
-        "Few Asteroids",
-        "Legion Patrols",
-        "Rogue Turrets",
-        "Few Ships"
-      ]
-    },
-    {
-      "sampleId": "map_2026-02-11T06-10-32",
-      "teammates": [
-        "Tone",
-        "JEfartingPuppy",
-        "Clenched?22",
-        "PrPANEERRAlixThus",
-        "oo一了",
-        "PrPANEERAlixThusV2"
-      ],
-      "opponentTeams": [
-        {
-          "teamName": "KEYMASTER",
-          "teamColor": "red",
-          "players": []
-        },
-        {
-          "teamName": "Enemy Team 2",
-          "teamColor": "orange",
-          "players": []
-        }
-      ],
-      "modifiers": [
-        "Artifact: Weapon",
-        "Ancient Vault",
-        "Easy Loot",
-        "Few Ships",
-        "Ice Storm",
-        "Legion Patrols"
-      ]
-    },
-    {
-      "sampleId": "crew_2026-02-08T05-53-41",
-      "teammates": [
-        "OUSTAFA3X5",
-        "HexWet",
-        "OON",
-        "Loserbones",
-        "ULL",
-        "fartingPuppy",
-        "jacklyn",
-        "AliXThus",
-        "RancidAloner",
-        "UNGUS",
-        "XLAZIe3",
-        "DarkoOPizza",
-        "orl"
-      ],
-      "opponentTeams": [
-        {
-          "teamName": "Team 1",
-          "teamColor": "unknown",
-          "players": [
-            "Alinki231342"
-          ]
-        }
-      ],
-      "modifiers": []
-    },
-    {
-      "sampleId": "crew_2026-02-12T05-02-40",
-      "teammates": [
-        "Oguri_",
-        "OPOCO",
-        "Alixer",
-        "forgotten",
-        "fartingPuppySPEE",
-        "Tone408Two",
-        "OSMI",
-        "AlixThus",
-        "Yfrothymug",
-        "Medu",
-        "Xiphori",
-        "WwE23",
-        "Hwey"
-      ],
-      "opponentTeams": [
-        {
-          "teamName": "LL J",
-          "teamColor": "unknown",
-          "players": [
-            "Talespinner",
-            "ase",
-            "Naf",
-            "eee",
-            "P2EchoesGrenchier"
-          ]
-        },
-        {
-          "teamName": "LE 3 J",
-          "teamColor": "unknown",
-          "players": [
-            "Ae1",
-            "eee",
-            "WorCrest"
-          ]
-        },
-        {
-          "teamName": "Team 1",
-          "teamColor": "unknown",
-          "players": [
-            "Xpe",
-            "fayTwotone1D4"
-          ]
-        },
-        {
-          "teamName": "VOICE OPTIONS 4",
-          "teamColor": "unknown",
-          "players": [
-            "4D497880"
-          ]
-        }
-      ],
-      "modifiers": []
-    },
-    {
-      "sampleId": "crew_2026-02-11T05-47-25",
-      "teammates": [
-        "Death",
-        "Imaceli",
-        "LordSpawn2k",
-        "YSTI",
-        "jdogoo",
-        "Clenche",
-        "AlixThus",
-        "Tone12",
-        "NfartingPuppy12",
-        "fel"
-      ],
-      "opponentTeams": [
-        {
-          "teamName": "Team 1",
-          "teamColor": "unknown",
-          "players": [
-            "Forks"
-          ]
-        },
-        {
-          "teamName": "VOICE OPTIONS W",
-          "teamColor": "unknown",
-          "players": [
-            "383DA7CO"
           ]
         }
       ],

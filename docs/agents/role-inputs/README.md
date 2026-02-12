@@ -27,6 +27,7 @@ Purpose: provide copy-paste startup inputs for each agent role in this repo.
 - `ui-designer.md` (required for UI work)
 - `builder.md` (required)
 - `debugger.md` (required)
+- `release-manager.md` (required at release integration stage; may be dual-hatted by `verifier`)
 - `verifier.md` (optional)
 - `reporter.md` (optional)
 
@@ -43,6 +44,6 @@ Purpose: provide copy-paste startup inputs for each agent role in this repo.
 
 ## Notes
 
-- Use role names exactly: `project-manager`, `ui-designer`, `builder`, `debugger`, `verifier`, `reporter`.
+- Use role names exactly: `project-manager`, `ui-designer`, `builder`, `debugger`, `release-manager`, `verifier`, `reporter`.
 - Legacy owner names in old logs are allowed, but all new entries should use role names.
 - Role inputs include report-driven safeguards: mandatory preflight, one-phase-per-cycle execution, and proof-first OCR verification.

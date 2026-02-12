@@ -27,3 +27,31 @@ All 18 files processed with text opacity normalized to the 3-tier system.
   - In: Electron main-process modularization, state ownership cleanup, legacy field migration path, targeted test coverage.
   - Out: UI redesign, OCR-model quality work, framework-level rewrites.
 - Activation rule: this remains queued until `project-manager` explicitly starts "Structure Hardening Sprint (3 Phases)" in `docs/agents/01_PLAN.md`.
+
+## Role Matrix (Current Model)
+
+### Required Core Roles
+- `project-manager` (PM): scope control, lane arbitration, blocker escalation, final business signoff.
+- `ui-designer`: OCR-facing UX/usability only with proof package.
+- `builder`: implementation/migrations/runtime code.
+- `debugger`: reproduction, root-cause validation, negative/regression checks.
+
+### Release Role
+- `release-manager`: required at release integration stage (may be dual-hatted by `verifier` if staffing is limited).
+
+### Optional Roles
+- `verifier`: independent validation pass.
+- `reporter`: external-ready summary packaging.
+
+## Release Acceptance Criteria (PM + Release-Manager)
+
+Release is accepted only when all are true:
+1. Gate A (Security/Data Integrity) evidence is present and cross-checked by `release-manager`.
+2. Gate B (OCR Baseline Quality) evidence includes builder run + debugger verification + UI usability confirmation.
+3. Gate C (Ship Readiness) package includes:
+   - UI screenshot proof/checklist
+   - stability run notes
+   - final go/no-go recommendation
+4. `npm run build` and `npm test` are green for the release candidate.
+5. `docs/agents/03_VALIDATION.md` includes a final release block owned by `release-manager`.
+6. `docs/agents/04_HANDOFF.md` includes release candidate summary, known risks, rollback path, and PM approval outcome.

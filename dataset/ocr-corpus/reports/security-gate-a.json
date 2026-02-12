@@ -1,0 +1,454 @@
+{
+  "timestamp": "2026-02-12T20:27:56.948Z",
+  "gate": "A",
+  "title": "Security Negative Tests — Rejection Path Evidence",
+  "summary": {
+    "pass": 109,
+    "fail": 0,
+    "total": 109,
+    "status": "ALL_PASS"
+  },
+  "results": [
+    {
+      "test": "Reject null path",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject undefined path",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject empty string path",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject non-string path (number)",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject System32 path",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject Windows config",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject drive root",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject different drive",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject other user directory",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject Program Files",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject ../ traversal from app data",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject deep ../ traversal",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject single ../ from docs root",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject traversal from logs to roaming",
+      "result": "PASS"
+    },
+    {
+      "test": "Allow valid app data subpath",
+      "result": "PASS"
+    },
+    {
+      "test": "Allow valid docs subpath",
+      "result": "PASS"
+    },
+    {
+      "test": "Allow valid Nebula log",
+      "result": "PASS"
+    },
+    {
+      "test": "Allow valid Wildgate log",
+      "result": "PASS"
+    },
+    {
+      "test": "Allow root itself (exact match)",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject UNC network path",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject file:// URL",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject encoded traversal through AppData",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"exec\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"shell-exec\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"run-command\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"eval\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"fs-read\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"fs-write\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"fs-delete\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"fs-readdir\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"require\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"child-process\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"get-env\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"set-env\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"process-exit\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"delete-file\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"write-file\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"read-file\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"execute-script\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"spawn-process\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"arbitrary-channel\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"hack\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Invoke blocks dangerous channel: \"(empty)\" ",
+      "result": "PASS"
+    },
+    {
+      "test": "Send blocks dangerous channel: \"exec\"",
+      "result": "PASS"
+    },
+    {
+      "test": "Send blocks dangerous channel: \"shell-exec\"",
+      "result": "PASS"
+    },
+    {
+      "test": "Send blocks dangerous channel: \"run-command\"",
+      "result": "PASS"
+    },
+    {
+      "test": "Send blocks dangerous channel: \"eval\"",
+      "result": "PASS"
+    },
+    {
+      "test": "Send blocks dangerous channel: \"kill-process\"",
+      "result": "PASS"
+    },
+    {
+      "test": "Send blocks dangerous channel: \"shutdown\"",
+      "result": "PASS"
+    },
+    {
+      "test": "Send blocks dangerous channel: \"reboot\"",
+      "result": "PASS"
+    },
+    {
+      "test": "Send blocks dangerous channel: \"arbitrary-channel\"",
+      "result": "PASS"
+    },
+    {
+      "test": "Send blocks dangerous channel: \"(empty)\"",
+      "result": "PASS"
+    },
+    {
+      "test": "Receive blocks dangerous channel: \"exec-result\"",
+      "result": "PASS"
+    },
+    {
+      "test": "Receive blocks dangerous channel: \"shell-output\"",
+      "result": "PASS"
+    },
+    {
+      "test": "Receive blocks dangerous channel: \"eval-result\"",
+      "result": "PASS"
+    },
+    {
+      "test": "Receive blocks dangerous channel: \"arbitrary-data\"",
+      "result": "PASS"
+    },
+    {
+      "test": "Receive blocks dangerous channel: \"(empty)\"",
+      "result": "PASS"
+    },
+    {
+      "test": "No duplicate invoke channels",
+      "result": "PASS"
+    },
+    {
+      "test": "No duplicate send channels",
+      "result": "PASS"
+    },
+    {
+      "test": "No duplicate receive channels",
+      "result": "PASS"
+    },
+    {
+      "test": "open-path is in invoke allowlist",
+      "result": "PASS"
+    },
+    {
+      "test": "read-file-base64 is in invoke allowlist",
+      "result": "PASS"
+    },
+    {
+      "test": "ocr-process-capture is in invoke allowlist",
+      "result": "PASS"
+    },
+    {
+      "test": "Allow ground-truth.json",
+      "result": "PASS"
+    },
+    {
+      "test": "Allow predictions.latest.json",
+      "result": "PASS"
+    },
+    {
+      "test": "Allow baseline.json",
+      "result": "PASS"
+    },
+    {
+      "test": "Allow reports/latest.json",
+      "result": "PASS"
+    },
+    {
+      "test": "Allow reports/index.json",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject traversal in corpus name",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject parent directory corpus name",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject arbitrary corpus filename",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject backup file suffix",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject empty corpus name",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject null corpus name",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject traversal through reports/",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject non-allowlisted config.json",
+      "result": "PASS"
+    },
+    {
+      "test": "Allow Epic accounts host",
+      "result": "PASS"
+    },
+    {
+      "test": "Allow Epic launcher host",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject evil.com",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject google.com",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject empty host",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject null host",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject localhost",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject loopback IP",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject subdomain spoofing (evil.epicgames.com)",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject bare epicgames.com domain",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject partial host (ol.epicgames.com)",
+      "result": "PASS"
+    },
+    {
+      "test": "Allow GET method",
+      "result": "PASS"
+    },
+    {
+      "test": "Allow POST method",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject CONNECT method",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject TRACE method",
+      "result": "PASS"
+    },
+    {
+      "test": "Reject empty method",
+      "result": "PASS"
+    },
+    {
+      "test": "friendlyError hides \"Path not allowed\" raw text",
+      "result": "PASS"
+    },
+    {
+      "test": "friendlyError shows user-safe path message",
+      "result": "PASS"
+    },
+    {
+      "test": "friendlyError hides hostname from \"Host not allowed\"",
+      "result": "PASS"
+    },
+    {
+      "test": "friendlyError shows user-safe host message",
+      "result": "PASS"
+    },
+    {
+      "test": "friendlyError hides method name",
+      "result": "PASS"
+    },
+    {
+      "test": "friendlyError shows user-safe method message",
+      "result": "PASS"
+    },
+    {
+      "test": "friendlyError hides blocked channel name",
+      "result": "PASS"
+    },
+    {
+      "test": "friendlyError shows user-safe IPC blocked message",
+      "result": "PASS"
+    },
+    {
+      "test": "friendlyError hides blocked send channel",
+      "result": "PASS"
+    },
+    {
+      "test": "friendlyError hides blocked on channel",
+      "result": "PASS"
+    },
+    {
+      "test": "friendlyError handles IPC unavailable",
+      "result": "PASS"
+    },
+    {
+      "test": "friendlyError handles electronAPI unavailable",
+      "result": "PASS"
+    },
+    {
+      "test": "friendlyError handles file read null",
+      "result": "PASS"
+    },
+    {
+      "test": "friendlyError handles HTTPS required",
+      "result": "PASS"
+    },
+    {
+      "test": "friendlyError handles malformed URL",
+      "result": "PASS"
+    },
+    {
+      "test": "Fallback strips Windows file paths",
+      "result": "PASS"
+    },
+    {
+      "test": "Fallback strips sensitive filenames",
+      "result": "PASS"
+    },
+    {
+      "test": "FINDING: shell.openExternal has no URL validation",
+      "result": "ADVISORY",
+      "note": "setWindowOpenHandler at main.cjs:1671-1674 passes all URLs to shell.openExternal without filtering. While this is standard Electron behavior (deny new window + open in browser), there is no \"Unsupported external link\" rejection path. Risk is low because content is not user-supplied URLs, but worth documenting."
+    }
+  ]
+}

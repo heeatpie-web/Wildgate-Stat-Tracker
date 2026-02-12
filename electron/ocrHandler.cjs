@@ -18,7 +18,7 @@ const crypto = require('crypto');
 // Import new extraction modules
 const { detectScreenType, detectScreenTypeFromLines, SCREEN_TYPES } = require('./screenDetector.cjs');
 const { extractCrewHub } = require('./crewHubExtractor.cjs');
-const { extractMapScreen, KNOWN_HAZARDS } = require('./mapScreenExtractor.cjs');
+const { extractMapScreen, extractPlayerList, KNOWN_HAZARDS } = require('./mapScreenExtractor.cjs');
 const { mergeCaptures, isSameMatch } = require('./ocrMerger.cjs');
 const gcloudService = require('./gcloudService.cjs');
 const gcloudSyncService = require('./gcloudSyncService.cjs');
@@ -258,6 +258,84 @@ async function preprocessImage(imageBuffer) {
       originalWidth: 1920,
       originalHeight: 1080,
     };
+  }
+}
+
+/**
+ * Crop a region from an image, upscale aggressively, and run a dedicated OCR pass.
+ * Returns OCR words with bounding boxes mapped back to the full-image coordinate space.
+ *
+ * @param {Buffer} imageBuffer - Original (un-preprocessed) image buffer
+ * @param {{ xMin: number, xMax: number, yMin: number, yMax: number }} region - Percentage-based region
+ * @param {number} fullWidth - Full image width (pixels)
+ * @param {number} fullHeight - Full image height (pixels)
+ * @returns {Promise<{ words: Array, text: string } | null>}
+ */
+async function cropRegionAndOCR(imageBuffer, region, fullWidth, fullHeight) {
+  if (!sharp) {
+    console.warn('[OCR-Region] sharp not available, skipping region OCR');
+    return null;
+  }
+
+  try {
+    const left = Math.round(fullWidth * region.xMin);
+    const top = Math.round(fullHeight * region.yMin);
+    const cropWidth = Math.round(fullWidth * (region.xMax - region.xMin));
+    const cropHeight = Math.round(fullHeight * (region.yMax - region.yMin));
+
+    if (cropWidth < 20 || cropHeight < 20) {
+      console.warn('[OCR-Region] Crop region too small, skipping');
+      return null;
+    }
+
+    console.log(`[OCR-Region] Cropping region: ${left},${top} ${cropWidth}x${cropHeight} from ${fullWidth}x${fullHeight}`);
+
+    // Crop, upscale 3x, convert to grayscale, boost contrast, sharpen
+    const REGION_SCALE = 3;
+    const cropped = await sharp(imageBuffer)
+      .extract({ left, top, width: cropWidth, height: cropHeight })
+      .resize(cropWidth * REGION_SCALE, cropHeight * REGION_SCALE, {
+        kernel: sharp.kernel.lanczos3,
+      })
+      .grayscale()
+      .modulate({ brightness: 1.2 })
+      .linear(1.5, -(0.5 * 128)) // aggressive contrast
+      .sharpen({ sigma: 1.5, m1: 1.5, m2: 0.7 })
+      .png()
+      .toBuffer();
+
+    console.log(`[OCR-Region] Cropped+upscaled buffer: ${cropped.length} bytes`);
+
+    // Run dedicated Tesseract pass on the cropped region
+    const regionOCR = await runOCR(cropped);
+    if (!regionOCR || !regionOCR.words || regionOCR.words.length === 0) {
+      console.log('[OCR-Region] No words detected in cropped region');
+      return null;
+    }
+
+    console.log(`[OCR-Region] Detected ${regionOCR.words.length} words in cropped region`);
+
+    // Map bounding boxes back to full-image coordinate space
+    const scaledCropWidth = cropWidth * REGION_SCALE;
+    const scaledCropHeight = cropHeight * REGION_SCALE;
+
+    const mappedWords = regionOCR.words.map(w => ({
+      ...w,
+      bbox: {
+        x0: left + (w.bbox.x0 / scaledCropWidth) * cropWidth,
+        y0: top + (w.bbox.y0 / scaledCropHeight) * cropHeight,
+        x1: left + (w.bbox.x1 / scaledCropWidth) * cropWidth,
+        y1: top + (w.bbox.y1 / scaledCropHeight) * cropHeight,
+      },
+    }));
+
+    return {
+      words: mappedWords,
+      text: regionOCR.text || '',
+    };
+  } catch (error) {
+    console.error('[OCR-Region] Crop+OCR failed:', error.message);
+    return null;
   }
 }
 
@@ -1039,6 +1117,38 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           console.log(`[OCR-Merge] Modifier fallback restored ${mergedUniqueCount - currentUniqueCount} modifier(s) from local OCR`);
         }
         extractedData.reachModifiers = mergedModifiers;
+      }
+
+      // Bug 3 mitigation: map-screen player names are small and overlaid on game visuals.
+      // Full-image OCR often extracts garbled names (0% recall). Crop the player-list region
+      // (bottom-left), upscale 3x, and run a dedicated OCR pass for much better accuracy.
+      if (imageBuffer) {
+        console.log('[OCR-Region] Running region-specific OCR for map teammate list');
+        const PLAYER_REGION = { xMin: 0, xMax: 0.40, yMin: 0.70, yMax: 1.0 };
+        const regionResult = await cropRegionAndOCR(
+          imageBuffer,
+          PLAYER_REGION,
+          processed.originalWidth,
+          processed.originalHeight
+        );
+        if (regionResult && regionResult.words.length > 0) {
+          // extractPlayerList expects words in full-image coordinates (already mapped by cropRegionAndOCR)
+          const regionPlayers = extractPlayerList(regionResult.words, processed.originalWidth, processed.originalHeight);
+          const existingCount = (extractedData.teammates || []).length;
+          if (regionPlayers.length > 0) {
+            console.log(`[OCR-Region] Region OCR extracted ${regionPlayers.length} teammate(s) (full-image had ${existingCount}): ${regionPlayers.join(', ')}`);
+            // Prefer region results — they come from a higher-resolution, higher-contrast crop
+            extractedData.teammates = regionPlayers.map(name => ({
+              name,
+              confidence: 70,
+              isTeammate: true,
+            }));
+          } else {
+            console.log(`[OCR-Region] Region OCR found ${regionResult.words.length} words but no valid player names; keeping ${existingCount} from full-image`);
+          }
+        } else {
+          console.log('[OCR-Region] Region OCR returned no results; keeping full-image extraction');
+        }
       }
 
     } else {

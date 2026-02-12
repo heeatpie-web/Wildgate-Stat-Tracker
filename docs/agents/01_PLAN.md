@@ -3,16 +3,16 @@
 Status: ACTIVE
 
 ## Steps
-1. [IN_PROGRESS] Bind `ui-designer` role to an explicit active agent tab and unblock lane B.
-2. [PENDING] Builder fixes Bug 1: cloud-local merge modifier regression in OCR pipeline.
-3. [PENDING] Builder fixes Bug 2: Crew Hub enemy/teammate misclassification (panel boundary issue).
-4. [PENDING] Builder prototypes Bug 3 mitigation: map-screen teammate extraction via region-specific preprocessing.
-5. [PENDING] Debugger validates each fix with abuse/negative checks and full predict+eval deltas.
-6. [PENDING] PM publishes cycle handoff with baseline comparison and next-safe increment.
+1. [COMPLETE] Bind `ui-designer` role to an explicit active agent tab and unblock lane B.
+2. [COMPLETE] Builder fixes Bug 1: cloud-local merge modifier regression in OCR pipeline.
+3. [COMPLETE] Builder fixes Bug 2: Crew Hub enemy/teammate misclassification (panel boundary issue).
+4. [COMPLETE] Builder prototypes Bug 3 mitigation: map-screen teammate extraction via region-specific preprocessing.
+5. [COMPLETE] Debugger validates each fix with abuse/negative checks and full predict+eval deltas.
+6. [COMPLETE] PM publishes cycle handoff with baseline comparison and next-safe increment.
 
 ## Active Step
-- IN_PROGRESS: Step 1
-- Current role model version: v2 (role-based ownership)
+- COMPLETE: Steps 1-6
+- Cycle complete — ready for batch commit/push
 
 ## PM Approval
 - Date (UTC): 2026-02-12T22:25:00Z
@@ -34,6 +34,7 @@ Status: ACTIVE
 - `ui-designer`: OCR UX clarity for rejection/error states and correction flow usability.
 - `builder`: code changes, refactors, and implementation tasks.
 - `debugger`: bug reproduction, diagnosis, fix validation, and regression checks.
+- `release-manager`: release-candidate integration, gate enforcement, rollback package ownership.
 - `verifier` (optional): independent test pass before handoff.
 - `reporter` (optional): concise external-facing handoff summary.
 
@@ -88,6 +89,22 @@ Status: ACTIVE
   - Confirm no regression in best-known metrics.
 - Status: ACTIVE
 
+### Lane E - release-manager (integration + release gates)
+- Files:
+  - `docs/agents/03_VALIDATION.md`
+  - `docs/agents/04_HANDOFF.md`
+  - `docs/agents/02_EXECUTION_LOG.md`
+  - `docs/WORKLOCKS.md`
+- Tasks:
+  - Aggregate approved lane outputs into release-candidate package.
+  - Enforce final release checklist and evidence completeness.
+  - Publish go/no-go recommendation with rollback notes.
+- Status: ACTIVE
+- Activation: PM Directive (2026-02-13)
+- Constraints:
+  - No feature implementation except emergency hotfix merge blockers.
+  - Consolidate only approved changes with evidence present.
+
 ## WIP Limits
 - Max active implementation lanes: 2 (`builder`, `debugger`).
 - `ui-designer` lane is support-only and only when tied to OCR correction usability/security rejection UX.
@@ -100,6 +117,47 @@ Status: ACTIVE
   - `npm run ocr:predict` and `npm run ocr:eval` deltas are recorded.
   - New blockers/risks are logged (or explicitly none).
   - `docs/agents/04_HANDOFF.md` is updated with next safe step.
+
+## Role Gate Responsibilities
+
+- Gate A (Security/Data Integrity)
+  - Implementer: `builder`
+  - Validator: `debugger`
+  - Evidence gatekeeper: `release-manager`
+- Gate B (OCR Baseline Quality)
+  - Runtime execution: `builder`
+  - Metric verification/repro: `debugger`
+  - UX usability proof: `ui-designer`
+  - Gate signoff: `release-manager`
+- Gate C (Ship Readiness)
+  - UI checklist/screenshots: `ui-designer`
+  - Stability run: `debugger`
+  - RC package + go/no-go: `release-manager`
+  - Final release approval: `project-manager`
+
+## Release-Manager Active Enforcement Checklist
+
+Before any RC handoff, `release-manager` must verify all:
+1. `npm test` PASS
+2. `npm run build` PASS
+3. OCR runtime evidence logged in `docs/agents/03_VALIDATION.md`
+4. UI before/after screenshots for touched OCR surfaces
+5. Security negative tests for path traversal and external URL handling
+
+Merge rule:
+- Block merge if any required artifact is missing.
+
+Escalation rule:
+- Escalate only unresolved peer dependencies older than 45 minutes.
+
+Lateral communication enforcement:
+- Builder -> Debugger (regression/security validation request)
+- UI -> Builder (implementation handoff confirmation)
+- Debugger -> UI (user-facing failure-state requirements)
+- All roles -> Release-manager (merge readiness acknowledgment)
+
+Delegation acceptance condition:
+- One full cycle completes with release-manager signoff and clear GO/NO-GO in `docs/agents/04_HANDOFF.md`.
 
 ## Parking Lot (Non-OCR Requests)
 - Keep out-of-scope requests here and do not execute until OCR baseline is reached.
@@ -210,6 +268,109 @@ Status: ACTIVE
 ### Rollback
 1. Restore truth from backup file created during apply.
 2. Use ingest report to delete uploaded `_ingest/<batch-id>/...` objects if rollback required.
+
+### Queued Role Prompts (Do Not Start Until PM Activates)
+
+#### `project-manager` prompt (queued)
+```md
+Role: project-manager
+Task: One-Time Screenshot Integration + GCloud Upload (queued only — do not execute yet)
+
+Objective
+- Prepare activation and scope controls for one-time ingest+upload migration.
+
+Required outputs (planning only)
+1. Confirm source paths and naming policy:
+   - `dataset/images/`
+   - `userData/training_data/`
+2. Confirm strict-mode policy and rollback checkpoint expectations.
+3. Define activation gate:
+   - dry-run evidence approved before apply/upload.
+4. Define completion gate:
+   - idempotent second run + eval evidence logged.
+
+Constraints
+- Queued only now; do not start implementation.
+```
+
+#### `builder` prompt (queued)
+```md
+Role: builder
+Task: Implement one-time legacy ingest + optional upload (queued only — do not execute yet)
+
+Objective
+- Build migration script and wiring with dedupe safety and reporting.
+
+When activated, implement:
+1. `scripts/ocr_corpus_ingest_legacy.cjs`
+2. `package.json` script: `ocr:ingest:legacy`
+3. Flags:
+   - `--dry-run`
+   - `--apply`
+   - `--upload`
+   - `--strict`
+   - `--sources dataset-images,training-data`
+4. Deduplication:
+   - SHA-256 hash (primary)
+   - normalized filename (secondary)
+   - existing sampleId check (tertiary)
+5. Outputs:
+   - backup of `ground-truth.json` before write
+   - `dataset/ocr-corpus/reports/legacy-ingest-report.json`
+   - `dataset/ocr-corpus/reports/legacy-ingest-report.md`
+6. Reuse existing GCloud upload path where possible.
+
+Constraints
+- Queued only now; do not start coding until PM activation.
+```
+
+#### `debugger` prompt (queued)
+```md
+Role: debugger
+Task: Abuse/edge validation for legacy ingest (queued only — do not execute yet)
+
+Objective
+- Validate robustness, idempotency, and failure behavior for migration.
+
+When activated, validate:
+1. Duplicate files across both sources.
+2. Corrupt JSON labels (strict vs non-strict behavior).
+3. Missing label file handling.
+4. Unsupported image extensions.
+5. Partial upload failure and retry behavior.
+6. Idempotency: second `--apply --upload` imports 0 new samples.
+
+Evidence required
+- Append matrix + command outputs to `docs/agents/03_VALIDATION.md`.
+- If broken, open blocker in `docs/agents/BLOCKERS.md` with repro + likely fault module.
+
+Constraints
+- Queued only now; do not run tests until PM activation.
+```
+
+#### `verifier` prompt (queued; optional)
+```md
+Role: verifier (or debugger if verifier unassigned)
+Task: Independent migration verification (queued only — do not execute yet)
+
+Objective
+- Independently confirm ingest correctness and upload deltas.
+
+When activated, run:
+1. `npm run ocr:truth:validate`
+2. `npm run ocr:ingest:legacy -- --dry-run`
+3. `npm run ocr:ingest:legacy -- --apply --upload`
+4. `npm run ocr:truth:validate`
+5. `npm run ocr:predict`
+6. `npm run ocr:eval`
+
+Deliverables
+- Independent signoff in `docs/agents/03_VALIDATION.md`
+- Go/No-Go recommendation to project-manager
+
+Constraints
+- Queued only now; do not execute until PM activation.
+```
 
 ## Queued Agent Task (PM Approved Queue Item)
 
@@ -411,3 +572,140 @@ Constraints
 2. Retry still works and renderer still connects automatically when dev server becomes ready.
 3. Startup logs remain actionable without UI spam.
 4. Validation evidence recorded in `docs/agents/03_VALIDATION.md`.
+
+### Queued Role Prompts (Do Not Start Until PM Activates)
+
+#### `project-manager` prompt (queued)
+```md
+Role: project-manager
+Task: Dev Splash Retry Noise Reduction (queued only — do not execute yet)
+
+Objective
+- Prepare activation checklist and boundaries for a low-risk messaging-only improvement.
+
+Required outputs (planning only)
+1. Confirm scope lock:
+   - Dev startup splash messaging and retry-status behavior only.
+2. Define non-goals:
+   - no production flow changes
+   - no OCR-related edits
+3. Define phase gate:
+   - builder patch + debugger validation + verifier signoff.
+4. Add Go/No-Go entry point in `docs/agents/04_HANDOFF.md` when ready.
+
+Constraints
+- Queued only now; do not authorize implementation yet.
+```
+
+#### `builder` prompt (queued)
+```md
+Role: builder
+Task: Dev Splash Retry Noise Reduction implementation (queued only — do not execute yet)
+
+Objective
+- Reduce duplicate retry/checking splash updates while preserving retry robustness.
+
+When activated, implement:
+1. In `electron/main.cjs` retry flow, dedupe/throttle `setSplashProgress` updates.
+2. Track last rendered splash payload (`pct/status/detail`) and skip no-op updates.
+3. Emit user-facing updates on meaningful transitions only:
+   - first waiting state
+   - occasional heartbeat (e.g., every N attempts)
+   - connect success
+   - terminal failure threshold notice (if applicable)
+4. Keep retry and backoff logic unchanged unless required for correctness.
+
+Validation expectations
+- Dev boot still auto-connects when server becomes ready.
+- Splash updates become significantly less noisy.
+
+Constraints
+- Queued only now; do not start coding until PM activation.
+```
+
+#### `debugger` prompt (queued)
+```md
+Role: debugger
+Task: Dev Splash Retry Noise Reduction validation (queued only — do not execute yet)
+
+Objective
+- Validate behavior and non-regression for dev startup.
+
+When activated, test:
+1. Dev server not ready initially:
+   - verify reduced splash spam during retries.
+2. Dev server comes up after delay:
+   - verify auto-connect still succeeds.
+3. Dev server already up:
+   - verify no delay/regression.
+4. Confirm startup logs remain useful for debugging.
+
+Evidence required
+- Record attempt counts, visible splash updates, and pass/fail in `docs/agents/03_VALIDATION.md`.
+- If broken, log blocker in `docs/agents/BLOCKERS.md` with repro and likely fault area.
+
+Constraints
+- Queued only now; no execution until PM activation.
+```
+
+#### `verifier` prompt (queued; optional)
+```md
+Role: verifier (or debugger if verifier unassigned)
+Task: Independent check for Dev Splash Retry Noise Reduction (queued only — do not execute yet)
+
+Objective
+- Independently verify behavior parity and reduced message churn.
+
+When activated, verify:
+1. Startup path still reaches loaded renderer in dev mode.
+2. Splash status cadence is calmer and not repetitive.
+3. No side effects in non-dev startup behavior.
+
+Deliverables
+- Independent signoff note in `docs/agents/03_VALIDATION.md`.
+- Go/No-Go recommendation to project-manager.
+
+Constraints
+- Queued only now; do not start until PM activation.
+```
+
+## PM Batch Commit + Push Gate (Queued Closure Checklist)
+
+Use this only after all active/approved queued tasks complete and evidence is posted.
+
+1. Confirm each active lane reports COMPLETE in `docs/agents/01_PLAN.md`.
+2. Confirm validation evidence is present for each completed task in `docs/agents/03_VALIDATION.md`.
+3. Confirm blockers are resolved or explicitly carried forward in `docs/agents/BLOCKERS.md`.
+4. Confirm `docs/agents/04_HANDOFF.md` includes shipped changes, validations, and next queued item.
+5. Run final PM pre-commit checks:
+   - `git status`
+   - `git diff`
+   - quick scan for accidental secrets or transient artifacts.
+6. Perform single batch commit (no per-agent micro-commits).
+7. Run one final `git status` to confirm clean state.
+8. Push once to remote after PM approval.
+
+## PM Active Communications (Current Cycle)
+
+### Broadcast (All Roles)
+- Steps 1-4 are complete in substance.
+- RC remains NO-GO until release artifacts close RM-REQ-001/002/003.
+- No new feature scope; evidence-first updates only.
+- Escalate unresolved peer dependencies after 45 minutes via `docs/agents/BLOCKERS.md`.
+
+### Directed Requests
+- `RM-REQ-001` -> `builder`
+  - Provide RC-level `npm test` evidence in `docs/agents/03_VALIDATION.md`.
+  - If failing, include failing suites and remediation plan.
+- `RM-REQ-002` -> `ui-designer`
+  - Provide before/after OCR UI screenshots + checklist evidence in `docs/agents/03_VALIDATION.md`.
+- `RM-REQ-003` -> `debugger`
+  - Provide security negative-test evidence (path traversal, external URL handling, IPC blocked/unavailable) in `docs/agents/03_VALIDATION.md`.
+- `RM-REQ-004` -> `project-manager`
+  - Reconcile `docs/agents/01_PLAN.md` steps with current evidence once RM-REQ-001/002/003 close.
+
+### Release-Manager Control
+- Keep RC at NO-GO until required artifacts are present.
+- Re-run final gate check after dependencies close and update:
+  - `docs/agents/03_VALIDATION.md` (final release block)
+  - `docs/agents/04_HANDOFF.md` (RC go/no-go section)

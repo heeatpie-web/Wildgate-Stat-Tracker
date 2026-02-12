@@ -79,6 +79,16 @@ const KNOWN_HAZARDS = {
   'SANDSTORM': 'Sandstorm',
 };
 
+const PLAYER_NOISE_WORDS = new Set([
+  'YOUR', 'SHIP', 'ENEMY', 'SHIPS', 'HAZARDS', 'PARTY', 'VOICE',
+  'HUNTER', 'BASTION', 'PRIVATEER', 'SCOUT', 'OUTLAW', 'SOLO',
+  'ARTIFACT', 'HEALING', 'ICE', 'WEAPON', 'ANCIENT', 'VAULT',
+  'CRYON', 'REACH', 'DEAD', 'SENSORS', 'DEADWORLDS', 'EASY', 'LOOT',
+  'EPIC', 'FAST', 'GATE', 'FEW', 'MANY', 'ASTEROIDS', 'LAVA', 'LEGION',
+  'PATROLS', 'LOW', 'ALTITUDE', 'LATITUDE', 'FOG', 'ROGUE', 'TURRETS',
+  'LEECH', 'SWARMS', 'HAUNTED', 'STORM', 'SANDSTORM', 'GLOAMING', 'EXPANSE',
+]);
+
 /**
  * Main entry point: Extract all data from Map Screen
  * @param {Buffer} imageBuffer - Preprocessed image buffer
@@ -393,44 +403,48 @@ function extractHazards(text) {
  * Extract player list from bottom-left region
  */
 function extractPlayerList(words, imageWidth, imageHeight) {
-  const players = [];
-
-  // Define region bounds
-  const bounds = {
+  const broadBounds = {
     xMin: imageWidth * LAYOUT.PLAYERS.xMin,
     xMax: imageWidth * LAYOUT.PLAYERS.xMax,
     yMin: imageHeight * LAYOUT.PLAYERS.yMin,
     yMax: imageHeight * LAYOUT.PLAYERS.yMax,
   };
 
-  // Filter words in player list region
-  const regionWords = words.filter(w => {
-    if (!w.bbox) return false;
-    const centerX = (w.bbox.x0 + w.bbox.x1) / 2;
-    const centerY = (w.bbox.y0 + w.bbox.y1) / 2;
-    return centerX >= bounds.xMin && centerX <= bounds.xMax &&
-           centerY >= bounds.yMin && centerY <= bounds.yMax;
-  });
+  // Region-specific mitigation: tighter teammate strip for small map-name text.
+  const focusedBounds = {
+    xMin: 0,
+    xMax: imageWidth * 0.34,
+    yMin: imageHeight * 0.62,
+    yMax: imageHeight * 0.98,
+  };
 
-  // Group into lines
-  const groupedLines = groupWordsIntoLines(regionWords, imageHeight);
+  const broadWords = filterWordsInBounds(words, broadBounds);
+  const focusedWords = filterWordsInBounds(words, focusedBounds);
 
-  for (const line of groupedLines) {
-    const playerName = extractPlayerNameFromLine(line.words);
-    if (playerName && isValidPlayerName(playerName)) {
-      players.push(playerName);
+  const candidates = [];
+  const collectCandidates = (lineSet) => {
+    for (const line of lineSet) {
+      const playerName = extractPlayerNameFromLine(line.words);
+      if (!playerName || !isValidPlayerName(playerName)) continue;
+      candidates.push(playerName);
     }
-  }
+  };
 
-  return [...new Set(players)];
+  collectCandidates(groupWordsIntoLinesWithThreshold(focusedWords, Math.max(10, imageHeight * 0.012)));
+  collectCandidates(groupWordsIntoLinesWithThreshold(broadWords, Math.max(14, imageHeight * 0.016)));
+
+  return dedupePlayerNames(candidates);
 }
 
 /**
  * Group words into lines by Y position
  */
 function groupWordsIntoLines(words, imageHeight) {
+  return groupWordsIntoLinesWithThreshold(words, imageHeight * 0.02);
+}
+
+function groupWordsIntoLinesWithThreshold(words, lineThreshold) {
   const lines = [];
-  const lineThreshold = imageHeight * 0.02;
 
   for (const word of words) {
     if (!word.bbox || !word.text) continue;
@@ -468,45 +482,36 @@ function groupWordsIntoLines(words, imageHeight) {
 function extractPlayerNameFromLine(words) {
   if (!words || words.length === 0) return null;
 
-  const NOISE = new Set([
-    'PARTY', 'VOICE', 'CREW', 'HUB', 'PUSH', 'TALK', 'YOUR', 'TEAM',
-    'HUNTER', 'BASTION', 'PRIVATEER', 'SCOUT', 'OUTLAW', 'SHIP',
-  ]);
-
   const parts = [];
+  let bestToken = '';
+  let bestTokenScore = 0;
 
   for (const word of words) {
     const text = word.text?.trim();
     if (!text) continue;
-    if (NOISE.has(text.toUpperCase())) continue;
+    if (PLAYER_NOISE_WORDS.has(text.toUpperCase())) continue;
     if (text.length < 2) continue;
     if (/^[XPCD]$/i.test(text) && parts.length > 0) continue;
+    if (/^[|=\-~#%&*]+$/.test(text)) continue;
 
-    parts.push(text);
+    const cleanedToken = cleanupPlayerToken(text);
+    const tokenScore = scoreAsMapPlayerToken(cleanedToken);
+    if (tokenScore > bestTokenScore) {
+      bestTokenScore = tokenScore;
+      bestToken = cleanedToken;
+    }
+    parts.push(cleanedToken);
   }
 
   if (parts.length === 0) return null;
 
-  let name = parts.join('');
+  // For tiny map text, a single strong token is often better than joining noisy neighbors.
+  if (bestToken && bestTokenScore >= 45 && parts.length <= 3) {
+    return bestToken.length >= 3 ? bestToken : null;
+  }
 
-  // Clean up (supports Latin, Extended Latin, Cyrillic, CJK)
-  // \u00C0-\u024F: Extended Latin (accented characters)
-  // \u0400-\u04FF: Cyrillic
-  // \u4e00-\u9fff: CJK
-  name = name
-    .replace(/@/g, 'Q')
-    .replace(/[{}()\[\]]/g, '')
-    // Preserve periods between alphanumeric chars (e.g. "River.Banks")
-    .replace(/(?<![a-zA-Z0-9])[.,:;!?]+/g, '')
-    .replace(/[,:;!?]+(?![a-zA-Z0-9])/g, '')
-    .replace(/\.(?![a-zA-Z0-9])/g, '')
-    .replace(/(?<![a-zA-Z0-9])\./g, '')
-    .replace(/\s*[XPCD]$/i, '')
-    .replace(/^[^a-zA-Z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]+/, '')
-    .replace(/[^a-zA-Z0-9_.\-\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]+$/, '')
-    .trim();
-
-  return name.length >= 3 ? name : null;
+  const joined = cleanupPlayerToken(parts.join(''));
+  return joined.length >= 3 ? joined : null;
 }
 
 /**
@@ -532,12 +537,75 @@ function isValidPlayerName(name) {
   if (hasCJK || hasCyrillic || hasExtendedLatin) return true;
   if (hasNumbers || hasUnderscore || hasMixedCase) return true;
 
-  // All caps short words are likely UI
+  // Allow all-caps map names if they are not known UI labels.
   if (name === name.toUpperCase() && name.length < 10 && !hasNumbers) {
-    return false;
+    if (PLAYER_NOISE_WORDS.has(name.toUpperCase())) {
+      return false;
+    }
   }
 
   return true;
+}
+
+function cleanupPlayerToken(name) {
+  if (!name) return '';
+  return name
+    .replace(/@/g, 'Q')
+    .replace(/»/g, 'a')
+    .replace(/[{}()\[\]<>]/g, '')
+    .replace(/[|]/g, '')
+    .replace(/[~#%&*^]/g, '')
+    .replace(/(?<![a-zA-Z0-9])[.,:;!?]+/g, '')
+    .replace(/[,:;!?]+(?![a-zA-Z0-9])/g, '')
+    .replace(/\.(?![a-zA-Z0-9])/g, '')
+    .replace(/(?<![a-zA-Z0-9])\./g, '')
+    .replace(/\s*[XPCD]$/i, '')
+    .replace(/^[^a-zA-Z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]+/, '')
+    .replace(/[^a-zA-Z0-9_.\-\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]+$/, '')
+    .trim();
+}
+
+function scoreAsMapPlayerToken(token) {
+  if (!token || token.length < 3) return 0;
+  let score = 0;
+  if (token.length >= 4 && token.length <= 16) score += 20;
+  if (/[0-9]/.test(token)) score += 12;
+  if (/_/.test(token)) score += 12;
+  if (/[a-z]/.test(token) && /[A-Z]/.test(token)) score += 18;
+  if (/[\u4e00-\u9fff\u0400-\u04FF]/.test(token)) score += 20;
+  if (/^[A-Z]/.test(token)) score += 8;
+  const noiseRatio = (token.match(/[^a-zA-Z0-9_\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff.\-]/g) || []).length / token.length;
+  if (noiseRatio > 0.25) score -= 20;
+  if (PLAYER_NOISE_WORDS.has(token.toUpperCase())) score -= 40;
+  return Math.max(0, Math.min(100, score));
+}
+
+function filterWordsInBounds(words, bounds) {
+  return words.filter(w => {
+    if (!w.bbox) return false;
+    const centerX = (w.bbox.x0 + w.bbox.x1) / 2;
+    const centerY = (w.bbox.y0 + w.bbox.y1) / 2;
+    return centerX >= bounds.xMin && centerX <= bounds.xMax &&
+      centerY >= bounds.yMin && centerY <= bounds.yMax;
+  });
+}
+
+function normalizeNameKey(input) {
+  return (input || '').toLowerCase().replace(/[^a-z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/g, '');
+}
+
+function dedupePlayerNames(players) {
+  const out = [];
+  for (const candidate of players) {
+    const key = normalizeNameKey(candidate);
+    if (!key) continue;
+    const exists = out.some(existing => {
+      const existingKey = normalizeNameKey(existing);
+      return existingKey === key || existingKey.includes(key) || key.includes(existingKey);
+    });
+    if (!exists) out.push(candidate);
+  }
+  return out;
 }
 
 /**

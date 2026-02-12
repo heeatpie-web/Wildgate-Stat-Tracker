@@ -113,6 +113,36 @@
   - Builder remains ACTIVE on lane C files in `docs/agents/01_PLAN.md`.
   - Builder may proceed with OCR corpus throughput and prediction/eval workflow improvements that pass OCR scope gate.
 
+- Date: 2026-02-12
+- Decision: For Bug 3 validation, use 15-sample corpus as authoritative comparison baseline; run 20-sample as secondary informational pass.
+- Options considered:
+  - Continue Bug 3 against 20-sample corpus only.
+  - Restore/reuse 15-sample snapshot for strict comparison and keep 20-sample as secondary.
+  - Park Bug 3 and switch scope.
+- Rationale:
+  - Mid-cycle corpus drift breaks apples-to-apples phase comparison and weakens decision quality.
+  - 15-sample baseline preserves continuity with prior Bug 1/Bug 2 evidence.
+  - Secondary 20-sample run still captures forward-looking signal without invalidating phase gate.
+- Impact:
+  - Builder/debugger unblock: proceed with Bug 3 using 15-sample primary metrics.
+  - Validation must report two sections:
+    - Primary (15-sample, gate decision)
+    - Secondary (20-sample, informational only)
+  - PM handoff must cite which dataset gated the decision.
+
+- Date: 2026-02-13
+- Decision: Add `release-manager` as a dedicated integration and release-gate role (5th role).
+- Options considered:
+  - Keep current 4-role model and let PM absorb integration/release checks.
+  - Add `release-manager` role (with optional dual-hat by `verifier` when needed).
+- Rationale:
+  - Reduces merge/release chaos by separating implementation from final integration quality control.
+  - Creates independent release evidence ownership and explicit rollback accountability.
+- Impact:
+  - Lane E added in `docs/agents/01_PLAN.md` for release-manager.
+  - Final release validation/signoff sections added to validation and handoff docs.
+  - Inter-agent handshake protocol and SLA added before PM escalation.
+
 ## Copy-Paste Decision Template
 
 ```md

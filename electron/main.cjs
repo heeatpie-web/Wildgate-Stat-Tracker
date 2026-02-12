@@ -16,6 +16,8 @@ const DEV_SERVER_URL = process.env.WILDGATE_DEV_SERVER_URL || 'http://localhost:
 const USER_DATA_ROOT = path.resolve(app.getPath('userData'));
 const OCR_CORPUS_DIR = path.join(USER_DATA_ROOT, 'ocr-corpus');
 const OCR_CORPUS_REPORTS_DIR = path.join(OCR_CORPUS_DIR, 'reports');
+const REPO_OCR_CORPUS_DIR = path.resolve(app.getAppPath(), 'dataset', 'ocr-corpus');
+const AUTO_SYNC_CORPUS_TO_REPO = process.env.WILDGATE_AUTO_SYNC_CORPUS_TO_REPO !== '0';
 const ALLOWED_FILE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.webp', '.gif']);
 const ALLOWED_HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const DEFAULT_EPIC_REQUEST_HOSTS = [
@@ -111,6 +113,54 @@ async function ensureCorpusDefaults() {
       await fsPromises.writeFile(d.file, d.content, 'utf8');
     }
   }
+}
+
+async function listFilesRecursive(rootDir) {
+  const out = [];
+  const stack = [''];
+  while (stack.length) {
+    const rel = stack.pop();
+    const abs = rel ? path.join(rootDir, rel) : rootDir;
+    let entries = [];
+    try {
+      entries = await fsPromises.readdir(abs, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const nextRel = rel ? path.join(rel, entry.name) : entry.name;
+      if (entry.isDirectory()) stack.push(nextRel);
+      else if (entry.isFile()) out.push(nextRel);
+    }
+  }
+  return out;
+}
+
+async function syncCorpusToRepo(reason = 'unknown') {
+  if (!isDev || !AUTO_SYNC_CORPUS_TO_REPO) {
+    return { synced: false, copied: 0, reason: 'disabled' };
+  }
+
+  try {
+    await fsPromises.access(OCR_CORPUS_DIR);
+  } catch {
+    return { synced: false, copied: 0, reason: 'missing-source' };
+  }
+
+  await fsPromises.mkdir(REPO_OCR_CORPUS_DIR, { recursive: true });
+  const relFiles = await listFilesRecursive(OCR_CORPUS_DIR);
+  let copied = 0;
+
+  for (const rel of relFiles) {
+    const src = path.join(OCR_CORPUS_DIR, rel);
+    const dst = path.join(REPO_OCR_CORPUS_DIR, rel);
+    await fsPromises.mkdir(path.dirname(dst), { recursive: true });
+    await fsPromises.copyFile(src, dst);
+    copied += 1;
+  }
+
+  console.log(`[OCR Corpus] Synced ${copied} file(s) to repo (${reason})`);
+  return { synced: true, copied, reason };
 }
 
 function runNodeScript(scriptPath, args = []) {
@@ -1924,6 +1974,16 @@ ipcMain.handle('ocr-corpus-load', async (event, name) => {
   }
 });
 
+ipcMain.handle('ocr-corpus-sync-to-repo', async () => {
+  try {
+    await ensureCorpusDefaults();
+    const result = await syncCorpusToRepo('manual');
+    return { success: true, ...result };
+  } catch (e) {
+    return { success: false, error: e.message || String(e) };
+  }
+});
+
 ipcMain.handle('ocr-corpus-save', async (event, name, content) => {
   try {
     await ensureCorpusDefaults();
@@ -1933,6 +1993,7 @@ ipcMain.handle('ocr-corpus-save', async (event, name, content) => {
     JSON.parse(payload); // validate JSON before writing
     await fsPromises.mkdir(path.dirname(target), { recursive: true });
     await fsPromises.writeFile(target, payload, 'utf8');
+    await syncCorpusToRepo(`save:${name}`);
     return { success: true };
   } catch (e) {
     return { success: false, error: e.message || String(e) };
@@ -1963,6 +2024,7 @@ ipcMain.handle('ocr-corpus-eval', async () => {
     try {
       report = JSON.parse(await fsPromises.readFile(outPath, 'utf8'));
     } catch { }
+    await syncCorpusToRepo('eval');
 
     return {
       success: true,
@@ -1990,6 +2052,7 @@ ipcMain.handle('ocr-corpus-promote-baseline', async () => {
     if (result.code !== 0) {
       return { success: false, error: result.stderr || result.stdout || 'Promote baseline failed' };
     }
+    await syncCorpusToRepo('promote-baseline');
     return { success: true, output: result.stdout };
   } catch (e) {
     return { success: false, error: e.message || String(e) };
@@ -2054,6 +2117,7 @@ ipcMain.handle('ocr-corpus-import-images', async () => {
       samples
     };
     await fsPromises.writeFile(truthPath, JSON.stringify(nextTruth, null, 2), 'utf8');
+    await syncCorpusToRepo('import-images');
     return { success: true, imported, skipped, canceled: false };
   } catch (e) {
     return { success: false, error: e.message || String(e) };
@@ -2123,6 +2187,7 @@ ipcMain.handle('ocr-corpus-run-pipeline', async (event, opts = {}) => {
     };
 
     await fsPromises.writeFile(predPath, JSON.stringify(payload, null, 2), 'utf8');
+    await syncCorpusToRepo('run-pipeline');
     return {
       success: true,
       processed: predictions.length,
@@ -2210,6 +2275,14 @@ ipcMain.handle('test-gcloud-upload', async () => {
 
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+
+app.on('before-quit', () => {
+  // Dev safety net: mirror latest userData corpus into repo on app shutdown.
+  if (!isDev || !AUTO_SYNC_CORPUS_TO_REPO) return;
+  syncCorpusToRepo('before-quit').catch((e) => {
+    console.warn('[OCR Corpus] before-quit sync failed:', e?.message || e);
+  });
+});
 
 autoUpdater.on('update-available', (info) => { if (win) win.webContents.send('update_available'); });
 autoUpdater.on('update-not-available', (info) => { if (win) win.webContents.send('update_not_available'); });

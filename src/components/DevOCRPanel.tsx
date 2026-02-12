@@ -321,6 +321,23 @@ const DevOCRPanel: React.FC = () => {
         }
     };
 
+    const syncCorpusToRepoNow = async () => {
+        try {
+            const api = getElectronAPI();
+            if (!api) throw new Error('IPC not available');
+            setCorpusBusy(true);
+            setCorpusStatus('Syncing corpus to repo...');
+            const res = await api.invoke('ocr-corpus-sync-to-repo');
+            if (!res?.success) throw new Error(res?.error || 'Sync failed');
+            if (res?.synced) setCorpusStatus(`Synced ${res.copied} file(s) to dataset/ocr-corpus`);
+            else setCorpusStatus(`Sync skipped (${res.reason || 'disabled'})`);
+        } catch (e: any) {
+            setCorpusStatus(`Sync failed: ${friendlyError(e.message)}`);
+        } finally {
+            setCorpusBusy(false);
+        }
+    };
+
     const countCorpusSamples = (content: string): number => {
         if (!content.trim()) return 0;
         try {
@@ -343,7 +360,7 @@ const DevOCRPanel: React.FC = () => {
         if (!s) return 'idle';
         if (s.includes('fail') || s.includes('error')) return 'error';
         if (s.includes('complete') || s.includes('promoted') || s.includes('saved') || s.includes('loaded') || s.includes('done')) return 'success';
-        if (s.includes('running') || s.includes('loading') || s.includes('importing') || s.includes('saving')) return 'busy';
+        if (s.includes('running') || s.includes('loading') || s.includes('importing') || s.includes('saving') || s.includes('syncing')) return 'busy';
         return 'idle';
     })();
 
@@ -514,6 +531,7 @@ const DevOCRPanel: React.FC = () => {
                         <div className="text-label-sm font-bold uppercase opacity-secondary mb-3">Pipeline Actions</div>
                         <div className="flex flex-wrap gap-2">
                             <button onClick={loadCorpusFiles} disabled={corpusBusy} className="px-3 py-2 rounded-control md3-surface-low font-bold text-label-sm disabled:opacity-disabled">Reload Files</button>
+                            <button onClick={syncCorpusToRepoNow} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-warning-soft text-warning border border-warning-soft-strong font-bold text-label-sm disabled:opacity-disabled">Sync Corpus Now</button>
                             <button onClick={importCorpusImages} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-info-soft text-info border border-info-soft-strong font-bold text-label-sm disabled:opacity-disabled">Import Images</button>
                             <button onClick={runCorpusPipeline} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-info-soft text-info border border-info-soft-strong font-bold text-label-sm disabled:opacity-disabled">Run Corpus OCR</button>
                             <button onClick={runCorpusEval} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-md-sys-primary text-md-sys-on-primary font-bold text-label-sm disabled:opacity-disabled">Run Eval</button>

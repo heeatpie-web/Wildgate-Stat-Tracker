@@ -214,8 +214,14 @@ function updateReportIndex(baseOutPath, report) {
     latestReport: path.relative(reportsDir, outAbs).replace(/\\/g, '/'),
     historyReport: path.relative(reportsDir, historyFile).replace(/\\/g, '/'),
     teammateRecall: summary.teammateRecall ?? 0,
+    teammatePrecision: summary.teammatePrecision ?? 0,
+    teammateF1: summary.teammateF1 ?? 0,
     opponentRecall: summary.opponentRecall ?? 0,
+    opponentPrecision: summary.opponentPrecision ?? 0,
+    opponentF1: summary.opponentF1 ?? 0,
     modifierRecall: summary.modifierRecall ?? 0,
+    modifierPrecision: summary.modifierPrecision ?? 0,
+    modifierF1: summary.modifierF1 ?? 0,
     teamGroupingAccuracy: summary.teamGroupingAccuracy ?? 0,
     teamColorAccuracy: summary.teamColorAccuracy,
     sessionUsablePassRate: summary.sessionUsablePassRate ?? 0
@@ -244,9 +250,9 @@ function main() {
 
   const perSample = [];
   const totals = {
-    teammate: { tp: 0, fp: 0, fn: 0 },
-    opponent: { tp: 0, fp: 0, fn: 0 },
-    modifier: { tp: 0, fp: 0, fn: 0 },
+    teammate: { tp: 0, fp: 0, fn: 0, predCount: 0 },
+    opponent: { tp: 0, fp: 0, fn: 0, predCount: 0 },
+    modifier: { tp: 0, fp: 0, fn: 0, predCount: 0 },
     teamGroupingSum: 0,
     teamGroupingCount: 0,
     teamColorMatched: 0,
@@ -277,12 +283,15 @@ function main() {
     totals.teammate.tp += teammateStats.tp;
     totals.teammate.fp += teammateStats.fp;
     totals.teammate.fn += teammateStats.fn;
+    totals.teammate.predCount += teammateStats.predCount;
     totals.opponent.tp += opponentStats.tp;
     totals.opponent.fp += opponentStats.fp;
     totals.opponent.fn += opponentStats.fn;
+    totals.opponent.predCount += opponentStats.predCount;
     totals.modifier.tp += modifierStats.tp;
     totals.modifier.fp += modifierStats.fp;
     totals.modifier.fn += modifierStats.fn;
+    totals.modifier.predCount += modifierStats.predCount;
     totals.teamGroupingSum += grouping;
     totals.teamGroupingCount += 1;
     totals.teamColorMatched += colorStats.matchedCount;
@@ -294,8 +303,14 @@ function main() {
     perSample.push({
       sampleId: t.sampleId,
       teammateRecall: pct(teammateStats.recall),
+      teammatePrecision: pct(teammateStats.precision),
+      teammateF1: pct(teammateStats.f1),
       opponentRecall: pct(opponentStats.recall),
+      opponentPrecision: pct(opponentStats.precision),
+      opponentF1: pct(opponentStats.f1),
       modifierRecall: pct(modifierStats.recall),
+      modifierPrecision: pct(modifierStats.precision),
+      modifierF1: pct(modifierStats.f1),
       teamGroupingAccuracy: pct(grouping),
       teamColorAccuracy: colorStats.accuracy === null ? null : pct(colorStats.accuracy),
       truthColorTeams: colorStats.truthColorTeamCount,
@@ -304,11 +319,25 @@ function main() {
     });
   }
 
+  const microPrecision = (cat) => pct(cat.tp / Math.max(1, cat.tp + cat.fp));
+  const microRecall = (cat) => pct(cat.tp / Math.max(1, cat.tp + cat.fn));
+  const microF1 = (cat) => {
+    const p = cat.tp / Math.max(1, cat.tp + cat.fp);
+    const r = cat.tp / Math.max(1, cat.tp + cat.fn);
+    return pct(p + r ? (2 * p * r) / (p + r) : 0);
+  };
+
   const summary = {
     totalSamples: truthSamples.length,
-    teammateRecall: pct(totals.teammate.tp / Math.max(1, totals.teammate.tp + totals.teammate.fn)),
-    opponentRecall: pct(totals.opponent.tp / Math.max(1, totals.opponent.tp + totals.opponent.fn)),
-    modifierRecall: pct(totals.modifier.tp / Math.max(1, totals.modifier.tp + totals.modifier.fn)),
+    teammateRecall: microRecall(totals.teammate),
+    teammatePrecision: microPrecision(totals.teammate),
+    teammateF1: microF1(totals.teammate),
+    opponentRecall: microRecall(totals.opponent),
+    opponentPrecision: microPrecision(totals.opponent),
+    opponentF1: microF1(totals.opponent),
+    modifierRecall: microRecall(totals.modifier),
+    modifierPrecision: microPrecision(totals.modifier),
+    modifierF1: microF1(totals.modifier),
     teamGroupingAccuracy: pct(totals.teamGroupingSum / Math.max(1, totals.teamGroupingCount)),
     teamColorAccuracy:
       totals.teamColorComparable > 0
@@ -323,8 +352,14 @@ function main() {
   const deltas = baselineSummary
     ? {
         teammateRecallDelta: delta(summary.teammateRecall, baselineSummary.teammateRecall),
+        teammatePrecisionDelta: delta(summary.teammatePrecision, baselineSummary.teammatePrecision),
+        teammateF1Delta: delta(summary.teammateF1, baselineSummary.teammateF1),
         opponentRecallDelta: delta(summary.opponentRecall, baselineSummary.opponentRecall),
+        opponentPrecisionDelta: delta(summary.opponentPrecision, baselineSummary.opponentPrecision),
+        opponentF1Delta: delta(summary.opponentF1, baselineSummary.opponentF1),
         modifierRecallDelta: delta(summary.modifierRecall, baselineSummary.modifierRecall),
+        modifierPrecisionDelta: delta(summary.modifierPrecision, baselineSummary.modifierPrecision),
+        modifierF1Delta: delta(summary.modifierF1, baselineSummary.modifierF1),
         teamGroupingAccuracyDelta: delta(summary.teamGroupingAccuracy, baselineSummary.teamGroupingAccuracy),
         teamColorAccuracyDelta: delta(summary.teamColorAccuracy, baselineSummary.teamColorAccuracy),
         sessionUsablePassRateDelta: delta(summary.sessionUsablePassRate, baselineSummary.sessionUsablePassRate)
@@ -346,9 +381,12 @@ function main() {
   console.log('OCR Corpus Evaluation');
   console.log('---------------------');
   console.log(`Samples: ${summary.totalSamples}`);
-  console.log(`Teammate recall: ${summary.teammateRecall}%`);
-  console.log(`Opponent recall: ${summary.opponentRecall}%`);
-  console.log(`Modifier recall: ${summary.modifierRecall}%`);
+  console.log('');
+  console.log('              Recall   Precision   F1');
+  console.log(`Teammate:     ${String(summary.teammateRecall).padStart(6)}%    ${String(summary.teammatePrecision).padStart(6)}%   ${String(summary.teammateF1).padStart(6)}%`);
+  console.log(`Opponent:     ${String(summary.opponentRecall).padStart(6)}%    ${String(summary.opponentPrecision).padStart(6)}%   ${String(summary.opponentF1).padStart(6)}%`);
+  console.log(`Modifier:     ${String(summary.modifierRecall).padStart(6)}%    ${String(summary.modifierPrecision).padStart(6)}%   ${String(summary.modifierF1).padStart(6)}%`);
+  console.log('');
   console.log(`Team grouping accuracy: ${summary.teamGroupingAccuracy}%`);
   console.log(
     `Team color accuracy: ${summary.teamColorAccuracy === null ? 'n/a' : `${summary.teamColorAccuracy}%`}`
@@ -362,9 +400,10 @@ function main() {
   if (deltas) {
     console.log('');
     console.log('Delta vs baseline');
-    console.log(`Teammate recall: ${deltas.teammateRecallDelta}%`);
-    console.log(`Opponent recall: ${deltas.opponentRecallDelta}%`);
-    console.log(`Modifier recall: ${deltas.modifierRecallDelta}%`);
+    console.log('              Recall   Precision   F1');
+    console.log(`Teammate:     ${String(deltas.teammateRecallDelta ?? 'n/a').padStart(6)}%    ${String(deltas.teammatePrecisionDelta ?? 'n/a').padStart(6)}%   ${String(deltas.teammateF1Delta ?? 'n/a').padStart(6)}%`);
+    console.log(`Opponent:     ${String(deltas.opponentRecallDelta ?? 'n/a').padStart(6)}%    ${String(deltas.opponentPrecisionDelta ?? 'n/a').padStart(6)}%   ${String(deltas.opponentF1Delta ?? 'n/a').padStart(6)}%`);
+    console.log(`Modifier:     ${String(deltas.modifierRecallDelta ?? 'n/a').padStart(6)}%    ${String(deltas.modifierPrecisionDelta ?? 'n/a').padStart(6)}%   ${String(deltas.modifierF1Delta ?? 'n/a').padStart(6)}%`);
     console.log(`Team grouping accuracy: ${deltas.teamGroupingAccuracyDelta}%`);
     console.log(
       `Team color accuracy: ${
