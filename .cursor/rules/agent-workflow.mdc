@@ -1,0 +1,27 @@
+---
+description: Enforce project agent workflow and UI masterplan
+alwaysApply: true
+---
+
+# Project Workflow Rules
+
+Follow `AGENTS.md` as the primary execution contract for all tasks.
+
+Required workflow docs:
+- `AGENTS.md`
+- `docs/agents/00_INTAKE.md`
+- `docs/agents/01_PLAN.md`
+- `docs/agents/02_EXECUTION_LOG.md`
+- `docs/agents/03_VALIDATION.md`
+- `docs/agents/04_HANDOFF.md`
+- `docs/agents/DECISIONS.md`
+- `docs/agents/BLOCKERS.md`
+
+UI work rule:
+- For any UI/layout/style/interaction/copy hierarchy task, follow `docs/agents/UI_MASTERPLAN.md`.
+- If a requested UI change conflicts with `docs/agents/UI_MASTERPLAN.md`, log the exception in `docs/agents/DECISIONS.md` before implementation.
+
+Execution constraints:
+- Keep scope narrow to the user request.
+- Keep one active task step in progress.
+- Do not claim completion without validation evidence.
