@@ -30,7 +30,8 @@
 - 3. Blockers: BLOCKERS.md — only RESOLVED items; no ACTIVE blockers.
 - 4. Handoff: 04_HANDOFF reflects Phases 1–6 complete; next = PM sign-off or new task.
 - 5. Pre-commit: Run `git status` and `git diff --stat`; confirm no secrets in modified files.
-- 6–8. **PM action:** When approved: stage (`git add` as needed), commit, push. Example message: `UI Overhaul Phases 1–6 complete; telemetry chip, Smart Capture side nav, Analytics shell, Tactical Console & OverlayView tokens`.
+- 6. **Done:** Batch commit created: `9119898` — "UI Overhaul Phases 1-6 + agent docs; Step 16 spec in progress" (35 files, +1625/-400).
+- 7–8. **PM action:** When approved: `git push` to remote.
 
 ### Approvals (continue)
 - **PM (project-manager):** Step 12 batch 2 (opacity normalization, 8/18 files) **APPROVED**. Builder may continue with remaining 10 files per same intake rules.
