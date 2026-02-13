@@ -55,6 +55,11 @@ const DevOCRPanel: React.FC = () => {
     const [corpusIndex, setCorpusIndex] = useState('');
     const [corpusStatus, setCorpusStatus] = useState('');
     const [corpusBusy, setCorpusBusy] = useState(false);
+    const [plainTeammates, setPlainTeammates] = useState('');
+    const [plainOpponents, setPlainOpponents] = useState('');
+    const [plainModifiers, setPlainModifiers] = useState('');
+    const [corpusImageList, setCorpusImageList] = useState<{ name: string; relativePath: string }[]>([]);
+    const [corpusImageThumbs, setCorpusImageThumbs] = useState<Record<string, string>>({});
 
     useEffect(() => {
         loadRecentFiles();
@@ -63,6 +68,12 @@ const DevOCRPanel: React.FC = () => {
     useEffect(() => {
         if (tab === 'Corpus') {
             void loadCorpusFiles();
+            const api = getElectronAPI();
+            if (api) {
+                api.invoke('ocr-corpus-list-images').then((res: any) => {
+                    if (res?.success && Array.isArray(res.files)) setCorpusImageList(res.files);
+                });
+            }
         }
     }, [tab]);
 
@@ -351,6 +362,40 @@ const DevOCRPanel: React.FC = () => {
         return 0;
     };
 
+    const parsePlainList = (raw: string): string[] =>
+        raw.split(/[\n,]/).map(s => s.trim()).filter(Boolean);
+
+    const handlePlainTruthSubmit = () => {
+        const teammates = parsePlainList(plainTeammates);
+        const opponents = parsePlainList(plainOpponents);
+        const modifiers = parsePlainList(plainModifiers);
+        let truth: { version: number; samples: any[] };
+        try {
+            truth = corpusTruth ? JSON.parse(corpusTruth) : { version: 1, samples: [] };
+        } catch {
+            truth = { version: 1, samples: [] };
+        }
+        const samples = Array.isArray(truth.samples) ? [...truth.samples] : [];
+        const imagePath = corpusImageList.length > 0 ? corpusImageList[0].relativePath : 'images/plain-form.png';
+        const newSample = {
+            sampleId: `plain-${Date.now()}`,
+            imagePath,
+            teammates,
+            opponentTeams: opponents.length ? [{ teamName: 'Enemy', players: opponents }] : [],
+            modifiers,
+        };
+        samples.push(newSample);
+        setCorpusTruth(JSON.stringify({ version: truth.version || 1, samples }, null, 2));
+        setCorpusStatus('Ground truth updated from plain text. Click Save to write ground-truth.json.');
+    };
+
+    const loadThumb = (relativePath: string) => {
+        if (corpusImageThumbs[relativePath]) return;
+        getElectronAPI()?.invoke('ocr-corpus-read-image', relativePath).then((b64: string | null) => {
+            if (b64) setCorpusImageThumbs(prev => ({ ...prev, [relativePath]: `data:image/png;base64,${b64}` }));
+        });
+    };
+
     const truthCount = countCorpusSamples(corpusTruth);
     const predictionCount = countCorpusSamples(corpusPredictions);
     const reportCount = countCorpusSamples(corpusIndex);
@@ -538,6 +583,54 @@ const DevOCRPanel: React.FC = () => {
                             <button onClick={promoteCorpusBaseline} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-success-soft text-success border border-success-soft-strong font-bold text-label-sm disabled:opacity-disabled">Promote Baseline</button>
                         </div>
                         <p className="text-label-sm opacity-secondary mt-3">Flow: import → run OCR → evaluate → promote baseline. Keep ground truth and predictions in sync before eval.</p>
+                    </div>
+
+                    <div className="md3-card md3-surface-high rounded-card border border-md-sys-outline/10 p-4 mb-4">
+                        <h3 className="text-label-lg font-bold text-md-sys-on-surface mb-1">Ground truth (plain text)</h3>
+                        <p className="text-label-sm text-md-sys-on-surface/60 mb-3">One name per line or comma-separated. Update merges one sample into ground truth; then Save.</p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                            <div>
+                                <label className="text-label-sm font-semibold text-md-sys-on-surface/80 block mb-1">Teammates</label>
+                                <textarea value={plainTeammates} onChange={e => setPlainTeammates(e.target.value)} className="w-full min-h-[80px] md3-surface-low rounded-control p-2 text-label-sm outline-none border border-md-sys-outline/20" placeholder="One per line or comma" />
+                            </div>
+                            <div>
+                                <label className="text-label-sm font-semibold text-md-sys-on-surface/80 block mb-1">Opponents</label>
+                                <textarea value={plainOpponents} onChange={e => setPlainOpponents(e.target.value)} className="w-full min-h-[80px] md3-surface-low rounded-control p-2 text-label-sm outline-none border border-md-sys-outline/20" placeholder="One per line or comma" />
+                            </div>
+                            <div>
+                                <label className="text-label-sm font-semibold text-md-sys-on-surface/80 block mb-1">Modifiers (optional)</label>
+                                <textarea value={plainModifiers} onChange={e => setPlainModifiers(e.target.value)} className="w-full min-h-[80px] md3-surface-low rounded-control p-2 text-label-sm outline-none border border-md-sys-outline/20" placeholder="Comma-separated" />
+                            </div>
+                        </div>
+                        <button onClick={handlePlainTruthSubmit} disabled={corpusBusy} className="rounded-control md3-btn-filled px-4 py-2 text-label-sm font-bold disabled:opacity-disabled">
+                            Update ground truth
+                        </button>
+                    </div>
+
+                    <div className="md3-card md3-surface-high rounded-card border border-md-sys-outline/10 p-4 mb-4">
+                        <h3 className="text-label-lg font-bold text-md-sys-on-surface mb-2">Images in corpus</h3>
+                        {corpusImageList.length === 0 ? (
+                            <p className="text-label-sm text-md-sys-on-surface/60">No images. Use Import Images to add some.</p>
+                        ) : (
+                            <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                                {corpusImageList.map(f => (
+                                    <div key={f.relativePath} className="flex flex-col gap-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => loadThumb(f.relativePath)}
+                                            className="aspect-video rounded-control bg-md-sys-surface-container-low overflow-hidden border border-md-sys-outline/10 hover:border-md-sys-primary/30 flex items-center justify-center"
+                                        >
+                                            {corpusImageThumbs[f.relativePath] ? (
+                                                <img src={corpusImageThumbs[f.relativePath]} alt={f.name} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <span className="text-label-xs text-md-sys-on-surface/40">Load</span>
+                                            )}
+                                        </button>
+                                        <span className="text-label-xs truncate text-md-sys-on-surface/60" title={f.name}>{f.name}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">

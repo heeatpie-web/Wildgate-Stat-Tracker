@@ -171,7 +171,9 @@ export const AnalyticsShell: React.FC = () => {
             </div>
 
             {currentView === 'overview' && data.filteredMatches.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar px-1 flex-shrink-0">
+                <div className="flex-shrink-0 px-1">
+                    <span className="text-label-sm text-md-sys-on-surface/60 block mb-1.5" aria-hidden>Quick views</span>
+                    <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                     {QUICK_VIEWS.map(({ view, icon }) => (
                         <button
                             key={view}
@@ -182,6 +184,7 @@ export const AnalyticsShell: React.FC = () => {
                             {VIEW_LABELS[view]}
                         </button>
                     ))}
+                    </div>
                 </div>
             )}
 
@@ -196,7 +199,7 @@ export const AnalyticsShell: React.FC = () => {
                     </div>
                 </div>
             ) : currentView === 'overview' ? (
-                <div ref={contentRef}>
+                <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar rounded-card mg-surface-high p-3">
                 <AnalyticsDashboard
                     visualMode={visualMode}
                     onNavigate={navigateTo}

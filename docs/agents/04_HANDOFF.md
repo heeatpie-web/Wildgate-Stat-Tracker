@@ -2,6 +2,14 @@
 
 ---
 
+## Final to-do (handoff to PM)
+
+- **Steps 1–19 and Step 20:** 100% complete. Evidence in 02_EXECUTION_LOG and 03_VALIDATION. Build + 88 tests PASS; no ACTIVE blockers.
+- **Features to add:** [docs/agents/PM_TODO.md](docs/agents/PM_TODO.md) — **F1** Analytics strip label; **F2** Overlay DevTools collapse. **QA on F1 and F2 (2026-02-13):** both **PASS** — F1 "Quick views" label present (AnalyticsShell.tsx); F2 DevTools collapse in compact overlay (OverlayView.tsx). See 03_VALIDATION "F1 and F2 — QA". PM may mark F1/F2 complete.
+- **Next:** PM marks F1/F2 complete in PM_TODO or closes; new intake/plan step when starting next cycle.
+
+---
+
 ## Tasks Begun (2026-02-13)
 
 - **Activated by:** project-manager (user: "begin tasks" / "continue")
@@ -22,9 +30,33 @@
 
 ---
 
+## Step 20 — Verifier feedback implementation (current task)
+- **Task ID:** VERIFIER-FEEDBACK-20. **Source:** [docs/agents/STEP19_VERIFIER_UI_FEEDBACK.md](docs/agents/STEP19_VERIFIER_UI_FEEDBACK.md).
+- **Work items (20.1–20.9):** Header/match merge, Analytics (scroll, hierarchy, sort), Smart Capture (clutter, Re-run, Tools clarity), Players (pagination, third column), History (win/loss shading), Overlay (transparent fix, DevTools, cut-off, default size), Settings (clutter, alias/authority), ID Mapper (visibility), Dev OCR lab (plain-text ground truth, images).
+- **Delegation:** **ui-designer** — specs done (SPEC_STEP20_VERIFIER_FEEDBACK.md). **builder** — implement per spec. **debugger** — regression after builder batches. **verifier** — spot-check when designated. **project-manager** — gate sub-steps or end of Step 20.
+- **Done condition:** All 20.1–20.9 implemented; build + test PASS; evidence as required; PM gate and 04_HANDOFF update. See 00_INTAKE and 01_PLAN Step 20 table for details.
+- **To builder (handoff from ui-designer):** Implement 20.1–20.9 per [SPEC_STEP20_VERIFIER_FEEDBACK.md](docs/agents/SPEC_STEP20_VERIFIER_FEEDBACK.md). That doc contains: specs for each item, per-item acceptance checklist ("Done when"), and suggested implementation order (Tiers 1–4). Follow UI_MASTERPLAN and UI_AUDIT. Log batches in 02_EXECUTION_LOG; debugger validates regressions.
+- **Next action (PM, 2026-02-13):** **Builder:** Start implementation per [SPEC_STEP20_VERIFIER_FEEDBACK.md](docs/agents/SPEC_STEP20_VERIFIER_FEEDBACK.md). Suggested order: quick wins 20.2 (Analytics scroll), 20.5 (History win/loss shading), 20.6 (transparent overlay fix); then 20.1, 20.3, 20.4, 20.6 compact, 20.7, 20.8, 20.9. **Debugger:** Validate regressions after each builder batch. **Verifier:** Standing by for spot-check when designated. See 00_INTAKE "Next action (continue)" for full directive.
+- **First batch checkpoint (PM):** When builder completes 20.2, 20.5, 20.6, log in 02_EXECUTION_LOG "Step 20 first batch (20.2, 20.5, 20.6) complete" with files changed and build/test result; then debugger runs regression for those areas. PM may gate before next batch.
+- **Step 20 status (PM, 2026-02-13):** ~~Awaiting builder first batch~~ **Builder complete:** both batches logged in 02_EXECUTION_LOG; all 20.1–20.9 implemented; build + tests PASS. Next: debugger full regression, verifier spot-check, PM gate to mark Step 20 COMPLETE.
+- **Completed tasks (Step 20):** 20.1 (Session chip), 20.2 (Analytics scroll), 20.3 (Smart Capture Re-run + Tools), 20.4 (Players pagination + third column), 20.5 (History row shading), 20.6 (Overlay transparent/compact/size), 20.7 (Settings Alias & authority), 20.8 (ID Mapper Sidebar + recording), 20.9 (Dev OCR plain-text form + image list). Completion logged in 02_EXECUTION_LOG (first batch + remainder) and 03_VALIDATION "Step 20 — Completion log (all tasks 20.1–20.9)".
+- **Continue (ui-designer):** Step 20 specs complete; 03_VALIDATION entry added. No further ui-designer deliverable for Step 20 unless PM requests clarifications or phased sub-specs. Standing by for builder implementation or PM assignment.
+- **Continue (ui-designer):** Added "Suggested implementation order" to SPEC_STEP20_VERIFIER_FEEDBACK.md (Tier 1: 20.2 scroll, 20.6 transparent; Tier 2: 20.1, 20.5, 20.3; Tier 3: 20.4, 20.6 compact, 20.7, 20.8; Tier 4: 20.9). Builder may use or PM may override. Standing by.
+- **QA 20.1–20.9 complete (QA manager, 2026-02-13):** Full assessment in `docs/agents/03_VALIDATION.md` under "Step 20 — QA 20.1 through 20.9". **PASS (1):** 20.5 History. **PARTIAL (5):** 20.2, 20.3, 20.6, 20.7, 20.8. **FAIL (3):** 20.1, 20.4, 20.9. Builder to implement/complete 20.1, 20.4, 20.9 and tighten partials per spec; QA will re-run after builder batches.
+- **Builder complete (Step 20, 2026-02-13):** All 20.1–20.9 implemented per 02_EXECUTION_LOG (first batch 20.2/20.5/20.6; remainder 20.1/20.3/20.4/20.7/20.8/20.9). Build + 88 tests PASS. Code spot-check confirms: SystemPulse "Session" chip, PlayerHub pagination (Page X of N), Sidebar "ID Mapper", DevOCRPanel "Ground truth (plain text)" + "Images in corpus". **Next:** Debugger full regression; verifier spot-check when designated; PM gate to mark Step 20 COMPLETE.
+- **QA re-run (Step 20, 2026-02-13):** Log re-checked; full QA vs spec completed. Results in `docs/agents/03_VALIDATION.md` under "Step 20 — QA re-run (post-builder)". **PASS (7):** 20.1, 20.3, 20.4, 20.5, 20.7, 20.8, 20.9. **PARTIAL (2):** 20.2 (Analytics strip — scroll + Overview done; "Quick views" label not present), 20.6 (Overlay — transparent + Mission collapse + default size; DevTools collapse not in OverlayView). PM may gate and mark Step 20 COMPLETE; optional follow-up for 20.2 label and 20.6 DevTools.
+- **PM gate (Step 20, 2026-02-13):** `npm run build` → exit 0 (~32s); `npm test -- --run` → 88 tests, 10 files, PASS (~19s). Evidence and BLOCKERS reviewed. **Step 20 COMPLETE.** Steps 1–20 complete. Optional follow-up: 20.2 Analytics strip label, 20.6 DevTools in overlay.
+- **Follow-up spec (ui-designer):** FU-20.2 and FU-20.6 specified in [SPEC_STEP20_VERIFIER_FEEDBACK.md](docs/agents/SPEC_STEP20_VERIFIER_FEEDBACK.md) under "Follow-up (optional)". **Builder:** Implement FU-20.2 (add "Quick views" label to analytics strip in AnalyticsShell) and FU-20.6 (DevTools collapse/expand in OverlayView compact mode) per that section to close QA PARTIALs.
+
+---
+
 ## To Project Manager (PM Brief)
 
-**Status:** UI Overhaul (Steps 13–18) implemented. **Step 19 evidence entered.** Intake/plan/blockers updated with real scope and explicit assignments.
+**Status:** Steps 1–20 complete. Final to-do handed off to PM.
+
+- **Completed (no action):** Steps 1–19 and Step 20 (20.1–20.9). Evidence: 02_EXECUTION_LOG, 03_VALIDATION. Build + 88 tests PASS; no ACTIVE blockers.
+- **Final to-do:** [docs/agents/PM_TODO.md](docs/agents/PM_TODO.md) — list of features to add (optional follow-up from QA). **F1** Analytics: "Quick views" or "Jump to" label on strip. **F2** Overlay: DevTools collapse in overlay (or document OOS). PM assigns to ui-designer/builder or defers/closes.
+- **Next:** PM assigns F1/F2 from PM_TODO, or closes items; new intake/plan step when starting next cycle.
 
 - **Batch authentication:** Step 19a, 19b, 19c entries are in `03_VALIDATION.md` with PASS/GO and scoped evidence. **Release-Manager has verified and recorded signoff.** Audit hold **LIFTED**; builds and QA may proceed. PM may run 19d gate and mark Step 19 COMPLETE when appropriate.
 - **Real scope (Step 19):** Audit only — 19a design audit, 19b implementation attestation, 19c functional + role-alignment. No new feature work. Input reference: STEP19_VERIFIER_UI_FEEDBACK.md.
@@ -50,7 +82,8 @@
 - **Continue (PM):** No new step in plan. Steps 1–19 COMPLETE; Active Blockers empty. Optional next: (1) Assign next task (e.g. STEP19_VERIFIER_UI_FEEDBACK follow-ups, queued OCR or Structure Hardening), or (2) Declare release GO and batch commit/push. Standing by.
 - **PM Release GO (2026-02-13):** All gates satisfied for batch Steps 1–19 (OCR stabilization, post-cycle steps 7–12, UI Overhaul Phases 1–6, Step 19 batch authentication). 19a/19b/19c PASS/GO; RM signoff recorded; no ACTIVE blockers; build + 88 tests PASS. **Release GO** for this batch. Batch commit/push may proceed when ready (run `git status`, `git diff --stat`, confirm no secrets; then commit and push per your workflow).
 - **Continue (PM):** Build re-check PASS (20.81s). Release GO stands. No further plan steps; batch commit/push at your discretion. Standing by for next task or cycle.
-- **Continue (verifier):** Step 19 COMPLETE; 19d gate run per handoff (19a/19b/19c PASS/GO, no ACTIVE blockers). No further verifier action until PM assigns next FULL_PATH or follow-up task. Standing by.
+- **Continue (release-manager):** Role confirmed. Plan: Steps 1–19 COMPLETE; audit hold LIFTED; Release GO per PM. No ACTIVE blockers. Standing by for PM.
+- **Release managed (release-manager):** Final checks: build PASS, 88 tests PASS, Active Blockers none, Step 19 evidence + RM signoff in place. Staged all modified tracked files; commit and push executed. See commit message and 02_EXECUTION_LOG for details.
 - **Pre-commit checklist (2026-02-13):** `git status` and `git diff --stat` run. **Modified (7 files):** docs/agents/00_INTAKE.md, 01_PLAN.md, 02_EXECUTION_LOG.md, 03_VALIDATION.md, 04_HANDOFF.md, BLOCKERS.md, DECISIONS.md. **Diff:** +363 −144 lines (agent docs only; no app code). No secrets in modified files. **Untracked:** STEP19_VERIFIER_UI_FEEDBACK.md, backups, tool dirs — add only what you want in the commit. **Next:** Stage and commit when ready; then push per your workflow.
 
 ### PM Batch Commit + Push Checklist (01_PLAN, continue)

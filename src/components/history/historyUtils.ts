@@ -28,9 +28,9 @@ export const formatDayHeader = (timestamp: number): string => {
     return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: d.getFullYear() !== today.getFullYear() ? 'numeric' : undefined });
 };
 
-/** Row background shading by match outcome */
+/** Row background shading by match outcome (Step 20.5: full row width, at-a-glance win/loss) */
 export const getRowBg = (m: Match): string => {
-    if (m.result === 'Win') return 'bg-success/[0.06] hover:bg-success/[0.12]';
-    if (m.result === 'Loss') return 'bg-danger/[0.06] hover:bg-danger/[0.12]';
-    return 'bg-info/[0.04] hover:bg-info/[0.10]';
+    if (m.result === 'Win') return 'bg-success/10 hover:bg-success/20';
+    if (m.result === 'Loss') return 'bg-danger/10 hover:bg-danger/20';
+    return 'bg-info/10 hover:bg-info/20';
 };

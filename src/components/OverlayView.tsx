@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { MissionPanel } from './recording/MissionPanel';
 import { ActionPanel } from './recording/ActionPanel';
 import { WindowResizer } from './WindowResizer';
-import { X, Minus, LayoutTemplate, Maximize2, GripHorizontal } from 'lucide-react';
+import { X, Minus, LayoutTemplate, Maximize2, GripHorizontal, ChevronDown, ChevronUp } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { getElectronAPI } from '../utils/electronAPI';
@@ -12,8 +12,10 @@ interface OverlayViewProps {
 }
 
 export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) => {
-    const { setIsOverlayMode, showWizard } = useUIState();
+    const { setIsOverlayMode, showWizard, devMode } = useUIState();
     const { overlayStyle } = useUserPreferences();
+    const [missionPanelCollapsed, setMissionPanelCollapsed] = useState(false);
+    const [devToolsCollapsed, setDevToolsCollapsed] = useState(true);
 
     const handleMinimize = () => getElectronAPI()?.send('minimize-window');
     const handleClose = () => getElectronAPI()?.send('close-window');
@@ -105,8 +107,39 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                         </button>
                     </div>
                 </div>
-                <div className="flex-1 overflow-hidden p-3 flex flex-col gap-2">
-                    <MissionPanel variant="default" accordionMode={true} />
+                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 flex flex-col gap-2">
+                    <div className="shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => setMissionPanelCollapsed(!missionPanelCollapsed)}
+                            className="w-full flex items-center justify-between px-2 py-1.5 rounded-control text-label-sm font-medium text-md-sys-on-surface/80 hover:bg-md-sys-on-surface/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary"
+                            aria-expanded={!missionPanelCollapsed}
+                            title={missionPanelCollapsed ? 'Show Mission' : 'Minimize Mission'}
+                        >
+                            <span>Mission</span>
+                            {missionPanelCollapsed ? <ChevronDown size={14} aria-hidden /> : <ChevronUp size={14} aria-hidden />}
+                        </button>
+                        {!missionPanelCollapsed && <MissionPanel variant="default" accordionMode={true} />}
+                    </div>
+                    {devMode && (
+                        <div className="shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setDevToolsCollapsed(!devToolsCollapsed)}
+                                className="w-full flex items-center justify-between px-2 py-1.5 rounded-control text-label-sm font-medium text-md-sys-on-surface/80 hover:bg-md-sys-on-surface/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary"
+                                aria-expanded={!devToolsCollapsed}
+                                title={devToolsCollapsed ? 'Show DevTools' : 'Minimize DevTools'}
+                            >
+                                <span>DevTools</span>
+                                {devToolsCollapsed ? <ChevronDown size={14} aria-hidden /> : <ChevronUp size={14} aria-hidden />}
+                            </button>
+                            {!devToolsCollapsed && (
+                                <div className="mt-1 px-2 py-2 rounded-control bg-md-sys-surface-container-low/80 border border-md-sys-outline/10 text-label-sm text-md-sys-on-surface/60">
+                                    Dev mode active. Exit overlay to use full DevTools panel.
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <ActionPanel variant="default" onSmartCaptureData={onSmartCaptureData} />
                 </div>
             </div>
@@ -164,11 +197,11 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                             <button onClick={handleClose} className="p-1 hover:bg-danger-soft rounded-control text-md-sys-on-surface/60 hover:text-danger transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger" title="Close"><X size={12} aria-hidden /></button>
                         </div>
                     </div>
-                    <div className="p-2 grid grid-cols-2 gap-3 max-h-[75vh] overflow-y-auto custom-scrollbar">
-                        <div className="flex flex-col justify-start gap-2">
+                    <div className="flex-1 min-h-0 max-h-[75vh] p-2 grid grid-cols-2 gap-3 overflow-y-auto custom-scrollbar">
+                        <div className="flex flex-col justify-start gap-2 min-h-0">
                             <ActionPanel variant="transparent" onSmartCaptureData={onSmartCaptureData} />
                         </div>
-                        <div className="flex flex-col justify-start border-l border-md-sys-outline/20 pl-3">
+                        <div className="flex flex-col justify-start min-h-0 border-l border-md-sys-outline/20 pl-3">
                             <MissionPanel variant="transparent" accordionMode={true} />
                         </div>
                     </div>

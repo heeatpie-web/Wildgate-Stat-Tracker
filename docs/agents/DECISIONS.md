@@ -2,6 +2,16 @@
 
 ## Decision Log
 - Date: 2026-02-13
+- Decision: **Release-Manager assigned as supervising authority for Step 19 audit (emergency retro).**
+- Rationale: Intake/plan trace must be stabilized; PM gate must keep up with reality before any new feature work. Release-Manager (per PM direction) becomes the supervising authority for this audit: they stop any `npm run electron:dev` / QA runs, verify audit evidence, and attest that the foundation is secure before any lane resumes. PM adds explicit audit checkpoints before approving further commits.
+- Impact: RM owns the gate until 19a/19b/19c entries exist and are approved; only then does PM drop the "Foundation hold" and unblock other tasks. No electron:dev or new builds for QA until Step 19 records exist.
+
+- Date: 2026-02-13
+- Decision: **PM acknowledgment of failure (RM-BLK-005).**
+- Rationale: Step 19 (batch authentication) was not completed. Intake and plan were allowed to conflict with release scope and validation evidence (Steps 1–18 marked complete while Step 19 was left hanging). Forensic steps 19a–19c were skipped; PM did not keep intake/plan aligned with the UI overhaul batch. Release-manager audit correctly logged ACTIVE blocker RM-BLK-005.
+- Impact: PM accepts the blocker. No release GO and no new work approved until: (1) intake and plan realigned with actual release scope (Step 19 IN_PROGRESS until 19a–19d complete), (2) formal audits 19a (design), 19b (implementation attestation), 19c (functional + role-alignment) completed and documented in 03_VALIDATION, (3) PM runs 19d gate after 19a–19c PASS. PM will not declare "done" or "GO" without evidence.
+
+- Date: 2026-02-13
 - Decision: PLAN_UI_OVERHAUL Phase 2 (Navigation review) — **No change** to Sidebar/in-view nav.
 - Options considered:
   - Structural or visual change to Sidebar (e.g. width, layout, token alignment).

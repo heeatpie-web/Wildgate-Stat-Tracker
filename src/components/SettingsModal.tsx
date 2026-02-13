@@ -175,6 +175,54 @@ export const SettingsModal: React.FC = () => {
                 {/* Modal Content - Scrollable */}
                 <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
 
+                    {/* Alias & authority (primary) */}
+                    <section className="md3-surface p-5 rounded-card border border-md-sys-outline/10">
+                        <h3 className="text-label-lg font-bold text-md-sys-on-surface mb-1">Alias & authority</h3>
+                        <p className="text-body text-md-sys-on-surface/60 mb-4">This identity is used for session and analytics.</p>
+                        <div className="grid grid-cols-2 gap-2 mb-3">
+                            <input
+                                type="text"
+                                value={aliasFrom}
+                                onChange={(e) => setAliasFrom(e.target.value)}
+                                placeholder="OCR name (raw)"
+                                className="md3-textfield--outlined p-2.5 rounded-control text-label-sm min-h-[40px]"
+                            />
+                            <input
+                                type="text"
+                                value={aliasTo}
+                                onChange={(e) => setAliasTo(e.target.value)}
+                                placeholder="Canonical name"
+                                className="md3-textfield--outlined p-2.5 rounded-control text-label-sm min-h-[40px]"
+                            />
+                        </div>
+                        <button
+                            onClick={() => {
+                                const raw = normalizeOcrName(aliasFrom);
+                                const target = normalizeOcrName(aliasTo);
+                                if (!raw || !target) return;
+                                recordOcrCorrection(raw, target);
+                                setAliasFrom('');
+                                setAliasTo('');
+                            }}
+                            className="md3-btn-filled px-4 py-2 text-label-sm font-bold mb-3 rounded-control"
+                        >
+                            Add Alias
+                        </button>
+                        <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-1">
+                            {Object.values(ocrCorrections)
+                                .sort((a, b) => b.count - a.count)
+                                .slice(0, 30)
+                                .map((c, idx) => (
+                                    <div key={`${c.ocrText}-${idx}`} className="md3-surface rounded-lg px-2 py-1.5 text-label-sm flex items-center justify-between">
+                                        <span className="truncate opacity-60">{c.ocrText}</span>
+                                        <span className="mx-2 opacity-40">→</span>
+                                        <span className="truncate font-bold text-md-sys-primary">{c.correctedTo}</span>
+                                        <span className="ml-2 opacity-40">x{c.count}</span>
+                                    </div>
+                                ))}
+                        </div>
+                    </section>
+
                     {/* Appearance Section */}
                     <section>
                         <h3 className="text-label-sm font-bold uppercase tracking-wide opacity-60 flex items-center gap-2 mb-4">
@@ -510,52 +558,6 @@ export const SettingsModal: React.FC = () => {
                                 </span>
                             </div>
                         )}
-                    </section>
-
-                    <section className="md3-surface-high/50 backdrop-blur-sm p-4 rounded-card border border-md-sys-outline/10">
-                        <h3 className="text-body font-bold mb-3">Name Alias Manager</h3>
-                        <div className="grid grid-cols-2 gap-2 mb-3">
-                            <input
-                                type="text"
-                                value={aliasFrom}
-                                onChange={(e) => setAliasFrom(e.target.value)}
-                                placeholder="OCR name (raw)"
-                                className="md3-textfield--outlined p-2 rounded-control text-label-sm"
-                            />
-                            <input
-                                type="text"
-                                value={aliasTo}
-                                onChange={(e) => setAliasTo(e.target.value)}
-                                placeholder="Canonical name"
-                                className="md3-textfield--outlined p-2 rounded-control text-label-sm"
-                            />
-                        </div>
-                        <button
-                            onClick={() => {
-                                const raw = normalizeOcrName(aliasFrom);
-                                const target = normalizeOcrName(aliasTo);
-                                if (!raw || !target) return;
-                                recordOcrCorrection(raw, target);
-                                setAliasFrom('');
-                                setAliasTo('');
-                            }}
-                            className="md3-btn-filled px-4 py-2 text-label-sm font-bold mb-3"
-                        >
-                            Add Alias
-                        </button>
-                        <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-1">
-                            {Object.values(ocrCorrections)
-                                .sort((a, b) => b.count - a.count)
-                                .slice(0, 30)
-                                .map((c, idx) => (
-                                    <div key={`${c.ocrText}-${idx}`} className="md3-surface rounded-lg px-2 py-1.5 text-label-sm flex items-center justify-between">
-                                        <span className="truncate opacity-60">{c.ocrText}</span>
-                                        <span className="mx-2 opacity-40">→</span>
-                                        <span className="truncate font-bold text-md-sys-primary">{c.correctedTo}</span>
-                                        <span className="ml-2 opacity-40">x{c.count}</span>
-                                    </div>
-                                ))}
-                        </div>
                     </section>
 
                     {/* Capture Mode */}

@@ -9,7 +9,8 @@ import {
     ScanEye,
     RefreshCw,
     X,
-    ChevronRight
+    ChevronRight,
+    UserPlus
 } from 'lucide-react';
 import { SessionTimer } from '../SessionTimer';
 import { useGameData } from '../../providers/GameDataProvider';
@@ -385,6 +386,16 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     <button onClick={() => initiateSubmission('Loss')} className={`btn-loss flex flex-col ${isCompact ? 'gap-1 py-3 rounded-control' : 'gap-1.5 py-4 rounded-card'} items-center font-bold uppercase text-label-sm transition-all hover:brightness-110 active:scale-[0.98] ${lastSubmitted === 'Loss' ? 'ring-2 ring-white/70 scale-[1.02]' : ''}`}><Skull size={isCompact ? 18 : 20} /> Loss</button>
                     <button onClick={() => initiateSubmission('Draw')} className={`btn-draw flex flex-col ${isCompact ? 'gap-1 py-3 rounded-control' : 'gap-1.5 py-4 rounded-card'} items-center font-bold uppercase text-label-sm transition-all hover:brightness-110 active:scale-[0.98] ${lastSubmitted === 'Draw' ? 'ring-2 ring-white/70 scale-[1.02]' : ''}`}><Scale size={isCompact ? 18 : 20} /> Draw</button>
                 </div>
+
+                <button
+                    type="button"
+                    onClick={() => setShowIdMapper(true)}
+                    className="rounded-control text-label-sm font-semibold text-md-sys-on-surface/70 hover:text-md-sys-primary flex items-center justify-center gap-1.5 py-1.5"
+                    title="Manage player ID mappings"
+                >
+                    <UserPlus size={12} />
+                    ID Mapper
+                </button>
 
                 {isMatchInProgress ? (
                     <div className="bg-success-soft border border-success-soft-strong rounded-control px-3 py-2 flex items-center justify-between">

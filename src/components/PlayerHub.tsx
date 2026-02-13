@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     Users, Search, Star, Edit2, Trash2, ChevronRight, Merge,
     Undo2, ScanEye, Swords, Handshake, TrendingUp, X,
@@ -53,6 +53,8 @@ const PlayerHub: React.FC = () => {
     const [mergeSearch, setMergeSearch] = useState('');
     const [mergeKeepName, setMergeKeepName] = useState<string | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+    const PLAYERS_PAGE_SIZE = 10;
+    const [playersPage, setPlayersPage] = useState(1);
 
     const socialData = useMemo(() => calculateSocialData(matches), [matches]);
 
@@ -116,6 +118,16 @@ const PlayerHub: React.FC = () => {
         });
         return list;
     }, [enrichedPilots, searchTerm, sortMode]);
+
+    const totalPlayerPages = Math.max(1, Math.ceil(filtered.length / PLAYERS_PAGE_SIZE));
+    const paginatedPlayers = useMemo(() => {
+        const start = (playersPage - 1) * PLAYERS_PAGE_SIZE;
+        return filtered.slice(start, start + PLAYERS_PAGE_SIZE);
+    }, [filtered, playersPage]);
+
+    useEffect(() => {
+        setPlayersPage(1);
+    }, [searchTerm, sortMode]);
 
     const selected = useMemo(() => {
         if (!selectedPilot) return null;
@@ -188,9 +200,9 @@ const PlayerHub: React.FC = () => {
     }, [enrichedPilots, selectedPilot, mergeSearch]);
 
     return (
-        <div data-tour="view-players" className="h-full flex gap-4 overflow-hidden players-shell-gradient rounded-2xl p-3">
-            {/* Left: Roster List */}
-            <div className="w-[340px] shrink-0 flex flex-col gap-3 h-full">
+        <div data-tour="view-players" className="h-full flex flex-col lg:grid lg:grid-cols-[340px_1fr] xl:grid-cols-[340px_1fr_280px] gap-4 overflow-hidden players-shell-gradient rounded-2xl p-3">
+            {/* Column 1: Roster List */}
+            <div className="w-full lg:w-[340px] shrink-0 flex flex-col gap-3 h-full min-h-0">
                 <div className="md3-card mg-surface shadow-lg p-4 flex flex-col gap-3 shrink-0">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -260,7 +272,7 @@ const PlayerHub: React.FC = () => {
                     );
                 })()}
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
+                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1 flex flex-col">
                     {filtered.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12 text-md-sys-on-surface/40">
                             <Users size={32} className="mb-2 opacity-40" />
@@ -269,8 +281,9 @@ const PlayerHub: React.FC = () => {
                             </span>
                         </div>
                     ) : (
+                        <>
                         <div className="grid grid-cols-2 gap-1.5 content-start">
-                            {filtered.map(pilot => (
+                            {paginatedPlayers.map(pilot => (
                             <button
                                 key={pilot.name}
                                 onClick={() => setSelectedPilot(pilot.name)}
@@ -298,12 +311,32 @@ const PlayerHub: React.FC = () => {
                             </button>
                             ))}
                         </div>
+                        <div className="mt-3 pt-2 border-t border-md-sys-outline/10 flex items-center justify-between gap-2 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setPlayersPage(p => Math.max(1, p - 1))}
+                                disabled={playersPage <= 1}
+                                className="rounded-control px-2.5 py-1.5 text-label-sm font-bold bg-md-sys-surface-container-high text-md-sys-on-surface disabled:opacity-disabled hover:bg-md-sys-surface-container-highest"
+                            >
+                                Previous
+                            </button>
+                            <span className="text-label-sm text-md-sys-on-surface/60">Page {playersPage} of {totalPlayerPages}</span>
+                            <button
+                                type="button"
+                                onClick={() => setPlayersPage(p => Math.min(totalPlayerPages, p + 1))}
+                                disabled={playersPage >= totalPlayerPages}
+                                className="rounded-control px-2.5 py-1.5 text-label-sm font-bold bg-md-sys-surface-container-high text-md-sys-on-surface disabled:opacity-disabled hover:bg-md-sys-surface-container-highest"
+                            >
+                                Next
+                            </button>
+                        </div>
+                        </>
                     )}
                 </div>
             </div>
 
-            {/* Right: Player Detail */}
-            <div className="flex-1 min-w-0 overflow-y-auto custom-scrollbar">
+            {/* Column 2: Player Detail */}
+            <div className="flex-1 min-w-0 overflow-y-auto custom-scrollbar min-h-0">
                 {!selected ? (
                     <div className="h-full flex flex-col items-center justify-center text-md-sys-on-surface/40">
                         <Users size={48} className="mb-3 opacity-40" />
@@ -614,6 +647,34 @@ const PlayerHub: React.FC = () => {
                                 </div>
                             </div>
                         )}
+                    </div>
+                )}
+            </div>
+
+            {/* Column 3 (xl): Selected player summary */}
+            <div className="hidden xl:flex flex-col min-w-0 rounded-card md3-surface-high p-4 border border-md-sys-outline/10">
+                {!selected ? (
+                    <div className="flex flex-col items-center justify-center flex-1 text-md-sys-on-surface/40 py-8">
+                        <Users size={24} className="mb-2 opacity-40" />
+                        <span className="text-label-sm">Select a player</span>
+                    </div>
+                ) : (
+                    <div className="flex flex-col gap-3">
+                        <div className="text-label-lg font-bold text-md-sys-on-surface truncate">{selected.name}</div>
+                        {selected.asTeammate && (
+                            <div className="text-label-sm text-md-sys-on-surface/80">
+                                As teammate: {winRate(selected.asTeammate)}% ({selected.asTeammate.wins}W / {selected.asTeammate.total - selected.asTeammate.wins}L)
+                            </div>
+                        )}
+                        {selected.asOpponent && (
+                            <div className="text-label-sm text-md-sys-on-surface/80">
+                                As opponent: {winRate(selected.asOpponent)}% ({selected.asOpponent.wins}W / {selected.asOpponent.total - selected.asOpponent.wins}L)
+                            </div>
+                        )}
+                        {selected.totalEncounters > 0 && (
+                            <div className="text-label-xs text-md-sys-on-surface/60">{selected.totalEncounters} encounters</div>
+                        )}
+                        <span className="text-label-xs text-md-sys-primary font-semibold">View full profile →</span>
                     </div>
                 )}
             </div>

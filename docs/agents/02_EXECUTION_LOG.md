@@ -1,5 +1,213 @@
 # 02 Execution Log
 
+## Change Entry — QA on F1 and F2 (QA manager, 2026-02-13)
+- Date (UTC): 2026-02-13
+- Owner: QA manager
+- Task: Begin QA on F1 (Analytics strip label) and F2 (Overlay DevTools collapse) per PM_TODO.
+- Files changed: `docs/agents/03_VALIDATION.md`, `docs/agents/PM_TODO.md`, `docs/agents/04_HANDOFF.md`, `docs/agents/02_EXECUTION_LOG.md`.
+- What: Code audit — AnalyticsShell.tsx line 175: "Quick views" label above QUICK_VIEWS strip (F1). OverlayView.tsx: devToolsCollapsed state and toggle in compact overlay when devMode (F2). Both features present.
+- Outcome: F1 PASS, F2 PASS. 03_VALIDATION "F1 and F2 — QA" block added; PM_TODO and 04_HANDOFF updated. PM may mark F1/F2 complete.
+
+## Change Entry — Step 21 / F1 + F2 complete (builder)
+- Date (UTC): 2026-02-12
+- Owner: builder
+- Task: Implement PM backlog F1 (Analytics strip label) and F2 (Overlay DevTools collapse) per 00_INTAKE, 01_PLAN Step 21, and SPEC_STEP20_VERIFIER_FEEDBACK.md follow-up (FU-20.2, FU-20.6).
+- Files changed: `src/components/analytics/AnalyticsShell.tsx`, `src/components/OverlayView.tsx`.
+- What: **F1 (FU-20.2):** Added "Quick views" label above the quick-view button strip in AnalyticsShell (text-label-sm text-md-sys-on-surface/60). **F2 (FU-20.6):** In OverlayView compact mode, when devMode is true, added a collapsible "DevTools" section with chevron toggle; when expanded shows "Dev mode active. Exit overlay to use full DevTools panel." Uses rounded-control, text-label-sm; state devToolsCollapsed (default true).
+- Validation: `npm run build` → exit 0; `npm test` → 88 tests, 10 files, PASS.
+- Outcome: F1 and F2 done. Step 21 deliverable complete; PM may gate or close.
+
+## Change Entry — Step 20 follow-up: ui-designer spec for FU-20.2 and FU-20.6 (ui-designer)
+- Date (UTC): 2026-02-13
+- Owner: ui-designer
+- Task: Spec the two QA PARTIAL follow-ups for the builder.
+- Files changed: `docs/agents/SPEC_STEP20_VERIFIER_FEEDBACK.md`.
+- What: Added "Follow-up (optional)" section with two specs. **FU-20.2:** Analytics quick-view strip — add visible label "Quick views" (or "Jump to") left of or above the quick-view buttons in AnalyticsShell; text-label-sm, text-md-sys-on-surface/60. **FU-20.6:** OverlayView (compact) — DevTools section has collapse/expand control (chevron or "Minimize"/"Show DevTools"); state local; toggle on DevTools header; rounded-control. Done when strip is labeled and DevTools can be collapsed in overlay.
+- Outcome: Builder may implement FU-20.2 and FU-20.6 per SPEC_STEP20_VERIFIER_FEEDBACK.md to close QA PARTIALs (or F1/F2 in PM_TODO).
+
+## Change Entry — PM_TODO: F1/F2 assigned; Step 21 added for next cycle (project-manager)
+- Date (UTC): 2026-02-13
+- Owner: project-manager
+- Task: Open PM_TODO.md; assign F1 and F2 to ui-designer/builder; add intake/plan step for next cycle.
+- Files changed: `docs/agents/PM_TODO.md`, `docs/agents/01_PLAN.md`, `docs/agents/00_INTAKE.md`, `docs/agents/02_EXECUTION_LOG.md`.
+- What changed: **PM_TODO:** F1 and F2 marked ASSIGNED; added "Assigned (next cycle — Step 21)" with ui-designer (confirm copy/scope) and builder (implement or OOS); added Closed/Deferred section; Handoff updated. **01_PLAN:** Added Step 21 (PM backlog F1 + F2) with F1/F2 delegation; Active Step = set to 21 when starting next cycle. **00_INTAKE:** Next action = next cycle Step 21 (ui-designer confirm F1/F2; builder implement F1/F2); Alignment and Done condition updated.
+- Outcome: F1 and F2 assigned to ui-designer and builder; Step 21 added; next cycle starts with Step 21. No defer/close.
+
+## Change Entry — PM backlog: features to add, archive 1–19, handoff to PM (project-manager)
+- Date (UTC): 2026-02-13
+- Owner: project-manager (reporter / handoff)
+- Task: Create list of features to add; clear completed tasks (1–19) from active view; pass final to-do to PM.
+- Files changed: `docs/agents/PM_TODO.md` (new), `docs/agents/01_PLAN.md`, `docs/agents/04_HANDOFF.md`, `docs/agents/00_INTAKE.md`, `docs/agents/02_EXECUTION_LOG.md`.
+- What: **PM_TODO.md** — Created single backlog: F1 (Analytics "Quick views" / "Jump to" label), F2 (Overlay DevTools collapse or OOS); completed steps 1–20 summarized; handoff to PM. **01_PLAN** — Current task = PM backlog; Active Step = None; completed steps 1–20 archived (reference only); next work = PM_TODO. **04_HANDOFF** — "Final to-do (handoff to PM)" at top; PM Brief updated; pointer to PM_TODO. **00_INTAKE** — Current task = PM_BACKLOG; goal = PM assigns F1/F2 or closes; done condition = PM has processed backlog.
+- Outcome: Features-to-add list in PM_TODO.md; Steps 1–19 (and 20) cleared from active task list; final to-do passed to PM.
+
+## Change Entry — Debug run on F1 and F2 (debugger)
+- Date (UTC): 2026-02-12
+- Owner: debugger
+- Task: Run debug on F1 (Analytics strip label) and F2 (Overlay DevTools collapse) per user request.
+- Actions: FULL_PATH regression — build exit 0 (11.32s), npm test 88/10 PASS (10.50s). Code audit: F1 — "Quick views" label in AnalyticsShell.tsx line 175; F2 — devToolsCollapsed + toggle in OverlayView.tsx (compact, devMode). Documented in 03_VALIDATION "F1 and F2 — Debugger regression".
+- Outcome: F1 PASS, F2 PASS. No regressions; gate green.
+
+## Change Entry — Step 20 debug begin: regression first batch (debugger)
+- Date (UTC): 2026-02-12
+- Owner: debugger (debug manager)
+- Task: Begin debug on Step 20 per user request; validate regression for first batch (20.2, 20.5, 20.6) after builder completion.
+- Actions: Ran FULL_PATH (build exit 0, 88 tests PASS). Code audit: AnalyticsShell.tsx (scroll container), historyUtils.ts (getRowBg full-row tints), OverlayView.tsx (transparent max-h-[75vh] + scroll; compact Mission minimizable + content scroll), main.cjs (overlay default 360×max(300, 20% workArea.height)). Documented repro, expected, actual, confidence in 03_VALIDATION "Step 20 — Debugger regression (first batch 20.2, 20.5, 20.6)".
+- Files changed: `docs/agents/03_VALIDATION.md`, `docs/agents/02_EXECUTION_LOG.md`.
+- Outcome: First batch regression PASS. No blockers. Debugger standing by for next batch (20.1, 20.3, 20.4, 20.7, 20.8, 20.9) or PM gate.
+
+## Change Entry — Step 20 first batch (20.2, 20.5, 20.6) complete (builder)
+- Date (UTC): 2026-02-12
+- Owner: builder
+- Task: Implement Step 20 verifier feedback items 20.2, 20.5, 20.6 per SPEC_STEP20_VERIFIER_FEEDBACK.md.
+- Files changed: `src/components/analytics/AnalyticsShell.tsx`, `src/components/history/historyUtils.ts`, `src/components/OverlayView.tsx`, `electron/main.cjs`.
+- What: **20.2** — Analytics overview content wrapped in scrollable container (`flex-1 min-h-0 overflow-y-auto custom-scrollbar` + surface/padding) so shell scroll bar works. **20.5** — History row shading already in historyUtils.ts (getRowBg); confirmed full-row Win/Loss/Draw tints (bg-success/10, bg-danger/10, bg-info/10). **20.6** — Transparent overlay: content area `flex-1 min-h-0 max-h-[75vh]` + overflow-y-auto for reliable scroll; compact overlay: Mission panel minimizable (chevron toggle, "Mission" label); content area `flex-1 min-h-0 overflow-y-auto custom-scrollbar` so bottom not cut off; default overlay size in main.cjs set to ~20% of work area height (min 300px), width 360.
+- Validation: `npm run build` → exit 0; `npm test` → 88 tests, 10 files, PASS.
+- Outcome: Step 20 first batch complete; debugger may run regression for Analytics, History, Overlay. Remainder: 20.1, 20.3, 20.4, 20.7, 20.8, 20.9.
+
+## Change Entry — Step 20 remainder (20.1, 20.3, 20.4, 20.7, 20.8, 20.9) complete (builder)
+- Date (UTC): 2026-02-12
+- Owner: builder
+- Task: Implement Step 20 verifier feedback items 20.1, 20.3, 20.4, 20.7, 20.8, 20.9 per SPEC_STEP20_VERIFIER_FEEDBACK.md.
+- Files changed: `src/components/SystemPulse.tsx`, `src/components/SmartCapturesPanel.tsx`, `src/components/PlayerHub.tsx`, `src/components/Sidebar.tsx`, `src/components/recording/ActionPanel.tsx`, `src/components/SettingsModal.tsx`, `src/components/DevOCRPanel.tsx`, `electron/main.cjs`, `electron/preload.cjs`.
+- What: **20.1** — Renamed Telemetry chip to "Session" in SystemPulse; same dual state (solid/flashing), tooltip "Session: connected" / "Session: receiving telemetry". **20.3** — Tools panel: purpose line "Bulk actions, pending captures, and OCR issues."; Re-run as primary at top of detail (bar with rounded-control button), same style for bottom Re-run; Screenshots section kept secondary Re-run. **20.4** — PlayerHub: pagination (page size 10, Previous/Next, "Page X of N"); third column at xl for selected player summary (name, teammate/opponent stats, "View full profile"). **20.7** — Settings: Alias & authority as first content section with heading and copy; OCR engine section unchanged (already one card). **20.8** — Sidebar: "ID Mapper" nav item (UserPlus icon); ActionPanel: "ID Mapper" link below Win/Loss/Draw. **20.9** — Dev OCR Corpus: "Ground truth (plain text)" form (Teammates, Opponents, Modifiers textareas, "Update ground truth" merges one sample into truth); "Images in corpus" list with load-on-click thumbnails; IPC ocr-corpus-list-images, ocr-corpus-read-image in main/preload.
+- Validation: `npm run build` → exit 0; `npm test` → 88 tests, 10 files, PASS.
+- Outcome: Step 20 items 20.1–20.9 implemented. Debugger may run full regression; verifier may spot-check per 01_PLAN.
+
+## Change Entry — Step 20: ui-designer specs for 20.1–20.9 (ui-designer)
+- Date (UTC): 2026-02-13
+- Owner: ui-designer
+- Task: Produce specs/decisions for Step 20 (Verifier feedback implementation) per 00_INTAKE and 01_PLAN delegation.
+- Files changed: `docs/agents/SPEC_STEP20_VERIFIER_FEEDBACK.md` (new).
+- What: Single spec document covering all nine work items: 20.1 Header/match (merge Telemetry into one Session chip, dual state); 20.2 Analytics (scroll fix, hierarchy Overview primary, connection to dashboard, time/sort); 20.3 Smart Capture (sections, Re-run at top primary, Tools panel copy/purpose); 20.4 Players (pagination 10/20, third column for selected player summary); 20.5 History (restore win/loss row shading full width); 20.6 Overlay (transparent fix, compact: DevTools minimizable, bottom visible, default size 15–20%); 20.7 Settings (group OCR, reduce outlines, Alias/authority primary); 20.8 ID Mapper (recording panel entry point + sidebar); 20.9 Dev OCR (plain-text ground truth form, image list, base images). All per UI_MASTERPLAN and UI_AUDIT.
+- Outcome: Builder may implement 20.1–20.9 per SPEC_STEP20_VERIFIER_FEEDBACK.md. Debugger validates regressions; verifier spot-checks when designated.
+
+## Change Entry — Step 20: ui-designer per-item checklists (ui-designer)
+- Date (UTC): 2026-02-13
+- Owner: ui-designer
+- Task: Start on 20.1–20.9 — complete design package for Step 20.
+- Files changed: `docs/agents/SPEC_STEP20_VERIFIER_FEEDBACK.md`.
+- What: Added "Per-item acceptance checklist" table: one "Done when" row per work item (20.1–20.9) so builder and verifier can tick off completion. Spec already contained full specs + suggested implementation order.
+- Outcome: 20.1–20.9 fully scoped from ui-designer; builder can implement and verify against checklist.
+
+## Release-Manager: Step 19 verification and audit hold lifted (2026-02-13)
+- **Role:** release-manager
+- **Action:** Reviewed docs/agents/03_VALIDATION.md for Step 19a, 19b, 19c entries and docs/agents/04_HANDOFF.md for the corresponding status summary.
+- **Confirmation:** All three entries are present with PASS/FAIL (or GO) and scoped evidence: **19a** (ui-designer design audit — GO, per-area PASS); **19b** (builder implementation attestation — PASS, build/test, file list); **19c** (verifier functional + role-alignment — GO, functional and role-alignment PASS). STEP 19 EVIDENCE ENTERED is appropriate.
+- **Signoff:** RM attests foundation secure. Audit hold **LIFTED.** Signoff recorded in 03_VALIDATION and 04_HANDOFF. New builds and QA may proceed; PM may run 19d gate.
+- **Continue directive (04_HANDOFF):** Continue only after reviewing the updated intake/plan/blocker docs; ui-designer, builder, debugger, verifier may resume their next tasks now that RM confirmed Step 19 evidence and lifted the hold.
+
+## Change Entry — Step 20: Verifier feedback incorporated into plan and delegated (project-manager)
+- Date (UTC): 2026-02-13
+- Owner: project-manager
+- Task: Incorporate STEP19_VERIFIER_UI_FEEDBACK.md into the plan and delegate to responsible agents for implementation.
+- Files changed: `docs/agents/01_PLAN.md`, `docs/agents/00_INTAKE.md`, `docs/agents/04_HANDOFF.md`, `docs/agents/02_EXECUTION_LOG.md`.
+- What changed: **01_PLAN:** Added Step 20 "Verifier feedback implementation" with work items 20.1–20.9 (Header/match, Analytics, Smart Capture, Players, History, Overlay, Settings, ID Mapper, Dev OCR lab); delegation table (ui-designer spec, builder implement, debugger regression, verifier spot-check). Active Step = Step 20 IN_PROGRESS; Current Task = VERIFIER_FEEDBACK_20. **00_INTAKE:** Current task = VERIFIER_FEEDBACK_20; goal, scope 20.1–20.9, delegation, done condition, constraints. **04_HANDOFF:** Added "Step 20 — Verifier feedback implementation" with work items and delegation; PM Brief status = Step 20 current task.
+- Outcome: Verifier feedback is in the plan; ui-designer, builder, debugger, and verifier delegated to implement 20.1–20.9 per 00_INTAKE and 01_PLAN.
+
+## Change Entry — Step 20: PM continue — next action and gate check (project-manager)
+- Date (UTC): 2026-02-13
+- Owner: project-manager
+- Task: Direct lanes to start Step 20 implementation; confirm gate green.
+- What changed: **00_INTAKE:** Added "Next action (continue) — PM directive": ui-designer specs complete; builder start implementation per SPEC_STEP20_VERIFIER_FEEDBACK.md with suggested order (quick wins 20.2, 20.5, 20.6 then remainder); debugger validate after builder batches; verifier standing by. **01_PLAN:** Active Step updated with PM directive and builder start per spec; suggested order in 00_INTAKE. **04_HANDOFF:** Step 20 section — Next action (PM): builder start per spec, suggested order; debugger/verifier as above.
+- Gate: `npm run build` → exit 0 (~15s); `npm test -- --run` → 88 tests, 10 files, PASS (~14s). Gate confirmed green before implementation.
+- Outcome: Builder has clear directive to start; debugger and verifier know their triggers. Step 20 execution in progress.
+
+## Change Entry — Step 20: PM continue — first batch checkpoint and gate (project-manager)
+- Date (UTC): 2026-02-13
+- Owner: project-manager
+- Task: Define first-batch checkpoint for Step 20; confirm gate green.
+- What changed: **00_INTAKE:** Added "Step 20 — First batch checkpoint": when builder completes 20.2, 20.5, 20.6, log in 02_EXECUTION_LOG with files changed and build/test result; then debugger runs regression; PM may gate before next batch. **04_HANDOFF:** Same checkpoint in Step 20 section.
+- Gate: `npm run build` → exit 0 (~21s); `npm test -- --run` → 88 tests, 10 files, PASS (~13s). Gate green; no builder Step 20 code changes yet.
+- Outcome: Builder has clear milestone (first batch = 20.2, 20.5, 20.6 + log); debugger trigger after first batch. Step 20 in progress.
+
+## Change Entry — Step 20: PM continue — status and gate (project-manager)
+- Date (UTC): 2026-02-13
+- Owner: project-manager
+- Task: Confirm Step 20 status; run gate; leave directive unchanged.
+- Gate: `npm run build` → exit 0 (~18s); `npm test -- --run` → 88 tests, 10 files, PASS (~14s).
+- What changed: 04_HANDOFF — added "Step 20 status (PM)": awaiting builder first batch; gate green; directive unchanged.
+- Outcome: Step 20 IN_PROGRESS; awaiting builder first batch (20.2, 20.5, 20.6). Gate green.
+
+## Change Entry — Continue: next = PM assign task or release GO (project-manager)
+- Date (UTC): 2026-02-13
+- Owner: project-manager
+- Task: Define "continue" after Step 19 — PM to assign next task or declare release GO; lanes cleared to resume after reviewing docs.
+- Files changed: `docs/agents/00_INTAKE.md`, `docs/agents/01_PLAN.md`, `docs/agents/04_HANDOFF.md`.
+- What changed: 00_INTAKE — Current Task = BATCH_AUTH_19 closed, standing by; Next action = PM to assign next task or declare release GO. 01_PLAN — Current Task = BATCH_AUTH_19 closed; next = PM assign next task or release GO. 04_HANDOFF — Continue section: next = PM to assign next task or declare release GO; optional build/test before release GO.
+- Outcome: Continue path is explicit; no new task until PM sets one. Lanes may resume after reviewing docs.
+
+## Change Entry — Resume directive: intake/plan/blockers updated for post–Step 19 (project-manager)
+- Date (UTC): 2026-02-13
+- Owner: project-manager
+- Task: Align intake/plan/blockers with RM signoff and resume directive so roles continue only after reviewing updated docs.
+- Files changed: `docs/agents/00_INTAKE.md`, `docs/agents/01_PLAN.md`, `docs/agents/BLOCKERS.md`, `docs/agents/04_HANDOFF.md`.
+- What changed: 00_INTAKE — batch COMPLETE, Next action = continue only after reviewing docs; Alignment and Resume sections; Active Plan Context = Step 19 COMPLETE. 01_PLAN — Active Step = Step 19 COMPLETE, hold lifted, continue only after reviewing docs; Steps 1–19 complete. BLOCKERS — Active = none; RM-BLK-005 in Resolved (RM confirmed Step 19, hold lifted). 04_HANDOFF — Step 19 gate narrative + Resume directive (continue only after reviewing docs; ui-designer/builder/debugger/verifier may resume).
+- Outcome: ui-designer, builder, debugger, verifier may resume next tasks after reviewing updated intake/plan/blocker docs; RM signoff and lifted hold reflected throughout.
+
+## Change Entry — Continue: gate check PASS; PM may release GO or assign next task (project-manager)
+- Date (UTC): 2026-02-13
+- Owner: project-manager
+- Task: Run gate check (build + test); record result; leave next move to PM (release GO or assign task).
+- Commands: `npm run build` → exit 0 (~10.8s); `npm test -- --run` → 88 tests, 10 files, PASS (~15s).
+- Files changed: `docs/agents/03_VALIDATION.md`, `docs/agents/04_HANDOFF.md`, `docs/agents/02_EXECUTION_LOG.md`.
+- What changed: 03_VALIDATION — added "PM gate check (continue, 2026-02-13)" (build + test PASS). 04_HANDOFF — Continue section: Gate 2026-02-13 build + test PASS; PM may declare release GO or assign next task.
+- Outcome: Gate green. PM may declare release GO or assign next task per 04_HANDOFF.
+
+## Change Entry — Continue: pre-commit checklist run (project-manager)
+- Date (UTC): 2026-02-13
+- Owner: project-manager
+- Task: Run pre-commit checklist (git status, git diff --stat) after release GO; record result.
+- Commands: `git status`; `git diff --stat`.
+- Result: Branch Opus.debug, up to date with origin. Modified: 7 files (docs/agents/* + DECISIONS.md), +363 −144. No secrets. Untracked: STEP19_VERIFIER_UI_FEEDBACK.md, backups, tool dirs.
+- Files changed: `docs/agents/04_HANDOFF.md`, `docs/agents/02_EXECUTION_LOG.md`.
+- Outcome: Pre-commit done; batch commit/push when ready. 04_HANDOFF updated with checklist result.
+
+## Change Entry — Debugger resumption after RM lift (debugger)
+- Date (UTC): 2026-02-12
+- Owner: debugger
+- Task: Continue per 04_HANDOFF directive: review updated intake/plan/blockers; resume next tasks now that RM confirmed Step 19 evidence and lifted the hold.
+- Actions: Reviewed 00_INTAKE (BATCH_AUTH_19), 01_PLAN (Step 19), BLOCKERS (RM-BLK-005). Ran FULL_PATH regression: `npm run build` → exit 0 (21.35s); `npm test` → 88 tests, 10 files, PASS (18.90s).
+- Files changed: `docs/agents/03_VALIDATION.md` — added "Debugger — Resumption after RM lift" entry.
+- Outcome: Gate C (Build + Tests) PASS. Debugger resumed; standing by for next assignment.
+
+## Change Entry — Step 19 real scope + explicit assignment for RM fresh evidence (project-manager)
+- Date (UTC): 2026-02-13
+- Owner: project-manager
+- Task: Update intake, plan, and blockers with real scope; explicitly assign ui-designer/builder/verifier to finish Step 19a–c so RM has fresh evidence.
+- Files changed: `docs/agents/00_INTAKE.md`, `docs/agents/01_PLAN.md`, `docs/agents/BLOCKERS.md`, `docs/agents/04_HANDOFF.md`.
+- What changed: (1) **00_INTAKE:** Added "Real scope (Step 19 only)" — audit only, in/out of scope, reference STEP19_VERIFIER_UI_FEEDBACK. Replaced "Next action (continue)" with "Explicit assignment — finish Step 19a–c (for RM fresh evidence)" — ui-designer → 19a, builder → 19b, verifier → 19c, each "Execute **now**" with deliverable (one 03_VALIDATION entry) and inputs. (2) **01_PLAN:** Step 19 — added "Real scope" line; added "Explicit assignment (PM) — execute 19a, 19b, 19c now" with role → deliverable + inputs. (3) **BLOCKERS:** RM-BLK-005 — updated "Latest status" and "Needed input" to state intake/plan updated with real scope and explicit assignments; needed input = ui-designer, builder, verifier execute 19a–19c now and each add 03_VALIDATION entry so RM has fresh evidence. (4) **04_HANDOFF:** Delegation and alignment text updated to reference real scope and "execute now" per 00_INTAKE.
+- Outcome: Real scope and explicit assignments are in intake/plan/blockers. ui-designer, builder, verifier are directed to execute 19a, 19b, 19c and post evidence; RM can verify once entries exist.
+
+## Release-Manager: Directive — nothing proceeds until Step 19 evidence + RM signoff (2026-02-13)
+- **Role:** release-manager
+- **Directive:** Project-manager is realigning intake/plan/blockers to match UI Overhaul scope and delegating Step 19a → ui-designer, 19b → builder, 19c → verifier. Once those entries land in 03_VALIDATION with PASS/FAIL evidence, RM can lift the audit hold and record signoff in 03_VALIDATION and 04_HANDOFF. **Nothing else may proceed** until Step 19 evidence is completed and RM signoff is recorded: no builds, no QA, no electron:dev, no new feature work. Directive emphasized in docs/agents/03_VALIDATION.md and docs/agents/04_HANDOFF.md.
+
+## Change Entry — Intake and plan realignment; continue (project-manager)
+- Date (UTC): 2026-02-13
+- Owner: project-manager
+- Task: Realign intake and plan; direct team to continue (execute 19a–19c).
+- Files changed: `docs/agents/00_INTAKE.md`, `docs/agents/01_PLAN.md`, `docs/agents/04_HANDOFF.md`.
+- What changed: 00_INTAKE — added "Alignment with 01_PLAN" and "Next action (continue)" with explicit actions for ui-designer (19a), builder (19b), verifier (19c), PM (19d), release-manager. 01_PLAN — Active Step now states intake alignment and "Continue: team executes 19a–19c per 00_INTAKE." 04_HANDOFF — status "Intake and plan realigned"; Alignment and Continue reference added.
+- Outcome: Intake and plan aligned; team can continue by executing 19a, 19b, 19c per 00_INTAKE and 01_PLAN.
+
+## Release-Manager: Emergency retro audit — stabilize intake/plan trace, PM audit lock (2026-02-13)
+- **Role:** release-manager (supervising authority per DECISIONS.md and 01_PLAN).
+- **Actions taken:** (1) **00_INTAKE:** Step 19 NO-GO requirements added; no further steps until 19a–c pass and evidence recorded; RM as supervising authority. (2) **DECISIONS.md:** RM assigned as audit supervising authority; no electron:dev/QA until Step 19 records exist. (3) **01_PLAN:** Audit supervising authority directive (RM); Active Step now includes Foundation hold and verifier/debugger double-hat. (4) **BLOCKERS:** RM-BLK-005 updated with latest status and RM-supervises-entries language. (5) **02_EXECUTION_LOG:** Audit hold and RM gate ownership entry added; RM-REQ-005/006 timestamps already correct. (6) **03_VALIDATION:** RM audit review added — completed (Steps 13–18 with evidence), missing (19a/19b/19c); QA hold stated. (7) **04_HANDOFF:** Audit pause and QA hold declared; explicit delegation (19a ui-designer, 19b builder, 19c verifier/debugger); RM supervises and approves; only when all three PASS does PM drop Foundation hold.
+- **Outcome:** Intake/plan trace stabilized; PM audit lock enforced. No new feature work, no electron:dev/new builds, until Step 19a/19b/19c entries exist and RM attests foundation secure.
+
+## Peer Message Log — Release-manager: Intake/plan alignment + gate hold (2026-02-13)
+- **Role:** release-manager
+- **Task:** Align intake/plan with UI Overhaul + Step 19; fix RM-REQ-005/006 resolution clarity; ensure Active Blockers lists only real blockers; hold gate until 19a/19b/19c exist.
+- **Changes:** (1) **01_PLAN:** Current Task updated from AGENT_BOOTSTRAP to BATCH_AUTH_19 (UI Overhaul Steps 13–18 + Step 19); validation/gate docs must match this scope before sign-off. (2) **02_EXECUTION_LOG:** RM-REQ-005/006 response column now states **Closed 2026-02-13T13:35Z** (resolution time) explicitly; 01:00/01:15Z clarified as evidence production time, not closure. (3) **BLOCKERS:** Active Blockers header added — only real blockers here; resolved only below. (4) **03_VALIDATION:** Release gate note — hold until 19a/19b/19c entries exist, Active only real blockers, intake/plan align with UI work (no stale opacity-normalization as current task).
+- **Outcome:** Intake/plan reflect UI Overhaul + Step 19. Blocker trail credible. Gate held until Step 19 (19a–19c) complete and docs aligned.
+
+## Change Entry — PM acknowledgment of RM-BLK-005 (project-manager)
+- Date (UTC): 2026-02-13
+- Owner: project-manager
+- Task: Acknowledge release-manager audit and ACTIVE blocker RM-BLK-005.
+- What changed: DECISIONS.md updated with PM acknowledgment of failure: Step 19 not completed, intake/plan allowed to conflict with release scope, forensic 19a–19c skipped. PM accepts blocker; no release GO or new work approval until Step 19 (19a–19d) and doc realignment are complete.
+
 ## Change Entry — Doc corrections for gate trace and release GO (project-manager)
 - Date (UTC): 2026-02-13
 - Owner: project-manager
@@ -413,11 +621,16 @@ Use this section for cross-role dependencies before PM escalation.
 | release-manager | ui-designer | RM-REQ-002 | 2026-02-13T00:20:00Z | Attach UI before/after screenshot proof and checklist for Lane B changes in validation/handoff docs. | Resolved 2026-02-13T01:00Z: `npm run snap:views` — 0% mismatch, 5/5 views (copy-only). Evidence in 03_VALIDATION. | CLOSED |
 | release-manager | debugger | RM-REQ-003 | 2026-02-13T00:20:00Z | Add explicit security negative-test evidence for rejection paths (invalid path, external link, IPC blocked/unavailable). | Resolved 2026-02-13T01:15Z: Security test suite — 109/109 PASS. Evidence in 03_VALIDATION and `dataset/ocr-corpus/reports/security-gate-a.json`. | CLOSED |
 | release-manager | project-manager | RM-REQ-004 | 2026-02-13T00:20:00Z | Reconcile `docs/agents/01_PLAN.md` step statuses with current evidence before final approval. | Resolved 2026-02-13T02:00Z: Plan reconciliation complete — Steps 1–6 COMPLETE; PM cycle handoff published. | CLOSED |
-| release-manager | ui-designer | RM-REQ-005 | 2026-02-13T13:30:00Z | **URGENT**: RC NO-GO — missing UI screenshot evidence for Lane B (DevOCRPanel, OCRReviewModal, OcrCorrectionModal). Need screenshots + checklist in 03_VALIDATION Gate C. | Closed 2026-02-13T13:35Z: Evidence already present (snap:views 01:00Z, 0% mismatch). RM recognized and closed as satisfied; no further action. | CLOSED |
-| release-manager | project-manager | RM-REQ-006 | 2026-02-13T13:30:00Z | **URGENT**: RC blocked on RM-REQ-002/003 artifacts; PM decision on UI deferral, security test priority, plan reconciliation. | Closed 2026-02-13T13:35Z: All artifacts present (UI 01:00Z, security 01:15Z, plan 02:00Z). RM recognized and closed; release gates satisfied. | CLOSED |
+| release-manager | ui-designer | RM-REQ-005 | 2026-02-13T13:30:00Z | **URGENT**: RC NO-GO — missing UI screenshot evidence for Lane B (DevOCRPanel, OCRReviewModal, OcrCorrectionModal). Need screenshots + checklist in 03_VALIDATION Gate C. | **Closed 2026-02-13T13:35Z** (resolution time). Evidence had been produced earlier (snap:views 01:00Z, 0% mismatch). RM re-verified and closed; no further action. | CLOSED |
+| release-manager | project-manager | RM-REQ-006 | 2026-02-13T13:30:00Z | **URGENT**: RC blocked on RM-REQ-002/003 artifacts; PM decision on UI deferral, security test priority, plan reconciliation. | **Closed 2026-02-13T13:35Z** (resolution time). Artifacts had been produced earlier (UI 01:00Z, security 01:15Z, plan 02:00Z). RM re-verified and closed; release gates satisfied. | CLOSED |
 | release-manager | project-manager | RM-REQ-007 | 2026-02-13T13:45:00Z | **Question**: OCR Cycle 01 RM tasks complete. Proceed with Step 7, or standby for PM batch commit/push? | Closed 2026-02-13T14:00Z: Proceeding with Step 7 per user "continue"; release gate GO; PM gates Step 7 to unblock Steps 8–11. | CLOSED |
 
-**Resolution narrative (gate trace):** RM-REQ-001 through RM-REQ-004 were satisfied in order (00:20 requested → 01:00, 01:15, 02:00 resolutions). RM-REQ-005 and RM-REQ-006 were raised at 13:30; RM re-verified evidence and closed both at 13:35 with no further work. RM-REQ-007 was closed at 14:00 with PM direction. All request timestamps precede their resolution/closing timestamps; gate trace is chronologically consistent for PM sign-off.
+**Resolution narrative (gate trace):** RM-REQ-001–004: requested 00:20Z; resolutions 01:00Z, 01:15Z, 02:00Z (evidence production time). RM-REQ-005 and RM-REQ-006: **created 13:30Z, closed 13:35Z** (resolution time); the 01:00/01:15Z in the narrative refer to when evidence was produced, not when the request was closed. RM-REQ-007 closed 14:00Z. All resolution/closing timestamps are after their request timestamps; gate trace is chronologically consistent.
+
+## Release-Manager: Audit hold and gate ownership (2026-02-13)
+- **Role:** release-manager (supervising authority for Step 19 retro audit, per DECISIONS.md and 01_PLAN).
+- **Audit hold:** All new feature work and overarching PM gate are paused until intake/plan/blocker trace are stabilized and Step 19 (19a–19c) evidence exists. Release-Manager **owns the gate**: no lane resumes, no `npm run electron:dev` / QA runs, until RM has verified audit evidence and (once 19a–19b–19c are PASS) attested that the foundation is secure.
+- **Log/blocker state:** RM-REQ-005/006 resolution timestamps are correct (closed 13:35Z after created 13:30Z). Active Blockers section contains only true active blockers (RM-BLK-005); resolved items are in "Resolved Blockers (with closing date)" only. This entry documents the audit hold and that RM now owns the gate.
 
 ## PM Dispatch Packet (Active)
 

@@ -4,11 +4,15 @@
 
 *Only items that actually block the RC are listed here. Resolved items appear only under "Resolved Blockers (with closing date)" below.*
 
+*none*
+
+---
+
 ## Resolved Blockers (with closing date)
 
 *One-sentence resolution note + closing date so downstream roles know whether anything still needs attention.*
 
-- **RM-BLK-005 — Step 19 audit hold** (release-manager, opened 2026-02-13). Closed 2026-02-13: RM confirmed Step 19a/19b/19c evidence in 03_VALIDATION, attested foundation secure, recorded signoff in 03_VALIDATION and 04_HANDOFF; audit hold lifted. New builds and QA may proceed; roles may resume next tasks.
+- **RM-BLK-005 (Step 19 batch authentication)** (release-manager, opened 2026-02-13). Closed 2026-02-13: RM confirmed Step 19 evidence (19a, 19b, 19c in 03_VALIDATION), recorded signoff in 03_VALIDATION and 04_HANDOFF, and lifted the audit hold. ui-designer/builder/debugger/verifier may resume next tasks after reviewing updated intake/plan/blocker docs.
 - **SmartCapturesPanel build failure** (builder, opened 2026-02-12). Closed 2026-02-12: Builder fixed undefined `toolsOpen`/`setToolsOpen`; debugger re-ran build + test PASS.
 - **RC release gate — missing UI + security evidence** (release-manager, opened 2026-02-13T13:30Z). Closed 2026-02-13T13:35Z: Evidence was present (snap:views 01:00Z, security 109/109 01:15Z, plan reconciliation 02:00Z); RM closed as GO.
 - **RC checklist — npm test evidence missing** (release-manager, opened 2026-02-12T23:52Z). Closed 2026-02-13T13:24Z: Release-manager ran `npm test` and recorded PASS in 03_VALIDATION.

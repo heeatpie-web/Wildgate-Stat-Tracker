@@ -626,6 +626,7 @@ const SmartCapturesPanel: React.FC = () => {
 
             {scView === 'tools' && (
                 <div className="h-full min-h-0 overflow-y-auto md3-surface-high rounded-card p-4 space-y-4 flex flex-col gap-4">
+                    <p className="text-body text-md-sys-on-surface/60 text-label-sm">Bulk actions, pending captures, and OCR issues.</p>
                     <section className="md3-surface rounded-card p-4 border border-md-sys-outline/10" aria-labelledby="sc-tools-bulk-heading">
                         <h2 id="sc-tools-bulk-heading" className="text-label-lg font-bold text-md-sys-on-surface mb-3">Bulk Actions</h2>
                         <div className="flex items-center justify-between gap-2 mb-3">
@@ -1395,6 +1396,20 @@ const SmartMatchDetail: React.FC<{
                 </div>
 
                 <div className="lg:col-span-5 lg:col-start-8 space-y-3 min-w-0" ref={screenshotsSectionRef}>
+                    {artifacts.images.length > 0 && (
+                        <div className="rounded-card md3-surface-high p-2 border border-md-sys-outline/10 flex items-center justify-between gap-2">
+                            <span className="text-label-sm font-bold text-md-sys-on-surface/80">Re-run analysis</span>
+                            <button
+                                onClick={handleRerunAnalysis}
+                                disabled={rerunning}
+                                className="rounded-control md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled flex items-center gap-1.5"
+                                title="Run OCR analysis on the bundled screenshots"
+                            >
+                                <RefreshCw size={12} className={rerunning ? 'animate-spin' : ''} />
+                                {rerunning ? 'Analyzing...' : `Re-analyze ${countImages(match.artifacts || [])} Screenshot${countImages(match.artifacts || []) !== 1 ? 's' : ''}`}
+                            </button>
+                        </div>
+                    )}
                     <Section title={`Screenshots (${artifacts.images.length})`} icon={<Image size={14} />} collapsible collapsed={!!collapsedSections.screenshots} onToggle={() => toggleSection('screenshots')}>
                         {artifacts.images.length > 0 && (
                             <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -1410,11 +1425,11 @@ const SmartMatchDetail: React.FC<{
                             <button
                                 onClick={handleRerunAnalysis}
                                 disabled={rerunning}
-                                className="md3-btn-tonal px-3 py-1 text-label-sm font-semibold disabled:opacity-disabled flex items-center gap-1.5"
+                                className="rounded-control md3-btn-tonal px-3 py-1 text-label-sm font-semibold disabled:opacity-disabled flex items-center gap-1.5"
                                 title="Run OCR analysis on the bundled screenshots"
                             >
                                 <RefreshCw size={12} className={rerunning ? 'animate-spin' : ''} />
-                                {rerunning ? 'Analyzing...' : 'Run OCR Analysis'}
+                                {rerunning ? 'Analyzing...' : 'Re-run'}
                             </button>
                         </div>
                     )}
@@ -1821,10 +1836,10 @@ const SmartMatchDetail: React.FC<{
                         <button
                             onClick={handleRerunAnalysis}
                             disabled={rerunning}
-                            className="md3-btn-filled px-4 py-2 font-bold text-label-sm disabled:opacity-disabled transition-all flex items-center gap-2"
+                            className="rounded-control md3-btn-filled px-4 py-2 font-bold text-label-sm disabled:opacity-disabled transition-all flex items-center gap-2"
                         >
                             <RefreshCw size={14} className={rerunning ? 'animate-spin' : ''} />
-                            {rerunning ? 'Analyzing...' : `Re-analyze ${countImages(match.artifacts)} Screenshot${countImages(match.artifacts) !== 1 ? 's' : ''}`}
+                            {rerunning ? 'Analyzing...' : `Re-analyze ${countImages(match.artifacts || [])} Screenshot${countImages(match.artifacts || []) !== 1 ? 's' : ''}`}
                         </button>
 
                         

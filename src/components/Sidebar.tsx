@@ -1,5 +1,5 @@
 import React from 'react';
-import { CircleDot, BarChart3, History, Settings, ScanEye, FlaskConical, Users } from 'lucide-react';
+import { CircleDot, BarChart3, History, Settings, ScanEye, FlaskConical, Users, UserPlus } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 
 export type AppView = 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr';
@@ -19,7 +19,7 @@ const navItems: NavItem[] = [
 ];
 
 export const Sidebar: React.FC = () => {
-    const { activeView, setActiveView, setShowSettings, devMode } = useUIState();
+    const { activeView, setActiveView, setShowSettings, devMode, setShowIdMapper } = useUIState();
 
     return (
         <nav className="w-[84px] premium-sidebar app-nav-rail flex flex-col items-center py-4 gap-2 shrink-0 rounded-r-2xl" aria-label="Main navigation">
@@ -43,6 +43,17 @@ export const Sidebar: React.FC = () => {
                         <span className="text-label-xs mt-1.5 tracking-[0.02em] leading-tight text-center px-1">{item.label}</span>
                     </button>
                 ))}
+
+                <button
+                    onClick={() => setShowIdMapper(true)}
+                    className="relative w-[72px] py-2.5 premium-nav-item md3-nav-item flex flex-col items-center justify-center transition-all duration-150 group text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5"
+                    title="ID Mapper"
+                >
+                    <span className="md3-nav-icon premium-nav-icon">
+                        <UserPlus size={18} />
+                    </span>
+                    <span className="text-label-xs mt-1.5 tracking-[0.02em] leading-tight text-center px-1">ID Mapper</span>
+                </button>
 
                 {devMode && (
                     <button

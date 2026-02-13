@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain, globalShortcut, Menu, Tray } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, globalShortcut, Menu, Tray, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const DiscordRPC = require('discord-rpc');
 const { spawn } = require('child_process');
@@ -1331,7 +1331,11 @@ function createWindow() {
       win.setMinimumSize(0, 0);
       if (win.isMaximized()) win.unmaximize();
       setTimeout(() => {
-        win.setSize(360, 700); // Larger to fit MissionPanel content
+        // Default overlay size ~15–20% of viewport (spec 20.6)
+        const workArea = screen.getPrimaryDisplay().workAreaSize;
+        const width = 360;
+        const height = Math.max(300, Math.round(workArea.height * 0.2));
+        win.setSize(width, height);
         win.setAlwaysOnTop(true, 'screen-saver');
         // win.setSkipTaskbar(true); // DISABLED: Causing window to disappear for user
       }, 50);
@@ -1575,6 +1579,46 @@ ipcMain.handle('read-file-base64', async (event, filePath) => {
     const ext = path.extname(resolved).toLowerCase();
     if (!ALLOWED_FILE_EXTENSIONS.has(ext)) return null;
     const data = await fsPromises.readFile(resolved);
+    return data.toString('base64');
+  } catch (e) {
+    return null;
+  }
+});
+
+ipcMain.handle('ocr-corpus-list-images', async () => {
+  try {
+    await ensureCorpusDefaults();
+    const imagesDir = path.join(OCR_CORPUS_DIR, 'images');
+    const files = [];
+    try {
+      const entries = await fsPromises.readdir(imagesDir, { withFileTypes: true });
+      for (const e of entries) {
+        if (e.isFile()) {
+          const ext = path.extname(e.name).toLowerCase();
+          if (ALLOWED_FILE_EXTENSIONS.has(ext)) {
+            files.push({ name: e.name, relativePath: `images/${e.name}` });
+          }
+        }
+      }
+    } catch {
+      // no images dir yet
+    }
+    return { success: true, files };
+  } catch (e) {
+    return { success: false, error: e.message || String(e) };
+  }
+});
+
+ipcMain.handle('ocr-corpus-read-image', async (event, relativePath) => {
+  try {
+    const safe = path.normalize(relativePath).replace(/^(\.\.(\/|\\|$))+/, '');
+    const abs = path.join(OCR_CORPUS_DIR, safe);
+    const resolvedAbs = path.resolve(abs);
+    const resolvedDir = path.resolve(OCR_CORPUS_DIR);
+    if (!resolvedAbs.startsWith(resolvedDir + path.sep) && resolvedAbs !== resolvedDir) return null;
+    const ext = path.extname(abs).toLowerCase();
+    if (!ALLOWED_FILE_EXTENSIONS.has(ext)) return null;
+    const data = await fsPromises.readFile(abs);
     return data.toString('base64');
   } catch (e) {
     return null;

@@ -1,15 +1,28 @@
-# Intake: UI Overhaul — Smart Capture & Analytics (Phase 3–4) + Batch Authentication
+# Intake: PM backlog (post–Step 20)
 
-## Current Task (BATCH_AUTH_19)
-- **Task ID:** BATCH-AUTH-19
-- **Goal:** Thorough analysis of UI Overhaul batch (Steps 13–18) to authenticate: **clean design**, **functional code**, **role alignment**. Delegated to team per 01_PLAN Step 19 (19a ui-designer, 19b builder, 19c verifier); PM gates in 19d.
-- **Risk Tier:** `T2` (multi-file, visual/behavior; not security/release-critical)
-- **Execution Path:** `FULL_PATH`
-- **Evidence required:** Each role writes its own 03_VALIDATION entry (19a, 19b, 19c); failures → BLOCKERS.md. PM marks Step 19 COMPLETE only when all PASS and no ACTIVE blockers. No release GO until intake/plan state and Step 19 outcomes are confirmed.
+## Current Task (PM_BACKLOG)
+- **Task ID:** PM-BACKLOG
+- **Goal:** PM assigns optional features from backlog or closes them. Steps 1–20 are 100% complete; remaining work is in [docs/agents/PM_TODO.md](docs/agents/PM_TODO.md).
+- **Risk Tier:** T1 (small, optional polish)
+- **Execution Path:** FAST_PATH (per-item)
+- **Evidence required:** If PM assigns F1/F2: builder or ui-designer log in 02_EXECUTION_LOG; build + test remain PASS.
 
-## Active Plan Context (01_PLAN)
-- **UI Overhaul Phases 3–4:** Smart Capture (Phase 3) — one page, side nav Capture | Tools; Analytics (Phase 4) — shell/dashboard/subpanel token alignment per SPEC_ANALYTICS_PHASE4.md and UI_MASTERPLAN. Steps 13–18 implemented; Step 19 batch authentication IN_PROGRESS.
-- **Done condition (aligned with plan):** Step 19 complete when 19a (design audit), 19b (implementation attestation), 19c (functional + role-alignment audit) are PASS and documented in 03_VALIDATION; no ACTIVE blockers; PM gate (19d) run and 04_HANDOFF updated.
+## Features to add (see PM_TODO.md)
+- **F1:** Analytics — add "Quick views" or "Jump to" label on strip (20.2 PARTIAL follow-up).
+- **F2:** Overlay — DevTools collapse in overlay mode, or document out-of-scope (20.6 PARTIAL follow-up).
+- PM may assign to ui-designer (spec/copy) and builder (implementation), or defer/close.
+
+## Next action (next cycle — Step 21)
+- **project-manager:** When starting next cycle, set 01_PLAN Active Step = 21 and point this intake to STEP21_PM_BACKLOG (or keep PM_BACKLOG with Step 21 in plan).
+- **ui-designer:** F1 — confirm label copy/placement ("Quick views" or "Jump to"). F2 — confirm DevTools collapse in overlay in scope (or OOS).
+- **builder:** F1 — add label in AnalyticsShell.tsx per spec; log in 02_EXECUTION_LOG. F2 — implement DevTools collapse in overlay (compact) or document OOS in DECISIONS.md; log in 02_EXECUTION_LOG. Keep build + test PASS.
+
+## Alignment with 01_PLAN
+- **Plan state:** 01_PLAN Step 21 added (PM backlog F1/F2). When starting next cycle, Active Step = 21. Steps 1–20 complete (archived).
+- **This intake** = current task PM backlog; next cycle executes Step 21 per PM_TODO and 01_PLAN.
+
+## Done condition
+- F1 and F2 assigned (done). Next: Step 21 executed — ui-designer confirms F1/F2; builder implements F1 and F2 (or documents OOS); build + test PASS; 02_EXECUTION_LOG entries. PM gates or closes deferred items.
 
 ## Risk Tier and Execution Path (AOM_V2)
 - **T0:** Docs/config only; single owner; no behavior or contract change. FAST_PATH eligible.
@@ -20,18 +33,13 @@
 - **FULL_PATH:** Evidence in `docs/agents/03_VALIDATION.md` required before step DONE. Escalate only via `docs/agents/BLOCKERS.md` or `docs/agents/DECISIONS.md`. Use role labels only (`project-manager`, `builder`, etc.) for new entries.
 
 ## Goal (current phase)
-- Complete **Step 19 — Batch authentication** for UI Overhaul batch (Steps 13–18): design audit, implementation attestation, functional and role-alignment audit.
-- Ensure **00_INTAKE**, **01_PLAN**, **03_VALIDATION**, **04_HANDOFF**, and **BLOCKERS** are consistent and credible before any PM release sign-off (GO).
+- PM processes backlog in PM_TODO.md (assign F1/F2 or close). Steps 1–20 complete.
 
 ## Constraints
-- Step 19 executed by designated roles only (ui-designer 19a, builder 19b, verifier 19c); PM does not implement.
-- Release GO is conditional on corrected intake/plan state and Step 19 outcomes; do not declare GO until 03_VALIDATION and 04_HANDOFF cite corrected state.
+- UI work follows UI_MASTERPLAN.md and docs/UI_AUDIT.md. Escalation via BLOCKERS.md or DECISIONS.md.
 
 ## Out of Scope (this intake)
-- New feature work; OCR-only cycle scope; Structure Hardening next phase (queued separately).
-
-## Done Condition
-- Step 19 (19a–19d) complete per 01_PLAN; all 19a/19b/19c entries in 03_VALIDATION; no ACTIVE blockers; 04_HANDOFF and 03_VALIDATION cite corrected intake/plan; PM has run gate and (if all PASS) may declare release GO.
+- New steps beyond F1/F2 until PM defines next cycle.
 
 ## Canonical UI Overhaul Plan (Reference)
 - **Plan:** [docs/agents/PLAN_UI_OVERHAUL.md](docs/agents/PLAN_UI_OVERHAUL.md) — Smart Capture, Analytics, telemetry indicator, navigation, Tactical Console, overlay HUDs; phases, delegation, and locked-in clarifications.

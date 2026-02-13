@@ -10,7 +10,7 @@ Status: ACTIVE
 - **Role labels only:** All new entries in execution log, validation, handoff, blockers, and locks use role names only: `project-manager`, `ui-designer`, `builder`, `debugger`, `release-manager`, `verifier`, `reporter`. Legacy labels (lead, agent-a, etc.) are historical-only.
 
 ## Current Task
-- Defined in `docs/agents/00_INTAKE.md` under **Current Task** (e.g. **BATCH_AUTH_19** for Step 19 batch authentication). Set Risk Tier and Execution Path there; keep plan and intake aligned so "current task" matches active work and release scope.
+- **PM backlog** — Next work is in [docs/agents/PM_TODO.md](docs/agents/PM_TODO.md). Steps 1–20 complete; optional features F1, F2 for PM to assign. See 00_INTAKE and 04_HANDOFF.
 
 ## Step: PM Bootstrap (AOM_V2 alignment)
 - [COMPLETE] `project-manager`: Update intake + plan for AGENT_BOOTSTRAP; set Risk Tier and Execution Path framework; require evidence before DONE; escalation via BLOCKERS/DECISIONS; role labels only. Evidence: `00_INTAKE.md`, `01_PLAN.md`, `DECISIONS.md` updated; `03_VALIDATION.md` bootstrap entry added.
@@ -42,7 +42,15 @@ Status: ACTIVE
 ## Step 19 — Batch authentication (UI Overhaul batch: Steps 13–18)
 **Owner:** `project-manager` (assigns; does not implement).  
 **Goal:** Thorough analysis of all work done this batch to authenticate: **clean design**, **functional code**, **role alignment**.  
-**Delegation:** Each role executes only their lane; evidence in `03_VALIDATION.md`; failures or role violations in `BLOCKERS.md`.
+**Real scope:** Audit only — no new feature work. Three roles each produce one 03_VALIDATION entry so Release-Manager has fresh evidence; PM runs 19d gate after.  
+**Delegation:** Each role executes only their lane; evidence in `03_VALIDATION.md`; failures or role violations in `BLOCKERS.md`.  
+**Reference (19a, 19b, 19c):** [docs/agents/STEP19_VERIFIER_UI_FEEDBACK.md](docs/agents/STEP19_VERIFIER_UI_FEEDBACK.md) — verifier walkthrough of current app state; use as input for design audit (19a), implementation attestation (19b), and functional/role-alignment audit (19c).
+
+### Explicit assignment (PM) — execute 19a, 19b, 19c now
+- **ui-designer** → **19a.** Deliverable: one 03_VALIDATION entry "Step 19a — ui-designer design audit". Inputs: PLAN_UI_OVERHAUL, UI_MASTERPLAN, UI_AUDIT, STEP19_VERIFIER_UI_FEEDBACK, changed files. If NO-GO → BLOCKERS for builder.
+- **builder** → **19b.** Deliverable: one 03_VALIDATION entry "Step 19b — builder implementation attestation". Inputs: 01_PLAN Steps 13–18, 02_EXECUTION_LOG, codebase. If build/test FAIL → BLOCKERS.
+- **verifier** → **19c.** Deliverable: one 03_VALIDATION entry "Step 19c — verifier functional and role-alignment audit". Inputs: diff, intake, plan, execution log, validation, STEP19_VERIFIER_UI_FEEDBACK. If FAIL → BLOCKERS with owner/action.
+- **project-manager** → **19d** (after 19a–19c): Gate on 03_VALIDATION + BLOCKERS; if all PASS and no ACTIVE blockers, mark Step 19 COMPLETE and update 04_HANDOFF.
 
 ### 19a — ui-designer (design audit)
 - **Inputs:** PLAN_UI_OVERHAUL.md, UI_MASTERPLAN.md, UI_AUDIT.md, changed files (SystemPulse, SmartCapturesPanel, AnalyticsShell, TelemetryPanel, OverlayView, ProView).
@@ -62,9 +70,43 @@ Status: ACTIVE
 ### 19d — project-manager (gate)
 - **Task:** After 19a–19c complete, read 03_VALIDATION and BLOCKERS. If all PASS and no ACTIVE blockers for Step 19, mark Step 19 COMPLETE and update 04_HANDOFF. If any NO-GO or ACTIVE blocker, keep Step 19 IN_PROGRESS and direct remediating role per BLOCKERS.
 
+### Audit supervising authority (Release-Manager)
+- **Directive (per DECISIONS.md):** Release-Manager is the supervising authority for the Step 19 retro audit. RM stops any `npm run electron:dev` / QA runs, verifies audit evidence, and attests that the foundation is secure before any lane resumes. PM may not approve further commits until RM has verified the audit evidence and (once 19a–19c are PASS) dropped the Foundation hold.
+
+## Steps (Verifier feedback implementation — STEP19_VERIFIER_UI_FEEDBACK)
+**Source:** [docs/agents/STEP19_VERIFIER_UI_FEEDBACK.md](docs/agents/STEP19_VERIFIER_UI_FEEDBACK.md). All items below are delegated for implementation; ui-designer produces specs/decisions where design or hierarchy is in question, builder implements, debugger validates regressions, verifier spot-checks when designated.
+
+20. [COMPLETE] **Verifier feedback implementation.** Work items and delegation:
+
+| # | Area | Summary | ui-designer | builder | debugger | verifier |
+|---|------|---------|-------------|---------|----------|----------|
+| 20.1 | Header / match indicator | Merge Telemetry indicator with match indicator; keep dual state (solid = log present, flashing = receiving). | Spec: how to merge, keep one chip with dual state. | Implement merge; remove separate Telemetry chip or combine per spec. | Regression: header chips still reflect state. | Spot-check when designated. |
+| 20.2 | Analytics page | Fix scroll bar (bug); improve time/sort; add visual hierarchy; clarify connection top graphs ↔ dashboard. | Spec: hierarchy (which panels primary), connection to dashboard. | Fix scroll bar; improve time/sort UX; apply hierarchy/layout per spec. | Regression: analytics scroll, sort, layout. | Spot-check when designated. |
+| 20.3 | Smart Capture | Reduce clutter on right; align Re-run analysis placement (top vs bottom); clarify Tools panel purpose (not “black box”). | Spec: layout, primary action placement, Tools panel copy/hierarchy. | Layout/clutter; move or duplicate Re-run; add copy/affordance for Tools. | Regression: capture flow, tools view. | Spot-check when designated. |
+| 20.4 | Players tab | Paginated list (not single scroll); consider third column. | Spec: pagination UX, third column content/layout. | Implement pagination; add third column per spec. | Regression: players list, navigation. | Spot-check when designated. |
+| 20.5 | History tab | Restore or clarify win/loss row shading across width. | Optional spec if design decision needed. | Restore win/loss shading or document why removed; clarify. | Regression: history table display. | Spot-check when designated. |
+| 20.6 | Overlay | Fix transparent overlay (broken); compact: DevTools minimizable, fix bottom cut-off, default size ~15–20%. | Spec: overlay default size, minimizable DevTools, bottom button visibility. | Fix transparent overlay; compact: minimize DevTools, layout/size, default size. | Regression: overlay modes, data entry. | Spot-check when designated. |
+| 20.7 | Settings tab | Reduce clutter (esp. OCR engine area); reduce white outlines/negative space; strengthen Alias/authority presence. | Spec: grouping, hierarchy, “authority” for alias/manager. | Layout, outlines, spacing; alias/manager prominence per spec. | Regression: settings flows. | Spot-check when designated. |
+| 20.8 | ID Mapper | Visibility on recording panel; clarify where ID mapper lives. | Spec: where ID mapper appears (recording panel + elsewhere). | Surface ID mapper on recording panel per spec; ensure discoverable. | Regression: ID mapper access. | Spot-check when designated. |
+| 20.9 | Dev OCR lab (corpus) | Plain-text ground truth input (“who was on my team”); show images present; flat/base images for corpus runs. | Spec: simple form for ground truth, image list/base images UX. | Plain-text form; image list view; base images for corpus per spec. | Regression: corpus eval, ground truth. | Spot-check when designated. |
+
+- **Evidence:** Each work item (20.1–20.9) requires implementation and, where applicable, 03_VALIDATION or 02_EXECUTION_LOG entry. Build and test must remain PASS. PM may gate by sub-step or at end of Step 20.
+- **Order:** Items may be implemented in parallel by different owners where lanes do not conflict; otherwise PM defines sequence (e.g. ui-designer spec before builder for that area).
+- **Completion log (builder):** All 20.1–20.9 implemented. 02_EXECUTION_LOG: "Step 20 first batch (20.2, 20.5, 20.6) complete"; "Step 20 remainder (20.1, 20.3, 20.4, 20.7, 20.8, 20.9) complete". 03_VALIDATION: "Step 20 — Completion log (all tasks 20.1–20.9)" with per-item status table. Build + 88 tests PASS.
+
+## Steps (PM backlog — optional follow-up)
+
+21. [NOT STARTED] **PM backlog F1 + F2.** Source: [docs/agents/PM_TODO.md](docs/agents/PM_TODO.md). When starting next cycle, set Active Step = 21.
+- **F1 (Analytics strip label):** ui-designer confirm copy/placement ("Quick views" or "Jump to"); builder add label in AnalyticsShell.tsx. Done when label visible; build + test PASS.
+- **F2 (Overlay DevTools collapse):** ui-designer confirm in-scope; builder implement collapse/expand in overlay (compact) or document OOS in DECISIONS.md. Done when implemented or OOS documented; build + test PASS.
+- **Evidence:** 02_EXECUTION_LOG entry per item; build + test PASS. PM may gate after F1/F2 or close deferred items.
+
 ## Active Step
-- **IN_PROGRESS:** Step 19 (Batch authentication). **Delegated to team:** ui-designer (19a), builder (19b), verifier (19c). Execute in any order; each role writes only their 03_VALIDATION entry and BLOCKERS if needed.
-- COMPLETE: Steps 1–18 (UI Overhaul Phases 1–6 complete).
+- **None.** Steps 1–20 complete (archived). **Next cycle:** Set Active Step = 21 (PM backlog F1/F2). See [PM_TODO.md](docs/agents/PM_TODO.md) and Step 21 above.
+- **Last gate:** build + 88 tests PASS. No ACTIVE blockers.
+
+## Completed steps (1–20) — reference
+- **1–6:** OCR Stabilization. **7–12:** Post-cycle (Screenshot/GCloud, Structure Hardening, Dev Splash, Opacity). **13–18:** UI Overhaul Phases 1–6. **19:** Batch auth (19a–19d, RM signoff). **20:** Verifier feedback (20.1–20.9); PM gate PASS. Optional follow-up → PM_TODO.
 
 ## Canonical UI Overhaul Plan (Reference)
 - **Plan:** [docs/agents/PLAN_UI_OVERHAUL.md](docs/agents/PLAN_UI_OVERHAUL.md) — canonical plan for Smart Capture, Analytics, telemetry indicator, navigation, Tactical Console, and overlay HUD overhauls (phases 1–6, delegation, self-audit + user routing).

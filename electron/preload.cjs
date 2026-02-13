@@ -25,6 +25,7 @@ const INVOKE_CHANNELS = [
   'read-file-base64', 'open-path',
   'ocr-corpus-load', 'ocr-corpus-save', 'ocr-corpus-eval', 'ocr-corpus-promote-baseline',
   'ocr-corpus-import-images', 'ocr-corpus-run-pipeline', 'ocr-corpus-sync-to-repo',
+  'ocr-corpus-list-images', 'ocr-corpus-read-image',
   'get-gcloud-status',
   'test-gcloud-upload',
   'gcloud-backfill-screenshots',

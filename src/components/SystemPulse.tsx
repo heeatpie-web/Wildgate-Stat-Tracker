@@ -127,15 +127,15 @@ const SystemPulse: React.FC = () => {
             const lastAt = telemetryStatus?.lastEventAt;
             const receiving = !!lastAt && (Date.now() - lastAt) < TELEMETRY_RECEIVING_MS;
             return {
-                id: 'telemetry',
-                label: receiving ? '' : (connected ? '' : ''),
+                id: 'session',
+                label: 'Session',
                 icon: <Terminal size={12} />,
                 active: connected,
                 color: connected ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
                 dot: connected ? (receiving ? 'bg-success animate-pulse' : 'bg-success') : 'bg-md-sys-outline/40',
                 tooltip: connected
-                    ? `Telemetry: ${receiving ? 'Receiving (recent events)' : 'Connected (log active)'}`
-                    : 'Telemetry: Not connected',
+                    ? `Session: ${receiving ? 'receiving telemetry' : 'connected'}`
+                    : 'Session: not connected',
             };
         })(),
     ] as const;
