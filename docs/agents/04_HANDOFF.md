@@ -31,7 +31,7 @@
 - 4. Handoff: 04_HANDOFF reflects Phases 1–6 complete; next = PM sign-off or new task.
 - 5. Pre-commit: Run `git status` and `git diff --stat`; confirm no secrets in modified files.
 - 6. **Done:** Batch commit created: `9119898` — "UI Overhaul Phases 1-6 + agent docs; Step 16 spec in progress" (35 files, +1625/-400).
-- 7–8. **PM action:** When approved: `git push` to remote.
+- 7–8. **Done:** Pushed to remote: `00aa241..16a33d0` → `origin/Opus.debug`. PM Batch Commit + Push gate complete.
 
 ### Approvals (continue)
 - **PM (project-manager):** Step 12 batch 2 (opacity normalization, 8/18 files) **APPROVED**. Builder may continue with remaining 10 files per same intake rules.
@@ -507,6 +507,7 @@ All three bugs validated. The OCR stabilization cycle is complete.
 - **Continue (sanity check):** `npm run build` PASS (16.86s). `npm test -- --run` PASS (88 tests, 10 files, 22.88s). No regressions. Plan: Steps 1–15 COMPLETE; no PENDING. 00_INTAKE updated (Phases 1–3 COMPLETE). Standing by for PM to assign next scope or close cycle.
 - **Continue:** Step 16 (Phase 4 — Analytics overhaul) added to 01_PLAN as PENDING per PLAN_UI_OVERHAUL. Next: ui-designer spec + subpanel list, then builder (shell/dashboard + subpanel fixes). Await PM activation to start Step 16.
 - **Continue (ui-designer):** Step 16 spec created: [SPEC_ANALYTICS_PHASE4.md](docs/agents/SPEC_ANALYTICS_PHASE4.md) (subpanel list, shell/dashboard/subpanel target, acceptance). Plan set to IN_PROGRESS. Builder: shell tokens may already be in place; remaining — dashboard + 2–3 subpanels token normalization per spec; then validate and handoff.
+- **Continue (builder):** Step 16 implementation complete. Dashboard + SessionSummaryView, MomentumView, ProView token normalization (rounded-card, text-md-sys-on-surface/40 and /60, font-bold). Build PASS (22.31s), 88 tests PASS (42.67s). 03_VALIDATION and 01_PLAN updated; Step 16 COMPLETE. Next: Step 17 (Phase 5) when PM activates.
 - **Continue (release-manager):** Plan: Steps 1–18 COMPLETE (UI Overhaul Phases 1–6 done). Next: PM sign-off or new task per PLAN_UI_OVERHAUL. No ACTIVE blockers. Gate checklist GO. Standing by.
 
 ---
