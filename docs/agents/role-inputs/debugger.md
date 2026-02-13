@@ -43,3 +43,14 @@ deliverables:
 - Risk callout for any unresolved edge cases.
 END_AGENT_INPUT
 ```
+
+
+## v2 Addendum (AOM_V2)
+
+Debug evidence requirements:
+- Include reproducible steps, suspected cause, and confidence score.
+- Execute minimum regression set for FULL_PATH changes.
+
+Rule:
+- If root cause confidence is below 0.7, keep status BLOCKED and escalate for clarification.
+

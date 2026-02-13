@@ -115,8 +115,8 @@ export const AnalyticsShell: React.FC = () => {
     const modeBadge = currentMode === 'Artifact Brawl' ? 'bg-warning-soft text-warning border-warning-soft' : 'bg-info-soft text-info border-info-soft';
 
     return (
-        <div className="h-full flex flex-col gap-3 overflow-hidden p-3 rounded-2xl analytics-shell-gradient shadow-lg">
-            <div className="flex-shrink-0 rounded-2xl mg-surface-high backdrop-blur p-3 md:p-4">
+        <div className="h-full flex flex-col gap-3 overflow-hidden p-3 rounded-modal analytics-shell-gradient shadow-lg">
+            <div className="flex-shrink-0 rounded-card mg-surface-high backdrop-blur p-3 md:p-4">
                 <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
@@ -130,9 +130,9 @@ export const AnalyticsShell: React.FC = () => {
                                     <Activity className="text-md-sys-primary" size={18} />
                                     <span className="truncate">{currentView === 'overview' ? 'Analytics Cockpit' : VIEW_LABELS[currentView]}</span>
                                 </h2>
-                                <div className="mt-1 flex items-center gap-2 text-label-sm font-semibold uppercase tracking-wider">
-                                    <span className={`px-2 py-0.5 rounded-full border ${modeBadge}`}>{currentMode}</span>
-                                    <span className="text-md-sys-on-surface/60">{currentView === 'overview' ? 'Performance Overview' : 'Deep Dive View'}</span>
+                                <div className="mt-1 flex items-center gap-2 text-label-sm font-semibold uppercase tracking-wider text-md-sys-on-surface/60">
+                                    <span className={`px-2 py-0.5 rounded-pill border ${modeBadge}`}>{currentMode}</span>
+                                    <span>{currentView === 'overview' ? 'Performance Overview' : 'Deep Dive View'}</span>
                                 </div>
                             </div>
                         </div>
@@ -158,7 +158,7 @@ export const AnalyticsShell: React.FC = () => {
                             <button
                                 key={opt.value}
                                 onClick={() => setTimeRange(opt.value)}
-                                className={`px-3 py-1.5 rounded-full text-label-sm font-bold uppercase tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/25 ${timeRange === opt.value
+                                className={`px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${timeRange === opt.value
                                     ? 'bg-md-sys-primary text-md-sys-onPrimary shadow'
                                     : 'bg-md-sys-surfaceContainerLowest/70 text-md-sys-on-surface/60 hover:bg-md-sys-surfaceContainerHigh/70'
                                     }`}
@@ -176,7 +176,7 @@ export const AnalyticsShell: React.FC = () => {
                         <button
                             key={view}
                             onClick={() => navigateTo(view)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-label-sm font-bold uppercase tracking-wide bg-md-sys-surfaceContainerLowest/70 text-md-sys-on-surface/60 hover:bg-md-sys-primaryContainer hover:text-md-sys-onPrimaryContainer transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary/25"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide bg-md-sys-surfaceContainerLowest/70 text-md-sys-on-surface/60 hover:bg-md-sys-primaryContainer hover:text-md-sys-onPrimaryContainer transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary"
                         >
                             {icon}
                             {VIEW_LABELS[view]}
@@ -187,7 +187,7 @@ export const AnalyticsShell: React.FC = () => {
 
             {data.filteredMatches.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-4 text-md-sys-on-surface/40 animate-fade-in">
-                    <div className="w-16 h-16 rounded-2xl bg-md-sys-primaryContainer/30 flex items-center justify-center">
+                    <div className="w-16 h-16 rounded-card bg-md-sys-primaryContainer/30 flex items-center justify-center">
                         <Activity size={28} className="text-md-sys-primary/40" />
                     </div>
                     <div className="text-center">
@@ -220,12 +220,11 @@ export const AnalyticsShell: React.FC = () => {
                 />
                 </div>
             ) : (
-                <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar rounded-xl mg-surface-high p-3">
-                    {/* Inline back-navigation breadcrumb */}
+                <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar rounded-card mg-surface-high p-3">
                     <div className="flex items-center gap-2 mb-3 px-1">
                         <button
                             onClick={goBack}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-label-sm font-bold uppercase tracking-wide bg-md-sys-surfaceContainerHigh/70 text-md-sys-on-surface/60 hover:bg-md-sys-primaryContainer hover:text-md-sys-onPrimaryContainer transition-colors"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide bg-md-sys-surfaceContainerHigh/70 text-md-sys-on-surface/60 hover:bg-md-sys-primaryContainer hover:text-md-sys-onPrimaryContainer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary"
                         >
                             <ArrowLeft size={12} />
                             Overview
@@ -238,7 +237,7 @@ export const AnalyticsShell: React.FC = () => {
                             <button
                                 key={view}
                                 onClick={() => navigateTo(view)}
-                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-label-sm font-bold uppercase tracking-wide whitespace-nowrap transition-colors ${currentView === view
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${currentView === view
                                     ? 'bg-md-sys-primary text-md-sys-onPrimary'
                                     : 'bg-md-sys-surfaceContainerLowest/70 text-md-sys-on-surface/60 hover:bg-md-sys-primaryContainer hover:text-md-sys-onPrimaryContainer'
                                     }`}

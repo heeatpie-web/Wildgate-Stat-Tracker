@@ -1,5 +1,141 @@
 # 02 Execution Log
 
+## Change Entry — Step 16 Phase 4: Analytics spec + subpanel list (ui-designer)
+- Date (UTC): 2026-02-13
+- Owner: ui-designer
+- Task: PLAN_UI_OVERHAUL Phase 4 — Analytics overhaul; deliverable = spec + subpanel list for builder.
+- Files changed: `docs/agents/SPEC_ANALYTICS_PHASE4.md` (new).
+- What: One-page spec: classification, current state, canonical subpanel list (14 views + overview), target (shell/dashboard/subpanel token + hierarchy fixes), acceptance criteria, out of scope. Builder may have already applied shell tokens (see "UI Overhaul Phase 4: Analytics shell token alignment"); remaining per spec: dashboard + 2–3 representative subpanels token normalization; build + test; optional 03_VALIDATION viewport evidence.
+- Outcome: Spec complete; builder to implement or confirm coverage.
+
+## Change Entry — UI Overhaul Phase 5: Tactical Console & OverlayView token overhaul (builder)
+- Date (UTC): 2026-02-13
+- Owner: builder
+- Task: PLAN_UI_OVERHAUL Phase 5 — Overhaul TelemetryPanel and OverlayView (compact + transparent) per UI_MASTERPLAN tokens.
+- Files changed: `src/components/TelemetryPanel.tsx`, `src/components/OverlayView.tsx`.
+- What changed: **TelemetryPanel:** rounded-3xl → rounded-modal; header title font-black → font-bold, opacity-60 → text-md-sys-on-surface/60; Clear button rounded-xl → rounded-control, bg-errorContainer/error → bg-danger-soft text-danger, focus ring; context block bg-black/10 → bg-md-sys-surface-container-high/50, labels font-black/opacity-40 → font-semibold text-md-sys-on-surface/40, status text-success/text-danger; error box rounded → rounded-control, danger-soft; log stream bg-black/5 → bg-md-sys-surface-container-low/30; raw fault box rounded-xl → rounded-card, opacity-60 → text-md-sys-on-surface/60; feed cards rounded-xl → rounded-card, font-black → font-bold, opacity → text-md-sys-on-surface/40 and /60; empty state opacity-20 → text-md-sys-on-surface/40. **OverlayView (compact):** border/rounded-xl → rounded-modal, header bg-black/20 → bg-md-sys-surface-container-high/80, border outlineVariant → outline/10; icon container rounded-md → rounded-control; buttons rounded-md → rounded-control, close hover bg-md-sys-error → hover:bg-danger, focus rings. **OverlayView (transparent):** rounded-xl/rounded-2xl → rounded-modal/rounded-card; HUD container bg-zinc-900/90 → mg-surface-high, border outlineVariant → outline/20; header bg-black/40 → bg-md-sys-surface-container-high/80; Dashboard button bg-info → bg-md-sys-primary; buttons rounded → rounded-control, close hover bg-danger-soft, focus rings; border-l outlineVariant → outline/20.
+- Evidence: `npx tsc --noEmit` exit 0. Build run (may timeout in CI); visual evidence at 1366x768 and 390x844 per plan.
+- Risk/regression notes: Visual and token only; no behavior change.
+
+## Change Entry — UI Overhaul Phase 4: Analytics shell token alignment (builder)
+- Date (UTC): 2026-02-13
+- Owner: builder
+- Task: PLAN_UI_OVERHAUL Phase 4 — Analytics shell and dashboard alignment with UI_MASTERPLAN tokens.
+- Files changed: `src/components/analytics/AnalyticsShell.tsx`.
+- What changed: Shell chrome: outer container rounded-2xl → rounded-modal; header strip rounded-2xl → rounded-card; title text-base/text-lg → text-title; mode badge container text-md-sys-on-surface/60 applied to row, badge rounded-full → rounded-pill; time range and quick-view buttons rounded-xl → rounded-control, focus-visible:ring-md-sys-primary; detail view content area rounded-xl → rounded-card; empty state icon container rounded-2xl → rounded-card. No subpanel file edits in this batch.
+- Evidence: npm run build PASS.
+- Risk/regression notes: Visual only; tokens per UI_MASTERPLAN.
+
+## Change Entry — UI Overhaul Phase 3: Smart Capture side nav + Tools view (builder)
+- Date (UTC): 2026-02-13
+- Owner: builder
+- Task: PLAN_UI_OVERHAUL Phase 3 — Smart Capture overhaul per SPEC_SMART_CAPTURE_PHASE3.md.
+- Files changed: `src/components/SmartCapturesPanel.tsx`.
+- What changed: One page, no new routes. Added persistent left side nav (56px) with two items: **Capture** (LayoutList), **Tools** (Zap). Content area: when Capture — existing two-column (list + detail) with search, All/Queue, queue Prev/Resolve/Next; when Tools — single column with Bulk Actions card, Capture Queue (pending), Priority (OCR issues). Removed collapsible tools toggle and toolsOpen state; Tools content only in Tools view. Tokens: md3-surface, rounded-card, rounded-control, text-label-lg/text-label-sm, semantic status. Priority items in Tools view switch to Capture and select match on click. Removed unused ChevronDown import.
+- Evidence: `npm run build` PASS; `npm test -- --run` 88/88 PASS. Acceptance: side nav focusable (Enter/Space); one primary content block per nav selection.
+- Risk/regression notes: Visual-impact; no API/behavior change. Evidence at 1366x768 and 390x844 to be recorded in 03_VALIDATION.
+
+## Change Entry — Debugger FULL_PATH regression + SmartCapturesPanel blocker (debugger)
+- Date (UTC): 2026-02-12
+- Owner: debugger
+- Task: Continue (user); run FULL_PATH regression per Lane D protocol; record expected vs actual; open blocker if root cause uncertain.
+- Actions: Ran `npm run build` (FAIL — SmartCapturesPanel.tsx 8 TS errors: undefined `toolsOpen`/`setToolsOpen`); `npm test` (88 tests, 10 files, PASS). Attempted minimal fix (derive toolsOpen/setToolsOpen from scView); build then showed cascade JSX/structure errors; reverted to avoid scope creep.
+- Files changed: `docs/agents/03_VALIDATION.md` — added "Debugger FULL_PATH regression (2026-02-12)" block; `docs/agents/BLOCKERS.md` — added ACTIVE blocker for builder (fix SmartCapturesPanel).
+- Outcome: Gate C Build = FAIL until builder fixes SmartCapturesPanel; tests PASS. Blocker assigned to builder.
+
+## Change Entry — Debugger FULL_PATH re-run after SmartCapturesPanel fix (debugger)
+- Date (UTC): 2026-02-12
+- Owner: debugger
+- Task: Continue; verify SmartCapturesPanel blocker resolved; re-run FULL_PATH regression.
+- Actions: Confirmed SmartCapturesPanel.tsx now defines `toolsOpen` and `setToolsOpen` (derived from scView). Ran `npm run build` → exit 0 (13.84s); `npm test` → 88 tests, 10 files, PASS.
+- Files changed: `docs/agents/03_VALIDATION.md` — resolution note on Debugger FULL_PATH regression block; `docs/agents/BLOCKERS.md` — SmartCapturesPanel blocker marked RESOLVED.
+- Outcome: Gate C (Build) and Gate C (Tests) PASS. No active blockers for this regression.
+
+## Change Entry — Step 15 Phase 3: Smart Capture spec + hierarchy (ui-designer)
+- Date (UTC): 2026-02-13
+- Owner: ui-designer
+- Task: PLAN_UI_OVERHAUL Phase 3 — Smart Capture overhaul; deliverable = spec + hierarchy for builder.
+- Files changed: `docs/agents/SPEC_SMART_CAPTURE_PHASE3.md` (new).
+- Why: Continue per handoff; Step 15 is ui-designer spec then builder implementation.
+- What changed: Spec document added: one page + side nav (Capture | Tools); content area behavior; information and visual hierarchy (tokens, typography, actions); acceptance criteria; phased plan. Classification: visual-impact. Evidence required per UI_MASTERPLAN v2.
+- Risk/regression notes: Spec only; no code edits. Builder to implement per spec and log evidence in 03_VALIDATION.
+
+## Change Entry — Step 13 debugger FULL_PATH regression (debugger)
+- Date (UTC): 2026-02-13
+- Owner: debugger
+- Task: User requested "begin tasks"; active step = Step 13 (UI Overhaul Phase 1 — Telemetry indicator).
+- Actions: Ran FULL_PATH regression: `npm run build` (PASS, ~13s), `npm test -- --run` (88 tests, 10 files, PASS). Audited Phase 1 implementation vs PLAN_UI_OVERHAUL (5 chips, Telemetry solid/blinking).
+- Files changed: `docs/agents/03_VALIDATION.md` — added "Step 13 — Debugger FULL_PATH regression" block (expected vs actual, confidence, no blocker).
+- Outcome: Step 13 Phase 1 evidence complete; no active blocker. PM may mark Step 13 COMPLETE when ready.
+
+## Peer Message Log — Begin tasks (project-manager)
+- Date (UTC): 2026-02-13
+- Role: project-manager
+- Action: User requested "begin tasks." Confirmed current task and active step.
+- Outcome: **Current task:** Step 13 — UI Overhaul Phase 1 (Telemetry indicator), Task ID UI-OVERHAUL-01. **Plan:** Step 13 [IN_PROGRESS]. Execution log shows Phase 1 (builder) and Phase 2 Navigation review (ui-designer) already completed. Tasks begun; if Step 13 not yet marked COMPLETE, add 03_VALIDATION evidence and PM will mark COMPLETE. Next: Phase 2 implementation or PM-assigned step per PLAN_UI_OVERHAUL.
+
+## Change Entry — UI Overhaul Phase 2: Navigation review (ui-designer)
+- Date (UTC): 2026-02-13
+- Owner: ui-designer
+- Task: PLAN_UI_OVERHAUL Phase 2 — Navigation review; decision (change vs no change).
+- Files changed: `docs/agents/UI_DESIGNER_PLAN.md` (task + Phase 2 steps), `docs/agents/DECISIONS.md` (Phase 2 decision).
+- Why: User requested "begin tasks"; first ui-designer task per plan is Phase 2 Navigation review.
+- What changed: Intake and scope confirmed (Sidebar, in-view nav; goal = improve if needed). Reviewed Sidebar.tsx vs UI_MASTERPLAN §4: stable rail, icon+label, tokens (text-md-sys-on-surface/60, text-label-xs), title for a11y. Decision: **No change**; optional token alignment (rail radius) deferred. Evidence in 03_VALIDATION.md.
+- Risk/regression notes: Review only; no code edits to Sidebar. Phase 2 deliverable satisfied.
+
+## Change Entry — UI Overhaul Phase 1: Telemetry indicator (builder)
+- Date (UTC): 2026-02-13
+- Owner: builder
+- Task: PLAN_UI_OVERHAUL Phase 1 — Add telemetry chip to header; solid = connected, blinking = receiving.
+- Files changed:
+  - `src/store/slices/createUISlice.ts` — Extended `telemetryStatus` type with `lastEventAt?: number`; `setTelemetryStatus` now merges into existing state so hook can set `lastEventAt` without replacing IPC status.
+  - `src/hooks/useLogMonitor.ts` — On processing telemetry events (`onLogData`), call `setTelemetryStatus({ lastEventAt: now })`.
+  - `src/components/SystemPulse.tsx` — Added 5th chip "Telemetry": uses `telemetryStatus` from `useUIState`; solid green when `telemetryStatus.exists`, blinking (`animate-pulse`) when `lastEventAt` within 45s; Terminal icon; tooltip distinguishes Connected vs Receiving.
+- Why: Plan requires one telemetry chip with two states; all 5 chips (Data, Vision, Mission, Updates, Telemetry) in header.
+- Evidence: Build and npm test (88/88) PASS. Manual check at 1366x768: both states visible when log exists and when events flow.
+
+## Change Entry — UI Overhaul Phase 2: Navigation review (builder)
+- Date (UTC): 2026-02-13
+- Owner: builder
+- Task: PLAN_UI_OVERHAUL Phase 2 — Evaluate Sidebar and in-view nav vs UI_MASTERPLAN; implement only clear wins.
+- Review: Sidebar already has stable location, consistent icon+label; AnalyticsShell has one primary view + back/quick views. Clear wins: keyboard/screen-reader (UI_MASTERPLAN §6).
+- Files changed: `src/components/Sidebar.tsx` — Added `aria-label="Main navigation"` on `<nav>`; `aria-current="page"` on active nav item (main items + dev-ocr); `aria-label="Open settings"` on Settings button.
+- Evidence: Build and npm test (88/88) PASS. No visual change; accessibility only.
+
+## Change Entry — Debugger protocol and validation checklist
+- Date (UTC): 2026-02-13
+- Owner: debugger
+- Files changed: `docs/agents/03_VALIDATION.md`
+- Why changed: User assigned debugger role; requested read/follow of AGENTS.md, 00_INTAKE, 01_PLAN, WORKLOCKS, 03_VALIDATION, BLOCKERS; post repro steps and validation checklist.
+- What changed:
+  - Appended **Debugger Protocol — Repro, Hypothesis, Verify** to `03_VALIDATION.md`:
+    - Rules: repro first, then cause hypothesis, then verify; record expected vs actual and confidence score; add regression checks for FULL_PATH; open blocker when root cause uncertain.
+    - Repro steps template (preconditions, steps, expected, actual, confidence, hypothesis, verify).
+    - Validation checklist table (repro doc, expected/actual, blocker if uncertain, FULL_PATH regression, security/behavior, evidence path).
+    - FULL_PATH regression checklist (build, test, ocr:truth:validate, security_negative_tests, path-specific).
+    - Current status: no active investigation; checklist applies to next debugger task.
+- Risk/regression notes: Documentation only; no code or behavior change.
+
+## Peer Message Log — Continue (release-manager)
+- Date (UTC): 2026-02-13
+- Role: release-manager
+- Action: User requested "continue." Reconfirmed plan and handoff state.
+- Outcome: Steps 1–15 COMPLETE; Step 16 (Phase 4 — Analytics) IN_PROGRESS — spec COMPLETE; builder to implement or confirm. No ACTIVE blockers. Gate checklist GO. Logged in 04_HANDOFF. Standing by.
+- **Continue:** Plan unchanged. Steps 1–15 COMPLETE; Step 16 IN_PROGRESS. No ACTIVE blockers. Standing by.
+- **Continue (release-manager):** Steps 1–18 COMPLETE (UI Overhaul Phases 1–6). Next: PM sign-off or new task. No ACTIVE blockers. Standing by.
+
+## Peer Message Log — Gate checklist (release-manager)
+- Date (UTC): 2026-02-13
+- Role: release-manager
+- Action: Produced canonical gate checklist per AGENTS.md and release-manager rules (evidence completeness, deterministic GO/NO-GO, canonical IDs for deduplication).
+- Outcome: Added "Release-Manager Gate Checklist (Canonical)" to `docs/agents/03_VALIDATION.md`. Rows: G-A (security), G-B (OCR/quality), G-C1–G-C4 (build, tests, UI, plan/blockers), S7–S12 (post-cycle step gates). Canonical blocker IDs: RM-BLK-001–004; peer requests RM-REQ-xxx. Current recommendation: GO. No feature work; checklist only.
+
+## Peer Message Log — Final push (release-manager)
+- Date (UTC): 2026-02-13
+- Role: release-manager
+- Action: Executed final push per PM approval ("you are approved for final push").
+- Outcome: Pre-push sanity: `npm run build` PASS (11.22s), `npm test` PASS (88 tests, 10 files). Staged all modified tracked files (35 files). Commit `00aa241`: "Release: OCR stabilization cycle 01 + post-cycle steps 7-11 + Step 12 opacity normalization (3-tier). PM approved final push. Build + 88 tests PASS." Pushed to `origin/Opus.debug` (e19a39e..00aa241). Logged in 04_HANDOFF.md.
+
 ## Peer Message Log — Continue approvals (release-manager)
 - Date (UTC): 2026-02-13
 - Role: release-manager
@@ -963,3 +1099,39 @@ SLA:
   - Added `dbHelpers.cjs`: getDbPaths, listRecentBackups, pruneBackups, createDbBackup, DB_FILENAME.
   - main.cjs already had requires and most call sites wired (telemetry + db backup). Updated `load-telemetry-archive-file` to use telemetryArchiveHelpers.loadArchiveFile(archiveDir, filename). list-telemetry-archives and clear-telemetry-archives already used helpers.
 - Risk/regression notes: Low. No IPC contract changes; parity preserved. Build and full test suite passed.
+
+## Execution Log v2 (AOM_V2)
+
+### Change Entry Template v2
+- Change ID:
+- Date (UTC):
+- Owner (`project-manager` | `ui-designer` | `builder` | `debugger` | `release-manager` | `verifier` | `reporter`):
+- Task ID:
+- Intent:
+- Files changed:
+  -
+- Risk tier: `T0|T1|T2|T3`
+- Execution path: `FAST_PATH|FULL_PATH`
+- Validation pointer:
+- Notes:
+
+### Lateral Request Table v2 (single source)
+| Request ID | From | To | Date (UTC) | Need | SLA (min) | Status | Evidence/Resolution |
+|---|---|---|---|---|---|---|---|
+
+Rules:
+- Duplicate requests must be closed as DUPLICATE with pointer to canonical Request ID.
+- PM escalation only after SLA breach or explicit dependency failure.
+
+### Change Entry — Step 13 UI Overhaul Phase 1 (Telemetry indicator) — Builder
+- Change ID: STEP13-PH1-BUILDER
+- Date (UTC): 2026-02-13T16:28:00Z
+- Owner: builder
+- Task ID: UI-OVERHAUL-01
+- Intent: Verify Step 13 Phase 1 (Telemetry indicator) implementation per PLAN_UI_OVERHAUL.md; no code change required — implementation already present.
+- Files changed: none (verification only)
+- Risk tier: T2
+- Execution path: FULL_PATH
+- Validation pointer: docs/agents/03_VALIDATION.md (Step 13 Phase 1 — Builder)
+- Notes: Store (createUISlice telemetryStatus with exists, lastEventAt), hook (useLogMonitor setTelemetryStatus from log-status + lastEventAt on log-data), SystemPulse (5 chips: Data, Vision, Mission, Updates, Telemetry; Telemetry chip solid = connected, blinking = receiving within 45s). Main process sends log-status with exists; renderer sets lastEventAt on telemetry events. Build + 88 tests PASS.
+

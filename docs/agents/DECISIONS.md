@@ -1,6 +1,43 @@
 # Decisions
 
 ## Decision Log
+- Date: 2026-02-13
+- Decision: PLAN_UI_OVERHAUL Phase 2 (Navigation review) — **No change** to Sidebar/in-view nav.
+- Options considered:
+  - Structural or visual change to Sidebar (e.g. width, layout, token alignment).
+  - No change; optional minor token alignment deferred.
+- Rationale:
+  - Sidebar already meets UI_MASTERPLAN §4: stable location, consistent icon+label, design tokens (text-md-sys-on-surface/60, text-label-xs), accessible titles. Rail width 84px and pattern are clear. Only minor gap: rail uses `rounded-r-2xl` instead of a semantic token (e.g. rounded-card); low priority.
+- Impact:
+  - Phase 2 deliverable (decision) complete. No builder implementation required for nav. Optional follow-up: builder may align rail radius to `rounded-card` if desired; not blocking.
+- Owner: ui-designer.
+
+- Date: 2026-02-13
+- Decision: Define Risk Tier (T0–T3) and Execution Path (FAST_PATH / FULL_PATH) for AOM_V2.
+- Options considered:
+  - No formal tiers; PM judgment only.
+  - Four risk tiers + two execution paths with eligibility rules (AGENTS.md AOM_V2).
+- Rationale:
+  - AGENT_BOOTSTRAP requires classifying Risk Tier and Execution Path before work starts; definitions must be canonical.
+- Impact:
+  - **T0**: Docs/config only; single owner; no behavior or contract change. → FAST_PATH eligible.
+  - **T1**: Single-owner, single-file or small set; low behavior impact; no security/release/API. → FAST_PATH if no FAST_PATH rejection rule hits.
+  - **T2**: Multi-file or behavior change; no security/release-critical path. → FULL_PATH.
+  - **T3**: Security, release gate, or public API/contract change. → FULL_PATH. Verifier required for FULL_PATH when PM designates.
+  - **FAST_PATH**: Low-risk; single lane; no evidence beyond minimal (e.g. build/lint). PM may still require 03_VALIDATION entry.
+  - **FULL_PATH**: Evidence in `docs/agents/03_VALIDATION.md` required before step DONE; release-manager/verifier involvement per plan.
+  - Intake and plan updated to require Risk Tier + Execution Path per task; step DONE only with evidence in 03_VALIDATION unless PM explicitly waives for FAST_PATH.
+
+- Date: 2026-02-13
+- Decision: Assign Cursor AI the project-manager role by default in this workspace.
+- Options considered:
+  - No default role; user specifies role per request.
+  - Assign AI a single fixed role (e.g. project-manager or builder).
+- Rationale:
+  - User requested "assign yourself the Project manager role"; provides clear default for scope, approvals, and handoff ownership.
+- Impact:
+  - `docs/agents/01_PLAN.md` includes "Agent Role Assignment (Cursor AI)" with assigned role `project-manager`. AI acts as PM unless user assigns a different role or task.
+
 - Date: 2026-02-12
 - Decision: Standardize agent names for coordination as `lead`, `agent-a`, `agent-b`, `agent-c`.
 - Options considered:
@@ -154,3 +191,18 @@
 - Rationale:
 - Impact:
 ```
+
+## Decision Taxonomy v2 (AOM_V2)
+
+For all new decisions, include:
+- Type: `scope|architecture|risk|release`
+- Decision:
+- Date:
+- Options considered:
+- Rationale:
+- Impacted files/artifacts:
+- Revisit trigger/expiry:
+
+Rule:
+- A decision without revisit trigger is incomplete.
+

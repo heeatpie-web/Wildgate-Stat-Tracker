@@ -22,7 +22,7 @@ export const Sidebar: React.FC = () => {
     const { activeView, setActiveView, setShowSettings, devMode } = useUIState();
 
     return (
-        <nav className="w-[84px] premium-sidebar app-nav-rail flex flex-col items-center py-4 gap-2 shrink-0 rounded-r-2xl">
+        <nav className="w-[84px] premium-sidebar app-nav-rail flex flex-col items-center py-4 gap-2 shrink-0 rounded-r-2xl" aria-label="Main navigation">
             {/* Navigation Icons */}
             <div className="flex flex-col items-center gap-2 flex-1">
                 {navItems.map((item) => (
@@ -30,6 +30,7 @@ export const Sidebar: React.FC = () => {
                         key={item.id}
                         onClick={() => setActiveView(item.id)}
                         data-tour={`nav-${item.id}`}
+                        aria-current={activeView === item.id ? 'page' : undefined}
                         className={`relative w-[72px] py-2.5 premium-nav-item md3-nav-item flex flex-col items-center justify-center transition-all duration-150 group ${activeView === item.id
                                 ? 'premium-nav-item--active'
                                 : 'text-md-sys-on-surface/60'
@@ -46,6 +47,7 @@ export const Sidebar: React.FC = () => {
                 {devMode && (
                     <button
                         onClick={() => setActiveView('dev-ocr')}
+                        aria-current={activeView === 'dev-ocr' ? 'page' : undefined}
                         className={`relative w-[72px] py-2.5 premium-nav-item md3-nav-item flex flex-col items-center justify-center transition-all duration-150 group ${activeView === 'dev-ocr'
                                 ? 'premium-nav-item--active'
                                 : 'text-md-sys-on-surface/60'
@@ -64,6 +66,7 @@ export const Sidebar: React.FC = () => {
             <button
                 onClick={() => setShowSettings(true)}
                 data-tour="nav-settings"
+                aria-label="Open settings"
                 className="w-[72px] py-2.5 premium-nav-item md3-nav-item flex flex-col items-center justify-center text-md-sys-on-surface/60 transition-all duration-150 group relative"
                 title="Settings"
             >

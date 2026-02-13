@@ -44,3 +44,18 @@ deliverables:
 - For OCR tasks, include raw runtime output evidence from real samples (not tests alone).
 END_AGENT_INPUT
 ```
+
+
+## v2 Addendum (AOM_V2)
+
+Before editing:
+- Confirm `Execution Path` and `Risk Tier` from intake.
+- Declare if interfaces/types/contracts change.
+
+Testing obligations:
+- T0/T1: targeted checks.
+- T2/T3: targeted + regression checks with evidence artifacts.
+
+Rule:
+- If implementation crosses lane boundaries, stop and request PM reassignment.
+

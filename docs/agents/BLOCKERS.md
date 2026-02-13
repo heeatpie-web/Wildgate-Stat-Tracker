@@ -2,6 +2,13 @@
 
 ## Active Blockers
 
+### Blocker (RESOLVED) — SmartCapturesPanel build failure
+- Date (UTC): 2026-02-12
+- Owner: builder
+- Blocker: `npm run build` failed due to undefined `toolsOpen` and `setToolsOpen` in `src/components/SmartCapturesPanel.tsx`.
+- Resolution: Builder (or follow-up) added derived `toolsOpen = scView === 'tools'` and typed `setToolsOpen` (useCallback mapping to `setScView`) in SmartCapturesPanel.tsx. Debugger re-ran FULL_PATH: `npm run build` exit 0 (built in ~14s), `npm test` 88 tests, 10 files, PASS.
+- Status: RESOLVED
+
 ### Blocker (RESOLVED — Release Gate)
 - Date (UTC): 2026-02-13T13:30:00Z
 - Owner (`project-manager` | `ui-designer` | `builder` | `debugger` | `release-manager` | `verifier` | `reporter`): release-manager
@@ -156,3 +163,34 @@ Use this when implementation assumptions are uncertain and could cause rework.
 - Needed input: Project manager decision to release/reassign lock.
 - Status: ACTIVE
 ```
+
+
+## Blocker Protocol v2 (AOM_V2)
+
+### Severity Levels
+- `S1`: release-blocking or security-critical.
+- `S2`: feature-blocking with active owner dependency.
+- `S3`: workflow/process friction.
+- `S4`: informational risk.
+
+### SLA Defaults
+- `S1`: 15 minutes
+- `S2`: 45 minutes
+- `S3`: same day
+- `S4`: next planning cycle
+
+### Blocker Entry v2
+- Date (UTC):
+- Severity: `S1|S2|S3|S4`
+- Owner:
+- Blocker:
+- Impact:
+- Needed input:
+- SLA deadline (UTC):
+- Status: `ACTIVE|RESOLVED|DUPLICATE`
+- Canonical ID:
+
+Rules:
+- Duplicate blockers must be marked `DUPLICATE` with canonical ID pointer.
+- ACTIVE blockers need explicit owner + deadline.
+

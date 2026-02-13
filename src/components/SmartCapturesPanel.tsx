@@ -3,7 +3,8 @@ import {
     Search, ChevronRight, Trophy, Skull,
     Clock, HeartCrack, Target, Image, Eye, X, Edit3, Check,
     ShieldCheck, Crosshair, Users, AlertTriangle, FileText,
-    ScanEye, RefreshCw, Plus, ImageOff, Trash2, Upload, Camera, Zap, Loader2, FolderOpen, ChevronDown
+    ScanEye, RefreshCw, Plus, ImageOff, Trash2, Upload, Camera, Zap, Loader2, FolderOpen,
+    LayoutList, ListChecks
 } from 'lucide-react';
 import { Match, SHIPS, getShipColor, OpponentTeam, Loadout } from '../types';
 import { UI_REACH_MODIFIERS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT, SYSTEMS } from '../utils/constants';
@@ -37,16 +38,18 @@ const SmartCapturesPanel: React.FC = () => {
     // Default to showing all matches; "Queue" is still available as a filter.
     const [queueOnly, setQueueOnly] = useState(false);
     const [showResolved, setShowResolved] = useState(false);
-    const [toolsOpen, setToolsOpen] = useState(false);
+    /** Side nav: 'capture' = list + detail, 'tools' = bulk actions + pending + OCR issues (per SPEC_SMART_CAPTURE_PHASE3) */
+    const [scView, setScView] = useState<'capture' | 'tools'>('capture');
+    const toolsOpen = scView === 'tools';
+    const setToolsOpen = useCallback((fn: boolean | ((v: boolean) => boolean)) => {
+        if (typeof fn === 'function') setScView(prev => fn(prev === 'tools') ? 'tools' : 'capture');
+        else setScView(fn ? 'tools' : 'capture');
+    }, []);
     const normalizeModifierName = useCallback((name: string) => {
         const match = UI_REACH_MODIFIERS.find(m => m.toLowerCase() === name.toLowerCase());
         return match || name;
     }, []);
 
-    useEffect(() => {
-        // When the user captures screenshots, auto-open tools so OCR actions are visible.
-        if ((captureState.savedCaptures?.length || 0) > 0) setToolsOpen(true);
-    }, [captureState.savedCaptures?.length]);
 
     const isWorkQueueItem = useCallback((m: Match) => {
         const hasArtifacts = (m.artifacts?.length || 0) > 0;
@@ -339,9 +342,41 @@ const SmartCapturesPanel: React.FC = () => {
     }, [activeUser, matches, normalizeModifierName, ocrMode, selectedIds, setToast, updateMatch]);
 
     return (
-        <div data-tour="view-smart-captures" className="h-full min-h-0 p-3">
+        <div data-tour="view-smart-captures" className="h-full min-h-0 p-3 flex gap-3">
+            {/* Side nav: Capture | Tools (per SPEC_SMART_CAPTURE_PHASE3) */}
+            <nav
+                className="w-14 shrink-0 flex flex-col gap-1 md3-surface-high rounded-card p-2 self-start"
+                aria-label="Smart Captures sections"
+            >
+                <button
+                    type="button"
+                    onClick={() => setScView('capture')}
+                    aria-current={scView === 'capture' ? 'page' : undefined}
+                    title="Capture"
+                    className={`w-full flex flex-col items-center gap-1 py-2.5 rounded-control text-label-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${
+                        scView === 'capture' ? 'bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer' : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
+                    }`}
+                >
+                    <LayoutList size={20} aria-hidden />
+                    <span>Capture</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setScView('tools')}
+                    aria-current={scView === 'tools' ? 'page' : undefined}
+                    title="Tools"
+                    className={`w-full flex flex-col items-center gap-1 py-2.5 rounded-control text-label-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${
+                        scView === 'tools' ? 'bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer' : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
+                    }`}
+                >
+                    <Zap size={20} aria-hidden />
+                    <span>Tools</span>
+                </button>
+            </nav>
+
+            <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+            {scView === 'capture' && (
             <div className="h-full min-h-0 grid grid-cols-1 lg:grid-cols-[380px,1fr] gap-3">
-                
                 <div className="min-h-0 flex flex-col mg-surface-high rounded-card overflow-hidden p-0" style={{ backgroundImage: 'radial-gradient(circle at bottom left, rgba(139,92,246,0.06), transparent 50%)' }}>
                     <div className="px-4 pt-4 pb-3 space-y-3 border-b border-md-sys-outline/10">
                         <div className="flex items-center justify-between gap-3">
@@ -378,15 +413,6 @@ const SmartCapturesPanel: React.FC = () => {
                                     title="Lock Team Mapping (OCR)"
                                 >
                                     Lock
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => setToolsOpen(v => !v)}
-                                    className="md3-icon-btn md3-surface-high"
-                                    title={toolsOpen ? 'Hide Tools' : 'Show Tools'}
-                                >
-                                    <ChevronDown size={14} className={`transition-transform ${toolsOpen ? 'rotate-180' : ''}`} />
                                 </button>
                             </div>
                         </div>
@@ -457,150 +483,6 @@ const SmartCapturesPanel: React.FC = () => {
                                 {queueIndex.idx + 1}/{queueIndex.total}
                             </div>
                         )}
-                    </div>
-                )}
-
-                {toolsOpen && (
-                    <div className="px-4 py-3 border-b border-md-sys-outline/10 space-y-2">
-                        <div className="md3-surface-high rounded-card sc-bordered p-2">
-                            <div className="flex items-center justify-between gap-2">
-                                <div className="text-label-sm font-bold text-md-sys-on-surface/60 uppercase tracking-[0.18em]">
-                                    Bulk Actions
-                                </div>
-                                <div className="text-label-sm font-bold text-md-sys-on-surface/60">
-                                    Selected: {selectedIds.size}
-                                </div>
-                            </div>
-                            <div className="mt-2 grid grid-cols-2 gap-2">
-                                <button
-                                    type="button"
-                                    className="md3-btn-tonal px-2 py-1.5 text-label-xs font-bold disabled:opacity-disabled"
-                                    onClick={() => selectVisible('all')}
-                                    disabled={bulkBusy || visibleMatches.length === 0}
-                                    title="Select all visible matches"
-                                >
-                                    Select Visible ({visibleMatches.length})
-                                </button>
-                                <button
-                                    type="button"
-                                    className="md3-btn-tonal px-2 py-1.5 text-label-xs font-bold disabled:opacity-disabled"
-                                    onClick={bulkResolveVisible}
-                                    disabled={bulkBusy || visibleMatches.length === 0}
-                                    title="Resolve every currently visible match row"
-                                >
-                                    Resolve Visible
-                                </button>
-                            </div>
-                            <div className="mt-2 grid grid-cols-3 gap-2">
-                                <button
-                                    type="button"
-                                    className="md3-btn-filled px-2 py-1.5 text-label-xs font-bold disabled:opacity-disabled"
-                                    onClick={() => { resolveMatches(Array.from(selectedIds)); setToast({ message: 'Resolved selected', type: 'success' }); }}
-                                    disabled={bulkBusy || selectedIds.size === 0}
-                                    title="Mark selected matches as resolved"
-                                >
-                                    Resolve
-                                </button>
-                                <button
-                                    type="button"
-                                    className="md3-btn-tonal px-2 py-1.5 text-label-xs font-bold disabled:opacity-disabled"
-                                    onClick={bulkRerunOcrSelected}
-                                    disabled={bulkBusy || selectedIds.size === 0}
-                                    title="Rerun OCR on screenshots for selected matches"
-                                >
-                                    {bulkBusy ? 'Working...' : 'Rerun OCR'}
-                                </button>
-                                <button
-                                    type="button"
-                                    className="md3-btn-outlined px-2 py-1.5 text-label-xs font-bold disabled:opacity-disabled"
-                                    onClick={bulkExportSelectedJson}
-                                    disabled={bulkBusy || selectedIds.size === 0}
-                                    title="Export selected matches JSON"
-                                >
-                                    Export JSON
-                                </button>
-                            </div>
-                            {selectedIds.size > 0 && (
-                                <div className="mt-2 flex items-center justify-between gap-2">
-                                    <button
-                                        type="button"
-                                        className="md3-btn-text px-2 py-1 text-label-xs font-bold"
-                                        onClick={() => setSelectedIds(new Set())}
-                                    >
-                                        Clear Selection
-                                    </button>
-                                    <span className="text-label-xs font-semibold opacity-60">
-                                        {bulkBusy ? 'Working...' : 'Actions apply to selected rows'}
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {toolsOpen && captureState.savedCaptures.length > 0 && (
-                    <div className="px-4 py-3 space-y-2 border-b border-md-sys-outline/10">
-                        <div className="flex items-center justify-between">
-                            <span className="text-label-sm font-semibold opacity-60 flex items-center gap-1">
-                                <Camera size={10} /> Capture Queue ({captureState.savedCaptures.length})
-                            </span>
-                            {captureState.processingProgress && (
-                                <span className="text-label-xs font-semibold opacity-60">
-                                    Processing {captureState.processingProgress.current}/{captureState.processingProgress.total}
-                                </span>
-                            )}
-                            <div className="flex gap-1">
-                                {captureState.savedCaptures.some(c => !c.ocrProcessed) && (
-                                    <button
-                                        onClick={() => captureActions.processAllStored(activeUser)}
-                                        disabled={captureState.isProcessing}
-                                        className="md3-btn-tonal px-2 py-1 text-label-xs font-bold transition-colors disabled:opacity-disabled flex items-center gap-1"
-                                    >
-                                        {captureState.isProcessing ? <Loader2 size={8} className="animate-spin" /> : <Zap size={8} />}
-                                        OCR All
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                        <div className="space-y-1 max-h-32 overflow-y-auto custom-scrollbar">
-                            {captureState.savedCaptures.map((cap, i) => (
-                                <div key={cap.filePath} className="flex items-center gap-2 py-2 px-2.5 rounded-control md3-surface-high sc-bordered">
-                                    <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cap.ocrProcessed ? 'bg-success' : 'bg-warning'}`} />
-                                    <span className="text-label-sm flex-1 truncate opacity-60">{cap.filename}</span>
-                                    {!cap.ocrProcessed ? (
-                                        <button
-                                            onClick={() => captureActions.processStoredImage(cap.filePath, activeUser)}
-                                            disabled={captureState.isProcessing}
-                                            className="md3-btn-tonal px-2 py-0.5 text-label-xs font-bold transition-colors disabled:opacity-disabled"
-                                        >
-                                            OCR
-                                        </button>
-                                    ) : (
-                                        <Check size={10} className="text-success flex-shrink-0" />
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {toolsOpen && ocrIssueMatches.length > 0 && (
-                    <div className="px-4 py-3 border-b border-md-sys-outline/10">
-                        <div className="md3-surface rounded-card sc-bordered p-2">
-                            <div className="text-label-xs uppercase font-semibold opacity-60 mb-1 tracking-wider">Priority</div>
-                            <div className="space-y-1 max-h-24 overflow-y-auto custom-scrollbar">
-                                {ocrIssueMatches.map(m => (
-                                    <button
-                                        key={`issue-${m.id}`}
-                                        onClick={() => setSelectedMatchId(m.id)}
-                                        className="w-full text-left text-label-sm px-2 py-1 rounded-lg hover:bg-md-sys-on-surface/5 flex items-center justify-between"
-                                    >
-                                        <span className="truncate">{new Date(m.timestamp).toLocaleDateString()} {m.ship || 'No ship'}</span>
-                                        <span className="text-danger font-bold">{Math.round(m.ocrDebug?.confidence || 0)}%</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
                     </div>
                 )}
 
@@ -740,6 +622,73 @@ const SmartCapturesPanel: React.FC = () => {
                     </div>
                 </div>
             </div>
+            )}
+
+            {scView === 'tools' && (
+                <div className="h-full min-h-0 overflow-y-auto md3-surface-high rounded-card p-4 space-y-4 flex flex-col gap-4">
+                    <section className="md3-surface rounded-card p-4 border border-md-sys-outline/10" aria-labelledby="sc-tools-bulk-heading">
+                        <h2 id="sc-tools-bulk-heading" className="text-label-lg font-bold text-md-sys-on-surface mb-3">Bulk Actions</h2>
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                            <span className="text-label-sm text-md-sys-on-surface/60">Selected: {selectedIds.size}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 mb-3">
+                            <button type="button" className="md3-btn-tonal px-3 py-2 text-label-sm font-bold disabled:opacity-disabled rounded-control" onClick={() => selectVisible('all')} disabled={bulkBusy || visibleMatches.length === 0} title="Select all visible matches">Select Visible ({visibleMatches.length})</button>
+                            <button type="button" className="md3-btn-tonal px-3 py-2 text-label-sm font-bold disabled:opacity-disabled rounded-control" onClick={bulkResolveVisible} disabled={bulkBusy || visibleMatches.length === 0} title="Resolve every currently visible match row">Resolve Visible</button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                            <button type="button" className="md3-btn-filled px-3 py-2 text-label-sm font-bold disabled:opacity-disabled rounded-control" onClick={() => { resolveMatches(Array.from(selectedIds)); setToast({ message: 'Resolved selected', type: 'success' }); }} disabled={bulkBusy || selectedIds.size === 0} title="Mark selected as resolved">Resolve</button>
+                            <button type="button" className="md3-btn-tonal px-3 py-2 text-label-sm font-bold disabled:opacity-disabled rounded-control" onClick={bulkRerunOcrSelected} disabled={bulkBusy || selectedIds.size === 0} title="Rerun OCR on selected">{bulkBusy ? 'Working...' : 'Rerun OCR'}</button>
+                            <button type="button" className="md3-btn-outlined px-3 py-2 text-label-sm font-bold disabled:opacity-disabled rounded-control" onClick={bulkExportSelectedJson} disabled={bulkBusy || selectedIds.size === 0} title="Export selected JSON">Export JSON</button>
+                        </div>
+                        {selectedIds.size > 0 && (
+                            <div className="mt-3 flex items-center justify-between gap-2">
+                                <button type="button" className="md3-btn-text px-2 py-1 text-label-xs font-bold rounded-control" onClick={() => setSelectedIds(new Set())}>Clear Selection</button>
+                                <span className="text-label-xs text-md-sys-on-surface/60">{bulkBusy ? 'Working...' : 'Actions apply to selected rows'}</span>
+                            </div>
+                        )}
+                    </section>
+                    {captureState.savedCaptures.length > 0 && (
+                        <section className="md3-surface rounded-card p-4 border border-md-sys-outline/10" aria-labelledby="sc-tools-queue-heading">
+                            <h2 id="sc-tools-queue-heading" className="text-label-lg font-bold text-md-sys-on-surface mb-3 flex items-center justify-between gap-2">
+                                <span className="flex items-center gap-1"><Camera size={16} /> Capture Queue ({captureState.savedCaptures.length})</span>
+                                {captureState.processingProgress && <span className="text-label-sm text-md-sys-on-surface/60">Processing {captureState.processingProgress.current}/{captureState.processingProgress.total}</span>}
+                                {captureState.savedCaptures.some(c => !c.ocrProcessed) && (
+                                    <button onClick={() => captureActions.processAllStored(activeUser)} disabled={captureState.isProcessing} className="md3-btn-tonal px-2 py-1.5 text-label-xs font-bold rounded-control disabled:opacity-disabled flex items-center gap-1">
+                                        {captureState.isProcessing ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />} OCR All
+                                    </button>
+                                )}
+                            </h2>
+                            <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                                {captureState.savedCaptures.map((cap) => (
+                                    <div key={cap.filePath} className="flex items-center gap-2 py-2 px-3 rounded-control md3-surface-high border border-md-sys-outline/10">
+                                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cap.ocrProcessed ? 'bg-success' : 'bg-warning'}`} aria-hidden />
+                                        <span className="text-label-sm text-md-sys-on-surface/60 flex-1 truncate">{cap.filename}</span>
+                                        {!cap.ocrProcessed ? (
+                                            <button onClick={() => captureActions.processStoredImage(cap.filePath, activeUser)} disabled={captureState.isProcessing} className="md3-btn-tonal px-2 py-1 text-label-xs font-bold rounded-control disabled:opacity-disabled">OCR</button>
+                                        ) : (
+                                            <Check size={14} className="text-success flex-shrink-0" aria-hidden />
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+                    {ocrIssueMatches.length > 0 && (
+                        <section className="md3-surface rounded-card p-4 border border-md-sys-outline/10" aria-labelledby="sc-tools-priority-heading">
+                            <h2 id="sc-tools-priority-heading" className="text-label-lg font-bold text-md-sys-on-surface mb-3">Priority (OCR issues)</h2>
+                            <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
+                                {ocrIssueMatches.map(m => (
+                                    <button key={`issue-${m.id}`} onClick={() => { setSelectedMatchId(m.id); setScView('capture'); }} className="w-full text-left text-label-sm px-3 py-2 rounded-control hover:bg-md-sys-on-surface/5 flex items-center justify-between border border-transparent hover:border-md-sys-outline/10">
+                                        <span className="truncate">{new Date(m.timestamp).toLocaleDateString()} {m.ship || 'No ship'}</span>
+                                        <span className="text-danger font-bold">{Math.round(m.ocrDebug?.confidence || 0)}%</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+                </div>
+            )}
+        </div>
         </div>
     );
 };

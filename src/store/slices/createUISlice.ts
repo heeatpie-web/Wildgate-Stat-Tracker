@@ -30,7 +30,7 @@ export interface UISlice {
     overlayPhase: 'Setup' | 'Live' | 'Result';
     activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr';
     visionStatus: 'idle' | 'capturing' | 'scanning' | 'processing';
-    telemetryStatus: { exists: boolean, size?: number, lastCheck?: number, error?: string, path?: string };
+    telemetryStatus: { exists: boolean, size?: number, lastCheck?: number, error?: string, path?: string, lastEventAt?: number };
 
     setIsLoading: (isLoading: boolean) => void;
     setShowWelcome: (show: boolean) => void;
@@ -154,7 +154,7 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     showIdMapper: false,
     setShowIdMapper: (show) => set({ showIdMapper: show }),
     setVisionStatus: (status) => set({ visionStatus: status }),
-    setTelemetryStatus: (status) => set({ telemetryStatus: status }),
+    setTelemetryStatus: (status) => set((state) => ({ telemetryStatus: { ...state.telemetryStatus, ...status } })),
     smartCapturesFocusMatchId: null,
     setSmartCapturesFocusMatchId: (id) => set({ smartCapturesFocusMatchId: id }),
 });

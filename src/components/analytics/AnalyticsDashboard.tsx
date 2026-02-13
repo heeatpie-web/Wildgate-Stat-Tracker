@@ -169,10 +169,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
     return (
         <div className="flex-1 overflow-y-auto custom-scrollbar animate-fade-in p-2 pb-8">
             {!dense && editorial && (
-                <div className="md3-card rounded-2xl p-6 mb-4 overflow-hidden">
+                <div className="md3-card rounded-card p-6 mb-4 overflow-hidden">
                     <div className="flex flex-col md:flex-row gap-6">
                         <div className="flex-1 min-w-0">
-                            <div className="text-label-sm uppercase tracking-[0.22em] font-semibold opacity-40 mb-2">
+                            <div className="text-label-sm uppercase tracking-[0.22em] font-semibold text-md-sys-on-surface/40 mb-2">
                                 Analytics Editorial
                             </div>
                             <h2 className="text-xl md:text-2xl font-bold tracking-tight leading-snug text-md-sys-on-surface">
@@ -187,7 +187,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                                             <div className="mt-2 flex flex-wrap gap-2">
                                                 {s.metrics.map((m, i) => (
                                                     <div key={i} className="md3-surface-high px-3 py-1.5 rounded-lg text-label-sm font-semibold">
-                                                        <span className="opacity-60 uppercase mr-1">{m.label}</span>
+                                                        <span className="text-md-sys-on-surface/60 uppercase mr-1">{m.label}</span>
                                                         <span className="font-bold">{m.value}</span>
                                                     </div>
                                                 ))}
@@ -197,23 +197,23 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                                 ))}
                             </div>
                         </div>
-                        <div className="md:w-[260px] flex-shrink-0 md3-surface-high rounded-2xl p-4">
-                            <div className="text-label-sm font-semibold uppercase tracking-widest opacity-60 mb-3">Key Tape</div>
+                        <div className="md:w-[260px] flex-shrink-0 md3-surface-high rounded-card p-4">
+                            <div className="text-label-sm font-semibold uppercase tracking-widest text-md-sys-on-surface/60 mb-3">Key Tape</div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <div className="text-label-xs font-semibold uppercase opacity-40">Win Rate</div>
+                                    <div className="text-label-xs font-semibold uppercase text-md-sys-on-surface/40">Win Rate</div>
                                     <div className="text-lg font-bold">{winRate}%</div>
                                 </div>
                                 <div>
-                                    <div className="text-label-xs font-semibold uppercase opacity-40">Streak</div>
+                                    <div className="text-label-xs font-semibold uppercase text-md-sys-on-surface/40">Streak</div>
                                     <div className="text-lg font-bold">{currentStreak}W</div>
                                 </div>
                                 <div>
-                                    <div className="text-label-xs font-semibold uppercase opacity-40">Momentum</div>
+                                    <div className="text-label-xs font-semibold uppercase text-md-sys-on-surface/40">Momentum</div>
                                     <div className="text-lg font-bold" style={{ color: scoreColor }}>{momentum.currentMomentum}</div>
                                 </div>
                                 <div>
-                                    <div className="text-label-xs font-semibold uppercase opacity-40">Matches</div>
+                                    <div className="text-label-xs font-semibold uppercase text-md-sys-on-surface/40">Matches</div>
                                     <div className="text-lg font-bold">{totalMatches}</div>
                                 </div>
                             </div>
@@ -249,10 +249,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 >
                     <div className="flex items-center justify-between gap-4">
                         <div className="flex-shrink-0">
-                            <div className={`font-black tracking-tighter leading-none ${winRate >= 50 ? 'text-success' : 'text-danger'} ${dense ? 'text-4xl' : 'text-6xl'}`}>
-                                {winRate}<span className="text-[0.5em] opacity-60 ml-1">%</span>
+                            <div className={`font-bold tracking-tighter leading-none ${winRate >= 50 ? 'text-success' : 'text-danger'} ${dense ? 'text-4xl' : 'text-6xl'}`}>
+                                {winRate}<span className="text-[0.5em] text-md-sys-on-surface/60 ml-1">%</span>
                             </div>
-                            <div className={`mt-1 font-semibold opacity-60 uppercase tracking-widest ${dense ? 'text-label-xs' : 'text-label-sm'}`}>
+                            <div className={`mt-1 font-semibold text-md-sys-on-surface/60 uppercase tracking-widest ${dense ? 'text-label-xs' : 'text-label-sm'}`}>
                                 {totalMatches} tracked matches
                             </div>
                         </div>
@@ -273,30 +273,30 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                     {today ? (
                         <div className="flex items-center justify-between">
                             <div>
-                                <div className={`font-black tracking-tight leading-none ${dense ? 'text-3xl' : 'text-5xl'}`}>
+                                <div className={`font-bold tracking-tight leading-none ${dense ? 'text-3xl' : 'text-5xl'}`}>
                                     <span className="text-success">{today.wins}</span>
-                                    <span className="opacity-40 mx-1">/</span>
+                                    <span className="text-md-sys-on-surface/40 mx-1">/</span>
                                     <span className="text-danger">{today.losses}</span>
                                 </div>
-                                <div className={`mt-1 font-semibold opacity-60 uppercase tracking-wide ${dense ? 'text-label-xs' : 'text-label-sm'}`}>
+                                <div className={`mt-1 font-semibold text-md-sys-on-surface/60 uppercase tracking-wide ${dense ? 'text-label-xs' : 'text-label-sm'}`}>
                                     {today.winRate}% win rate
                                 </div>
                             </div>
                             <div className="text-right">
-                                <div className={`font-black text-md-sys-on-surface ${dense ? 'text-2xl' : 'text-3xl'}`}>{today.totalKills}</div>
-                                <div className="text-label-sm uppercase opacity-60 font-semibold tracking-wide">Kills</div>
+                                <div className={`font-bold text-md-sys-on-surface ${dense ? 'text-2xl' : 'text-3xl'}`}>{today.totalKills}</div>
+                                <div className="text-label-sm uppercase text-md-sys-on-surface/60 font-semibold tracking-wide">Kills</div>
                             </div>
                         </div>
                     ) : (
-                        <div className="opacity-40 text-body font-semibold uppercase tracking-wide">No Session Data Today</div>
+                        <div className="text-md-sys-on-surface/40 text-body font-semibold uppercase tracking-wide">No Session Data Today</div>
                     )}
                 </AnalyticsCard>
 
                 <AnalyticsCard title="Momentum" icon={<Gauge size={12} />} visualMode={visualMode} className={dense ? '' : 'md:col-span-2'} accentColor="bg-accent" onExpand={() => onNavigate('momentum')}>
                     <div className="flex items-end justify-between">
                         <div>
-                            <div className={`font-black leading-none ${dense ? 'text-2xl' : 'text-4xl'}`} style={{ color: scoreColor }}>{momentum.currentMomentum}</div>
-                            <div className="text-label-sm opacity-40 font-semibold uppercase tracking-wide mt-1">Peak {momentum.peakMomentum}</div>
+                            <div className={`font-bold leading-none ${dense ? 'text-2xl' : 'text-4xl'}`} style={{ color: scoreColor }}>{momentum.currentMomentum}</div>
+                            <div className="text-label-sm text-md-sys-on-surface/40 font-semibold uppercase tracking-wide mt-1">Peak {momentum.peakMomentum}</div>
                         </div>
                         <div className="w-20 h-8">
                             <SparklineWidget data={momentumSparkline} color={scoreColor} height={dense ? 24 : 32} />
@@ -306,7 +306,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
 
                 <AnalyticsCard title="Current Streak" icon={<Flame size={12} />} visualMode={visualMode} className={dense ? '' : 'md:col-span-2'} accentColor="bg-warning" onExpand={() => onNavigate('streaks')}>
                     <div className="flex items-center justify-between">
-                        <div className={`font-black text-warning leading-none ${dense ? 'text-2xl' : 'text-4xl'}`}>{currentStreak}</div>
+                        <div className={`font-bold text-warning leading-none ${dense ? 'text-2xl' : 'text-4xl'}`}>{currentStreak}</div>
                         <div className="text-right text-label-sm font-semibold uppercase tracking-wide">
                             <div className="text-success">Best {streakHistory.longestWinStreak}W</div>
                             <div className="text-danger">Worst {streakHistory.longestLossStreak}L</div>
@@ -322,17 +322,17 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                     accentColor="bg-info"
                     onExpand={() => onNavigate('timePatterns')}
                 >
-                    <div className={`font-black text-info leading-none ${dense ? 'text-2xl' : 'text-4xl'}`}>{avgSortiesPerDay}</div>
-                    <div className="text-label-sm opacity-40 font-semibold uppercase tracking-wide mt-1">Matches per day</div>
+                    <div className={`font-bold text-info leading-none ${dense ? 'text-2xl' : 'text-4xl'}`}>{avgSortiesPerDay}</div>
+                    <div className="text-label-sm text-md-sys-on-surface/40 font-semibold uppercase tracking-wide mt-1">Matches per day</div>
                 </AnalyticsCard>
 
                 <AnalyticsCard title="Kill Efficiency" icon={<Crosshair size={12} />} visualMode={visualMode} className={dense ? '' : 'md:col-span-2'} accentColor="bg-danger" onExpand={() => onNavigate('killEfficiency')}>
-                    <div className={`font-black text-warning leading-none ${dense ? 'text-2xl' : 'text-4xl'}`}>{killEfficiency.overallAvgKills}</div>
+                    <div className={`font-bold text-warning leading-none ${dense ? 'text-2xl' : 'text-4xl'}`}>{killEfficiency.overallAvgKills}</div>
                     <div className="mt-2 flex items-center gap-2">
                         <span className={`text-label-sm font-semibold uppercase ${killEfficiency.trendDirection === 'up' ? 'text-success' : 'text-danger'}`}>
                             {killEfficiency.trendDirection === 'up' ? 'Improving' : 'Declining'}
                         </span>
-                        <div className="flex-1 h-3 opacity-60">
+                        <div className="flex-1 h-3 text-md-sys-on-surface/60">
                             <SparklineWidget data={killSparkline} color="var(--color-warning)" height={12} />
                         </div>
                     </div>
@@ -344,7 +344,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                         <div className="h-20">
                             <SparklineWidget data={winRateSparkline} color={winRate >= 50 ? 'var(--color-success)' : 'var(--color-danger)'} height={80} />
                         </div>
-                        <div className="mt-1 flex items-center justify-between text-label-xs font-semibold uppercase tracking-wide opacity-40">
+                        <div className="mt-1 flex items-center justify-between text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/40">
                             <span>Match 1</span>
                             <span>Match {winRateSparkline.length}</span>
                         </div>
@@ -355,7 +355,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                         <div className="h-20">
                             <SparklineWidget data={killSparkline} color="var(--color-warning)" height={80} />
                         </div>
-                        <div className="mt-1 flex items-center justify-between text-label-xs font-semibold uppercase tracking-wide opacity-40">
+                        <div className="mt-1 flex items-center justify-between text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/40">
                             <span>Oldest</span>
                             <span>Recent</span>
                         </div>
@@ -371,11 +371,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                     onExpand={() => onNavigate('pro')}
                 >
                     <div className="flex items-baseline gap-2">
-                        <span className="text-success font-black text-2xl">{avgDmgWins}</span>
+                        <span className="text-success font-bold text-2xl">{avgDmgWins}</span>
                         <span className="opacity-25 text-label-sm font-semibold">VS</span>
-                        <span className="text-danger font-black text-2xl">{avgDmgLosses}</span>
+                        <span className="text-danger font-bold text-2xl">{avgDmgLosses}</span>
                     </div>
-                    <div className="text-label-sm opacity-40 font-semibold uppercase tracking-wide mt-1">Wins vs losses</div>
+                    <div className="text-label-sm text-md-sys-on-surface/40 font-semibold uppercase tracking-wide mt-1">Wins vs losses</div>
                 </AnalyticsCard>
 
                 <AnalyticsCard
@@ -388,10 +388,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 >
                     <div className="flex items-center justify-between">
                         <div>
-                            <div className={`font-black text-warning leading-none ${dense ? 'text-2xl' : 'text-4xl'}`}>{clutchWins.length}</div>
-                            <div className="text-label-sm opacity-40 font-semibold uppercase tracking-wide mt-1">Clutch wins</div>
+                            <div className={`font-bold text-warning leading-none ${dense ? 'text-2xl' : 'text-4xl'}`}>{clutchWins.length}</div>
+                            <div className="text-label-sm text-md-sys-on-surface/40 font-semibold uppercase tracking-wide mt-1">Clutch wins</div>
                         </div>
-                        <div className="px-3 py-2 rounded-xl bg-warning/10 border border-warning/30 text-warning text-label-sm font-bold">
+                        <div className="px-3 py-2 rounded-control bg-warning/10 border border-warning/30 text-warning text-label-sm font-bold">
                             {clutchRate}%
                         </div>
                     </div>
@@ -400,10 +400,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 <AnalyticsCard title="Top Insights" icon={<Lightbulb size={12} />} onExpand={() => onNavigate('insights')} visualMode={visualMode} className={dense ? 'col-span-2' : 'md:col-span-3'} accentColor="bg-warning">
                     <div className="grid grid-cols-1 gap-2">
                         {insights.slice(0, 3).map((stat, i) => (
-                            <div key={i} className="flex items-center gap-3 p-2 rounded-xl bg-md-sys-surfaceContainerHigh/70">
+                            <div key={i} className="flex items-center gap-3 p-2 rounded-control bg-md-sys-surfaceContainerHigh/70">
                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-label-sm font-bold ${stat.color}`}>{i + 1}</div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="text-label-sm opacity-60 font-semibold uppercase tracking-wide truncate">{stat.title}</div>
+                                    <div className="text-label-sm text-md-sys-on-surface/60 font-semibold uppercase tracking-wide truncate">{stat.title}</div>
                                     <div className="font-bold text-body truncate">{stat.value}</div>
                                 </div>
                             </div>
@@ -414,7 +414,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 <AnalyticsCard title="Social Pulse" icon={<Handshake size={12} />} onExpand={() => onNavigate('social')} visualMode={visualMode} className={dense ? 'col-span-2' : 'md:col-span-3'} accentColor="bg-success">
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <div className="text-label-xs font-semibold uppercase tracking-widest opacity-40 mb-2 flex items-center gap-1"><Swords size={10} /> Nemeses</div>
+                            <div className="text-label-xs font-semibold uppercase tracking-widest text-md-sys-on-surface/40 mb-2 flex items-center gap-1"><Swords size={10} /> Nemeses</div>
                             <div className="space-y-1.5">
                                 {socialData.opponents.slice(0, 3).map(([name, stat]: any) => (
                                     <button key={name} onClick={(e) => { e.stopPropagation(); onDrillDown(name, 'Opponent'); }} className="w-full flex justify-between items-center text-label-sm text-left hover:bg-md-sys-surfaceContainerHigh/60 rounded-lg px-1.5 py-1 transition-colors">
@@ -425,7 +425,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                             </div>
                         </div>
                         <div>
-                            <div className="text-label-xs font-semibold uppercase tracking-widest opacity-40 mb-2 flex items-center gap-1"><Zap size={10} /> Wingmen</div>
+                            <div className="text-label-xs font-semibold uppercase tracking-widest text-md-sys-on-surface/40 mb-2 flex items-center gap-1"><Zap size={10} /> Wingmen</div>
                             <div className="space-y-1.5">
                                 {socialData.teammates.slice(0, 3).map(([name, stat]: any) => (
                                     <button key={name} onClick={(e) => { e.stopPropagation(); onDrillDown(name, 'Teammate'); }} className="w-full flex justify-between items-center text-label-sm text-left hover:bg-md-sys-surfaceContainerHigh/60 rounded-lg px-1.5 py-1 transition-colors">
@@ -448,16 +448,16 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 >
                     <div className="flex items-end justify-between gap-4">
                         <div>
-                            <div className={`font-black leading-none ${dense ? 'text-2xl' : 'text-4xl'} ${weekDeltaWR >= 0 ? 'text-success' : 'text-danger'}`}>
-                                {weekDeltaWR >= 0 ? '+' : ''}{weekDeltaWR}<span className="text-[0.5em] opacity-60 ml-1">pp</span>
+                            <div className={`font-bold leading-none ${dense ? 'text-2xl' : 'text-4xl'} ${weekDeltaWR >= 0 ? 'text-success' : 'text-danger'}`}>
+                                {weekDeltaWR >= 0 ? '+' : ''}{weekDeltaWR}<span className="text-[0.5em] text-md-sys-on-surface/60 ml-1">pp</span>
                             </div>
-                            <div className="text-label-sm opacity-40 font-semibold uppercase tracking-wide mt-1">
+                            <div className="text-label-sm text-md-sys-on-surface/40 font-semibold uppercase tracking-wide mt-1">
                                 {thisWeekWR}% vs {lastWeekWR}%
                             </div>
                         </div>
-                        <div className="text-right text-label-sm font-semibold uppercase tracking-wide opacity-60">
+                        <div className="text-right text-label-sm font-semibold uppercase tracking-wide text-md-sys-on-surface/60">
                             <div>WR Delta</div>
-                            <div className="opacity-60">Weekly</div>
+                            <div className="text-md-sys-on-surface/60">Weekly</div>
                         </div>
                     </div>
                 </AnalyticsCard>
@@ -472,16 +472,16 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 >
                     <div className="flex items-center justify-between gap-3">
                         <div>
-                            <div className={`font-black leading-none ${dense ? 'text-2xl' : 'text-4xl'}`}>
+                            <div className={`font-bold leading-none ${dense ? 'text-2xl' : 'text-4xl'}`}>
                                 {peakHour}:00
                             </div>
-                            <div className="text-label-sm opacity-40 font-semibold uppercase tracking-wide mt-1">
+                            <div className="text-label-sm text-md-sys-on-surface/40 font-semibold uppercase tracking-wide mt-1">
                                 Peak on {DAY_NAMES[peakDay] || 'N/A'}
                             </div>
                         </div>
-                        <div className="text-right text-label-sm font-semibold uppercase tracking-wide opacity-60">
+                        <div className="text-right text-label-sm font-semibold uppercase tracking-wide text-md-sys-on-surface/60">
                             <div>Rhythm</div>
-                            <div className="opacity-60">Patterns</div>
+                            <div className="text-md-sys-on-surface/60">Patterns</div>
                         </div>
                     </div>
                 </AnalyticsCard>
@@ -496,16 +496,16 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 >
                     <div className="flex items-center justify-between gap-3">
                         <div>
-                            <div className={`font-black leading-none ${dense ? 'text-2xl' : 'text-4xl'}`}>
+                            <div className={`font-bold leading-none ${dense ? 'text-2xl' : 'text-4xl'}`}>
                                 {placementData?.avgPlacement ?? 0}
                             </div>
-                            <div className="text-label-sm opacity-40 font-semibold uppercase tracking-wide mt-1">
+                            <div className="text-label-sm text-md-sys-on-surface/40 font-semibold uppercase tracking-wide mt-1">
                                 Top quartile {placementData?.topQuartileRate ?? 0}%
                             </div>
                         </div>
-                        <div className="text-right text-label-sm font-semibold uppercase tracking-wide opacity-60">
+                        <div className="text-right text-label-sm font-semibold uppercase tracking-wide text-md-sys-on-surface/60">
                             <div>Avg</div>
-                            <div className="opacity-60">Finish</div>
+                            <div className="text-md-sys-on-surface/60">Finish</div>
                         </div>
                     </div>
                     {placementBuckets.rows.length > 0 && (
@@ -517,7 +517,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                                         style={{ height: `${Math.max(6, Math.round((b.count / placementBuckets.maxCount) * 40))}px` }}
                                         title={`Place ${b.placement}: ${b.count}`}
                                     />
-                                    <div className="text-label-xs font-semibold opacity-40">{b.placement}</div>
+                                    <div className="text-label-xs font-semibold text-md-sys-on-surface/40">{b.placement}</div>
                                 </div>
                             ))}
                         </div>
@@ -534,7 +534,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 >
                     {hazardSummary.rows.length > 0 ? (
                         <div className="space-y-2">
-                            <div className="text-label-sm font-semibold uppercase tracking-widest opacity-40">
+                            <div className="text-label-sm font-semibold uppercase tracking-widest text-md-sys-on-surface/40">
                                 Top modifiers (WR vs {hazardSummary.overallWR}% avg)
                             </div>
                             <div className="space-y-2">
@@ -542,8 +542,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                                     <div key={r.name} className="flex items-center gap-2">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center justify-between gap-2">
-                                                <div className="text-label-sm font-semibold truncate opacity-60">{r.name}</div>
-                                                <div className="text-label-sm font-bold opacity-60">{r.total}x</div>
+                                                <div className="text-label-sm font-semibold truncate text-md-sys-on-surface/60">{r.name}</div>
+                                                <div className="text-label-sm font-bold text-md-sys-on-surface/60">{r.total}x</div>
                                             </div>
                                             <div className="mt-1 h-2 rounded-full bg-md-sys-on-surface/8 overflow-hidden">
                                                 <div
@@ -561,7 +561,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                             </div>
                         </div>
                     ) : (
-                        <div className="opacity-40 text-body font-semibold uppercase tracking-wide">No modifier data yet</div>
+                        <div className="text-md-sys-on-surface/40 text-body font-semibold uppercase tracking-wide">No modifier data yet</div>
                     )}
                 </AnalyticsCard>
 
@@ -576,16 +576,16 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                     {bestCombo ? (
                         <div className="flex items-center justify-between gap-4">
                             <div className="min-w-0">
-                                <div className="text-label-sm opacity-60 font-semibold uppercase tracking-wide truncate">{bestCombo.ship} x {bestCombo.hero}</div>
-                                <div className={`font-black leading-tight ${dense ? 'text-xl' : 'text-2xl'}`}>{bestCombo.wr}%</div>
-                                <div className="text-label-sm opacity-40 font-semibold uppercase tracking-wide">{bestCombo.total} matches</div>
+                                <div className="text-label-sm text-md-sys-on-surface/60 font-semibold uppercase tracking-wide truncate">{bestCombo.ship} x {bestCombo.hero}</div>
+                                <div className={`font-bold leading-tight ${dense ? 'text-xl' : 'text-2xl'}`}>{bestCombo.wr}%</div>
+                                <div className="text-label-sm text-md-sys-on-surface/40 font-semibold uppercase tracking-wide">{bestCombo.total} matches</div>
                             </div>
-                            <div className="px-3 py-2 rounded-xl md3-surface-high text-label-sm font-semibold uppercase opacity-60">
+                            <div className="px-3 py-2 rounded-control md3-surface-high text-label-sm font-semibold uppercase text-md-sys-on-surface/60">
                                 Combo
                             </div>
                         </div>
                     ) : (
-                        <div className="opacity-40 text-body font-semibold uppercase tracking-wide">Not enough synergy data</div>
+                        <div className="text-md-sys-on-surface/40 text-body font-semibold uppercase tracking-wide">Not enough synergy data</div>
                     )}
                 </AnalyticsCard>
 
@@ -600,16 +600,16 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                     {topRelationship ? (
                         <div className="flex items-center justify-between gap-4">
                             <div className="min-w-0">
-                                <div className="text-label-sm opacity-60 font-semibold uppercase tracking-wide">{topRelationship.type}</div>
+                                <div className="text-label-sm text-md-sys-on-surface/60 font-semibold uppercase tracking-wide">{topRelationship.type}</div>
                                 <div className={`font-bold leading-tight truncate ${dense ? 'text-lg' : 'text-xl'}`}>{topRelationship.playerName}</div>
-                                <div className="text-label-sm opacity-40 font-semibold uppercase tracking-wide">{topRelationship.encounters} encounters</div>
+                                <div className="text-label-sm text-md-sys-on-surface/40 font-semibold uppercase tracking-wide">{topRelationship.encounters} encounters</div>
                             </div>
-                            <div className="px-3 py-2 rounded-xl md3-surface-high text-label-sm font-semibold uppercase opacity-60">
+                            <div className="px-3 py-2 rounded-control md3-surface-high text-label-sm font-semibold uppercase text-md-sys-on-surface/60">
                                 Top
                             </div>
                         </div>
                     ) : (
-                        <div className="opacity-40 text-body font-semibold uppercase tracking-wide">No repeat encounters yet</div>
+                        <div className="text-md-sys-on-surface/40 text-body font-semibold uppercase tracking-wide">No repeat encounters yet</div>
                     )}
                 </AnalyticsCard>
             </div>

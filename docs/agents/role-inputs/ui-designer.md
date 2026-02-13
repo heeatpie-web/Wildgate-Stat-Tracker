@@ -44,3 +44,14 @@ deliverables:
 - If conflicts with masterplan occur, add DECISIONS entry request.
 END_AGENT_INPUT
 ```
+
+
+## v2 Addendum (AOM_V2)
+
+UI proof requirements:
+- Mark change as `copy-only` or `visual-impact`.
+- Provide required evidence per `UI_MASTERPLAN` v2 guardrails.
+
+Rule:
+- Missing state-coverage proof blocks DONE for visual-impact changes.
+

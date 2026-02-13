@@ -2,18 +2,40 @@
 
 ---
 
+## Tasks Begun (2026-02-13)
+
+- **Activated by:** project-manager (user: "begin tasks" / "continue")
+- **Current task:** UI Overhaul (Task ID: UI-OVERHAUL-01). **Phases 1–6 complete.**
+- **Plan:** Phases 1–6 of PLAN_UI_OVERHAUL implemented and documented.
+- **Phase 1:** Telemetry indicator — COMPLETE. Store/hook + SystemPulse 5 chips; solid = connected, blinking = receiving. Evidence: 03_VALIDATION, 02_EXECUTION_LOG.
+- **Phase 2:** Navigation review — COMPLETE. ui-designer: no change; evidence in 03_VALIDATION, DECISIONS.md.
+- **Phase 3:** Smart Capture overhaul — COMPLETE. Side nav (Capture | Tools), content switching, tokens. Evidence: 02_EXECUTION_LOG, 03_VALIDATION.
+- **Phase 4:** Analytics shell — COMPLETE. Shell chrome tokens (rounded-modal, rounded-card, rounded-control, text-title). Evidence: 02_EXECUTION_LOG, 03_VALIDATION.
+- **Phase 5:** Tactical Console & OverlayView — COMPLETE. TelemetryPanel and OverlayView (compact + transparent) token overhaul. Evidence: 02_EXECUTION_LOG, 03_VALIDATION.
+- **Phase 6:** Validation and self-audit — COMPLETE. Self-audit in 03_VALIDATION; subjective questions routed to USER.
+
+---
+
 ## To Project Manager (PM Brief)
 
-**Status:** Steps 1–12 complete. Step 12 (Opacity Normalization) COMPLETE — 25+ component files normalized to 3-tier (full/60/40; disabled→opacity-disabled).
+**Status:** UI Overhaul plan (Phases 1–6) implemented.
 
-- **Cycle:** OCR stabilization (1–6), Legacy Ingest (7), Structure Hardening Phases 1–3 (8–10), Dev Splash (11) — all COMPLETE. Plan: PENDING none.
-- **Sanity check (post-approval):** `npm run build` PASS, `npm test` PASS (10 files, 88 tests). No regressions.
-- **Next:** No pending steps. PM to assign new scope or close cycle.
-- **Standing by:** Builder, debugger, release-manager.
+- **Delivered:** Phase 1 (Telemetry chip), Phase 2 (Navigation review — no change), Phase 3 (Smart Capture side nav + Tools view), Phase 4 (Analytics shell tokens), Phase 5 (TelemetryPanel + OverlayView compact/transparent tokens), Phase 6 (self-audit and validation summary).
+- **Evidence:** 02_EXECUTION_LOG and 03_VALIDATION updated for each phase. Build and tests PASS for Phases 1–3; tsc pass for Phase 5. Subjective “looks good” per plan routed to USER.
+- **Standing by:** PM for sign-off or next scope; verifier optional for viewport/state coverage.
+
+### PM Batch Commit + Push Checklist (01_PLAN, continue)
+- 1. Lanes: Steps 1–18 COMPLETE in 01_PLAN (UI Overhaul Phases 1–6).
+- 2. Validation evidence: Present in 03_VALIDATION for all phases; full build + test PASS.
+- 3. Blockers: BLOCKERS.md — only RESOLVED items; no ACTIVE blockers.
+- 4. Handoff: 04_HANDOFF reflects Phases 1–6 complete; next = PM sign-off or new task.
+- 5. Pre-commit: Run `git status` and `git diff --stat`; confirm no secrets in modified files.
+- 6–8. **PM action:** When approved: stage (`git add` as needed), commit, push. Example message: `UI Overhaul Phases 1–6 complete; telemetry chip, Smart Capture side nav, Analytics shell, Tactical Console & OverlayView tokens`.
 
 ### Approvals (continue)
 - **PM (project-manager):** Step 12 batch 2 (opacity normalization, 8/18 files) **APPROVED**. Builder may continue with remaining 10 files per same intake rules.
 - **Release-manager:** Gate **GO** — build + 88 tests PASS; visual-only changes; no scope creep. Continue Step 12 when ready.
+- **Verifier (2026-02-13):** Step 12 (Opacity Normalization) — independent FULL_PATH signoff **GO**. Evidence: `docs/agents/03_VALIDATION.md` "Step 12 — Verifier Independent Signoff (FULL_PATH)". Build + 88 tests verified; scope and constraints confirmed. Verifier standing by for next FULL_PATH task (e.g. Step 15 when designated).
 
 ---
 
@@ -475,6 +497,16 @@ All three bugs validated. The OCR stabilization cycle is complete.
 - **Continue:** `npm run build` PASS (12.75s), `npm test` PASS (88 tests, 18.25s). Standing by for PM.
 - **Continue approvals:** PM approval to continue recorded. Plan: Step 12 (Opacity Normalization) IN_PROGRESS; Steps 1–11 COMPLETE. Build and test verified PASS (debugger). Approvals and regression checks continue as builder completes Step 12.
 - **Continue:** `npm run build` PASS (12.44s), `npm test` PASS (88 tests, 13.59s). Standing by for PM.
+- **Final push (PM approved, 2026-02-13):** Release-manager executed batch commit and push per PM approval. Commit `00aa241`: OCR stabilization cycle 01 + post-cycle steps 7–11 + Step 12 opacity normalization (3-tier). Build + 88 tests PASS. Pushed to `origin/Opus.debug`.
+- **Continue approvals:** PM approval to continue recorded. Debugger role locked to Lane D files (02_EXECUTION_LOG, 03_VALIDATION, BLOCKERS, WORKLOCKS, dataset/ocr-corpus/). Approvals and regression checks continue per plan.
+- **Continue (release-manager):** Plan: Steps 1–14 COMPLETE; Step 15 (UI Overhaul Phase 3 — Smart Capture) PENDING — ui-designer spec COMPLETE per SPEC_SMART_CAPTURE_PHASE3.md; next: builder to implement. No ACTIVE blockers. Gate checklist GO. Release-manager standing by for PM.
+- **Continue (release-manager):** Plan: Steps 1–15 COMPLETE; PENDING none. Await PM for next scope or cycle close. No ACTIVE blockers. Gate checklist GO. Release-manager standing by.
+- **Continue (release-manager):** Plan: Steps 1–15 COMPLETE; Step 16 (Phase 4 — Analytics) IN_PROGRESS — spec COMPLETE per SPEC_ANALYTICS_PHASE4.md; builder to implement or confirm. No ACTIVE blockers. Gate checklist GO. Standing by.
+- **Continue (builder, 2026-02-13):** Step 15 — Implementation already present in SmartCapturesPanel (scView, side nav Capture | Tools). Build PASS. Validation evidence added to 03_VALIDATION; 01_PLAN Step 15 marked COMPLETE; 04_HANDOFF Tasks Begun + PM brief updated. Standing by for PM next scope or cycle close.
+- **Continue (sanity check):** `npm run build` PASS (16.86s). `npm test -- --run` PASS (88 tests, 10 files, 22.88s). No regressions. Plan: Steps 1–15 COMPLETE; no PENDING. 00_INTAKE updated (Phases 1–3 COMPLETE). Standing by for PM to assign next scope or close cycle.
+- **Continue:** Step 16 (Phase 4 — Analytics overhaul) added to 01_PLAN as PENDING per PLAN_UI_OVERHAUL. Next: ui-designer spec + subpanel list, then builder (shell/dashboard + subpanel fixes). Await PM activation to start Step 16.
+- **Continue (ui-designer):** Step 16 spec created: [SPEC_ANALYTICS_PHASE4.md](docs/agents/SPEC_ANALYTICS_PHASE4.md) (subpanel list, shell/dashboard/subpanel target, acceptance). Plan set to IN_PROGRESS. Builder: shell tokens may already be in place; remaining — dashboard + 2–3 subpanels token normalization per spec; then validate and handoff.
+- **Continue (release-manager):** Plan: Steps 1–18 COMPLETE (UI Overhaul Phases 1–6 done). Next: PM sign-off or new task per PLAN_UI_OVERHAUL. No ACTIVE blockers. Gate checklist GO. Standing by.
 
 ---
 
@@ -512,3 +544,29 @@ All three bugs validated. The OCR stabilization cycle is complete.
 
 ### Builder Addendum (2026-02-12T21:45Z) — Structure Hardening Phase 1 (telemetry + db helpers)
 - **New modules**: `electron/helpers/telemetryArchiveHelpers.cjs`, `electron/helpers/dbHelpers.cjs`. Main.cjs inlined telemetry/archive and backup logic removed; all call sites use helpers. Build + test PASS; `ocr:truth:validate` exit 1 is pre-existing (input file errors). Phase 1 extraction complete; ready for debugger regression and PM gate for Phase 2.
+
+
+## Handoff Schema v2 (AOM_V2)
+
+### Release/Delivery Summary
+- Task ID:
+- Scope shipped:
+- Scope not shipped:
+- Risks accepted:
+- Risks deferred:
+- Rollback procedure:
+1.
+2.
+3.
+
+### Final Gate Table
+| Gate | Owner | Status | Evidence |
+|---|---|---|---|
+| Functional | builder/debugger | PASS/FAIL | |
+| Security | debugger/verifier | PASS/FAIL | |
+| UI Quality | ui-designer/verifier | PASS/FAIL | |
+| Release Readiness | release-manager | GO/NO-GO | |
+
+Rule:
+- Do not imply completion for deferred or unverified work.
+

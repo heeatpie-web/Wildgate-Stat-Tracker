@@ -116,17 +116,17 @@ export const ProView: React.FC<ProViewProps> = ({ matches, visualMode }) => {
 
     return (
         <div className="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar animate-fade-in p-1">
-            <div className="md3-card flex flex-wrap justify-between items-center p-3 rounded-2xl sticky top-0 z-20">
+            <div className="md3-card flex flex-wrap justify-between items-center p-3 rounded-card sticky top-0 z-20">
                 <div className="flex gap-2">
                     {['All', 'Win', 'Loss'].map(type => (
                         <button key={type} onClick={() => setProResultType(type as any)}
-                            className={`md3-chip px-3 py-1.5 text-label-sm font-black uppercase transition-all ${proResultType === type ? 'md3-chip--selected' : 'hover:bg-md-sys-on-surface/5'}`}>{type}</button>
+                            className={`md3-chip px-3 py-1.5 text-label-sm font-bold uppercase transition-all ${proResultType === type ? 'md3-chip--selected' : 'hover:bg-md-sys-on-surface/5'}`}>{type}</button>
                     ))}
                 </div>
                 <div className="flex gap-2 items-center">
-                    <span className="text-label-sm font-bold opacity-60 uppercase mr-2">Metric:</span>
+                    <span className="text-label-sm font-bold text-md-sys-on-surface/60 uppercase mr-2">Metric:</span>
                     <select value={proMetric} onChange={(e) => setProMetric(e.target.value)}
-                        className="md3-textfield--outlined px-3 py-1.5 text-label-sm font-black uppercase outline-none cursor-pointer border-transparent">
+                        className="md3-textfield--outlined px-3 py-1.5 text-label-sm font-bold uppercase outline-none cursor-pointer border-transparent">
                         <option value="win_rate">Win Rate</option>
                         <option value="avg_damage">Avg Damage</option>
                         <option value="avg_kills">Avg Kills</option>
@@ -137,24 +137,24 @@ export const ProView: React.FC<ProViewProps> = ({ matches, visualMode }) => {
 
             {/* Editorial Summary */}
             {!dense && narrative && (
-                <div className="md3-card rounded-2xl p-6 overflow-hidden">
-                    <div className="text-label-sm uppercase tracking-[0.22em] font-black opacity-40 mb-2">
+                <div className="md3-card rounded-card p-6 overflow-hidden">
+                    <div className="text-label-sm uppercase tracking-[0.22em] font-bold text-md-sys-on-surface/40 mb-2">
                         Detailed Narrative
                     </div>
-                    <h2 className="text-xl md:text-2xl font-black tracking-tight leading-snug text-md-sys-on-surface">
+                    <h2 className="text-xl md:text-2xl font-bold tracking-tight leading-snug text-md-sys-on-surface">
                         {narrative.headline}
                     </h2>
                     <div className="mt-4 space-y-4 text-body leading-relaxed text-md-sys-on-surface/60">
                         {narrative.sections.map((s) => (
                             <div key={s.id} className="pb-4 border-b border-md-sys-outlineVariant/25 last:border-b-0 last:pb-0">
-                                <div className="text-label-sm font-black uppercase tracking-[0.18em] text-md-sys-on-surface/60">{s.title}</div>
+                                <div className="text-label-sm font-bold uppercase tracking-[0.18em] text-md-sys-on-surface/60">{s.title}</div>
                                 <p className="mt-1">{s.body}</p>
                                 {s.metrics && s.metrics.length > 0 && (
                                     <div className="mt-2 flex flex-wrap gap-2">
                                         {s.metrics.map((m, i) => (
                                             <div key={i} className="md3-surface-high px-3 py-1.5 rounded-lg text-label-sm font-bold">
                                                 <span className="opacity-60 uppercase mr-1">{m.label}</span>
-                                                <span className="font-black">{m.value}</span>
+                                                <span className="font-bold">{m.value}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -166,24 +166,24 @@ export const ProView: React.FC<ProViewProps> = ({ matches, visualMode }) => {
             )}
 
             <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
-                <div className={`md3-card rounded-2xl flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
-                    <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><Rocket size={16} /> Ship Distribution</h3>
+                <div className={`md3-card rounded-card flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
+                    <h3 className={`font-bold uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><Rocket size={16} /> Ship Distribution</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart><Pie data={shipMetricData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="80%" innerRadius="50%" paddingAngle={2}>
                             {shipMetricData.map((entry, index) => <Cell key={`cell-${index}`} fill={getColor(entry.name)} stroke="var(--md-sys-color-surface2)" strokeWidth={2} />)}
                         </Pie><Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }} /><Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} /></PieChart>
                     </ResponsiveContainer>
                 </div>
-                <div className={`md3-card rounded-2xl flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
-                    <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><User size={16} /> Hero Distribution</h3>
+                <div className={`md3-card rounded-card flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
+                    <h3 className={`font-bold uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><User size={16} /> Hero Distribution</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart><Pie data={heroMetricData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="80%" innerRadius="50%" paddingAngle={2}>
                             {heroMetricData.map((entry, index) => <Cell key={`cell-${index}`} fill={getColor(entry.name)} stroke="var(--md-sys-color-surface2)" strokeWidth={2} />)}
                         </Pie><Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }} /><Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} /></PieChart>
                     </ResponsiveContainer>
                 </div>
-                <div className={`md3-card rounded-2xl flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
-                    <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><BarChart3 size={16} /> {metricTitle}</h3>
+                <div className={`md3-card rounded-card flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
+                    <h3 className={`font-bold uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><BarChart3 size={16} /> {metricTitle}</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={metricData} layout="vertical" margin={{ left: 20 }}>
                             <XAxis type="number" hide />
@@ -193,8 +193,8 @@ export const ProView: React.FC<ProViewProps> = ({ matches, visualMode }) => {
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
-                <div className={`md3-card rounded-2xl flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
-                    <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><TrendingUp size={16} /> {metricTitle} Trend</h3>
+                <div className={`md3-card rounded-card flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
+                    <h3 className={`font-bold uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><TrendingUp size={16} /> {metricTitle} Trend</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={timelineData}>
                             <defs><linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="var(--md-sys-color-primary)" stopOpacity={0.3} /><stop offset="95%" stopColor="var(--md-sys-color-primary)" stopOpacity={0} /></linearGradient></defs>

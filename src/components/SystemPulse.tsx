@@ -16,9 +16,12 @@ import { getElectronAPI } from '../utils/electronAPI';
  *   - Vision: whether there are pending OCR reviews waiting to be applied.
  *   - Mission: whether a match is currently in progress.
  *   - Updates: Electron auto-updater status.
+ *   - Telemetry: solid = connected (log exists), blinking = receiving (recent events within ~45s).
  */
+const TELEMETRY_RECEIVING_MS = 45000;
+
 const SystemPulse: React.FC = () => {
-    const { updateStatus, enableAutoLogRecording } = useUIState();
+    const { updateStatus, enableAutoLogRecording, telemetryStatus } = useUIState();
     const { isMatchInProgress, pendingReviews } = useGameData();
     const [safety, setSafety] = React.useState<{
         ok: boolean;
@@ -119,6 +122,22 @@ const SystemPulse: React.FC = () => {
             dot: updateActivity !== 'idle' ? 'bg-md-sys-secondary animate-pulse' : 'bg-md-sys-outline/40',
             tooltip: `Updates: ${updateStatus === 'available' ? 'New version available' : updateStatus === 'downloaded' ? 'Restart to apply' : updateStatus === 'checking' ? 'Checking...' : 'Up to date'}`,
         },
+        (() => {
+            const connected = !!telemetryStatus?.exists;
+            const lastAt = telemetryStatus?.lastEventAt;
+            const receiving = !!lastAt && (Date.now() - lastAt) < TELEMETRY_RECEIVING_MS;
+            return {
+                id: 'telemetry',
+                label: receiving ? '' : (connected ? '' : ''),
+                icon: <Terminal size={12} />,
+                active: connected,
+                color: connected ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
+                dot: connected ? (receiving ? 'bg-success animate-pulse' : 'bg-success') : 'bg-md-sys-outline/40',
+                tooltip: connected
+                    ? `Telemetry: ${receiving ? 'Receiving (recent events)' : 'Connected (log active)'}`
+                    : 'Telemetry: Not connected',
+            };
+        })(),
     ] as const;
 
     return (

@@ -37,3 +37,14 @@ deliverables:
 - Go/No-Go recommendation for project-manager.
 END_AGENT_INPUT
 ```
+
+
+## v2 Core Role Upgrade (AOM_V2)
+
+- `verifier` is required for FULL_PATH as independent QA.
+- Verifier cannot sign off on a change they implemented.
+
+Required output:
+- Independence check: PASS/FAIL
+- Final recommendation: GO/NO-GO
+

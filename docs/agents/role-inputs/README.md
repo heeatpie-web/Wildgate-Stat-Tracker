@@ -47,3 +47,24 @@ Purpose: provide copy-paste startup inputs for each agent role in this repo.
 - Use role names exactly: `project-manager`, `ui-designer`, `builder`, `debugger`, `release-manager`, `verifier`, `reporter`.
 - Legacy owner names in old logs are allowed, but all new entries should use role names.
 - Role inputs include report-driven safeguards: mandatory preflight, one-phase-per-cycle execution, and proof-first OCR verification.
+
+
+## v2 Startup Model (AOM_V2)
+
+### Core roster for FULL_PATH
+- `project-manager`
+- `ui-designer`
+- `builder`
+- `debugger`
+- `release-manager`
+- `verifier`
+
+### FAST_PATH minimum roster
+- `project-manager`
+- single implementing role (`builder` or `ui-designer`)
+- `verifier` optional unless PM upgrades risk to FULL_PATH
+
+### New role-label rule
+- New entries must use role names only.
+- Legacy labels are historical-only and must not appear in new records.
+

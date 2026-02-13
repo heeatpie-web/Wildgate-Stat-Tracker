@@ -73,43 +73,38 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
         getElectronAPI()?.send('set-ignore-mouse-events', isHoveringRef.current ? false : true, isHoveringRef.current ? undefined : { forward: true });
     }, [isTransparent, showWizard]);
 
-    // Standard Mini Mode (Opaque)
     if (!isTransparent) {
         return (
-            <div className="h-screen w-full flex flex-col overflow-hidden animate-fade-in md3-card border border-md-sys-outlineVariant/25 rounded-xl shadow-2xl">
-                {/* Draggable Header */}
+            <div className="h-screen w-full flex flex-col overflow-hidden animate-fade-in md3-card border border-md-sys-outline/20 rounded-modal shadow-2xl">
                 <div
-                    className="h-10 flex items-center justify-between px-3 shrink-0 select-none bg-black/20 border-b border-md-sys-outlineVariant/20"
+                    className="h-10 flex items-center justify-between px-3 shrink-0 select-none bg-md-sys-surface-container-high/80 border-b border-md-sys-outline/10"
                     style={{ WebkitAppRegion: 'drag' } as any}
                 >
                     <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-md flex items-center justify-center bg-md-sys-primary/20">
-                            <LayoutTemplate size={12} className="text-md-sys-primary" />
+                        <div className="w-5 h-5 rounded-control flex items-center justify-center bg-md-sys-primary/20">
+                            <LayoutTemplate size={12} className="text-md-sys-primary" aria-hidden />
                         </div>
-                        <span className="text-label-sm font-black uppercase tracking-widest text-md-sys-on-surface/60">
+                        <span className="text-label-sm font-bold uppercase tracking-widest text-md-sys-on-surface/60">
                             Mini-Mode
                         </span>
                     </div>
-
                     <div className="flex items-center gap-0.5" style={{ WebkitAppRegion: 'no-drag' } as any}>
                         <button
                             onClick={() => setIsOverlayMode(false)}
-                            className="flex items-center gap-1.5 px-2 h-7 bg-md-sys-primary text-md-sys-on-primary rounded-md transition-all hover:brightness-110 active:scale-95 shadow-sm"
+                            className="flex items-center gap-1.5 px-2 h-7 bg-md-sys-primary text-md-sys-onPrimary rounded-control transition-all hover:brightness-110 active:scale-95 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary"
                             title="Back to Dashboard"
                         >
-                            <LayoutTemplate size={10} />
+                            <LayoutTemplate size={10} aria-hidden />
                             <span className="text-label-sm font-bold uppercase">Dashboard</span>
                         </button>
-                        <button onClick={handleMinimize} className="w-7 h-7 flex items-center justify-center hover:bg-md-sys-on-surface/10 text-md-sys-on-surface/60 rounded-md transition-colors" title="Minimize">
-                            <Minus size={12} />
+                        <button onClick={handleMinimize} className="w-7 h-7 flex items-center justify-center hover:bg-md-sys-on-surface/10 text-md-sys-on-surface/60 rounded-control transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary" title="Minimize">
+                            <Minus size={12} aria-hidden />
                         </button>
-                        <button onClick={handleClose} className="w-7 h-7 flex items-center justify-center hover:bg-md-sys-error hover:text-md-sys-on-error text-md-sys-on-surface/60 rounded-md transition-colors" title="Close">
-                            <X size={12} />
+                        <button onClick={handleClose} className="w-7 h-7 flex items-center justify-center hover:bg-danger hover:text-white text-md-sys-on-surface/60 rounded-control transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger" title="Close">
+                            <X size={12} aria-hidden />
                         </button>
                     </div>
                 </div>
-
-                {/* Content - Accordion mode eliminates need for scrollbar */}
                 <div className="flex-1 overflow-hidden p-3 flex flex-col gap-2">
                     <MissionPanel variant="default" accordionMode={true} />
                     <ActionPanel variant="default" onSmartCaptureData={onSmartCaptureData} />
@@ -138,59 +133,47 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
     };
 
     return (
-        <div className="h-screen w-full flex flex-col pointer-events-none relative animate-fade-in border border-transparent hover:border-md-sys-outlineVariant/25 transition-colors rounded-xl overflow-hidden">
-            {/* Content - Floating Panels */}
+        <div className="h-screen w-full flex flex-col pointer-events-none relative animate-fade-in border border-transparent hover:border-md-sys-outline/20 transition-colors rounded-modal overflow-hidden">
             <div className="flex-1 flex flex-col items-center p-2 pointer-events-none relative z-10">
-
-                {/* Unified HUD Window - Wider for 2 Columns */}
                 <div
-                    className="pointer-events-auto mt-2 w-full min-w-[300px] max-w-2xl flex flex-col bg-zinc-900/90 backdrop-blur-md border border-md-sys-outlineVariant/25 rounded-2xl shadow-2xl overflow-hidden"
+                    className="pointer-events-auto mt-2 w-full min-w-[300px] max-w-2xl flex flex-col mg-surface-high backdrop-blur-md border border-md-sys-outline/20 rounded-card shadow-2xl overflow-hidden"
                     onMouseEnter={enableInteraction}
                     onMouseLeave={disableInteraction}
                     onPointerEnter={enableInteraction}
                     onPointerLeave={disableInteraction}
                     onMouseMove={enableInteraction}
                 >
-                    {/* Header Bar (Drag Handle & Controls) */}
                     <div
-                        className="flex items-center justify-between px-3 py-2 bg-black/40 cursor-move active:cursor-grabbing border-b border-md-sys-outlineVariant/20"
+                        className="flex items-center justify-between px-3 py-2 bg-md-sys-surface-container-high/80 cursor-move active:cursor-grabbing border-b border-md-sys-outline/10"
                         style={{ WebkitAppRegion: 'drag' } as any}
                     >
-                        <div className="flex items-center gap-2 text-md-sys-on-surface/60 group-hover:text-md-sys-on-surface transition-colors">
-                            <GripHorizontal size={14} />
-                            <span className="text-label-sm font-bold uppercase tracking-widest">
-                                HUD
-                            </span>
+                        <div className="flex items-center gap-2 text-md-sys-on-surface/60">
+                            <GripHorizontal size={14} aria-hidden />
+                            <span className="text-label-sm font-bold uppercase tracking-widest">HUD</span>
                         </div>
                         <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as any}>
                             <button
                                 onClick={() => setIsOverlayMode(false)}
-                                className="flex items-center gap-1 px-2 py-0.5 bg-info/80 hover:bg-info text-white rounded transition-colors"
+                                className="flex items-center gap-1 px-2 py-0.5 bg-md-sys-primary text-md-sys-onPrimary rounded-control hover:brightness-110 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary"
                                 title="Exit to Dashboard"
                             >
-                                <LayoutTemplate size={12} />
+                                <LayoutTemplate size={12} aria-hidden />
                                 <span className="text-label-xs font-bold uppercase">Dashboard</span>
                             </button>
-                            <button onClick={handleMinimize} className="p-1 hover:bg-md-sys-on-surface/10 rounded text-md-sys-on-surface/40 hover:text-md-sys-on-surface transition-colors" title="Minimize"><Minus size={12} /></button>
-                            <button onClick={handleClose} className="p-1 hover:bg-md-sys-error/80 rounded text-md-sys-on-surface/40 hover:text-md-sys-on-error transition-colors" title="Close"><X size={12} /></button>
+                            <button onClick={handleMinimize} className="p-1 hover:bg-md-sys-on-surface/10 rounded-control text-md-sys-on-surface/60 hover:text-md-sys-on-surface transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary" title="Minimize"><Minus size={12} aria-hidden /></button>
+                            <button onClick={handleClose} className="p-1 hover:bg-danger-soft rounded-control text-md-sys-on-surface/60 hover:text-danger transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger" title="Close"><X size={12} aria-hidden /></button>
                         </div>
                     </div>
-
-                    {/* Window Content - 2 Column Grid */}
                     <div className="p-2 grid grid-cols-2 gap-3 max-h-[75vh] overflow-y-auto custom-scrollbar">
-                        {/* Left: Actions (Control) */}
                         <div className="flex flex-col justify-start gap-2">
                             <ActionPanel variant="transparent" onSmartCaptureData={onSmartCaptureData} />
                         </div>
-
-                        {/* Right: Stats (Info) - Accordion keeps it compact */}
-                        <div className="flex flex-col justify-start border-l border-md-sys-outlineVariant/25 pl-3">
+                        <div className="flex flex-col justify-start border-l border-md-sys-outline/20 pl-3">
                             <MissionPanel variant="transparent" accordionMode={true} />
                         </div>
                     </div>
                 </div>
             </div>
-            {/* Resize Handle - specific for Custom/Transparent mode */}
             <div onMouseEnter={enableInteraction} onMouseLeave={disableInteraction} className="pointer-events-auto">
                 <WindowResizer />
             </div>

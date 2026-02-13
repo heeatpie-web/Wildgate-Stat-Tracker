@@ -55,3 +55,15 @@ handoff_gate:
 - Locks released or explicitly transferred.
 END_AGENT_INPUT
 ```
+
+
+## v2 Addendum (AOM_V2)
+
+Required first actions:
+1. Classify `Risk Tier` and `Execution Path` in intake.
+2. Declare role lanes with disjoint file ownership.
+3. Define dependency SLA and escalation triggers.
+
+Completion rule:
+- Reject closure if any DONE step lacks evidence pointer in validation.
+

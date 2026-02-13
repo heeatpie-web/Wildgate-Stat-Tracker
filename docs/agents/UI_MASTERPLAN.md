@@ -159,3 +159,26 @@ Use CSS utility classes instead of hardcoded Tailwind colors:
 - `src/components/RecordingView.tsx` (primary workflow layout)
 - `src/components/SmartCapturesPanel.tsx` (queue/review patterns)
 - `docs/UI_AUDIT.md` (known anti-patterns and cleanup direction)
+
+
+## UI Acceptance Guardrails v2 (AOM_V2)
+
+### Classification
+- `Copy-only`: text and labels only, no layout/style/interaction changes.
+- `Visual-impact`: any spacing, hierarchy, style, component, or interaction change.
+
+### Required Evidence
+For copy-only:
+- Screenshot/snapshot proof at one desktop and one mobile breakpoint.
+- Confirm no clipping/regression in touched view.
+
+For visual-impact:
+- Before/after evidence at 1366x768 and 390x844 minimum.
+- State coverage: loading, empty, error, disabled, success.
+- Keyboard focus traversal verified.
+
+### Acceptance Thresholds
+- No control clipping or overlap.
+- Primary action remains visually dominant.
+- Any unresolved UI defect must be listed in handoff as deferred risk.
+

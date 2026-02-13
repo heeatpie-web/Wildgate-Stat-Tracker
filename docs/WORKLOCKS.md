@@ -19,7 +19,22 @@ Rules:
 
 | File | Owner | Started (UTC) | Purpose |
 |---|---|---|---|
-| _none_ |  |  |  |
+| `docs/agents/00_INTAKE.md` | project-manager | 2026-02-13T16:00:00Z | Lane A PM ownership; scope and intake control per 01_PLAN |
+| `docs/agents/01_PLAN.md` | project-manager | 2026-02-13T16:00:00Z | Lane A PM ownership; plan, steps, approvals, role assignment |
+| `docs/agents/DECISIONS.md` | project-manager | 2026-02-13T16:00:00Z | Lane A PM ownership; governance and arbitration |
+| `docs/agents/02_EXECUTION_LOG.md` | debugger | 2026-02-13T21:00:00Z | Lane D debugger role bound; execution log and validation handoff per 01_PLAN |
+| `docs/agents/03_VALIDATION.md` | debugger | 2026-02-13T21:00:00Z | Lane D debugger role bound; validation evidence and regression checks per 01_PLAN |
+| `docs/agents/04_HANDOFF.md` | release-manager | 2026-02-13T20:35:00Z | Release-manager ownership; handoff assembly and RC summary |
+| `docs/agents/BLOCKERS.md` | debugger | 2026-02-13T21:00:00Z | Lane D debugger role bound; blocker logging and repro per 01_PLAN |
+| `docs/WORKLOCKS.md` | debugger | 2026-02-13T21:00:00Z | Lane D debugger role bound; lock table maintenance per 01_PLAN |
+| `dataset/ocr-corpus/` | debugger | 2026-02-13T21:00:00Z | Lane D debugger role bound; OCR corpus, baseline, reports per 01_PLAN |
+| src/components/ocr/OCRReviewModal.tsx | ui-designer | 2026-02-13T15:30:00Z | ui-designer role bound: OCR UX and correction flow ownership (Lane B) |
+| src/components/OcrCorrectionModal.tsx | ui-designer | 2026-02-13T15:30:00Z | ui-designer role bound: OCR UX and correction flow ownership (Lane B) |
+| src/components/DevOCRPanel.tsx | ui-designer | 2026-02-13T15:30:00Z | ui-designer role bound: OCR UX and dev panel/corpus ownership (Lane B) |
+| `electron/ocrHandler.cjs` | builder | 2026-02-13T15:35:00Z | builder role bound: OCR pipeline and capture ownership (Lane C) |
+| `electron/geminiService.cjs` | builder | 2026-02-13T15:35:00Z | builder role bound: OCR/structured refinement ownership (Lane C) |
+| `src/hooks/useSmartCapture.ts` | builder | 2026-02-13T15:35:00Z | builder role bound: smart capture flow ownership (Lane C) |
+| `src/components/recording/ActionPanel.tsx` | builder | 2026-02-13T15:35:00Z | builder role bound: recording/action panel ownership (Lane C) |
 
 ## Copy-Paste Lock Entry
 
@@ -38,6 +53,9 @@ Use this row format when claiming:
 
 | File | Owner | Started (UTC) | Released (UTC) | Purpose |
 |---|---|---|---|---|
+| `docs/agents/02_EXECUTION_LOG.md` | release-manager | 2026-02-13T20:35:00Z | 2026-02-13T21:00:00Z | Released to debugger; Lane D role bound per user request |
+| `docs/agents/03_VALIDATION.md` | release-manager | 2026-02-13T20:35:00Z | 2026-02-13T21:00:00Z | Released to debugger; Lane D role bound per user request |
+| `docs/WORKLOCKS.md` | release-manager | 2026-02-13T20:35:00Z | 2026-02-13T21:00:00Z | Released to debugger; Lane D role bound per user request |
 | _legacy rows may use prior owner labels (`lead`, `agent-a`, ...)_ |  |  |  |  |
 | `docs/agents/DECISIONS.md` | lead | 2026-02-12T17:30:00Z | 2026-02-12T17:33:00Z | confirm owner model and channel policy |
 | `docs/WORKLOCKS.md` | agent-a | 2026-02-12T17:34:00Z | 2026-02-12T17:38:00Z | add lock/release protocol and templates |
@@ -99,3 +117,24 @@ Use this row format when claiming:
 | `package.json` | builder | 2026-02-12T20:58:26Z | 2026-02-12T21:00:25Z | Step 7: verify npm script exists for legacy ingest |
 | `docs/agents/02_EXECUTION_LOG.md` | builder | 2026-02-12T20:58:26Z | 2026-02-12T21:00:25Z | Step 7: log legacy ingest implementation |
 | `docs/WORKLOCKS.md` | builder | 2026-02-12T20:58:26Z | 2026-02-12T21:00:25Z | Step 7: claim/release lock lifecycle |
+
+## v2 Lock Protocol (AOM_V2)
+
+### Active Lock Schema (required)
+| File | Owner | Lock Class | Started (UTC) | Expected Release (UTC) | Purpose |
+|---|---|---|---|---|---|
+
+Lock Class:
+- `exclusive`: one editor only, high conflict risk.
+- `shared`: controlled multi-role coordination.
+- `hot`: frequently touched integration artifact.
+
+### Enforcement
+- A lock without `Expected Release (UTC)` is invalid.
+- If current time exceeds expected release by 30 minutes, log stale lock blocker in `docs/agents/BLOCKERS.md`.
+- PM resolves lock conflict by decision entry in `docs/agents/DECISIONS.md`.
+
+### Legacy Label Policy
+- New lock rows must use role names only.
+- Legacy owner labels remain in history but cannot be used in new active rows.
+

@@ -85,3 +85,43 @@ A task is done only when all are true:
 - Plan steps in `01_PLAN` are complete or explicitly deferred.
 - Validation evidence exists in `03_VALIDATION`.
 - Handoff summary is complete in `04_HANDOFF`.
+
+
+## Agent Operating Model v2 (Hybrid Gates)
+
+Marker: AOM_V2
+
+### Core Roles
+- Required: `project-manager`, `ui-designer`, `builder`, `debugger`, `release-manager`, `verifier`.
+- Optional: `reporter`.
+- New entries must use role names only. Legacy labels (`lead`, `agent-a`, `agent-b`, `agent-c`) are historical-only.
+
+### Execution Paths
+- `FAST_PATH`: low-risk tasks (single-file docs/copy/no behavior change).
+- `FULL_PATH`: behavior/security/release-impacting work, multi-file refactors, interface changes.
+- Project-manager must set `Risk Tier` (`T0` to `T3`) and `Execution Path` in `docs/agents/00_INTAKE.md`.
+
+### Fast-Path Eligibility (all required)
+- Single owner lane.
+- No public API/interface/type contract changes.
+- No security-sensitive code paths.
+- No release gate changes.
+
+### Fast-Path Rejection (any true means FULL_PATH)
+- Runtime logic changes.
+- Data schema or IPC contract changes.
+- Multi-role dependency.
+- Any unknown risk.
+
+### Evidence Rules
+- A step cannot be marked DONE without evidence in `docs/agents/03_VALIDATION.md`.
+- Missing evidence auto-demotes status to `IN_PROGRESS`.
+- “No blockers” claims are invalid unless `docs/agents/BLOCKERS.md` has no ACTIVE item for the task.
+
+### Lateral Communication Rules
+- Peer requests must be logged in `docs/agents/02_EXECUTION_LOG.md` using request IDs.
+- Escalate to PM only after SLA breach or explicit dependency failure.
+
+### Migration Policy
+- Non-destructive only: add v2 sections and keep legacy content intact.
+

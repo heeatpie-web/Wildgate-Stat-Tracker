@@ -39,3 +39,18 @@ deliverables:
 - Shareable summary for external agents or stakeholders.
 END_AGENT_INPUT
 ```
+
+
+## v2 Addendum (AOM_V2)
+
+Reporting limits:
+- Use only validated evidence and decision records.
+- Do not infer unverified status.
+
+Required fields:
+- Shipped scope
+- Not shipped scope
+- Active blockers
+- Deferred risks
+- Resume point
+

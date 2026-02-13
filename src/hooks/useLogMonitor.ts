@@ -122,6 +122,7 @@ export const useLogMonitor = (activeUser?: string) => {
 
                 if (events.length === 0) return;
                 setLogFeed(prev => [...events.slice(0, 10), ...prev].slice(0, 50));
+                setTelemetryStatus({ lastEventAt: now });
 
                 events.forEach(e => {
                     const name = e.EventName;

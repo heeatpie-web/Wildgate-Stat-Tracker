@@ -2,6 +2,19 @@
 
 Status: ACTIVE
 
+## PM Bootstrap Rules (AOM_V2)
+- **Before work starts:** `project-manager` sets **Risk Tier** (T0–T3) and **Execution Path** (FAST_PATH | FULL_PATH) in `docs/agents/00_INTAKE.md` for the current task.
+- **Disjoint ownership:** Assign disjoint lanes per Multi-Lane Declaration; one owner per file/lane; conflicts escalated via BLOCKERS/DECISIONS.
+- **Evidence before DONE:** No step may be marked DONE without evidence in `docs/agents/03_VALIDATION.md` unless `project-manager` explicitly waives (e.g. FAST_PATH docs-only). Missing evidence keeps status IN_PROGRESS.
+- **Escalation:** Only via `docs/agents/BLOCKERS.md` or `docs/agents/DECISIONS.md`. No ad hoc scope or lane changes without PM update.
+- **Role labels only:** All new entries in execution log, validation, handoff, blockers, and locks use role names only: `project-manager`, `ui-designer`, `builder`, `debugger`, `release-manager`, `verifier`, `reporter`. Legacy labels (lead, agent-a, etc.) are historical-only.
+
+## Current Task
+- Defined in `docs/agents/00_INTAKE.md` under **Current Task (AGENT_BOOTSTRAP)**. Replace `<TASK_ID>` and `<GOAL>` when a new task is assigned; set Risk Tier and Execution Path there.
+
+## Step: PM Bootstrap (AOM_V2 alignment)
+- [COMPLETE] `project-manager`: Update intake + plan for AGENT_BOOTSTRAP; set Risk Tier and Execution Path framework; require evidence before DONE; escalation via BLOCKERS/DECISIONS; role labels only. Evidence: `00_INTAKE.md`, `01_PLAN.md`, `DECISIONS.md` updated; `03_VALIDATION.md` bootstrap entry added.
+
 ## Steps (OCR Stabilization Cycle 01)
 1. [COMPLETE] Bind `ui-designer` role to an explicit active agent tab and unblock lane B.
 2. [COMPLETE] Builder fixes Bug 1: cloud-local merge modifier regression in OCR pipeline.
@@ -18,9 +31,24 @@ Status: ACTIVE
 11. [COMPLETE] Dev Splash Retry Noise Reduction — builder implemented throttling + dedupe; build + tests pass.
 12. [COMPLETE] Opacity Normalization (3-Tier System) — builder normalized text-related opacity across 25+ component files (full/60/40; disabled→opacity-disabled); build + tests pass.
 
+## Steps (UI Overhaul — PLAN_UI_OVERHAUL.md)
+13. [COMPLETE] Phase 1 — Telemetry indicator. Builder: store/hook extended; SystemPulse — one Telemetry chip (solid = connected, blinking = receiving); all 5 chips in header. Evidence: 03_VALIDATION "UI Overhaul Phase 1 — Telemetry indicator"; 02_EXECUTION_LOG builder entry.
+14. [COMPLETE] Phase 2 — Navigation review. ui-designer: decision (no change); Sidebar vs UI_MASTERPLAN reviewed. Evidence: 03_VALIDATION Phase 2; DECISIONS.md; 02_EXECUTION_LOG.
+15. [COMPLETE] Phase 3 — Smart Capture overhaul. ui-designer spec COMPLETE; builder confirmed implementation present (side nav, Capture | Tools, scView); build PASS. Evidence: 03_VALIDATION "Step 15 — UI Overhaul Phase 3". Spec §5 viewport/keyboard optional follow-up.
+16. [COMPLETE] Phase 4 — Analytics overhaul. Builder: shell token alignment (rounded-modal, rounded-card, rounded-control, text-title); 02_EXECUTION_LOG, 03_VALIDATION. Build PASS.
+17. [COMPLETE] Phase 5 — Tactical Console & overlay HUDs. Builder: TelemetryPanel + OverlayView (compact + transparent) token overhaul; 02_EXECUTION_LOG, 03_VALIDATION. tsc PASS.
+18. [COMPLETE] Phase 6 — Validation / self-audit. Builder: self-audit in 03_VALIDATION; subjective → USER. All phases 1–6 complete.
+
 ## Active Step
-- COMPLETE: Steps 1-12 (OCR cycle, Legacy Ingest, Structure Hardening, Dev Splash, Opacity Normalization)
-- PENDING: none
+- COMPLETE: Steps 1–18 (UI Overhaul Phases 1–6 complete).
+- Next: PM sign-off or new task per PLAN_UI_OVERHAUL.
+
+## Canonical UI Overhaul Plan (Reference)
+- **Plan:** [docs/agents/PLAN_UI_OVERHAUL.md](docs/agents/PLAN_UI_OVERHAUL.md) — canonical plan for Smart Capture, Analytics, telemetry indicator, navigation, Tactical Console, and overlay HUD overhauls (phases 1–6, delegation, self-audit + user routing).
+- **Existing UI style guidelines remain in force:** All work under the UI overhaul must follow:
+  - [docs/agents/UI_MASTERPLAN.md](docs/agents/UI_MASTERPLAN.md) — design system, tokens, surfaces, opacity, status colors, layout, action hierarchy, PR/UI gate.
+  - [docs/UI_AUDIT.md](docs/UI_AUDIT.md) — anti-patterns and consistency recommendations.
+- The overhaul plan references these docs; it does not replace or override them.
 
 ## PM Approval
 - Date (UTC): 2026-02-12T22:25:00Z
@@ -51,6 +79,12 @@ Status: ACTIVE
 - `release-manager`: release-candidate integration, gate enforcement, rollback package ownership.
 - `verifier` (optional): independent test pass before handoff.
 - `reporter` (optional): concise external-facing handoff summary.
+
+## Agent Role Assignment (Cursor AI)
+- **Assigned role:** `project-manager`
+- **Agent:** Cursor AI (this session / primary assistant).
+- **Scope:** When operating in this workspace, the AI acts as project-manager unless the user explicitly assigns a different role or task to another agent. PM responsibilities: scope control, lane arbitration, approvals, handoff updates, and next-scope decisions per AGENTS.md and this plan.
+- **File locks:** Lane A files are locked to `project-manager` in `docs/WORKLOCKS.md` (Active Locks). Other agents must not edit those files without PM reassignment or lock release.
 
 ## Multi-Lane Declaration (OCR-Only Cycle)
 
@@ -758,3 +792,25 @@ Use this only after all active/approved queued tasks complete and evidence is po
 - Re-run final gate check after dependencies close and update:
   - `docs/agents/03_VALIDATION.md` (final release block)
   - `docs/agents/04_HANDOFF.md` (RC go/no-go section)
+
+
+## Plan Schema v2 (AOM_V2)
+
+Use deterministic step rows for all new work.
+
+| Step ID | Owner | Path | Status | Dependency | Exit Evidence |
+|---|---|---|---|---|---|
+| STEP-01 | project-manager | FULL_PATH | READY | none | Intake approved + lane assignment |
+
+Status values:
+- `READY`
+- `IN_PROGRESS`
+- `BLOCKED`
+- `DONE`
+- `DEFERRED`
+
+Rules:
+- Exactly one `IN_PROGRESS` step per owner.
+- A `DONE` step must include concrete evidence pointer in `docs/agents/03_VALIDATION.md`.
+- PM arbitration required for conflicting lanes before execution starts.
+

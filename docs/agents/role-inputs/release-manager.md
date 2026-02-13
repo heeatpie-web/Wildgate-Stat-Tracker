@@ -45,3 +45,14 @@ deliverables:
 - Execution log entries documenting gate decisions and handoffs
 END_AGENT_INPUT
 ```
+
+
+## v2 Addendum (AOM_V2)
+
+Gate rubric:
+- GO only when required artifacts exist and are traceable.
+- NO-GO if evidence is missing, ambiguous, or duplicate without canonical mapping.
+
+Rule:
+- Resolve duplicate blocker/request noise by pointing to canonical IDs before escalation.
+
