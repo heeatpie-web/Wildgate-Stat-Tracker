@@ -1,11 +1,15 @@
-# Intake: Opacity Normalization (3-Tier System)
+# Intake: UI Overhaul — Smart Capture & Analytics (Phase 3–4) + Batch Authentication
 
-## Current Task (UI_OVERHAUL_01)
-- **Task ID:** UI-OVERHAUL-01
-- **Goal:** UI Overhaul per PLAN_UI_OVERHAUL. **Phases 1–6 COMPLETE.** Steps 13–18 done; build + test PASS; evidence in 02_EXECUTION_LOG, 03_VALIDATION, 04_HANDOFF.
-- **Risk Tier:** `T2` (multi-file / behavior; not security/release-critical)
+## Current Task (BATCH_AUTH_19)
+- **Task ID:** BATCH-AUTH-19
+- **Goal:** Thorough analysis of UI Overhaul batch (Steps 13–18) to authenticate: **clean design**, **functional code**, **role alignment**. Delegated to team per 01_PLAN Step 19 (19a ui-designer, 19b builder, 19c verifier); PM gates in 19d.
+- **Risk Tier:** `T2` (multi-file, visual/behavior; not security/release-critical)
 - **Execution Path:** `FULL_PATH`
-- **Evidence required:** 03_VALIDATION entry for each phase; build + test pass; self-audit against goals. Escalation via BLOCKERS/DECISIONS.
+- **Evidence required:** Each role writes its own 03_VALIDATION entry (19a, 19b, 19c); failures → BLOCKERS.md. PM marks Step 19 COMPLETE only when all PASS and no ACTIVE blockers. No release GO until intake/plan state and Step 19 outcomes are confirmed.
+
+## Active Plan Context (01_PLAN)
+- **UI Overhaul Phases 3–4:** Smart Capture (Phase 3) — one page, side nav Capture | Tools; Analytics (Phase 4) — shell/dashboard/subpanel token alignment per SPEC_ANALYTICS_PHASE4.md and UI_MASTERPLAN. Steps 13–18 implemented; Step 19 batch authentication IN_PROGRESS.
+- **Done condition (aligned with plan):** Step 19 complete when 19a (design audit), 19b (implementation attestation), 19c (functional + role-alignment audit) are PASS and documented in 03_VALIDATION; no ACTIVE blockers; PM gate (19d) run and 04_HANDOFF updated.
 
 ## Risk Tier and Execution Path (AOM_V2)
 - **T0:** Docs/config only; single owner; no behavior or contract change. FAST_PATH eligible.
@@ -15,30 +19,19 @@
 - **FAST_PATH:** Low-risk; single lane; minimal evidence. Step DONE may still require 03_VALIDATION entry unless PM waives.
 - **FULL_PATH:** Evidence in `docs/agents/03_VALIDATION.md` required before step DONE. Escalate only via `docs/agents/BLOCKERS.md` or `docs/agents/DECISIONS.md`. Use role labels only (`project-manager`, `builder`, etc.) for new entries.
 
-## Goal
-Normalize text-related opacity values across 18 component files to a consistent 3-tier system:
-- **Full opacity**: remove class / remove slash
-- **Secondary (60)**: `opacity-60` / `/60`
-- **Muted (40)**: `opacity-40` / `/40`
+## Goal (current phase)
+- Complete **Step 19 — Batch authentication** for UI Overhaul batch (Steps 13–18): design audit, implementation attestation, functional and role-alignment audit.
+- Ensure **00_INTAKE**, **01_PLAN**, **03_VALIDATION**, **04_HANDOFF**, and **BLOCKERS** are consistent and credible before any PM release sign-off (GO).
 
 ## Constraints
-- Only change TEXT-related opacity (not bg/border)
-- Do not touch hover/focus/group-hover interaction states
-- Do not touch opacity-disabled, /4–/15 values
-- Normalize `disabled:opacity-50` / `disabled:opacity-40` → `disabled:opacity-disabled`
+- Step 19 executed by designated roles only (ui-designer 19a, builder 19b, verifier 19c); PM does not implement.
+- Release GO is conditional on corrected intake/plan state and Step 19 outcomes; do not declare GO until 03_VALIDATION and 04_HANDOFF cite corrected state.
 
-## Out of Scope
-- Background opacity (bg-*/border-*)
-- Files not in the 18-file list
-- Structural/layout changes
+## Out of Scope (this intake)
+- New feature work; OCR-only cycle scope; Structure Hardening next phase (queued separately).
 
 ## Done Condition
-All 18 files processed with text opacity normalized to the 3-tier system.
-
-## PM Queue Addendum (Queued, Not Active)
-
-- **Step 13 (active):** UI Overhaul Phase 1 — Telemetry indicator (see Current Task above). Not Structure Hardening.
-- **Queued (separate):** Structure Hardening Next Phase. Scope: Electron main-process modularization, state ownership cleanup, legacy field migration path, targeted test coverage. Out: UI redesign, OCR-model work, framework rewrites. Activation: PM to add a future step to `01_PLAN.md` when ready.
+- Step 19 (19a–19d) complete per 01_PLAN; all 19a/19b/19c entries in 03_VALIDATION; no ACTIVE blockers; 04_HANDOFF and 03_VALIDATION cite corrected intake/plan; PM has run gate and (if all PASS) may declare release GO.
 
 ## Canonical UI Overhaul Plan (Reference)
 - **Plan:** [docs/agents/PLAN_UI_OVERHAUL.md](docs/agents/PLAN_UI_OVERHAUL.md) — Smart Capture, Analytics, telemetry indicator, navigation, Tactical Console, overlay HUDs; phases, delegation, and locked-in clarifications.

@@ -16,22 +16,51 @@
 
 ---
 
+## Step 19 gate narrative (for Release-Manager)
+- **STEP 19 EVIDENCE ENTERED.** All three audit entries are in `docs/agents/03_VALIDATION.md`: **19a** (ui-designer design audit — GO), **19b** (builder implementation attestation — PASS), **19c** (verifier functional + role-alignment — GO). **Release-Manager has verified** each and **recorded signoff** in 03_VALIDATION and this file. **Audit hold LIFTED.** New builds and QA may proceed.
+- **Resume directive:** Continue only after reviewing the updated intake/plan/blocker docs. **ui-designer, builder, debugger, and verifier may resume their next tasks** now that RM confirmed Step 19 evidence and lifted the hold.
+
+---
+
 ## To Project Manager (PM Brief)
 
-**Status:** UI Overhaul plan (Phases 1–6) implemented.
+**Status:** UI Overhaul (Steps 13–18) implemented. **Step 19 evidence entered.** Intake/plan/blockers updated with real scope and explicit assignments.
 
-- **Delivered:** Phase 1 (Telemetry chip), Phase 2 (Navigation review — no change), Phase 3 (Smart Capture side nav + Tools view), Phase 4 (Analytics shell tokens), Phase 5 (TelemetryPanel + OverlayView compact/transparent tokens), Phase 6 (self-audit and validation summary).
-- **Evidence:** 02_EXECUTION_LOG and 03_VALIDATION updated for each phase. Build and tests PASS for Phases 1–3; tsc pass for Phase 5. Subjective “looks good” per plan routed to USER.
-- **Standing by:** PM for sign-off or next scope; verifier optional for viewport/state coverage.
+- **Batch authentication:** Step 19a, 19b, 19c entries are in `03_VALIDATION.md` with PASS/GO and scoped evidence. **Release-Manager has verified and recorded signoff.** Audit hold **LIFTED**; builds and QA may proceed. PM may run 19d gate and mark Step 19 COMPLETE when appropriate.
+- **Real scope (Step 19):** Audit only — 19a design audit, 19b implementation attestation, 19c functional + role-alignment. No new feature work. Input reference: STEP19_VERIFIER_UI_FEEDBACK.md.
+- **Delivered (Steps 13–18):** Phase 1 (Telemetry chip), Phase 2 (Navigation review — no change), Phase 3 (Smart Capture side nav + Tools view), Phase 4 (Analytics shell tokens), Phase 5 (TelemetryPanel + OverlayView tokens), Phase 6 (self-audit). Build and tests PASS.
+- **Alignment:** 00_INTAKE and 01_PLAN both state real scope and **explicit assignment — execute 19a, 19b, 19c now** so RM has fresh evidence. Done condition matches.
+- **Active — Step 19 explicit assignment (execute now):**
+  - **ui-designer** → 19a. Inputs: PLAN_UI_OVERHAUL, UI_MASTERPLAN, UI_AUDIT, STEP19_VERIFIER_UI_FEEDBACK, changed files. Deliverable: one 03_VALIDATION entry "Step 19a — ui-designer design audit"; BLOCKERS if NO-GO.
+  - **builder** → 19b. Inputs: 01_PLAN Steps 13–18, 02_EXECUTION_LOG, codebase. Deliverable: one 03_VALIDATION entry "Step 19b — builder implementation attestation"; BLOCKERS if build/test FAIL.
+  - **verifier** → 19c. Inputs: diff, intake, plan, execution log, validation, STEP19_VERIFIER_UI_FEEDBACK. Deliverable: one 03_VALIDATION entry "Step 19c — verifier functional and role-alignment audit"; BLOCKERS if FAIL.
+- **Release-Manager:** Once 19a, 19b, 19c entries exist, verify evidence and attest foundation secure; then drop Foundation hold.
+- **PM:** After 19a–19c evidence is in 03_VALIDATION, run 19d gate; mark Step 19 COMPLETE only if all PASS and no ACTIVE blockers.
+
+### Audit pause and QA hold (Release-Manager)
+- **Audit hold LIFTED (2026-02-13).** Release-Manager has reviewed 03_VALIDATION for Step 19a, 19b, 19c and 04_HANDOFF for the status summary; confirmed each has PASS/FAIL and scoped evidence; recorded signoff in 03_VALIDATION and this file. New builds, QA, and `npm run electron:dev` may proceed. PM may run 19d gate and mark Step 19 COMPLETE when appropriate.
+
+### Continue (after RM hold lifted)
+- **Continue:** ui-designer, builder, debugger, and verifier **may resume their next tasks** after reviewing the updated intake/plan/blocker docs. Release-Manager confirmed Step 19 evidence and lifted the hold; no audit gate blocks builds or QA.
+- **Next:** **PM to assign next task or declare release GO.** Steps 1–19 COMPLETE; no ACTIVE blockers. When PM sets the next task in 00_INTAKE / 01_PLAN, lanes proceed per that assignment. Optional: run `npm run build` and `npm test -- --run` before release GO.
+- **Continue (release-manager):** Plan unchanged. Steps 1–19 COMPLETE; hold LIFTED. Standing by for PM.
+- **Continue:** Plan unchanged. Steps 1–19 COMPLETE. No ACTIVE blockers. Standing by for PM.
+- **Continue:** Plan unchanged. Standing by for PM.
+- **Continue (PM):** 19d gate satisfied (19a/19b/19c PASS/GO, no ACTIVE blockers); Step 19 COMPLETE in 01_PLAN. Sanity check: `npm run build` PASS (11.81s); `npm test -- --run` 88 tests, 10 files, PASS (~61s). Steps 1–19 complete; no blockers. Standing by to assign next task or declare release GO.
+- **Continue (PM):** No new step in plan. Steps 1–19 COMPLETE; Active Blockers empty. Optional next: (1) Assign next task (e.g. STEP19_VERIFIER_UI_FEEDBACK follow-ups, queued OCR or Structure Hardening), or (2) Declare release GO and batch commit/push. Standing by.
+- **PM Release GO (2026-02-13):** All gates satisfied for batch Steps 1–19 (OCR stabilization, post-cycle steps 7–12, UI Overhaul Phases 1–6, Step 19 batch authentication). 19a/19b/19c PASS/GO; RM signoff recorded; no ACTIVE blockers; build + 88 tests PASS. **Release GO** for this batch. Batch commit/push may proceed when ready (run `git status`, `git diff --stat`, confirm no secrets; then commit and push per your workflow).
+- **Continue (PM):** Build re-check PASS (20.81s). Release GO stands. No further plan steps; batch commit/push at your discretion. Standing by for next task or cycle.
+- **Continue (verifier):** Step 19 COMPLETE; 19d gate run per handoff (19a/19b/19c PASS/GO, no ACTIVE blockers). No further verifier action until PM assigns next FULL_PATH or follow-up task. Standing by.
+- **Pre-commit checklist (2026-02-13):** `git status` and `git diff --stat` run. **Modified (7 files):** docs/agents/00_INTAKE.md, 01_PLAN.md, 02_EXECUTION_LOG.md, 03_VALIDATION.md, 04_HANDOFF.md, BLOCKERS.md, DECISIONS.md. **Diff:** +363 −144 lines (agent docs only; no app code). No secrets in modified files. **Untracked:** STEP19_VERIFIER_UI_FEEDBACK.md, backups, tool dirs — add only what you want in the commit. **Next:** Stage and commit when ready; then push per your workflow.
 
 ### PM Batch Commit + Push Checklist (01_PLAN, continue)
-- 1. Lanes: Steps 1–18 COMPLETE in 01_PLAN (UI Overhaul Phases 1–6).
-- 2. Validation evidence: Present in 03_VALIDATION for all phases; full build + test PASS.
-- 3. Blockers: BLOCKERS.md — only RESOLVED items; no ACTIVE blockers.
-- 4. Handoff: 04_HANDOFF reflects Phases 1–6 complete; next = PM sign-off or new task.
-- 5. Pre-commit: Run `git status` and `git diff --stat`; confirm no secrets in modified files.
-- 6. **Done:** Batch commit created: `9119898` — "UI Overhaul Phases 1-6 + agent docs; Step 16 spec in progress" (35 files, +1625/-400).
-- 7–8. **Done:** Pushed to remote: `00aa241..16a33d0` → `origin/Opus.debug`. PM Batch Commit + Push gate complete.
+- 1. Lanes: Steps 1–18 COMPLETE in 01_PLAN (UI Overhaul Phases 1–6); Step 19 IN_PROGRESS.
+- 2. Validation evidence: Present in 03_VALIDATION for phases 1–6; full build + test PASS. Step 19 (19a–19c) evidence required before release GO.
+- 3. Blockers: BLOCKERS.md — Active Blockers empty (RM-BLK-005 resolved; RM confirmed Step 19 evidence and lifted hold). Resolved entries under "Resolved Blockers (with closing date)."
+- 4. Intake/plan: 00_INTAKE reflects current Smart Capture/Analytics phase (Phase 3–4) and Step 19; done condition, risk tier, and evidence align with 01_PLAN. 02_EXECUTION_LOG RM-REQ entries and gate trace updated for chronological credibility.
+- 5. **Release GO:** Do not declare release GO until 03_VALIDATION and 04_HANDOFF cite the corrected intake/plan state and Step 19 outcomes (19a–19c PASS, 19d gate run). This handoff and 03_VALIDATION have been updated to state that condition.
+- 6. **Release-manager (audit):** ACTIVE blocker RM-BLK-005 filed: Step 19 and doc realignment required; **no new work approved** until 19a–19d complete and intake/plan/validation aligned. Execution-trace discipline and Active-vs-Resolved blockers enforced. Intake/plan updated to BATCH_AUTH_19 (UI Overhaul + Step 19); gate held until 19a/19b/19c entries exist and Active Blockers lists only real blockers.
+- 7. Pre-commit (when ready): Run `git status` and `git diff --stat`; confirm no secrets in modified files. Batch commit/push follows only after Step 19 gate and PM GO decision.
 
 ### Approvals (continue)
 - **PM (project-manager):** Step 12 batch 2 (opacity normalization, 8/18 files) **APPROVED**. Builder may continue with remaining 10 files per same intake rules.
@@ -508,7 +537,9 @@ All three bugs validated. The OCR stabilization cycle is complete.
 - **Continue:** Step 16 (Phase 4 — Analytics overhaul) added to 01_PLAN as PENDING per PLAN_UI_OVERHAUL. Next: ui-designer spec + subpanel list, then builder (shell/dashboard + subpanel fixes). Await PM activation to start Step 16.
 - **Continue (ui-designer):** Step 16 spec created: [SPEC_ANALYTICS_PHASE4.md](docs/agents/SPEC_ANALYTICS_PHASE4.md) (subpanel list, shell/dashboard/subpanel target, acceptance). Plan set to IN_PROGRESS. Builder: shell tokens may already be in place; remaining — dashboard + 2–3 subpanels token normalization per spec; then validate and handoff.
 - **Continue (builder):** Step 16 implementation complete. Dashboard + SessionSummaryView, MomentumView, ProView token normalization (rounded-card, text-md-sys-on-surface/40 and /60, font-bold). Build PASS (22.31s), 88 tests PASS (42.67s). 03_VALIDATION and 01_PLAN updated; Step 16 COMPLETE. Next: Step 17 (Phase 5) when PM activates.
+- **Continue if authorized (PM authorization received):** User authorized continuation. Sanity check: `npm run build` PASS (14.09s); `npm test -- --run` PASS (88 tests, 10 files, 12.87s). No regressions. Steps 1–18 (UI Overhaul Phases 1–6) complete per plan; Step 19 (Batch authentication) delegated (19a–19c). Standing by for Step 19 execution or next task.
 - **Continue (release-manager):** Plan: Steps 1–18 COMPLETE (UI Overhaul Phases 1–6 done). Next: PM sign-off or new task per PLAN_UI_OVERHAUL. No ACTIVE blockers. Gate checklist GO. Standing by.
+- **Continue (release-manager):** Role confirmed. Plan unchanged — Steps 1–18 COMPLETE. No ACTIVE blockers. Standing by for PM.
 
 ---
 

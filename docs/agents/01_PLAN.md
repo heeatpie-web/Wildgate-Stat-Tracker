@@ -10,7 +10,7 @@ Status: ACTIVE
 - **Role labels only:** All new entries in execution log, validation, handoff, blockers, and locks use role names only: `project-manager`, `ui-designer`, `builder`, `debugger`, `release-manager`, `verifier`, `reporter`. Legacy labels (lead, agent-a, etc.) are historical-only.
 
 ## Current Task
-- Defined in `docs/agents/00_INTAKE.md` under **Current Task (AGENT_BOOTSTRAP)**. Replace `<TASK_ID>` and `<GOAL>` when a new task is assigned; set Risk Tier and Execution Path there.
+- Defined in `docs/agents/00_INTAKE.md` under **Current Task** (e.g. **BATCH_AUTH_19** for Step 19 batch authentication). Set Risk Tier and Execution Path there; keep plan and intake aligned so "current task" matches active work and release scope.
 
 ## Step: PM Bootstrap (AOM_V2 alignment)
 - [COMPLETE] `project-manager`: Update intake + plan for AGENT_BOOTSTRAP; set Risk Tier and Execution Path framework; require evidence before DONE; escalation via BLOCKERS/DECISIONS; role labels only. Evidence: `00_INTAKE.md`, `01_PLAN.md`, `DECISIONS.md` updated; `03_VALIDATION.md` bootstrap entry added.
@@ -39,9 +39,32 @@ Status: ACTIVE
 17. [COMPLETE] Phase 5 — Tactical Console & overlay HUDs. Builder: TelemetryPanel + OverlayView (compact + transparent) token overhaul; 02_EXECUTION_LOG, 03_VALIDATION. tsc PASS.
 18. [COMPLETE] Phase 6 — Validation / self-audit. Builder: self-audit in 03_VALIDATION; subjective → USER. All phases 1–6 complete.
 
+## Step 19 — Batch authentication (UI Overhaul batch: Steps 13–18)
+**Owner:** `project-manager` (assigns; does not implement).  
+**Goal:** Thorough analysis of all work done this batch to authenticate: **clean design**, **functional code**, **role alignment**.  
+**Delegation:** Each role executes only their lane; evidence in `03_VALIDATION.md`; failures or role violations in `BLOCKERS.md`.
+
+### 19a — ui-designer (design audit)
+- **Inputs:** PLAN_UI_OVERHAUL.md, UI_MASTERPLAN.md, UI_AUDIT.md, changed files (SystemPulse, SmartCapturesPanel, AnalyticsShell, TelemetryPanel, OverlayView, ProView).
+- **Task:** Audit for clean design: tokens (rounded-*, text-*, semantic colors), hierarchy (one primary action per context), no hardcoded colors/radii, empty/loading states where relevant. Compare 02_EXECUTION_LOG claims to actual UI.
+- **Output:** One entry in `03_VALIDATION.md` under "Step 19a — ui-designer design audit" with: PASS/FAIL per area, list of violations (if any), recommendation (GO / NO-GO). If NO-GO or violations, add blocker in BLOCKERS.md for builder with concrete fixes.
+
+### 19b — builder (implementation attestation)
+- **Inputs:** 01_PLAN Steps 13–18, 02_EXECUTION_LOG, codebase.
+- **Task:** Attest what was actually built: run `npm run build` and `npm test -- --run`. List files touched this batch and one-sentence summary per file. Confirm no out-of-scope files (if ProView was in scope, document; if not, flag scope drift).
+- **Output:** One entry in `03_VALIDATION.md` under "Step 19b — builder implementation attestation" with: build exit code, test count and result, file list, scope-drift note if any. If build/test FAIL, add blocker in BLOCKERS.md.
+
+### 19c — verifier (functional + role-alignment audit)
+- **Inputs:** Code diff (Steps 13–18), 00_INTAKE, 01_PLAN, 02_EXECUTION_LOG, 03_VALIDATION.
+- **Task:** (1) **Functional:** Spot-check behavior: telemetry chip states, Smart Capture nav (Capture vs Tools), Analytics shell chrome, Tactical Console / OverlayView tokens. Optional: viewport 1366x768 and 390x844 if feasible. (2) **Role alignment:** Compare 02_EXECUTION_LOG and 03_VALIDATION to role model: was design work done by ui-designer or by builder? Was verification done by verifier or by builder? List any role-boundary violations.
+- **Output:** One entry in `03_VALIDATION.md` under "Step 19c — verifier functional and role-alignment audit" with: functional PASS/FAIL with notes, role-alignment PASS/FAIL with list of violations. If FAIL, add blocker in BLOCKERS.md with owner and required action.
+
+### 19d — project-manager (gate)
+- **Task:** After 19a–19c complete, read 03_VALIDATION and BLOCKERS. If all PASS and no ACTIVE blockers for Step 19, mark Step 19 COMPLETE and update 04_HANDOFF. If any NO-GO or ACTIVE blocker, keep Step 19 IN_PROGRESS and direct remediating role per BLOCKERS.
+
 ## Active Step
+- **IN_PROGRESS:** Step 19 (Batch authentication). **Delegated to team:** ui-designer (19a), builder (19b), verifier (19c). Execute in any order; each role writes only their 03_VALIDATION entry and BLOCKERS if needed.
 - COMPLETE: Steps 1–18 (UI Overhaul Phases 1–6 complete).
-- Next: PM sign-off or new task per PLAN_UI_OVERHAUL.
 
 ## Canonical UI Overhaul Plan (Reference)
 - **Plan:** [docs/agents/PLAN_UI_OVERHAUL.md](docs/agents/PLAN_UI_OVERHAUL.md) — canonical plan for Smart Capture, Analytics, telemetry indicator, navigation, Tactical Console, and overlay HUD overhauls (phases 1–6, delegation, self-audit + user routing).
