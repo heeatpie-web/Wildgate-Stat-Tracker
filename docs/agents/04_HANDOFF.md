@@ -678,6 +678,19 @@ Rule:
 - Remaining:
   1. Teams should use the new lifecycle on the next delegated task.
 
+## Handoff - PM-DELEGATION-BOARD-2026-02-13
+
+- Scope shipped:
+  1. Implemented the provided PM Delegation To-Do as the canonical board in `docs/agents/PM_TODO.md`.
+  2. Added `Status` and `Dependencies` fields across backlog tables for scheduling control.
+  3. Preserved operating constraints, priority codes, execution waves, and PM sign-off targets.
+- Scope not shipped:
+  1. No backlog execution; this task only established the board.
+- Verification:
+  1. ID and section presence checks recorded PASS in `docs/agents/03_VALIDATION.md`.
+- Next action:
+  1. Begin Wave 1 execution from `PM_TODO.md` (`PM-002` onward, with role assignments and lock claims).
+
 
 
 

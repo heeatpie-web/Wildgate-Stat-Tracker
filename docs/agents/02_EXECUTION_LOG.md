@@ -1432,6 +1432,26 @@ Rules:
 - PM response: APPROVED
 - Notes: Step is eligible for DONE once validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
 
+## Change Entry - PM-DELEGATION-BOARD-2026-02-13 (project-manager)
+- Date (UTC): 2026-02-13T22:45:00Z
+- Owner: project-manager
+- Files changed:
+  - `docs/agents/PM_TODO.md`
+  - `docs/agents/00_INTAKE.md`
+  - `docs/agents/01_PLAN.md`
+  - `docs/agents/02_EXECUTION_LOG.md`
+  - `docs/agents/03_VALIDATION.md`
+  - `docs/agents/04_HANDOFF.md`
+  - `docs/WORKLOCKS.md`
+- Why changed: User requested implementation of a comprehensive PM delegation board into the to-do list.
+- What changed:
+  - Replaced `PM_TODO.md` with a canonical master backlog containing all requested IDs, priorities, owners, risk/path, deliverables, done evidence, status, and dependencies.
+  - Preserved the provided operating constraints, priority codes, delegation backlog groupings, execution waves, and PM sign-off targets.
+  - Added lifecycle documentation updates across required 00-04 files.
+- Risk/regression notes:
+  - Docs/process-only update.
+  - No runtime code, schema, or UI behavior changes.
+
 
 
 

@@ -896,6 +896,15 @@ Rules:
 4. [DONE] project-manager: Validate presence of new governance rules and record PASS in `docs/agents/03_VALIDATION.md`.
 5. [DONE] project-manager: Publish completion summary in `docs/agents/04_HANDOFF.md`.
 
+## Task Plan - PM-DELEGATION-BOARD-2026-02-13
+
+1. [DONE] project-manager: Normalize `docs/agents/PM_TODO.md` with the provided master delegation board.
+2. [DONE] project-manager: Preserve operating constraints, priority codes, and wave sequence verbatim in backlog structure.
+3. [DONE] project-manager: Add status and dependency columns to every backlog table.
+4. [DONE] project-manager: Log execution details in `docs/agents/02_EXECUTION_LOG.md`.
+5. [DONE] project-manager: Validate ID coverage and required sections in `docs/agents/03_VALIDATION.md`.
+6. [DONE] project-manager: Publish handoff summary in `docs/agents/04_HANDOFF.md`.
+
 ## Step 22 - UI Navigation Overhaul Pack (Delegation Ready)
 
 Task ID: UI-NAV-OVERHAUL-22  
