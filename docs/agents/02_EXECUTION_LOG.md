@@ -1,3 +1,23 @@
+## Change Entry - CODEBASE_AUDIT_2026-02-13 (debugger)
+- Date (UTC): 2026-02-13T05:30:37Z
+- Owner: debugger
+- Task: Full repository audit focused on stability, performance, security, UI, OCR.
+- Files inspected: package.json, eslint.config.js, tsconfig.json, electron/main.cjs, electron/preload.cjs, electron/ocrHandler.cjs, electron/handlers/artifactHandlers.cjs, electron/helpers/telemetryArchiveHelpers.cjs, src/components/analytics/useAnalyticsData.ts, src/utils/__tests__/analyticsEditorial.test.ts, plus repository inventory via rg.
+- Commands executed:
+  - Get-ChildItem / rg inventory scans.
+  - npm run lint (FAIL: 11 errors tied to missing react-hooks rule definition).
+  - npm test (PASS: 19 files, 298 tests).
+  - npm run build (FAIL: TypeScript type errors in analyticsEditorial.test.ts).
+  - node scripts/security_negative_tests.cjs (PASS: 109 tests, advisory noted).
+  - npm audit --omit=dev (PASS: 0 vulnerabilities).
+- Notable findings surfaced during execution:
+  - Path traversal risk in telemetry archive load IPC.
+  - Path traversal risk in OCR debug save IPC.
+  - Path traversal/arbitrary delete risk in match artifact remove IPC.
+  - Build and lint gates currently broken.
+  - Telemetry persistence path has unbounded growth and repeated full-file read/sort/write in monitoring loop.
+- Non-code artifact created by validation run:
+  - dataset/ocr-corpus/reports/security-gate-a.json updated by security_negative_tests.cjs.
 # 02 Execution Log
 
 ## Change Entry — QA on F1 and F2 (QA manager, 2026-02-13)
@@ -1364,7 +1384,7 @@ Rules:
 - Duplicate requests must be closed as DUPLICATE with pointer to canonical Request ID.
 - PM escalation only after SLA breach or explicit dependency failure.
 
-### Change Entry — Step 13 UI Overhaul Phase 1 (Telemetry indicator) — Builder
+### Change Entry - Step 13 UI Overhaul Phase 1 (Telemetry indicator) - Builder
 - Change ID: STEP13-PH1-BUILDER
 - Date (UTC): 2026-02-13T16:28:00Z
 - Owner: builder
@@ -1373,6 +1393,45 @@ Rules:
 - Files changed: none (verification only)
 - Risk tier: T2
 - Execution path: FULL_PATH
-- Validation pointer: docs/agents/03_VALIDATION.md (Step 13 Phase 1 — Builder)
+- Validation pointer: docs/agents/03_VALIDATION.md (Step 13 Phase 1 - Builder)
 - Notes: Store (createUISlice telemetryStatus with exists, lastEventAt), hook (useLogMonitor setTelemetryStatus from log-status + lastEventAt on log-data), SystemPulse (5 chips: Data, Vision, Mission, Updates, Telemetry; Telemetry chip solid = connected, blinking = receiving within 45s). Main process sends log-status with exists; renderer sets lastEventAt on telemetry events. Build + 88 tests PASS.
+
+## Change Entry - AGENT-COMM-FEEDBACK-LOOP governance update (project-manager)
+- Date (UTC): 2026-02-13T22:20:00Z
+- Owner: project-manager
+- Files changed:
+  - `AGENTS.md`
+  - `docs/agents/00_INTAKE.md`
+  - `docs/agents/01_PLAN.md`
+- Why changed: User requested agent-to-agent communication plus a cycle back to PM for feedback.
+- What changed:
+  - Added `Inter-Agent Communication Loop` lifecycle in `AGENTS.md` (`OPEN` -> `ACK` -> `IN_PROGRESS` -> `READY_FOR_REVIEW` -> `CLOSED` / `BLOCKED`).
+  - Added required `PM Feedback Cycle` in `AGENTS.md` (`PM-FEEDBACK-REQ` and PM disposition rules).
+  - Added scoped intake addendum and task plan for this governance change.
+- Risk/regression notes: Docs-only governance update; no runtime behavior changes.
+
+## Peer Message Log - AGENT-COMM-FEEDBACK-LOOP (project-manager)
+- Request ID: PM-REQ-AGENT-COMMS-001
+- From: project-manager
+- To: all roles
+- Date (UTC): 2026-02-13T22:21:00Z
+- Need: Adopt the new lifecycle and post PM feedback requests before DONE.
+- Status: CLOSED
+- Evidence/Resolution: `AGENTS.md` sections `Inter-Agent Communication Loop` and `PM Feedback Cycle (Required)`.
+
+## PM Feedback Log - AGENT-COMM-FEEDBACK-LOOP
+- Feedback ID: PM-FEEDBACK-REQ-AGENT-COMMS-001
+- Date (UTC): 2026-02-13T22:22:00Z
+- Owner: project-manager
+- Step/Task: AGENT-COMM-FEEDBACK-LOOP
+- Review ask: Confirm new communication lifecycle and PM cycle are documented and enforceable.
+- Evidence pointers:
+  - `AGENTS.md`
+  - `docs/agents/00_INTAKE.md`
+  - `docs/agents/01_PLAN.md`
+- PM response: APPROVED
+- Notes: Step is eligible for DONE once validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+
+
+
 

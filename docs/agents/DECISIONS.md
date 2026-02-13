@@ -1,6 +1,32 @@
+## Decision Log - CODEBASE_AUDIT_2026-02-13
+- Date (UTC): 2026-02-13T05:30:37Z
+- Owner: project-manager
+- Decision ID: AUDIT-2026-02-13-001
+- Decision: Classify IPC path traversal vectors as CRITICAL because renderer-reachable handlers allow read/write/delete outside intended directories.
+- Rationale: A compromised renderer or injected script could abuse privileged Electron main-process file APIs.
+
+- Decision ID: AUDIT-2026-02-13-002
+- Decision: Classify red lint/build gates as CRITICAL stability regressions despite passing tests.
+- Rationale: Release pipeline is not shippable when compile/lint checks fail; test pass does not offset inability to produce a clean build artifact.
+
+- Decision ID: AUDIT-2026-02-13-003
+- Decision: Treat telemetry permanent-history algorithm as HIGH performance risk requiring near-term remediation.
+- Rationale: Monitoring loop repeatedly loads/sorts/writes full history with no bounded retention, causing superlinear growth in IO and memory over time.
 # Decisions
 
 ## Decision Log
+- Date: 2026-02-13
+- Decision: Add mandatory inter-agent lifecycle and PM feedback cycle to governance docs.
+- Options considered:
+  - Keep existing lateral-request rule only.
+  - Add explicit request-state lifecycle and PM review checkpoint before DONE.
+- Rationale:
+  - Existing docs had request logging but no required closed-loop review gate to PM.
+  - PM approval/changes-requested cycle reduces silent drift before step closure.
+- Impact:
+  - `AGENTS.md` now defines request lifecycle states and required `PM-FEEDBACK-REQ`.
+  - Task completion now requires PM response and validation evidence before final DONE.
+
 - Date: 2026-02-13
 - Decision: **Release-Manager assigned as supervising authority for Step 19 audit (emergency retro).**
 - Rationale: Intake/plan trace must be stabilized; PM gate must keep up with reality before any new feature work. Release-Manager (per PM direction) becomes the supervising authority for this audit: they stop any `npm run electron:dev` / QA runs, verify audit evidence, and attest that the foundation is secure before any lane resumes. PM adds explicit audit checkpoints before approving further commits.
@@ -215,4 +241,5 @@ For all new decisions, include:
 
 Rule:
 - A decision without revisit trigger is incomplete.
+
 

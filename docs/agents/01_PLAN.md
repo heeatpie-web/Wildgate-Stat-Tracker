@@ -1,3 +1,12 @@
+## Task Plan: CODEBASE_AUDIT_2026-02-13
+
+Status: ACTIVE
+
+1. [COMPLETE] Intake normalization for audit scope, constraints, and done condition in 00_INTAKE.
+2. [COMPLETE] Establish audit baseline: repository inventory and high-risk subsystem map.
+3. [COMPLETE] Run validation commands (lint, test, build, security negative tests) and collect outcomes.
+4. [COMPLETE] Perform deep file-level review for stability, performance, and security findings with severity ranking.
+5. [COMPLETE] Publish final handoff with UI/OCR optimization opportunities and remediation order.
 # 01 Plan
 
 Status: ACTIVE
@@ -878,4 +887,92 @@ Rules:
 - Exactly one `IN_PROGRESS` step per owner.
 - A `DONE` step must include concrete evidence pointer in `docs/agents/03_VALIDATION.md`.
 - PM arbitration required for conflicting lanes before execution starts.
+
+## Task Plan - AGENT-COMM-FEEDBACK-LOOP (2026-02-13)
+
+1. [DONE] project-manager: Capture intake addendum with scope, constraints, and done condition in `docs/agents/00_INTAKE.md`.
+2. [DONE] project-manager: Add communication lifecycle and PM feedback cycle requirements to `AGENTS.md`.
+3. [DONE] project-manager: Log implementation details and rationale in `docs/agents/02_EXECUTION_LOG.md`.
+4. [DONE] project-manager: Validate presence of new governance rules and record PASS in `docs/agents/03_VALIDATION.md`.
+5. [DONE] project-manager: Publish completion summary in `docs/agents/04_HANDOFF.md`.
+
+## Step 22 - UI Navigation Overhaul Pack (Delegation Ready)
+
+Task ID: UI-NAV-OVERHAUL-22  
+Risk Tier: T2  
+Execution Path: FULL_PATH  
+Status: READY (pending PM activation)
+
+### Scope
+- Implement Claude-style collapsible side panel with hamburger trigger.
+- Relocate profile icon and settings/adjustments entrypoints into side panel.
+- Preserve existing F1/F2 closeout flow and validate regressions.
+
+### Work Breakdown
+
+1. **PM-OVR-01 - Confirm scope and sequence**
+- Owner: `project-manager`
+- Status: READY
+- Done when: F1/F2/F3 are prioritized (must-do vs optional), owners assigned, and sequence locked for this cycle.
+
+2. **UI-OVR-02 - Navigation IA and interaction spec**
+- Owner: `ui-designer`
+- Status: READY
+- Dependency: PM-OVR-01
+- Done when: Spec defines expanded/collapsed states, hamburger placement, icon+label behavior, profile/settings placement, and mobile behavior.
+
+3. **UI-OVR-03 - Collapsible sidebar implementation**
+- Owner: `builder`
+- Status: READY
+- Dependency: UI-OVR-02
+- Done when: Sidebar collapse/expand works via hamburger and state remains stable across view changes.
+
+4. **UI-OVR-04 - Profile/settings relocation**
+- Owner: `builder`
+- Status: READY
+- Dependency: UI-OVR-02
+- Done when: Profile and settings entrypoints are relocated to the side panel with unchanged functionality.
+
+5. **UI-OVR-05 - Mobile/tablet adaptation**
+- Owner: `builder`
+- Status: READY
+- Dependency: UI-OVR-03
+- Done when: 390x844 and intermediate widths retain usable navigation with no overlap/clipping.
+
+6. **UI-OVR-06 - Keyboard and focus accessibility**
+- Owner: `builder`
+- Status: READY
+- Dependency: UI-OVR-03
+- Done when: Sidebar toggle and navigation/profile/settings controls are keyboard reachable with visible focus and no traps.
+
+7. **UI-OVR-07 - F1 closeout (analytics strip label)**
+- Owner: `ui-designer` + `builder`
+- Status: READY
+- Dependency: PM-OVR-01
+- Done when: Label copy/location finalized and implemented per spec with no hierarchy regression.
+
+8. **UI-OVR-08 - F2 closeout (overlay DevTools collapse)**
+- Owner: `ui-designer` + `builder`
+- Status: READY
+- Dependency: PM-OVR-01
+- Done when: Overlay compact mode supports collapse/expand or explicit out-of-scope decision is logged in `docs/agents/DECISIONS.md`.
+
+9. **UI-OVR-09 - Visual regression evidence package**
+- Owner: `verifier`
+- Status: READY
+- Dependency: UI-OVR-03, UI-OVR-04, UI-OVR-05, UI-OVR-06
+- Done when: Before/after captures at 1366x768 and 390x844 exist for touched views with loading/empty/error/disabled/success state coverage.
+
+10. **UI-OVR-10 - Final validation and handoff**
+- Owner: `verifier` + `release-manager`
+- Status: READY
+- Dependency: UI-OVR-09
+- Done when: `npm run build` and `npm test` pass; evidence is recorded in `docs/agents/03_VALIDATION.md`; release recommendation is recorded in `docs/agents/04_HANDOFF.md`.
+
+### PM Activation Checklist
+- Mark exactly one Step 22 subtask `IN_PROGRESS` in cycle plan tracking.
+- Confirm file ownership locks before implementation edits.
+- Route blocker questions to `docs/agents/BLOCKERS.md` with one explicit ask.
+
+
 

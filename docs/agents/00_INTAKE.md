@@ -1,3 +1,39 @@
+## Intake: CODEBASE_AUDIT_2026-02-13
+
+- Task ID: CODEBASE_AUDIT_2026-02-13
+- Date (UTC): 2026-02-13T05:30:37Z
+- Goal: Complete deep audit of the current project directory with priority on stability, performance, security, plus UI and OCR optimization opportunities.
+- Audience: project-manager, builder, debugger, verifier, release-manager.
+- In Scope:
+  - Whole repository code and build/test/lint state.
+  - Electron security surface (IPC, file access, external URL handling).
+  - Runtime performance hotspots in telemetry/log/OCR paths.
+  - UI quality opportunities and OCR pipeline optimization ideas.
+- Out of Scope:
+  - Feature implementation not required to prove findings.
+  - Broad refactors beyond minimal validation artifacts.
+- Acceptance Criteria:
+  1. At least 3 critical findings are identified with file-level evidence.
+  2. Validation evidence includes command outcomes for lint/test/build and security scan.
+  3. UI and OCR improvement opportunities are documented with prioritized next actions.
+- Risk Tier: T3
+- Execution Path: FULL_PATH
+- Evidence Required:
+  1. docs/agents/03_VALIDATION.md contains command outputs and pass/fail status.
+  2. docs/agents/02_EXECUTION_LOG.md contains execution chronology and touched files.
+  3. docs/agents/04_HANDOFF.md contains final severity-ranked findings and next actions.
+- Dependencies (role -> artifact):
+  1. debugger -> docs/agents/03_VALIDATION.md command evidence.
+  2. project-manager -> docs/agents/01_PLAN.md active step ownership.
+  3. reporter/release-manager -> docs/agents/04_HANDOFF.md summary and action gates.
+- Constraints:
+  - Keep scope to audit only.
+  - Do not claim completion without explicit validation evidence.
+  - Keep role labels AOM_V2-compliant.
+- Done Condition:
+  - Intake acceptance criteria met.
+  - Plan steps completed or explicitly deferred.
+  - Findings delivered to user with evidence-backed severity.
 # Intake: PM backlog (post–Step 20)
 
 ## Current Task (PM_BACKLOG)
@@ -100,4 +136,34 @@ Use this template for each new cycle.
 1.
 - Constraints:
 - Done Condition:
+
+## Intake Addendum - AGENT_COMM_FEEDBACK_LOOP (2026-02-13)
+
+- Task ID: AGENT-COMM-FEEDBACK-LOOP
+- Goal: Add explicit inter-agent communication and a required PM feedback cycle to existing agent governance docs.
+- In Scope:
+  1. Update AGENTS.md communication protocol.
+  2. Record execution and evidence in 02_EXECUTION_LOG and 03_VALIDATION.
+  3. Publish handoff note in 04_HANDOFF.
+- Out of Scope:
+  1. Runtime app logic changes.
+  2. UI behavior changes.
+- Acceptance Criteria:
+  1. AGENTS.md defines a request lifecycle and PM feedback checkpoint.
+  2. Plan notes that PM review is mandatory before DONE.
+  3. Execution/validation/handoff entries exist for this task.
+- Risk Tier: T0
+- Execution Path: FAST_PATH
+- Evidence Required:
+  1. AGENTS.md contains "Inter-Agent Communication Loop".
+  2. AGENTS.md contains "PM Feedback Cycle (Required)".
+  3. 03_VALIDATION entry records checks and PASS result.
+- Dependencies (role -> artifact):
+  1. project-manager -> AGENTS.md
+  2. project-manager -> docs/agents/02_EXECUTION_LOG.md
+  3. project-manager -> docs/agents/03_VALIDATION.md
+  4. project-manager -> docs/agents/04_HANDOFF.md
+- Constraints: Keep scope to governance docs only.
+- Done Condition: Protocol and PM feedback loop are documented and evidenced in agent docs.
+
 
