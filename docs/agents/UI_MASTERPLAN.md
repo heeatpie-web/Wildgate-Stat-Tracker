@@ -182,3 +182,40 @@ For visual-impact:
 - Primary action remains visually dominant.
 - Any unresolved UI defect must be listed in handoff as deferred risk.
 
+## 11) Clutter-Control Addendum (v2.1)
+
+Purpose: close quality gaps without expanding process overhead.
+
+### Accessibility Thresholds (Measurable)
+- Contrast target: WCAG AA minimum (`4.5:1` normal text, `3:1` large text and UI controls).
+- Keyboard rule: all interactive controls reachable by keyboard; no keyboard trap in overlays/modals.
+- Focus rule: visible focus indicator on every interactive control (do not remove default focus without replacement).
+
+### Component Baselines (Single Source)
+- Canonical primitives must be defined once in shared UI code and reused:
+  - `Button`: `primary`, `secondary`, `tonal`, `danger`, `disabled`, `loading`.
+  - `Input`: `default`, `focus`, `error`, `disabled`.
+  - `Card/Panel`: `md3-surface*` or `mg-surface*` per intent, not both.
+- New variants are allowed only if used in `2+` places or required by a distinct state.
+
+### Evidence Format (Standardized, Minimal)
+- Store visual evidence under `docs/agents/evidence/ui/<task-id>/`.
+- Naming convention:
+  - `before-1366x768.png`, `after-1366x768.png`
+  - `before-390x844.png`, `after-390x844.png`
+  - `states-loading-empty-error-disabled-success.png` (or separate per-state files)
+- `docs/agents/03_VALIDATION.md` must include exact artifact paths.
+
+### Exception Control
+- Any intentional deviation from this masterplan must be logged in `docs/agents/DECISIONS.md` before implementation.
+- Exception entry must include: reason, owner, impacted view/component, and expiry/revisit trigger.
+- Expired exceptions must be either renewed with rationale or removed by aligning implementation.
+
+### Visual Regression Expectations
+- Required snapshot targets for visual-impact changes:
+  - Header/top bar (`src/components/Header.tsx`)
+  - Primary workflow view (`src/components/RecordingView.tsx`)
+  - Smart Capture queue/review (`src/components/SmartCapturesPanel.tsx`)
+  - Active analytics surface(s) touched by the change
+- Minimum check: one desktop and one mobile comparison per touched view.
+

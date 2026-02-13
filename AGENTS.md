@@ -122,6 +122,19 @@ Marker: AOM_V2
 - Peer requests must be logged in `docs/agents/02_EXECUTION_LOG.md` using request IDs.
 - Escalate to PM only after SLA breach or explicit dependency failure.
 
+### Inter-Agent Communication Loop
+- Every dependency handoff must use a request ID with this lifecycle: `OPEN` -> `ACK` -> `IN_PROGRESS` -> `READY_FOR_REVIEW` -> `CLOSED` (or `BLOCKED`).
+- The sender owns `OPEN`; the receiver must post `ACK` (or `BLOCKED`) in `docs/agents/02_EXECUTION_LOG.md`.
+- `BLOCKED` items must include one explicit question and an owner in `docs/agents/BLOCKERS.md`.
+- A request cannot be marked `CLOSED` without an evidence pointer (file path or validation section).
+
+### PM Feedback Cycle (Required)
+- Before any plan step is marked `DONE`, the owner must post a `PM-FEEDBACK-REQ` entry in `docs/agents/02_EXECUTION_LOG.md`.
+- `PM-FEEDBACK-REQ` must include: task/step ID, summary of delta, evidence pointers, and one explicit review ask.
+- PM responds with one of: `APPROVED`, `CHANGES_REQUESTED`, or `DEFERRED` in `docs/agents/02_EXECUTION_LOG.md`.
+- If PM responds `CHANGES_REQUESTED`, the task cycles back to the owner and remains `IN_PROGRESS` in `docs/agents/01_PLAN.md`.
+- Validation evidence for PM response must be logged in `docs/agents/03_VALIDATION.md` before final handoff.
+
 ### Migration Policy
 - Non-destructive only: add v2 sections and keep legacy content intact.
 

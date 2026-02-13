@@ -166,4 +166,37 @@ Use this template for each new cycle.
 - Constraints: Keep scope to governance docs only.
 - Done Condition: Protocol and PM feedback loop are documented and evidenced in agent docs.
 
+## Intake Addendum - PM_DELEGATION_BOARD_2026-02-13
+
+- Task ID: PM-DELEGATION-BOARD-2026-02-13
+- Goal: Implement the provided PM Delegation To-Do board as the canonical master backlog.
+- In Scope:
+  1. Replace `docs/agents/PM_TODO.md` with normalized backlog IDs, priorities, status, and dependencies.
+  2. Record this task in `00_INTAKE`, `01_PLAN`, `02_EXECUTION_LOG`, `03_VALIDATION`, and `04_HANDOFF`.
+  3. Preserve operating constraints and acceptance targets in the backlog doc.
+- Out of Scope:
+  1. Executing backlog items.
+  2. Runtime code or UI behavior changes.
+- Acceptance Criteria:
+  1. `docs/agents/PM_TODO.md` contains all provided task IDs (`PM-*`, `DATA-*`, `EVAL-*`, `OCR-*`, `TEST-*`, `SEC-*`, `REPO-*`, `DOC-*`).
+  2. Execution sequence waves and PM sign-off targets are present.
+  3. Required 00-04 documentation updates exist for this task.
+- Risk Tier: T1
+- Execution Path: FULL_PATH
+- Evidence Required:
+  1. `03_VALIDATION.md` includes ID coverage checks and PASS.
+  2. `02_EXECUTION_LOG.md` includes file-change summary and rationale.
+  3. `04_HANDOFF.md` summarizes completion and next action.
+- Dependencies (role -> artifact):
+  1. project-manager -> `docs/agents/PM_TODO.md`
+  2. project-manager -> `docs/agents/00_INTAKE.md`
+  3. project-manager -> `docs/agents/01_PLAN.md`
+  4. project-manager -> `docs/agents/02_EXECUTION_LOG.md`
+  5. project-manager -> `docs/agents/03_VALIDATION.md`
+  6. project-manager -> `docs/agents/04_HANDOFF.md`
+- Constraints:
+  - Keep board wording aligned with user-provided priorities and wave order.
+  - No backlog item marked DONE without validation evidence policy in the board.
+- Done Condition: Board is canonicalized in `PM_TODO.md` and this update is evidenced in 00-04 docs.
+
 

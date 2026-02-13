@@ -53,6 +53,11 @@ Use this row format when claiming:
 
 | File | Owner | Started (UTC) | Released (UTC) | Purpose |
 |---|---|---|---|---|
+| `docs/agents/PM_TODO.md` | project-manager | 2026-02-13T22:40:00Z | 2026-02-13T22:55:00Z | Canonical PM delegation board update with IDs, statuses, dependencies, and wave sequencing |
+| `docs/agents/04_HANDOFF.md` | project-manager | 2026-02-13T22:40:00Z | 2026-02-13T22:55:00Z | Temporary PM handoff ownership for delegation-board documentation cycle |
+| `docs/agents/03_VALIDATION.md` | project-manager | 2026-02-13T22:40:00Z | 2026-02-13T22:55:00Z | Temporary PM validation ownership for delegation-board evidence cycle |
+| `docs/agents/02_EXECUTION_LOG.md` | project-manager | 2026-02-13T22:40:00Z | 2026-02-13T22:55:00Z | Temporary PM execution-log ownership for delegation-board cycle |
+| `docs/WORKLOCKS.md` | project-manager | 2026-02-13T22:40:00Z | 2026-02-13T22:55:00Z | Temporary lock arbitration to claim/release shared docs for PM delegation-board update |
 | `docs/agents/02_EXECUTION_LOG.md` | release-manager | 2026-02-13T20:35:00Z | 2026-02-13T21:00:00Z | Released to debugger; Lane D role bound per user request |
 | `docs/agents/03_VALIDATION.md` | release-manager | 2026-02-13T20:35:00Z | 2026-02-13T21:00:00Z | Released to debugger; Lane D role bound per user request |
 | `docs/WORKLOCKS.md` | release-manager | 2026-02-13T20:35:00Z | 2026-02-13T21:00:00Z | Released to debugger; Lane D role bound per user request |
