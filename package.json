@@ -17,7 +17,7 @@
     "build": "vite build",
     "ci:quality": "npm run lint && npm run test && npm run typecheck && npm run build",
     "preview": "vite preview",
-    "electron:dev": "concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "electron:dev": "concurrently \"vite\" \"wait-on tcp:5173 && node scripts/run-electron.cjs .\"",
     "dev:hot": "concurrently \"vite\" \"wait-on tcp:5173 && node scripts/electron-hot-dev.cjs\"",
     "electron:build": "vite build && electron-builder",
     "snap:views": "node scripts/visual-snapshots.mjs",

@@ -1784,8 +1784,18 @@ const clientId = '1331154341514117120';
 DiscordRPC.register(clientId);
 const rpc = new DiscordRPC.Client({ transport: 'ipc' });
 
+function logDiscordRpcIssue(err, phase) {
+  const message = err && err.message ? err.message : String(err || 'Unknown RPC error');
+  const isBenign = /connection closed|could not connect|ENOENT|ECONNREFUSED/i.test(message);
+  if (isBenign) {
+    if (isDev) console.warn(`[DiscordRPC] ${phase}: ${message}`);
+    return;
+  }
+  console.error(`[DiscordRPC] ${phase}: ${message}`);
+}
+
 rpc.on('error', (err) => {
-  if (isDev) console.error("Discord RPC Error:", err.message);
+  logDiscordRpcIssue(err, 'client-error');
 });
 
 async function setActivity(stats) {
@@ -2024,7 +2034,9 @@ app.whenReady().then(async () => {
   }
   if (!isDev) autoUpdater.checkForUpdates();
   if (isDev) setSplashProgress(win, 84, 'Initializing presence...', 'Connecting Discord RPC');
-  rpc.login({ clientId }).catch(console.error);
+  rpc.login({ clientId }).catch((err) => {
+    logDiscordRpcIssue(err, 'login');
+  });
 
   if (isDev) setSplashProgress(win, 90, 'Registering hotkeys...', 'Almost there');
   globalShortcut.register('F9', () => {

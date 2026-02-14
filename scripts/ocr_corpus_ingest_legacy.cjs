@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* eslint-disable no-console */
 /**
  * One-Time Legacy Screenshot Integration + GCloud Upload
  * 

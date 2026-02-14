@@ -17,6 +17,8 @@ _savepoint_*
 .visual/diff/
 .visual/report.json
 .visual/report.md
+.visual/ui-hardcoded-report.json
+.visual/ui-hardcoded-report.md
 
 # Editor directories and files
 .vscode/*

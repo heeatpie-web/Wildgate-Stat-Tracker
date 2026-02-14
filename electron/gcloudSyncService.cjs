@@ -42,8 +42,14 @@ class GCloudSyncService {
           console.log(`[GCloudSync] Bucket "${this.bucketName}" verified accessible`);
         }
       } catch (validationErr) {
-        console.warn(`[GCloudSync] Bucket validation failed (may still work): ${validationErr.message}`);
-        this.lastError = `Bucket validation: ${validationErr.message}`;
+        const message = validationErr && validationErr.message ? validationErr.message : String(validationErr);
+        const isMetadataPermissionGap = /storage\.buckets\.get|Permission 'storage\.buckets\.get' denied|403/.test(message);
+        if (isMetadataPermissionGap) {
+          console.log(`[GCloudSync] Bucket metadata check skipped (non-fatal): ${message}`);
+        } else {
+          console.warn(`[GCloudSync] Bucket validation failed (may still work): ${message}`);
+        }
+        this.lastError = `Bucket validation: ${message}`;
       }
     } catch (error) {
       console.error('[GCloudSync] Storage Init Error:', error);

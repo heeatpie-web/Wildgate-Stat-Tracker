@@ -1,0 +1,9 @@
+{
+  "allow": [
+    "OCR",
+    "JSON",
+    "UI",
+    "GPU",
+    "CPU"
+  ]
+}
