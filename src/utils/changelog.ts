@@ -1,4 +1,10 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v2.14": [
+    "Corpus: Added opponent team name and team color inputs in the plain-text ground truth workflow.",
+    "Corpus: Image thumbnails in corpus mode now open in a full-size lightbox preview.",
+    "Workflow: Corpus labeling now writes team metadata (name/color) into generated opponent team entries.",
+    "Polish: Corpus image tiles now signal zoom behavior for faster review."
+  ],
   "v2.12.2": [
     "UI: Removed the extra layered look in Ship and Loadout so it matches the Recording panel style in Twilight mode.",
     "UI: Players view now renders a third desktop column at large breakpoints for faster profile scanning.",

@@ -12,6 +12,7 @@ import { getGCloudStatus, type GCloudStatus } from '../utils/electronBridge';
 import type { OcrMode, CaptureMode } from '../store/slices/createSettingsSlice';
 import { normalizeOcrName } from '../utils/stringUtils';
 import { DEFAULT_OCR_BEST_GUESS_THRESHOLDS, getPreset, detectSensitivityLevel } from './settings/ocrThresholdPresets';
+import { Button, Input } from './ui';
 
 export const SettingsModal: React.FC = () => {
     const {
@@ -156,9 +157,9 @@ export const SettingsModal: React.FC = () => {
     };
 
     return (
-        <div className="fixed inset-0 z-[10000] md3-dialog-scrim flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowSettings(false)}>
+        <div className="fixed inset-0 z-modal md3-dialog-scrim flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowSettings(false)}>
             <div
-                className={`md3-dialog overflow-hidden ${isOverlayMode ? 'max-w-[400px]' : 'max-w-2xl'} w-full max-h-[85vh] flex flex-col ring-1 ring-md-sys-outline/10 bg-md-sys-surface/90 backdrop-blur-xl shadow-2xl rounded-modal`}
+                className={`md3-dialog overflow-hidden ${isOverlayMode ? 'max-w-400px' : 'max-w-2xl'} w-full max-h-85vh flex flex-col ring-1 ring-md-sys-outline/10 bg-md-sys-surface/90 backdrop-blur-xl shadow-2xl rounded-modal`}
                 onClick={e => e.stopPropagation()}
             >
                 {/* Modal Header */}
@@ -180,22 +181,22 @@ export const SettingsModal: React.FC = () => {
                         <h3 className="text-label-lg font-bold text-md-sys-on-surface mb-1">Alias & authority</h3>
                         <p className="text-body text-md-sys-on-surface/60 mb-4">This identity is used for session and analytics.</p>
                         <div className="grid grid-cols-2 gap-2 mb-3">
-                            <input
+                            <Input
                                 type="text"
                                 value={aliasFrom}
                                 onChange={(e) => setAliasFrom(e.target.value)}
                                 placeholder="OCR name (raw)"
-                                className="md3-textfield--outlined p-2.5 rounded-control text-label-sm min-h-[40px]"
+                                className="h-10 text-label-sm"
                             />
-                            <input
+                            <Input
                                 type="text"
                                 value={aliasTo}
                                 onChange={(e) => setAliasTo(e.target.value)}
                                 placeholder="Canonical name"
-                                className="md3-textfield--outlined p-2.5 rounded-control text-label-sm min-h-[40px]"
+                                className="h-10 text-label-sm"
                             />
                         </div>
-                        <button
+                        <Button
                             onClick={() => {
                                 const raw = normalizeOcrName(aliasFrom);
                                 const target = normalizeOcrName(aliasTo);
@@ -204,10 +205,10 @@ export const SettingsModal: React.FC = () => {
                                 setAliasFrom('');
                                 setAliasTo('');
                             }}
-                            className="md3-btn-filled px-4 py-2 text-label-sm font-bold mb-3 rounded-control"
+                            className="px-4 py-2 text-label-sm font-bold mb-3"
                         >
                             Add Alias
-                        </button>
+                        </Button>
                         <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-1">
                             {Object.values(ocrCorrections)
                                 .sort((a, b) => b.count - a.count)
@@ -264,7 +265,7 @@ export const SettingsModal: React.FC = () => {
                                         className="flex-1 h-2 bg-gradient-to-r from-red-500 via-green-500 to-blue-500 rounded-full appearance-none cursor-pointer"
                                     />
                                     <div
-                                        className="w-8 h-8 rounded-full border-2 border-white/50 shadow-lg"
+                                        className="w-8 h-8 rounded-full border-2 border-frost-050 shadow-lg"
                                         style={{ backgroundColor: `hsl(${customHue}, 50%, 50%)` }}
                                     />
                                 </div>
@@ -280,13 +281,14 @@ export const SettingsModal: React.FC = () => {
                                     { id: 'twilight', label: 'Twilight' },
                                     { id: 'system', label: 'System' },
                                 ] as const).map(opt => (
-                                    <button
+                                    <Button
                                         key={opt.id}
                                         onClick={() => setAppearanceMode(opt.id)}
-                                        className={`h-10 rounded-control text-label-sm font-bold uppercase tracking-wide transition-all ${appearanceMode === opt.id ? 'md3-btn-filled' : 'md3-btn-tonal opacity-60 hover:opacity-100'}`}
+                                        variant={appearanceMode === opt.id ? 'primary' : 'secondary'}
+                                        className={`h-10 text-label-sm font-bold uppercase tracking-wide ${appearanceMode === opt.id ? '' : 'opacity-60 hover:opacity-100'}`}
                                     >
                                         {opt.label}
-                                    </button>
+                                    </Button>
                                 ))}
                             </div>
                         </div>
@@ -295,20 +297,22 @@ export const SettingsModal: React.FC = () => {
                         <div className="md3-surface-high/50 backdrop-blur-sm p-5 rounded-card mb-4 border border-md-sys-outline/10">
                             <label className="text-label-sm font-semibold opacity-60 block mb-2">Background URL</label>
                             <div className="flex gap-2">
-                                <input
+                                <Input
                                     type="text"
                                     value={customBgUrl}
                                     onChange={(e) => setCustomBgUrl(e.target.value)}
                                     placeholder="https://..."
-                                    className="flex-1 md3-textfield--outlined rounded-control px-4 py-2.5 text-body outline-none transition-colors"
+                                    className="flex-1 px-4 text-body"
                                 />
                                 {customBgUrl && (
-                                    <button
+                                    <Button
+                                        variant="icon"
                                         onClick={() => setCustomBgUrl('')}
-                                        className="md3-icon-btn w-10 h-10 text-danger"
+                                        className="w-10 h-10 text-danger"
+                                        aria-label="Clear background URL"
                                     >
                                         <X size={16} />
-                                    </button>
+                                    </Button>
                                 )}
                             </div>
                         </div>
@@ -350,7 +354,7 @@ export const SettingsModal: React.FC = () => {
                                             onClick={() => toggle.setter(!toggle.value)}
                                             className={`w-11 h-6 rounded-full transition-colors ${toggle.value ? toggle.color : 'md3-surface-high'} relative`}
                                         >
-                                            <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${toggle.value ? 'translate-x-5' : ''}`} />
+                                            <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${toggle.value ? 'translate-x-5' : ''}`} />
                                         </button>
                                     </div>
                                 ))}
@@ -363,7 +367,7 @@ export const SettingsModal: React.FC = () => {
                                         onClick={() => setEnableAutoLogRecording(!enableAutoLogRecording)}
                                         className={`w-11 h-6 rounded-full transition-colors ${enableAutoLogRecording ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
                                     >
-                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${enableAutoLogRecording ? 'translate-x-5' : ''}`} />
+                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${enableAutoLogRecording ? 'translate-x-5' : ''}`} />
                                     </button>
                                 </div>
                                 <div className="flex justify-between items-center pt-2 border-t border-md-sys-outline/10">
@@ -375,7 +379,7 @@ export const SettingsModal: React.FC = () => {
                                         onClick={() => setDevMode(!devMode)}
                                         className={`w-11 h-6 rounded-full transition-colors ${devMode ? 'bg-md-sys-error' : 'md3-surface-high'} relative`}
                                     >
-                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${devMode ? 'translate-x-5' : ''}`} />
+                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${devMode ? 'translate-x-5' : ''}`} />
                                     </button>
                                 </div>
                             </div>
@@ -390,7 +394,7 @@ export const SettingsModal: React.FC = () => {
                                     onClick={() => setShowSmartCaptureInHeader(!showSmartCaptureInHeader)}
                                     className={`w-11 h-6 rounded-full transition-colors ${showSmartCaptureInHeader ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
                                 >
-                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${showSmartCaptureInHeader ? 'translate-x-5' : ''}`} />
+                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${showSmartCaptureInHeader ? 'translate-x-5' : ''}`} />
                                 </button>
                             </div>
                             <div className="flex justify-between items-center pt-3 mt-3 border-t border-md-sys-outline/10">
@@ -492,7 +496,7 @@ export const SettingsModal: React.FC = () => {
                                 onClick={() => setLockOcrTeams(!lockOcrTeams)}
                                 className={`w-11 h-6 rounded-full transition-colors ${lockOcrTeams ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
                             >
-                                <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${lockOcrTeams ? 'translate-x-5' : ''}`} />
+                                <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${lockOcrTeams ? 'translate-x-5' : ''}`} />
                             </button>
                         </div>
                         <div className="mt-4 p-4 md3-surface rounded-card border border-md-sys-outline/10">
@@ -608,7 +612,7 @@ export const SettingsModal: React.FC = () => {
                                     onClick={() => setEnableAutoBackup(!enableAutoBackup)}
                                     className={`w-11 h-6 rounded-full transition-colors ${enableAutoBackup ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
                                 >
-                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${enableAutoBackup ? 'translate-x-5' : ''}`} />
+                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${enableAutoBackup ? 'translate-x-5' : ''}`} />
                                 </button>
                             </div>
                             <div className="grid grid-cols-2 gap-3 mb-4">
@@ -653,7 +657,7 @@ export const SettingsModal: React.FC = () => {
                             <div className="md3-surface-high/50 backdrop-blur-sm p-4 rounded-card flex items-center justify-between border border-md-sys-outline/10">
                                 <div>
                                     <div className="text-body font-bold">Update</div>
-                                    <div className="text-label-sm font-mono opacity-60">v{APP_VERSION}</div>
+                                    <div className="text-label-sm font-mono opacity-60">{APP_VERSION}</div>
                                 </div>
                                 {updateStatus === 'downloaded' ? (
                                     <button
@@ -681,7 +685,7 @@ export const SettingsModal: React.FC = () => {
                             onClick={handleSaveAndClose}
                             disabled={saved}
                             className={`w-full py-4 rounded-card font-bold uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2 ${saved
-                                ? 'md3-btn-filled bg-success text-white'
+                                ? 'md3-btn-filled bg-success text-on-scrim'
                                 : 'md3-btn-filled'
                                 }`}
                         >

@@ -58,6 +58,8 @@ const DevOCRPanel: React.FC = () => {
     const [plainTeammates, setPlainTeammates] = useState('');
     const [plainOpponents, setPlainOpponents] = useState('');
     const [plainModifiers, setPlainModifiers] = useState('');
+    const [plainOpponentTeamName, setPlainOpponentTeamName] = useState('Enemy');
+    const [plainOpponentTeamColor, setPlainOpponentTeamColor] = useState('red');
     const [corpusImageList, setCorpusImageList] = useState<{ name: string; relativePath: string }[]>([]);
     const [corpusImageThumbs, setCorpusImageThumbs] = useState<Record<string, string>>({});
 
@@ -369,6 +371,8 @@ const DevOCRPanel: React.FC = () => {
         const teammates = parsePlainList(plainTeammates);
         const opponents = parsePlainList(plainOpponents);
         const modifiers = parsePlainList(plainModifiers);
+        const opponentTeamName = plainOpponentTeamName.trim() || 'Enemy';
+        const opponentTeamColor = (plainOpponentTeamColor || 'unknown').trim().toLowerCase();
         let truth: { version: number; samples: any[] };
         try {
             truth = corpusTruth ? JSON.parse(corpusTruth) : { version: 1, samples: [] };
@@ -381,7 +385,12 @@ const DevOCRPanel: React.FC = () => {
             sampleId: `plain-${Date.now()}`,
             imagePath,
             teammates,
-            opponentTeams: opponents.length ? [{ teamName: 'Enemy', players: opponents }] : [],
+            opponentTeams: opponents.length ? [{
+                teamName: opponentTeamName,
+                color: opponentTeamColor,
+                shipType: 'Unknown',
+                players: opponents
+            }] : [],
             modifiers,
         };
         samples.push(newSample);
@@ -389,11 +398,13 @@ const DevOCRPanel: React.FC = () => {
         setCorpusStatus('Ground truth updated from plain text. Click Save to write ground-truth.json.');
     };
 
-    const loadThumb = (relativePath: string) => {
-        if (corpusImageThumbs[relativePath]) return;
-        getElectronAPI()?.invoke('ocr-corpus-read-image', relativePath).then((b64: string | null) => {
-            if (b64) setCorpusImageThumbs(prev => ({ ...prev, [relativePath]: `data:image/png;base64,${b64}` }));
-        });
+    const loadThumb = async (relativePath: string): Promise<string | null> => {
+        if (corpusImageThumbs[relativePath]) return corpusImageThumbs[relativePath];
+        const b64 = await getElectronAPI()?.invoke('ocr-corpus-read-image', relativePath);
+        if (!b64) return null;
+        const src = `data:image/png;base64,${b64}`;
+        setCorpusImageThumbs(prev => ({ ...prev, [relativePath]: src }));
+        return src;
     };
 
     const truthCount = countCorpusSamples(corpusTruth);
@@ -441,7 +452,7 @@ const DevOCRPanel: React.FC = () => {
                         >
                             {loading ? 'Processing...' : 'Run Bundle Scan'}
                         </button>
-                        {status && <div className="mt-4 text-label-sm font-mono p-2 bg-black/20 rounded text-center">{status}</div>}
+                        {status && <div className="mt-4 text-label-sm font-mono p-2 bg-scrim-20 rounded text-center">{status}</div>}
                     </div>
 
                     <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
@@ -478,7 +489,7 @@ const DevOCRPanel: React.FC = () => {
                                 }
                             }}
                             disabled={loading}
-                            className="px-6 py-3 bg-md-sys-error/10 text-md-sys-error border border-md-sys-error/20 rounded-lg font-bold disabled:opacity-disabled hover:bg-md-sys-error hover:text-white transition-all flex items-center justify-center w-full"
+                            className="px-6 py-3 bg-md-sys-error/10 text-md-sys-error border border-md-sys-error/20 rounded-lg font-bold disabled:opacity-disabled hover:bg-md-sys-error hover:text-on-scrim transition-all flex items-center justify-center w-full"
                         >
                             {loading ? 'Processing...' : 'Clear All Archives'}
                         </button>
@@ -506,7 +517,7 @@ const DevOCRPanel: React.FC = () => {
                                 }
                             }}
                             disabled={loading}
-                            className="px-6 py-3 bg-warning-soft text-warning border border-warning-soft rounded-lg font-bold disabled:opacity-disabled hover:bg-warning hover:text-black transition-all flex items-center justify-center w-full"
+                            className="px-6 py-3 bg-warning-soft text-warning border border-warning-soft rounded-lg font-bold disabled:opacity-disabled hover:bg-warning hover:text-ink-strong transition-all flex items-center justify-center w-full"
                         >
                             {loading ? 'Processing...' : 'Clear Preprocessed Images'}
                         </button>
@@ -534,7 +545,7 @@ const DevOCRPanel: React.FC = () => {
                                 setLoading(false);
                             }}
                             disabled={loading}
-                            className="px-6 py-3 bg-info-soft text-info border border-info-soft rounded-lg font-bold disabled:opacity-disabled hover:bg-info hover:text-white transition-all flex items-center justify-center w-full"
+                            className="px-6 py-3 bg-info-soft text-info border border-info-soft rounded-lg font-bold disabled:opacity-disabled hover:bg-info hover:text-on-scrim transition-all flex items-center justify-center w-full"
                         >
                             {loading ? 'Processing...' : 'Open OCR Captures Folder'}
                         </button>
@@ -591,15 +602,42 @@ const DevOCRPanel: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                             <div>
                                 <label className="text-label-sm font-semibold text-md-sys-on-surface/80 block mb-1">Teammates</label>
-                                <textarea value={plainTeammates} onChange={e => setPlainTeammates(e.target.value)} className="w-full min-h-[80px] md3-surface-low rounded-control p-2 text-label-sm outline-none border border-md-sys-outline/20" placeholder="One per line or comma" />
+                                <textarea value={plainTeammates} onChange={e => setPlainTeammates(e.target.value)} className="w-full min-h-80px md3-surface-low rounded-control p-2 text-label-sm outline-none border border-md-sys-outline/20" placeholder="One per line or comma" />
                             </div>
                             <div>
                                 <label className="text-label-sm font-semibold text-md-sys-on-surface/80 block mb-1">Opponents</label>
-                                <textarea value={plainOpponents} onChange={e => setPlainOpponents(e.target.value)} className="w-full min-h-[80px] md3-surface-low rounded-control p-2 text-label-sm outline-none border border-md-sys-outline/20" placeholder="One per line or comma" />
+                                <textarea value={plainOpponents} onChange={e => setPlainOpponents(e.target.value)} className="w-full min-h-80px md3-surface-low rounded-control p-2 text-label-sm outline-none border border-md-sys-outline/20" placeholder="One per line or comma" />
                             </div>
                             <div>
                                 <label className="text-label-sm font-semibold text-md-sys-on-surface/80 block mb-1">Modifiers (optional)</label>
-                                <textarea value={plainModifiers} onChange={e => setPlainModifiers(e.target.value)} className="w-full min-h-[80px] md3-surface-low rounded-control p-2 text-label-sm outline-none border border-md-sys-outline/20" placeholder="Comma-separated" />
+                                <textarea value={plainModifiers} onChange={e => setPlainModifiers(e.target.value)} className="w-full min-h-80px md3-surface-low rounded-control p-2 text-label-sm outline-none border border-md-sys-outline/20" placeholder="Comma-separated" />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                            <div>
+                                <label className="text-label-sm font-semibold text-md-sys-on-surface/80 block mb-1">Opponent Team Name</label>
+                                <input
+                                    value={plainOpponentTeamName}
+                                    onChange={e => setPlainOpponentTeamName(e.target.value)}
+                                    className="w-full h-10 md3-surface-low rounded-control px-3 text-label-sm outline-none border border-md-sys-outline/20"
+                                    placeholder="Enemy Team"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-label-sm font-semibold text-md-sys-on-surface/80 block mb-1">Opponent Team Color</label>
+                                <select
+                                    value={plainOpponentTeamColor}
+                                    onChange={e => setPlainOpponentTeamColor(e.target.value)}
+                                    className="w-full h-10 md3-surface-low rounded-control px-3 text-label-sm outline-none border border-md-sys-outline/20"
+                                >
+                                    <option value="red">Red</option>
+                                    <option value="orange">Orange</option>
+                                    <option value="yellow">Yellow</option>
+                                    <option value="green">Green</option>
+                                    <option value="blue">Blue</option>
+                                    <option value="purple">Purple</option>
+                                    <option value="unknown">Unknown</option>
+                                </select>
                             </div>
                         </div>
                         <button onClick={handlePlainTruthSubmit} disabled={corpusBusy} className="rounded-control md3-btn-filled px-4 py-2 text-label-sm font-bold disabled:opacity-disabled">
@@ -617,13 +655,16 @@ const DevOCRPanel: React.FC = () => {
                                     <div key={f.relativePath} className="flex flex-col gap-1">
                                         <button
                                             type="button"
-                                            onClick={() => loadThumb(f.relativePath)}
-                                            className="aspect-video rounded-control bg-md-sys-surface-container-low overflow-hidden border border-md-sys-outline/10 hover:border-md-sys-primary/30 flex items-center justify-center"
+                                            onClick={async () => {
+                                                const src = await loadThumb(f.relativePath);
+                                                if (src) setLightboxSrc(src);
+                                            }}
+                                            className="aspect-video rounded-control bg-md-sys-surface-container-low overflow-hidden border border-md-sys-outline/10 hover:border-md-sys-primary/30 flex items-center justify-center cursor-zoom-in"
                                         >
                                             {corpusImageThumbs[f.relativePath] ? (
                                                 <img src={corpusImageThumbs[f.relativePath]} alt={f.name} className="w-full h-full object-cover" />
                                             ) : (
-                                                <span className="text-label-xs text-md-sys-on-surface/40">Load</span>
+                                                <span className="text-label-xs text-md-sys-on-surface/40">Load / Zoom</span>
                                             )}
                                         </button>
                                         <span className="text-label-xs truncate text-md-sys-on-surface/60" title={f.name}>{f.name}</span>
@@ -640,7 +681,7 @@ const DevOCRPanel: React.FC = () => {
                                 <button onClick={() => saveCorpusFile('ground-truth.json', corpusTruth)} disabled={corpusBusy} className="px-3 py-1 rounded-control bg-md-sys-primary text-md-sys-on-primary text-label-sm font-bold disabled:opacity-disabled">Save</button>
                             </div>
                             <p className="text-label-xs opacity-secondary">Edit expected OCR outcomes for each sample.</p>
-                            <textarea value={corpusTruth} onChange={e => setCorpusTruth(e.target.value)} className="w-full min-h-[280px] md3-surface-low rounded-control p-3 text-label-sm font-mono outline-none border border-md-sys-outline/20" spellCheck={false} />
+                            <textarea value={corpusTruth} onChange={e => setCorpusTruth(e.target.value)} className="w-full min-h-280px md3-surface-low rounded-control p-3 text-label-sm font-mono outline-none border border-md-sys-outline/20" spellCheck={false} />
                         </div>
 
                         <div className="md3-card md3-surface-high rounded-card border border-md-sys-outline/10 p-3 flex flex-col gap-2">
@@ -649,7 +690,7 @@ const DevOCRPanel: React.FC = () => {
                                 <button onClick={() => saveCorpusFile('predictions.latest.json', corpusPredictions)} disabled={corpusBusy} className="px-3 py-1 rounded-control bg-md-sys-primary text-md-sys-on-primary text-label-sm font-bold disabled:opacity-disabled">Save</button>
                             </div>
                             <p className="text-label-xs opacity-secondary">Latest model outputs used for scoring against ground truth.</p>
-                            <textarea value={corpusPredictions} onChange={e => setCorpusPredictions(e.target.value)} className="w-full min-h-[280px] md3-surface-low rounded-control p-3 text-label-sm font-mono outline-none border border-md-sys-outline/20" spellCheck={false} />
+                            <textarea value={corpusPredictions} onChange={e => setCorpusPredictions(e.target.value)} className="w-full min-h-280px md3-surface-low rounded-control p-3 text-label-sm font-mono outline-none border border-md-sys-outline/20" spellCheck={false} />
                         </div>
                     </div>
 
@@ -657,20 +698,20 @@ const DevOCRPanel: React.FC = () => {
                         <div className="md3-card md3-surface rounded-card border border-md-sys-outline/10 p-3 flex flex-col gap-2">
                             <h3 className="font-bold uppercase text-label-sm opacity-secondary">baseline.json</h3>
                             <p className="text-label-xs opacity-secondary">Accepted baseline for regression comparison.</p>
-                            <textarea value={corpusBaseline} className="w-full min-h-[200px] md3-surface-low rounded-control p-3 text-label-sm font-mono outline-none border border-md-sys-outline/20 opacity-secondary" readOnly spellCheck={false} />
+                            <textarea value={corpusBaseline} className="w-full min-h-200px md3-surface-low rounded-control p-3 text-label-sm font-mono outline-none border border-md-sys-outline/20 opacity-secondary" readOnly spellCheck={false} />
                         </div>
 
                         <div className="md3-card md3-surface rounded-card border border-md-sys-outline/10 p-3 flex flex-col gap-2">
                             <h3 className="font-bold uppercase text-label-sm opacity-secondary">reports/index.json</h3>
                             <p className="text-label-xs opacity-secondary">Recent run history for trend tracking.</p>
-                            <textarea value={corpusIndex} className="w-full min-h-[200px] md3-surface-low rounded-control p-3 text-label-sm font-mono outline-none border border-md-sys-outline/20 opacity-secondary" readOnly spellCheck={false} />
+                            <textarea value={corpusIndex} className="w-full min-h-200px md3-surface-low rounded-control p-3 text-label-sm font-mono outline-none border border-md-sys-outline/20 opacity-secondary" readOnly spellCheck={false} />
                         </div>
                     </div>
 
                     <div className="mt-4 md3-card md3-surface rounded-card border border-md-sys-outline/10 p-3 flex flex-col gap-2">
                         <h3 className="font-bold uppercase text-label-sm opacity-secondary">reports/latest.json</h3>
                         <p className="text-label-xs opacity-secondary">Latest evaluation output (accuracy, regressions, deltas).</p>
-                        <textarea value={corpusLatestReport} className="w-full min-h-[260px] md3-surface-low rounded-control p-3 text-label-sm font-mono outline-none border border-md-sys-outline/20 opacity-secondary" readOnly spellCheck={false} />
+                        <textarea value={corpusLatestReport} className="w-full min-h-260px md3-surface-low rounded-control p-3 text-label-sm font-mono outline-none border border-md-sys-outline/20 opacity-secondary" readOnly spellCheck={false} />
                     </div>
                 </div>
             ) : (
@@ -692,7 +733,7 @@ const DevOCRPanel: React.FC = () => {
 
                         <div className="flex gap-4 flex-1 min-h-0">
                             {/* Image Preview Area */}
-                            <div className="flex-1 bg-black rounded-xl border border-md-sys-outline/20 overflow-hidden relative flex items-center justify-center">
+                            <div className="flex-1 bg-scrim-solid rounded-xl border border-md-sys-outline/20 overflow-hidden relative flex items-center justify-center">
                                 {loadError && (
                                     <div className="absolute top-2 left-2 right-2 bg-danger-soft border border-danger-soft rounded-lg px-3 py-2 text-label-sm text-danger z-10">
                                         {loadError}
@@ -806,9 +847,9 @@ const DevOCRPanel: React.FC = () => {
                                                         <span className="text-label-sm font-bold uppercase opacity-40">Opponent Teams ({ocrResult.opponentTeams.length})</span>
                                                         {ocrResult.opponentTeams.map((team, idx) => {
                                                             const colorMap: Record<string, string> = {
-                                                                'red': 'bg-red-500', 'orange': 'bg-orange-500',
-                                                                'yellow': 'bg-yellow-500', 'green': 'bg-green-500',
-                                                                'blue': 'bg-blue-500', 'purple': 'bg-purple-500'
+                                                                'red': 'bg-danger', 'orange': 'bg-warning',
+                                                                'yellow': 'bg-warning', 'green': 'bg-success',
+                                                                'blue': 'bg-info', 'purple': 'bg-accent'
                                                             };
                                                             return (
                                                                 <div key={idx} className="bg-md-sys-surface1 p-2 rounded">
@@ -832,7 +873,7 @@ const DevOCRPanel: React.FC = () => {
                                                 {ocrResult.rawText && (
                                                     <details className="text-label-sm opacity-50">
                                                         <summary className="cursor-pointer hover:opacity-100">View Raw OCR Text</summary>
-                                                        <pre className="whitespace-pre-wrap select-text bg-black/30 p-2 rounded mt-1 text-label-xs max-h-32 overflow-auto">
+                                                        <pre className="whitespace-pre-wrap select-text bg-scrim-30 p-2 rounded mt-1 text-label-xs max-h-32 overflow-auto">
                                                             {ocrResult.rawText}
                                                         </pre>
                                                     </details>
@@ -841,7 +882,7 @@ const DevOCRPanel: React.FC = () => {
                                                 {/* Raw JSON Toggle */}
                                                 <details className="text-label-sm opacity-50">
                                                     <summary className="cursor-pointer hover:opacity-100 mb-2">View Raw JSON</summary>
-                                                    <pre className="whitespace-pre-wrap select-text bg-black/20 p-2 rounded">
+                                                    <pre className="whitespace-pre-wrap select-text bg-scrim-20 p-2 rounded">
                                                         {JSON.stringify(ocrResult, null, 2)}
                                                     </pre>
                                                 </details>
@@ -896,18 +937,18 @@ const DevOCRPanel: React.FC = () => {
             {/* Lightbox Overlay */}
             {lightboxSrc && (
                 <div
-                    className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center cursor-zoom-out"
+                    className="fixed inset-0 z-overlay bg-scrim-90 flex items-center justify-center cursor-zoom-out"
                     onClick={() => setLightboxSrc(null)}
                 >
                     <img
                         src={lightboxSrc}
-                        className="max-w-[95vw] max-h-[95vh] object-contain select-none"
+                        className="max-w-95vw max-h-95vh object-contain select-none"
                         alt="Full size preview"
                         draggable={false}
                     />
                     <button
                         onClick={() => setLightboxSrc(null)}
-                        className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-xl transition-colors"
+                        className="absolute top-4 right-4 w-10 h-10 rounded-full bg-frost-10 hover:bg-frost-20 flex items-center justify-center text-on-scrim text-xl transition-colors"
                     >
                         &times;
                     </button>
