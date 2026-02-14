@@ -9,7 +9,7 @@ interface KillEfficiencyViewProps { data: KillEfficiencyData; visualMode: Visual
 export const KillEfficiencyView: React.FC<KillEfficiencyViewProps> = ({ data, visualMode }) => {
     const dense = visualMode === 'dense';
     const TrendIcon = data.trendDirection === 'up' ? TrendingUp : data.trendDirection === 'down' ? TrendingDown : Minus;
-    const trendColor = data.trendDirection === 'up' ? 'text-green-500' : data.trendDirection === 'down' ? 'text-red-500' : 'opacity-60';
+    const trendColor = data.trendDirection === 'up' ? 'text-success' : data.trendDirection === 'down' ? 'text-danger' : 'opacity-60';
 
     const shipData = Object.entries(data.killsByShipType)
         .map(([name, s]) => ({ name, avgKills: s.avgKills, total: s.total }))
@@ -32,7 +32,7 @@ export const KillEfficiencyView: React.FC<KillEfficiencyViewProps> = ({ data, vi
             <div className={`grid gap-4 ${dense ? 'grid-cols-3' : 'grid-cols-1 md:grid-cols-3'}`}>
                 <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
                     <div className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-1">Overall Avg Kills</div>
-                    <div className={`font-black text-orange-500 ${dense ? 'text-3xl' : 'text-4xl'}`}>{data.overallAvgKills}</div>
+                    <div className={`font-black text-warning ${dense ? 'text-3xl' : 'text-4xl'}`}>{data.overallAvgKills}</div>
                     <div className="text-label-xs font-bold opacity-40">Per match</div>
                 </div>
                 <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
@@ -71,7 +71,7 @@ export const KillEfficiencyView: React.FC<KillEfficiencyViewProps> = ({ data, vi
 
             {/* Breakdown charts */}
             <div className={`grid gap-4 ${dense ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2'}`}>
-                <div className={`md3-card rounded-2xl min-h-[250px] ${dense ? 'p-4' : 'p-6'}`}>
+                <div className={`md3-card rounded-2xl min-h-250px ${dense ? 'p-4' : 'p-6'}`}>
                     <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-label-sm' : 'text-body'}`}>By Ship</h3>
                     <ResponsiveContainer width="100%" height={dense ? 180 : 250}>
                         <BarChart data={shipData} layout="vertical" margin={{ left: 10 }}>
@@ -82,7 +82,7 @@ export const KillEfficiencyView: React.FC<KillEfficiencyViewProps> = ({ data, vi
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
-                <div className={`md3-card rounded-2xl min-h-[250px] ${dense ? 'p-4' : 'p-6'}`}>
+                <div className={`md3-card rounded-2xl min-h-250px ${dense ? 'p-4' : 'p-6'}`}>
                     <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-label-sm' : 'text-body'}`}>By Hero</h3>
                     <ResponsiveContainer width="100%" height={dense ? 180 : 250}>
                         <BarChart data={heroData} layout="vertical" margin={{ left: 10 }}>

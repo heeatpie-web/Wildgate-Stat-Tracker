@@ -70,7 +70,7 @@ export const MomentumView: React.FC<MomentumViewProps> = ({ data, visualMode }) 
             </div>
 
             {/* Timeline chart */}
-            <div className={`md3-card rounded-card flex-1 min-h-[300px] ${dense ? 'p-4' : 'p-6'}`}>
+            <div className={`md3-card rounded-card flex-1 min-h-300px ${dense ? 'p-4' : 'p-6'}`}>
                 <h3 className={`font-bold uppercase text-md-sys-on-surface/60 mb-4 flex items-center gap-2 ${dense ? 'text-label-sm' : 'text-body'}`}><Gauge size={14} /> Momentum Over Time</h3>
                 {data.timeline.length < 2 ? (
                     <div className="h-48 flex items-center justify-center text-md-sys-on-surface/40 font-bold uppercase text-body">Not enough data</div>

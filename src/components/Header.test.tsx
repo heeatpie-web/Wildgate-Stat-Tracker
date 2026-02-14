@@ -20,9 +20,12 @@ const uiState = {
   visionStatus: 'idle',
 };
 
-const gameData = {
-  players: ['Alec', 'Casey'],
-  deletePlayer: vi.fn(),
+const appStoreState = {
+  showSmartCaptureInHeader: true,
+  tutorialCompleted: false,
+  pendingMatchData: null as any,
+  matches: [] as any[],
+  sessionStartTime: Date.now() - 1000,
 };
 
 const userPrefs = {
@@ -30,25 +33,16 @@ const userPrefs = {
   setAppearanceMode: vi.fn(),
 };
 
-const appStoreState = {
-  showSmartCaptureInHeader: true,
-  tutorialCompleted: false,
-};
-
 vi.mock('../providers/UIStateProvider', () => ({
   useUIState: () => uiState,
 }));
 
-vi.mock('../providers/GameDataProvider', () => ({
-  useGameData: () => gameData,
+vi.mock('../store/useAppStore', () => ({
+  useAppStore: (selector: any) => selector(appStoreState),
 }));
 
 vi.mock('../providers/UserPreferencesProvider', () => ({
   useUserPreferences: () => userPrefs,
-}));
-
-vi.mock('../store/useAppStore', () => ({
-  useAppStore: (selector: any) => selector(appStoreState),
 }));
 
 vi.mock('./SystemPulse', () => ({
@@ -66,6 +60,9 @@ describe('Header', () => {
     Object.assign(appStoreState, {
       showSmartCaptureInHeader: true,
       tutorialCompleted: false,
+      pendingMatchData: null,
+      matches: [],
+      sessionStartTime: Date.now() - 1000,
     });
     vi.clearAllMocks();
   });
@@ -85,19 +82,14 @@ describe('Header', () => {
     expect(screen.queryByRole('button', { name: /tutorial/i })).toBeNull();
   }, 10000);
 
-  it('opens compact profile hub from avatar entry and exposes profile actions', async () => {
+  it('renders hamburger navigation control and calls the toggle handler', async () => {
     const { Header } = await import('./Header');
-    render(<Header />);
+    const onToggleNavigation = vi.fn();
+    render(<Header onToggleNavigation={onToggleNavigation} navigationAriaLabel="Open navigation" />);
 
-    const profileButtons = screen.getAllByTitle(/profile: alec/i);
-    fireEvent.click(profileButtons[0]);
-
-    expect(screen.getByText(/profile hub/i)).toBeInTheDocument();
-    expect(screen.getByTitle(/new profile/i)).toBeInTheDocument();
-    expect(screen.getByTitle(/rename profile/i)).toBeInTheDocument();
-    expect(screen.getByTitle(/delete profile/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^settings$/i })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /^tutorial$/i }).length).toBeGreaterThanOrEqual(2);
+    const navButton = screen.getByRole('button', { name: /open navigation/i });
+    fireEvent.click(navButton);
+    expect(onToggleNavigation).toHaveBeenCalledTimes(1);
   });
 
   it('dispatches smart capture request and routes to recording view from header CTA', async () => {
@@ -112,7 +104,30 @@ describe('Header', () => {
     expect(eventSpy).toHaveBeenCalledTimes(1);
 
     const event = eventSpy.mock.calls[0][0] as CustomEvent;
-    expect(event.detail).toEqual({ activeUser: 'Alec', source: 'header' });
+    expect(event.detail).toEqual({ activeUser: 'Alec', source: 'header', matchId: null });
+
+    window.removeEventListener('smart-capture-request', eventSpy as EventListener);
+  });
+
+  it('auto-binds header smart capture to latest telemetry draft match', async () => {
+    const { Header } = await import('./Header');
+    const now = Date.now();
+    const eventSpy = vi.fn();
+    appStoreState.sessionStartTime = now - 120_000;
+    appStoreState.matches = [{
+      id: 9001,
+      timestamp: now - 10_000,
+      player: 'Alec',
+      subType: 'Telemetry Draft',
+    }];
+    window.addEventListener('smart-capture-request', eventSpy as EventListener);
+
+    render(<Header />);
+    fireEvent.click(screen.getByRole('button', { name: /smart capture/i }));
+
+    expect(eventSpy).toHaveBeenCalledTimes(1);
+    const event = eventSpy.mock.calls[0][0] as CustomEvent;
+    expect(event.detail).toEqual({ activeUser: 'Alec', source: 'header', matchId: 9001 });
 
     window.removeEventListener('smart-capture-request', eventSpy as EventListener);
   });

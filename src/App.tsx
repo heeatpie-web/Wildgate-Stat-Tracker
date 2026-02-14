@@ -21,7 +21,7 @@ import Tutorial from './components/Tutorial';
 import { WindowResizer } from './components/WindowResizer';
 const AnalyticsPanel = React.lazy(() => import('./components/AnalyticsPanel'));
 const HistoryTable = React.lazy(() => import('./components/HistoryTable'));
-import { APP_VERSION, getShipCapacity, MatchResult } from './types';
+import { APP_VERSION, getShipCapacity, Match, MatchResult } from './types';
 import { CHANGELOG } from './utils/changelog';
 import { Toast } from './components/Toast';
 import { IdMapper } from './components/IdMapper';
@@ -49,6 +49,12 @@ interface TelemetryRetentionStatus {
     };
 }
 
+interface TelemetryDraftPromptState {
+    matchId: number;
+    duration: string;
+    phase: 'midmatch' | 'postmatch';
+}
+
 const formatBytes = (bytes: number): string => {
     if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
     const units = ['B', 'KB', 'MB', 'GB'];
@@ -66,11 +72,14 @@ const App: React.FC = () => {
     const [ocrGateOutcome, setOcrGateOutcome] = useState<MatchResult | null>(null);
     const [telemetryPruneStatus, setTelemetryPruneStatus] = useState<TelemetryRetentionStatus | null>(null);
     const [telemetryPruneBusy, setTelemetryPruneBusy] = useState(false);
+    const [telemetryDraftPrompt, setTelemetryDraftPrompt] = useState<TelemetryDraftPromptState | null>(null);
     const [isCompactNav, setIsCompactNav] = useState(() => window.innerWidth < 1024);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const navToggleRef = React.useRef<HTMLButtonElement | null>(null);
     const mobileNavRef = React.useRef<HTMLElement | null>(null);
     const telemetryPruneSnoozedRef = React.useRef(false);
+    const dismissedTelemetryDraftMidmatchPromptIdsRef = React.useRef<Set<number>>(new Set());
+    const handledTelemetryDraftPostmatchPromptIdsRef = React.useRef<Set<number>>(new Set());
     const setTutorialCompleted = useAppStore(s => s.setTutorialCompleted);
 
     const {
@@ -78,6 +87,7 @@ const App: React.FC = () => {
         showTutorial, setShowTutorial,
         showChangelog, setShowChangelog,
         showWizard, setShowWizard,
+        activeUser,
         activeMode,
         activeView,
         toast, setToast,
@@ -271,6 +281,130 @@ const App: React.FC = () => {
             setTelemetryPruneBusy(false);
         }
     }, [setToast, telemetryPruneBusy]);
+
+    const handleTelemetryDraftLater = useCallback(() => {
+        if (!telemetryDraftPrompt) return;
+        if (telemetryDraftPrompt.phase === 'midmatch') {
+            dismissedTelemetryDraftMidmatchPromptIdsRef.current.add(telemetryDraftPrompt.matchId);
+        } else {
+            handledTelemetryDraftPostmatchPromptIdsRef.current.add(telemetryDraftPrompt.matchId);
+        }
+        setTelemetryDraftPrompt(null);
+        setToast({
+            message: telemetryDraftPrompt.phase === 'midmatch'
+                ? 'Smart Capture reminder dismissed for this match.'
+                : 'Telemetry draft reminder dismissed for this match.',
+            type: 'info',
+        });
+    }, [setToast, telemetryDraftPrompt]);
+
+    const handleTelemetryDraftSmartCapture = useCallback(() => {
+        if (!telemetryDraftPrompt) return;
+        window.dispatchEvent(new CustomEvent('smart-capture-request', {
+            detail: {
+                activeUser: activeUser || null,
+                source: 'telemetry-draft-prompt',
+                requestId: `telemetry-draft-${telemetryDraftPrompt.matchId}-${Date.now()}`,
+                matchId: telemetryDraftPrompt.matchId,
+            },
+        }));
+        if (telemetryDraftPrompt.phase === 'midmatch') {
+            dismissedTelemetryDraftMidmatchPromptIdsRef.current.add(telemetryDraftPrompt.matchId);
+            setTelemetryDraftPrompt(null);
+            setToast({ message: 'Smart Capture started. Capture now; you can submit result after mission end.', type: 'info' });
+            return;
+        }
+        setToast({ message: 'Smart Capture started. You can submit result when ready.', type: 'info' });
+    }, [activeUser, setToast, telemetryDraftPrompt]);
+
+    const handleTelemetryDraftResult = useCallback((result: MatchResult) => {
+        if (!telemetryDraftPrompt || telemetryDraftPrompt.phase !== 'postmatch') return;
+        const draft = matches.find(m => m.id === telemetryDraftPrompt.matchId);
+        if (!draft) {
+            handledTelemetryDraftPostmatchPromptIdsRef.current.add(telemetryDraftPrompt.matchId);
+            setTelemetryDraftPrompt(null);
+            setToast({ message: 'Telemetry draft no longer exists. Start from Win/Loss/Draw buttons.', type: 'warning' });
+            return;
+        }
+
+        const pendingData: Partial<Match> = {
+            id: draft.id,
+            timestamp: draft.timestamp,
+            mode: draft.mode,
+            player: draft.player,
+            teammates: [...(draft.teammates || [])],
+            opponents: [...(draft.opponents || [])],
+            hero: draft.hero,
+            ship: draft.ship,
+            loadout: draft.loadout ? {
+                hero: draft.loadout.hero,
+                ship: draft.loadout.ship,
+                weapons: (draft.loadout.weapons || []).filter(Boolean),
+                equipment: (draft.loadout.equipment || []).filter(Boolean),
+            } : undefined,
+            reachModifiers: [...(draft.reachModifiers || [])],
+            kills: { ...(draft.kills || {}) },
+            time: draft.time || telemetryDraftPrompt.duration || '00:00',
+            damageTaken: draft.damageTaken || 0,
+            notes: draft.notes || '',
+            poiEasy: draft.poiEasy || 0,
+            poiMedium: draft.poiMedium || 0,
+            poiEpic: draft.poiEpic || 0,
+            timelineEvents: [...(draft.timelineEvents || [])],
+            opponentTeams: draft.opponentTeams || undefined,
+            ocrDebug: draft.ocrDebug || undefined,
+            artifacts: [...(draft.artifacts || [])],
+            ocrState: draft.ocrState,
+        };
+
+        handledTelemetryDraftPostmatchPromptIdsRef.current.add(draft.id);
+        setPendingMatchData(pendingData);
+        setTelemetryDraftPrompt(null);
+        if (activeView === 'recording') {
+            window.dispatchEvent(new CustomEvent('submission:open-result', {
+                detail: { result, source: 'telemetry-draft-prompt' }
+            }));
+        } else {
+            setShowWizard(result);
+        }
+        setToast({ message: `Telemetry draft loaded. Confirm ${result} details in the wizard.`, type: 'success' });
+    }, [activeView, matches, setPendingMatchData, setShowWizard, setToast, telemetryDraftPrompt]);
+
+    useEffect(() => {
+        const onTelemetryDraftReady = (evt: Event) => {
+            const customEvt = evt as CustomEvent<{ matchId?: number; duration?: string }>;
+            const matchId = Number(customEvt?.detail?.matchId || 0);
+            if (!Number.isInteger(matchId) || matchId <= 0) return;
+            if (handledTelemetryDraftPostmatchPromptIdsRef.current.has(matchId)) return;
+            setTelemetryDraftPrompt({
+                matchId,
+                duration: customEvt?.detail?.duration || '00:00',
+                phase: 'postmatch',
+            });
+        };
+
+        const onTelemetryDraftCapturePrompt = (evt: Event) => {
+            const customEvt = evt as CustomEvent<{ matchId?: number }>;
+            const matchId = Number(customEvt?.detail?.matchId || 0);
+            if (!Number.isInteger(matchId) || matchId <= 0) return;
+            if (dismissedTelemetryDraftMidmatchPromptIdsRef.current.has(matchId)) return;
+            setTelemetryDraftPrompt(current => {
+                if (current?.phase === 'postmatch') return current;
+                return {
+                    matchId,
+                    duration: '00:00',
+                    phase: 'midmatch',
+                };
+            });
+        };
+
+        window.addEventListener('telemetry:draft-ready', onTelemetryDraftReady as EventListener);
+        window.addEventListener('telemetry:draft-capture-prompt', onTelemetryDraftCapturePrompt as EventListener);
+        return () => {
+            window.removeEventListener('telemetry:draft-ready', onTelemetryDraftReady as EventListener);
+            window.removeEventListener('telemetry:draft-capture-prompt', onTelemetryDraftCapturePrompt as EventListener);
+        };
+    }, []);
 
     // Window restore/maximize animation
     const appRef = React.useRef<HTMLDivElement>(null);
@@ -681,6 +815,66 @@ const App: React.FC = () => {
                                 onClick={handleTelemetryPruneLater}
                                 disabled={telemetryPruneBusy}
                                 className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled"
+                            >
+                                Later
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {telemetryDraftPrompt && (
+                <div className="fixed z-popover bottom-4 left-4 right-4 md:right-auto md:w-[28rem] pointer-events-none">
+                    <div className="pointer-events-auto rounded-2xl border border-md-sys-primary/40 bg-md-sys-surface1 shadow-2xl p-4">
+                        <div className="text-body font-bold">
+                            {telemetryDraftPrompt.phase === 'midmatch' ? 'Telemetry match in progress' : 'Telemetry match ready'}
+                        </div>
+                        {telemetryDraftPrompt.phase === 'midmatch' ? (
+                            <div className="mt-1 text-label-sm opacity-70">
+                                Telemetry detected mission start. Capture Crew Hub/Tactical now for better OCR.
+                            </div>
+                        ) : (
+                            <>
+                                <div className="mt-1 text-label-sm opacity-70">
+                                    Duration: {telemetryDraftPrompt.duration}. Choose a result now, or start Smart Capture first.
+                                </div>
+                                <div className="mt-3 grid grid-cols-3 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleTelemetryDraftResult('Win')}
+                                        className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
+                                    >
+                                        Win
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleTelemetryDraftResult('Loss')}
+                                        className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
+                                    >
+                                        Loss
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleTelemetryDraftResult('Draw')}
+                                        className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
+                                    >
+                                        Draw
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                        <div className="mt-3 flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={handleTelemetryDraftSmartCapture}
+                                className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
+                            >
+                                Start Smart Capture
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleTelemetryDraftLater}
+                                className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
                             >
                                 Later
                             </button>

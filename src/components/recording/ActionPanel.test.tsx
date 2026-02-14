@@ -14,6 +14,11 @@ const gameData = {
   setIsMatchInProgress: vi.fn(),
   setPendingMatchData: vi.fn(),
   activeShip: 'Hunter',
+  shipSource: 'manual',
+  telemetryDetectedShip: undefined as string | undefined,
+  activeHero: 'Adrian',
+  heroSource: 'manual',
+  telemetryDetectedHero: undefined as string | undefined,
   pendingReviews: [],
   detectedUnknowns: {},
 };
@@ -53,6 +58,8 @@ const smartCaptureActions = {
   reanalyzeCaptures: vi.fn(),
 };
 
+const initiateSubmission = vi.fn();
+
 const appStoreState = {
   ocrMode: 'both',
 };
@@ -71,6 +78,14 @@ vi.mock('../../hooks/useSmartScan', () => ({
 
 vi.mock('../../hooks/useSmartCapture', () => ({
   useSmartCapture: () => [smartCaptureState, smartCaptureActions],
+}));
+
+vi.mock('../../hooks/useMatchSubmission', () => ({
+  useMatchSubmission: () => ({
+    initiateSubmission,
+    processFinalSubmission: vi.fn(),
+    submitting: false,
+  }),
 }));
 
 vi.mock('../../store/useAppStore', () => ({
@@ -156,4 +171,67 @@ describe('ActionPanel', () => {
     expect(onSmartCaptureData).toHaveBeenCalledWith(pendingPayload);
     expect(smartCaptureActions.dismissPendingData).toHaveBeenCalledTimes(1);
   });
+
+  it('uses unified result button styling and 3-way layout', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+
+    render(<ActionPanel />);
+
+    const resultButtons = screen.getAllByRole('button', { name: /win|loss|draw/i });
+    expect(resultButtons).toHaveLength(3);
+    resultButtons.forEach((button) => {
+      expect(button.className).toContain('recording-result-btn');
+    });
+  });
+
+  it('routes Win/Loss/Draw clicks through submission hook', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+
+    render(<ActionPanel />);
+    fireEvent.click(screen.getByRole('button', { name: /win/i }));
+    fireEvent.click(screen.getByRole('button', { name: /loss/i }));
+    fireEvent.click(screen.getByRole('button', { name: /draw/i }));
+
+    expect(initiateSubmission).toHaveBeenNthCalledWith(1, 'Win');
+    expect(initiateSubmission).toHaveBeenNthCalledWith(2, 'Loss');
+    expect(initiateSubmission).toHaveBeenNthCalledWith(3, 'Draw');
+  });
+
+  it('opens OCR gate before submission when pending OCR data exists', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    const onSmartCaptureData = vi.fn();
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    smartCaptureState.pendingData = {
+      screenshotType: 'tactical_map',
+      playerShip: undefined,
+      playerTeamName: undefined,
+      reachModifiers: [],
+      enemyShips: [],
+      teammates: [],
+      opponentTeams: [],
+      overallConfidence: 80,
+      captureTimestamp: Date.now(),
+    };
+
+    render(<ActionPanel onSmartCaptureData={onSmartCaptureData} />);
+    fireEvent.click(screen.getByRole('button', { name: /win/i }));
+
+    expect(initiateSubmission).not.toHaveBeenCalled();
+    const gateEvent = dispatchSpy.mock.calls
+      .map(([evt]) => evt as Event)
+      .find((evt) => evt.type === 'submission:ocr-gate') as CustomEvent | undefined;
+    expect(gateEvent).toBeDefined();
+    expect(gateEvent?.detail?.result).toBe('Win');
+    dispatchSpy.mockRestore();
+  });
+
+  it('emits processing OCR toast when smart capture enters processing', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    smartCaptureState.isProcessing = true;
+
+    render(<ActionPanel />);
+
+    expect(uiState.setToast).toHaveBeenCalledWith({ message: 'Processing OCR...', type: 'info' });
+  });
+
 });

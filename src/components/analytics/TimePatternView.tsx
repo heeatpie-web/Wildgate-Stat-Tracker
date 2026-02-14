@@ -47,7 +47,7 @@ export const TimePatternView: React.FC<TimePatternViewProps> = ({ data, visualMo
             </div>
 
             {/* Hour-of-day chart */}
-            <div className={`md3-card rounded-2xl ${dense ? 'p-4 min-h-[250px]' : 'p-6 min-h-[350px]'}`}>
+            <div className={`md3-card rounded-2xl ${dense ? 'p-4 min-h-250px' : 'p-6 min-h-350px'}`}>
                 <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-label-sm' : 'text-body'}`}><Clock size={14} /> Matches by Hour</h3>
                 <ResponsiveContainer width="100%" height={dense ? 200 : 280}>
                     <BarChart data={hourData}>
@@ -62,7 +62,7 @@ export const TimePatternView: React.FC<TimePatternViewProps> = ({ data, visualMo
             </div>
 
             {/* Day-of-week chart */}
-            <div className={`md3-card rounded-2xl ${dense ? 'p-4 min-h-[250px]' : 'p-6 min-h-[350px]'}`}>
+            <div className={`md3-card rounded-2xl ${dense ? 'p-4 min-h-250px' : 'p-6 min-h-350px'}`}>
                 <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-label-sm' : 'text-body'}`}><Clock size={14} /> Win Rate by Day</h3>
                 <ResponsiveContainer width="100%" height={dense ? 200 : 280}>
                     <BarChart data={dayData}>
@@ -85,7 +85,7 @@ export const TimePatternView: React.FC<TimePatternViewProps> = ({ data, visualMo
             <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
                 <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-label-sm' : 'text-body'}`}><Clock size={14} /> Activity Heatmap</h3>
                 <div className="overflow-x-auto">
-                    <div className="grid grid-cols-[auto_repeat(24,1fr)] gap-0.5 min-w-[600px]">
+                    <div className="grid grid-cols-time-heatmap gap-0.5 min-w-600px">
                         <div></div>
                         {Array.from({ length: 24 }, (_, h) => (
                             <div key={h} className="text-label-xs font-bold text-center opacity-40">{h}</div>
@@ -100,7 +100,7 @@ export const TimePatternView: React.FC<TimePatternViewProps> = ({ data, visualMo
                                         <div key={h} className="aspect-square rounded-sm relative group"
                                             style={{ backgroundColor: `rgba(var(--md-sys-color-primary-rgb, 99, 102, 241), ${intensity * 0.8 + 0.05})` }}>
                                             {cell && cell.matches > 0 && (
-                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-black/80 text-white text-label-xs p-1.5 rounded-lg whitespace-nowrap hidden group-hover:block z-50">
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-scrim-80 text-on-scrim text-label-xs p-1.5 rounded-lg whitespace-nowrap hidden group-hover:block z-50">
                                                     {cell.matches} match{cell.matches > 1 ? 'es' : ''} - {cell.winRate}% WR
                                                 </div>
                                             )}

@@ -140,63 +140,63 @@ export const calculateInsights = (matches: Match[]): Insight[] => {
     const squadWR = squadMatches.total > 5 ? (squadMatches.wins / squadMatches.total) : 0;
     const soloWR = soloMatches.total > 5 ? (soloMatches.wins / soloMatches.total) : 0;
     if (squadWR > soloWR + 0.15 && squadMatches.total > 5) {
-        res.push({ title: "Wolfpack Leader", subtitle: "High Squad Win Rate", value: `${Math.round(squadWR * 100)}%`, subValue: "Better Together", color: "bg-indigo-600", iconType: 'Users', priority: 60 });
+        res.push({ title: "Wolfpack Leader", subtitle: "High Squad Win Rate", value: `${Math.round(squadWR * 100)}%`, subValue: "Better Together", tone: "primary", iconType: 'Users', priority: 60 });
     } else if (soloWR > squadWR + 0.15 && soloMatches.total > 5) {
-        res.push({ title: "Lone Wolf", subtitle: "High Solo Win Rate", value: `${Math.round(soloWR * 100)}%`, subValue: "Solo Operative", color: "bg-slate-600", iconType: 'User', priority: 60 });
+        res.push({ title: "Lone Wolf", subtitle: "High Solo Win Rate", value: `${Math.round(soloWR * 100)}%`, subValue: "Solo Operative", tone: "secondary", iconType: 'User', priority: 60 });
     }
 
     // 2. Duration ("Late Game Expert" vs "Sprinter")
     const longWR = longMatches.total > 3 ? (longMatches.wins / longMatches.total) : 0;
     const shortWR = shortMatches.total > 3 ? (shortMatches.wins / shortMatches.total) : 0;
     if (longWR > shortWR + 0.2 && longMatches.total > 3) {
-        res.push({ title: "Late Game Expert", subtitle: "Long Match Specialist", value: `${Math.round(longWR * 100)}% WR`, subValue: ">12 Mins", color: "bg-purple-600", iconType: 'Clock', priority: 55 });
+        res.push({ title: "Late Game Expert", subtitle: "Long Match Specialist", value: `${Math.round(longWR * 100)}% WR`, subValue: ">12 Mins", tone: "accent", iconType: 'Clock', priority: 55 });
     } else if (shortWR > longWR + 0.2 && shortMatches.total > 3) {
-        res.push({ title: "Sprinter", subtitle: "Short Match Specialist", value: `${Math.round(shortWR * 100)}% WR`, subValue: "<8 Mins", color: "bg-amber-500", iconType: 'Zap', priority: 55 });
+        res.push({ title: "Sprinter", subtitle: "Short Match Specialist", value: `${Math.round(shortWR * 100)}% WR`, subValue: "<8 Mins", tone: "warning", iconType: 'Zap', priority: 55 });
     }
 
     // 3. Survivalist
     const highDmgWR = highDmgMatches.total > 3 ? (highDmgMatches.wins / highDmgMatches.total) : 0;
     const baseWR = validMatches.filter(m => m.result === 'Win').length / validMatches.length;
     if (highDmgWR > baseWR && highDmgMatches.total > 3) {
-        res.push({ title: "Survivalist", subtitle: "Thrives Under Pressure", value: `${Math.round(highDmgWR * 100)}% WR`, subValue: "High Dmg Taken", color: "bg-red-600", iconType: 'ShieldCheck', priority: 50 });
+        res.push({ title: "Survivalist", subtitle: "Thrives Under Pressure", value: `${Math.round(highDmgWR * 100)}% WR`, subValue: "High Dmg Taken", tone: "danger", iconType: 'ShieldCheck', priority: 50 });
     }
 
     // 4. Hazard Specialist
     const bestHazard = Object.entries(hazardStats).filter(e => e[1].total >= 3).sort((a, b) => (b[1].wins / b[1].total) - (a[1].wins / a[1].total))[0];
     if (bestHazard && (bestHazard[1].wins / bestHazard[1].total) > baseWR + 0.15) {
-        res.push({ title: "Hazard Expert", subtitle: `Master of ${bestHazard[0]}`, value: `${Math.round((bestHazard[1].wins / bestHazard[1].total) * 100)}% WR`, subValue: "Environmentally Adapted", color: "bg-teal-600", iconType: 'Mountain', priority: 45 });
+        res.push({ title: "Hazard Expert", subtitle: `Master of ${bestHazard[0]}`, value: `${Math.round((bestHazard[1].wins / bestHazard[1].total) * 100)}% WR`, subValue: "Environmentally Adapted", tone: "info", iconType: 'Mountain', priority: 45 });
     }
 
     // 5. Cursed Loadout
     const worstCombo = Object.entries(comboStats).filter(e => e[1].total >= 5).sort((a, b) => (a[1].wins / a[1].total) - (b[1].wins / b[1].total))[0];
     if (worstCombo && (worstCombo[1].wins / worstCombo[1].total) < 0.3) {
-        res.push({ title: "Cursed Loadout", subtitle: "Low Win Rate Combo", value: worstCombo[0], subValue: `${Math.round((worstCombo[1].wins / worstCombo[1].total) * 100)}% WR`, color: "bg-pink-700", iconType: 'Skull', priority: 70 });
+        res.push({ title: "Cursed Loadout", subtitle: "Low Win Rate Combo", value: worstCombo[0], subValue: `${Math.round((worstCombo[1].wins / worstCombo[1].total) * 100)}% WR`, tone: "accent", iconType: 'Skull', priority: 70 });
     }
 
     // 6. Objective Specialist
     const poiWR = highPoiMatches.total > 3 ? (highPoiMatches.wins / highPoiMatches.total) : 0;
     if (poiWR > baseWR + 0.1 && highPoiMatches.total > 3) {
-        res.push({ title: "Tactician", subtitle: "Objective Focused", value: `${Math.round(poiWR * 100)}% WR`, subValue: "High Capture Rate", color: "bg-cyan-600", iconType: 'Target', priority: 48 });
+        res.push({ title: "Tactician", subtitle: "Objective Focused", value: `${Math.round(poiWR * 100)}% WR`, subValue: "High Capture Rate", tone: "info", iconType: 'Target', priority: 48 });
     }
 
     // Keep Existing High-Value Insights (Aggregated logic for brevity)
     const topShip = Object.entries(shipCounts).sort((a, b) => b[1] - a[1])[0];
-    if (topShip) res.push({ title: "The Specialist", subtitle: "Most Piloted Vessel", value: topShip[0], subValue: `${topShip[1]} Sorties`, color: "bg-blue-500", iconType: 'Rocket', priority: 10 });
+    if (topShip) res.push({ title: "The Specialist", subtitle: "Most Piloted Vessel", value: topShip[0], subValue: `${topShip[1]} Sorties`, tone: "info", iconType: 'Rocket', priority: 10 });
 
     const topHero = Object.entries(heroStats).filter(([_, s]) => s.total >= 3).sort((a, b) => (b[1].wins / b[1].total) - (a[1].wins / a[1].total))[0];
-    if (topHero && (topHero[1].wins / topHero[1].total) > baseWR) res.push({ title: "Ace Pilot", subtitle: "Best Hero Win Rate", value: topHero[0], subValue: `${Math.round((topHero[1].wins / topHero[1].total) * 100)}% Win Rate`, color: "bg-green-500", iconType: 'Crown', priority: 20 });
+    if (topHero && (topHero[1].wins / topHero[1].total) > baseWR) res.push({ title: "Ace Pilot", subtitle: "Best Hero Win Rate", value: topHero[0], subValue: `${Math.round((topHero[1].wins / topHero[1].total) * 100)}% Win Rate`, tone: "success", iconType: 'Crown', priority: 20 });
 
-    if (topDmgMatch && ((topDmgMatch as any).damageTaken || 0) > 500) res.push({ title: "Top Gun", subtitle: "Highest Damage Record", value: `${(topDmgMatch as any).damageTaken} DMG`, subValue: `${((topDmgMatch as any).ship || '').split('(')[0]}`, color: "bg-red-500", iconType: 'Flame', priority: 15 });
+    if (topDmgMatch && ((topDmgMatch as any).damageTaken || 0) > 500) res.push({ title: "Top Gun", subtitle: "Highest Damage Record", value: `${(topDmgMatch as any).damageTaken} DMG`, subValue: `${((topDmgMatch as any).ship || '').split('(')[0]}`, tone: "danger", iconType: 'Flame', priority: 15 });
 
-    if (fastWinMatch) res.push({ title: "Blitz", subtitle: "Fastest Victory", value: (fastWinMatch as any).time || "00:00", subValue: `${((fastWinMatch as any).ship || '').split('(')[0]}`, color: "bg-yellow-500", iconType: 'Zap', priority: 25 });
+    if (fastWinMatch) res.push({ title: "Blitz", subtitle: "Fastest Victory", value: (fastWinMatch as any).time || "00:00", subValue: `${((fastWinMatch as any).ship || '').split('(')[0]}`, tone: "warning", iconType: 'Zap', priority: 25 });
 
-    if (slowWinMatch) res.push({ title: "The Grinder", subtitle: "Longest Victory", value: (slowWinMatch as any).time || "00:00", subValue: "Endurance Test", color: "bg-slate-500", iconType: 'Clock', priority: 5 });
+    if (slowWinMatch) res.push({ title: "The Grinder", subtitle: "Longest Victory", value: (slowWinMatch as any).time || "00:00", subValue: "Endurance Test", tone: "neutral", iconType: 'Clock', priority: 5 });
 
-    if (flawlessMatch) res.push({ title: "Flawless", subtitle: "Zero Damage Victory", value: "Untouchable", subValue: `${((flawlessMatch as any).ship || '').split('(')[0]}`, color: "bg-cyan-400", iconType: 'ShieldCheck', priority: 50 });
+    if (flawlessMatch) res.push({ title: "Flawless", subtitle: "Zero Damage Victory", value: "Untouchable", subValue: `${((flawlessMatch as any).ship || '').split('(')[0]}`, tone: "info", iconType: 'ShieldCheck', priority: 50 });
 
-    if (pacifistMatch) res.push({ title: "Pacifist", subtitle: "Zero Kill Victory", value: "Peacekeeper", subValue: "Diplomatic Win", color: "bg-indigo-400", iconType: 'Ghost', priority: 30 });
+    if (pacifistMatch) res.push({ title: "Pacifist", subtitle: "Zero Kill Victory", value: "Peacekeeper", subValue: "Diplomatic Win", tone: "secondary", iconType: 'Ghost', priority: 30 });
 
-    if (warlordMatch) res.push({ title: "Warlord", subtitle: "High Kill Count", value: `${Object.values((warlordMatch as any).kills || {}).reduce((a: any, b: any) => a + b, 0)} Eliminations`, subValue: "Ace Status", color: "bg-red-600", iconType: 'Crosshair', priority: 30 });
+    if (warlordMatch) res.push({ title: "Warlord", subtitle: "High Kill Count", value: `${Object.values((warlordMatch as any).kills || {}).reduce((a: any, b: any) => a + b, 0)} Eliminations`, subValue: "Ace Status", tone: "danger", iconType: 'Crosshair', priority: 30 });
 
     // Advanced Insights (Opponent/Artifact)
     const opponentStats: Record<string, { wins: number, total: number }> = {};
@@ -216,10 +216,10 @@ export const calculateInsights = (matches: Match[]): Insight[] => {
     });
 
     const nemesis = Object.entries(opponentStats).find(([_, s]) => s.total >= 3 && s.wins === 0);
-    if (nemesis) res.push({ title: "Nemesis Detected", subtitle: "Tough Opponent", value: nemesis[0], subValue: `0% Win Rate (${nemesis[1].total} Enc.)`, color: "bg-red-900", iconType: 'Skull', priority: 45 });
+    if (nemesis) res.push({ title: "Nemesis Detected", subtitle: "Tough Opponent", value: nemesis[0], subValue: `0% Win Rate (${nemesis[1].total} Enc.)`, tone: "danger", iconType: 'Skull', priority: 45 });
 
     const bestArt = Object.entries(artifactStats).filter(([_, s]) => s.total >= 2).sort((a, b) => (b[1].wins / b[1].total) - (a[1].wins / a[1].total))[0];
-    if (bestArt && (bestArt[1].wins / bestArt[1].total) > 0.7) res.push({ title: "Artifact Specialist", subtitle: "Highest Win Affinity", value: bestArt[0], subValue: `${Math.round((bestArt[1].wins / bestArt[1].total) * 100)}% Win Rate`, color: "bg-amber-600", iconType: 'Zap', priority: 35 });
+    if (bestArt && (bestArt[1].wins / bestArt[1].total) > 0.7) res.push({ title: "Artifact Specialist", subtitle: "Highest Win Affinity", value: bestArt[0], subValue: `${Math.round((bestArt[1].wins / bestArt[1].total) * 100)}% Win Rate`, tone: "warning", iconType: 'Zap', priority: 35 });
 
     // Phase 3.3: Add death cause insights
     const deathInsights = calculateDeathCauseAnalytics(validMatches);
@@ -272,7 +272,7 @@ export const calculateDeathCauseAnalytics = (matches: Match[]): Insight[] => {
             subtitle: "Most Common Death Cause",
             value: topCause,
             subValue: `${count}x (${percentage}% of losses)`,
-            color: "bg-red-700",
+            tone: "danger",
             iconType: 'Skull',
             priority: 65
         });
@@ -287,7 +287,7 @@ export const calculateDeathCauseAnalytics = (matches: Match[]): Insight[] => {
                 subtitle: "Another Common Killer",
                 value: secondCause[0],
                 subValue: `${secondCause[1]}x deaths`,
-                color: "bg-orange-600",
+                tone: "warning",
                 iconType: 'Skull',
                 priority: 40
             });
@@ -338,7 +338,7 @@ export const calculatePoiCorrelation = (matches: Match[]): Insight[] => {
             subtitle: "Capture = Victory",
             value: `${Math.round(highPoiWR * 100)}% WR`,
             subValue: `When capturing 3+ POIs`,
-            color: "bg-cyan-600",
+            tone: "info",
             iconType: 'Target',
             priority: 55
         });
@@ -351,7 +351,7 @@ export const calculatePoiCorrelation = (matches: Match[]): Insight[] => {
             subtitle: "Wins Without Objectives",
             value: `${Math.round(lowPoiWR * 100)}% WR`,
             subValue: `When capturing few POIs`,
-            color: "bg-purple-600",
+            tone: "accent",
             iconType: 'Crosshair',
             priority: 45
         });
@@ -364,7 +364,7 @@ export const calculatePoiCorrelation = (matches: Match[]): Insight[] => {
             subtitle: "Capture != Victory",
             value: `${Math.round(highPoiWR * 100)}% WR`,
             subValue: `Despite high captures`,
-            color: "bg-amber-600",
+            tone: "warning",
             iconType: 'AlertTriangle',
             priority: 60
         });
@@ -426,7 +426,7 @@ export const calculateLoadoutAnalytics = (matches: Match[]): {
             subtitle: "Best Win Rate Weapon",
             value: bestWeapon,
             subValue: `${wr}% WR (${stat.total} matches)`,
-            color: "bg-green-600",
+            tone: "success",
             iconType: 'Target',
             priority: 50
         });
@@ -441,7 +441,7 @@ export const calculateLoadoutAnalytics = (matches: Match[]): {
             subtitle: "Consider Switching",
             value: worstWeapon,
             subValue: `${wr}% WR (${stat.total} matches)`,
-            color: "bg-red-600",
+            tone: "danger",
             iconType: 'Skull',
             priority: 55
         });

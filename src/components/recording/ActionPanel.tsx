@@ -18,6 +18,7 @@ import { useUIState } from '../../providers/UIStateProvider';
 import Logger from '../../utils/logger';
 import { useSmartScan } from '../../hooks/useSmartScan';
 import { useSmartCapture } from '../../hooks/useSmartCapture';
+import { useMatchSubmission } from '../../hooks/useMatchSubmission';
 import { useAppStore } from '../../store/useAppStore';
 
 interface ActionPanelProps {
@@ -26,6 +27,8 @@ interface ActionPanelProps {
     onSmartCaptureData?: (data: any) => void;
 }
 
+type MatchResult = 'Win' | 'Loss' | 'Draw';
+
 export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', density = 'standard', onSmartCaptureData }) => {
     const {
         sessionStartTime,
@@ -33,7 +36,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         lastActivity, setLastActivity,
         matchStartTime, isMatchInProgress,
         setMatchStartTime, setIsMatchInProgress,
-        setPendingMatchData,
         activeShip, shipSource, telemetryDetectedShip,
         activeHero, heroSource, telemetryDetectedHero,
         pendingReviews,
@@ -41,7 +43,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     } = useGameData();
 
     const {
-        setShowWizard,
         activeUser,
         setShowReviewQueue,
         setShowIdMapper,
@@ -78,14 +79,42 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         processAllStored,
         clearError: clearCaptureError,
         dismissPendingData,
+        getPendingData,
         reanalyzeCaptures
     } = smartCaptureActions;
+    const { initiateSubmission: openResultWizard } = useMatchSubmission();
 
-    const pendingOcrCount = savedCaptures.filter(c => !c.ocrProcessed).length;
+    const resolveSubmissionMatchId = React.useCallback((): string | number | null => {
+        const stateGetter = (useAppStore as any)?.getState;
+        const state = typeof stateGetter === 'function' ? stateGetter() : null;
+        const pendingId = Number(state?.pendingMatchData?.id || 0);
+        if (Number.isInteger(pendingId) && pendingId > 0) return pendingId;
+
+        const sourceMatches = Array.isArray(state?.matches) ? state.matches : matches;
+        const sourceSessionStart = typeof state?.sessionStartTime === 'number' ? state.sessionStartTime : sessionStartTime;
+        const sourceUser = (typeof state?.activeUser === 'string' ? state.activeUser : activeUser) || '';
+        const recentCutoff = (typeof sourceSessionStart === 'number' && sourceSessionStart > 0)
+            ? (sourceSessionStart - 60_000)
+            : (Date.now() - (6 * 60 * 60 * 1000));
+        const unresolvedDraft = (sourceMatches || []).find((m: any) => {
+            if (!m || m.subType !== 'Telemetry Draft') return false;
+            if (Number(m.timestamp || 0) < recentCutoff) return false;
+            if (sourceUser && m.player && m.player !== sourceUser) return false;
+            return true;
+        });
+        return unresolvedDraft?.id ?? null;
+    }, [activeUser, matches, sessionStartTime]);
+
+    const submissionMatchId = resolveSubmissionMatchId();
+    const pendingOcrCountGlobal = savedCaptures.filter(c => !c.ocrProcessed).length;
+    const pendingOcrCountForSubmission = submissionMatchId == null
+        ? pendingOcrCountGlobal
+        : savedCaptures.filter(c => !c.ocrProcessed && String((c as any).matchId ?? '') === String(submissionMatchId)).length;
 
     const handleReviewBucket = () => {
-        if (pendingData && onSmartCaptureData) {
-            onSmartCaptureData(pendingData);
+        const scopedPending = submissionMatchId != null ? getPendingData(submissionMatchId) : pendingData;
+        if (scopedPending && onSmartCaptureData) {
+            onSmartCaptureData(scopedPending);
             dismissPendingData();
         }
     };
@@ -116,7 +145,11 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
 
     const handleNewSmartCapture = async () => {
         if (onSmartCaptureData) {
-            await triggerSmartCapture(activeUser || null);
+            if (submissionMatchId != null) {
+                await triggerSmartCapture(activeUser || null, submissionMatchId);
+            } else {
+                await triggerSmartCapture(activeUser || null);
+            }
         } else {
             handleSmartScan();
         }
@@ -125,14 +158,22 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const logsEndRef = React.useRef<HTMLDivElement>(null);
     const handledCaptureRequestRef = React.useRef<string | null>(null);
     const lastCaptureRequestAtRef = React.useRef(0);
-    const [lastSubmitted, setLastSubmitted] = React.useState<'Win' | 'Loss' | 'Draw' | null>(null);
+    const [lastSubmitted, setLastSubmitted] = React.useState<MatchResult | null>(null);
+    const [pulseResult, setPulseResult] = React.useState<MatchResult | null>(null);
+    const lastSubmitSignalRef = React.useRef<{ result: MatchResult; at: number } | null>(null);
+    const [ripples, setRipples] = React.useState<Record<MatchResult, { id: number; x: number; y: number } | null>>({
+        Win: null,
+        Loss: null,
+        Draw: null,
+    });
+    const processingToastShownRef = React.useRef(false);
     React.useEffect(() => {
         if (logsEndRef.current) logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }, [scanLogs]);
 
     React.useEffect(() => {
         const onCaptureRequest = (evt: Event) => {
-            const custom = evt as CustomEvent<{ activeUser?: string | null; requestId?: string }>;
+            const custom = evt as CustomEvent<{ activeUser?: string | null; requestId?: string; matchId?: string | number | null }>;
             const requestId = custom?.detail?.requestId || null;
             if (requestId && handledCaptureRequestRef.current === requestId) return;
             if (requestId) handledCaptureRequestRef.current = requestId;
@@ -140,20 +181,116 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             if (now - lastCaptureRequestAtRef.current < 350) return;
             lastCaptureRequestAtRef.current = now;
             const requestedUser = custom?.detail?.activeUser;
-            void triggerSmartCapture(requestedUser ?? activeUser ?? null);
+            const requestedMatchId = custom?.detail?.matchId;
+            if (requestedMatchId != null && requestedMatchId !== '') {
+                void triggerSmartCapture(requestedUser ?? activeUser ?? null, requestedMatchId);
+            } else {
+                void triggerSmartCapture(requestedUser ?? activeUser ?? null);
+            }
         };
         window.addEventListener('smart-capture-request', onCaptureRequest as EventListener);
         return () => window.removeEventListener('smart-capture-request', onCaptureRequest as EventListener);
     }, [triggerSmartCapture, activeUser]);
 
-    const initiateSubmission = (result: 'Win' | 'Loss' | 'Draw') => {
-        setLastSubmitted(result);
-        setPendingMatchData({
-            result,
-            ship: (activeShip && activeShip !== 'Unknown') ? activeShip : undefined
-        });
-        setShowWizard(result);
+    React.useEffect(() => {
+        if (isProcessing && !processingToastShownRef.current) {
+            processingToastShownRef.current = true;
+            setToast({ message: 'Processing OCR...', type: 'info' });
+        }
+        if (!isProcessing) {
+            processingToastShownRef.current = false;
+        }
+    }, [isProcessing, setToast]);
+
+    React.useEffect(() => {
+        const onMatchComplete = (evt: Event) => {
+            const customEvt = evt as CustomEvent<{ result?: MatchResult }>;
+            const result = customEvt?.detail?.result;
+            if (!result) return;
+            setPulseResult(result);
+            setTimeout(() => setPulseResult(null), 700);
+        };
+        window.addEventListener('recording:match-complete', onMatchComplete as EventListener);
+        return () => window.removeEventListener('recording:match-complete', onMatchComplete as EventListener);
+    }, []);
+
+    const triggerResultRipple = (result: MatchResult, event: React.PointerEvent<HTMLButtonElement>) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        const id = Date.now();
+        setRipples((prev) => ({ ...prev, [result]: { id, x, y } }));
+        setTimeout(() => {
+            setRipples((prev) => (prev[result]?.id === id ? { ...prev, [result]: null } : prev));
+        }, 320);
     };
+
+    const initiateSubmission = async (result: MatchResult) => {
+        const now = Date.now();
+        const lastSignal = lastSubmitSignalRef.current;
+        if (lastSignal && lastSignal.result === result && (now - lastSignal.at) < 250) {
+            return;
+        }
+        lastSubmitSignalRef.current = { result, at: now };
+        setLastSubmitted(result);
+
+        const scopedPendingData = submissionMatchId != null ? getPendingData(submissionMatchId) : pendingData;
+        if (onSmartCaptureData && (scopedPendingData || pendingOcrCountForSubmission > 0)) {
+            let reviewData = scopedPendingData;
+            if (!reviewData && pendingOcrCountForSubmission > 0) {
+                await processAllStored(activeUser || null, submissionMatchId ?? null);
+                reviewData = submissionMatchId != null ? getPendingData(submissionMatchId) : getPendingData();
+            }
+            if (reviewData) {
+                window.dispatchEvent(new CustomEvent('submission:ocr-gate', { detail: { result, data: reviewData } }));
+                return;
+            }
+        }
+
+        openResultWizard(result);
+    };
+
+    React.useEffect(() => {
+        const onOpenResultRequest = (evt: Event) => {
+            const customEvt = evt as CustomEvent<{ result?: MatchResult }>;
+            const result = customEvt?.detail?.result;
+            if (!result) return;
+            void initiateSubmission(result);
+        };
+        window.addEventListener('submission:open-result', onOpenResultRequest as EventListener);
+        return () => window.removeEventListener('submission:open-result', onOpenResultRequest as EventListener);
+    }, [initiateSubmission]);
+
+    const ResultButtons: React.FC<{ compact: boolean }> = ({ compact }) => (
+        <div className={`grid grid-cols-3 ${compact ? 'gap-1.5' : 'gap-2'}`}>
+            {([
+                { key: 'Win', icon: Trophy, cls: 'recording-result-btn--win' },
+                { key: 'Loss', icon: Skull, cls: 'recording-result-btn--loss' },
+                { key: 'Draw', icon: Scale, cls: 'recording-result-btn--draw' },
+            ] as const).map(({ key, icon: Icon, cls }) => (
+                <button
+                    key={key}
+                    type="button"
+                    onPointerDown={(event) => {
+                        triggerResultRipple(key, event);
+                        if (event.button === 0) void initiateSubmission(key);
+                    }}
+                    onClick={() => { void initiateSubmission(key); }}
+                    className={`recording-result-btn ${cls} ${compact ? 'rounded-control' : 'rounded-card'} ${lastSubmitted === key ? 'is-selected' : ''} ${pulseResult === key ? 'is-pulse' : ''}`}
+                >
+                    <Icon size={compact ? 18 : 20} />
+                    <span>{key}</span>
+                    {ripples[key] && (
+                        <span
+                            key={ripples[key]!.id}
+                            className="recording-result-ripple"
+                            style={{ left: ripples[key]!.x, top: ripples[key]!.y }}
+                        />
+                    )}
+                </button>
+            ))}
+        </div>
+    );
 
     // Shared Status Block (OCR Progress)
     const StatusOverlay = () => (
@@ -211,7 +348,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     onClick={handleNewSmartCapture}
                     disabled={isBusy}
                     data-tour="smart-capture"
-                    className="relative z-50 w-full bg-md-sys-primary text-md-sys-onPrimary py-4 font-bold text-body uppercase tracking-wide flex items-center justify-center gap-3 shadow-xl ring-2 ring-md-sys-primary/30 active:scale-[0.98] transition-all disabled:opacity-disabled disabled:cursor-not-allowed group rounded-card"
+                    className="relative z-50 w-full bg-md-sys-primary text-md-sys-onPrimary py-4 font-bold text-body uppercase tracking-wide flex items-center justify-center gap-3 shadow-xl ring-2 ring-md-sys-primary/30 active:scale-98 transition-all disabled:opacity-disabled disabled:cursor-not-allowed group rounded-card"
                 >
                     {isBusy ? <Loader2 size={18} className="animate-spin" /> : <Scan size={18} className="group-hover:scale-110 transition-transform" />}
                     <span>Smart Capture</span>
@@ -243,7 +380,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     </div>
                 )}
 
-                {(capturedScreenshots.length > 0 || pendingOcrCount > 0) && (
+                {(capturedScreenshots.length > 0 || pendingOcrCountGlobal > 0) && (
                     <div className="flex gap-2 animate-in slide-in-from-top-1">
                         <button
                             onClick={pendingData ? handleReviewBucket : handleProcessQueue}
@@ -251,7 +388,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                             className="flex-1 bg-md-sys-primary/10 hover:bg-md-sys-primary/20 text-md-sys-primary border border-md-sys-primary/20 text-label-sm uppercase font-bold py-2.5 rounded-control transition-all disabled:opacity-disabled flex items-center justify-center gap-2"
                         >
                             <span className="px-1.5 py-0.5 bg-md-sys-primary text-md-sys-onPrimary text-label-xs font-bold rounded-full">
-                                {pendingData ? capturedScreenshots.length : pendingOcrCount}
+                                {pendingData ? capturedScreenshots.length : pendingOcrCountGlobal}
                             </span>
                             {pendingData ? 'Review & Apply' : 'Process Queue'}
                         </button>
@@ -298,10 +435,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     />
                 </div>
 
-                <div className="grid grid-cols-3 gap-1.5 mt-1">
-                    <button onClick={() => initiateSubmission('Win')} className={`btn-win text-label-sm py-2.5 rounded-control font-bold uppercase flex flex-col items-center justify-center gap-1 shadow-sm transition-all ${lastSubmitted === 'Win' ? 'ring-2 ring-white/70 scale-[1.02]' : ''}`}><Trophy size={16} /> Win</button>
-                    <button onClick={() => initiateSubmission('Loss')} className={`btn-loss text-label-sm py-2.5 rounded-control font-bold uppercase flex flex-col items-center justify-center gap-1 shadow-sm transition-all ${lastSubmitted === 'Loss' ? 'ring-2 ring-white/70 scale-[1.02]' : ''}`}><Skull size={16} /> Loss</button>
-                    <button onClick={() => initiateSubmission('Draw')} className={`btn-draw text-label-sm py-2.5 rounded-control font-bold uppercase flex flex-col items-center justify-center gap-1 shadow-sm transition-all ${lastSubmitted === 'Draw' ? 'ring-2 ring-white/70 scale-[1.02]' : ''}`}><Scale size={16} /> Draw</button>
+                <div className="mt-1">
+                    <ResultButtons compact />
                 </div>
 
                 {processingProgress && (
@@ -345,23 +480,23 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     return (
         <div className={`flex flex-col ${isCompact ? 'gap-3' : 'gap-4'}`}>
             {/* Mission Section */}
-            <div className={`md3-card flex flex-col overflow-visible mg-surface shadow-lg ${isCompact ? 'p-3 gap-3' : 'p-4 gap-4'}`}>
+            <div data-recording-panel="match-recording" className={`md3-card flex flex-col overflow-visible mg-surface shadow-lg ${isCompact ? 'p-3 gap-3' : 'p-4 gap-4'}`}>
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className={`${isCompact ? 'w-8 h-8 rounded-control' : 'w-10 h-10 rounded-card'} bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer flex items-center justify-center`}>
                             <Trophy size={isCompact ? 14 : 18} />
                         </div>
-                        <h3 className="text-body font-bold text-md-sys-on-surface uppercase tracking-tight">Match Recording</h3>
+                        <h3 className="md3-title font-semibold text-md-sys-on-surface uppercase tracking-tight">Match Recording</h3>
                     </div>
-                    {(capturedScreenshots.length > 0 || pendingOcrCount > 0) && (
+                    {(capturedScreenshots.length > 0 || pendingOcrCountGlobal > 0) && (
                         <button
                             onClick={pendingData ? handleReviewBucket : handleProcessQueue}
                             disabled={isBusy}
-                            className={`bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer rounded-control font-bold text-label-sm uppercase tracking-widest relative overflow-visible ${isCompact ? 'h-[36px] px-2.5' : 'h-[36px] px-3'}`}
+                            className={`bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer rounded-control font-bold text-label-sm uppercase tracking-widest relative overflow-visible ${isCompact ? 'h-36px px-2.5' : 'h-36px px-3'}`}
                         >
-                            {pendingData ? 'Review' : `Process ${pendingOcrCount}`}
+                            {pendingData ? 'Review' : `Process ${pendingOcrCountGlobal}`}
                             <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-md-sys-primary text-md-sys-onPrimary rounded-full text-label-xs flex items-center justify-center shadow-md animate-in zoom-in-50">
-                                {pendingData ? capturedScreenshots.length : pendingOcrCount}
+                                {pendingData ? capturedScreenshots.length : pendingOcrCountGlobal}
                             </span>
                         </button>
                     )}
@@ -381,11 +516,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     />
                 </div>
 
-                <div className={`grid grid-cols-3 ${isCompact ? 'gap-1.5' : 'gap-2'}`}>
-                    <button onClick={() => initiateSubmission('Win')} className={`btn-win flex flex-col ${isCompact ? 'gap-1 py-3 rounded-control' : 'gap-1.5 py-4 rounded-card'} items-center font-bold uppercase text-label-sm transition-all hover:brightness-110 active:scale-[0.98] ${lastSubmitted === 'Win' ? 'ring-2 ring-white/70 scale-[1.02]' : ''}`}><Trophy size={isCompact ? 18 : 20} /> Win</button>
-                    <button onClick={() => initiateSubmission('Loss')} className={`btn-loss flex flex-col ${isCompact ? 'gap-1 py-3 rounded-control' : 'gap-1.5 py-4 rounded-card'} items-center font-bold uppercase text-label-sm transition-all hover:brightness-110 active:scale-[0.98] ${lastSubmitted === 'Loss' ? 'ring-2 ring-white/70 scale-[1.02]' : ''}`}><Skull size={isCompact ? 18 : 20} /> Loss</button>
-                    <button onClick={() => initiateSubmission('Draw')} className={`btn-draw flex flex-col ${isCompact ? 'gap-1 py-3 rounded-control' : 'gap-1.5 py-4 rounded-card'} items-center font-bold uppercase text-label-sm transition-all hover:brightness-110 active:scale-[0.98] ${lastSubmitted === 'Draw' ? 'ring-2 ring-white/70 scale-[1.02]' : ''}`}><Scale size={isCompact ? 18 : 20} /> Draw</button>
-                </div>
+                <ResultButtons compact={isCompact} />
 
                 <button
                     type="button"

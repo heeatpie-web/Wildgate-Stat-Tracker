@@ -125,10 +125,6 @@ export const processTelemetryEvent = (
         actions.setOverlayPhase('Result');
         actions.setToast({ message: "Mission Accomplished - Ready for Submission", type: 'success' });
 
-        // Open Wizard without assuming a result - let user select
-        // FIX: Previously hardcoded 'Win' which was incorrect
-        actions.setShowWizard(null);
-
         Logger.info('TelemetryProcessor', `Match End Detected. Duration: ${formatDuration(totalSeconds * 1000)}`);
     }
 

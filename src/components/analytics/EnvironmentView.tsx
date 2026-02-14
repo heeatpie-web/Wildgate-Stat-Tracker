@@ -47,7 +47,7 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
                     {data.slice(0, 6).map(d => (
                         <div key={d.name} className={`md3-card rounded-xl ${dense ? 'p-2' : 'p-3'} text-center`}>
                             <div className="text-label-xs font-black uppercase opacity-40 truncate mb-1">{d.name}</div>
-                            <div className={`text-body font-black flex items-center justify-center gap-1 ${d.impact >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                            <div className={`text-body font-black flex items-center justify-center gap-1 ${d.impact >= 0 ? 'text-success' : 'text-danger'}`}>
                                 {d.impact >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                                 {d.impact >= 0 ? '+' : ''}{d.impact}%
                             </div>
@@ -58,7 +58,7 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
             )}
 
             <div className={`grid gap-4 ${dense ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
-                <div className={`md3-card rounded-2xl flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
+                <div className={`md3-card rounded-2xl flex flex-col ${dense ? 'p-6 min-h-300px' : 'p-8 min-h-400px'}`}>
                     <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><Zap size={16} /> Hazard Frequency</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart><Pie data={data} dataKey="total" nameKey="name" cx="50%" cy="50%" outerRadius="80%" innerRadius="50%" paddingAngle={2}>
@@ -66,7 +66,7 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
                         </Pie><Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }} /><Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} /></PieChart>
                     </ResponsiveContainer>
                 </div>
-                <div className={`md3-card rounded-2xl flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
+                <div className={`md3-card rounded-2xl flex flex-col ${dense ? 'p-6 min-h-300px' : 'p-8 min-h-400px'}`}>
                     <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><Trophy size={16} /> Win Rate by Hazard</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={data} layout="vertical" margin={{ left: 30, right: 16 }}>
@@ -81,7 +81,7 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
                     </ResponsiveContainer>
                 </div>
                 {/* Stacked Win/Loss Breakdown */}
-                <div className={`md3-card rounded-2xl flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
+                <div className={`md3-card rounded-2xl flex flex-col ${dense ? 'p-6 min-h-300px' : 'p-8 min-h-400px'}`}>
                     <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><Trophy size={16} /> Win/Loss Breakdown</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={data} layout="vertical" margin={{ left: 30, right: 16 }}>

@@ -29,7 +29,8 @@ export const RosterPanel: React.FC = () => {
         setSelectedReachModifiers,
         sessionShipTypes,
         addPendingReview,
-        pendingReviews
+        pendingReviews,
+        isMatchInProgress
     } = useGameData();
 
     const [searchTerm, setSearchTerm] = useState("");
@@ -47,6 +48,7 @@ export const RosterPanel: React.FC = () => {
 
     const hasTeammates = selectedTeammates.length > 0;
     const hasOpponents = selectedOpponents.length > 0;
+    const rosterTelemetryActive = Object.values(sessionTeams || {}).some(team => (team?.length || 0) > 0);
 
     const filtered = Array.from(new Set(pilotRegistry))
         .filter((p: string) => !selectedTeammates.includes(p) && !selectedOpponents.includes(p))
@@ -103,15 +105,19 @@ export const RosterPanel: React.FC = () => {
 
 
     return (
-        <div className="md3-card recording-inside-panel flex flex-col overflow-visible mg-surface shadow-lg p-3 gap-3 h-full">
-            <div className="flex items-center justify-between">
-                <h3 className="text-body font-bold text-md-sys-on-surface uppercase tracking-tight flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-control bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer flex items-center justify-center">
-                        <Users size={14} />
+        <div data-recording-panel="roster-manager" className="md3-card recording-inside-panel flex flex-col overflow-visible mg-surface shadow-lg p-4 gap-4 h-full">
+            <div className="recording-panel-header">
+                <div className="recording-panel-heading">
+                    <span className="recording-panel-heading-icon">
+                        <Users size={12} />
                     </span>
-                    Roster Manager
-                </h3>
-                <div className="flex items-center gap-2">
+                    <h3 className="recording-panel-heading-title">Roster Manager</h3>
+                    <span className={`recording-telemetry-indicator ${rosterTelemetryActive ? 'is-active' : ''} ${(rosterTelemetryActive && isMatchInProgress) ? 'is-recording' : ''}`} title="Roster telemetry active">
+                        <span className="recording-telemetry-dot" />
+                        <span>Telemetry Active</span>
+                    </span>
+                </div>
+                <div className="recording-panel-heading-meta">
                     <span className="text-label-sm font-semibold px-2 py-1 rounded-control mg-surface text-md-sys-on-surface/60">
                         {pilotRegistry.length} pilots
                     </span>
@@ -129,7 +135,7 @@ export const RosterPanel: React.FC = () => {
                         </span>
                         <button
                             onClick={() => undoLastMerge()}
-                            className="flex items-center gap-1 px-2 py-1 bg-warning-soft hover:bg-warning hover:text-black text-warning rounded text-label-sm font-bold transition-colors"
+                            className="flex items-center gap-1 px-2 py-1 bg-warning-soft hover:bg-warning hover:text-ink-strong text-warning rounded text-label-sm font-bold transition-colors"
                         >
                             <Undo2 size={10} /> Undo
                         </button>
@@ -138,7 +144,7 @@ export const RosterPanel: React.FC = () => {
             })()}
 
             <div className="grid grid-cols-2 gap-3">
-                <div className="mg-surface rounded-card p-3 border border-md-sys-outline/10 flex flex-col gap-2 min-h-[104px]">
+                <div className="mg-surface rounded-card p-3 border border-md-sys-outline/10 flex flex-col gap-2 min-h-104px">
                     <div className="flex items-center justify-between">
                         <span className={`text-label-sm font-bold ${hasTeammates ? 'text-md-sys-primary' : 'text-md-sys-on-surface/60'}`}>Teammates</span>
                         <span className="text-label-sm px-1.5 py-0.5 rounded-full md3-surface">{selectedTeammates.length}</span>
@@ -159,7 +165,7 @@ export const RosterPanel: React.FC = () => {
                         <div className="text-label-sm text-md-sys-on-surface/40">No teammates selected.</div>
                     )}
                 </div>
-                <div className="mg-surface rounded-card p-3 border border-md-sys-outline/10 flex flex-col gap-2 min-h-[104px]">
+                <div className="mg-surface rounded-card p-3 border border-md-sys-outline/10 flex flex-col gap-2 min-h-104px">
                     <span className={`text-label-sm font-bold ${hasOpponents ? 'text-danger' : 'text-md-sys-on-surface/60'}`}>
                         Hostiles
                     </span>
@@ -204,7 +210,7 @@ export const RosterPanel: React.FC = () => {
                                                 <button
                                                     key={p}
                                                     onClick={() => toggleOpponent(p)}
-                                                    className="px-2 py-0.5 bg-danger-soft text-danger rounded-control text-label-sm font-semibold hover:bg-danger hover:text-white transition-colors"
+                                                    className="px-2 py-0.5 bg-danger-soft text-danger rounded-control text-label-sm font-semibold hover:bg-danger hover:text-on-scrim transition-colors"
                                                 >
                                                     {p}
                                                 </button>
@@ -218,7 +224,7 @@ export const RosterPanel: React.FC = () => {
                                             <button
                                                 key={p}
                                                 onClick={() => toggleOpponent(p)}
-                                                className="px-2 py-0.5 bg-danger-soft text-danger rounded-control text-label-sm font-semibold hover:bg-danger hover:text-white transition-colors"
+                                                className="px-2 py-0.5 bg-danger-soft text-danger rounded-control text-label-sm font-semibold hover:bg-danger hover:text-on-scrim transition-colors"
                                             >
                                                 {p}
                                             </button>
@@ -232,7 +238,7 @@ export const RosterPanel: React.FC = () => {
                                     <button
                                         key={p}
                                         onClick={() => toggleOpponent(p)}
-                                        className="px-2 py-1 bg-danger-soft text-danger rounded-control text-label-sm font-semibold hover:bg-danger hover:text-white transition-colors"
+                                        className="px-2 py-1 bg-danger-soft text-danger rounded-control text-label-sm font-semibold hover:bg-danger hover:text-on-scrim transition-colors"
                                     >
                                         {p}
                                     </button>
@@ -268,7 +274,7 @@ export const RosterPanel: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-[1fr_auto] gap-2">
+                <div className="grid grid-cols-1-auto gap-2">
                     <div className="relative">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-md-sys-on-surface/40" />
                         <input
@@ -327,10 +333,10 @@ export const RosterPanel: React.FC = () => {
                                     <button onClick={() => openEditModal(p)} className="md3-icon-btn md3-icon-btn--small w-7 h-7 min-w-7 hover:bg-md-sys-primary hover:text-md-sys-onPrimary" title="Edit">
                                         <Edit2 size={12} />
                                     </button>
-                                    <button onClick={() => toggleTeammate(p)} className="h-7 w-8 rounded-control text-label-xs font-bold bg-success-soft text-success hover:bg-success hover:text-white transition-colors flex items-center justify-center shrink-0" title="Add as Teammate">
+                                    <button onClick={() => toggleTeammate(p)} className="h-7 w-8 rounded-control text-label-xs font-bold bg-success-soft text-success hover:bg-success hover:text-on-scrim transition-colors flex items-center justify-center shrink-0" title="Add as Teammate">
                                         TM
                                     </button>
-                                    <button onClick={() => toggleOpponent(p)} className="h-7 w-8 rounded-control text-label-xs font-bold bg-danger-soft text-danger hover:bg-danger hover:text-white transition-colors flex items-center justify-center shrink-0" title="Add as Hostile">
+                                    <button onClick={() => toggleOpponent(p)} className="h-7 w-8 rounded-control text-label-xs font-bold bg-danger-soft text-danger hover:bg-danger hover:text-on-scrim transition-colors flex items-center justify-center shrink-0" title="Add as Hostile">
                                         VS
                                     </button>
                                 </div>
@@ -339,7 +345,7 @@ export const RosterPanel: React.FC = () => {
                     })}
                 </div>
 
-                <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2 pt-2 border-t border-md-sys-outline/10">
+                <div className="grid grid-cols-1-auto-auto-auto items-center gap-2 pt-2 border-t border-md-sys-outline/10">
                     <input
                         type="text"
                         placeholder="Add New Player..."
@@ -365,7 +371,7 @@ export const RosterPanel: React.FC = () => {
                                 setNewPilotName("");
                             }
                         }}
-                        className="h-10 w-10 shrink-0 rounded-control text-label-xs font-bold flex items-center justify-center bg-success-soft text-success hover:bg-success hover:text-white transition-colors"
+                        className="h-10 w-10 shrink-0 rounded-control text-label-xs font-bold flex items-center justify-center bg-success-soft text-success hover:bg-success hover:text-on-scrim transition-colors"
                         title="Add as Teammate"
                     >
                         TM
@@ -378,7 +384,7 @@ export const RosterPanel: React.FC = () => {
                                 setNewPilotName("");
                             }
                         }}
-                        className="h-10 w-10 shrink-0 rounded-control text-label-xs font-bold flex items-center justify-center bg-danger-soft text-danger hover:bg-danger hover:text-white transition-colors"
+                        className="h-10 w-10 shrink-0 rounded-control text-label-xs font-bold flex items-center justify-center bg-danger-soft text-danger hover:bg-danger hover:text-on-scrim transition-colors"
                         title="Add as Hostile"
                     >
                         VS
@@ -389,7 +395,7 @@ export const RosterPanel: React.FC = () => {
             {/* Manual scan overlays removed. Smart Capture now handles auto-detection. */}
 
             {editingPilot && createPortal(
-                <div className="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center p-4" onClick={() => setEditingPilot(null)}>
+                <div className="fixed inset-0 bg-scrim-80 z-modal flex items-center justify-center p-4" onClick={() => setEditingPilot(null)}>
                     <div className="md3-surface-low p-5 rounded-modal max-w-sm w-full shadow-2xl flex flex-col gap-4" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center">
                             <h3 className="text-base font-bold">Edit Pilot</h3>
@@ -413,14 +419,14 @@ export const RosterPanel: React.FC = () => {
                                     <textarea
                                         value={editNote}
                                         onChange={(e) => setEditNote(e.target.value)}
-                                        className="w-full md3-textfield--outlined text-body outline-none min-h-[80px] resize-none"
+                                        className="w-full md3-textfield--outlined text-body outline-none min-h-80px resize-none"
                                         placeholder="Add notes..."
                                     />
                                 </div>
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => onToggleFavorite(editingPilot)}
-                                        className={`flex-1 py-2.5 rounded-control font-semibold text-body flex items-center justify-center gap-1.5 transition-all ${favorites.includes(editingPilot) ? 'md3-btn-tonal bg-warning text-black' : 'md3-btn-outlined text-md-sys-on-surface/60'
+                                        className={`flex-1 py-2.5 rounded-control font-semibold text-body flex items-center justify-center gap-1.5 transition-all ${favorites.includes(editingPilot) ? 'md3-btn-tonal bg-warning text-ink-strong' : 'md3-btn-outlined text-md-sys-on-surface/60'
                                             }`}
                                     >
                                         <Star size={14} className={favorites.includes(editingPilot) ? 'fill-black' : ''} />

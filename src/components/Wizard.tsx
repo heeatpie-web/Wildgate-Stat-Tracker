@@ -6,6 +6,7 @@ import {
     Target,
     Sword,
     Gem,
+    Scan,
     X,
     Users,
     ChevronDown,
@@ -37,7 +38,7 @@ export const Wizard: React.FC = () => {
         poiEpic, setPoiEpic
     } = useGameData();
 
-    const { showWizard, setShowWizard, isOverlayMode, activeMode, activeUser } = useUIState();
+    const { showWizard, setShowWizard, isOverlayMode, activeMode, activeUser, setToast } = useUIState();
     const { processFinalSubmission, submitting } = useMatchSubmission();
 
     React.useEffect(() => {
@@ -65,15 +66,27 @@ export const Wizard: React.FC = () => {
     const inputBaseClass = 'mg-surface-primary bg-md-sys-primary/5 font-bold outline-none text-center rounded-xl border border-md-sys-primary/10 transition-all focus:border-md-sys-primary/40 focus:bg-md-sys-primary/10';
 
     const showPlacement = isDefeat && activeMode === 'Artifact Brawl' && selectedWinType === 'Combat';
+    const handleWizardSmartCapture = () => {
+        const pendingMatchId = Number((pendingMatchData as Match | null)?.id || 0);
+        window.dispatchEvent(new CustomEvent('smart-capture-request', {
+            detail: {
+                activeUser: activeUser || null,
+                source: 'wizard',
+                requestId: `wizard-${Date.now()}`,
+                matchId: Number.isInteger(pendingMatchId) && pendingMatchId > 0 ? pendingMatchId : null,
+            }
+        }));
+        setToast({ message: 'Smart Capture requested from wizard.', type: 'info' });
+    };
 
     return (
-        <div className="fixed inset-0 md3-dialog-scrim z-[99999] flex items-center justify-center p-4 mg-blur animate-fade-in" onClick={() => setShowWizard(null)}>
+        <div className="fixed inset-0 md3-dialog-scrim z-top flex items-center justify-center p-4 mg-blur animate-fade-in" onClick={() => setShowWizard(null)}>
             <div
-                className={`mg-surface overflow-hidden rounded-[2.5rem] w-full shadow-2xl flex flex-col animate-scale-in border border-md-sys-outline/20 ${isOverlayMode ? 'max-w-[360px] max-h-[90vh]' : 'max-w-3xl max-h-[95vh]'}`}
+                className={`mg-surface overflow-hidden rounded-2_5rem w-full shadow-2xl flex flex-col animate-scale-in border border-md-sys-outline/20 ${isOverlayMode ? 'max-w-360px max-h-90vh' : 'max-w-3xl max-h-95vh'}`}
                 onClick={e => e.stopPropagation()}
             >
                 {/* Unified Glass Header */}
-                <div className={`${isOverlayMode ? 'py-3 px-5 text-label-sm' : 'py-5 px-8 text-xl'} font-bold uppercase tracking-[0.2em] mg-surface-high border-b border-md-sys-outline/10 text-md-sys-on-surface flex items-center justify-center gap-3 relative`}>
+                <div className={`${isOverlayMode ? 'py-3 px-5 text-label-sm' : 'py-5 px-8 text-xl'} font-bold uppercase tracking-wide-20 mg-surface-high border-b border-md-sys-outline/10 text-md-sys-on-surface flex items-center justify-center gap-3 relative`}>
                     <div className={`w-2 h-2 rounded-full ${isDefeat ? 'bg-md-sys-error' : 'bg-success'} animate-pulse`} />
                     {title}
                     <button onClick={() => setShowWizard(null)} className="absolute right-4 md3-icon-btn opacity-40 hover:opacity-100 hover:bg-md-sys-error/10 hover:text-md-sys-error transition-all">
@@ -89,13 +102,13 @@ export const Wizard: React.FC = () => {
                             <>
                                 <button
                                     onClick={() => setSelectedWinType('Combat')}
-                                    className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Combat' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg scale-[1.02]' : 'mg-surface-high opacity-60 hover:opacity-100'}`}
+                                    className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Combat' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg scale-102' : 'mg-surface-high opacity-60 hover:opacity-100'}`}
                                 >
                                     <Sword size={16} /> Combat
                                 </button>
                                 <button
                                     onClick={() => setSelectedWinType('Artifact')}
-                                    className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Artifact' ? 'bg-warning text-black shadow-lg scale-[1.02]' : 'mg-surface-high opacity-60 hover:opacity-100'}`}
+                                    className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong shadow-lg scale-102' : 'mg-surface-high opacity-60 hover:opacity-100'}`}
                                 >
                                     <Gem size={16} /> Artifact
                                 </button>
@@ -104,13 +117,13 @@ export const Wizard: React.FC = () => {
                             <>
                                 <button
                                     onClick={() => setSelectedWinType('Combat')}
-                                    className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Combat' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg scale-[1.02]' : 'mg-surface-high opacity-60 hover:opacity-100'}`}
+                                    className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Combat' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg scale-102' : 'mg-surface-high opacity-60 hover:opacity-100'}`}
                                 >
                                     <Sword size={16} /> Combat
                                 </button>
                                 <button
                                     onClick={() => setSelectedWinType('Objective')}
-                                    className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Objective' ? 'bg-info text-black shadow-lg scale-[1.02]' : 'mg-surface-high opacity-60 hover:opacity-100'}`}
+                                    className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Objective' ? 'bg-info text-ink-strong shadow-lg scale-102' : 'mg-surface-high opacity-60 hover:opacity-100'}`}
                                 >
                                     <Target size={16} /> Objective
                                 </button>
@@ -239,11 +252,18 @@ export const Wizard: React.FC = () => {
                         </button>
                     )}
 
+                    <button
+                        onClick={handleWizardSmartCapture}
+                        className="w-full py-3 rounded-2xl mg-surface-high border border-md-sys-outline/15 text-label-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:border-md-sys-primary/30 hover:bg-md-sys-primary/5 transition-all"
+                    >
+                        <Scan size={14} /> Smart Capture
+                    </button>
+
                     {/* Primary Action */}
                     <button
                         onClick={() => processFinalSubmission(selectedWinType)}
                         disabled={submitting}
-                        className={`w-full ${isOverlayMode ? 'py-4' : 'py-5'} rounded-3xl font-bold uppercase tracking-[0.3em] text-label-sm transition-all shadow-xl active:scale-95 ${submitting ? 'opacity-disabled grayscale' : (selectedWinType === 'Artifact' ? 'bg-warning text-black' : selectedWinType === 'Objective' ? 'bg-info text-black' : 'bg-md-sys-primary text-md-sys-onPrimary')}`}
+                        className={`w-full ${isOverlayMode ? 'py-4' : 'py-5'} rounded-3xl font-bold uppercase tracking-wide-30 text-label-sm transition-all shadow-xl active:scale-95 ${submitting ? 'opacity-disabled grayscale' : (selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong' : selectedWinType === 'Objective' ? 'bg-info text-ink-strong' : 'bg-md-sys-primary text-md-sys-onPrimary')}`}
                     >
                         {submitting ? 'Synchronizing...' : `Finalize ${selectedWinType}`}
                     </button>

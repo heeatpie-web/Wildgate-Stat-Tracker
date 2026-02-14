@@ -101,7 +101,7 @@ describe('processTelemetryEvent', () => {
       expect(actions.setIsMatchInProgress).toHaveBeenCalledWith(false);
       expect(actions.setMatchStartTime).toHaveBeenCalledWith(null);
       expect(actions.setOverlayPhase).toHaveBeenCalledWith('Result');
-      expect(actions.setShowWizard).toHaveBeenCalledWith(null);
+      expect(actions.setShowWizard).not.toHaveBeenCalled();
     });
 
     it('calculates match duration from matchStartTime', () => {

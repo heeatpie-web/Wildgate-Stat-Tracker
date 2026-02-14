@@ -61,7 +61,7 @@ export const TiltMeter: React.FC<TiltMeterProps> = ({ recentMatches }) => {
             <div className="flex-1">
                 <div className="flex justify-between items-center mb-2">
                     <h3 className="text-body font-bold uppercase flex items-center gap-2"><Zap size={16}/> Mental State Analysis</h3>
-                    <span className={`px-3 py-1 rounded-full text-label-sm font-bold uppercase text-white ${color}`}>{explanation}</span>
+                    <span className={`px-3 py-1 rounded-full text-label-sm font-bold uppercase text-on-scrim ${color}`}>{explanation}</span>
                 </div>
                 <div className="text-label-sm opacity-60 leading-relaxed font-medium">
                     {tiltScore > 50 

@@ -49,7 +49,7 @@ const SectionShell: React.FC<{
                 </button>
             </div>
 
-            <div className="mt-4 max-h-[520px] overflow-y-auto custom-scrollbar">
+            <div className="mt-4 max-h-520px overflow-y-auto custom-scrollbar">
                 {children}
             </div>
         </section>

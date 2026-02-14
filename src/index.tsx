@@ -13,6 +13,7 @@ import { UserPreferencesProvider } from './providers/UserPreferencesProvider';
 import { UIStateProvider } from './providers/UIStateProvider';
 import { GameDataProvider } from './providers/GameDataProvider';
 import Logger from './utils/logger';
+import { useAppStore } from './store/useAppStore';
 
 // Global error handlers — catch unhandled errors outside React's tree
 window.onerror = (message, source, lineno, colno, error) => {
@@ -29,6 +30,10 @@ window.onunhandledrejection = (event: PromiseRejectionEvent) => {
     action: 'unhandledrejection',
   });
 };
+
+if (typeof window !== 'undefined') {
+  (window as any).__WG_STORE__ = useAppStore;
+}
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { AnalyticsView, AnalyticsTimeRange, DrillDownTarget } from '../../types';
-import { Activity, ArrowLeft, Gauge, Lightbulb, Handshake, BarChart3, Globe, Flame, PenSquare, Download } from 'lucide-react';
+import { Activity, ArrowLeft, Download, LayoutGrid, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
 import { useUserPreferences } from '../../providers/UserPreferencesProvider';
@@ -9,6 +9,7 @@ import { useAnalyticsData } from './useAnalyticsData';
 import { InlineNarrativeToggle } from './DenseEditorialToggle';
 import { exportAnalyticsAsImage } from './analyticsExport';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
+import { ControlPanelView } from './ControlPanelView';
 import { ProView } from './ProView';
 import { EnvironmentView } from './EnvironmentView';
 import { SynergyView } from './SynergyView';
@@ -22,6 +23,7 @@ import { KillEfficiencyView } from './KillEfficiencyView';
 import { PlacementDistView } from './PlacementDistView';
 import { MomentumView } from './MomentumView';
 import { VisualEssayView } from './VisualEssayView';
+import { AnalyticsNavigation, AnalyticsCategory } from './AnalyticsNavigation';
 
 const VIEW_LABELS: Record<AnalyticsView, string> = {
     overview: 'Overview',
@@ -38,6 +40,7 @@ const VIEW_LABELS: Record<AnalyticsView, string> = {
     environment: 'Hazard Analysis',
     synergy: 'Synergy Matrix',
     essay: 'Visual Essay',
+    reactor: 'Reactor',
 };
 
 const TIME_RANGE_OPTIONS: { value: AnalyticsTimeRange; label: string }[] = [
@@ -48,29 +51,13 @@ const TIME_RANGE_OPTIONS: { value: AnalyticsTimeRange; label: string }[] = [
     { value: 'lastN', label: 'Last 20' },
 ];
 
-const QUICK_VIEWS: { view: AnalyticsView; icon: React.ReactNode }[] = [
-    { view: 'momentum', icon: <Gauge size={12} /> },
-    { view: 'insights', icon: <Lightbulb size={12} /> },
-    { view: 'social', icon: <Handshake size={12} /> },
-    { view: 'pro', icon: <BarChart3 size={12} /> },
-    { view: 'environment', icon: <Globe size={12} /> },
-    { view: 'streaks', icon: <Flame size={12} /> },
-];
-
-const DETAIL_QUICK_VIEWS: AnalyticsView[] = [
-    'session',
-    'momentum',
-    'period',
-    'timePatterns',
-    'streaks',
-    'killEfficiency',
-    'placement',
-    'insights',
-    'social',
-    'pro',
-    'environment',
-    'synergy',
-];
+const CATEGORY_SUBVIEWS: Record<AnalyticsCategory, AnalyticsView[]> = {
+    overview: [],
+    performance: ['momentum', 'streaks', 'killEfficiency', 'placement'],
+    team: ['social', 'insights', 'synergy'],
+    environment: ['environment'],
+    narrative: ['essay', 'session', 'period', 'timePatterns'],
+};
 
 export const AnalyticsShell: React.FC = () => {
     const { setDrillDownTarget } = useGameData();
@@ -82,6 +69,7 @@ export const AnalyticsShell: React.FC = () => {
     const [timeRange, setTimeRange] = useState<AnalyticsTimeRange>('all');
     const [lastN] = useState(20);
     const [exporting, setExporting] = useState(false);
+    const [isProMode, setIsProMode] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
 
     const data = useAnalyticsData(timeRange, lastN, currentView);
@@ -92,6 +80,59 @@ export const AnalyticsShell: React.FC = () => {
 
     const navigateTo = (view: AnalyticsView) => setCurrentView(view);
     const goBack = () => setCurrentView('overview');
+    const openDetailedFromPro = (view: AnalyticsView) => {
+        setCurrentView(view);
+        setIsProMode(false);
+    };
+
+    const isInteractiveTarget = (target: EventTarget | null) => {
+        const el = target as HTMLElement | null;
+        if (!el) return false;
+        return Boolean(el.closest('button, a, input, select, textarea, [role="button"], [data-no-pro-drill]'));
+    };
+
+    const renderProDrillTile = (view: AnalyticsView, label: string, content: React.ReactNode) => (
+        <div
+            role="button"
+            tabIndex={0}
+            aria-label={`Open ${label} detailed breakdown`}
+            onClick={(e) => {
+                if (isInteractiveTarget(e.target)) return;
+                openDetailedFromPro(view);
+            }}
+            onKeyDown={(e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                openDetailedFromPro(view);
+            }}
+            className="group relative rounded-card cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary"
+        >
+            <div className="absolute right-3 top-3 z-10 px-2 py-1 rounded-pill text-label-xs font-bold uppercase tracking-wide bg-md-sys-primary/12 text-md-sys-primary opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">
+                Open detail
+            </div>
+            {content}
+        </div>
+    );
+
+    const getActiveCategory = (view: AnalyticsView): AnalyticsCategory => {
+        if (view === 'overview') return 'overview';
+        for (const [cat, views] of Object.entries(CATEGORY_SUBVIEWS)) {
+            if (views.includes(view)) return cat as AnalyticsCategory;
+        }
+        return 'overview';
+    };
+
+    const activeCategory = getActiveCategory(currentView);
+
+    const handleCategoryChange = (cat: AnalyticsCategory) => {
+        if (cat === 'overview') {
+            setCurrentView('overview');
+        } else {
+            // Default to first view in category
+            const defaultView = CATEGORY_SUBVIEWS[cat][0];
+            if (defaultView) setCurrentView(defaultView);
+        }
+    };
 
     const renderExpandedView = () => {
         switch (currentView) {
@@ -116,11 +157,13 @@ export const AnalyticsShell: React.FC = () => {
 
     return (
         <div className="h-full flex flex-col gap-3 overflow-hidden p-3 rounded-modal analytics-shell-gradient shadow-lg">
+            {/* Header */}
             <div className="flex-shrink-0 rounded-card mg-surface-high backdrop-blur p-3 md:p-4">
                 <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                            {currentView !== 'overview' && (
+                            {/* In standard mode, show Back button if not in overview */}
+                            {!isProMode && currentView !== 'overview' && (
                                 <button onClick={goBack} className="md3-icon-btn">
                                     <ArrowLeft size={16} />
                                 </button>
@@ -128,15 +171,33 @@ export const AnalyticsShell: React.FC = () => {
                             <div className="min-w-0">
                                 <h2 className="text-base md:text-lg font-bold tracking-tight flex items-center gap-2 text-md-sys-on-surface">
                                     <Activity className="text-md-sys-primary" size={18} />
-                                    <span className="truncate">{currentView === 'overview' ? 'Analytics Cockpit' : VIEW_LABELS[currentView]}</span>
+                                    <span className="truncate">
+                                        {isProMode ? 'Pro Analytics' : (currentView === 'overview' ? 'Analytics Cockpit' : VIEW_LABELS[currentView])}
+                                    </span>
                                 </h2>
                                 <div className="mt-1 flex items-center gap-2 text-label-sm font-semibold uppercase tracking-wider text-md-sys-on-surface/60">
                                     <span className={`px-2 py-0.5 rounded-pill border ${modeBadge}`}>{currentMode}</span>
-                                    <span>{currentView === 'overview' ? 'Performance Overview' : 'Deep Dive View'}</span>
+                                    <span>
+                                        {isProMode ? 'High Density View' : (currentView === 'overview' ? 'Performance Overview' : 'Deep Dive View')}
+                                    </span>
                                 </div>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
+                            {/* Pro Mode Toggle */}
+                            <button
+                                onClick={() => setIsProMode(!isProMode)}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide transition-all border ${
+                                    isProMode
+                                        ? 'bg-md-sys-primary text-md-sys-onPrimary border-md-sys-primary'
+                                        : 'bg-md-sys-surfaceContainerHigh text-md-sys-on-surface/60 border-transparent hover:bg-md-sys-surfaceContainerHighest'
+                                }`}
+                            >
+                                <LayoutGrid size={14} />
+                                {isProMode ? 'Pro' : 'Standard'}
+                                {isProMode ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                            </button>
+
                             <button
                                 onClick={async () => {
                                     setExporting(true);
@@ -170,87 +231,120 @@ export const AnalyticsShell: React.FC = () => {
                 </div>
             </div>
 
-            {currentView === 'overview' && data.filteredMatches.length > 0 && (
-                <div className="flex-shrink-0 px-1">
-                    <span className="text-label-sm text-md-sys-on-surface/60 block mb-1.5" aria-hidden>Quick views</span>
-                    <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                    {QUICK_VIEWS.map(({ view, icon }) => (
-                        <button
-                            key={view}
-                            onClick={() => navigateTo(view)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide bg-md-sys-surfaceContainerLowest/70 text-md-sys-on-surface/60 hover:bg-md-sys-primaryContainer hover:text-md-sys-onPrimaryContainer transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary"
-                        >
-                            {icon}
-                            {VIEW_LABELS[view]}
-                        </button>
-                    ))}
-                    </div>
-                </div>
-            )}
-
-            {data.filteredMatches.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center gap-4 text-md-sys-on-surface/40 animate-fade-in">
-                    <div className="w-16 h-16 rounded-card bg-md-sys-primaryContainer/30 flex items-center justify-center">
-                        <Activity size={28} className="text-md-sys-primary/40" />
-                    </div>
-                    <div className="text-center">
-                        <h3 className="text-body font-bold text-md-sys-on-surface/60">No match data yet</h3>
-                        <p className="text-label-sm mt-1 text-md-sys-on-surface/40">Record some matches to unlock analytics</p>
-                    </div>
-                </div>
-            ) : currentView === 'overview' ? (
+            {/* Main Content Area */}
+            {isProMode ? (
+                // Pro Mode: High Density Grid
                 <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar rounded-card mg-surface-high p-3">
-                <AnalyticsDashboard
-                    visualMode={visualMode}
-                    onNavigate={navigateTo}
-                    onDrillDown={onDrillDown}
-                    winRate={data.winRate}
-                    currentStreak={data.currentStreak}
-                    totalMatches={data.filteredMatches.length}
-                    avgSortiesPerDay={data.avgSortiesPerDay}
-                    sessionSummary={data.sessionSummary}
-                    momentum={data.momentum}
-                    periodComparison={data.periodComparison}
-                    timePatterns={data.timePatterns}
-                    streakHistory={data.streakHistory}
-                    killEfficiency={data.killEfficiency}
-                    placementData={data.placementData}
-                    insights={data.insights}
-                    socialData={data.socialData}
-                    relationshipInsights={data.relationshipInsights}
-                    synergyMatrix={data.synergyMatrix}
-                    filteredMatches={data.filteredMatches}
-                />
+                    <div className="space-y-4">
+                        <ControlPanelView timeRange={timeRange} lastN={lastN} />
+
+                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                            {renderProDrillTile('momentum', 'Momentum', <MomentumView data={data.momentum} visualMode={visualMode} />)}
+                            {renderProDrillTile('killEfficiency', 'Kill Efficiency', <KillEfficiencyView data={data.killEfficiency} visualMode={visualMode} />)}
+                            {renderProDrillTile('placement', 'Placement Distribution', <PlacementDistView data={data.placementData} visualMode={visualMode} />)}
+                            {renderProDrillTile('streaks', 'Streak Timeline', <StreakTimelineView data={data.streakHistory} visualMode={visualMode} />)}
+                            {renderProDrillTile('timePatterns', 'Time Patterns', <TimePatternView data={data.timePatterns} visualMode={visualMode} />)}
+                            {renderProDrillTile('period', 'Period Comparison', <PeriodComparisonView data={data.periodComparison} visualMode={visualMode} />)}
+                            {renderProDrillTile('session', 'Session Summary', <SessionSummaryView data={data.sessionSummary} visualMode={visualMode} />)}
+                            {renderProDrillTile('synergy', 'Synergy Matrix', <SynergyView synergyMatrix={data.synergyMatrix} visualMode={visualMode} />)}
+                            {renderProDrillTile('environment', 'Hazard Analysis', <EnvironmentView matches={data.filteredMatches} visualMode={visualMode} />)}
+                            {renderProDrillTile(
+                                'social',
+                                'Social',
+                                <SocialView
+                                    socialData={data.socialData}
+                                    filteredMatches={data.filteredMatches}
+                                    currentUser={currentUser}
+                                    playerProfiles={data.playerProfiles}
+                                    onDrillDown={onDrillDown}
+                                    visualMode={visualMode}
+                                />,
+                            )}
+                            {renderProDrillTile(
+                                'insights',
+                                'Insights',
+                                <InsightsView
+                                    insights={data.insights}
+                                    relationshipInsights={data.relationshipInsights}
+                                    filteredMatches={data.filteredMatches}
+                                    onDrillDown={onDrillDown}
+                                    visualMode={visualMode}
+                                />,
+                            )}
+                            {renderProDrillTile('pro', 'Detailed Analysis', <ProView matches={data.filteredMatches} visualMode={visualMode} />)}
+                        </div>
+                    </div>
                 </div>
             ) : (
-                <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar rounded-card mg-surface-high p-3">
-                    <div className="flex items-center gap-2 mb-3 px-1">
-                        <button
-                            onClick={goBack}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide bg-md-sys-surfaceContainerHigh/70 text-md-sys-on-surface/60 hover:bg-md-sys-primaryContainer hover:text-md-sys-onPrimaryContainer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary"
-                        >
-                            <ArrowLeft size={12} />
-                            Overview
-                        </button>
-                        <span className="text-label-sm font-semibold text-md-sys-on-surface/40">/</span>
-                        <span className="text-label-sm font-bold uppercase tracking-wide text-md-sys-primary">{VIEW_LABELS[currentView]}</span>
-                    </div>
-                    <div className="flex gap-2 overflow-x-auto pb-2 mb-2 no-scrollbar px-1">
-                        {DETAIL_QUICK_VIEWS.map((view) => (
-                            <button
-                                key={view}
-                                onClick={() => navigateTo(view)}
-                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${currentView === view
-                                    ? 'bg-md-sys-primary text-md-sys-onPrimary'
-                                    : 'bg-md-sys-surfaceContainerLowest/70 text-md-sys-on-surface/60 hover:bg-md-sys-primaryContainer hover:text-md-sys-onPrimaryContainer'
-                                    }`}
-                            >
-                                {VIEW_LABELS[view]}
-                            </button>
-                        ))}
-                    </div>
-                    {renderExpandedView()}
-                </div>
+                // Standard Mode
+                <>
+                    {/* Navigation Strip */}
+                    {data.filteredMatches.length > 0 && (
+                        <div className="flex-shrink-0">
+                            <AnalyticsNavigation
+                                activeCategory={activeCategory}
+                                onSelectCategory={handleCategoryChange}
+                            />
+                        </div>
+                    )}
+
+                    {data.filteredMatches.length === 0 ? (
+                        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-md-sys-on-surface/40 animate-fade-in">
+                            <div className="w-16 h-16 rounded-card bg-md-sys-primaryContainer/30 flex items-center justify-center">
+                                <Activity size={28} className="text-md-sys-primary/40" />
+                            </div>
+                            <div className="text-center">
+                                <h3 className="text-body font-bold text-md-sys-on-surface/60">No match data yet</h3>
+                                <p className="text-label-sm mt-1 text-md-sys-on-surface/40">Record some matches to unlock analytics</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar rounded-card mg-surface-high p-3">
+                            {currentView === 'overview' ? (
+                                <AnalyticsDashboard
+                                    visualMode={visualMode}
+                                    onNavigate={navigateTo}
+                                    onDrillDown={onDrillDown}
+                                    winRate={data.winRate}
+                                    currentStreak={data.currentStreak}
+                                    totalMatches={data.filteredMatches.length}
+                                    avgSortiesPerDay={data.avgSortiesPerDay}
+                                    sessionSummary={data.sessionSummary}
+                                    momentum={data.momentum}
+                                    periodComparison={data.periodComparison}
+                                    timePatterns={data.timePatterns}
+                                    streakHistory={data.streakHistory}
+                                    killEfficiency={data.killEfficiency}
+                                    placementData={data.placementData}
+                                    insights={data.insights}
+                                    socialData={data.socialData}
+                                    relationshipInsights={data.relationshipInsights}
+                                    synergyMatrix={data.synergyMatrix}
+                                    filteredMatches={data.filteredMatches}
+                                />
+                            ) : (
+                                <>
+                                    {/* Sub-Navigation for Detailed Views */}
+                                    <div className="flex gap-2 overflow-x-auto pb-2 mb-2 no-scrollbar px-1">
+                                        {CATEGORY_SUBVIEWS[activeCategory]?.map((view) => (
+                                            <button
+                                                key={view}
+                                                onClick={() => navigateTo(view)}
+                                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${currentView === view
+                                                    ? 'bg-md-sys-primary text-md-sys-onPrimary'
+                                                    : 'bg-md-sys-surfaceContainerLowest/70 text-md-sys-on-surface/60 hover:bg-md-sys-primaryContainer hover:text-md-sys-onPrimaryContainer'
+                                                    }`}
+                                            >
+                                                {VIEW_LABELS[view]}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {renderExpandedView()}
+                                </>
+                            )}
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );

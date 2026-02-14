@@ -54,7 +54,7 @@ export const DevTools: React.FC<DevToolsProps> = ({ logFeed = [], logStatus = {}
 
     return (
         <>
-            <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-[200]">
+            <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-popover">
                 <div className="bg-md-sys-surface1 p-2 rounded-xl shadow-2xl border border-md-sys-outline/10 flex flex-col gap-2">
                     <div className="text-label-sm font-black uppercase text-center opacity-40 p-1">Dev Tools</div>
                     <button onClick={() => setShowIdMapper(!showIdMapper)} className={`px-4 py-2 rounded-lg text-label-sm font-bold transition-all ${showIdMapper ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3 text-md-sys-primary'}`}>
@@ -72,7 +72,7 @@ export const DevTools: React.FC<DevToolsProps> = ({ logFeed = [], logStatus = {}
                     <button onClick={() => setShowLogStream(!showLogStream)} className={`px-4 py-2 rounded-lg text-label-sm font-bold transition-all ${showLogStream ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3 text-md-sys-primary'}`}>
                         {showLogStream ? 'Hide Telemetry' : 'Show Telemetry'}
                     </button>
-                    <button onClick={() => setActiveView('dev-ocr')} className={`px-4 py-2 rounded-lg text-label-sm font-bold transition-all ${activeView === 'dev-ocr' ? 'bg-purple-600 text-white shadow-lg scale-105' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3 text-purple-500'}`}>
+                    <button onClick={() => setActiveView('dev-ocr')} className={`px-4 py-2 rounded-lg text-label-sm font-bold transition-all ${activeView === 'dev-ocr' ? 'bg-accent text-on-scrim shadow-lg scale-105' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3 text-accent'}`}>
                         Dev OCR Lab
                     </button>
                 </div>

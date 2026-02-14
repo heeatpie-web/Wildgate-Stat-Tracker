@@ -74,7 +74,7 @@ export const WindowResizer: React.FC = () => {
 
     const Handle = ({ dir, className }: { dir: string, className: string }) => (
         <div
-            className={`fixed z-[99999] ${className}`} // extremely high z-index
+            className={`fixed z-top ${className}`} // extremely high z-index
             onMouseDown={(e) => startDrag(dir, e)}
             style={{ WebkitAppRegion: 'no-drag' } as any}
         />
@@ -83,20 +83,20 @@ export const WindowResizer: React.FC = () => {
     return (
         <>
             {/* Edges */}
-            <Handle dir="n" className="top-0 left-0 right-0 h-1 cursor-n-resize hover:bg-blue-500/50 transition-colors" />
-            <Handle dir="s" className="bottom-0 left-0 right-0 h-1 cursor-s-resize hover:bg-blue-500/50 transition-colors" />
-            <Handle dir="w" className="left-0 top-0 bottom-0 w-1 cursor-w-resize hover:bg-blue-500/50 transition-colors" />
-            <Handle dir="e" className="right-0 top-0 bottom-0 w-1 cursor-e-resize hover:bg-blue-500/50 transition-colors" />
+            <Handle dir="n" className="top-0 left-0 right-0 h-1 cursor-n-resize hover:bg-info/50 transition-colors" />
+            <Handle dir="s" className="bottom-0 left-0 right-0 h-1 cursor-s-resize hover:bg-info/50 transition-colors" />
+            <Handle dir="w" className="left-0 top-0 bottom-0 w-1 cursor-w-resize hover:bg-info/50 transition-colors" />
+            <Handle dir="e" className="right-0 top-0 bottom-0 w-1 cursor-e-resize hover:bg-info/50 transition-colors" />
 
             {/* Corners */}
-            <Handle dir="nw" className="top-0 left-0 w-3 h-3 cursor-nw-resize hover:bg-blue-500 transition-colors" />
-            <Handle dir="ne" className="top-0 right-0 w-3 h-3 cursor-ne-resize hover:bg-blue-500 transition-colors" />
-            <Handle dir="sw" className="bottom-0 left-0 w-3 h-3 cursor-sw-resize hover:bg-blue-500 transition-colors" />
-            <Handle dir="se" className="bottom-0 right-0 w-3 h-3 cursor-se-resize hover:bg-blue-500 transition-colors" />
+            <Handle dir="nw" className="top-0 left-0 w-3 h-3 cursor-nw-resize hover:bg-info transition-colors" />
+            <Handle dir="ne" className="top-0 right-0 w-3 h-3 cursor-ne-resize hover:bg-info transition-colors" />
+            <Handle dir="sw" className="bottom-0 left-0 w-3 h-3 cursor-sw-resize hover:bg-info transition-colors" />
+            <Handle dir="se" className="bottom-0 right-0 w-3 h-3 cursor-se-resize hover:bg-info transition-colors" />
 
             {/* Visible Corner Icon? Optional. The user liked the bottom-right grip. We can keep it or make it part of SE handle */}
             <div
-                className="fixed bottom-0 right-0 w-4 h-4 cursor-se-resize z-[99998] pointer-events-none opacity-50"
+                className="fixed bottom-0 right-0 w-4 h-4 cursor-se-resize z-top-second pointer-events-none opacity-50"
             >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute bottom-1 right-1 text-md-sys-on-surface/40">
                     <path d="M21 15v6" />

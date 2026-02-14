@@ -36,17 +36,17 @@ export const PlacementDistView: React.FC<PlacementDistViewProps> = ({ data, visu
                 </div>
                 <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
                     <div className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-1">Median</div>
-                    <div className={`font-black text-blue-400 ${dense ? 'text-3xl' : 'text-4xl'}`}>{data.medianPlacement}</div>
+                    <div className={`font-black text-info ${dense ? 'text-3xl' : 'text-4xl'}`}>{data.medianPlacement}</div>
                 </div>
                 <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
                     <div className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-1">Top Quartile Rate</div>
-                    <div className={`font-black text-green-500 ${dense ? 'text-3xl' : 'text-4xl'}`}>{data.topQuartileRate}%</div>
+                    <div className={`font-black text-success ${dense ? 'text-3xl' : 'text-4xl'}`}>{data.topQuartileRate}%</div>
                     <div className="text-label-xs font-bold opacity-40">Finished in top 25%</div>
                 </div>
             </div>
 
             {/* Histogram */}
-            <div className={`md3-card rounded-2xl flex-1 min-h-[300px] ${dense ? 'p-4' : 'p-6'}`}>
+            <div className={`md3-card rounded-2xl flex-1 min-h-300px ${dense ? 'p-4' : 'p-6'}`}>
                 <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-label-sm' : 'text-body'}`}><Medal size={14} /> Placement Distribution</h3>
                 <ResponsiveContainer width="100%" height={dense ? 250 : 350}>
                     <BarChart data={data.distribution}>

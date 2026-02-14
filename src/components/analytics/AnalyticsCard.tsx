@@ -10,16 +10,46 @@ interface AnalyticsCardProps {
     visualMode: VisualMode;
     className?: string;
     accentColor?: string;
+    variant?: 'glass' | 'solid' | 'flat';
 }
 
-export const AnalyticsCard: React.FC<AnalyticsCardProps> = ({ title, icon, children, onExpand, visualMode, className = '', accentColor }) => {
+export const AnalyticsCard: React.FC<AnalyticsCardProps> = ({ 
+    title, 
+    icon, 
+    children, 
+    onExpand, 
+    visualMode, 
+    className = '', 
+    accentColor,
+    variant = 'glass'
+}) => {
     const dense = visualMode === 'dense';
+
+    const getVariantClasses = () => {
+        switch (variant) {
+            case 'solid':
+                return 'md3-surface';
+            case 'flat':
+                return 'bg-transparent border border-md-sys-outlineVariant/50';
+            case 'glass':
+            default:
+                return 'mg-surface-high';
+        }
+    };
+
+    const getPaddingClasses = () => {
+        if (dense) {
+            // Tighter padding for non-glass variants in dense mode
+            return variant === 'glass' ? 'p-3' : 'p-2.5';
+        }
+        return 'p-4';
+    };
 
     return (
         <div className={`
                 relative overflow-hidden group transition-all duration-300
-                mg-surface-high
-                ${dense ? 'p-3 rounded-card' : 'p-4 rounded-card'}
+                ${getVariantClasses()}
+                ${getPaddingClasses()} rounded-card
                 ${onExpand ? 'cursor-pointer hover:shadow-lg' : ''}
                 ${className}
             `}
@@ -28,7 +58,7 @@ export const AnalyticsCard: React.FC<AnalyticsCardProps> = ({ title, icon, child
             <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none bg-gradient-to-tr from-transparent via-white/5 to-transparent" />
 
             {accentColor && (
-                <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${accentColor} opacity-80`} />
+                <div className={`absolute left-0 top-0 bottom-0 w-3px ${accentColor} opacity-80`} />
             )}
 
             <div className="flex justify-between items-center mb-2.5 relative z-10">
