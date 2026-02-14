@@ -365,6 +365,7 @@ export const useLogMonitor = (activeUser?: string) => {
                                 }
 
                                 if (!shipName) {
+                                    registerUnknownId(shipGuid, 'Ship');
                                     shipName = `Unknown (${shipGuid.substr(0, 4)})`;
                                 }
                                 Logger.warn('LogMonitor', `Unknown Ship GUID: ${shipGuid} | raw: "${rawShip}" | resolved: "${shipName}"`);
