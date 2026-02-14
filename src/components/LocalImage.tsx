@@ -2,6 +2,25 @@ import React, { useState, useEffect, useRef } from 'react';
 import { getElectronAPI } from '../utils/electronAPI';
 
 const cache = new Map<string, string>();
+const MAX_CACHE_ENTRIES = 300;
+
+const getCached = (key: string): string | null => {
+    if (!cache.has(key)) return null;
+    const value = cache.get(key)!;
+    cache.delete(key);
+    cache.set(key, value);
+    return value;
+};
+
+const setCached = (key: string, value: string) => {
+    if (cache.has(key)) cache.delete(key);
+    cache.set(key, value);
+    while (cache.size > MAX_CACHE_ENTRIES) {
+        const oldestKey = cache.keys().next().value;
+        if (!oldestKey) break;
+        cache.delete(oldestKey);
+    }
+};
 
 interface LocalImageProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'> {
     src: string;
@@ -16,7 +35,7 @@ interface LocalImageProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>
 export const LocalImage: React.FC<LocalImageProps> = ({ src, fallback, ...imgProps }) => {
     const [dataUrl, setDataUrl] = useState<string | null>(() => {
         if (src.startsWith('data:')) return src;
-        return cache.get(src) || null;
+        return getCached(src);
     });
     const [failed, setFailed] = useState(false);
     const mountedRef = useRef(true);
@@ -33,7 +52,7 @@ export const LocalImage: React.FC<LocalImageProps> = ({ src, fallback, ...imgPro
             return;
         }
         if (cache.has(src)) {
-            setDataUrl(cache.get(src)!);
+            setDataUrl(getCached(src));
             setFailed(false);
             return;
         }
@@ -53,7 +72,7 @@ export const LocalImage: React.FC<LocalImageProps> = ({ src, fallback, ...imgPro
                 : ext === 'bmp' ? 'image/bmp'
                 : 'image/png';
             const url = `data:${mime};base64,${base64}`;
-            cache.set(src, url);
+            setCached(src, url);
             setDataUrl(url);
         }).catch(() => {
             if (mountedRef.current) setFailed(true);

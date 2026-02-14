@@ -21,7 +21,7 @@ import Tutorial from './components/Tutorial';
 import { WindowResizer } from './components/WindowResizer';
 const AnalyticsPanel = React.lazy(() => import('./components/AnalyticsPanel'));
 const HistoryTable = React.lazy(() => import('./components/HistoryTable'));
-import { APP_VERSION, getShipCapacity } from './types';
+import { APP_VERSION, getShipCapacity, MatchResult } from './types';
 import { CHANGELOG } from './utils/changelog';
 import { Toast } from './components/Toast';
 import { IdMapper } from './components/IdMapper';
@@ -36,8 +36,41 @@ import { getElectronAPI } from './utils/electronAPI';
 import { findClosestMatch, normalizeOcrName, similarityScore } from './utils/stringUtils';
 import { StorageService } from './utils/storage';
 
+interface TelemetryRetentionStatus {
+    exceedsLimits: boolean;
+    totalEntries: number;
+    sizeBytes: number;
+    maxBytes: number;
+    maxAgeMs: number;
+    prunePreview?: {
+        wouldRemoveEntries: number;
+        wouldFreeBytes: number;
+        remainingBytes: number;
+    };
+}
+
+const formatBytes = (bytes: number): string => {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let value = bytes;
+    let unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+        value /= 1024;
+        unitIndex += 1;
+    }
+    return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+};
+
 const App: React.FC = () => {
     const [ocrReviewData, setOcrReviewData] = useState<OCRExtractedData | null>(null);
+    const [ocrGateOutcome, setOcrGateOutcome] = useState<MatchResult | null>(null);
+    const [telemetryPruneStatus, setTelemetryPruneStatus] = useState<TelemetryRetentionStatus | null>(null);
+    const [telemetryPruneBusy, setTelemetryPruneBusy] = useState(false);
+    const [isCompactNav, setIsCompactNav] = useState(() => window.innerWidth < 1024);
+    const [mobileNavOpen, setMobileNavOpen] = useState(false);
+    const navToggleRef = React.useRef<HTMLButtonElement | null>(null);
+    const mobileNavRef = React.useRef<HTMLElement | null>(null);
+    const telemetryPruneSnoozedRef = React.useRef(false);
     const setTutorialCompleted = useAppStore(s => s.setTutorialCompleted);
 
     const {
@@ -50,7 +83,8 @@ const App: React.FC = () => {
         toast, setToast,
         updateStatus, setUpdateStatus,
         hiddenForScan,
-        showIdMapper, setShowIdMapper
+        showIdMapper, setShowIdMapper,
+        sidebarCollapsed, setSidebarCollapsed
     } = useUIState();
 
     const {
@@ -68,24 +102,84 @@ const App: React.FC = () => {
         setSessionShipTypes
     } = useGameData();
 
-    useUserPreferences();
+    const { overlayStyle } = useUserPreferences();
 
     const { logFeed, logStatus } = useLogMonitor();
 
+    const overlayTransitionRef = React.useRef(false);
     useEffect(() => {
         const body = document.body;
         if (isOverlayMode) {
+            overlayTransitionRef.current = true;
             body.style.backgroundColor = 'transparent';
             document.documentElement.style.backgroundColor = 'transparent';
             body.style.overflow = 'hidden';
-            getElectronAPI()?.send('toggle-overlay', true);
+            getElectronAPI()?.send('toggle-overlay', { enabled: true, style: overlayStyle });
         } else {
             body.style.removeProperty('background-color');
             document.documentElement.style.removeProperty('background-color');
             body.style.removeProperty('overflow');
-            getElectronAPI()?.send('toggle-overlay', false);
+            if (overlayTransitionRef.current) {
+                getElectronAPI()?.send('toggle-overlay', { enabled: false, style: overlayStyle });
+            }
+            overlayTransitionRef.current = false;
         }
-    }, [isOverlayMode]);
+    }, [isOverlayMode, overlayStyle]);
+
+    useEffect(() => {
+        const onResize = () => {
+            const compact = window.innerWidth < 1024;
+            setIsCompactNav(compact);
+            if (!compact) {
+                setMobileNavOpen(false);
+            }
+        };
+        window.addEventListener('resize', onResize);
+        onResize();
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
+
+    useEffect(() => {
+        if (!mobileNavOpen) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            setMobileNavOpen(false);
+            requestAnimationFrame(() => navToggleRef.current?.focus());
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [mobileNavOpen]);
+
+    useEffect(() => {
+        if (!mobileNavOpen || !isCompactNav || !mobileNavRef.current) return;
+
+        const container = mobileNavRef.current;
+        const focusable = container.querySelectorAll<HTMLElement>(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        first?.focus();
+
+        const onTrapTab = (event: KeyboardEvent) => {
+            if (event.key !== 'Tab' || focusable.length === 0) return;
+            const active = document.activeElement as HTMLElement | null;
+            if (event.shiftKey) {
+                if (!active || active === first) {
+                    event.preventDefault();
+                    last?.focus();
+                }
+                return;
+            }
+            if (active === last) {
+                event.preventDefault();
+                first?.focus();
+            }
+        };
+
+        window.addEventListener('keydown', onTrapTab);
+        return () => window.removeEventListener('keydown', onTrapTab);
+    }, [mobileNavOpen, isCompactNav]);
 
     // Apply persisted always-on-top setting on startup
     useEffect(() => {
@@ -115,6 +209,68 @@ const App: React.FC = () => {
             unsubHotkey();
         };
     }, [setUpdateStatus, setIsOverlayMode]);
+
+    useEffect(() => {
+        const api = getElectronAPI();
+        if (!api) return;
+
+        const normalizeStatus = (raw: any): TelemetryRetentionStatus | null => {
+            if (!raw) return null;
+            if (raw.success === true && raw.data) return raw.data;
+            if (raw.exceedsLimits != null) return raw;
+            return null;
+        };
+
+        api.invoke('telemetry-retention-status')
+            .then((raw: any) => {
+                const status = normalizeStatus(raw);
+                if (status?.exceedsLimits && !telemetryPruneSnoozedRef.current) {
+                    setTelemetryPruneStatus(status);
+                }
+            })
+            .catch(() => {});
+
+        const unsubPruneNeeded = api.on('telemetry-prune-needed', (status: any) => {
+            const normalized = normalizeStatus(status);
+            if (!normalized?.exceedsLimits) return;
+            if (telemetryPruneSnoozedRef.current) return;
+            setTelemetryPruneStatus(normalized);
+        });
+
+        return () => {
+            unsubPruneNeeded();
+        };
+    }, []);
+
+    const handleTelemetryPruneLater = useCallback(() => {
+        telemetryPruneSnoozedRef.current = true;
+        setTelemetryPruneStatus(null);
+        setToast({ message: 'Telemetry prune reminder snoozed for this session.', type: 'info' });
+    }, [setToast]);
+
+    const handleTelemetryPruneNow = useCallback(async () => {
+        const api = getElectronAPI();
+        if (!api || telemetryPruneBusy) return;
+        setTelemetryPruneBusy(true);
+        try {
+            const raw = await api.invoke('telemetry-prune-apply');
+            if (raw?.success) {
+                const removed = raw.data?.removedEntries ?? 0;
+                const freedBytes = raw.data?.freedBytes ?? 0;
+                setTelemetryPruneStatus(null);
+                setToast({
+                    message: `Telemetry prune complete: removed ${removed} entries, freed ${formatBytes(freedBytes)}.`,
+                    type: 'success',
+                });
+                return;
+            }
+            setToast({ message: raw?.message || 'Telemetry prune failed.', type: 'error' });
+        } catch (e: any) {
+            setToast({ message: `Telemetry prune failed: ${e?.message || 'Unknown error'}`, type: 'error' });
+        } finally {
+            setTelemetryPruneBusy(false);
+        }
+    }, [setToast, telemetryPruneBusy]);
 
     // Window restore/maximize animation
     const appRef = React.useRef<HTMLDivElement>(null);
@@ -281,7 +437,11 @@ const App: React.FC = () => {
 
         setOcrReviewData(null);
         setToast({ message: `Applied OCR data: ${data.teammates.length} teammates, ${data.reachModifiers.length} modifiers`, type: 'success' });
-    }, [pilotRegistry, selectedTeammates, setSelectedTeammates, selectedOpponents, setSelectedOpponents, setActiveShip, selectedReachModifiers, setSelectedReachModifiers, setToast, addPendingReview, pendingReviews, sessionTeams, setSessionTeams, setSessionShipTypes]);
+        if (ocrGateOutcome) {
+            setShowWizard(ocrGateOutcome);
+            setOcrGateOutcome(null);
+        }
+    }, [pilotRegistry, selectedTeammates, setSelectedTeammates, selectedOpponents, setSelectedOpponents, setActiveShip, selectedReachModifiers, setSelectedReachModifiers, setToast, addPendingReview, pendingReviews, sessionTeams, setSessionTeams, setSessionShipTypes, ocrGateOutcome, setShowWizard]);
 
     useEffect(() => {
         const lastSeen = localStorage.getItem('wg_last_seen_version');
@@ -301,6 +461,19 @@ const App: React.FC = () => {
         };
         window.addEventListener('beforeunload', onBeforeUnload);
         return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    }, []);
+
+    useEffect(() => {
+        const onOcrGateRequest = (evt: Event) => {
+            const customEvt = evt as CustomEvent<{ result?: MatchResult; data?: OCRExtractedData }>;
+            const result = customEvt?.detail?.result;
+            const data = customEvt?.detail?.data;
+            if (!result || !data) return;
+            setOcrGateOutcome(result);
+            setOcrReviewData(data);
+        };
+        window.addEventListener('submission:ocr-gate', onOcrGateRequest as EventListener);
+        return () => window.removeEventListener('submission:ocr-gate', onOcrGateRequest as EventListener);
     }, []);
 
     const renderActiveView = () => {
@@ -348,6 +521,8 @@ const App: React.FC = () => {
         </div>
     );
 
+    const navigationOpen = isCompactNav ? mobileNavOpen : !sidebarCollapsed;
+
     return (
         <div ref={appRef} className={`app-container h-screen w-screen flex flex-col text-md-sys-onSurface ${!isOverlayMode ? 'bg-md-sys-background' : ''} font-sans transition-colors duration-300`} style={{ opacity: hiddenForScan ? 0 : 1 }}>
 
@@ -359,13 +534,65 @@ const App: React.FC = () => {
                 <>
                     <WindowFrame />
 
-                    <div className="flex-1 flex overflow-hidden">
-                        <Sidebar />
+                    <div className="relative flex-1 flex overflow-hidden p-3 gap-3">
+                        {isCompactNav ? (
+                            <>
+                                {navigationOpen && (
+                                    <button
+                                        type="button"
+                                        className="absolute inset-0 z-20 bg-scrim-35 backdrop-blur-1"
+                                        onClick={() => {
+                                            setMobileNavOpen(false);
+                                            requestAnimationFrame(() => navToggleRef.current?.focus());
+                                        }}
+                                        aria-label="Close navigation"
+                                    />
+                                )}
+                                <aside
+                                    id="main-navigation"
+                                    ref={mobileNavRef}
+                                    aria-label="Main navigation"
+                                    className={`absolute left-3 top-3 bottom-3 z-30 transition-transform duration-200 ${navigationOpen ? 'translate-x-0' : '-translate-x-full'}`}
+                                >
+                                    <Sidebar
+                                        isMobileDrawer
+                                        onRequestClose={() => {
+                                            setMobileNavOpen(false);
+                                            requestAnimationFrame(() => navToggleRef.current?.focus());
+                                        }}
+                                    />
+                                </aside>
+                            </>
+                        ) : (
+                            <aside
+                                id="main-navigation"
+                                aria-label="Main navigation"
+                                className={`relative z-40 shrink-0 ${navigationOpen ? 'overflow-visible' : 'overflow-hidden'} transition-width-opacity duration-300 ease-emphasized-enter ${navigationOpen ? 'w-32 opacity-100' : 'w-0 opacity-0 pointer-events-none'}`}
+                            >
+                                <Sidebar />
+                            </aside>
+                        )}
 
-                        <div className="flex-1 flex flex-col overflow-hidden p-3 gap-3">
-                            <Header />
+                        <div className="flex-1 flex flex-col overflow-hidden gap-3 min-w-0">
+                            <Header
+                                onToggleNavigation={() => {
+                                    if (isCompactNav) {
+                                        setMobileNavOpen(v => !v);
+                                        return;
+                                    }
+                                    setSidebarCollapsed(!sidebarCollapsed);
+                                }}
+                                navigationAriaLabel={
+                                    isCompactNav
+                                        ? (mobileNavOpen ? 'Close navigation' : 'Open navigation')
+                                        : (sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation')
+                                }
+                                navigationExpanded={isCompactNav ? mobileNavOpen : !sidebarCollapsed}
+                                navigationControlsId="main-navigation"
+                                navigationButtonRef={navToggleRef}
+                            />
 
-                            <main className="flex-1 overflow-hidden bg-md-sys-surface rounded-2xl">
+                            <main className="flex-1 overflow-hidden bg-md-sys-surface rounded-card">
                                 <Suspense fallback={viewFallback}>
                                     {renderActiveView()}
                                 </Suspense>
@@ -396,8 +623,8 @@ const App: React.FC = () => {
             )}
 
             {showChangelog && (
-                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closeChangelog}>
-                    <div className="bg-md-sys-surface1 p-8 rounded-[28px] max-w-lg w-full shadow-2xl border border-md-sys-outline/20 animate-scale-in" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-modal flex items-center justify-center p-4 bg-scrim-60 backdrop-blur-sm" onClick={closeChangelog}>
+                    <div className="bg-md-sys-surface1 p-8 rounded-28px max-w-lg w-full shadow-2xl border border-md-sys-outline/20 animate-scale-in" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center mb-6">
                             <div>
                                 <h2 className="text-3xl font-black uppercase tracking-tighter bg-gradient-to-r from-md-sys-primary to-md-sys-secondary bg-clip-text text-transparent">Update {APP_VERSION}</h2>
@@ -405,7 +632,7 @@ const App: React.FC = () => {
                             </div>
                             <div className="w-12 h-12 rounded-full bg-md-sys-surface2 flex items-center justify-center text-2xl">Update</div>
                         </div>
-                        <div className="space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
+                        <div className="space-y-3 max-h-60vh overflow-y-auto custom-scrollbar pr-2">
                             {CHANGELOG[APP_VERSION]?.map((item, i) => (
                                 <div key={i} className="flex gap-3 items-start">
                                     <div className="w-2 h-2 rounded-full bg-md-sys-primary mt-2 flex-shrink-0"></div>
@@ -421,10 +648,43 @@ const App: React.FC = () => {
             <DevTools logFeed={logFeed} logStatus={logStatus} />
 
             {showIdMapper && (
-                <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-8" onClick={() => setShowIdMapper(false)}>
+                <div className="fixed inset-0 z-popover bg-scrim-60 backdrop-blur-sm flex items-center justify-center p-8" onClick={() => setShowIdMapper(false)}>
                     <div className="max-w-xl w-full" onClick={e => e.stopPropagation()}>
                         <IdMapper />
                         <button onClick={() => setShowIdMapper(false)} className="mt-4 w-full py-2 bg-md-sys-surface1 rounded-lg text-label-sm hover:bg-md-sys-surface2">Close</button>
+                    </div>
+                </div>
+            )}
+
+            {telemetryPruneStatus && (
+                <div className="fixed z-popover bottom-4 right-4 left-4 md:left-auto md:w-96 pointer-events-none">
+                    <div className="pointer-events-auto rounded-2xl border border-warning/40 bg-md-sys-surface1 shadow-2xl p-4">
+                        <div className="text-body font-bold">Telemetry storage is over limit</div>
+                        <div className="mt-1 text-label-sm opacity-70">
+                            Current: {formatBytes(telemetryPruneStatus.sizeBytes)} of {formatBytes(telemetryPruneStatus.maxBytes)}.
+                        </div>
+                        <div className="mt-1 text-label-sm opacity-70">
+                            Suggested prune: {telemetryPruneStatus.prunePreview?.wouldRemoveEntries || 0} entries
+                            ({formatBytes(telemetryPruneStatus.prunePreview?.wouldFreeBytes || 0)}).
+                        </div>
+                        <div className="mt-3 flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={handleTelemetryPruneNow}
+                                disabled={telemetryPruneBusy}
+                                className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled"
+                            >
+                                {telemetryPruneBusy ? 'Pruning...' : 'Prune now'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleTelemetryPruneLater}
+                                disabled={telemetryPruneBusy}
+                                className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled"
+                            >
+                                Later
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -433,7 +693,18 @@ const App: React.FC = () => {
                 <OCRReviewModal
                     data={ocrReviewData}
                     onApply={handleApplyOCRData}
-                    onCancel={() => setOcrReviewData(null)}
+                    onCancel={() => {
+                        setOcrReviewData(null);
+                        setOcrGateOutcome(null);
+                    }}
+                    onSkip={ocrGateOutcome ? () => {
+                        useAppStore.getState().setPendingMatchData(useAppStore.getState().pendingMatchData || {});
+                        setOcrReviewData(null);
+                        setShowWizard(ocrGateOutcome);
+                        setToast({ message: 'Skipped OCR review. Captures remain queued for later review.', type: 'info' });
+                        setOcrGateOutcome(null);
+                    } : undefined}
+                    stepLabel={ocrGateOutcome ? 'Step 1 of 2' : undefined}
                     pilotRegistry={pilotRegistry}
                 />
             )}
