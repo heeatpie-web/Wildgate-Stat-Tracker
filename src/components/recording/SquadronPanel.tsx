@@ -8,7 +8,20 @@ export interface SquadronPanelProps {
 }
 
 export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standard' }) => {
-  const { activeShip, shipSource, telemetryDetectedShip, setActiveShip, activeHero, heroSource, telemetryDetectedHero, setActiveHero } = useGameData();
+  const {
+    activeShip,
+    shipSource,
+    telemetryDetectedShip,
+    setActiveShip,
+    activeHero,
+    heroSource,
+    telemetryDetectedHero,
+    setActiveHero,
+    isMatchInProgress,
+  } = useGameData();
+
+  const shipTelemetryActive = Boolean(telemetryDetectedShip || shipSource === 'telemetry');
+  const prospectorTelemetryActive = Boolean(telemetryDetectedHero || heroSource === 'telemetry');
 
   const sourceChip = (label: string, source?: 'manual' | 'telemetry' | 'ocr') => {
     if (!source || source === 'manual') return null;
@@ -24,20 +37,33 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
     );
   };
 
-  if (density === 'compact') {
+  const TelemetryIndicator: React.FC<{ active: boolean; title: string }> = ({ active, title }) => (
+    <span
+      className={`recording-telemetry-indicator ${active ? 'is-active' : ''} ${(active && isMatchInProgress) ? 'is-recording' : ''}`}
+      title={title}
+    >
+      <span className="recording-telemetry-dot" />
+      <span>Telemetry Active</span>
+    </span>
+  );
 
+  if (density === 'compact') {
     return (
-      <div className="md3-card p-3 flex flex-col gap-3 mg-surface shadow-lg">
-        <span className="md3-title flex items-center gap-2 text-md-sys-on-surface">
-          <span className="w-8 h-8 rounded-xl bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer flex items-center justify-center">
-            <Rocket size={14} />
-          </span>
-          Ship & Loadout
-          <span className="ml-auto flex items-center gap-1.5">
+      <div data-recording-panel="ship-loadout" className="md3-card recording-inside-panel p-4 flex flex-col gap-3 mg-surface shadow-lg">
+        <div className="recording-panel-header">
+          <div className="recording-panel-heading">
+            <span className="recording-panel-heading-icon">
+              <Rocket size={12} />
+            </span>
+            <h3 className="recording-panel-heading-title">Ship and Loadout</h3>
+          </div>
+          <div className="recording-panel-heading-meta">
+            <TelemetryIndicator active={shipTelemetryActive} title="Ship telemetry active" />
+            <TelemetryIndicator active={prospectorTelemetryActive} title="Prospector telemetry active" />
             {sourceChip('Ship', shipSource)}
             {sourceChip('Prospector', heroSource)}
-          </span>
-        </span>
+          </div>
+        </div>
 
         {(telemetryDetectedShip && shipSource !== 'telemetry') && (
           <div className="text-label-sm font-semibold text-md-sys-on-surface/55">
@@ -62,9 +88,9 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
               <button
                 key={s}
                 onClick={() => setActiveShip(s)}
-                className={`relative min-h-[32px] py-1.5 px-1.5 text-label-sm leading-tight text-center font-semibold transition-all whitespace-normal rounded-xl ${activeShip === s
-                  ? 'md3-chip md3-chip--selected'
-                  : 'md3-chip text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
+                className={`relative min-h-32px py-1.5 px-1.5 text-label-sm leading-tight text-center font-semibold transition-all whitespace-normal rounded-xl ${activeShip === s
+                  ? 'md3-chip md3-chip--selected ring-2 ring-md-sys-primary/60 bg-md-sys-primary/10'
+                  : 'md3-chip opacity-60 text-md-sys-on-surface/60 hover:opacity-100 hover:bg-md-sys-on-surface/5'
                   }`}
               >
                 {s.split('(')[0].trim()}
@@ -84,9 +110,9 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
               <button
                 key={c}
                 onClick={() => setActiveHero(c)}
-                className={`relative min-h-[28px] py-1 px-1 text-label-sm leading-tight text-center font-semibold transition-all whitespace-normal rounded-xl ${activeHero === c
-                  ? 'md3-chip md3-chip--selected'
-                  : 'md3-chip text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
+                className={`relative min-h-28px py-1 px-1 text-label-sm leading-tight text-center font-semibold transition-all whitespace-normal rounded-xl ${activeHero === c
+                  ? 'md3-chip md3-chip--selected ring-2 ring-md-sys-primary/60 bg-md-sys-primary/10'
+                  : 'md3-chip opacity-60 text-md-sys-on-surface/60 hover:opacity-100 hover:bg-md-sys-on-surface/5'
                   }`}
               >
                 {c}
@@ -102,18 +128,25 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
   }
 
   return (
-    <div className="md3-card p-4 flex flex-col gap-4 mg-surface shadow-lg" style={{ backgroundImage: 'radial-gradient(circle at top right, rgba(56,189,248,0.05), transparent 40%)' }}>
+      <div
+        data-recording-panel="ship-loadout"
+        className="md3-card recording-inside-panel p-4 flex flex-col gap-4 mg-surface shadow-lg"
+      >
       {/* Header */}
-      <span className="md3-title flex items-center gap-2 text-md-sys-on-surface">
-        <span className="w-8 h-8 rounded-xl bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer flex items-center justify-center">
-          <Rocket size={14} />
-        </span>
-        Ship & Loadout
-        <span className="ml-auto flex items-center gap-1.5">
+      <div className="recording-panel-header">
+        <div className="recording-panel-heading">
+          <span className="recording-panel-heading-icon">
+            <Rocket size={12} />
+          </span>
+          <h3 className="recording-panel-heading-title">Ship and Loadout</h3>
+        </div>
+        <div className="recording-panel-heading-meta">
+          <TelemetryIndicator active={shipTelemetryActive} title="Ship telemetry active" />
+          <TelemetryIndicator active={prospectorTelemetryActive} title="Prospector telemetry active" />
           {sourceChip('Ship', shipSource)}
           {sourceChip('Prospector', heroSource)}
-        </span>
-      </span>
+        </div>
+      </div>
 
       {(telemetryDetectedShip && shipSource !== 'telemetry') && (
         <div className="text-label-sm font-semibold text-md-sys-on-surface/55">
@@ -136,9 +169,9 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
           <button
             key={s}
             onClick={() => setActiveShip(s)}
-            className={`relative min-h-[40px] py-2 px-2 md3-label leading-tight text-center font-semibold transition-all whitespace-normal justify-center ${activeShip === s
-              ? 'md3-chip md3-chip--selected'
-              : 'md3-chip text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
+            className={`relative min-h-40px py-2 px-2 md3-label leading-tight text-center font-semibold transition-all whitespace-normal justify-center ${activeShip === s
+              ? 'md3-chip md3-chip--selected ring-2 ring-md-sys-primary/60 bg-md-sys-primary/10'
+              : 'md3-chip opacity-60 text-md-sys-on-surface/60 hover:opacity-100 hover:bg-md-sys-on-surface/5'
               }`}
           >
             {s.split('(')[0].trim()}
@@ -157,9 +190,9 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
             <button
               key={c}
               onClick={() => setActiveHero(c)}
-              className={`relative min-h-[36px] py-1.5 px-1 md3-label leading-tight text-center font-semibold transition-all whitespace-normal justify-center ${activeHero === c
-                ? 'md3-chip md3-chip--selected'
-                : 'md3-chip text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
+              className={`relative min-h-36px py-1.5 px-1 md3-label leading-tight text-center font-semibold transition-all whitespace-normal justify-center ${activeHero === c
+                ? 'md3-chip md3-chip--selected ring-2 ring-md-sys-primary/60 bg-md-sys-primary/10'
+                : 'md3-chip opacity-60 text-md-sys-on-surface/60 hover:opacity-100 hover:bg-md-sys-on-surface/5'
                 }`}
             >
               {c}

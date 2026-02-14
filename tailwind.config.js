@@ -1,8 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
+    './index.html',
+    './src/**/*.{js,ts,jsx,tsx}',
   ],
   darkMode: ['class', '[data-mode="dark"]', '[data-mode="twilight"]'],
   theme: {
@@ -13,9 +13,13 @@ export default {
       fontSize: {
         'label-xs': ['9px', { lineHeight: '12px', letterSpacing: '0.02em', fontWeight: '600' }],
         'label-sm': ['11px', { lineHeight: '16px', letterSpacing: '0.01em', fontWeight: '600' }],
-        'body':     ['13px', { lineHeight: '18px', letterSpacing: '0',      fontWeight: '400' }],
-        'title':    ['15px', { lineHeight: '20px', letterSpacing: '-0.01em', fontWeight: '700' }],
-        'heading':  ['20px', { lineHeight: '26px', letterSpacing: '-0.02em', fontWeight: '800' }],
+        body: ['13px', { lineHeight: '18px', letterSpacing: '0', fontWeight: '400' }],
+        title: ['15px', { lineHeight: '20px', letterSpacing: '-0.01em', fontWeight: '700' }],
+        heading: ['20px', { lineHeight: '26px', letterSpacing: '-0.02em', fontWeight: '800' }],
+        '8px': ['8px', { lineHeight: '11px' }],
+        '10px': ['10px', { lineHeight: '14px' }],
+        '11px': ['11px', { lineHeight: '16px' }],
+        'half-em': ['0.5em', { lineHeight: '1' }],
       },
       animation: {
         'fade-in': 'fadeIn 0.2s ease-out forwards',
@@ -24,14 +28,143 @@ export default {
       },
       keyframes: {
         fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
-        slideUp: { '0%': { transform: 'translateY(20px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
+        slideUp: {
+          '0%': { transform: 'translateY(20px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
         scaleIn: { '0%': { transform: 'scale(0.9)', opacity: '0' }, '100%': { transform: 'scale(1)', opacity: '1' } },
       },
       borderRadius: {
-        modal: 'var(--md-sys-shape-corner-large)',    // 16px – modals/dialogs
-        card: 'var(--md-sys-shape-corner-medium)',     // 12px – cards/sections
-        control: 'var(--md-sys-shape-corner-small)',   // 8px  – buttons/inputs
-        pill: 'var(--md-sys-shape-corner-full)',       // 9999px – badges/pills
+        modal: 'var(--md-sys-shape-corner-large)',
+        card: 'var(--md-sys-shape-corner-medium)',
+        control: 'var(--md-sys-shape-corner-small)',
+        pill: 'var(--md-sys-shape-corner-full)',
+        '28px': '28px',
+        '2_5rem': '2.5rem',
+      },
+      spacing: {
+        '1px': '1px',
+        '3px': '3px',
+        '36px': '36px',
+        '120px': '120px',
+        '220px': '220px',
+        '290px': '290px',
+        '320px': '320px',
+        '340px': '340px',
+        '400px': '400px',
+        '600px': '600px',
+      },
+      width: {
+        '3px': '3px',
+        '220px': '220px',
+        '290px': '290px',
+        '320px': '320px',
+        '340px': '340px',
+        '400px': '400px',
+      },
+      height: {
+        '36px': '36px',
+        '50vh': '50vh',
+        '120px': '120px',
+        '600px': '600px',
+      },
+      minWidth: {
+        '40px': '40px',
+        '50px': '50px',
+        '60px': '60px',
+        '100px': '100px',
+        '138px': '138px',
+        '160px': '160px',
+        '180px': '180px',
+        '300px': '300px',
+        '600px': '600px',
+      },
+      maxWidth: {
+        '140px': '140px',
+        '160px': '160px',
+        '360px': '360px',
+        '400px': '400px',
+        '600px': '600px',
+        '60p': '60%',
+        '70p': '70%',
+        '95vw': '95vw',
+        'screen-minus-32': 'calc(100vw - 32px)',
+      },
+      minHeight: {
+        '28px': '28px',
+        '32px': '32px',
+        '36px': '36px',
+        '40px': '40px',
+        '80px': '80px',
+        '104px': '104px',
+        '200px': '200px',
+        '250px': '250px',
+        '260px': '260px',
+        '280px': '280px',
+        '300px': '300px',
+        '350px': '350px',
+        '400px': '400px',
+        '420px': '420px',
+      },
+      maxHeight: {
+        '60vh': '60vh',
+        '75vh': '75vh',
+        '80vh': '80vh',
+        '85vh': '85vh',
+        '90vh': '90vh',
+        '95vh': '95vh',
+        '520px': '520px',
+        '600px': '600px',
+      },
+      zIndex: {
+        lightbox: '60',
+        popover: '200',
+        tour: '1000',
+        devpanel: '5000',
+        overlay: '9999',
+        modal: '10000',
+        'modal-plus': '10001',
+        'modal-top': '10010',
+        'top-second': '99998',
+        top: '99999',
+      },
+      letterSpacing: {
+        'wide-02': '0.02em',
+        'wide-06': '0.06em',
+        'wide-08': '0.08em',
+        'wide-10': '0.10em',
+        'wide-12': '0.12em',
+        'wide-14': '0.14em',
+        'wide-16': '0.16em',
+        'wide-18': '0.18em',
+        'wide-20': '0.2em',
+        'wide-22': '0.22em',
+        'wide-30': '0.3em',
+      },
+      transitionProperty: {
+        width: 'width',
+        'width-opacity': 'width, opacity',
+      },
+      transitionTimingFunction: {
+        'emphasized-enter': 'cubic-bezier(0.22, 1, 0.36, 1)',
+      },
+      backdropBlur: {
+        1: '1px',
+      },
+      borderWidth: {
+        3: '3px',
+      },
+      scale: {
+        98: '0.98',
+        102: '1.02',
+      },
+      gridTemplateColumns: {
+        'smart-panel': '380px 1fr',
+        'time-heatmap': 'auto repeat(24, minmax(0, 1fr))',
+        '1-auto': '1fr auto',
+        '1-auto-auto-auto': '1fr auto auto auto',
+        'playerhub-lg': '320px minmax(0, 1fr) 240px',
+        'playerhub-xl': '340px minmax(0, 1fr) 300px',
       },
       colors: {
         status: {
@@ -70,10 +203,55 @@ export default {
             onError: 'var(--md-sys-color-on-error)',
             errorContainer: 'var(--md-sys-color-error-container)',
             onErrorContainer: 'var(--md-sys-color-on-error-container)',
-          }
-        }
-      }
-    }
+          },
+        },
+        'on-scrim': 'rgba(255, 255, 255, 1)',
+        'on-scrim-muted': 'rgba(255, 255, 255, 0.6)',
+        'ink-strong': 'rgba(0, 0, 0, 0.86)',
+        'warning-soft': 'color-mix(in srgb, var(--color-warning), transparent 22%)',
+        scrim: {
+          20: 'rgba(0, 0, 0, 0.2)',
+          30: 'rgba(0, 0, 0, 0.3)',
+          35: 'rgba(0, 0, 0, 0.35)',
+          40: 'rgba(0, 0, 0, 0.4)',
+          50: 'rgba(0, 0, 0, 0.5)',
+          60: 'rgba(0, 0, 0, 0.6)',
+          70: 'rgba(0, 0, 0, 0.7)',
+          80: 'rgba(0, 0, 0, 0.8)',
+          90: 'rgba(0, 0, 0, 0.9)',
+          solid: 'rgba(0, 0, 0, 1)',
+        },
+        frost: {
+          5: 'rgba(255, 255, 255, 0.05)',
+          10: 'rgba(255, 255, 255, 0.1)',
+          20: 'rgba(255, 255, 255, 0.2)',
+          solid: 'rgba(255, 255, 255, 1)',
+        },
+        ink: {
+          40: 'rgba(0, 0, 0, 0.4)',
+        },
+        danger: {
+          DEFAULT: 'var(--color-danger)',
+          strong: 'color-mix(in srgb, var(--color-danger), black 22%)',
+          deep: 'color-mix(in srgb, var(--color-danger), black 38%)',
+        },
+        warning: {
+          DEFAULT: 'var(--color-warning)',
+          strong: 'color-mix(in srgb, var(--color-warning), black 24%)',
+        },
+        primary: {
+          soft: 'color-mix(in srgb, var(--md-sys-color-primary), transparent 24%)',
+          strong: 'var(--md-sys-color-primary)',
+        },
+        info: {
+          soft: 'color-mix(in srgb, var(--color-info), transparent 24%)',
+          strong: 'var(--color-info)',
+        },
+        accent: {
+          strong: 'var(--color-accent)',
+        },
+      },
+    },
   },
   plugins: [],
-}
+};

@@ -6,7 +6,7 @@
  */
 import { EQUIPMENT_DB } from './equipmentDb';
 
-export const APP_VERSION = "v2.12.1";
+export const APP_VERSION = "v2.12.2";
 
 /** Prefix used for unnamed players discovered via telemetry (e.g. "Member 1"). */
 export const UNNAMED_PLAYER_PREFIX = 'Member ';
@@ -66,10 +66,10 @@ export const KILLED_BY_OPTIONS = [
 ];
 
 export const PIE_COLORS = [
-  "#a8c7fa", // Pastel Blue
-  "#81c995", // Pastel Green
-  "#fdc69c", // Pastel Orange
-  "#f28b82", // Pastel Red
-  "#c58af9", // Pastel Purple
-  "#8ab4f8"  // Pastel Cyan
+  "var(--md-sys-color-primary)",
+  "var(--color-success)",
+  "var(--color-warning)",
+  "var(--color-danger)",
+  "var(--color-accent)",
+  "var(--color-info)"
 ];

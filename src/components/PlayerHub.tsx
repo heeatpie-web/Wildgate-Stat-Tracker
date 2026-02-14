@@ -5,6 +5,7 @@ import {
     Check, AlertTriangle
 } from 'lucide-react';
 import { useGameData } from '../providers/GameDataProvider';
+import { useUIState } from '../providers/UIStateProvider';
 import { calculateSocialData } from '../utils/analyticsSocial';
 import { getShipColor } from '../types';
 
@@ -40,7 +41,9 @@ const PlayerHub: React.FC = () => {
         mergeHistory,
         matches,
         playerProfiles,
+        setDrillDownTarget,
     } = useGameData();
+    const { setActiveView } = useUIState();
 
     const [searchTerm, setSearchTerm] = useState('');
     const [sortMode, setSortMode] = useState<SortMode>('favorites');
@@ -191,6 +194,14 @@ const PlayerHub: React.FC = () => {
         return Math.round((stats.wins / stats.total) * 100);
     };
 
+    const handleOpenFullProfile = (player: PlayerDetail) => {
+        const teammateTotal = player.asTeammate?.total || 0;
+        const opponentTotal = player.asOpponent?.total || 0;
+        const drillType = teammateTotal >= opponentTotal ? 'Teammate' : 'Opponent';
+        setDrillDownTarget({ name: player.name, type: drillType });
+        setActiveView('analytics');
+    };
+
     const mergeCandidates = useMemo(() => {
         if (!selectedPilot) return [];
         const q = mergeSearch.toLowerCase();
@@ -200,9 +211,9 @@ const PlayerHub: React.FC = () => {
     }, [enrichedPilots, selectedPilot, mergeSearch]);
 
     return (
-        <div data-tour="view-players" className="h-full flex flex-col lg:grid lg:grid-cols-[340px_1fr] xl:grid-cols-[340px_1fr_280px] gap-4 overflow-hidden players-shell-gradient rounded-2xl p-3">
+        <div data-tour="view-players" className="h-full flex flex-col lg:grid lg:grid-cols-playerhub-lg xl:grid-cols-playerhub-xl gap-4 overflow-hidden players-shell-gradient rounded-2xl p-3">
             {/* Column 1: Roster List */}
-            <div className="w-full lg:w-[340px] shrink-0 flex flex-col gap-3 h-full min-h-0">
+            <div className="w-full lg:w-340px shrink-0 flex flex-col gap-3 h-full min-h-0">
                 <div className="md3-card mg-surface shadow-lg p-4 flex flex-col gap-3 shrink-0">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -264,7 +275,7 @@ const PlayerHub: React.FC = () => {
                             </span>
                             <button
                                 onClick={() => undoLastMerge()}
-                                className="flex items-center gap-1 px-2 py-1 bg-warning-soft hover:bg-warning hover:text-black text-warning rounded text-label-xs font-bold transition-colors shrink-0"
+                                className="flex items-center gap-1 px-2 py-1 bg-warning-soft hover:bg-warning hover:text-ink-strong text-warning rounded text-label-xs font-bold transition-colors shrink-0"
                             >
                                 <Undo2 size={10} /> Undo
                             </button>
@@ -480,7 +491,7 @@ const PlayerHub: React.FC = () => {
                                     <button
                                         onClick={handleMerge}
                                         disabled={!mergeKeepName || mergeTarget === selected.name}
-                                        className="px-4 py-2 bg-warning text-black rounded-xl text-label-sm font-bold disabled:opacity-disabled"
+                                        className="px-4 py-2 bg-warning text-ink-strong rounded-xl text-label-sm font-bold disabled:opacity-disabled"
                                     >
                                         Merge
                                     </button>
@@ -651,8 +662,8 @@ const PlayerHub: React.FC = () => {
                 )}
             </div>
 
-            {/* Column 3 (xl): Selected player summary */}
-            <div className="hidden xl:flex flex-col min-w-0 rounded-card md3-surface-high p-4 border border-md-sys-outline/10">
+            {/* Column 3: Selected player summary */}
+            <div className="hidden lg:flex flex-col min-w-0 rounded-card md3-surface-high p-4 border border-md-sys-outline/10">
                 {!selected ? (
                     <div className="flex flex-col items-center justify-center flex-1 text-md-sys-on-surface/40 py-8">
                         <Users size={24} className="mb-2 opacity-40" />
@@ -674,7 +685,13 @@ const PlayerHub: React.FC = () => {
                         {selected.totalEncounters > 0 && (
                             <div className="text-label-xs text-md-sys-on-surface/60">{selected.totalEncounters} encounters</div>
                         )}
-                        <span className="text-label-xs text-md-sys-primary font-semibold">View full profile →</span>
+                        <button
+                            type="button"
+                            onClick={() => handleOpenFullProfile(selected)}
+                            className="text-label-xs text-md-sys-primary font-semibold text-left hover:underline"
+                        >
+                            View full profile -&gt;
+                        </button>
                     </div>
                 )}
             </div>
@@ -683,4 +700,5 @@ const PlayerHub: React.FC = () => {
 };
 
 export default PlayerHub;
+
 

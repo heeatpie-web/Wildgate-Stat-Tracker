@@ -1,4 +1,10 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v2.12.2": [
+    "UI: Removed the extra layered look in Ship and Loadout so it matches the Recording panel style in Twilight mode.",
+    "UI: Players view now renders a third desktop column at large breakpoints for faster profile scanning.",
+    "Feature: 'View full profile' in Players now opens Analytics with a player-focused drilldown.",
+    "Polish: Smart Captures workspace gradient banding reduced with smoother layered background treatment."
+  ],
   "v2.12.1": [
     "Fix: Resolved Smart Scan hook compile error by restoring async flow in useSmartScan (await now only inside async handlers).",
     "Reliability: Hardened DB durability with recovery candidates (main DB + .prev + .tmp), plus fsync-backed atomic writes in Electron.",
@@ -11,9 +17,9 @@ export const CHANGELOG: Record<string, string[]> = {
     "Improvement: Updated app typography to Manrope + Sora for a more polished, premium UI feel."
   ],
   "v2.12.0": [
-    "Improvement: UI Consistency — Normalized border radii across 12 components (eliminated all ad-hoc rounded-[Npx] values).",
+    "Improvement: UI Consistency — Normalized border radii across 12 components (eliminated all ad-hoc token-radius values).",
     "Improvement: UI Consistency — Replaced hardcoded white/black colors with design tokens across 8 files for light-mode compatibility.",
-    "Improvement: UI Consistency — Consolidated font sizes (eliminated text-[11px] and text-[8px] outliers) for a cleaner type scale.",
+    "Improvement: UI Consistency — Consolidated font sizes (eliminated text-11px and text-8px outliers) for a cleaner type scale.",
     "Improvement: UI Consistency — Updated CSS typography tokens (.text-title, .text-body, .text-label, .text-caption) to use design-system colors.",
     "Feature: OCR Spectator Detection — Dark/black team badges are now classified as spectators and automatically excluded from opponent lists.",
     "Feature: OCR Spectator Names — Known spectator team names (FIEND OR FOE, SPECTATOR, OBSERVER) are filtered in Crew Hub extraction.",
@@ -101,3 +107,4 @@ export const CHANGELOG: Record<string, string[]> = {
     "Fix: Solved layout jitter on startup and improved overall responsiveness."
   ]
 };
+
