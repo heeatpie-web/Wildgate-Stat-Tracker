@@ -56,7 +56,7 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
     ) : null;
 
     const LeftPanel = (
-        <div className="recording-left-shell min-h-0 flex flex-col gap-3 overflow-hidden rounded-2xl p-3">
+        <div className="recording-left-shell min-h-0 flex flex-col gap-4 overflow-hidden rounded-2xl p-4">
             {LeftTabBar}
             {density === 'standard' ? (
                 <>
@@ -91,10 +91,10 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
                     {LeftPanel}
                 </div>
                 <div className="min-h-0 flex flex-col gap-4">
-                    <div className="min-h-[420px]">
+                    <div className="min-h-420px">
                         <RosterPanel />
                     </div>
-                    <div className="min-h-[420px]">
+                    <div className="min-h-420px">
                         <MissionPanel accordionMode />
                     </div>
                 </div>

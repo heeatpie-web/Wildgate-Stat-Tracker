@@ -13,9 +13,9 @@ export const WindowControls: React.FC<WindowControlsProps> = ({ className = '' }
     const handleMaximize = () => api.send('maximize-window');
     const handleClose = () => api.send('close-window');
 
-    const btnBase = "h-6 w-9 flex items-center justify-center transition-colors text-gray-400 hover:text-white";
-    const btnHover = "hover:bg-white/10";
-    const closeHover = "hover:bg-red-500 hover:text-white";
+    const btnBase = "h-6 w-9 flex items-center justify-center transition-colors text-gray-400 hover:text-on-scrim";
+    const btnHover = "hover:bg-frost-10";
+    const closeHover = "hover:bg-danger hover:text-on-scrim";
 
     return (
         <div className={`flex items-center ${className}`} style={{ WebkitAppRegion: 'no-drag' } as any}>

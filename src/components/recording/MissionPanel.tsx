@@ -122,17 +122,15 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
     };
 
     return (
-        <div className={`${isTransparent ? 'bg-transparent p-0' : 'md3-card recording-inside-panel flex flex-col overflow-visible mg-surface shadow-lg p-3 gap-3'} h-full`}>
+        <div data-recording-panel="mission-intel" className={`${isTransparent ? 'bg-transparent p-0' : 'md3-card recording-inside-panel flex flex-col overflow-visible mg-surface shadow-lg p-4 gap-4'} h-full`}>
             {/* Header */}
             {!isTransparent && (
-                <div className="flex items-center justify-between">
-                    <h3 className="text-body font-bold text-md-sys-on-surface uppercase tracking-tight flex items-center gap-2">
-                        <span className="w-8 h-8 rounded-control bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer flex items-center justify-center">
-                            <Layout size={14} />
+                <div className="recording-panel-header">
+                    <div className="recording-panel-heading">
+                        <span className="recording-panel-heading-icon">
+                            <Layout size={12} />
                         </span>
-                        Mission Intel
-                    </h3>
-                    <div className="flex items-center gap-2">
+                        <h3 className="recording-panel-heading-title">Mission Intel</h3>
                     </div>
                 </div>
             )}
@@ -153,7 +151,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                         value={timeMin}
                                         onChange={(e) => setTimeMin(e.target.value)}
                                         className={`${accordionMode ? 'w-8 text-base' : 'w-12 text-lg'} font-bold tracking-tight outline-none text-center rounded-control py-0.5 placeholder:opacity-40 pointer-events-auto
-                                            ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'md3-textfield--compact text-md-sys-on-surface'}
+                                            ${isTransparent ? 'bg-scrim-60 text-on-scrim border border-frost-10' : 'md3-textfield--compact text-md-sys-on-surface'}
                                             `}
                                     />
                                     <span className={`${accordionMode ? 'text-base' : 'text-xl'} font-bold tracking-tight text-md-sys-on-surface/60`}>:</span>
@@ -163,7 +161,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                         value={timeSec}
                                         onChange={(e) => setTimeSec(e.target.value)}
                                         className={`${accordionMode ? 'w-8 text-base' : 'w-12 text-lg'} font-bold tracking-tight outline-none text-center rounded-control py-0.5 placeholder:opacity-40 pointer-events-auto
-                                            ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'md3-textfield--compact text-md-sys-on-surface'}
+                                            ${isTransparent ? 'bg-scrim-60 text-on-scrim border border-frost-10' : 'md3-textfield--compact text-md-sys-on-surface'}
                                             `}
                                     />
                                 </div>
@@ -182,7 +180,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                         value={damageTaken}
                                         onChange={(e) => setDamageTaken(e.target.value.replace(/[^0-9]/g, ''))}
                                         className={`${accordionMode ? 'w-14 text-base' : 'w-20 text-lg'} font-bold outline-none text-center rounded-control py-0.5 placeholder:opacity-40 pointer-events-auto
-                                            ${isTransparent ? 'bg-black/60 text-white border border-white/10' : 'md3-textfield--compact text-md-sys-on-surface'}
+                                            ${isTransparent ? 'bg-scrim-60 text-on-scrim border border-frost-10' : 'md3-textfield--compact text-md-sys-on-surface'}
                                             `}
                                     />
                                 </div>
@@ -238,7 +236,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                 key={w}
                                                 className={`relative ${accordionMode ? 'h-9' : 'h-11'} rounded-control transition-all select-none overflow-hidden ${isActive
                                                     ? 'mg-surface ring-1 ring-md-sys-primary/30'
-                                                    : (isTransparent ? 'mg-surface border border-md-sys-outline/10 text-white' : 'mg-surface')
+                                                    : (isTransparent ? 'mg-surface border border-md-sys-outline/10 text-on-scrim' : 'mg-surface')
                                                     } cursor-pointer`}
                                             >
                                                 <div
@@ -299,7 +297,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                         ? 'bg-weapon-soft ring-1 ring-weapon'
                                                         : canAdd
                                                             ? (isTransparent ? 'mg-surface border border-md-sys-outline/10 hover:bg-md-sys-on-surface/[0.08]' : 'mg-surface')
-                                                            : (isTransparent ? 'bg-black/40 opacity-40' : 'mg-surface opacity-40')
+                                                            : (isTransparent ? 'bg-scrim-40 opacity-40' : 'mg-surface opacity-40')
                                                     }
                                                     ${isActive || canAdd ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                                             >
@@ -354,7 +352,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                         ? 'bg-equipment-soft ring-1 ring-equipment'
                                                         : canAdd
                                                             ? (isTransparent ? 'mg-surface border border-md-sys-outline/10 hover:bg-md-sys-on-surface/[0.08]' : 'mg-surface')
-                                                            : (isTransparent ? 'bg-black/40 opacity-40' : 'mg-surface opacity-40')
+                                                            : (isTransparent ? 'bg-scrim-40 opacity-40' : 'mg-surface opacity-40')
                                                     }
                                                     ${isActive || canAdd ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                                             >
@@ -387,12 +385,12 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                         {isSectionExpanded('modifiers') && (
                             <div className={`flex flex-wrap ${accordionMode ? 'gap-1' : 'gap-2'}`}>
                                 {showArtifactSelect ? (
-                                    <div className={`flex items-center gap-2 ${isTransparent ? 'bg-black/50' : 'mg-surface'} p-2 rounded-control w-full`}>
+                                    <div className={`flex items-center gap-2 ${isTransparent ? 'bg-scrim-50' : 'mg-surface'} p-2 rounded-control w-full`}>
                                         {['Healing', 'Ice', 'Weapon'].map(type => (
                                             <button
                                                 key={type}
                                                 onClick={() => { toggleReachModifier(`Artifact: ${type}`); setShowArtifactSelect(false); }}
-                                                className={`flex-1 md3-btn-tonal ${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} text-label-sm font-bold uppercase bg-warning text-black hover:brightness-110`}
+                                                className={`flex-1 md3-btn-tonal ${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} text-label-sm font-bold uppercase bg-warning text-ink-strong hover:brightness-110`}
                                             >
                                                 {type}
                                             </button>

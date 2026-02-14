@@ -13,9 +13,10 @@ import { SettingsSlice, createSettingsSlice } from './slices/createSettingsSlice
 import { UISlice, createUISlice } from './slices/createUISlice';
 import { FormSlice, createFormSlice } from './slices/createFormSlice';
 import { MappingSlice, createMappingSlice } from './slices/createMappingSlice';
+import { SmartCapturesUIState, createSmartCapturesSlice } from './slices/createSmartCapturesSlice';
 import { StorageService } from '../utils/storage';
 
-export type AppState = DataSlice & SettingsSlice & UISlice & FormSlice & MappingSlice;
+export type AppState = DataSlice & SettingsSlice & UISlice & SmartCapturesUIState & FormSlice & MappingSlice;
 
 let _hydrated = false;
 
@@ -95,6 +96,12 @@ const customStorage: PersistStorage<AppState> = {
             luminanceMin: 30,
           },
           tutorialCompleted: settings.tutorialCompleted ?? false,
+          activeSection: settings.smartCapturesActiveSection || 'capture',
+          queueCollapsed: settings.smartCapturesQueueCollapsed ?? false,
+          queueOnly: settings.smartCapturesQueueOnly ?? false,
+          showResolved: settings.smartCapturesShowResolved ?? false,
+          searchQuery: settings.smartCapturesSearchQuery || '',
+          sortMode: settings.smartCapturesSortMode || 'newest',
 
           // LIVE SESSION (Temporary persistence allowed for refresh safety)
           timelineEvents: data.timelineEvents || [],
@@ -167,6 +174,12 @@ const customStorage: PersistStorage<AppState> = {
                 ocrBestGuessThresholds: state.ocrBestGuessThresholds,
                 ocrCalibration: state.ocrCalibration,
                 tutorialCompleted: state.tutorialCompleted,
+                smartCapturesActiveSection: state.activeSection,
+                smartCapturesQueueCollapsed: state.queueCollapsed,
+                smartCapturesQueueOnly: state.queueOnly,
+                smartCapturesShowResolved: state.showResolved,
+                smartCapturesSearchQuery: state.searchQuery,
+                smartCapturesSortMode: state.sortMode,
         activeUser: state.activeUser
       },
       layouts: state.layouts,
@@ -186,6 +199,7 @@ export const useAppStore = create<AppState>()(
       ...createDataSlice(...a),
       ...createSettingsSlice(...a),
       ...createUISlice(...a),
+      ...createSmartCapturesSlice(...a),
       ...createFormSlice(...a),
       ...createMappingSlice(...a),
     }),
@@ -225,6 +239,12 @@ export const useAppStore = create<AppState>()(
         ocrBestGuessThresholds: state.ocrBestGuessThresholds,
         ocrCalibration: state.ocrCalibration,
         tutorialCompleted: state.tutorialCompleted,
+        activeSection: state.activeSection,
+        queueCollapsed: state.queueCollapsed,
+        queueOnly: state.queueOnly,
+        showResolved: state.showResolved,
+        searchQuery: state.searchQuery,
+        sortMode: state.sortMode,
         activeUser: state.activeUser,
         layouts: state.layouts,
         timelineEvents: state.timelineEvents,

@@ -3,6 +3,7 @@ import { Match, Insight, DrillDownTarget, VisualMode } from '../../types';
 import { RelationshipInsight } from '../../utils/analytics';
 import { Skull, Handshake, Ghost, Swords, Users, Rocket, Lightbulb, Crown, Flame, Zap, User, Target, AlertTriangle } from 'lucide-react';
 import { TiltMeter } from '../TiltMeter';
+import { getInsightToneClasses } from './insightTone';
 
 const getIconComponent = (type: Insight['iconType']) => {
     switch (type) {
@@ -47,7 +48,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ insights, relationsh
                                 <div className={`absolute -top-4 -right-4 w-20 h-20 opacity-10 rounded-full blur-2xl ${
                                     rel.type === 'nemesis' ? 'bg-danger' : rel.type === 'ally' ? 'bg-success' : rel.type === 'stalker' ? 'bg-accent' : 'bg-warning'
                                 }`}></div>
-                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white mb-3 ${
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-on-scrim mb-3 ${
                                     rel.type === 'nemesis' ? 'bg-danger' : rel.type === 'ally' ? 'bg-success' : rel.type === 'stalker' ? 'bg-accent' : 'bg-warning'
                                 }`}>
                                     {rel.type === 'nemesis' ? <Skull size={18} /> : rel.type === 'ally' ? <Handshake size={18} /> : rel.type === 'stalker' ? <Ghost size={18} /> : <Swords size={18} />}
@@ -68,16 +69,19 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ insights, relationsh
                 </div>
             )}
             <div className={`grid gap-4 pb-4 ${dense ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 md:grid-cols-2'}`}>
-                {enrichedInsights.map((stat, i) => (
-                    <div key={i} className={`md3-card relative overflow-hidden transition-all cursor-pointer group rounded-2xl hover:border-md-sys-primary/20 ${dense ? '!p-6' : '!p-8'}`}>
-                        <div className={`absolute -top-6 -right-6 w-32 h-32 opacity-10 rounded-full ${stat.color} blur-2xl`}></div>
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white mb-4 ${stat.color}`}>{stat.icon}</div>
+                {enrichedInsights.map((stat, i) => {
+                    const toneClasses = getInsightToneClasses(stat.tone);
+                    return (
+                        <div key={i} className={`md3-card relative overflow-hidden transition-all cursor-pointer group rounded-2xl hover:border-md-sys-primary/20 ${dense ? '!p-6' : '!p-8'}`}>
+                            <div className={`absolute -top-6 -right-6 w-32 h-32 opacity-10 rounded-full ${toneClasses.glowBg} blur-2xl`}></div>
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${toneClasses.badgeBg} ${toneClasses.badgeText}`}>{stat.icon}</div>
                         <div className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-1">{stat.title}</div>
                         <div className="text-label-sm font-bold uppercase opacity-40 mb-4">{stat.subtitle}</div>
                         <div className={`font-black leading-tight mb-2 tracking-tight ${dense ? 'text-2xl' : 'text-3xl'}`}>{stat.value}</div>
                         <div className="text-label-sm font-bold px-2 py-1 md3-surface-low rounded-lg inline-block">{stat.subValue}</div>
-                    </div>
-                ))}
+                        </div>
+                    );
+                })}
                 {enrichedInsights.length === 0 && relationshipInsights.length === 0 && (
                     <div className="col-span-full text-center opacity-60 text-body font-bold uppercase p-12">Not enough data to generate insights.</div>
                 )}

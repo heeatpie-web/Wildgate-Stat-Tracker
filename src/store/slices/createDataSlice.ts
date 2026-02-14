@@ -26,6 +26,15 @@ export const getPriority = (source: DataSource = 'manual'): number => {
   }
 };
 
+const sanitizeLoadoutSlots = (loadout: Loadout | null): Loadout | null => {
+  if (!loadout) return null;
+  return {
+    ...loadout,
+    weapons: (loadout.weapons || []).filter(Boolean).slice(0, 2),
+    equipment: (loadout.equipment || []).filter(Boolean).slice(0, 2),
+  };
+};
+
 /** Snapshot of state before a merge, enabling undo. */
 export interface MergeHistoryEntry {
   id: string;
@@ -166,7 +175,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     return {};
   }),
   currentLoadout: null,
-  setCurrentLoadout: (l) => set({ currentLoadout: l }),
+  setCurrentLoadout: (l) => set({ currentLoadout: sanitizeLoadoutSlots(l) }),
 
   isSimulation: false,
   setIsSimulation: (isSim) => set({ isSimulation: isSim }),

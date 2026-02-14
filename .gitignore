@@ -43,6 +43,9 @@ ocr_debug_results.txt
 temp_encoded.bin
 decoded_output.json
 
+# Training dataset (images, labels, OCR corpus - keep local only)
+dataset/
+
 # Large binary OCR data files (download at runtime instead)
 *.traineddata
 

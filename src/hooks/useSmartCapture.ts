@@ -14,6 +14,7 @@ export interface SavedCapture {
   filePath: string;
   filename: string;
   timestamp: number;
+  matchId?: string | number | null;
   ocrData?: OCRExtractedData;
   ocrProcessed: boolean;
 }
@@ -35,14 +36,15 @@ export interface SmartCaptureState {
 }
 
 export interface SmartCaptureActions {
-  capture: (activeUser?: string | null) => Promise<void>;
-  captureMultiple: (count: number, activeUser?: string | null) => Promise<void>;
+  capture: (activeUser?: string | null, matchId?: string | number | null) => Promise<void>;
+  captureMultiple: (count: number, activeUser?: string | null, matchId?: string | number | null) => Promise<void>;
   captureOnly: (matchId?: string | number | null) => Promise<SavedCapture | null>;
   processStoredImage: (filePath: string, activeUser?: string | null) => Promise<void>;
-  processAllStored: (activeUser?: string | null) => Promise<void>;
+  processAllStored: (activeUser?: string | null, matchId?: string | number | null) => Promise<void>;
   clearCaptures: () => void;
   clearError: () => void;
   dismissPendingData: () => void;
+  getPendingData: (matchId?: string | number | null) => OCRExtractedData | null;
   getMergedData: () => OCRExtractedData | null;
   reanalyzeCaptures: () => void;
   resetCaptureSession: () => void;
@@ -74,6 +76,8 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const isProcessing = visionStatus === 'processing';
 
   const [pendingData, setPendingData] = useState<OCRExtractedData | null>(null);
+  const pendingDataRef = useRef<OCRExtractedData | null>(null);
+  const pendingDataByScopeRef = useRef<Record<string, OCRExtractedData>>({});
   const [capturedScreenshots, setCapturedScreenshots] = useState<
     Array<{ type: ScreenshotType; data: OCRExtractedData; timestamp: number }>
   >([]);
@@ -87,6 +91,15 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   useEffect(() => {
     savedCapturesRef.current = savedCaptures;
   }, [savedCaptures]);
+  useEffect(() => {
+    pendingDataRef.current = pendingData;
+  }, [pendingData]);
+
+  const normalizeMatchScope = useCallback((matchId?: string | number | null): string | null => {
+    if (matchId === null || matchId === undefined || matchId === '') return null;
+    const normalized = String(matchId).trim();
+    return normalized.length > 0 ? normalized : null;
+  }, []);
 
   const captureQueueRef = useRef<Array<{ activeUser?: string | null }>>([]);
   const isProcessingQueueRef = useRef(false);
@@ -463,48 +476,55 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     };
   }, []);
 
-  const mergeIntoPending = useCallback((extractedData: OCRExtractedData) => {
+  const mergeIntoPending = useCallback((extractedData: OCRExtractedData, matchId?: string | number | null) => {
     let normalizedData = extractedData;
     setCapturedScreenshots(prev => {
       normalizedData = canonicalizeOcrData(extractedData, prev.map(p => p.data));
       return [...prev, { type: normalizedData.screenshotType, data: normalizedData, timestamp: Date.now() }];
     });
-    setPendingData(prev => {
-      if (!prev) {
-        return {
-          screenshotType: normalizedData.screenshotType,
-          playerShip: normalizedData.playerShip,
-          playerTeamName: undefined,
-          reachModifiers: normalizedData.reachModifiers || [],
-          enemyShips: [],
-          teammates: normalizedData.teammates || [],
-          opponentTeams: normalizedData.opponentTeams || [],
-          overallConfidence: normalizedData.overallConfidence || 0,
-          captureTimestamp: Date.now(),
-          imagePreview: normalizedData.imagePreview,
-        };
-      }
-      const merged = mergeOCRData(prev, {
+
+    const scope = normalizeMatchScope(matchId) || 'unscoped';
+    const previous = pendingDataByScopeRef.current[scope];
+    if (!previous) {
+      const created = {
+        screenshotType: normalizedData.screenshotType,
         playerShip: normalizedData.playerShip,
-        reachModifiers: normalizedData.reachModifiers,
-        teammates: normalizedData.teammates,
-        opponentTeams: normalizedData.opponentTeams,
-      });
-      const screenshotType = normalizedData.screenshotType !== 'unknown'
-        ? normalizedData.screenshotType : prev.screenshotType;
-      return {
-        ...prev,
-        screenshotType,
-        playerShip: merged.playerShip || prev.playerShip,
-        reachModifiers: merged.reachModifiers || prev.reachModifiers,
-        teammates: merged.teammates || prev.teammates,
-        opponentTeams: merged.opponentTeams || prev.opponentTeams,
-        overallConfidence: calculateOverallConfidence(merged),
+        playerTeamName: undefined,
+        reachModifiers: normalizedData.reachModifiers || [],
+        enemyShips: [],
+        teammates: normalizedData.teammates || [],
+        opponentTeams: normalizedData.opponentTeams || [],
+        overallConfidence: normalizedData.overallConfidence || 0,
         captureTimestamp: Date.now(),
-        imagePreview: normalizedData.imagePreview || prev.imagePreview,
+        imagePreview: normalizedData.imagePreview,
       };
+      pendingDataByScopeRef.current[scope] = created;
+      setPendingData(created);
+      return;
+    }
+
+    const merged = mergeOCRData(previous, {
+      playerShip: normalizedData.playerShip,
+      reachModifiers: normalizedData.reachModifiers,
+      teammates: normalizedData.teammates,
+      opponentTeams: normalizedData.opponentTeams,
     });
-  }, [canonicalizeOcrData]);
+    const screenshotType = normalizedData.screenshotType !== 'unknown'
+      ? normalizedData.screenshotType : previous.screenshotType;
+    const updated = {
+      ...previous,
+      screenshotType,
+      playerShip: merged.playerShip || previous.playerShip,
+      reachModifiers: merged.reachModifiers || previous.reachModifiers,
+      teammates: merged.teammates || previous.teammates,
+      opponentTeams: merged.opponentTeams || previous.opponentTeams,
+      overallConfidence: calculateOverallConfidence(merged),
+      captureTimestamp: Date.now(),
+      imagePreview: normalizedData.imagePreview || previous.imagePreview,
+    };
+    pendingDataByScopeRef.current[scope] = updated;
+    setPendingData(updated);
+  }, [canonicalizeOcrData, normalizeMatchScope]);
 
   const processSingleCapture = useCallback(async (activeUser?: string | null) => {
     const captureResult = await captureGameWindow();
@@ -535,6 +555,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         filePath: saved.filePath!,
         filename: saved.filename || 'capture.png',
         timestamp: Date.now(),
+        matchId: null,
         ocrProcessed: false,
       }]);
     }
@@ -582,7 +603,8 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       }
       setQualityHint(assessCaptureQuality(captureResult.imageBase64));
 
-      const saved = await saveScreenshot(captureResult.imageBase64, matchId);
+      const resolvedMatchId = normalizeMatchScope(matchId);
+      const saved = await saveScreenshot(captureResult.imageBase64, resolvedMatchId);
       if (!saved.success || !saved.filePath) {
         throw new Error(saved.error || 'Failed to save screenshot');
       }
@@ -591,6 +613,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         filePath: saved.filePath,
         filename: saved.filename || 'capture.png',
         timestamp: Date.now(),
+        matchId: resolvedMatchId,
         ocrProcessed: false,
       };
 
@@ -606,7 +629,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       setVisionStatus('idle');
       captureInFlightRef.current = false;
     }
-  }, [playSuccess, playSoundError, setVisionStatus, assessCaptureQuality]);
+  }, [playSuccess, playSoundError, setVisionStatus, assessCaptureQuality, normalizeMatchScope]);
 
   const processStoredImage = useCallback(async (filePath: string, activeUser?: string | null) => {
     setVisionStatus('processing');
@@ -623,7 +646,8 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         c.filePath === filePath ? { ...c, ocrProcessed: true, ocrData: result.data } : c
       ));
 
-      mergeIntoPending(result.data);
+      const scopeMatchId = savedCapturesRef.current.find(c => c.filePath === filePath)?.matchId ?? null;
+      mergeIntoPending(result.data, scopeMatchId);
       playSuccess();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Processing failed';
@@ -634,9 +658,20 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     }
   }, [ocrMode, mergeIntoPending, playSuccess, playSoundError, setVisionStatus, refineQualityFromOcr]);
 
-  const processAllStored = useCallback(async (activeUser?: string | null) => {
-    const unprocessed = savedCapturesRef.current.filter(c => !c.ocrProcessed);
+  const processAllStored = useCallback(async (activeUser?: string | null, matchId?: string | number | null) => {
+    const scope = normalizeMatchScope(matchId);
+    const unprocessed = savedCapturesRef.current.filter(c => {
+      if (c.ocrProcessed) return false;
+      if (!scope) return true;
+      return normalizeMatchScope(c.matchId) === scope;
+    });
     if (unprocessed.length === 0) return;
+
+    if (scope) {
+      delete pendingDataByScopeRef.current[scope];
+      setPendingData(null);
+      setCapturedScreenshots([]);
+    }
 
     setVisionStatus('processing');
     setError(null);
@@ -664,10 +699,11 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       for (const outcome of results) {
         if (outcome.result?.success && outcome.result.data) {
           const { filePath, result } = outcome;
+          const outcomeMatchId = savedCapturesRef.current.find(c => c.filePath === filePath)?.matchId ?? null;
           setSavedCaptures(prev => prev.map(c =>
             c.filePath === filePath ? { ...c, ocrProcessed: true, ocrData: result.data } : c
           ));
-          mergeIntoPending(result.data);
+          mergeIntoPending(result.data, scope || outcomeMatchId);
           setQualityHint(refineQualityFromOcr(null, result.data));
         }
       }
@@ -685,7 +721,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       setVisionStatus('idle');
       setProcessingProgress(null);
     }
-  }, [ocrMode, mergeIntoPending, playSuccess, playSoundError, setVisionStatus, refineQualityFromOcr]);
+  }, [ocrMode, mergeIntoPending, playSuccess, playSoundError, setVisionStatus, refineQualityFromOcr, normalizeMatchScope]);
 
   const processQueue = useCallback(async () => {
     if (isProcessingQueueRef.current) return;
@@ -718,14 +754,14 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     isProcessingQueueRef.current = false;
   }, [processSingleCapture, mergeIntoPending, playSuccess, playSoundError, setVisionStatus]);
 
-  const scheduleAutoOcr = useCallback((activeUser?: string | null) => {
+  const scheduleAutoOcr = useCallback((activeUser?: string | null, matchId?: string | number | null) => {
     if (autoOcrTimerRef.current) clearTimeout(autoOcrTimerRef.current);
     autoOcrTimerRef.current = setTimeout(() => {
-      processAllStored(activeUser || null);
+      processAllStored(activeUser || null, matchId ?? null);
     }, AUTO_OCR_BUNDLE_DELAY_MS);
   }, [processAllStored]);
 
-  const capture = useCallback(async (activeUser?: string | null) => {
+  const capture = useCallback(async (activeUser?: string | null, matchId?: string | number | null) => {
     if (!isElectron()) {
       setError('Smart Capture is only available in the desktop app');
       return;
@@ -739,13 +775,14 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
     // Always save the screenshot first so capture never blocks on OCR.
     // "deferred" never OCRs automatically; "auto" OCRs after a short bundling delay.
-    const entry = await captureOnly();
+    const resolvedMatchId = normalizeMatchScope(matchId);
+    const entry = await captureOnly(resolvedMatchId);
     if (entry && captureMode === 'auto') {
-      scheduleAutoOcr(activeUser || null);
+      scheduleAutoOcr(activeUser || null, resolvedMatchId);
     }
-  }, [captureOnly, captureMode, scheduleAutoOcr]);
+  }, [captureOnly, captureMode, scheduleAutoOcr, normalizeMatchScope]);
 
-  const captureMultiple = useCallback(async (count: number = 2, activeUser?: string | null) => {
+  const captureMultiple = useCallback(async (count: number = 2, activeUser?: string | null, matchId?: string | number | null) => {
     if (!isElectron()) {
       setError('Smart Capture is only available in the desktop app');
       return;
@@ -755,18 +792,19 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     setError(null);
 
     // Capture burst first (fast). If auto, OCR after the burst settles.
+    const resolvedMatchId = normalizeMatchScope(matchId);
     for (let i = 0; i < count; i++) {
-      // eslint-disable-next-line no-await-in-loop
-      await captureOnly();
+      await captureOnly(resolvedMatchId);
     }
     if (captureMode === 'auto') {
-      scheduleAutoOcr(activeUser || null);
+      scheduleAutoOcr(activeUser || null, resolvedMatchId);
     }
-  }, [captureOnly, captureMode, scheduleAutoOcr]);
+  }, [captureOnly, captureMode, scheduleAutoOcr, normalizeMatchScope]);
 
   const clearCaptures = useCallback(() => {
     setCapturedScreenshots([]);
     setPendingData(null);
+    pendingDataByScopeRef.current = {};
     setError(null);
   }, []);
 
@@ -776,15 +814,23 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
   const dismissPendingData = useCallback(() => {
     setPendingData(null);
+    pendingDataByScopeRef.current = {};
   }, []);
 
   const getMergedData = useCallback((): OCRExtractedData | null => {
     return buildMergedData(capturedScreenshots);
   }, [capturedScreenshots, buildMergedData]);
 
+  const getPendingData = useCallback((matchId?: string | number | null): OCRExtractedData | null => {
+    const scope = normalizeMatchScope(matchId);
+    if (scope) return pendingDataByScopeRef.current[scope] || null;
+    return pendingDataRef.current;
+  }, [normalizeMatchScope]);
+
   const reanalyzeCaptures = useCallback(() => {
     const mergedResult = buildMergedData(capturedScreenshots);
     if (mergedResult) {
+      pendingDataByScopeRef.current.unscoped = mergedResult;
       setPendingData(mergedResult);
     }
   }, [capturedScreenshots, buildMergedData]);
@@ -793,6 +839,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     setCapturedScreenshots([]);
     setSavedCaptures([]);
     setPendingData(null);
+    pendingDataByScopeRef.current = {};
     setError(null);
     captureQueueRef.current = [];
     setQueueDepth(0);
@@ -824,6 +871,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     clearCaptures,
     clearError,
     dismissPendingData,
+    getPendingData,
     getMergedData,
     reanalyzeCaptures,
     resetCaptureSession,

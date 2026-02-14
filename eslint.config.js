@@ -17,6 +17,8 @@ const baseIgnores = [
   '**/*.map',
   // Temp folders in this repo (used by release tooling / history rewrite scripts).
   '_*/**',
+  '.claude/**',
+  '.venv*/**',
 ];
 
 export default [
@@ -92,6 +94,61 @@ export default [
     },
     rules: {
       // Avoid blocking on stylistic JS issues in the main process.
+      'no-unused-vars': 'off',
+    },
+  },
+
+  // Node scripts and project config files.
+  {
+    files: [
+      'scripts/**/*.{ts,js,mjs}',
+      '*.config.{js,ts,mjs}',
+      'vite.config.ts',
+      'vitest.config.ts',
+      'eslint.config.js',
+    ],
+    languageOptions: {
+      parser: tsParser,
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        Buffer: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+      },
+    },
+    plugins: {
+      '@typescript-eslint': tsPlugin,
+    },
+    rules: {
+      ...tsPlugin.configs.recommended.rules,
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+
+  {
+    files: ['scripts/**/*.cjs'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'script',
+      globals: {
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        require: 'readonly',
+        module: 'readonly',
+        exports: 'readonly',
+        process: 'readonly',
+        Buffer: 'readonly',
+        console: 'readonly',
+      },
+    },
+    rules: {
       'no-unused-vars': 'off',
     },
   },

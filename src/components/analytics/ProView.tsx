@@ -138,7 +138,7 @@ export const ProView: React.FC<ProViewProps> = ({ matches, visualMode }) => {
             {/* Editorial Summary */}
             {!dense && narrative && (
                 <div className="md3-card rounded-card p-6 overflow-hidden">
-                    <div className="text-label-sm uppercase tracking-[0.22em] font-bold text-md-sys-on-surface/40 mb-2">
+                    <div className="text-label-sm uppercase tracking-wide-22 font-bold text-md-sys-on-surface/40 mb-2">
                         Detailed Narrative
                     </div>
                     <h2 className="text-xl md:text-2xl font-bold tracking-tight leading-snug text-md-sys-on-surface">
@@ -147,7 +147,7 @@ export const ProView: React.FC<ProViewProps> = ({ matches, visualMode }) => {
                     <div className="mt-4 space-y-4 text-body leading-relaxed text-md-sys-on-surface/60">
                         {narrative.sections.map((s) => (
                             <div key={s.id} className="pb-4 border-b border-md-sys-outlineVariant/25 last:border-b-0 last:pb-0">
-                                <div className="text-label-sm font-bold uppercase tracking-[0.18em] text-md-sys-on-surface/60">{s.title}</div>
+                                <div className="text-label-sm font-bold uppercase tracking-wide-18 text-md-sys-on-surface/60">{s.title}</div>
                                 <p className="mt-1">{s.body}</p>
                                 {s.metrics && s.metrics.length > 0 && (
                                     <div className="mt-2 flex flex-wrap gap-2">
@@ -166,7 +166,7 @@ export const ProView: React.FC<ProViewProps> = ({ matches, visualMode }) => {
             )}
 
             <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
-                <div className={`md3-card rounded-card flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
+                <div className={`md3-card rounded-card flex flex-col ${dense ? 'p-6 min-h-300px' : 'p-8 min-h-400px'}`}>
                     <h3 className={`font-bold uppercase text-md-sys-on-surface/60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><Rocket size={16} /> Ship Distribution</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart><Pie data={shipMetricData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="80%" innerRadius="50%" paddingAngle={2}>
@@ -174,7 +174,7 @@ export const ProView: React.FC<ProViewProps> = ({ matches, visualMode }) => {
                         </Pie><Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }} /><Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} /></PieChart>
                     </ResponsiveContainer>
                 </div>
-                <div className={`md3-card rounded-card flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
+                <div className={`md3-card rounded-card flex flex-col ${dense ? 'p-6 min-h-300px' : 'p-8 min-h-400px'}`}>
                     <h3 className={`font-bold uppercase text-md-sys-on-surface/60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><User size={16} /> Hero Distribution</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart><Pie data={heroMetricData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius="80%" innerRadius="50%" paddingAngle={2}>
@@ -182,7 +182,7 @@ export const ProView: React.FC<ProViewProps> = ({ matches, visualMode }) => {
                         </Pie><Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }} /><Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} /></PieChart>
                     </ResponsiveContainer>
                 </div>
-                <div className={`md3-card rounded-card flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
+                <div className={`md3-card rounded-card flex flex-col ${dense ? 'p-6 min-h-300px' : 'p-8 min-h-400px'}`}>
                     <h3 className={`font-bold uppercase text-md-sys-on-surface/60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><BarChart3 size={16} /> {metricTitle}</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={metricData} layout="vertical" margin={{ left: 20 }}>
@@ -193,7 +193,7 @@ export const ProView: React.FC<ProViewProps> = ({ matches, visualMode }) => {
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
-                <div className={`md3-card rounded-card flex flex-col ${dense ? 'p-6 min-h-[300px]' : 'p-8 min-h-[400px]'}`}>
+                <div className={`md3-card rounded-card flex flex-col ${dense ? 'p-6 min-h-300px' : 'p-8 min-h-400px'}`}>
                     <h3 className={`font-bold uppercase text-md-sys-on-surface/60 mb-4 flex items-center gap-2 ${dense ? 'text-body' : 'text-base'}`}><TrendingUp size={16} /> {metricTitle} Trend</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={timelineData}>

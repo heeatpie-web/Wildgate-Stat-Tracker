@@ -79,11 +79,11 @@ export const generateMatchImage = (match: Match) => {
   const mdWarn = styles.getPropertyValue('--color-warning').trim();
 
   // Background
-  ctx.fillStyle = mdBackground || '#161b29';
+  ctx.fillStyle = mdBackground || 'rgb(22, 27, 41)';
   ctx.fillRect(0, 0, 600, 350);
 
   // Border based on result
-  ctx.strokeStyle = match.result === 'Win' ? (mdSuccess || '#00ff9d') : (mdDanger || '#ff4757');
+  ctx.strokeStyle = match.result === 'Win' ? (mdSuccess || 'rgb(0, 255, 157)') : (mdDanger || 'rgb(255, 71, 87)');
   ctx.lineWidth = 10;
   ctx.strokeRect(5, 5, 590, 340);
 
@@ -94,7 +94,7 @@ export const generateMatchImage = (match: Match) => {
 
   // Details
   ctx.font = "18px 'Segoe UI', Roboto, sans-serif";
-  ctx.fillStyle = mdOnSurfaceVariant || "#e0e6ed";
+  ctx.fillStyle = mdOnSurfaceVariant || 'rgb(224, 230, 237)';
   
   let y = 100;
   ctx.fillText(`Prospector: ${match.player}`, 40, y);
@@ -105,9 +105,9 @@ export const generateMatchImage = (match: Match) => {
   y += 35;
 
   if (match.opponents && match.opponents.length > 0) {
-      ctx.fillStyle = mdWarn || "#ffaaaa";
+      ctx.fillStyle = mdWarn || 'rgb(255, 170, 170)';
       ctx.fillText(`Vs: ${match.opponents.join(', ')}`, 40, y);
-      ctx.fillStyle = mdOnSurfaceVariant || "#e0e6ed";
+      ctx.fillStyle = mdOnSurfaceVariant || 'rgb(224, 230, 237)';
       y += 35;
   }
 
@@ -130,12 +130,12 @@ export const generateMatchImage = (match: Match) => {
     .join(' | ');
 
   if (kills) {
-    ctx.fillStyle = mdInfo || "#00d4ff";
+    ctx.fillStyle = mdInfo || 'rgb(0, 212, 255)';
     ctx.fillText(`Kills: ${kills}`, 40, y);
   }
 
   // Date
-  ctx.fillStyle = mdOutline || "#8b9bb4";
+  ctx.fillStyle = mdOutline || 'rgb(139, 155, 180)';
   ctx.font = "12px sans-serif";
   ctx.fillText(match.date, 540 - ctx.measureText(match.date).width, 320);
 

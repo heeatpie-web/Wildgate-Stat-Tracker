@@ -134,13 +134,13 @@ export const DrillDownOverlay: React.FC = () => {
     const worstNemesis = topNemeses[0];
 
     return (
-        <div className="fixed inset-0 md3-dialog-scrim backdrop-blur-md z-[9999] flex items-center justify-center p-6 animate-fade-in" onClick={() => setDrillDownTarget(null)}>
-            <div className="md3-card w-full max-w-6xl rounded-2xl p-6 shadow-2xl border border-md-sys-outline/20 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 md3-dialog-scrim backdrop-blur-md z-overlay flex items-center justify-center p-6 animate-fade-in" onClick={() => setDrillDownTarget(null)}>
+            <div className="md3-card w-full max-w-6xl rounded-2xl p-6 shadow-2xl border border-md-sys-outline/20 flex flex-col max-h-90vh" onClick={e => e.stopPropagation()}>
 
                 {/* Header */}
                 <div className="flex justify-between items-start mb-8 flex-shrink-0">
                     <div>
-                        <div className="text-body font-black uppercase opacity-40 tracking-[0.2em] mb-1">Deep Dive Analysis - {drillDownTarget.type}</div>
+                        <div className="text-body font-black uppercase opacity-40 tracking-wide-20 mb-1">Deep Dive Analysis - {drillDownTarget.type}</div>
                         <h2 className="text-5xl font-black">{drillDownTarget.name}</h2>
                         <div className="flex gap-4 mt-4">
                             <div className="md3-surface-high px-4 py-2 rounded-xl text-label-sm font-black uppercase"><span className="opacity-60">Matches:</span> {targetMatches.length}</div>
@@ -181,7 +181,7 @@ export const DrillDownOverlay: React.FC = () => {
                             <div className="flex flex-col gap-2">
                                 {topSynergies.length > 0 ? topSynergies.map(([name, stat], i) => (
                                     <div key={name} className="flex justify-between items-center text-label-sm">
-                                        <div className="font-bold truncate max-w-[70%]">{i + 1}. {name}</div>
+                                        <div className="font-bold truncate max-w-70p">{i + 1}. {name}</div>
                                         <div className="font-mono opacity-60">{Math.round((stat.wins / stat.total) * 100)}%</div>
                                     </div>
                                 )) : <div className="text-label-sm opacity-40 font-bold uppercase">No Data</div>}
@@ -195,7 +195,7 @@ export const DrillDownOverlay: React.FC = () => {
                             <div className="flex flex-col gap-2">
                                 {topNemeses.length > 0 ? topNemeses.map(([name, stat], i) => (
                                     <div key={name} className="flex justify-between items-center text-label-sm">
-                                        <div className="font-bold truncate max-w-[70%]">{i + 1}. {name}</div>
+                                        <div className="font-bold truncate max-w-70p">{i + 1}. {name}</div>
                                         <div className="font-mono opacity-60 text-danger">{Math.round((stat.wins / stat.total) * 100)}%</div>
                                     </div>
                                 )) : <div className="text-label-sm opacity-40 font-bold uppercase">No Data</div>}
@@ -212,7 +212,7 @@ export const DrillDownOverlay: React.FC = () => {
                                         <div className="text-label-sm uppercase opacity-40 font-bold mb-1">Best</div>
                                         {topEnvs.map(([name, stat]) => (
                                             <div key={name} className="flex justify-between items-center text-label-sm">
-                                                <div className="font-bold truncate max-w-[70%]">{name}</div>
+                                                <div className="font-bold truncate max-w-70p">{name}</div>
                                                 <div className="font-mono text-success">{Math.round((stat.wins / stat.total) * 100)}%</div>
                                             </div>
                                         ))}

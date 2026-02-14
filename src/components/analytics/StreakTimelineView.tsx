@@ -51,7 +51,7 @@ export const StreakTimelineView: React.FC<StreakTimelineViewProps> = ({ data, vi
             </div>
 
             {/* Streak Timeline */}
-            <div className={`md3-card rounded-2xl flex-1 min-h-[300px] ${dense ? 'p-4' : 'p-6'}`}>
+            <div className={`md3-card rounded-2xl flex-1 min-h-300px ${dense ? 'p-4' : 'p-6'}`}>
                 <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-label-sm' : 'text-body'}`}><Flame size={14} /> Streak Timeline</h3>
                 {chartData.length < 2 ? (
                     <div className="h-48 flex items-center justify-center opacity-40 font-bold uppercase text-body">Not enough data</div>

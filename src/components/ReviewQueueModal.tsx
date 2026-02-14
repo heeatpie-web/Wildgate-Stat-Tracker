@@ -126,7 +126,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
 
     if (allItems.length === 0) {
         return (
-            <div className="md3-dialog-scrim fixed inset-0 z-[10010] flex items-center justify-center p-4">
+            <div className="md3-dialog-scrim fixed inset-0 z-modal-top flex items-center justify-center p-4">
                 <div className="md3-dialog rounded-modal w-full max-w-sm text-center">
                     <div className="md3-dialog-title">All Caught Up!</div>
                     <div className="md3-dialog-content text-md-sys-on-surface/60">
@@ -141,8 +141,8 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
     }
 
     return (
-        <div className="md3-dialog-scrim fixed inset-0 z-[10010] flex items-center justify-center p-4" onClick={onClose}>
-            <div className="md3-dialog rounded-modal w-full max-w-lg overflow-hidden max-h-[80vh]" onClick={e => e.stopPropagation()}>
+        <div className="md3-dialog-scrim fixed inset-0 z-modal-top flex items-center justify-center p-4" onClick={onClose}>
+            <div className="md3-dialog rounded-modal w-full max-w-lg overflow-hidden max-h-80vh" onClick={e => e.stopPropagation()}>
                 <div className="md3-banner md3-banner--warn">
                     <div className="flex items-center gap-2">
                         <AlertTriangle size={20} />

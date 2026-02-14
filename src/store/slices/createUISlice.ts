@@ -28,6 +28,7 @@ export interface UISlice {
     isAlwaysOnTop: boolean;
     overlayTab: 'Mission' | 'Squadron' | 'Social';
     overlayPhase: 'Setup' | 'Live' | 'Result';
+    sidebarCollapsed: boolean;
     activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr';
     visionStatus: 'idle' | 'capturing' | 'scanning' | 'processing';
     telemetryStatus: { exists: boolean, size?: number, lastCheck?: number, error?: string, path?: string, lastEventAt?: number };
@@ -51,6 +52,7 @@ export interface UISlice {
     setIsAlwaysOnTop: (always: boolean) => void;
     setOverlayTab: (tab: 'Mission' | 'Squadron' | 'Social') => void;
     setOverlayPhase: (phase: 'Setup' | 'Live' | 'Result') => void;
+    setSidebarCollapsed: (collapsed: boolean) => void;
     setActiveView: (view: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr') => void;
     showIdMapper: boolean;
     setShowIdMapper: (show: boolean) => void;
@@ -80,6 +82,7 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     isAlwaysOnTop: false,
     overlayTab: 'Mission',
     overlayPhase: 'Setup',
+    sidebarCollapsed: true,
     activeView: 'recording',
     visionStatus: 'idle',
     telemetryStatus: { exists: false },
@@ -150,6 +153,7 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     setIsAlwaysOnTop: (always) => set({ isAlwaysOnTop: always }),
     setOverlayTab: (tab) => set({ overlayTab: tab }),
     setOverlayPhase: (phase) => set({ overlayPhase: phase }),
+    setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
     setActiveView: (view) => set({ activeView: view }),
     showIdMapper: false,
     setShowIdMapper: (show) => set({ showIdMapper: show }),

@@ -138,11 +138,11 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
 
     return (
         <div
-            className="fixed inset-0 md3-dialog-scrim z-[99998] flex items-center justify-center p-4 animate-fade-in"
+            className="fixed inset-0 md3-dialog-scrim z-top-second flex items-center justify-center p-4 animate-fade-in"
             onClick={onClose}
         >
             <div
-                className="md3-dialog rounded-modal w-full max-w-2xl max-h-[85vh] flex flex-col animate-scale-in"
+                className="md3-dialog rounded-modal w-full max-w-2xl max-h-85vh flex flex-col animate-scale-in"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}

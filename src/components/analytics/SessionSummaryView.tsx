@@ -96,8 +96,8 @@ export const SessionSummaryView: React.FC<SessionSummaryViewProps> = ({ data, vi
                                         <span className="text-md-sys-on-surface/40 mx-0.5">-</span>
                                         <span className="text-danger">{day.losses}L</span>
                                     </span>
-                                    <span className={`text-label-sm font-bold min-w-[40px] text-right ${day.winRate >= 50 ? 'text-success' : 'text-danger'}`}>{day.winRate}%</span>
-                                    <span className="text-label-sm font-bold text-md-sys-on-surface/40 min-w-[50px] text-right">{day.totalKills} kills</span>
+                                    <span className={`text-label-sm font-bold min-w-40px text-right ${day.winRate >= 50 ? 'text-success' : 'text-danger'}`}>{day.winRate}%</span>
+                                    <span className="text-label-sm font-bold text-md-sys-on-surface/40 min-w-50px text-right">{day.totalKills} kills</span>
                                 </div>
                             </div>
                         ))}

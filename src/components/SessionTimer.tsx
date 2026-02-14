@@ -128,7 +128,7 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
                 <span className="font-mono font-black text-6xl tracking-tighter text-md-sys-on-surface drop-shadow-2xl">
                     {isMatchInProgress ? matchElapsedDisplay : elapsedDisplay}
                 </span>
-                <span className="text-label-sm font-bold uppercase tracking-[0.3em] opacity-60 mt-2">
+                <span className="text-label-sm font-bold uppercase tracking-wide-30 opacity-60 mt-2">
                     {isMatchInProgress ? "Mission Time" : "Session Time"}
                 </span>
             </div>
@@ -143,7 +143,7 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
                     <button
                         onClick={togglePause}
                         className={`md3-icon-btn md3-icon-btn--small transition-all ${isPaused
-                            ? 'bg-warning text-black hover:brightness-110'
+                            ? 'bg-warning text-ink-strong hover:brightness-110'
                             : 'md3-icon-btn--tonal'
                             }`}
                         title={isPaused ? "Resume" : "Pause"}
@@ -151,7 +151,7 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
                     >
                         {isPaused ? <Play size={14} /> : <Pause size={14} />}
                     </button>
-                    <div className="flex flex-col min-w-[60px]">
+                    <div className="flex flex-col min-w-60px">
                         <span className={`font-mono font-bold text-body leading-none ${isMatchInProgress ? 'text-success' : (isPaused ? 'text-warning' : 'text-md-sys-on-surface')}`}>
                             {isMatchInProgress ? matchElapsedDisplay : elapsedDisplay}
                         </span>
@@ -204,7 +204,7 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
             <div className="flex items-center gap-2">
                 <button
                     onClick={togglePause}
-                    className={`p-2 rounded-full transition-all ${isPaused ? 'bg-warning text-black hover:brightness-110' : 'md3-btn-tonal text-md-sys-on-surface hover:bg-md-sys-primary hover:text-md-sys-onPrimary'}`}
+                    className={`p-2 rounded-full transition-all ${isPaused ? 'bg-warning text-ink-strong hover:brightness-110' : 'md3-btn-tonal text-md-sys-on-surface hover:bg-md-sys-primary hover:text-md-sys-onPrimary'}`}
                     title={isPaused ? "Resume Session" : "Pause Session"}
                 >
                     {isPaused ? <Play size={20} /> : <Pause size={20} />}

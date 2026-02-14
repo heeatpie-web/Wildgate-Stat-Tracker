@@ -128,7 +128,7 @@ const SystemPulse: React.FC = () => {
             const receiving = !!lastAt && (Date.now() - lastAt) < TELEMETRY_RECEIVING_MS;
             return {
                 id: 'session',
-                label: 'Session',
+                label: '',
                 icon: <Terminal size={12} />,
                 active: connected,
                 color: connected ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
@@ -150,7 +150,7 @@ const SystemPulse: React.FC = () => {
                     key={indicator.id}
                     title={indicator.tooltip}
                     className={[
-                        'system-pulse-chip h-7 px-2.5 rounded-xl inline-flex items-center gap-1.5 transition-colors text-label-sm uppercase tracking-[0.06em]',
+                        'system-pulse-chip h-7 px-2.5 rounded-xl inline-flex items-center gap-1.5 transition-colors text-label-sm uppercase tracking-wide-06',
                         'bg-md-sys-surface-container-high/80 text-md-sys-on-surface/60',
                         indicator.active ? 'bg-md-sys-surface-container-highest/92 text-md-sys-on-surface' : '',
                     ].join(' ')}

@@ -76,7 +76,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ socialData, filteredMatc
                                             return (
                                                 <div key={name} onClick={() => onDrillDown(name, type as any)} className="flex justify-between items-center py-3 border-b last:border-0 cursor-pointer hover:bg-md-sys-on-surface/5 p-2 rounded-xl transition-colors">
                                                     <div className="flex items-center gap-3">
-                                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-label-sm font-black ${i === 0 ? (isOpponent ? 'bg-red-500 text-white' : 'bg-green-500 text-white') : 'md3-surface-high'}`}>{i + 1}</div>
+                                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-label-sm font-black ${i === 0 ? (isOpponent ? 'bg-danger text-on-scrim' : 'bg-success text-on-scrim') : 'md3-surface-high'}`}>{i + 1}</div>
                                                         <div className="flex flex-col">
                                                             <span className="font-bold text-body leading-tight">{name}</span>
                                                             {topShip && <span className="text-label-xs font-black opacity-40 uppercase tracking-tighter flex items-center gap-1"><Rocket size={8} className="text-md-sys-primary" /> {topShip}</span>}

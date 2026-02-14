@@ -45,10 +45,10 @@ const addEntry = (entry: LogEntry) => {
 
     // Console output with styling
     const styles: Record<LogLevel, string> = {
-        debug: 'color: #888',
-        info: 'color: #4FC3F7',
-        warn: 'color: #FFB74D',
-        error: 'color: #EF5350; font-weight: bold'
+        debug: 'color: gray',
+        info: 'color: deepskyblue',
+        warn: 'color: orange',
+        error: 'color: tomato; font-weight: bold'
     };
 
     const formatted = formatEntry(entry);

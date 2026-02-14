@@ -112,7 +112,7 @@ export const SynergyView: React.FC<SynergyViewProps> = ({ synergyMatrix, visualM
                 <div className="flex-1 overflow-auto custom-scrollbar">
                     <table className="w-full border-collapse">
                         <thead>
-                            <tr className="h-[120px] align-bottom">
+                            <tr className="h-120px align-bottom">
                                 <th className="p-2"></th>
                                 {CHARACTERS.map(c => <th key={c} className="p-2 text-label-sm font-black uppercase rotate-45 origin-bottom-left translate-x-6 translate-y-2 text-md-sys-on-surface/60">{c}</th>)}
                             </tr>
@@ -130,7 +130,7 @@ export const SynergyView: React.FC<SynergyViewProps> = ({ synergyMatrix, visualM
                                                 <div className="w-full h-10 rounded-lg flex items-center justify-center relative group transition-all hover:scale-110 hover:z-10 bg-md-sys-primary" style={{ opacity }}>
                                                     {stat.total > 0 && <span className="text-label-sm font-black text-md-sys-onPrimary relative z-20">{Math.round(wr * 100)}%</span>}
                                                     {stat.total > 0 && (
-                                                        <div className="absolute bottom-full mb-2 bg-black/80 text-white text-label-sm p-2 rounded-lg whitespace-nowrap hidden group-hover:block z-50 pointer-events-none">
+                                                        <div className="absolute bottom-full mb-2 bg-scrim-80 text-on-scrim text-label-sm p-2 rounded-lg whitespace-nowrap hidden group-hover:block z-50 pointer-events-none">
                                                             <div className="font-black">{hero} & {ship}</div>
                                                             <div>Win Rate: {Math.round(wr * 100)}%</div>
                                                             <div>Matches: {stat.total} ({stat.wins}W / {stat.total - stat.wins}L)</div>

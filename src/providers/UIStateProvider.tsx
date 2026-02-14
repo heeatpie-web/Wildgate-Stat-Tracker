@@ -67,6 +67,8 @@ interface UIStateContextType {
     setOverlayTab: (tab: 'Mission' | 'Squadron' | 'Social') => void;
     overlayPhase: string;
     setOverlayPhase: (phase: 'Setup' | 'Live' | 'Result') => void;
+    sidebarCollapsed: boolean;
+    setSidebarCollapsed: (collapsed: boolean) => void;
     enableAutoLogRecording: boolean;
     setEnableAutoLogRecording: (enabled: boolean) => void;
     showWizard: 'Win' | 'Loss' | 'Draw' | null;
@@ -118,6 +120,7 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isAlwaysOnTop: s.isAlwaysOnTop, setIsAlwaysOnTop: s.setIsAlwaysOnTop,
         overlayTab: s.overlayTab, setOverlayTab: s.setOverlayTab,
         overlayPhase: s.overlayPhase, setOverlayPhase: s.setOverlayPhase,
+        sidebarCollapsed: s.sidebarCollapsed, setSidebarCollapsed: s.setSidebarCollapsed,
         enableAutoLogRecording: s.enableAutoLogRecording, setEnableAutoLogRecording: s.setEnableAutoLogRecording,
         showWizard: s.showWizard, setShowWizard: s.setShowWizard,
         devMode: s.devMode, setDevMode: s.setDevMode,

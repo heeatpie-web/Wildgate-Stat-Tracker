@@ -24,6 +24,8 @@ interface OCRReviewModalProps {
   data: OCRExtractedData;
   onApply: (data: OCRExtractedData) => void;
   onCancel: () => void;
+  onSkip?: () => void;
+  stepLabel?: string;
   pilotRegistry: string[];
   screenshots?: string[];
 }
@@ -32,6 +34,8 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
   data,
   onApply,
   onCancel,
+  onSkip,
+  stepLabel,
   pilotRegistry,
   screenshots,
 }) => {
@@ -213,7 +217,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
 
   return (
     <div className="fixed inset-0 md3-dialog-scrim backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="md3-dialog rounded-modal shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="md3-dialog rounded-modal shadow-2xl max-w-2xl w-full max-h-90vh overflow-hidden flex flex-col">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="md3-surface-high p-2 rounded-card">
@@ -221,6 +225,9 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
             </div>
             <div>
               <h2 className="text-title font-bold">Review Captured Data</h2>
+              {stepLabel && (
+                <p className="text-label-sm font-bold uppercase tracking-widest text-md-sys-primary mt-0.5">{stepLabel}</p>
+              )}
               <p className="text-label-sm opacity-60">
                 {editedData.screenshotType === 'crew_hub' ? 'Crew Hub' :
                  editedData.screenshotType === 'tactical_map' ? 'Tactical Map' : 'Unknown Screen'}
@@ -280,17 +287,17 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                       <button
                         key={i}
                         onClick={() => setLightboxIdx(i)}
-                        className="relative aspect-video bg-black rounded-lg overflow-hidden group"
+                        className="relative aspect-video bg-scrim-solid rounded-lg overflow-hidden group"
                       >
                         <LocalImage
                           src={src}
                           alt={`Screenshot ${i + 1}`}
                           className="w-full h-full object-cover"
                         />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <Eye size={16} className="text-white" />
+                        <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <Eye size={16} className="text-on-scrim" />
                         </div>
-                        <span className="absolute bottom-1 left-1 text-label-xs bg-black/60 px-1 rounded font-bold text-white/60">
+                        <span className="absolute bottom-1 left-1 text-label-xs bg-scrim-60 px-1 rounded font-bold text-on-scrim-muted">
                           {i + 1}
                         </span>
                       </button>
@@ -479,10 +486,10 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                       <div className="flex items-center gap-2 mb-2">
                         <div
                           className={`w-3 h-3 rounded-full ${
-                            team.color === 'red' ? 'bg-red-500' :
-                            team.color === 'orange' ? 'bg-orange-500' :
-                            team.color === 'yellow' ? 'bg-yellow-500' :
-                            team.color === 'green' ? 'bg-green-500' :
+                            team.color === 'red' ? 'bg-danger' :
+                            team.color === 'orange' ? 'bg-warning' :
+                            team.color === 'yellow' ? 'bg-warning' :
+                            team.color === 'green' ? 'bg-success' :
                             'bg-gray-500'
                           }`}
                         />
@@ -555,6 +562,15 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
           >
             Cancel
           </button>
+          {onSkip && (
+            <button
+              onClick={onSkip}
+              className="md3-btn-text"
+              title="Skip OCR review and continue to submission"
+            >
+              Skip OCR
+            </button>
+          )}
           <button
             onClick={applyBestGuess}
             className="md3-btn-tonal flex items-center gap-2"
@@ -574,12 +590,12 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
       </div>
       {lightboxIdx !== null && screenshots && screenshots[lightboxIdx] && (
         <div
-          className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-8"
+          className="fixed inset-0 z-lightbox bg-scrim-90 flex items-center justify-center p-8"
           onClick={() => setLightboxIdx(null)}
         >
           <button
             onClick={() => setLightboxIdx(null)}
-            className="absolute top-4 right-4 text-white/60 hover:text-white z-10"
+            className="absolute top-4 right-4 text-on-scrim-muted hover:text-on-scrim z-10"
           >
             <X size={24} />
           </button>
@@ -587,13 +603,13 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
             <>
               <button
                 onClick={(e) => { e.stopPropagation(); setLightboxIdx((lightboxIdx - 1 + screenshots.length) % screenshots.length); }}
-                className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 rounded-full hover:bg-white/20 text-white z-10"
+                className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-frost-10 rounded-full hover:bg-frost-20 text-on-scrim z-10"
               >
                 <ChevronDown size={20} className="rotate-90" />
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); setLightboxIdx((lightboxIdx + 1) % screenshots.length); }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 rounded-full hover:bg-white/20 text-white z-10"
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-frost-10 rounded-full hover:bg-frost-20 text-on-scrim z-10"
               >
                 <ChevronUp size={20} className="rotate-90" />
               </button>
@@ -603,9 +619,9 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
             <LocalImage
               src={screenshots[lightboxIdx]}
               alt={`Screenshot ${lightboxIdx + 1}`}
-              className="max-w-full max-h-[85vh] object-contain rounded-lg"
+              className="max-w-full max-h-85vh object-contain rounded-lg"
             />
-              <div className="text-center mt-2 text-label-sm text-white/60 font-bold">
+              <div className="text-center mt-2 text-label-sm text-on-scrim-muted font-bold">
               Screenshot {lightboxIdx + 1} of {screenshots.length}
             </div>
           </div>

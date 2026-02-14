@@ -8,7 +8,7 @@ export async function exportAnalyticsAsImage(containerEl: HTMLElement | null): P
     if (!containerEl) return false;
 
     const styles = getComputedStyle(document.body);
-    const bg = styles.getPropertyValue('--md-sys-color-background').trim() || '#1a1a2e';
+    const bg = styles.getPropertyValue('--md-sys-color-background').trim() || styles.backgroundColor || 'rgb(24, 26, 34)';
 
     try {
         const canvas = await html2canvas(containerEl, {

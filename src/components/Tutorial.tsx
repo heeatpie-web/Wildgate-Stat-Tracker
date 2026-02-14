@@ -236,10 +236,10 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
         tooltipStyle || { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
 
     return (
-        <div className="fixed inset-0 z-[1000]">
+        <div className="fixed inset-0 z-tour">
             {targetRect ? (
                 <div
-                    className="absolute rounded-xl border-2 border-md-sys-primary shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-200 pointer-events-none"
+                    className="absolute rounded-xl border-2 border-md-sys-primary shadow-tour-scrim transition-all duration-200 pointer-events-none"
                     style={{
                         top: Math.max(targetRect.top - highlightPadding, 0),
                         left: Math.max(targetRect.left - highlightPadding, 0),
@@ -248,17 +248,17 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
                     }}
                 />
             ) : (
-                <div className="absolute inset-0 bg-black/70 pointer-events-none" />
+                <div className="absolute inset-0 bg-scrim-70 pointer-events-none" />
             )}
 
             <div
                 ref={tooltipRef}
-                className="absolute w-[320px] max-w-[calc(100vw-32px)] md3-card text-md-sys-on-surface rounded-2xl border border-md-sys-outline/20 shadow-2xl p-4 pointer-events-auto"
+                className="absolute w-320px max-w-screen-minus-32 md3-card text-md-sys-on-surface rounded-2xl border border-md-sys-outline/20 shadow-2xl p-4 pointer-events-auto"
                 style={tooltipInlineStyle}
             >
                 <div className="flex items-start justify-between gap-3">
                     <div>
-                        <div className="text-label-sm uppercase tracking-[0.2em] text-md-sys-primary font-bold">
+                        <div className="text-label-sm uppercase tracking-wide-20 text-md-sys-primary font-bold">
                             Step {stepIndex + 1} of {steps.length}
                         </div>
                         <h2 className="text-lg font-black mt-1">{step.title}</h2>

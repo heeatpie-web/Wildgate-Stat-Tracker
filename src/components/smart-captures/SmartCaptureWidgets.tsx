@@ -11,17 +11,17 @@ export const Section: React.FC<{
     collapsed?: boolean;
     onToggle?: () => void;
 }> = ({ title, icon, children, collapsible = false, collapsed = false, onToggle }) => (
-    <div className="md3-surface-high rounded-2xl sc-bordered p-4">
+    <div className="md3-surface-high rounded-2xl sc-bordered p-4 sc-editor-section">
         <button
             type="button"
             onClick={collapsible ? onToggle : undefined}
             className={`w-full flex items-center justify-between gap-2 ${collapsible ? 'cursor-pointer' : 'cursor-default'} ${collapsed ? '' : 'mb-3'}`}
         >
             <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-2xl bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer flex items-center justify-center sc-bordered">
+                <div className="w-8 h-8 rounded-2xl bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer flex items-center justify-center sc-bordered sc-editor-section-icon">
                     {icon}
                 </div>
-                <span className="text-label-sm font-black text-md-sys-on-surface/65 tracking-[0.22em] uppercase">{title}</span>
+                <span className="text-label-sm font-black text-md-sys-on-surface/65 tracking-wide-22 uppercase sc-editor-section-title">{title}</span>
             </div>
             {collapsible && (
                 <span className="text-md-sys-on-surface/40">
@@ -34,7 +34,7 @@ export const Section: React.FC<{
 );
 
 export const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: string }> = ({ icon, label, value }) => (
-    <div className="md3-surface rounded-xl sc-bordered p-3 flex flex-col items-center gap-0.5">
+    <div className="md3-surface rounded-xl sc-bordered p-3 flex flex-col items-center gap-0.5 sc-editor-stat-card">
         <span className="text-md-sys-on-surface/60">{icon}</span>
         <span className="text-label-xs font-semibold text-md-sys-on-surface/60">{label}</span>
         <span className="text-body font-bold text-md-sys-on-surface">{value}</span>
@@ -55,7 +55,7 @@ export const EditableStatCard: React.FC<{
 
     return (
         <div
-            className="md3-surface rounded-xl sc-bordered p-3 flex flex-col items-center gap-0.5 cursor-pointer hover:ring-1 ring-md-sys-primary/20 transition-all"
+            className="md3-surface rounded-xl sc-bordered p-3 flex flex-col items-center gap-0.5 cursor-pointer hover:ring-1 ring-md-sys-primary/20 transition-all sc-editor-stat-card"
             onClick={() => { if (!editing) { setEditing(true); setDraft(value === '--' ? '' : value); } }}
         >
             <span className="text-md-sys-on-surface/60">{icon}</span>
@@ -92,7 +92,7 @@ export const ModifierAdder: React.FC<{ existing: string[]; onAdd: (mod: string) 
     }
 
     return (
-        <div className="flex flex-col gap-1 md3-surface-high rounded-lg p-2 min-w-[180px]">
+        <div className="flex flex-col gap-1 md3-surface-high rounded-lg p-2 min-w-180px">
             <div className="flex items-center gap-1">
                 <input
                     value={search} onChange={(e) => setSearch(e.target.value)}
@@ -127,7 +127,7 @@ export const KillAdder: React.FC<{ existingShips: string[]; onAdd: (ship: string
     }
 
     return (
-        <div className="flex flex-col gap-0.5 md3-surface-high rounded-lg p-2 min-w-[160px]">
+        <div className="flex flex-col gap-0.5 md3-surface-high rounded-lg p-2 min-w-40">
             {SHIPS.map(s => (
                 <button key={s} onClick={() => { onAdd(s); setOpen(false); }}
                     className="text-left text-label-sm px-1.5 py-0.5 rounded hover:bg-success-soft text-success transition-colors flex items-center gap-1">

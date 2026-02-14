@@ -19,8 +19,8 @@ interface VisualEssayViewProps {
 }
 
 const TrendIcon: React.FC<{ trend?: 'up' | 'down' | 'stable' }> = ({ trend }) => {
-    if (trend === 'up') return <TrendingUp size={12} className="text-green-400" />;
-    if (trend === 'down') return <TrendingDown size={12} className="text-red-400" />;
+    if (trend === 'up') return <TrendingUp size={12} className="text-success" />;
+    if (trend === 'down') return <TrendingDown size={12} className="text-danger" />;
     return <Minus size={12} className="opacity-40" />;
 };
 

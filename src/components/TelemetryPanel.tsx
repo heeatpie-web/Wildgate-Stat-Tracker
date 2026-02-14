@@ -14,7 +14,7 @@ interface TelemetryPanelProps {
  */
 export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logFeed, logStatus, onClear }) => {
     return (
-        <div className="fixed top-24 right-6 w-[400px] h-[600px] md3-card rounded-modal shadow-2xl border border-md-sys-outline/20 flex flex-col overflow-hidden z-[5000] animate-slide-up mg-blur bg-md-sys-surface-container-high/90">
+        <div className="fixed top-24 right-6 w-400px h-600px md3-card rounded-modal shadow-2xl border border-md-sys-outline/20 flex flex-col overflow-hidden z-devpanel animate-slide-up mg-blur bg-md-sys-surface-container-high/90">
             <div className="px-4 py-3 border-b border-md-sys-outline/10 flex justify-between items-center bg-md-sys-surface-container-lowest/50">
                 <span className="text-label-sm font-bold uppercase tracking-tighter text-md-sys-on-surface/60 flex items-center gap-2">
                     <Terminal size={14} className="text-md-sys-primary" aria-hidden />

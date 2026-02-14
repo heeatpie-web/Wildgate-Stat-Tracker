@@ -49,7 +49,7 @@ export const RenameModal: React.FC = () => {
     const sub = isShare ? 'Paste your share code below' : (isRename ? 'Enter a new callsign' : 'Identify yourself, prospector');
 
     return (
-        <div className="fixed inset-0 md3-dialog-scrim z-[10000] flex items-center justify-center p-4 animate-fade-in" onClick={() => setRenameModal(null)}>
+        <div className="fixed inset-0 md3-dialog-scrim z-modal flex items-center justify-center p-4 animate-fade-in" onClick={() => setRenameModal(null)}>
             <div className="md3-dialog p-5 rounded-modal max-w-sm w-full shadow-2xl border border-md-sys-outline/20 animate-scale-in" onClick={e => e.stopPropagation()}>
                 <h3 className="text-title font-bold uppercase mb-2">{title}</h3>
                 <p className="text-label-sm font-bold opacity-60 uppercase tracking-widest mb-6">{sub}</p>
