@@ -82,6 +82,32 @@ const recentTelemetrySignatures = new Set();
 const recentTelemetrySignatureQueue = [];
 const MAX_RECENT_TELEMETRY_SIGNATURES = Number(process.env.WILDGATE_RECENT_TELEMETRY_SIGNATURES || 50000);
 const blockedSecurityCounters = new Map();
+const PLAYER_ID_KEYS = new Set(['accountid', 'platformaccountid', 'userid', 'playerid', 'platform_account_id', 'puid']);
+const HERO_ID_KEYS = new Set(['guidhero', 'heroguid', 'guid_hero', 'heroid', 'hero_id']);
+const SHIP_ID_KEYS = new Set(['guidship', 'shipguid', 'guid_ship', 'shipid', 'ship_id']);
+const WEAPON_ID_KEYS = new Set([
+  'guidweaponprimary',
+  'guidweaponsecondary',
+  'guid_weapon_primary',
+  'guid_weapon_secondary',
+  'weaponid',
+  'weapon_id',
+  'primaryweaponid',
+  'secondaryweaponid',
+]);
+const EQUIPMENT_ID_KEYS = new Set([
+  'guidequipmentprimary',
+  'guidequipmentsecondary',
+  'guid_equipment_primary',
+  'guid_equipment_secondary',
+  'equipmentid',
+  'equipment_id',
+  'primaryequipmentid',
+  'secondaryequipmentid',
+]);
+const MATCH_ID_KEYS = new Set(['matchid', 'match_id']);
+const SESSION_ID_KEYS = new Set(['sessionid', 'session_id']);
+const OUTCOME_KEYS = new Set(['result', 'matchresult', 'outcome']);
 
 function recordSecurityBlock(channel, code, message) {
   const key = `${channel}:${code}`;
@@ -180,6 +206,111 @@ function extractTelemetryEvents(data) {
   return [];
 }
 
+function normalizeScalarId(value) {
+  if (value == null) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const withoutPrefix = trimmed.includes(':') ? trimmed.split(':').pop() : trimmed;
+  return withoutPrefix ? withoutPrefix.trim() : null;
+}
+
+function collectUsableTelemetryFields(node, collector, depth = 0) {
+  if (depth > 8 || node == null) return;
+  if (Array.isArray(node)) {
+    for (const item of node) collectUsableTelemetryFields(item, collector, depth + 1);
+    return;
+  }
+  if (typeof node !== 'object') return;
+
+  for (const [rawKey, value] of Object.entries(node)) {
+    const key = String(rawKey || '').toLowerCase();
+    const normalized = normalizeScalarId(value);
+
+    if (normalized) {
+      if (PLAYER_ID_KEYS.has(key)) collector.playerIds.add(normalized);
+      if (HERO_ID_KEYS.has(key)) collector.heroIds.add(normalized);
+      if (SHIP_ID_KEYS.has(key)) collector.shipIds.add(normalized);
+      if (WEAPON_ID_KEYS.has(key)) collector.weaponIds.add(normalized);
+      if (EQUIPMENT_ID_KEYS.has(key)) collector.equipmentIds.add(normalized);
+      if (MATCH_ID_KEYS.has(key)) collector.matchIds.add(normalized);
+      if (SESSION_ID_KEYS.has(key)) collector.sessionIds.add(normalized);
+      if (OUTCOME_KEYS.has(key)) collector.outcomes.add(normalized);
+    }
+
+    if (typeof value === 'object' && value != null) {
+      collectUsableTelemetryFields(value, collector, depth + 1);
+    }
+  }
+}
+
+function firstSetValue(set) {
+  if (!(set instanceof Set) || set.size === 0) return null;
+  for (const value of set.values()) return value;
+  return null;
+}
+
+function buildUsableTelemetryEvent(evt) {
+  if (!evt || typeof evt !== 'object') return null;
+  const timestampMs = parseTelemetryTimestampMs(evt);
+  const eventNameRaw = evt.EventName ?? evt.eventName ?? evt.type ?? evt.name;
+  const eventName = typeof eventNameRaw === 'string' ? eventNameRaw.trim() : '';
+
+  const collector = {
+    playerIds: new Set(),
+    heroIds: new Set(),
+    shipIds: new Set(),
+    weaponIds: new Set(),
+    equipmentIds: new Set(),
+    matchIds: new Set(),
+    sessionIds: new Set(),
+    outcomes: new Set(),
+  };
+  collectUsableTelemetryFields(evt, collector);
+
+  const matchId = normalizeScalarId(evt.matchId ?? evt.MatchId ?? firstSetValue(collector.matchIds));
+  const sessionId = normalizeScalarId(evt.sessionId ?? evt.SessionId ?? firstSetValue(collector.sessionIds));
+  const outcome = normalizeScalarId(evt.result ?? evt.matchResult ?? evt.outcome ?? firstSetValue(collector.outcomes));
+
+  const hasAnyUsefulContent = Boolean(
+    eventName
+      || timestampMs
+      || matchId
+      || sessionId
+      || collector.playerIds.size
+      || collector.heroIds.size
+      || collector.shipIds.size
+      || collector.weaponIds.size
+      || collector.equipmentIds.size
+      || outcome
+  );
+  if (!hasAnyUsefulContent) return null;
+
+  return {
+    timestamp: timestampMs ?? Date.now(),
+    eventName: eventName || 'unknown',
+    matchId: matchId || undefined,
+    sessionId: sessionId || undefined,
+    outcome: outcome || undefined,
+    playerIds: Array.from(collector.playerIds),
+    heroIds: Array.from(collector.heroIds),
+    shipIds: Array.from(collector.shipIds),
+    weaponIds: Array.from(collector.weaponIds),
+    equipmentIds: Array.from(collector.equipmentIds),
+  };
+}
+
+function extractUsableTelemetryEvents(data) {
+  const events = extractTelemetryEvents(data);
+  const usable = [];
+  for (const evt of events) {
+    const normalized = buildUsableTelemetryEvent(evt);
+    if (normalized) usable.push(normalized);
+  }
+  return usable;
+}
+
 async function ensureTelemetryHistoryMigrated() {
   if (telemetryHistoryMigrated) return;
   telemetryHistoryMigrated = true;
@@ -205,6 +336,8 @@ async function ensureTelemetryHistoryMigrated() {
 
   if (legacyEntries.length > 0) {
     const lines = legacyEntries
+      .map(evt => buildUsableTelemetryEvent(evt))
+      .filter(Boolean)
       .map(evt => {
         try {
           return JSON.stringify(evt);
@@ -236,13 +369,18 @@ async function appendTelemetryHistoryEvents(events) {
   let skippedCount = 0;
 
   for (const evt of events) {
-    const signature = telemetryEventSignature(evt);
+    const usableEvt = buildUsableTelemetryEvent(evt);
+    if (!usableEvt) {
+      skippedCount += 1;
+      continue;
+    }
+    const signature = telemetryEventSignature(usableEvt);
     if (signature && !pushRecentTelemetrySignature(signature)) {
       skippedCount += 1;
       continue;
     }
     try {
-      lines.push(JSON.stringify(evt));
+      lines.push(JSON.stringify(usableEvt));
     } catch {
       skippedCount += 1;
     }
@@ -350,7 +488,21 @@ async function maybeCompactTelemetryHistory() {
   if ((now - telemetryHistoryLastCompactionAt) < TELEMETRY_HISTORY_COMPACTION_MIN_INTERVAL_MS) return;
   telemetryHistoryLastCompactionAt = now;
   const entries = await readTelemetryHistoryEntries();
-  const payload = entries.map(e => e.line).join('\n');
+  const seen = new Set();
+  const compactedLines = [];
+  for (const entry of entries) {
+    const usable = buildUsableTelemetryEvent(entry.event);
+    if (!usable) continue;
+    const signature = telemetryEventSignature(usable);
+    if (signature && seen.has(signature)) continue;
+    if (signature) seen.add(signature);
+    try {
+      compactedLines.push(JSON.stringify(usable));
+    } catch {
+      // skip malformed
+    }
+  }
+  const payload = compactedLines.join('\n');
   await fsPromises.writeFile(TELEMETRY_HISTORY_NDJSON_PATH, payload ? `${payload}\n` : '', 'utf8');
 }
 
@@ -1347,15 +1499,15 @@ ipcMain.on('start-log-monitoring', () => {
           });
 
           if (data && !hasError) {
-            const currentStr = JSON.stringify(data);
+            const usableTelemetryEvents = extractUsableTelemetryEvents(data);
             // Also Send Data
             win.webContents.send('log-data', data);
             telemetryArchiveHelpers.archiveTelemetry(telemetryArchiveHelpers.getArchiveDir(app), data);
 
             try {
-              const historyResult = await appendTelemetryHistoryEvents(extractTelemetryEvents(data));
+              const historyResult = await appendTelemetryHistoryEvents(usableTelemetryEvents);
               if (historyResult.addedCount > 0) {
-                console.log(`[Persistence] Appended ${historyResult.addedCount} telemetry event(s).`);
+                console.log(`[Persistence] Appended ${historyResult.addedCount} usable telemetry event(s).`);
               }
               await maybeCompactTelemetryHistory();
               if (historyResult.addedCount > 0) {
@@ -1365,11 +1517,13 @@ ipcMain.on('start-log-monitoring', () => {
               console.error("[Persistence] Failed to append telemetry history:", err);
             }
 
-            // Save Decoded Copy Automatically (Snapshot)
-            // This satisfies the "Save Decoded" requirement
+            // Save a compact usable-telemetry snapshot (not full decoded payload).
             try {
               const decodedSavePath = path.join(app.getPath('userData'), 'telemetry_latest_decoded.json');
-              await fsPromises.writeFile(decodedSavePath, currentStr); // Save decoded JSON
+              await fsPromises.writeFile(decodedSavePath, JSON.stringify({
+                generatedAt: Date.now(),
+                telemetry: usableTelemetryEvents,
+              }));
             } catch (e) { console.error("Failed to save decoded logs", e); }
           }
 
