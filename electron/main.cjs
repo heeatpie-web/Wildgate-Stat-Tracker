@@ -1223,6 +1223,33 @@ ipcMain.handle('db-read', async () => {
   }
 });
 
+ipcMain.handle('read-uid-seed', async () => {
+  try {
+    const candidates = [
+      path.join(app.getPath('userData'), 'uid-seed.json'),
+      path.join(app.getAppPath(), 'uid-seed.json'),
+    ];
+    for (const candidate of candidates) {
+      try {
+        await fsPromises.access(candidate);
+      } catch {
+        continue;
+      }
+      try {
+        const raw = await fsPromises.readFile(candidate, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      } catch (e) {
+        console.warn('[UIDSeed] Invalid seed file at', candidate, e?.message || e);
+      }
+    }
+    return null;
+  } catch (e) {
+    console.warn('[UIDSeed] Failed to load seed mappings', e?.message || e);
+    return null;
+  }
+});
+
 ipcMain.handle('db-write', async (event, data) => {
   try {
     // 1) Persist WAL first so a crash before DB write can still recover.
