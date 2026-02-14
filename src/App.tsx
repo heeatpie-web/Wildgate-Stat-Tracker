@@ -81,6 +81,8 @@ const App: React.FC = () => {
     const dismissedTelemetryDraftMidmatchPromptIdsRef = React.useRef<Set<number>>(new Set());
     const handledTelemetryDraftPostmatchPromptIdsRef = React.useRef<Set<number>>(new Set());
     const setTutorialCompleted = useAppStore(s => s.setTutorialCompleted);
+    const isStoreLoading = useAppStore(s => s.isLoading);
+    const welcomeBackToastShownRef = React.useRef(false);
 
     const {
         isOverlayMode, setIsOverlayMode,
@@ -115,6 +117,28 @@ const App: React.FC = () => {
     const { overlayStyle } = useUserPreferences();
 
     const { logFeed, logStatus } = useLogMonitor();
+
+    useEffect(() => {
+        if (welcomeBackToastShownRef.current) return;
+        if (isStoreLoading) return;
+        const name = (activeUser || '').trim();
+        if (!name) return;
+
+        // Guard for StrictMode/double-effect to avoid duplicate toasts per app launch.
+        try {
+            const launchKey = 'wg_welcome_back_shown_this_launch';
+            if (window.sessionStorage.getItem(launchKey) === '1') {
+                welcomeBackToastShownRef.current = true;
+                return;
+            }
+            window.sessionStorage.setItem(launchKey, '1');
+        } catch {
+            // If sessionStorage is unavailable, keep going with ref-only guard.
+        }
+
+        welcomeBackToastShownRef.current = true;
+        setToast({ message: `Welcome back ${name}`, type: 'success' });
+    }, [activeUser, isStoreLoading, setToast]);
 
     const overlayTransitionRef = React.useRef(false);
     useEffect(() => {
