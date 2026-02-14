@@ -1,16 +1,24 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
-    Search, ChevronRight, Trophy, Skull,
+    Search, Trophy, Skull,
     Clock, HeartCrack, Target, Image, Eye, X, Edit3, Check,
     ShieldCheck, Crosshair, Users, AlertTriangle, FileText,
     ScanEye, RefreshCw, Plus, ImageOff, Trash2, Upload, Camera, Zap, Loader2, FolderOpen,
-    LayoutList, ListChecks
 } from 'lucide-react';
 import { Match, SHIPS, getShipColor, OpponentTeam, Loadout } from '../types';
 import { UI_REACH_MODIFIERS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT, SYSTEMS } from '../utils/constants';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
-import { getMatchArtifactsStructured, rerunOCROnArtifact, removeMatchArtifact, addMatchArtifact, ArtifactFile } from '../utils/artifactService';
+import {
+    getMatchArtifactsStructured,
+    rerunOCROnArtifact,
+    removeMatchArtifact,
+    addMatchArtifact,
+    previewArtifactRepair,
+    applyArtifactRepair,
+    type ArtifactRepairResult,
+    ArtifactFile,
+} from '../utils/artifactService';
 import { getElectronAPI } from '../utils/electronAPI';
 import { useAppStore } from '../store/useAppStore';
 import { OCRReviewModal } from './ocr/OCRReviewModal';
@@ -20,35 +28,75 @@ import { useSmartCapture, type SavedCapture } from '../hooks/useSmartCapture';
 import { LocalImage } from './LocalImage';
 import { exportJSONFile } from '../utils/export';
 import { Section, StatCard, EditableStatCard, ModifierAdder, KillAdder, InlinePlayerAdd } from './smart-captures/SmartCaptureWidgets';
-import { type ModeFilter, IMAGE_EXTS, countImages, RESULT_COLORS, type QueueStatusKey, getQueueStatus, OCR_STATE_META } from './smart-captures/smartCaptureUtils';
+import {
+    type ModeFilter,
+    IMAGE_EXTS,
+    countImages,
+    formatDualConfidence,
+    getQueueDisplayNumber,
+    getQueueStatus,
+    getStatusMeta,
+} from './smart-captures/smartCaptureUtils';
+import { Button } from './ui';
+import { SmartCapturesShell } from './smart-captures/SmartCapturesShell';
+import { SmartCapturesQueuePane } from './smart-captures/SmartCapturesQueuePane';
+import { SmartCapturesDetailPane } from './smart-captures/SmartCapturesDetailPane';
+import { SmartCapturesToolsView } from './smart-captures/SmartCapturesToolsView';
+import { QueueCollapseToggle } from './smart-captures/QueueCollapseToggle';
+import { QueueItemRichPreview } from './smart-captures/QueueItemRichPreview';
+import { SmartCaptureSummaryBar } from './smart-captures/detail/SmartCaptureSummaryBar';
+import { SmartCaptureActionBar } from './smart-captures/detail/SmartCaptureActionBar';
 
 const SmartCapturesPanel: React.FC = () => {
     const { matches, updateMatch, pilotRegistry, setSelectedTeammates, setSelectedOpponents, setActiveShip, setSessionTeams, setSessionShipTypes, setSelectedReachModifiers, selectedTeammates, selectedOpponents, sessionTeams } = useGameData();
     const { activeUser, setToast, smartCapturesFocusMatchId, setSmartCapturesFocusMatchId } = useUIState();
     const ocrMode = useAppStore(s => s.ocrMode);
+    const setOcrMode = useAppStore(s => s.setOcrMode);
+    const captureMode = useAppStore(s => s.captureMode);
+    const setCaptureMode = useAppStore(s => s.setCaptureMode);
     const lockOcrTeams = useAppStore(s => s.lockOcrTeams);
     const setLockOcrTeams = useAppStore(s => s.setLockOcrTeams);
+    const activeSection = useAppStore(s => s.activeSection);
+    const setActiveSection = useAppStore(s => s.setActiveSection);
+    const selectedMatchId = useAppStore(s => s.selectedMatchId);
+    const setSelectedMatchId = useAppStore(s => s.setSelectedMatchId);
+    const searchQuery = useAppStore(s => s.searchQuery);
+    const setSearchQuery = useAppStore(s => s.setSearchQuery);
+    const queueOnly = useAppStore(s => s.queueOnly);
+    const setQueueOnly = useAppStore(s => s.setQueueOnly);
+    const showResolved = useAppStore(s => s.showResolved);
+    const setShowResolved = useAppStore(s => s.setShowResolved);
+    const queueCollapsed = useAppStore(s => s.queueCollapsed);
+    const toggleQueueCollapsed = useAppStore(s => s.toggleQueueCollapsed);
     const [captureState, captureActions] = useSmartCapture();
 
-    const [selectedMatchId, setSelectedMatchId] = useState<number | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
     const [bulkBusy, setBulkBusy] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
     const [modeFilter, setModeFilter] = useState<ModeFilter>('all');
-    // Default to showing all matches; "Queue" is still available as a filter.
-    const [queueOnly, setQueueOnly] = useState(false);
-    const [showResolved, setShowResolved] = useState(false);
-    /** Side nav: 'capture' = list + detail, 'tools' = bulk actions + pending + OCR issues (per SPEC_SMART_CAPTURE_PHASE3) */
-    const [scView, setScView] = useState<'capture' | 'tools'>('capture');
-    const toolsOpen = scView === 'tools';
-    const setToolsOpen = useCallback((fn: boolean | ((v: boolean) => boolean)) => {
-        if (typeof fn === 'function') setScView(prev => fn(prev === 'tools') ? 'tools' : 'capture');
-        else setScView(fn ? 'tools' : 'capture');
-    }, []);
+    const [queueWidthPct, setQueueWidthPct] = useState(30);
+    const [isResizing, setIsResizing] = useState(false);
+    const [repairBusy, setRepairBusy] = useState(false);
+    const [repairResult, setRepairResult] = useState<ArtifactRepairResult | null>(null);
     const normalizeModifierName = useCallback((name: string) => {
         const match = UI_REACH_MODIFIERS.find(m => m.toLowerCase() === name.toLowerCase());
         return match || name;
     }, []);
+
+    useEffect(() => {
+        if (!isResizing) return;
+        const onMove = (event: MouseEvent) => {
+            const viewportWidth = window.innerWidth || 1;
+            const nextPct = Math.min(45, Math.max(22, (event.clientX / viewportWidth) * 100));
+            setQueueWidthPct(nextPct);
+        };
+        const onUp = () => setIsResizing(false);
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        return () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+    }, [isResizing]);
 
 
     const isWorkQueueItem = useCallback((m: Match) => {
@@ -113,6 +161,11 @@ const SmartCapturesPanel: React.FC = () => {
         if (!queueOnly) return filteredMatches;
         return workQueueMatches;
     }, [queueOnly, filteredMatches, workQueueMatches]);
+
+    const globalOrderedMatchIds = useMemo(
+        () => [...matches].sort((a, b) => a.timestamp - b.timestamp).map(m => m.id),
+        [matches]
+    );
 
     useEffect(() => {
         // Keep selection sane as filters change.
@@ -341,310 +394,434 @@ const SmartCapturesPanel: React.FC = () => {
         }
     }, [activeUser, matches, normalizeModifierName, ocrMode, selectedIds, setToast, updateMatch]);
 
-    return (
-        <div data-tour="view-smart-captures" className="h-full min-h-0 p-3 flex gap-3">
-            {/* Side nav: Capture | Tools (per SPEC_SMART_CAPTURE_PHASE3) */}
-            <nav
-                className="w-14 shrink-0 flex flex-col gap-1 md3-surface-high rounded-card p-2 self-start"
-                aria-label="Smart Captures sections"
+    const handlePreviewArtifactRepair = useCallback(async () => {
+        setRepairBusy(true);
+        try {
+            const result = await previewArtifactRepair();
+            setRepairResult(result);
+            const planned = result.summary?.plannedLinks || 0;
+            setToast({ message: planned > 0 ? `Artifact repair preview: ${planned} links found` : 'Artifact repair preview: no missing links found', type: planned > 0 ? 'info' : 'success' });
+        } catch (e: any) {
+            setToast({ message: `Artifact repair preview failed: ${e?.message || 'Unknown error'}`, type: 'error' });
+        } finally {
+            setRepairBusy(false);
+        }
+    }, [setToast]);
+
+    const handleApplyArtifactRepair = useCallback(async () => {
+        if (repairBusy) return;
+        const confirmed = window.confirm('Apply artifact repair now? This will back up the DB and update match artifact links.');
+        if (!confirmed) return;
+        setRepairBusy(true);
+        try {
+            const result = await applyArtifactRepair();
+            setRepairResult(result);
+            const applied = result.applied || [];
+            const byId = new Map(matches.map(m => [m.id, m]));
+            applied.forEach(({ matchId, addedPaths }) => {
+                const current = byId.get(matchId);
+                if (!current) return;
+                const artifacts = Array.isArray(current.artifacts) ? current.artifacts : [];
+                const merged = [...artifacts, ...addedPaths];
+                updateMatch({ ...current, artifacts: merged });
+            });
+            const updatedMatches = result.summary?.updatedMatches || 0;
+            setToast({ message: updatedMatches > 0 ? `Artifact repair applied to ${updatedMatches} match${updatedMatches === 1 ? '' : 'es'}` : 'Artifact repair applied: nothing changed', type: 'success' });
+        } catch (e: any) {
+            setToast({ message: `Artifact repair apply failed: ${e?.message || 'Unknown error'}`, type: 'error' });
+        } finally {
+            setRepairBusy(false);
+        }
+    }, [matches, repairBusy, setToast, updateMatch]);
+
+    const renderSectionTabs = (className = '') => (
+        <div className={`sc-workspace-tabs ${className}`.trim()} role="tablist" aria-label="Smart Captures sections">
+            <button
+                type="button"
+                role="tab"
+                aria-selected={activeSection === 'capture'}
+                className="sc-workspace-tab-btn"
+                data-active={activeSection === 'capture'}
+                onClick={() => setActiveSection('capture')}
             >
-                <button
-                    type="button"
-                    onClick={() => setScView('capture')}
-                    aria-current={scView === 'capture' ? 'page' : undefined}
-                    title="Capture"
-                    className={`w-full flex flex-col items-center gap-1 py-2.5 rounded-control text-label-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${
-                        scView === 'capture' ? 'bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer' : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
-                    }`}
-                >
-                    <LayoutList size={20} aria-hidden />
-                    <span>Capture</span>
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setScView('tools')}
-                    aria-current={scView === 'tools' ? 'page' : undefined}
-                    title="Tools"
-                    className={`w-full flex flex-col items-center gap-1 py-2.5 rounded-control text-label-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${
-                        scView === 'tools' ? 'bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer' : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
-                    }`}
-                >
-                    <Zap size={20} aria-hidden />
-                    <span>Tools</span>
-                </button>
-            </nav>
+                <ScanEye size={12} />
+                Queue
+            </button>
+            <button
+                type="button"
+                role="tab"
+                aria-selected={activeSection === 'tools'}
+                className="sc-workspace-tab-btn"
+                data-active={activeSection === 'tools'}
+                onClick={() => setActiveSection('tools')}
+            >
+                <Zap size={12} />
+                Tools
+            </button>
+        </div>
+    );
 
-            <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-            {scView === 'capture' && (
-            <div className="h-full min-h-0 grid grid-cols-1 lg:grid-cols-[380px,1fr] gap-3">
-                <div className="min-h-0 flex flex-col mg-surface-high rounded-card overflow-hidden p-0" style={{ backgroundImage: 'radial-gradient(circle at bottom left, rgba(139,92,246,0.06), transparent 50%)' }}>
-                    <div className="px-4 pt-4 pb-3 space-y-3 border-b border-md-sys-outline/10">
-                        <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-9 h-9 rounded-card bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer flex items-center justify-center">
-                                    <ScanEye size={14} className="opacity-60" />
+    return (
+        <SmartCapturesShell
+            content={activeSection === 'capture' ? (
+                <div className="h-full min-h-0 flex max-[1200px]:flex-col gap-2">
+                    <div
+                        className={`min-h-0 transition-[width] duration-300 ${queueCollapsed ? 'w-[72px] min-w-[72px]' : 'min-w-[300px] max-[1200px]:w-full'}`}
+                        style={!queueCollapsed ? { width: `${queueWidthPct}%` } : undefined}
+                    >
+                        <SmartCapturesQueuePane
+                            className="h-full"
+                            header={
+                                <div className="px-3 pt-3 pb-2 space-y-2 border-b border-md-sys-outline/10">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <div className="w-8 h-8 rounded-card bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer flex items-center justify-center">
+                                                <ScanEye size={13} />
+                                            </div>
+                                            {!queueCollapsed && (
+                                                <div className="min-w-0">
+                                                    <div className="text-body font-bold text-md-sys-on-surface">Smart Captures</div>
+                                                    <div className="text-label-sm text-md-sys-on-surface/60 whitespace-nowrap">{workQueueOpenCount > 0 ? `${workQueueOpenCount} open` : 'No open items'} · {visibleMatches.length} visible</div>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {!queueCollapsed && renderSectionTabs('sc-workspace-tabs--inline')}
+                                            <QueueCollapseToggle collapsed={queueCollapsed} onToggle={toggleQueueCollapsed} />
+                                        </div>
+                                    </div>
+
+                                    {!queueCollapsed && (
+                                        <>
+                                            <div className="relative">
+                                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Search players, heroes, ships..."
+                                                    value={searchQuery}
+                                                    onChange={e => setSearchQuery(e.target.value)}
+                                                    className="w-full h-10 md3-surface rounded-control pl-9 pr-3 text-label-sm outline-none placeholder:opacity-40"
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <select
+                                                    aria-label="Capture mode"
+                                                    value={captureMode}
+                                                    onChange={(e) => setCaptureMode(e.target.value as any)}
+                                                    className="h-9 px-2 md3-surface rounded-control text-label-sm font-semibold outline-none"
+                                                >
+                                                    <option value="auto">Capture: Now</option>
+                                                    <option value="deferred">Capture: Later</option>
+                                                </select>
+                                                <select
+                                                    aria-label="OCR mode"
+                                                    value={ocrMode}
+                                                    onChange={(e) => setOcrMode(e.target.value as any)}
+                                                    className="h-9 px-2 md3-surface rounded-control text-label-sm font-semibold outline-none"
+                                                >
+                                                    <option value="local">OCR: Local</option>
+                                                    <option value="cloud">OCR: Cloud</option>
+                                                    <option value="both">OCR: Hybrid</option>
+                                                    <option value="hybrid-plus">OCR: Hybrid+</option>
+                                                </select>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="sc-seg sc-bordered flex-1">
+                                                    <button type="button" className="sc-seg-btn" data-active={!queueOnly} onClick={() => setQueueOnly(false)}>All Matches</button>
+                                                    <button type="button" className="sc-seg-btn" data-active={queueOnly} onClick={() => setQueueOnly(true)}>Queue{workQueueOpenCount > 0 ? ` (${workQueueOpenCount})` : ''}</button>
+                                                </div>
+                                                {queueOnly && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowResolved(!showResolved)}
+                                                        className={`px-2.5 py-2 rounded-pill text-label-xs font-bold transition-colors ${
+                                                            showResolved ? 'bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer' : 'text-md-sys-on-surface/40 hover:bg-md-sys-on-surface/5'
+                                                        }`}
+                                                    >
+                                                        {showResolved ? 'Showing resolved' : 'Show resolved'}
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => captureActions.captureOnly()}
+                                                    disabled={captureState.isCapturing}
+                                                    className="md3-btn-tonal px-2 py-1.5 text-label-xs font-bold disabled:opacity-disabled inline-flex items-center gap-1"
+                                                    title="Quick Capture (no OCR)"
+                                                >
+                                                    {captureState.isCapturing ? <Loader2 size={10} className="animate-spin" /> : <Camera size={10} />}
+                                                    Capture
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setLockOcrTeams(!lockOcrTeams)}
+                                                    className={`px-2 py-1.5 rounded-control text-label-xs font-bold uppercase tracking-wide border transition-colors ${
+                                                        lockOcrTeams
+                                                            ? 'bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer border-md-sys-primary/30'
+                                                            : 'md3-surface-high text-md-sys-on-surface/60 border-md-sys-outline/15 hover:bg-md-sys-on-surface/5'
+                                                    }`}
+                                                    title="Lock Team Mapping (OCR)"
+                                                >
+                                                    Team Lock
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
-                                <div className="min-w-0">
-                                    <div className="text-body font-bold tracking-wide text-md-sys-on-surface">Smart Captures</div>
-                                    <div className="text-label-sm text-md-sys-on-surface/60 whitespace-nowrap">{workQueueOpenCount > 0 ? `${workQueueOpenCount} open` : 'No open items'} · {visibleMatches.length} visible</div>
+                            }
+                            body={
+                                <div className="flex-1 overflow-y-auto custom-scrollbar px-2 py-1.5 flex flex-col gap-2 min-h-0">
+                                    {selectedIds.size > 0 && !queueCollapsed && (
+                                        <div className="sticky top-0 z-10 mb-2 rounded-lg p-2 flex items-center justify-between gap-2" style={{ background: 'color-mix(in srgb, var(--md-sys-color-primary), transparent 90%)' }}>
+                                            <span className="text-label-xs font-bold text-md-sys-primary">{selectedIds.size} selected</span>
+                                            <button
+                                                type="button"
+                                                className="text-label-xs font-bold text-md-sys-primary/60 hover:text-md-sys-primary transition-colors"
+                                                onClick={() => setSelectedIds(new Set())}
+                                            >
+                                                Clear
+                                            </button>
+                                        </div>
+                                    )}
+                                    {visibleMatches.length === 0 ? (
+                                        <div className="flex-1 flex flex-col items-center justify-center gap-3 py-12 text-md-sys-on-surface/40">
+                                            <ScanEye size={32} className="opacity-40" />
+                                            {!queueCollapsed && (
+                                                <div className="text-center">
+                                                    <p className="text-body font-bold text-md-sys-on-surface/60">All captures reviewed</p>
+                                                    <p className="text-label-sm mt-1 text-md-sys-on-surface/40">New captures will appear here</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        visibleMatches.map(match => {
+                                            const displayNumber = getQueueDisplayNumber(match.id, globalOrderedMatchIds);
+                                            return (
+                                                <QueueItemRichPreview
+                                                    key={match.id}
+                                                    compact={queueCollapsed}
+                                                    displayNumber={displayNumber}
+                                                    rawMatchId={match.id}
+                                                    match={match}
+                                                    isSelected={match.id === selectedMatchId}
+                                                    isMultiSelected={selectedIds.has(match.id)}
+                                                    onClick={() => setSelectedMatchId(match.id)}
+                                                    onToggleSelect={queueCollapsed ? undefined : () => toggleSelected(match.id)}
+                                                />
+                                            );
+                                        })
+                                    )}
                                 </div>
-                            </div>
-
-                            <div className="flex items-center gap-1 shrink-0">
-                                <button
-                                    type="button"
-                                    onClick={() => captureActions.captureOnly()}
-                                    disabled={captureState.isCapturing}
-                                    className="md3-btn-tonal px-2 py-1.5 text-label-xs font-bold disabled:opacity-disabled inline-flex items-center gap-1"
-                                    title="Quick Capture (no OCR)"
-                                >
-                                    {captureState.isCapturing ? <Loader2 size={10} className="animate-spin" /> : <Camera size={10} />}
-                                    Capture
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => setLockOcrTeams(!lockOcrTeams)}
-                                    className={`px-2 py-1.5 rounded-control text-label-xs font-bold uppercase tracking-wide border transition-colors ${
-                                        lockOcrTeams
-                                            ? 'bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer border-md-sys-primary/30'
-                                            : 'md3-surface-high text-md-sys-on-surface/60 border-md-sys-outline/15 hover:bg-md-sys-on-surface/5'
-                                    }`}
-                                    title="Lock Team Mapping (OCR)"
-                                >
-                                    Lock
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="relative">
-                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" />
-                            <input
-                                type="text"
-                                placeholder="Search players, heroes, ships..."
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                                className="w-full h-10 md3-surface rounded-control pl-9 pr-3 text-label-sm outline-none placeholder:opacity-40"
-                            />
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <div className="sc-seg sc-bordered flex-1">
-                                <button type="button" className="sc-seg-btn" data-active={!queueOnly} onClick={() => setQueueOnly(false)}>All Matches</button>
-                                <button type="button" className="sc-seg-btn" data-active={queueOnly} onClick={() => setQueueOnly(true)}>Queue{workQueueOpenCount > 0 ? ` (${workQueueOpenCount})` : ''}</button>
-                            </div>
-                            {queueOnly && (
-                                <button
-                                    type="button"
-                                    onClick={() => setShowResolved(!showResolved)}
-                                    className={`px-2.5 py-2 rounded-full text-label-xs font-bold transition-colors ${
-                                        showResolved ? 'bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer' : 'text-md-sys-on-surface/40 hover:bg-md-sys-on-surface/5'
-                                    }`}
-                                >
-                                    {showResolved ? 'Showing resolved' : 'Show resolved'}
-                                </button>
-                            )}
-                        </div>
+                            }
+                            footer={!queueCollapsed ? (
+                                <div className="px-4 py-2 text-center text-label-sm text-md-sys-on-surface/60 font-semibold border-t border-md-sys-outline/10">
+                                    {visibleMatches.length} match{visibleMatches.length !== 1 ? 'es' : ''}
+                                </div>
+                            ) : undefined}
+                        />
                     </div>
 
-                {queueOnly && (
-                    <div className="px-4 py-3 border-b border-md-sys-outline/10">
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={goPrevQueue}
-                                disabled={workQueueMatches.length === 0}
-                                className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled flex-1 inline-flex items-center justify-center"
-                                type="button"
-                                title="Prev (P)"
-                            >
-                                Prev
-                            </button>
-                            <button
-                                onClick={resolveSelected}
-                                disabled={!selectedMatchId}
-                                className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled flex-1 inline-flex items-center justify-center"
-                                type="button"
-                                title="Resolve (E)"
-                            >
-                                Resolve
-                            </button>
-                            <button
-                                onClick={goNextQueue}
-                                disabled={workQueueMatches.length === 0}
-                                className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled flex-1 inline-flex items-center justify-center"
-                                type="button"
-                                title="Next (N)"
-                            >
-                                Next
-                            </button>
-                        </div>
-                        {queueIndex.total > 0 && queueIndex.idx >= 0 && (
-                            <div className="mt-2 text-center text-label-sm font-bold text-md-sys-on-surface/60">
-                                {queueIndex.idx + 1}/{queueIndex.total}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                <div className="flex-1 overflow-y-auto custom-scrollbar px-2 py-1.5 flex flex-col gap-1 min-h-0">
-                    {selectedIds.size > 0 && (
-                        <div className="sticky top-0 z-10 mb-2 rounded-lg p-2 flex items-center justify-between gap-2" style={{ background: 'color-mix(in srgb, var(--md-sys-color-primary), transparent 90%)' }}>
-                            <span className="text-label-xs font-bold text-md-sys-primary">{selectedIds.size} selected</span>
-                            <button
-                                type="button"
-                                className="text-label-xs font-bold text-md-sys-primary/60 hover:text-md-sys-primary transition-colors"
-                                onClick={() => setSelectedIds(new Set())}
-                            >
-                                Clear
-                            </button>
-                        </div>
+                    {!queueCollapsed && (
+                        <div
+                            className="w-1 rounded-pill bg-md-sys-outline/20 hover:bg-md-sys-primary/50 cursor-col-resize transition-colors max-[1200px]:hidden"
+                            onMouseDown={() => setIsResizing(true)}
+                            role="separator"
+                            aria-orientation="vertical"
+                            aria-label="Resize queue panel"
+                        />
                     )}
-                    {visibleMatches.length === 0 ? (
-                        <div className="flex-1 flex flex-col items-center justify-center gap-3 py-12 text-md-sys-on-surface/40">
-                            <ScanEye size={32} className="opacity-40" />
-                            <div className="text-center">
-                                <p className="text-body font-bold text-md-sys-on-surface/60">No matches found</p>
-                                <p className="text-label-sm mt-1 text-md-sys-on-surface/40">{searchQuery ? 'Try a different search' : queueOnly ? 'Queue is clear' : 'Record some matches to get started'}</p>
-                            </div>
-                        </div>
-                    ) : (
-                        visibleMatches.map(match => (
-                            <MatchListItem
-                                key={match.id}
-                                match={match}
-                                isSelected={match.id === selectedMatchId}
-                                isMultiSelected={selectedIds.has(match.id)}
-                                onClick={() => setSelectedMatchId(match.id)}
-                                onToggleSelect={() => toggleSelected(match.id)}
-                            />
-                        ))
-                    )}
-                </div>
 
-                <div className="px-4 py-2.5 text-center text-label-sm text-md-sys-on-surface/60 font-semibold border-t border-md-sys-outline/10">
-                    {visibleMatches.length} match{visibleMatches.length !== 1 ? 'es' : ''}
-                </div>
-                </div>
-
-            
-                <div className="min-h-0 mg-surface-high rounded-card p-0 overflow-hidden" style={{ backgroundImage: 'radial-gradient(circle at top right, rgba(56,189,248,0.06), transparent 40%), radial-gradient(circle at bottom left, rgba(251,146,60,0.05), transparent 50%)' }}>
-                    <div className="h-full min-h-0 overflow-y-auto custom-scrollbar">
-                        {selectedMatch ? (
-                            <SmartMatchDetail
-                                match={selectedMatch}
-                                onUpdate={updateMatch}
-                                activeUser={activeUser}
-                                ocrMode={ocrMode}
-                                pilotRegistry={pilotRegistry}
-                                queueOnly={queueOnly}
-                                onNext={goNextQueue}
-                                onPrev={goPrevQueue}
-                                onResolve={() => {
-                                    if (!selectedMatch) return;
-                                    updateMatch({ ...selectedMatch, ocrReviewedAt: Date.now(), ocrState: 'saved' });
-                                    if (queueOnly) {
-                                        setTimeout(() => goNextQueue(), 0);
-                                    }
-                                }}
-                                onApplyToSession={(data) => {
-                                    if (data.playerShip?.shipType) setActiveShip(data.playerShip.shipType, 'ocr');
-                                    if (data.teammates?.length > 0) {
-                                        const newNames = data.teammates.map(t => t.name).filter(n => n && !selectedTeammates.includes(n));
-                                        if (newNames.length > 0) setSelectedTeammates([...selectedTeammates, ...newNames]);
-                                    }
-                                    if (data.opponentTeams?.length > 0) {
-                                        const oppNames = data.opponentTeams.flatMap(t => t.players.map(p => p.name)).filter(n => n && !selectedOpponents.includes(n));
-                                        if (oppNames.length > 0) setSelectedOpponents([...selectedOpponents, ...oppNames]);
-                                        const newTeams = { ...sessionTeams };
-                                        const newShipTypes: Record<string, string> = {};
-                                        data.opponentTeams.forEach(team => {
-                                            const colorKey = team.color || 'unknown';
-                                            if (lockOcrTeams && Object.keys(newTeams).length > 0 && !newTeams[colorKey]) {
-                                                return;
-                                            }
-                                            if (!newTeams[colorKey]) newTeams[colorKey] = [];
-                                            team.players.forEach(p => {
-                                                if (p.name && !newTeams[colorKey].includes(p.name)) newTeams[colorKey].push(p.name);
-                                            });
-                                            if (team.shipType) newShipTypes[colorKey] = team.shipType;
-                                        });
-                                        setSessionTeams(newTeams);
-                                        if (!lockOcrTeams || Object.keys(newShipTypes).length > 0) {
-                                            setSessionShipTypes(newShipTypes, 'ocr');
+                    <div className="flex-1 min-w-0 min-h-0">
+                        <SmartCapturesDetailPane
+                            className="h-full"
+                            content={selectedMatch ? (
+                                <SmartMatchDetail
+                                    match={selectedMatch}
+                                    displayNumber={getQueueDisplayNumber(selectedMatch.id, globalOrderedMatchIds)}
+                                    onUpdate={updateMatch}
+                                    activeUser={activeUser}
+                                    ocrMode={ocrMode}
+                                    pilotRegistry={pilotRegistry}
+                                    queueOnly={queueOnly}
+                                    onNext={goNextQueue}
+                                    onPrev={goPrevQueue}
+                                    onResolve={() => {
+                                        if (!selectedMatch) return;
+                                        updateMatch({ ...selectedMatch, ocrReviewedAt: Date.now(), ocrState: 'saved' });
+                                        if (queueOnly) {
+                                            setTimeout(() => goNextQueue(), 0);
                                         }
-                                    }
-                                    const reachModifiers = data.reachModifiers ?? [];
-                                    const hazards = data.hazards ?? [];
-                                    if (reachModifiers.length > 0 || hazards.length > 0) {
-                                        const rawMods = [
-                                            ...reachModifiers.map(m => m.name),
-                                            ...hazards,
-                                        ];
-                                        const canonical = rawMods.map(m => normalizeModifierName(m));
-                                        setSelectedReachModifiers(canonical, 'ocr');
-                                    }
-                                    setToast({ message: 'Applied reprocessed data to current session', type: 'success' });
-                                    // Apply implies this match was "worked" — also persist data to the match record.
-                                    if (selectedMatch) {
-                                        const matchUpdates: Partial<Match> = { ocrReviewedAt: Date.now(), ocrState: 'saved' as const };
-                                        if (data.playerShip?.shipType) matchUpdates.ship = data.playerShip.shipType;
+                                    }}
+                                    onApplyToSession={(data) => {
+                                        if (data.playerShip?.shipType) setActiveShip(data.playerShip.shipType, 'ocr');
                                         if (data.teammates?.length > 0) {
-                                            matchUpdates.teammates = data.teammates.map(t => t.name);
+                                            const newNames = data.teammates.map(t => t.name).filter(n => n && !selectedTeammates.includes(n));
+                                            if (newNames.length > 0) setSelectedTeammates([...selectedTeammates, ...newNames].slice(0, 4));
                                         }
                                         if (data.opponentTeams?.length > 0) {
-                                            matchUpdates.opponents = data.opponentTeams.flatMap(t => t.players.map(p => p.name));
-                                            matchUpdates.opponentTeams = data.opponentTeams.map(t => ({
-                                                teamName: t.teamName || 'Unknown Team',
-                                                shipType: t.shipType || '',
-                                                color: t.color || 'unknown',
-                                                players: t.players.map(p => p.name),
-                                            }));
+                                            const oppNames = data.opponentTeams.flatMap(t => t.players.map(p => p.name)).filter(n => n && !selectedOpponents.includes(n));
+                                            if (oppNames.length > 0) setSelectedOpponents([...selectedOpponents, ...oppNames]);
+                                            const newTeams = { ...sessionTeams };
+                                            const newShipTypes: Record<string, string> = {};
+                                            data.opponentTeams.forEach(team => {
+                                                const colorKey = team.color || 'unknown';
+                                                if (lockOcrTeams && Object.keys(newTeams).length > 0 && !newTeams[colorKey]) {
+                                                    return;
+                                                }
+                                                if (!newTeams[colorKey]) newTeams[colorKey] = [];
+                                                team.players.forEach(p => {
+                                                    if (p.name && !newTeams[colorKey].includes(p.name)) newTeams[colorKey].push(p.name);
+                                                });
+                                                if (team.shipType) newShipTypes[colorKey] = team.shipType;
+                                            });
+                                            setSessionTeams(newTeams);
+                                            if (!lockOcrTeams || Object.keys(newShipTypes).length > 0) {
+                                                setSessionShipTypes(newShipTypes, 'ocr');
+                                            }
                                         }
-                                        const mods = data.reachModifiers ?? [];
-                                        const haz = data.hazards ?? [];
-                                        if (mods.length > 0 || haz.length > 0) {
-                                            const rawMods = [...mods.map(m => m.name), ...haz];
-                                            matchUpdates.reachModifiers = Array.from(new Set(rawMods.map(m => normalizeModifierName(m)).filter(Boolean)));
+                                        const reachModifiers = data.reachModifiers ?? [];
+                                        const hazards = data.hazards ?? [];
+                                        if (reachModifiers.length > 0 || hazards.length > 0) {
+                                            const rawMods = [
+                                                ...reachModifiers.map(m => m.name),
+                                                ...hazards,
+                                            ];
+                                            const canonical = rawMods.map(m => normalizeModifierName(m));
+                                            setSelectedReachModifiers(canonical, 'ocr');
                                         }
-                                        updateMatch({ ...selectedMatch, ...matchUpdates });
-                                        if (queueOnly) setTimeout(() => goNextQueue(), 0);
-                                    }
-                                }}
-                            />
-                        ) : (
-                            <div className="h-full flex items-center justify-center">
-                                <div className="text-center opacity-40">
-                                    <ScanEye size={48} className="mx-auto mb-3" />
-                                    <p className="text-body font-bold">Select a match to analyze</p>
+                                        setToast({ message: 'Applied reprocessed data to current session', type: 'success' });
+                                        if (selectedMatch) {
+                                            const matchUpdates: Partial<Match> = { ocrReviewedAt: Date.now(), ocrState: 'saved' as const };
+                                            if (data.playerShip?.shipType) matchUpdates.ship = data.playerShip.shipType;
+                                            if (data.teammates?.length > 0) {
+                                                matchUpdates.teammates = data.teammates.map(t => t.name).slice(0, 4);
+                                            }
+                                            if (data.opponentTeams?.length > 0) {
+                                                matchUpdates.opponents = data.opponentTeams.flatMap(t => t.players.map(p => p.name));
+                                                matchUpdates.opponentTeams = data.opponentTeams.map(t => ({
+                                                    teamName: t.teamName || 'Unknown Team',
+                                                    shipType: t.shipType || '',
+                                                    color: t.color || 'unknown',
+                                                    players: t.players.map(p => p.name),
+                                                }));
+                                            }
+                                            const mods = data.reachModifiers ?? [];
+                                            const haz = data.hazards ?? [];
+                                            if (mods.length > 0 || haz.length > 0) {
+                                                const rawMods = [...mods.map(m => m.name), ...haz];
+                                                matchUpdates.reachModifiers = Array.from(new Set(rawMods.map(m => normalizeModifierName(m)).filter(Boolean)));
+                                            }
+                                            updateMatch({ ...selectedMatch, ...matchUpdates });
+                                            if (queueOnly) setTimeout(() => goNextQueue(), 0);
+                                        }
+                                    }}
+                                />
+                            ) : (
+                                <div className="h-full flex items-center justify-center p-4">
+                                    <div className="w-full max-w-xl rounded-card md3-surface-high border border-md-sys-outline/10 p-6 text-center space-y-3">
+                                        <div className="w-12 h-12 mx-auto rounded-pill bg-md-sys-primary/14 text-md-sys-primary inline-flex items-center justify-center">
+                                            <ScanEye size={24} />
+                                        </div>
+                                        <p className="text-title-sm font-bold text-md-sys-on-surface">Select a match to review</p>
+                                        <p className="text-label-sm text-md-sys-on-surface/60">
+                                            Choose a queue item to edit OCR fields, verify screenshots, and finalize the record.
+                                        </p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-left">
+                                            <div className="rounded-control md3-surface p-2 border border-md-sys-outline/10">
+                                                <div className="text-label-xs font-bold text-md-sys-primary uppercase">1. Select</div>
+                                                <div className="text-label-xs text-md-sys-on-surface/62 mt-1">Pick a queued match.</div>
+                                            </div>
+                                            <div className="rounded-control md3-surface p-2 border border-md-sys-outline/10">
+                                                <div className="text-label-xs font-bold text-md-sys-primary uppercase">2. Review</div>
+                                                <div className="text-label-xs text-md-sys-on-surface/62 mt-1">Fix OCR fields and hazards.</div>
+                                            </div>
+                                            <div className="rounded-control md3-surface p-2 border border-md-sys-outline/10">
+                                                <div className="text-label-xs font-bold text-md-sys-primary uppercase">3. Approve</div>
+                                                <div className="text-label-xs text-md-sys-on-surface/62 mt-1">Resolve and auto-open next.</div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        />
                     </div>
                 </div>
-            </div>
-            )}
-
-            {scView === 'tools' && (
-                <div className="h-full min-h-0 overflow-y-auto md3-surface-high rounded-card p-4 space-y-4 flex flex-col gap-4">
-                    <p className="text-body text-md-sys-on-surface/60 text-label-sm">Bulk actions, pending captures, and OCR issues.</p>
+            ) : (
+                <SmartCapturesToolsView>
+                    <div className="flex items-center justify-between gap-2">
+                        <div>
+                            <h2 className="text-label-md font-bold text-md-sys-on-surface">Smart Captures Tools</h2>
+                            <p className="text-label-xs text-md-sys-on-surface/58">Batch operations and artifact repair</p>
+                        </div>
+                        {renderSectionTabs('sc-workspace-tabs--inline')}
+                    </div>
+                    <p className="text-body text-md-sys-on-surface/60 text-label-sm">Bulk actions and automation controls.</p>
                     <section className="md3-surface rounded-card p-4 border border-md-sys-outline/10" aria-labelledby="sc-tools-bulk-heading">
                         <h2 id="sc-tools-bulk-heading" className="text-label-lg font-bold text-md-sys-on-surface mb-3">Bulk Actions</h2>
                         <div className="flex items-center justify-between gap-2 mb-3">
                             <span className="text-label-sm text-md-sys-on-surface/60">Selected: {selectedIds.size}</span>
                         </div>
                         <div className="grid grid-cols-2 gap-2 mb-3">
-                            <button type="button" className="md3-btn-tonal px-3 py-2 text-label-sm font-bold disabled:opacity-disabled rounded-control" onClick={() => selectVisible('all')} disabled={bulkBusy || visibleMatches.length === 0} title="Select all visible matches">Select Visible ({visibleMatches.length})</button>
-                            <button type="button" className="md3-btn-tonal px-3 py-2 text-label-sm font-bold disabled:opacity-disabled rounded-control" onClick={bulkResolveVisible} disabled={bulkBusy || visibleMatches.length === 0} title="Resolve every currently visible match row">Resolve Visible</button>
+                            <Button type="button" variant="secondary" className="px-3 py-2 text-label-sm font-bold rounded-control" onClick={() => selectVisible('all')} disabled={bulkBusy || visibleMatches.length === 0} title="Select all visible matches">Select Visible ({visibleMatches.length})</Button>
+                            <Button type="button" variant="secondary" className="px-3 py-2 text-label-sm font-bold rounded-control" onClick={bulkResolveVisible} disabled={bulkBusy || visibleMatches.length === 0} title="Resolve every currently visible match row">Resolve Visible</Button>
                         </div>
                         <div className="grid grid-cols-3 gap-2">
-                            <button type="button" className="md3-btn-filled px-3 py-2 text-label-sm font-bold disabled:opacity-disabled rounded-control" onClick={() => { resolveMatches(Array.from(selectedIds)); setToast({ message: 'Resolved selected', type: 'success' }); }} disabled={bulkBusy || selectedIds.size === 0} title="Mark selected as resolved">Resolve</button>
-                            <button type="button" className="md3-btn-tonal px-3 py-2 text-label-sm font-bold disabled:opacity-disabled rounded-control" onClick={bulkRerunOcrSelected} disabled={bulkBusy || selectedIds.size === 0} title="Rerun OCR on selected">{bulkBusy ? 'Working...' : 'Rerun OCR'}</button>
-                            <button type="button" className="md3-btn-outlined px-3 py-2 text-label-sm font-bold disabled:opacity-disabled rounded-control" onClick={bulkExportSelectedJson} disabled={bulkBusy || selectedIds.size === 0} title="Export selected JSON">Export JSON</button>
+                            <Button type="button" className="px-3 py-2 text-label-sm font-bold rounded-control" onClick={() => { resolveMatches(Array.from(selectedIds)); setToast({ message: 'Resolved selected', type: 'success' }); }} disabled={bulkBusy || selectedIds.size === 0} title="Mark selected as resolved">Resolve</Button>
+                            <Button type="button" variant="secondary" className="px-3 py-2 text-label-sm font-bold rounded-control" onClick={bulkRerunOcrSelected} disabled={bulkBusy || selectedIds.size === 0} loading={bulkBusy} title="Rerun OCR on selected">{bulkBusy ? 'Working...' : 'Rerun OCR'}</Button>
+                            <Button type="button" variant="tertiary" className="px-3 py-2 text-label-sm font-bold rounded-control border border-md-sys-outline/20" onClick={bulkExportSelectedJson} disabled={bulkBusy || selectedIds.size === 0} title="Export selected JSON">Export JSON</Button>
                         </div>
                         {selectedIds.size > 0 && (
                             <div className="mt-3 flex items-center justify-between gap-2">
-                                <button type="button" className="md3-btn-text px-2 py-1 text-label-xs font-bold rounded-control" onClick={() => setSelectedIds(new Set())}>Clear Selection</button>
+                                <Button type="button" variant="tertiary" className="px-2 py-1 text-label-xs font-bold rounded-control" onClick={() => setSelectedIds(new Set())}>Clear Selection</Button>
                                 <span className="text-label-xs text-md-sys-on-surface/60">{bulkBusy ? 'Working...' : 'Actions apply to selected rows'}</span>
+                            </div>
+                        )}
+                    </section>
+                    <section className="md3-surface rounded-card p-4 border border-md-sys-outline/10" aria-labelledby="sc-tools-artifact-repair-heading">
+                        <h2 id="sc-tools-artifact-repair-heading" className="text-label-lg font-bold text-md-sys-on-surface mb-3">Artifact Repair</h2>
+                        <p className="text-label-sm text-md-sys-on-surface/60 mb-3">
+                            Audit and relink older screenshots that were not attached to historical matches.
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2 mb-3">
+                            <Button
+                                type="button"
+                                variant="secondary"
+                                className="px-3 py-2 text-label-sm font-bold rounded-control"
+                                onClick={handlePreviewArtifactRepair}
+                                loading={repairBusy}
+                                disabled={repairBusy}
+                            >
+                                Preview Repair
+                            </Button>
+                            <Button
+                                type="button"
+                                className="px-3 py-2 text-label-sm font-bold rounded-control"
+                                onClick={handleApplyArtifactRepair}
+                                loading={repairBusy}
+                                disabled={repairBusy || !repairResult || (repairResult.summary?.plannedLinks || 0) === 0}
+                                title="Applies repair with automatic DB backup"
+                            >
+                                Apply Repair
+                            </Button>
+                        </div>
+                        {repairResult && (
+                            <div className="md3-surface-high rounded-control p-3 text-label-sm space-y-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                    <span className="text-md-sys-on-surface/60">Candidates scanned</span>
+                                    <span className="font-semibold text-right">{repairResult.summary?.candidatesScanned || 0}</span>
+                                    <span className="text-md-sys-on-surface/60">Eligible candidates</span>
+                                    <span className="font-semibold text-right">{repairResult.summary?.candidatesEligible || 0}</span>
+                                    <span className="text-md-sys-on-surface/60">Planned links</span>
+                                    <span className="font-semibold text-right">{repairResult.summary?.plannedLinks || 0}</span>
+                                    <span className="text-md-sys-on-surface/60">Updated matches</span>
+                                    <span className="font-semibold text-right">{repairResult.summary?.updatedMatches || 0}</span>
+                                </div>
+                                {repairResult.summary?.backupPath ? (
+                                    <div className="text-label-xs text-md-sys-on-surface/60 break-all">
+                                        Backup: {repairResult.summary.backupPath}
+                                    </div>
+                                ) : null}
                             </div>
                         )}
                     </section>
@@ -654,9 +831,9 @@ const SmartCapturesPanel: React.FC = () => {
                                 <span className="flex items-center gap-1"><Camera size={16} /> Capture Queue ({captureState.savedCaptures.length})</span>
                                 {captureState.processingProgress && <span className="text-label-sm text-md-sys-on-surface/60">Processing {captureState.processingProgress.current}/{captureState.processingProgress.total}</span>}
                                 {captureState.savedCaptures.some(c => !c.ocrProcessed) && (
-                                    <button onClick={() => captureActions.processAllStored(activeUser)} disabled={captureState.isProcessing} className="md3-btn-tonal px-2 py-1.5 text-label-xs font-bold rounded-control disabled:opacity-disabled flex items-center gap-1">
-                                        {captureState.isProcessing ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />} OCR All
-                                    </button>
+                                    <Button onClick={() => captureActions.processAllStored(activeUser)} disabled={captureState.isProcessing} loading={captureState.isProcessing} variant="secondary" className="px-2 py-1.5 text-label-xs font-bold rounded-control flex items-center gap-1" icon={!captureState.isProcessing ? <Zap size={12} /> : undefined}>
+                                        OCR All
+                                    </Button>
                                 )}
                             </h2>
                             <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
@@ -679,7 +856,7 @@ const SmartCapturesPanel: React.FC = () => {
                             <h2 id="sc-tools-priority-heading" className="text-label-lg font-bold text-md-sys-on-surface mb-3">Priority (OCR issues)</h2>
                             <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
                                 {ocrIssueMatches.map(m => (
-                                    <button key={`issue-${m.id}`} onClick={() => { setSelectedMatchId(m.id); setScView('capture'); }} className="w-full text-left text-label-sm px-3 py-2 rounded-control hover:bg-md-sys-on-surface/5 flex items-center justify-between border border-transparent hover:border-md-sys-outline/10">
+                                    <button key={`issue-${m.id}`} onClick={() => { setSelectedMatchId(m.id); setActiveSection('capture'); }} className="w-full text-left text-label-sm px-3 py-2 rounded-control hover:bg-md-sys-on-surface/5 flex items-center justify-between border border-transparent hover:border-md-sys-outline/10">
                                         <span className="truncate">{new Date(m.timestamp).toLocaleDateString()} {m.ship || 'No ship'}</span>
                                         <span className="text-danger font-bold">{Math.round(m.ocrDebug?.confidence || 0)}%</span>
                                     </button>
@@ -687,116 +864,14 @@ const SmartCapturesPanel: React.FC = () => {
                             </div>
                         </section>
                     )}
-                </div>
+                </SmartCapturesToolsView>
             )}
-        </div>
-        </div>
-    );
-};
-const MatchListItem: React.FC<{
-    match: Match;
-    isSelected: boolean;
-    isMultiSelected: boolean;
-    onClick: () => void;
-    onToggleSelect: () => void;
-}> = ({ match, isSelected, isMultiSelected, onClick, onToggleSelect }) => {
-    const totalKills = Object.values(match.kills || {}).reduce((a, b) => a + (Number(b) || 0), 0);
-    const qs = getQueueStatus(match);
-    const hasArtifacts = qs.hasArtifacts;
-    const shipLabel = match.ship ? match.ship.split('(')[0].trim() : 'No ship';
-    const heroLabel = match.hero ? match.hero.trim() : '';
-    const when = new Date(match.timestamp);
-
-    const statusChip = (() => {
-        // Use explicit OCR state machine when available
-        if (match.ocrState && match.ocrState !== 'saved') {
-            const meta = OCR_STATE_META[match.ocrState];
-            return { label: meta.label, cls: meta.cls, description: meta.description };
-        }
-        // Legacy fallback
-        if (qs.key === 'Resolved') return { label: 'Resolved', cls: 'bg-success-soft text-success', description: '' };
-        if (qs.key === 'NeedsOCR') return { label: 'Needs OCR', cls: 'bg-warning-soft text-warning', description: '' };
-        if (qs.key === 'LowConf') return { label: 'Low conf', cls: 'bg-warning-soft text-warning', description: '' };
-        if (qs.key === 'MissingData') return { label: 'Missing data', cls: 'bg-danger-soft text-danger', description: '' };
-        return null;
-    })();
-
-    return (
-        <button
-            onClick={onClick}
-            className={`group w-full text-left rounded-control transition-all flex items-center gap-2.5 relative overflow-hidden ${
-                isSelected
-                    ? 'mg-surface-high border-l-4 border-md-sys-primary pl-2.5 pr-3.5 py-3.5'
-                    : 'hover:bg-md-sys-on-surface/5 px-3.5 py-3.5'
-            } ${qs.key === 'Resolved' ? 'opacity-60' : ''}`}
-        >
-            <input
-                type="checkbox"
-                checked={isMultiSelected}
-                onChange={() => onToggleSelect()}
-                onClick={(e) => e.stopPropagation()}
-                style={{ accentColor: 'var(--md-sys-color-primary)' }}
-                className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${
-                    isMultiSelected
-                        ? 'opacity-100 pointer-events-auto'
-                        : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto'
-                }`}
-                title="Select row"
-            />
-
-            <div className={`w-1 h-8 rounded-full flex-shrink-0 ${RESULT_COLORS[match.result] || 'bg-md-sys-outline/30'}`} />
-
-            <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 min-w-0">
-                    <span className={`text-body font-bold truncate ${match.ship ? 'text-md-sys-on-surface' : 'text-md-sys-on-surface/40 italic'}`}>
-                        {shipLabel}
-                    </span>
-                    {heroLabel && (
-                        <span className="text-label-sm text-md-sys-on-surface/60 truncate">
-                            {heroLabel}
-                        </span>
-                    )}
-                </div>
-
-                <div className="mt-0.5 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-label-xs text-md-sys-on-surface/40">
-                        <span className={`font-bold uppercase ${match.result === 'Win' ? 'text-success' : match.result === 'Loss' ? 'text-danger' : 'text-md-sys-on-surface/60'}`}>
-                            {match.result}
-                        </span>
-                        <span>{when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
-                        <span className="font-mono">{when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        {totalKills > 0 && <span className="text-success/60">{totalKills}K</span>}
-                    </div>
-
-                    <div className="flex items-center gap-1 shrink-0">
-                        {statusChip && qs.key !== 'Resolved' && (
-                            <span
-                                className={`text-label-xs px-1.5 py-0.5 rounded-full font-bold ${statusChip.cls} ${match.ocrState === 'processing' ? 'animate-pulse' : ''}`}
-                                title={statusChip.description || (qs.key === 'MissingData'
-                                    ? `Missing: ${qs.missingShip ? 'ship ' : ''}${qs.missingPlayers ? 'players' : ''}`.trim()
-                                    : undefined)}
-                            >
-                                {statusChip.label}
-                            </span>
-                        )}
-                        {hasArtifacts && (
-                            <span className="text-label-xs text-md-sys-on-surface/40 font-mono">
-                                {countImages(match.artifacts!)}img
-                            </span>
-                        )}
-                        {qs.key === 'Resolved' ? (
-                            <Check size={12} className="text-success/60" />
-                        ) : (
-                            <ChevronRight size={12} className={`${isSelected ? 'text-md-sys-primary/60' : 'opacity-20'}`} />
-                        )}
-                    </div>
-                </div>
-            </div>
-        </button>
+        />
     );
 };
 const SmartMatchDetail: React.FC<{
     match: Match;
+    displayNumber: number;
     onUpdate: (m: Match) => void;
     activeUser: string;
     ocrMode: string;
@@ -806,14 +881,10 @@ const SmartMatchDetail: React.FC<{
     onPrev?: () => void;
     onResolve?: () => void;
     onApplyToSession?: (data: OCRExtractedData) => void;
-}> = ({ match, onUpdate, activeUser, ocrMode, pilotRegistry, queueOnly = false, onNext, onPrev, onResolve, onApplyToSession }) => {
+}> = ({ match, displayNumber, onUpdate, activeUser, ocrMode, pilotRegistry, queueOnly = false, onNext, onPrev, onResolve, onApplyToSession }) => {
     const [artifacts, setArtifacts] = useState<{ images: string[], imageFiles: ArtifactFile[], telemetry: any[] }>({ images: [], imageFiles: [], telemetry: [] });
     const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
     const screenshotsSectionRef = useRef<HTMLDivElement | null>(null);
-    const toDisplaySrc = (src: string) => {
-        if (src.startsWith('data:') || src.startsWith('file://')) return src;
-        return `file:///${src.replace(/\\/g, '/')}`;
-    };
     const [editingField, setEditingField] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
     const [editingPlayerIdx, setEditingPlayerIdx] = useState<{ type: 'teammate' | 'opponent'; idx: number } | null>(null);
@@ -837,7 +908,7 @@ const SmartMatchDetail: React.FC<{
         details: true,
         rerun: false,
     });
-    const { setToast } = useUIState();
+    const { setToast, setActiveView } = useUIState();
     const normalizeModifierName = useCallback((name: string) => {
         const match = UI_REACH_MODIFIERS.find(m => m.toLowerCase() === name.toLowerCase());
         return match || name;
@@ -916,6 +987,12 @@ const SmartMatchDetail: React.FC<{
     const addPlayer = () => {
         if (!addingPlayer || !newPlayerName.trim()) { setAddingPlayer(null); setNewPlayerName(''); return; }
         const field = addingPlayer === 'teammate' ? 'teammates' : 'opponents';
+        if (addingPlayer === 'teammate' && (match.teammates || []).length >= 4) {
+            setToast({ message: 'Teammates are limited to 4', type: 'warning' });
+            setAddingPlayer(null);
+            setNewPlayerName('');
+            return;
+        }
         const arr = [...(match[field] || []), newPlayerName.trim()];
         onUpdate({ ...match, [field]: arr });
         setAddingPlayer(null);
@@ -923,8 +1000,8 @@ const SmartMatchDetail: React.FC<{
     };
 
     const renderPlayerChips = (players: string[], type: 'teammate' | 'opponent') => {
-        const chipClass = type === 'teammate' ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger';
-        const addBtnClass = type === 'teammate' ? 'bg-success-soft text-success hover:bg-success-soft-strong' : 'bg-danger-soft text-danger hover:bg-danger-soft-strong';
+        const chipClass = type === 'teammate' ? 'sc-player-chip sc-player-chip--teammate' : 'sc-player-chip sc-player-chip--opponent';
+        const addBtnClass = type === 'teammate' ? 'sc-player-add-btn sc-player-add-btn--teammate' : 'sc-player-add-btn sc-player-add-btn--opponent';
         return (
             <div className="flex flex-wrap gap-1.5 items-center">
                 {players.map((p, idx) => (
@@ -989,15 +1066,20 @@ const SmartMatchDetail: React.FC<{
             return;
         }
         const file = artifacts.imageFiles[index];
-        if (!file) return;
-        const result = await removeMatchArtifact(match.id, file.filename);
+        if (!file?.artifactId) {
+            setToast({ message: 'Screenshot token missing. Refresh artifacts and try again.', type: 'warning' });
+            return;
+        }
+        const result = await removeMatchArtifact(match.id, file.artifactId);
         if (result.success) {
             const updated = await getMatchArtifactsStructured(match.id);
             setArtifacts(updated);
             if (match.artifacts) {
-                const newArtifacts = match.artifacts.filter(p => !p.endsWith(file.filename));
+                const newArtifacts = match.artifacts.filter(p => p !== file.path);
                 onUpdate({ ...match, artifacts: newArtifacts });
             }
+        } else if (result.error) {
+            setToast({ message: `Failed to remove screenshot: ${result.error}`, type: 'error' });
         }
         setConfirmDeleteIdx(null);
     };
@@ -1222,6 +1304,24 @@ const SmartMatchDetail: React.FC<{
     };
     const hasResult = match.result === 'Win' || match.result === 'Loss' || match.result === 'Draw';
     const hasArtifacts = (artifacts.images && artifacts.images.length > 0) || (match.artifacts && match.artifacts.length > 0);
+    const queueStatus = getQueueStatus(match);
+    const statusMeta = getStatusMeta(queueStatus.key);
+    const statusIcon = (() => {
+        switch (statusMeta.icon) {
+            case 'scan':
+                return <ScanEye size={10} />;
+            case 'alert':
+                return <AlertTriangle size={10} />;
+            case 'check':
+                return <Check size={10} />;
+            case 'x':
+                return <X size={10} />;
+            case 'spark':
+                return <Zap size={10} />;
+            default:
+                return <Clock size={10} />;
+        }
+    })();
     const toggleSection = (key: string) => {
         setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
     };
@@ -1273,43 +1373,43 @@ const SmartMatchDetail: React.FC<{
     }, [match, onUpdate, rerunning, reviewData, onApplyToSession]);
 
     return (
-        <div className="p-4 lg:p-5 space-y-3">
+        <div className="p-4 lg:p-5 space-y-3 sc-detail-workspace">
             
             <div className="sticky top-0 z-20">
-                <div className="md3-surface-high rounded-card p-4 space-y-3" style={{ backdropFilter: 'blur(12px)' }}>
+                <SmartCaptureSummaryBar>
                     <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-body font-bold text-md-sys-on-surface">Match #{match.id}</span>
-                                <button
-                                    onClick={() => {
-                                        const next = match.mode === 'Artifact Brawl' ? 'Fleet Battle' : 'Artifact Brawl';
-                                        onUpdate({ ...match, mode: next });
-                                    }}
-                                    className="md3-chip px-2 py-0.5 text-label-xs font-bold text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5 transition-colors cursor-pointer"
-                                    title="Click to toggle mode"
-                                >
-                                    {match.mode}
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        const types = ['Combat', 'Artifact'];
-                                        const idx = types.indexOf(match.subType || 'Combat');
-                                        const next = types[(idx + 1) % types.length];
-                                        onUpdate({ ...match, subType: next });
-                                    }}
-                                    className={`md3-chip px-2 py-0.5 text-label-xs font-bold transition-all cursor-pointer ${match.subType === 'Artifact' ? 'md3-chip--selected' : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'}`}
-                                    title="Click to toggle sub-type"
-                                >
-                                    {match.subType || 'Combat'}
-                                </button>
+                                <span className="text-body font-bold text-md-sys-on-surface">Match #{displayNumber}</span>
+                                <span className="text-label-xs text-md-sys-on-surface/48 font-mono">ID {match.id}</span>
+                                <span className="px-2 py-0.5 rounded-pill text-label-xs font-bold bg-info-soft text-info">
+                                    {countImages(match.artifacts || [])} bundled
+                                </span>
+                                <span className={`px-2 py-0.5 rounded-pill text-label-xs font-bold sc-status-chip sc-status-chip--${statusMeta.tone} inline-flex items-center gap-1`} title={statusMeta.description}>
+                                    {statusIcon}
+                                    {statusMeta.label}
+                                </span>
+                                {artifacts.telemetry.length > 0 && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-pill text-label-xs font-bold bg-success-soft text-success">
+                                        <span className="w-2 h-2 rounded-pill bg-success animate-pulse" aria-hidden />
+                                        Telemetry Active
+                                    </span>
+                                )}
+                                <span className="md3-chip px-2 py-0.5 text-label-xs font-bold text-md-sys-on-surface/60" title="Game mode">
+                                    {match.mode === 'Artifact Brawl' ? 'Artifact Brawl' : 'Legacy Match'}
+                                </span>
+                                {match.subType && match.subType.toLowerCase() !== 'combat' && (
+                                    <span className="md3-chip px-2 py-0.5 text-label-xs font-bold text-md-sys-on-surface/60" title="Match subtype">
+                                        {match.subType}
+                                    </span>
+                                )}
                             </div>
                             <div className="flex items-center gap-2 mt-1 text-label-xs text-md-sys-on-surface/40">
                                 <span>{new Date(match.timestamp).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
                                 <span className="font-mono">{new Date(match.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             </div>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <SmartCaptureActionBar>
                             {!hasResult && hasArtifacts && (
                                 <button
                                     onClick={() => screenshotsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
@@ -1331,7 +1431,14 @@ const SmartMatchDetail: React.FC<{
                                     Finalize
                                 </button>
                             )}
-                        </div>
+                            <button
+                                onClick={() => setActiveView('history')}
+                                className="md3-btn-text px-2.5 py-1.5 text-label-xs font-bold"
+                                title="View in History"
+                            >
+                                History
+                            </button>
+                        </SmartCaptureActionBar>
                     </div>
 
                     <div className="flex items-center justify-between gap-2">
@@ -1364,22 +1471,23 @@ const SmartMatchDetail: React.FC<{
                             </div>
                         )}
                     </div>
-                </div>
+                </SmartCaptureSummaryBar>
             </div>
 
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-                <div className="lg:col-span-7 lg:col-start-1 space-y-3 min-w-0">
+            <div className="sc-detail-main-grid">
+                <div className="lg:col-span-7 lg:col-start-1 space-y-3 min-w-0 sc-detail-editor-block">
+                    <div className="sc-detail-lane-kicker">Editor Workspace</div>
 
                     
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sc-detail-stats-grid">
                         <EditableStatCard
                             icon={<Clock size={14} />} label="Time" value={match.time || '--'}
                             onSave={(v) => onUpdate({ ...match, time: v })}
                             placeholder="MM:SS"
                         />
                         <EditableStatCard
-                            icon={<HeartCrack size={14} className="text-rose-400" />} label="Damage" value={match.damageTaken?.toString() || '0'}
+                            icon={<HeartCrack size={14} className="text-danger" />} label="Damage" value={match.damageTaken?.toString() || '0'}
                             onSave={(v) => onUpdate({ ...match, damageTaken: parseInt(v) || 0 })}
                             type="number"
                         />
@@ -1395,7 +1503,8 @@ const SmartMatchDetail: React.FC<{
                     </div>
                 </div>
 
-                <div className="lg:col-span-5 lg:col-start-8 space-y-3 min-w-0" ref={screenshotsSectionRef}>
+                <div className="lg:col-span-5 lg:col-start-8 space-y-3 min-w-0 sc-detail-rail-block" ref={screenshotsSectionRef}>
+                    <div className="sc-detail-lane-kicker sc-detail-lane-kicker--rail">Media and OCR Rail</div>
                     {artifacts.images.length > 0 && (
                         <div className="rounded-card md3-surface-high p-2 border border-md-sys-outline/10 flex items-center justify-between gap-2">
                             <span className="text-label-sm font-bold text-md-sys-on-surface/80">Re-run analysis</span>
@@ -1433,11 +1542,11 @@ const SmartMatchDetail: React.FC<{
                             </button>
                         </div>
                     )}
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                         {artifacts.images.map((src, i) => (
                             <div
                                 key={i}
-                                className="relative aspect-video md3-surface-high rounded-lg overflow-hidden group"
+                                className="relative aspect-video md3-surface-high rounded-lg overflow-hidden group sc-shot-thumb"
                             >
                                 <button onClick={() => setLightboxSrc(src)} className="w-full h-full">
                                     <LocalImage
@@ -1445,7 +1554,7 @@ const SmartMatchDetail: React.FC<{
                                         alt={`Screenshot ${i + 1}`}
                                         className="w-full h-full object-cover"
                                     />
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                         <Eye size={20} />
                                     </div>
                                 </button>
@@ -1455,7 +1564,7 @@ const SmartMatchDetail: React.FC<{
                                         onMouseLeave={() => { if (confirmDeleteIdx === i) setConfirmDeleteIdx(null); }}
                                         className={`absolute bottom-1 right-1 rounded-full flex items-center justify-center transition-all ${
                                             confirmDeleteIdx === i
-                                                ? 'w-auto h-6 px-2 gap-1 bg-danger text-white opacity-100 text-label-xs font-bold'
+                                                ? 'w-auto h-6 px-2 gap-1 bg-danger text-on-scrim opacity-100 text-label-xs font-bold'
                                                 : 'w-5 h-5 bg-danger-soft-strong text-danger opacity-0 group-hover:opacity-100'
                                         }`}
                                         title={confirmDeleteIdx === i ? 'Click again to confirm' : 'Remove screenshot'}
@@ -1468,7 +1577,7 @@ const SmartMatchDetail: React.FC<{
                         
                         <button
                             onClick={handleAddScreenshot}
-                            className="aspect-video md3-surface-high rounded-lg border-2 border-dashed border-md-sys-outline/5 hover:border-md-sys-primary/30 hover:bg-md-sys-primary/5 transition-all flex flex-col items-center justify-center gap-1 opacity-40 hover:opacity-100 hover:text-md-sys-primary"
+                            className="aspect-video md3-surface-high rounded-lg border-2 border-dashed border-md-sys-outline/5 hover:border-md-sys-primary/30 hover:bg-md-sys-primary/5 transition-all flex flex-col items-center justify-center gap-1 opacity-40 hover:opacity-100 hover:text-md-sys-primary sc-shot-thumb"
                         >
                             <Upload size={16} />
                             <span className="text-label-xs font-bold uppercase">Add</span>
@@ -1477,7 +1586,7 @@ const SmartMatchDetail: React.FC<{
                 </Section>
                 </div>
 
-                <div className="lg:col-span-7 lg:col-start-1 space-y-3 min-w-0">
+                <div className="lg:col-span-7 lg:col-start-1 space-y-3 min-w-0 sc-detail-editor-block">
                     
                     <Section title="Players" icon={<Users size={14} />} collapsible collapsed={!!collapsedSections.players} onToggle={() => toggleSection('players')}>
                         <div className="space-y-3">
@@ -1640,21 +1749,21 @@ const SmartMatchDetail: React.FC<{
                             {SHIPS.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
-                    {match.loadout?.weapons && match.loadout.weapons.length > 0 && (
+                    {match.loadout?.weapons && match.loadout.weapons.slice(0, 2).length > 0 && (
                         <div className="flex gap-2 items-start">
                             <span className="opacity-40 w-20 shrink-0">Weapons:</span>
                             <div className="flex flex-wrap gap-1">
-                                {match.loadout.weapons.map((w, i) => (
+                                {match.loadout.weapons.slice(0, 2).map((w, i) => (
                                     <span key={i} className="px-2 py-0.5 bg-info-soft text-info rounded-md text-label-sm font-bold">{w}</span>
                                 ))}
                             </div>
                         </div>
                     )}
-                    {match.loadout?.equipment && match.loadout.equipment.length > 0 && (
+                    {match.loadout?.equipment && match.loadout.equipment.slice(0, 2).length > 0 && (
                         <div className="flex gap-2 items-start">
                             <span className="opacity-40 w-20 shrink-0">Equipment:</span>
                             <div className="flex flex-wrap gap-1">
-                                {match.loadout.equipment.map((eq, i) => (
+                                {match.loadout.equipment.slice(0, 2).map((eq, i) => (
                                     <span key={i} className="px-2 py-0.5 bg-accent-soft text-accent rounded-md text-label-sm font-bold">{eq}</span>
                                 ))}
                             </div>
@@ -1693,7 +1802,7 @@ const SmartMatchDetail: React.FC<{
             
                 </div>
 
-                <div className="lg:col-span-5 lg:col-start-8 space-y-3 min-w-0">
+                <div className="lg:col-span-5 lg:col-start-8 space-y-3 min-w-0 sc-detail-rail-block">
                     
                     {match.ocrDebug && (
                 <Section title="OCR Metadata" icon={<ScanEye size={14} />} collapsible collapsed={!!collapsedSections.ocrMeta} onToggle={() => toggleSection('ocrMeta')}>
@@ -1704,6 +1813,9 @@ const SmartMatchDetail: React.FC<{
                                     <span className="opacity-40">Confidence:</span>
                                     <span className={`font-bold ${match.ocrDebug.confidence >= 80 ? 'text-success' : match.ocrDebug.confidence >= 60 ? 'text-warning' : 'text-danger'}`}>
                                         {Math.round(match.ocrDebug.confidence)}%
+                                    </span>
+                                    <span className="text-label-xs opacity-60">
+                                        Spec: {formatDualConfidence(match.ocrDebug.confidence).spec} · Practical: {formatDualConfidence(match.ocrDebug.confidence).practical}
                                     </span>
                                 </div>
                             )}
@@ -1776,7 +1888,7 @@ const SmartMatchDetail: React.FC<{
             )}
                 </div>
 
-                <div className="lg:col-span-7 lg:col-start-1 space-y-3 min-w-0">
+                <div className="lg:col-span-7 lg:col-start-1 space-y-3 min-w-0 sc-detail-editor-block">
                     
                     <Section title="Kill Breakdown" icon={<Crosshair size={14} />} collapsible collapsed={!!collapsedSections.kills} onToggle={() => toggleSection('kills')}>
                 <div className="flex flex-wrap gap-1.5 items-center">
@@ -1828,7 +1940,7 @@ const SmartMatchDetail: React.FC<{
                 </div>
 
             
-                <div className="lg:col-span-5 lg:col-start-8 space-y-3 min-w-0">
+                <div className="lg:col-span-5 lg:col-start-8 space-y-3 min-w-0 sc-detail-rail-block">
                     
                     {match.artifacts && match.artifacts.length > 0 && (
                 <Section title="Re-run Analysis" icon={<RefreshCw size={14} />} collapsible collapsed={!!collapsedSections.rerun} onToggle={() => toggleSection('rerun')}>
@@ -1884,7 +1996,7 @@ const SmartMatchDetail: React.FC<{
                                 <div className="flex gap-2 mt-1 flex-wrap">
                                     <button
                                         onClick={() => setReviewData(reviewData)}
-                                        className="flex-1 min-w-[160px] md3-btn-filled px-4 py-2.5 font-semibold text-body transition-all flex items-center justify-center gap-2"
+                                        className="flex-1 min-w-40 md3-btn-filled px-4 py-2.5 font-semibold text-body transition-all flex items-center justify-center gap-2"
                                     >
                                         <ScanEye size={16} />
                                         Finalize Entry
@@ -1892,7 +2004,7 @@ const SmartMatchDetail: React.FC<{
                                     {onApplyToSession && (
                                         <button
                                             onClick={() => { onApplyToSession(reviewData); setProcessingComplete(false); }}
-                                            className="flex-1 min-w-[160px] md3-btn-tonal px-4 py-2.5 text-info font-semibold text-body transition-all flex items-center justify-center gap-2"
+                                            className="flex-1 min-w-40 md3-btn-tonal px-4 py-2.5 text-info font-semibold text-body transition-all flex items-center justify-center gap-2"
                                             title="Feed this data into your current recording session (teammates, opponents, ship, modifiers)"
                                         >
                                             <Zap size={16} />
@@ -1902,7 +2014,7 @@ const SmartMatchDetail: React.FC<{
                                     <button
                                         onClick={handleCopyRerunJson}
                                         disabled={!rerunResults || rerunResults.length === 0}
-                                        className="flex-1 min-w-[160px] md3-btn-outlined px-4 py-2.5 font-bold text-body transition-all flex items-center justify-center gap-2 disabled:opacity-disabled"
+                                        className="flex-1 min-w-40 md3-btn-outlined px-4 py-2.5 font-bold text-body transition-all flex items-center justify-center gap-2 disabled:opacity-disabled"
                                         title="View rerun OCR JSON (combined + per-screenshot)"
                                     >
                                         <FileText size={16} />
@@ -1970,8 +2082,8 @@ const SmartMatchDetail: React.FC<{
             </div>
 
             {jsonExport && (
-                <div className="fixed inset-0 z-[10000] md3-dialog-scrim backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setJsonExport(null)}>
-                    <div className="md3-dialog w-full max-w-2xl max-h-[80vh] overflow-hidden sc-bordered" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-modal md3-dialog-scrim backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setJsonExport(null)}>
+                    <div className="md3-dialog w-full max-w-2xl max-h-80vh overflow-hidden sc-bordered" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between p-4 border-b border-md-sys-outline/10">
                             <div className="text-body font-bold">{jsonExport.title}</div>
                             <button onClick={() => setJsonExport(null)} className="md3-icon-btn">
@@ -1983,7 +2095,7 @@ const SmartMatchDetail: React.FC<{
                                 ref={jsonRef}
                                 value={jsonExport.content}
                                 readOnly
-                                className="w-full h-[50vh] md3-textfield--outlined rounded-control p-3 text-label-sm font-mono outline-none resize-none"
+                                className="w-full h-50vh md3-textfield--outlined rounded-control p-3 text-label-sm font-mono outline-none resize-none"
                             />
                             <div className="flex gap-2 mt-3">
                                 <button
@@ -2034,7 +2146,7 @@ const SmartMatchDetail: React.FC<{
 
             
             {lightboxSrc && (
-                <div className="fixed inset-0 z-[10000] bg-black/90 flex items-center justify-center p-8" onClick={() => setLightboxSrc(null)}>
+                <div className="fixed inset-0 z-modal bg-scrim-90 flex items-center justify-center p-8" onClick={() => setLightboxSrc(null)}>
                     <button onClick={() => setLightboxSrc(null)} className="absolute top-4 right-4 text-md-sys-on-surface/60 hover:text-md-sys-on-surface">
                         <X size={24} />
                     </button>
@@ -2046,3 +2158,4 @@ const SmartMatchDetail: React.FC<{
 };
 
 export default SmartCapturesPanel;
+

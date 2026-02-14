@@ -15,6 +15,19 @@ const artifactHelpers = require('./helpers/artifactHelpers.cjs');
 const telemetryArchiveHelpers = require('./helpers/telemetryArchiveHelpers.cjs');
 const dbHelpers = require('./helpers/dbHelpers.cjs');
 const { registerArtifactHandlers } = require('./handlers/artifactHandlers.cjs');
+const {
+  ok,
+  fail,
+  internal,
+  IpcErrorCode,
+  validatePathInRoots,
+  validateAllowedExtension,
+  validateHttpsUrlAllowlist,
+  validateBodySize,
+  validateBasenameToken,
+  createScopedTokenRegistry,
+  URL_ALLOWLIST_DISABLED,
+} = require('./security/ipcValidation.cjs');
 const isDev = !app.isPackaged;
 const DEV_SERVER_URL = process.env.WILDGATE_DEV_SERVER_URL || 'http://localhost:5173';
 const USER_DATA_ROOT = path.resolve(app.getPath('userData'));
@@ -36,22 +49,78 @@ const EPIC_REQUEST_ALLOWED_HOSTS = new Set(
     .map(v => v.trim().toLowerCase())
     .filter(Boolean)
 );
+const EXTERNAL_ALLOWED_HOSTS = new Set(
+  (process.env.WILDGATE_ALLOWED_EXTERNAL_HOSTS || '')
+    .split(',')
+    .map(v => v.trim().toLowerCase())
+    .filter(Boolean)
+);
+const MAX_EPIC_REQUEST_BODY_BYTES = Number(process.env.WILDGATE_MAX_EPIC_BODY_BYTES || (2 * 1024 * 1024));
+const telemetryArchiveTokenRegistry = createScopedTokenRegistry({
+  ttlMs: Number(process.env.WILDGATE_ARCHIVE_TOKEN_TTL_MS || (5 * 60 * 1000)),
+  maxEntriesPerScope: Number(process.env.WILDGATE_ARCHIVE_TOKEN_MAX || 5000),
+});
+const TELEMETRY_RETENTION_MAX_BYTES = Number(process.env.WILDGATE_TELEMETRY_MAX_BYTES || (100 * 1024 * 1024));
+const TELEMETRY_RETENTION_MAX_AGE_MS = Number(process.env.WILDGATE_TELEMETRY_MAX_AGE_MS || (14 * 24 * 60 * 60 * 1000));
+const TELEMETRY_RETENTION_PROMPT_DISABLED = process.env.WILDGATE_TELEMETRY_DISABLE_RETENTION_PROMPT === '1';
+const TELEMETRY_HISTORY_NDJSON_PATH = path.join(USER_DATA_ROOT, 'telemetry_permanent_history.ndjson');
+const TELEMETRY_HISTORY_LEGACY_PATH = path.join(USER_DATA_ROOT, 'telemetry_permanent_history.json');
+const TELEMETRY_HISTORY_COMPACTION_MIN_INTERVAL_MS = Number(process.env.WILDGATE_TELEMETRY_COMPACT_MIN_MS || (10 * 60 * 1000));
+const LOG_SCAN_MAX_CONCURRENCY = Math.max(1, Number(process.env.WILDGATE_SCAN_EPIC_WORKERS || 4));
+const LOG_SCAN_MAX_FILE_BYTES = Math.max(128 * 1024, Number(process.env.WILDGATE_SCAN_EPIC_MAX_FILE_BYTES || (8 * 1024 * 1024)));
+const LOG_SCAN_MAX_DECODE_BYTES = Math.max(256 * 1024, Number(process.env.WILDGATE_SCAN_EPIC_MAX_DECODE_BYTES || (1024 * 1024)));
+const getTelemetryArchiveScope = (webContentsId) => `telemetry-archive:${String(webContentsId)}`;
 
-function isPathWithinRoot(targetPath, rootPath) {
-  const relative = path.relative(rootPath, targetPath);
-  return relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+let telemetryRetentionTimer = null;
+let telemetryPruneLastNotifiedAt = 0;
+let telemetryHistoryLastCompactionAt = 0;
+let telemetryLogTickInProgress = false;
+let telemetryRetentionScanInProgress = false;
+let telemetryRetentionLastExceeds = null;
+let telemetryHistoryMigrated = false;
+const recentTelemetrySignatures = new Set();
+const recentTelemetrySignatureQueue = [];
+const MAX_RECENT_TELEMETRY_SIGNATURES = Number(process.env.WILDGATE_RECENT_TELEMETRY_SIGNATURES || 50000);
+const blockedSecurityCounters = new Map();
+
+function recordSecurityBlock(channel, code, message) {
+  const key = `${channel}:${code}`;
+  const count = (blockedSecurityCounters.get(key) || 0) + 1;
+  blockedSecurityCounters.set(key, count);
+  console.warn(`[Security][Blocked][${channel}] code=${code} count=${count} message="${message}"`);
 }
 
-function isAllowedRendererPath(inputPath) {
-  if (!inputPath || typeof inputPath !== 'string') return false;
-  const resolved = path.resolve(inputPath);
-  const roots = [
+function errorResult(code, message, opts = {}) {
+  const payload = { success: false, code, message };
+  if (opts.includeLegacyError !== false) payload.error = message;
+  return payload;
+}
+
+function decodeShiftedBufferToString(buffer, maxBytes) {
+  if (!buffer || buffer.length === 0) return '';
+  const decodeLen = Math.min(buffer.length, maxBytes || buffer.length);
+  const shifted = Buffer.allocUnsafe(decodeLen);
+  for (let i = 0; i < decodeLen; i += 1) {
+    shifted[i] = (buffer[i] + 1) & 0xff;
+  }
+  return shifted.toString('utf8');
+}
+
+function getAllowedRendererRoots() {
+  return [
     USER_DATA_ROOT,
     path.resolve(path.join(app.getPath('documents'), 'Wildgate Stat Tracker')),
     path.resolve(path.join(app.getPath('home'), 'AppData', 'Local', 'Nebula', 'Saved', 'Logs')),
     path.resolve(path.join(app.getPath('home'), 'AppData', 'Local', 'Wildgate', 'Saved', 'Logs')),
   ];
-  return roots.some(root => resolved === root || isPathWithinRoot(resolved, root));
+}
+
+function resolveAllowedRendererPath(inputPath) {
+  return validatePathInRoots(inputPath, getAllowedRendererRoots(), { isDev });
+}
+
+function isAllowedRendererPath(inputPath) {
+  return resolveAllowedRendererPath(inputPath).success;
 }
 
 function isAllowedEpicHost(hostname) {
@@ -72,6 +141,243 @@ function sanitizeForwardHeaders(headers) {
     safe[cleanKey] = value;
   }
   return safe;
+}
+
+function telemetryEventSignature(evt) {
+  if (!evt || typeof evt !== 'object') return '';
+  const ts = evt.ClientTimestamp ?? evt.timestamp ?? evt.ts ?? '';
+  const name = evt.EventName ?? evt.eventName ?? evt.type ?? '';
+  const matchId = evt.matchId ?? evt.MatchId ?? evt.sessionId ?? evt.SessionId ?? '';
+  return `${String(ts)}_${String(name)}_${String(matchId)}`;
+}
+
+function parseTelemetryTimestampMs(evt) {
+  if (!evt || typeof evt !== 'object') return null;
+  const raw = evt.ClientTimestamp ?? evt.timestamp ?? evt.ts;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  // Heuristic: telemetry timestamps are often seconds, convert to ms when needed.
+  return n < 100000000000 ? n * 1000 : n;
+}
+
+function pushRecentTelemetrySignature(signature) {
+  if (!signature) return true;
+  if (recentTelemetrySignatures.has(signature)) return false;
+  recentTelemetrySignatures.add(signature);
+  recentTelemetrySignatureQueue.push(signature);
+  if (recentTelemetrySignatureQueue.length > MAX_RECENT_TELEMETRY_SIGNATURES) {
+    const evicted = recentTelemetrySignatureQueue.shift();
+    if (evicted) recentTelemetrySignatures.delete(evicted);
+  }
+  return true;
+}
+
+function extractTelemetryEvents(data) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data.telemetry)) return data.telemetry;
+  if (data.EventName || data.eventName) return [data];
+  return [];
+}
+
+async function ensureTelemetryHistoryMigrated() {
+  if (telemetryHistoryMigrated) return;
+  telemetryHistoryMigrated = true;
+  await fsPromises.mkdir(path.dirname(TELEMETRY_HISTORY_NDJSON_PATH), { recursive: true });
+
+  try {
+    await fsPromises.access(TELEMETRY_HISTORY_NDJSON_PATH);
+    return;
+  } catch {
+    // continue
+  }
+
+  let legacyEntries = [];
+  try {
+    const raw = await fsPromises.readFile(TELEMETRY_HISTORY_LEGACY_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) legacyEntries = parsed;
+    else if (parsed && Array.isArray(parsed.telemetry)) legacyEntries = parsed.telemetry;
+    else if (parsed && typeof parsed === 'object') legacyEntries = [parsed];
+  } catch {
+    legacyEntries = [];
+  }
+
+  if (legacyEntries.length > 0) {
+    const lines = legacyEntries
+      .map(evt => {
+        try {
+          return JSON.stringify(evt);
+        } catch {
+          return '';
+        }
+      })
+      .filter(Boolean);
+    if (lines.length > 0) {
+      await fsPromises.writeFile(TELEMETRY_HISTORY_NDJSON_PATH, `${lines.join('\n')}\n`, 'utf8');
+    }
+  }
+
+  try {
+    const backupPath = `${TELEMETRY_HISTORY_LEGACY_PATH}.migrated.bak`;
+    await fsPromises.rename(TELEMETRY_HISTORY_LEGACY_PATH, backupPath);
+  } catch {
+    // ignore if missing
+  }
+}
+
+async function appendTelemetryHistoryEvents(events) {
+  if (!Array.isArray(events) || events.length === 0) {
+    return { addedCount: 0, skippedCount: 0 };
+  }
+
+  await ensureTelemetryHistoryMigrated();
+  const lines = [];
+  let skippedCount = 0;
+
+  for (const evt of events) {
+    const signature = telemetryEventSignature(evt);
+    if (signature && !pushRecentTelemetrySignature(signature)) {
+      skippedCount += 1;
+      continue;
+    }
+    try {
+      lines.push(JSON.stringify(evt));
+    } catch {
+      skippedCount += 1;
+    }
+  }
+
+  if (lines.length > 0) {
+    await fsPromises.appendFile(TELEMETRY_HISTORY_NDJSON_PATH, `${lines.join('\n')}\n`, 'utf8');
+  }
+  return { addedCount: lines.length, skippedCount };
+}
+
+async function readTelemetryHistoryEntries() {
+  await ensureTelemetryHistoryMigrated();
+  let content = '';
+  try {
+    content = await fsPromises.readFile(TELEMETRY_HISTORY_NDJSON_PATH, 'utf8');
+  } catch {
+    return [];
+  }
+
+  const lines = content.split('\n').filter(Boolean);
+  const entries = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const bytes = Buffer.byteLength(`${line}\n`, 'utf8');
+    try {
+      const event = JSON.parse(line);
+      entries.push({
+        line,
+        event,
+        bytes,
+        timestampMs: parseTelemetryTimestampMs(event),
+        index: i,
+      });
+    } catch {
+      // keep malformed lines out of the retained set during compaction/prune
+    }
+  }
+  return entries;
+}
+
+function buildTelemetryPrunePlan(entries) {
+  const sorted = [...entries].sort((a, b) => {
+    const aTs = a.timestampMs ?? Number.MIN_SAFE_INTEGER;
+    const bTs = b.timestampMs ?? Number.MIN_SAFE_INTEGER;
+    if (aTs !== bTs) return aTs - bTs;
+    return a.index - b.index;
+  });
+
+  const cutoffMs = Date.now() - TELEMETRY_RETENTION_MAX_AGE_MS;
+  let totalBytes = sorted.reduce((sum, e) => sum + e.bytes, 0);
+  let removeCount = 0;
+  let removedBytes = 0;
+
+  while (removeCount < sorted.length) {
+    const oldest = sorted[removeCount];
+    const oldestTs = oldest.timestampMs ?? 0;
+    const exceedsAge = oldestTs > 0 ? oldestTs < cutoffMs : true;
+    const exceedsSize = totalBytes > TELEMETRY_RETENTION_MAX_BYTES;
+    if (!exceedsAge && !exceedsSize) break;
+
+    removedBytes += oldest.bytes;
+    totalBytes -= oldest.bytes;
+    removeCount += 1;
+  }
+
+  const keepSet = new Set(sorted.slice(removeCount).map(e => e.index));
+  const keepEntries = entries.filter(e => keepSet.has(e.index));
+  return { removeCount, removedBytes, remainingBytes: totalBytes, keepEntries };
+}
+
+async function getTelemetryRetentionStatusInternal() {
+  const entries = await readTelemetryHistoryEntries();
+  const sizeBytes = entries.reduce((sum, e) => sum + e.bytes, 0);
+  const timestampValues = entries.map(e => e.timestampMs).filter(v => Number.isFinite(v) && v > 0);
+  const oldestTimestampMs = timestampValues.length ? Math.min(...timestampValues) : null;
+  const newestTimestampMs = timestampValues.length ? Math.max(...timestampValues) : null;
+  const cutoffMs = Date.now() - TELEMETRY_RETENTION_MAX_AGE_MS;
+  const exceedsAge = oldestTimestampMs != null ? oldestTimestampMs < cutoffMs : false;
+  const exceedsSize = sizeBytes > TELEMETRY_RETENTION_MAX_BYTES;
+  const exceedsLimits = exceedsAge || exceedsSize;
+  const preview = buildTelemetryPrunePlan(entries);
+
+  return {
+    exists: entries.length > 0,
+    totalEntries: entries.length,
+    sizeBytes,
+    maxBytes: TELEMETRY_RETENTION_MAX_BYTES,
+    maxAgeMs: TELEMETRY_RETENTION_MAX_AGE_MS,
+    oldestTimestampMs,
+    newestTimestampMs,
+    exceedsAge,
+    exceedsSize,
+    exceedsLimits,
+    prunePreview: {
+      wouldRemoveEntries: preview.removeCount,
+      wouldFreeBytes: preview.removedBytes,
+      remainingBytes: preview.remainingBytes,
+    },
+  };
+}
+
+async function maybeCompactTelemetryHistory() {
+  const now = Date.now();
+  if ((now - telemetryHistoryLastCompactionAt) < TELEMETRY_HISTORY_COMPACTION_MIN_INTERVAL_MS) return;
+  telemetryHistoryLastCompactionAt = now;
+  const entries = await readTelemetryHistoryEntries();
+  const payload = entries.map(e => e.line).join('\n');
+  await fsPromises.writeFile(TELEMETRY_HISTORY_NDJSON_PATH, payload ? `${payload}\n` : '', 'utf8');
+}
+
+async function emitTelemetryPruneNeededIfNecessary(force = false) {
+  if (TELEMETRY_RETENTION_PROMPT_DISABLED) return;
+  if (!win || win.isDestroyed()) return;
+  if (telemetryRetentionScanInProgress) return;
+  const now = Date.now();
+  if (!force && (now - telemetryPruneLastNotifiedAt) < 10 * 60 * 1000) return;
+
+  telemetryRetentionScanInProgress = true;
+  try {
+    const status = await getTelemetryRetentionStatusInternal();
+    if (telemetryRetentionLastExceeds !== status.exceedsLimits) {
+      telemetryRetentionLastExceeds = status.exceedsLimits;
+      console.log(`[TelemetryRetention] status=${status.exceedsLimits ? 'exceeded' : 'healthy'} entries=${status.totalEntries} sizeBytes=${status.sizeBytes}`);
+    }
+    if (status.exceedsLimits) {
+      telemetryPruneLastNotifiedAt = now;
+      win.webContents.send('telemetry-prune-needed', status);
+      console.log(`[TelemetryRetention] prune-needed emitted remove=${status.prunePreview.wouldRemoveEntries} freeBytes=${status.prunePreview.wouldFreeBytes}`);
+    }
+  } catch (e) {
+    console.warn('[TelemetryRetention] Failed to emit prune-needed event:', e?.message || e);
+  } finally {
+    telemetryRetentionScanInProgress = false;
+  }
 }
 
 function getCorpusFilePath(name) {
@@ -213,8 +519,36 @@ function devMark(label) {
 
 let win;
 let tray = null;
-let previousBounds = { width: 1200, height: 850 };
+let previousBounds = { x: 0, y: 0, width: 1440, height: 900 };
+let lastOverlayBounds = null;
+let currentOverlayStyle = 'compact';
 const DEFAULT_MIN_WINDOW_BOUNDS = { width: 1200, height: 768 };
+const OVERLAY_MIN_WINDOW_BOUNDS = {
+  compact: { width: 420, height: 520 },
+  transparent: { width: 640, height: 420 },
+};
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getOverlayBoundsForStyle(style, workAreaSize) {
+  if (style === 'transparent') {
+    return {
+      width: clamp(Math.round(workAreaSize.width * 0.52), 760, 1420),
+      height: clamp(Math.round(workAreaSize.height * 0.72), 520, 980),
+      minWidth: OVERLAY_MIN_WINDOW_BOUNDS.transparent.width,
+      minHeight: OVERLAY_MIN_WINDOW_BOUNDS.transparent.height,
+    };
+  }
+
+  return {
+    width: clamp(Math.round(workAreaSize.width * 0.34), 460, 760),
+    height: clamp(Math.round(workAreaSize.height * 0.84), 620, 1100),
+    minWidth: OVERLAY_MIN_WINDOW_BOUNDS.compact.width,
+    minHeight: OVERLAY_MIN_WINDOW_BOUNDS.compact.height,
+  };
+}
 
 function buildDevSplashDataUrl(targetUrl) {
   const html = `<!doctype html>
@@ -547,12 +881,18 @@ registerArtifactHandlers(ipcMain, { app, getWin: () => win, artifactHelpers, gcl
 
 ipcMain.handle('rerun-ocr-on-artifact', async (event, { imagePath, activeUser, ocrMode }) => {
   try {
-    const fullPath = path.resolve(imagePath);
-    if (!fs.existsSync(fullPath)) return { success: false, error: 'File not found' };
-    const ext = path.extname(fullPath).toLowerCase();
-    if (!['.png', '.jpg', '.jpeg', '.bmp', '.webp'].includes(ext)) {
-      return { success: false, error: `Not an image file: ${ext}` };
+    const pathCheck = resolveAllowedRendererPath(imagePath);
+    if (!pathCheck.success) {
+      recordSecurityBlock('rerun-ocr-on-artifact', pathCheck.code || IpcErrorCode.PATH_NOT_ALLOWED, pathCheck.message || 'Path not allowed');
+      return errorResult(pathCheck.code || IpcErrorCode.PATH_NOT_ALLOWED, pathCheck.message || 'Path not allowed');
     }
+    const fullPath = pathCheck.data.resolved;
+    const extCheck = validateAllowedExtension(fullPath, ALLOWED_FILE_EXTENSIONS, 'image');
+    if (!extCheck.success) {
+      recordSecurityBlock('rerun-ocr-on-artifact', extCheck.code, extCheck.message);
+      return errorResult(extCheck.code, extCheck.message);
+    }
+    if (!fs.existsSync(fullPath)) return errorResult(IpcErrorCode.NOT_FOUND, 'File not found');
     const imageBuffer = await fsPromises.readFile(fullPath);
     const base64 = imageBuffer.toString('base64');
     // Pass sourceImagePath to skip duplicate debug save and cloud upload
@@ -560,7 +900,7 @@ ipcMain.handle('rerun-ocr-on-artifact', async (event, { imagePath, activeUser, o
     return result;
   } catch (e) {
     console.error('[rerun-ocr] Error:', e.message);
-    return { success: false, error: e.message || 'Unknown error' };
+    return errorResult(IpcErrorCode.INTERNAL_ERROR, e.message || 'Unknown error');
   }
 });
 
@@ -600,8 +940,19 @@ ipcMain.handle('persist-logs', async (event, logContent) => {
 // OCR Scan (compatibility for scan pipeline)
 ipcMain.handle('ocr-scan', async (event, imagePath) => {
   try {
-    if (!fs.existsSync(imagePath)) throw new Error(`File not found: ${imagePath}`);
-    const buffer = await fsPromises.readFile(imagePath);
+    const pathCheck = resolveAllowedRendererPath(imagePath);
+    if (!pathCheck.success) {
+      recordSecurityBlock('ocr-scan', pathCheck.code || IpcErrorCode.PATH_NOT_ALLOWED, pathCheck.message || 'Path not allowed');
+      throw new Error(pathCheck.message || 'Path not allowed');
+    }
+    const fullPath = pathCheck.data.resolved;
+    const extCheck = validateAllowedExtension(fullPath, ALLOWED_FILE_EXTENSIONS, 'image');
+    if (!extCheck.success) {
+      recordSecurityBlock('ocr-scan', extCheck.code, extCheck.message);
+      throw new Error(extCheck.message || 'Unsupported image type');
+    }
+    if (!fs.existsSync(fullPath)) throw new Error(`File not found: ${fullPath}`);
+    const buffer = await fsPromises.readFile(fullPath);
     return await runOCR(buffer);
   } catch (e) {
     console.error('[OCR] Scan Error:', e);
@@ -793,31 +1144,40 @@ ipcMain.handle('epic-request', async (event, payload = {}) => {
       return { ok: false, status: 400, statusText: 'Bad Request', error: 'Invalid URL' };
     }
 
-    let parsed;
-    try {
-      parsed = new URL(url);
-    } catch {
-      return { ok: false, status: 400, statusText: 'Bad Request', error: 'Malformed URL' };
+    const urlCheck = validateHttpsUrlAllowlist(url, EPIC_REQUEST_ALLOWED_HOSTS);
+    if (!urlCheck.success) {
+      recordSecurityBlock('epic-request', urlCheck.code || IpcErrorCode.URL_NOT_ALLOWED, urlCheck.message || 'URL not allowed');
+      return {
+        ok: false,
+        status: urlCheck.code === IpcErrorCode.INVALID_INPUT ? 400 : 403,
+        statusText: urlCheck.code === IpcErrorCode.INVALID_INPUT ? 'Bad Request' : 'Forbidden',
+        error: urlCheck.message || 'URL not allowed',
+        code: urlCheck.code || IpcErrorCode.URL_NOT_ALLOWED,
+      };
     }
 
-    if (parsed.protocol !== 'https:') {
-      return { ok: false, status: 400, statusText: 'Bad Request', error: 'HTTPS required' };
-    }
-
-    if (!isAllowedEpicHost(parsed.hostname)) {
-      return { ok: false, status: 403, statusText: 'Forbidden', error: `Host not allowed: ${parsed.hostname}` };
+    const parsed = urlCheck.data;
+    if (!URL_ALLOWLIST_DISABLED && !isAllowedEpicHost(parsed.hostname)) {
+      recordSecurityBlock('epic-request', IpcErrorCode.URL_NOT_ALLOWED, `Host not allowed: ${parsed.hostname}`);
+      return { ok: false, status: 403, statusText: 'Forbidden', error: `Host not allowed: ${parsed.hostname}`, code: IpcErrorCode.URL_NOT_ALLOWED };
     }
 
     const normalizedMethod = String(method || 'GET').toUpperCase();
     if (!ALLOWED_HTTP_METHODS.has(normalizedMethod)) {
-      return { ok: false, status: 400, statusText: 'Bad Request', error: `Method not allowed: ${normalizedMethod}` };
+      recordSecurityBlock('epic-request', IpcErrorCode.METHOD_NOT_ALLOWED, `Method not allowed: ${normalizedMethod}`);
+      return { ok: false, status: 405, statusText: 'Method Not Allowed', error: `Method not allowed: ${normalizedMethod}`, code: IpcErrorCode.METHOD_NOT_ALLOWED };
     }
 
     let requestBody = undefined;
     if (body !== undefined && body !== null) {
+      const bodyCheck = validateBodySize(body, MAX_EPIC_REQUEST_BODY_BYTES);
+      if (!bodyCheck.success) {
+        recordSecurityBlock('epic-request', bodyCheck.code, bodyCheck.message);
+        return { ok: false, status: bodyCheck.code === IpcErrorCode.PAYLOAD_TOO_LARGE ? 413 : 400, statusText: 'Bad Request', error: bodyCheck.message, code: bodyCheck.code };
+      }
       if (typeof body === 'string') requestBody = body;
       else if (typeof body === 'object') requestBody = JSON.stringify(body);
-      else return { ok: false, status: 400, statusText: 'Bad Request', error: 'Invalid request body type' };
+      else return { ok: false, status: 400, statusText: 'Bad Request', error: 'Invalid request body type', code: IpcErrorCode.INVALID_INPUT };
     }
 
     const safeHeaders = sanitizeForwardHeaders(headers);
@@ -958,96 +1318,70 @@ ipcMain.on('start-log-monitoring', () => {
   let lastMtime = 0;
 
   logMonitorInterval = setInterval(async () => {
-    let stats = null;
+    if (telemetryLogTickInProgress) return;
+    telemetryLogTickInProgress = true;
     try {
-      if (LOG_PATH) stats = await fsPromises.stat(LOG_PATH);
-    } catch { }
+      let stats = null;
+      try {
+        if (LOG_PATH) stats = await fsPromises.stat(LOG_PATH);
+      } catch { }
 
-    const exists = !!stats;
+      const exists = !!stats;
 
-    // Only read if modified
-    if (stats && stats.mtimeMs !== lastMtime) {
-      lastMtime = stats.mtimeMs;
+      // Only read if modified
+      if (stats && stats.mtimeMs !== lastMtime) {
+        lastMtime = stats.mtimeMs;
 
-      const data = await decodeLog();
-      const hasError = data && data.error;
+        const data = await decodeLog();
+        const hasError = data && data.error;
 
-      if (win) {
-        win.webContents.send('log-status', {
-          exists,
-          path: LOG_PATH,
-          size: stats.size,
-          lastCheck: Date.now(),
-          dataFound: !!(data && !hasError),
-          error: hasError ? data.error : null,
-          rawHead: data?.rawHead || null
-        });
+        if (win) {
+          win.webContents.send('log-status', {
+            exists,
+            path: LOG_PATH,
+            size: stats.size,
+            lastCheck: Date.now(),
+            dataFound: !!(data && !hasError),
+            error: hasError ? data.error : null,
+            rawHead: data?.rawHead || null
+          });
 
+          if (data && !hasError) {
+            const currentStr = JSON.stringify(data);
+            // Also Send Data
+            win.webContents.send('log-data', data);
+            telemetryArchiveHelpers.archiveTelemetry(telemetryArchiveHelpers.getArchiveDir(app), data);
 
-        if (data && !hasError) {
-          const currentStr = JSON.stringify(data);
-          // Also Send Data
-          win.webContents.send('log-data', data);
-          telemetryArchiveHelpers.archiveTelemetry(telemetryArchiveHelpers.getArchiveDir(app), data);
-
-          // --- PERSISTENCE: Append-Only History ---
-          (async () => {
             try {
-              const permanentPath = path.join(app.getPath('userData'), 'telemetry_permanent_history.json');
-              let history = [];
-              try {
-                history = JSON.parse(await fsPromises.readFile(permanentPath, 'utf-8'));
-              } catch (e) {
-                // File doesn't exist or is corrupt, start fresh
+              const historyResult = await appendTelemetryHistoryEvents(extractTelemetryEvents(data));
+              if (historyResult.addedCount > 0) {
+                console.log(`[Persistence] Appended ${historyResult.addedCount} telemetry event(s).`);
               }
-
-              // Extract new events from the current batch
-              let newEventsBatch = [];
-              if (data.telemetry && Array.isArray(data.telemetry)) newEventsBatch = data.telemetry;
-              else if (Array.isArray(data)) newEventsBatch = data;
-              else if (data.EventName) newEventsBatch = [data];
-
-              // Deduplicate: Only add events we haven't seen before
-              // We use a composite key of (Timestamp + EventName) to identify uniqueness
-              // This is efficient enough for moderate log sizes.
-              const existingSignatures = new Set(history.map(e => `${e.ClientTimestamp}_${e.EventName}`));
-              let addedCount = 0;
-
-              newEventsBatch.forEach(e => {
-                const sig = `${e.ClientTimestamp}_${e.EventName}`;
-                if (!existingSignatures.has(sig)) {
-                  history.push(e);
-                  existingSignatures.add(sig); // Prevent duplicates within the same batch too
-                  addedCount++;
-                }
-              });
-
-              if (addedCount > 0) {
-                // Sort by time just in case
-                history.sort((a, b) => (a.ClientTimestamp || 0) - (b.ClientTimestamp || 0));
-
-                // Save back
-                await fsPromises.writeFile(permanentPath, JSON.stringify(history, null, 2));
-                console.log(`[Persistence] Saved ${addedCount} new unique events.`);
+              await maybeCompactTelemetryHistory();
+              if (historyResult.addedCount > 0) {
+                await emitTelemetryPruneNeededIfNecessary(false);
               }
             } catch (err) {
-              console.error("[Persistence] Failed to save history:", err);
+              console.error("[Persistence] Failed to append telemetry history:", err);
             }
-          })();
-          // ----------------------------------------
 
-          // Save Decoded Copy Automatically (Snapshot)
-          // This satisfies the "Save Decoded" requirement
-          try {
-            const decodedSavePath = path.join(app.getPath('userData'), 'telemetry_latest_decoded.json');
-            await fsPromises.writeFile(decodedSavePath, currentStr); // Save decoded JSON
-          } catch (e) { console.error("Failed to save decoded logs", e); }
+            // Save Decoded Copy Automatically (Snapshot)
+            // This satisfies the "Save Decoded" requirement
+            try {
+              const decodedSavePath = path.join(app.getPath('userData'), 'telemetry_latest_decoded.json');
+              await fsPromises.writeFile(decodedSavePath, currentStr); // Save decoded JSON
+            } catch (e) { console.error("Failed to save decoded logs", e); }
+          }
+
         }
-
+      } else if (!exists && win) {
+        // Notify if lost file
+        win.webContents.send('log-status', { exists: false, path: LOG_PATH, lastCheck: Date.now() });
       }
-    } else if (!exists && win) {
-      // Notify if lost file
-      win.webContents.send('log-status', { exists: false, path: LOG_PATH, lastCheck: Date.now() });
+    } catch (tickErr) {
+      console.error('[LogMonitor] Tick error:', tickErr);
+    } finally {
+      telemetryLogTickInProgress = false;
     }
   }, 2000);
 });
@@ -1110,24 +1444,25 @@ ipcMain.handle('scan-epic-ids', async () => {
   try {
     const logDir = path.dirname(LOG_PATH);
     if (fs.existsSync(logDir)) {
-      // Async readdir
       const logFiles = (await fsPromises.readdir(logDir)).filter(f => f.endsWith('.log') || f.includes('Cache'));
+      const queue = [...logFiles];
+      const workerCount = Math.min(LOG_SCAN_MAX_CONCURRENCY, queue.length);
 
-      // Parallelize file reading (limit concurrency if needed, but 10-50 files is usually fine)
-      await Promise.all(logFiles.map(async (file) => {
+      const scanSingleFile = async (file) => {
         try {
           const fullPath = path.join(logDir, file);
-          const buffer = await fsPromises.readFile(fullPath);
-          let iStr = '';
-
-          if (file.includes('Telemetry') || file.includes('General')) {
-            // Basic manual decoding for telemetry files
-            for (let i = 0; i < Math.min(buffer.length, 1000000); i++) iStr += String.fromCharCode(buffer[i] + 1);
-          } else {
-            iStr = buffer.toString('utf8');
+          const st = await fsPromises.stat(fullPath);
+          if (!st.isFile() || st.size === 0 || st.size > LOG_SCAN_MAX_FILE_BYTES) {
+            return;
           }
+          const buffer = await fsPromises.readFile(fullPath);
+          if (buffer.length === 0) return;
 
-          // Pattern: "id":"...", "name":"..." 
+          const iStr = (file.includes('Telemetry') || file.includes('General'))
+            ? decodeShiftedBufferToString(buffer, LOG_SCAN_MAX_DECODE_BYTES)
+            : buffer.toString('utf8', 0, Math.min(buffer.length, LOG_SCAN_MAX_DECODE_BYTES));
+
+          // Pattern: "id":"...", "name":"..."
           const nameMapRegex = /"(?:accountId|userId|id|u)":"([a-f0-9-|]{32,70})".*?"(?:displayName|userName|playerName|n|nick)":"(.*?)"/gi;
           let m;
           while ((m = nameMapRegex.exec(iStr)) !== null) {
@@ -1161,7 +1496,17 @@ ipcMain.handle('scan-epic-ids', async () => {
             rawId.split('|').forEach(p => ids.add(p.replace(/-/g, '')));
             if (rawId.includes('|')) ids.add(rawId);
           }
-        } catch (fErr) { }
+        } catch {
+          // Skip unreadable file and continue scanning.
+        }
+      };
+
+      await Promise.all(Array.from({ length: workerCount }, async () => {
+        while (queue.length > 0) {
+          const next = queue.shift();
+          if (!next) break;
+          await scanSingleFile(next);
+        }
       }));
     }
   } catch (e) { console.error("Global Log Scan Error", e); }
@@ -1228,7 +1573,7 @@ ipcMain.handle('scan-epic-ids', async () => {
   let rawSnip = '';
   try {
     const dbgBuffer = await fsPromises.readFile(LOG_PATH);
-    for (let i = 0; i < Math.min(dbgBuffer.length, 500000); i++) rawSnip += String.fromCharCode(dbgBuffer[i] + 1);
+    rawSnip = decodeShiftedBufferToString(dbgBuffer, 500000);
     const urlRegex = /https?:\/\/[^\s"']+/g;
     let u;
     while ((u = urlRegex.exec(rawSnip)) !== null) urls.add(u[0]);
@@ -1280,8 +1625,8 @@ async function setActivity(stats) {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1200,
-    height: 850,
+    width: 1440,
+    height: 900,
     minWidth: DEFAULT_MIN_WINDOW_BOUNDS.width,
     minHeight: DEFAULT_MIN_WINDOW_BOUNDS.height,
     webPreferences: {
@@ -1314,8 +1659,17 @@ function createWindow() {
   else win.loadFile(path.join(__dirname, '../dist/index.html'));
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    const urlCheck = validateHttpsUrlAllowlist(url, EXTERNAL_ALLOWED_HOSTS);
+    if (!urlCheck.success) {
+      recordSecurityBlock('window-open', urlCheck.code || IpcErrorCode.URL_NOT_ALLOWED, `${urlCheck.message || 'URL not allowed'}: ${url}`);
+      return { action: 'deny' };
+    }
+    shell.openExternal(urlCheck.data.toString());
     return { action: 'deny' };
+  });
+  const webContentsId = win.webContents.id;
+  win.webContents.once('destroyed', () => {
+    telemetryArchiveTokenRegistry.removeScope(getTelemetryArchiveScope(webContentsId));
   });
 
   ipcMain.on('open-devtools', () => win.webContents.openDevTools());
@@ -1324,25 +1678,51 @@ function createWindow() {
   ipcMain.on('restore-window', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
   ipcMain.on('set-always-on-top', (event, always) => { if (win) win.setAlwaysOnTop(always, 'screen-saver'); });
 
-  ipcMain.on('toggle-overlay', (event, isOverlay) => {
+  ipcMain.on('toggle-overlay', (event, payload) => {
     if (!win) return;
+    const isPayloadObj = payload && typeof payload === 'object' && !Array.isArray(payload);
+    const isOverlay = isPayloadObj ? Boolean(payload.enabled) : Boolean(payload);
+    const requestedStyle = isPayloadObj && payload.style === 'transparent' ? 'transparent' : 'compact';
+    currentOverlayStyle = requestedStyle;
     if (isOverlay) {
       previousBounds = win.getBounds();
-      win.setMinimumSize(0, 0);
       if (win.isMaximized()) win.unmaximize();
+      win.setResizable(true);
+      const display = screen.getDisplayMatching(previousBounds);
+      const workArea = display?.workArea || screen.getPrimaryDisplay().workArea;
+      const overlayBounds = getOverlayBoundsForStyle(currentOverlayStyle, workArea);
+      win.setMinimumSize(overlayBounds.minWidth, overlayBounds.minHeight);
       setTimeout(() => {
         // Default overlay size ~15–20% of viewport (spec 20.6)
-        const workArea = screen.getPrimaryDisplay().workAreaSize;
-        const width = 360;
-        const height = Math.max(300, Math.round(workArea.height * 0.2));
-        win.setSize(width, height);
+        if (!win || win.isDestroyed()) return;
+        const hasSavedOverlayBounds = lastOverlayBounds
+          && lastOverlayBounds.width >= overlayBounds.minWidth
+          && lastOverlayBounds.height >= overlayBounds.minHeight;
+
+        if (hasSavedOverlayBounds) {
+          win.setBounds({
+            x: clamp(lastOverlayBounds.x, workArea.x, workArea.x + Math.max(0, workArea.width - overlayBounds.minWidth)),
+            y: clamp(lastOverlayBounds.y, workArea.y, workArea.y + Math.max(0, workArea.height - overlayBounds.minHeight)),
+            width: lastOverlayBounds.width,
+            height: lastOverlayBounds.height,
+          });
+        } else {
+          win.setSize(overlayBounds.width, overlayBounds.height);
+          win.center();
+        }
         win.setAlwaysOnTop(true, 'screen-saver');
-        // win.setSkipTaskbar(true); // DISABLED: Causing window to disappear for user
+        win.setIgnoreMouseEvents(false);
       }, 50);
     } else {
+      lastOverlayBounds = win.getBounds();
+      win.setResizable(true);
       win.setSkipTaskbar(false);
-      win.setSize(previousBounds.width, previousBounds.height);
-      win.center();
+      if (previousBounds && previousBounds.width > 0 && previousBounds.height > 0) {
+        win.setBounds(previousBounds);
+      } else {
+        win.setSize(1440, 900);
+        win.center();
+      }
       // Reset click-through when exiting overlay
       win.setIgnoreMouseEvents(false);
       win.setMinimumSize(DEFAULT_MIN_WINDOW_BOUNDS.width, DEFAULT_MIN_WINDOW_BOUNDS.height);
@@ -1359,15 +1739,10 @@ function createWindow() {
 
   // Overlay style handler - controls initial state
   ipcMain.on('set-overlay-style', (event, style) => {
+    currentOverlayStyle = style === 'transparent' ? 'transparent' : 'compact';
     if (!win) return;
-    const isTransparent = style === 'transparent';
-    // For transparent mode, start with ignore=true (click-through default)
-    // Renderer will toggle to ignore=false when hovering interactive elements
-    if (isTransparent) {
-      win.setIgnoreMouseEvents(true, { forward: true });
-    } else {
-      win.setIgnoreMouseEvents(false);
-    }
+    // Keep transparent overlays interactive by default.
+    win.setIgnoreMouseEvents(false);
   });
 
   // Overlay style handler - controls initial state
@@ -1429,6 +1804,21 @@ app.whenReady().then(async () => {
   devMark('app whenReady');
   createTray();
   createWindow();
+  try {
+    await ensureTelemetryHistoryMigrated();
+  } catch (e) {
+    console.warn('[TelemetryRetention] Migration check failed:', e?.message || e);
+  }
+  if (!telemetryRetentionTimer) {
+    telemetryRetentionTimer = setInterval(() => {
+      emitTelemetryPruneNeededIfNecessary(false).catch((e) => {
+        console.warn('[TelemetryRetention] periodic check failed:', e?.message || e);
+      });
+    }, 10 * 60 * 1000);
+  }
+  emitTelemetryPruneNeededIfNecessary(true).catch((e) => {
+    console.warn('[TelemetryRetention] startup check failed:', e?.message || e);
+  });
   if (isDev) setSplashProgress(win, 20, 'Preparing services...', 'Starting startup tasks');
   telemetryArchiveHelpers.cleanupOldArchives(telemetryArchiveHelpers.getArchiveDir(app));
   if (isDev) setSplashProgress(win, 35, 'Preparing OCR...', 'Registering OCR handlers');
@@ -1532,31 +1922,59 @@ ipcMain.handle('decode-telemetry-cache', async () => {
   }
 });
 
-ipcMain.handle('list-telemetry-archives', async () => {
+ipcMain.handle('list-telemetry-archives', async (event) => {
   try {
     const archiveDir = telemetryArchiveHelpers.getArchiveDir(app);
-    console.log('[Simulator] Listing archives in:', archiveDir);
-    return await telemetryArchiveHelpers.listArchiveFiles(archiveDir);
+    const files = await telemetryArchiveHelpers.listArchiveFiles(archiveDir);
+    const scope = getTelemetryArchiveScope(event.sender.id);
+    const archives = files.map((entry) => {
+      const archiveId = telemetryArchiveTokenRegistry.issue(scope, { filename: entry.filename });
+      return {
+        archiveId,
+        filename: entry.filename,
+        date: entry.date,
+        size: entry.size,
+      };
+    });
+    return ok({ archives });
   } catch (e) {
     console.error('Failed to list telemetry archives:', e);
-    return [];
+    return internal('Failed to list telemetry archives');
   }
 });
 
-ipcMain.handle('load-telemetry-archive-file', async (event, filename) => {
+ipcMain.handle('load-telemetry-archive-file', async (event, payload = {}) => {
   try {
-    const archiveDir = path.join(app.getPath('userData'), 'telemetry_archive');
-    const fullPath = path.join(archiveDir, filename);
-
-    if (!fs.existsSync(fullPath)) {
-      throw new Error('File not found');
+    const archiveId = payload && typeof payload === 'object' ? payload.archiveId : '';
+    if (typeof archiveId !== 'string' || !archiveId.trim()) {
+      return fail(IpcErrorCode.INVALID_INPUT, 'archiveId required');
     }
 
+    const scope = getTelemetryArchiveScope(event.sender.id);
+    const resolved = telemetryArchiveTokenRegistry.resolve(scope, archiveId);
+    if (!resolved || typeof resolved.filename !== 'string') {
+      recordSecurityBlock('load-telemetry-archive-file', IpcErrorCode.INVALID_INPUT, 'Invalid or expired archiveId');
+      return fail(IpcErrorCode.INVALID_INPUT, 'Invalid or expired archiveId');
+    }
+
+    const filenameCheck = validateBasenameToken(resolved.filename, 'filename');
+    if (!filenameCheck.success) return filenameCheck;
+
+    const archiveDir = telemetryArchiveHelpers.getArchiveDir(app);
+    const fullPath = path.join(archiveDir, filenameCheck.data);
+    const pathCheck = validatePathInRoots(fullPath, [archiveDir], { isDev });
+    if (!pathCheck.success) {
+      recordSecurityBlock('load-telemetry-archive-file', pathCheck.code, pathCheck.message);
+      return pathCheck;
+    }
+    if (!fs.existsSync(fullPath)) {
+      return fail(IpcErrorCode.NOT_FOUND, 'File not found');
+    }
     const content = await fsPromises.readFile(fullPath, 'utf-8');
-    return JSON.parse(content);
+    return ok(JSON.parse(content));
   } catch (e) {
     console.error('Failed to load telemetry archive file:', e);
-    throw e;
+    return internal('Failed to load telemetry archive file');
   }
 });
 
@@ -1568,6 +1986,55 @@ ipcMain.handle('clear-telemetry-archives', async () => {
   } catch (e) {
     console.error('Failed to clear telemetry archives:', e);
     return { success: false, message: e.message };
+  }
+});
+
+ipcMain.handle('telemetry-retention-status', async () => {
+  try {
+    const status = await getTelemetryRetentionStatusInternal();
+    return ok(status);
+  } catch (e) {
+    return internal('Failed to read retention status');
+  }
+});
+
+ipcMain.handle('telemetry-prune-preview', async () => {
+  try {
+    const status = await getTelemetryRetentionStatusInternal();
+    return ok({
+      removeEntries: status.prunePreview.wouldRemoveEntries,
+      freeBytes: status.prunePreview.wouldFreeBytes,
+      remainingBytes: status.prunePreview.remainingBytes,
+      exceedsLimits: status.exceedsLimits,
+      status,
+    });
+  } catch (e) {
+    return internal('Failed to build prune preview');
+  }
+});
+
+ipcMain.handle('telemetry-prune-apply', async () => {
+  try {
+    const entries = await readTelemetryHistoryEntries();
+    const plan = buildTelemetryPrunePlan(entries);
+    if (plan.removeCount > 0) {
+      const payload = plan.keepEntries.map(e => e.line).join('\n');
+      await fsPromises.writeFile(TELEMETRY_HISTORY_NDJSON_PATH, payload ? `${payload}\n` : '', 'utf8');
+      telemetryPruneLastNotifiedAt = Date.now();
+      console.log(`[TelemetryRetention] prune-apply removedEntries=${plan.removeCount} freedBytes=${plan.removedBytes}`);
+    } else {
+      console.log('[TelemetryRetention] prune-apply no-op (already within limits)');
+    }
+    const status = await getTelemetryRetentionStatusInternal();
+    telemetryRetentionLastExceeds = status.exceedsLimits;
+    return ok({
+      removedEntries: plan.removeCount,
+      freedBytes: plan.removedBytes,
+      remainingBytes: status.sizeBytes,
+      status,
+    });
+  } catch (e) {
+    return internal('Failed to apply telemetry prune');
   }
 });
 
@@ -1944,6 +2411,14 @@ app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 
 app.on('before-quit', () => {
+  if (telemetryRetentionTimer) {
+    clearInterval(telemetryRetentionTimer);
+    telemetryRetentionTimer = null;
+  }
+  if (logMonitorInterval) {
+    clearInterval(logMonitorInterval);
+    logMonitorInterval = null;
+  }
   // Dev safety net: mirror latest userData corpus into repo on app shutdown.
   if (!isDev || !AUTO_SYNC_CORPUS_TO_REPO) return;
   syncCorpusToRepo('before-quit').catch((e) => {

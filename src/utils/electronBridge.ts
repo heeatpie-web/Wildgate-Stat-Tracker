@@ -70,7 +70,12 @@ export async function saveScreenshot(
   }
 
   try {
-    return await ipc.invoke('save-screenshot', { imageBase64, matchId: matchId ?? null });
+    const raw = await ipc.invoke('save-screenshot', { imageBase64, matchId: matchId ?? null });
+    if (raw && typeof raw === 'object' && typeof raw.success === 'boolean') {
+      if (raw.success) return { success: true, ...(raw.data || {}) };
+      return { success: false, error: raw.message || raw.error || 'Save failed' };
+    }
+    return raw;
   } catch (error: any) {
     return { success: false, error: error.message || 'Save failed' };
   }

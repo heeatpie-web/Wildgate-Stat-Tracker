@@ -6,6 +6,46 @@
 const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
+const artifactRelinker = require('../helpers/artifactRelinker.cjs');
+const {
+  ok,
+  fail,
+  internal,
+  IpcErrorCode,
+  validatePathInRoots,
+  validatePositiveInt,
+  validateBase64PayloadSize,
+  validateAllowedExtension,
+  createScopedTokenRegistry,
+} = require('../security/ipcValidation.cjs');
+
+const MAX_SCREENSHOT_BYTES = Number(process.env.WILDGATE_MAX_SCREENSHOT_BYTES || (15 * 1024 * 1024));
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.webp']);
+const artifactTokenRegistry = createScopedTokenRegistry({
+  ttlMs: Number(process.env.WILDGATE_ARTIFACT_TOKEN_TTL_MS || (5 * 60 * 1000)),
+  maxEntriesPerScope: Number(process.env.WILDGATE_ARTIFACT_TOKEN_MAX || 10000),
+});
+const blockedSecurityCounters = new Map();
+
+function recordSecurityBlock(channel, code, message) {
+  const key = `${channel}:${code}`;
+  const count = (blockedSecurityCounters.get(key) || 0) + 1;
+  blockedSecurityCounters.set(key, count);
+  console.warn(`[Security][Blocked][${channel}] code=${code} count=${count} message="${message}"`);
+}
+
+const getArtifactScope = (webContentsId, matchId) => `artifact:${String(webContentsId)}:${String(matchId)}`;
+
+function getValidatedMatchDir(app, artifactHelpers, matchId) {
+  const idCheck = validatePositiveInt(matchId, 'matchId');
+  if (!idCheck.success) return idCheck;
+
+  const paths = artifactHelpers.getArtifactPaths(app);
+  const matchDir = path.join(paths.matchArtifactsRoot, idCheck.data.toString());
+  const safePath = validatePathInRoots(matchDir, [paths.matchArtifactsRoot], { isDev: !app.isPackaged });
+  if (!safePath.success) return safePath;
+  return ok({ matchId: idCheck.data, matchDir, paths });
+}
 
 /**
  * Register artifact-related IPC handlers.
@@ -17,15 +57,16 @@ function registerArtifactHandlers(ipcMain, ctx) {
 
   ipcMain.handle('bundle-artifacts', async (event, { matchId, startTime, endTime }) => {
     try {
-      const paths = artifactHelpers.getArtifactPaths(app);
-      const matchDir = path.join(paths.matchArtifactsRoot, matchId.toString());
+      const validated = getValidatedMatchDir(app, artifactHelpers, matchId);
+      if (!validated.success) return [];
+      const { paths, matchDir } = validated.data;
       if (!fs.existsSync(matchDir)) fs.mkdirSync(matchDir, { recursive: true });
 
       const bundledNames = new Set();
-      const bundledSizes = new Set();
+      const bundledKeys = new Set();
       const state = {
         bundledNames,
-        bundledSizes,
+        bundledKeys,
         onCopy: (srcPath, destPath, file) => {
           if (gcloudSyncService.isInitialized) {
             return gcloudSyncService.uploadFile(destPath, `match_artifacts/${matchId}/${file}`)
@@ -41,7 +82,7 @@ function registerArtifactHandlers(ipcMain, ctx) {
 
       const telemetryCount = await artifactHelpers.copyTelemetryInWindow(paths.telemetryArchiveDir, matchDir, startTime, endTime);
 
-      console.log(`[Artifacts] Bundled ${bundledImages.length} images + ${telemetryCount} telemetry files for match ${matchId}`);
+      console.log(`[Artifacts] Bundled ${bundledImages.length} images + ${telemetryCount} telemetry files for match ${validated.data.matchId}`);
       return bundledImages;
     } catch (e) {
       console.error("Artifact Bundling Error", e);
@@ -51,13 +92,19 @@ function registerArtifactHandlers(ipcMain, ctx) {
 
   ipcMain.handle('get-match-artifacts', async (event, matchId) => {
     try {
-      const matchDir = path.join(artifactHelpers.getArtifactPaths(app).matchArtifactsRoot, matchId.toString());
-      if (!fs.existsSync(matchDir)) return { images: [], imageFiles: [], telemetry: [] };
+      const validated = getValidatedMatchDir(app, artifactHelpers, matchId);
+      if (!validated.success) {
+        recordSecurityBlock('get-match-artifacts', validated.code, validated.message);
+        return ok({ images: [], imageFiles: [], telemetry: [] });
+      }
+      const { matchDir, matchId: safeMatchId } = validated.data;
+      if (!fs.existsSync(matchDir)) return ok({ images: [], imageFiles: [], telemetry: [] });
 
       const files = await fsPromises.readdir(matchDir);
       const images = [];
       const imageFiles = [];
       const telemetry = [];
+      const scope = getArtifactScope(event.sender.id, safeMatchId);
 
       for (const f of files) {
         const fullPath = path.join(matchDir, f);
@@ -67,14 +114,15 @@ function registerArtifactHandlers(ipcMain, ctx) {
             const content = JSON.parse(await fsPromises.readFile(fullPath, 'utf-8'));
             telemetry.push(content);
           } catch (e) { /* skip unparseable */ }
-        } else if (['.png', '.jpg', '.jpeg', '.bmp', '.webp'].includes(ext)) {
+        } else if (IMAGE_EXTENSIONS.has(ext)) {
           images.push(fullPath);
-          imageFiles.push({ filename: f, path: fullPath });
+          const artifactId = artifactTokenRegistry.issue(scope, { filename: f, fullPath });
+          imageFiles.push({ artifactId, filename: f, path: fullPath });
         }
       }
-      return { images, imageFiles, telemetry };
+      return ok({ images, imageFiles, telemetry });
     } catch (e) {
-      return { images: [], imageFiles: [], telemetry: [] };
+      return internal('Failed to load artifacts');
     }
   });
 
@@ -114,24 +162,76 @@ function registerArtifactHandlers(ipcMain, ctx) {
     }
   });
 
-  ipcMain.handle('remove-match-artifact', async (event, { matchId, filename }) => {
+  ipcMain.handle('artifact-repair-preview', async () => {
     try {
-      const matchDir = path.join(artifactHelpers.getArtifactPaths(app).matchArtifactsRoot, matchId.toString());
-      const filePath = path.join(matchDir, filename);
+      const userData = app.getPath('userData');
+      const dbPath = path.join(userData, 'wildgate_db.json');
+      return artifactRelinker.previewArtifactRepair({ dbPath, userData });
+    } catch (e) {
+      return {
+        summary: { mode: 'preview', matches: 0, candidatesScanned: 0, candidatesEligible: 0, plannedLinks: 0 },
+        candidates: [],
+        error: e?.message || 'Artifact repair preview failed',
+      };
+    }
+  });
+
+  ipcMain.handle('artifact-repair-apply', async () => {
+    try {
+      const userData = app.getPath('userData');
+      const dbPath = path.join(userData, 'wildgate_db.json');
+      return artifactRelinker.applyArtifactRepair({ dbPath, userData });
+    } catch (e) {
+      return {
+        summary: { mode: 'apply', matches: 0, candidatesScanned: 0, candidatesEligible: 0, plannedLinks: 0, appliedLinks: 0, updatedMatches: 0 },
+        candidates: [],
+        applied: [],
+        error: e?.message || 'Artifact repair apply failed',
+      };
+    }
+  });
+
+  ipcMain.handle('remove-match-artifact', async (event, { matchId, artifactId }) => {
+    try {
+      const validated = getValidatedMatchDir(app, artifactHelpers, matchId);
+      if (!validated.success) {
+        recordSecurityBlock('remove-match-artifact', validated.code, validated.message);
+        return validated;
+      }
+      const { matchDir, matchId: safeMatchId } = validated.data;
+      if (typeof artifactId !== 'string' || !artifactId.trim()) {
+        recordSecurityBlock('remove-match-artifact', IpcErrorCode.INVALID_INPUT, 'artifactId required');
+        return fail(IpcErrorCode.INVALID_INPUT, 'artifactId required');
+      }
+      const scope = getArtifactScope(event.sender.id, safeMatchId);
+      const resolved = artifactTokenRegistry.resolve(scope, artifactId);
+      if (!resolved || typeof resolved.filename !== 'string') {
+        recordSecurityBlock('remove-match-artifact', IpcErrorCode.INVALID_INPUT, 'Invalid or expired artifactId');
+        return fail(IpcErrorCode.INVALID_INPUT, 'Invalid or expired artifactId');
+      }
+      const filePath = path.join(matchDir, resolved.filename);
+      const pathCheck = validatePathInRoots(filePath, [matchDir], { isDev: !app.isPackaged });
+      if (!pathCheck.success) {
+        recordSecurityBlock('remove-match-artifact', pathCheck.code, pathCheck.message);
+        return pathCheck;
+      }
       if (fs.existsSync(filePath)) {
         await fsPromises.unlink(filePath);
-        console.log(`[Artifacts] Removed ${filename} from match ${matchId}`);
-        return { success: true };
+        console.log(`[Artifacts] Removed ${resolved.filename} from match ${safeMatchId}`);
+        return ok({ removed: resolved.filename });
       }
-      return { success: false, error: 'File not found' };
+      return fail(IpcErrorCode.NOT_FOUND, 'File not found');
     } catch (e) {
       console.error('[Artifacts] Remove error:', e.message);
-      return { success: false, error: e.message };
+      return internal('Failed to remove artifact');
     }
   });
 
   ipcMain.handle('add-match-artifact', async (event, { matchId }) => {
     try {
+      const validated = getValidatedMatchDir(app, artifactHelpers, matchId);
+      if (!validated.success) return validated;
+      const { matchDir, matchId: safeMatchId } = validated.data;
       const { dialog } = require('electron');
       const win = getWin();
       const result = await dialog.showOpenDialog(win || undefined, {
@@ -139,52 +239,62 @@ function registerArtifactHandlers(ipcMain, ctx) {
         filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'bmp', 'webp'] }],
         properties: ['openFile', 'multiSelections'],
       });
-      if (result.canceled || result.filePaths.length === 0) return { success: false, canceled: true };
-
-      const paths = artifactHelpers.getArtifactPaths(app);
-      const matchDir = path.join(paths.matchArtifactsRoot, matchId.toString());
+      if (result.canceled || result.filePaths.length === 0) return ok({ canceled: true, added: [] });
       if (!fs.existsSync(matchDir)) fs.mkdirSync(matchDir, { recursive: true });
 
       const added = [];
       for (const srcPath of result.filePaths) {
-        const ext = path.extname(srcPath).toLowerCase();
+        const extCheck = validateAllowedExtension(srcPath, IMAGE_EXTENSIONS, 'artifact');
+        if (!extCheck.success) continue;
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const destName = `added_${timestamp}_${path.basename(srcPath)}`;
         const destPath = path.join(matchDir, destName);
         await fsPromises.copyFile(srcPath, destPath);
         added.push(destPath);
-        console.log(`[Artifacts] Added ${destName} to match ${matchId}`);
+        console.log(`[Artifacts] Added ${destName} to match ${safeMatchId}`);
       }
-      return { success: true, added };
+      return ok({ added, canceled: false });
     } catch (e) {
       console.error('[Artifacts] Add error:', e.message);
-      return { success: false, error: e.message };
+      return internal('Failed to add artifact');
     }
   });
 
   ipcMain.handle('save-screenshot', async (event, { imageBase64, matchId }) => {
     try {
       if (!imageBase64 || imageBase64.length < 100) {
-        return { success: false, error: 'Invalid image data' };
+        recordSecurityBlock('save-screenshot', IpcErrorCode.INVALID_INPUT, 'Invalid image data');
+        return fail(IpcErrorCode.INVALID_INPUT, 'Invalid image data');
+      }
+      const sizeCheck = validateBase64PayloadSize(imageBase64, MAX_SCREENSHOT_BYTES, 'image payload');
+      if (!sizeCheck.success) {
+        recordSecurityBlock('save-screenshot', sizeCheck.code, sizeCheck.message);
+        return sizeCheck;
       }
       const imageBuffer = Buffer.from(imageBase64, 'base64');
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `capture_${timestamp}.png`;
 
       const paths = artifactHelpers.getArtifactPaths(app);
-      const destDir = matchId
-        ? path.join(paths.matchArtifactsRoot, matchId.toString())
-        : paths.screenshotsDir;
+      let destDir = paths.screenshotsDir;
+      if (matchId != null) {
+        const validated = getValidatedMatchDir(app, artifactHelpers, matchId);
+        if (!validated.success) {
+          recordSecurityBlock('save-screenshot', validated.code, validated.message);
+          return validated;
+        }
+        destDir = validated.data.matchDir;
+      }
       if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
 
       const filePath = path.join(destDir, filename);
       await fsPromises.writeFile(filePath, imageBuffer);
       console.log(`[Screenshot] Saved ${filename} (${(imageBuffer.length / 1024).toFixed(1)}KB) to ${destDir}`);
 
-      return { success: true, filePath, filename, size: imageBuffer.length };
+      return ok({ filePath, filename, size: imageBuffer.length });
     } catch (e) {
       console.error('[Screenshot] Save error:', e.message);
-      return { success: false, error: e.message };
+      return internal('Failed to save screenshot');
     }
   });
 }

@@ -8,6 +8,7 @@ import { Match, SHIPS, getShipColor } from '../types';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { getMatchArtifactsStructured } from '../utils/artifactService';
+import { LocalImage } from './LocalImage';
 
 type ModeFilter = 'all' | 'Artifact Brawl' | 'Fleet Battle';
 
@@ -238,7 +239,7 @@ const MatchDetail: React.FC<{
         <div className="p-4 space-y-4">
             {/* Header */}
             <div className="flex items-start gap-4">
-                <div className={`px-3 py-1.5 rounded-xl text-body font-black uppercase ${RESULT_COLORS[match.result]} text-white`}>
+                <div className={`px-3 py-1.5 rounded-xl text-body font-black uppercase ${RESULT_COLORS[match.result]} text-on-scrim`}>
                     {match.result}
                 </div>
                 <div className="flex-1">
@@ -293,13 +294,13 @@ const MatchDetail: React.FC<{
                                 onClick={() => setLightboxSrc(src)}
                                 className="relative aspect-video bg-md-sys-surface3 rounded-lg overflow-hidden group"
                             >
-                                <img
-                                    src={src.startsWith('data:') ? src : `file://${src.replace(/\\/g, '/')}`}
+                                <LocalImage
+                                    src={src}
                                     alt={`Screenshot ${i + 1}`}
                                     className="w-full h-full object-cover"
-                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                    fallback={<div className="w-full h-full bg-md-sys-surface3" />}
                                 />
-                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                     <Eye size={20} />
                                 </div>
                             </button>
@@ -446,7 +447,7 @@ const MatchDetail: React.FC<{
                                 {match.ocrDebug.rawText && (
                                     <details className="mt-1">
                                         <summary className="text-label-sm opacity-40 cursor-pointer hover:opacity-60">Raw OCR Text</summary>
-                                        <pre className="mt-1 p-2 bg-black/30 rounded-lg text-label-xs font-mono opacity-60 max-h-40 overflow-auto whitespace-pre-wrap break-all">
+                                        <pre className="mt-1 p-2 bg-scrim-30 rounded-lg text-label-xs font-mono opacity-60 max-h-40 overflow-auto whitespace-pre-wrap break-all">
                                             {match.ocrDebug.rawText}
                                         </pre>
                                     </details>
@@ -459,11 +460,11 @@ const MatchDetail: React.FC<{
 
             {/* Lightbox */}
             {lightboxSrc && (
-                <div className="fixed inset-0 z-[10000] bg-black/90 flex items-center justify-center p-8" onClick={() => setLightboxSrc(null)}>
+                <div className="fixed inset-0 z-modal bg-scrim-90 flex items-center justify-center p-8" onClick={() => setLightboxSrc(null)}>
                     <button onClick={() => setLightboxSrc(null)} className="absolute top-4 right-4 text-md-sys-on-surface/60 hover:text-md-sys-on-surface">
                         <X size={24} />
                     </button>
-                    <img src={lightboxSrc.startsWith('data:') ? lightboxSrc : `file://${lightboxSrc.replace(/\\/g, '/')}`} alt="Screenshot" className="max-w-full max-h-full object-contain rounded-lg" />
+                    <LocalImage src={lightboxSrc} alt="Screenshot" className="max-w-full max-h-full object-contain rounded-lg" />
                 </div>
             )}
         </div>

@@ -17,8 +17,10 @@ const INVOKE_CHANNELS = [
   'save-screenshot',
   'bundle-artifacts', 'get-match-artifacts', 'rerun-ocr-on-artifact',
   'list-match-artifacts',
+  'artifact-repair-preview', 'artifact-repair-apply',
   'remove-match-artifact', 'add-match-artifact',
   'load-archived-telemetry', 'list-telemetry-archives', 'load-telemetry-archive-file',
+  'telemetry-retention-status', 'telemetry-prune-preview', 'telemetry-prune-apply',
   'decode-telemetry-cache', 'clear-telemetry-archives',
   'clear-ocr-preprocessed', 'get-ocr-debug-dir', 'list-ocr-debug-files',
   'scan-epic-ids',
@@ -46,6 +48,7 @@ const RECEIVE_CHANNELS = [
   'window-restored',
   'update_available', 'update_downloaded',
   'hotkey-toggle-overlay',
+  'telemetry-prune-needed',
 ];
 
 contextBridge.exposeInMainWorld('electronAPI', {

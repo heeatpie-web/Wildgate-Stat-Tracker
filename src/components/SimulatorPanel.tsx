@@ -10,6 +10,13 @@ interface SimEvent {
     Payload: any;
 }
 
+interface TelemetryArchiveEntry {
+    archiveId: string;
+    filename: string;
+    date: number;
+    size: number;
+}
+
 const SimulatorPanel: React.FC = () => {
     const {
         isSimulation, setIsSimulation,
@@ -24,7 +31,7 @@ const SimulatorPanel: React.FC = () => {
     const [playbackSpeed, setPlaybackSpeed] = useState(1);
     const [currentSimTime, setCurrentSimTime] = useState<string>("0:00");
     const [status, setStatus] = useState("Idle");
-    const [archiveFiles, setArchiveFiles] = useState<any[]>([]);
+    const [archiveFiles, setArchiveFiles] = useState<TelemetryArchiveEntry[]>([]);
     const [selectedArchive, setSelectedArchive] = useState<string>("");
     const [loading, setLoading] = useState(false);
 
@@ -39,7 +46,11 @@ const SimulatorPanel: React.FC = () => {
                 setStatus("Error: IPC not available");
                 return;
             }
-            const list = await api.invoke('list-telemetry-archives');
+            const raw = await api.invoke('list-telemetry-archives');
+            if (raw?.success === false) {
+                throw new Error(raw.message || 'Failed to list archives');
+            }
+            const list = raw?.success ? (raw.data?.archives || []) : (Array.isArray(raw) ? raw : []);
             console.log('[Simulator] Found archives:', list?.length);
             setArchiveFiles(list || []);
 
@@ -51,7 +62,8 @@ const SimulatorPanel: React.FC = () => {
 
             // Auto-load latest if requested and we have archives
             if (autoLoadLatest && list && list.length > 0 && events.length === 0) {
-                handleLoadArchive(list[0].filename);
+                setSelectedArchive(list[0].archiveId);
+                handleLoadArchive(list[0].archiveId);
             }
         } catch (e: any) {
             console.error("Failed to list archives", e);
@@ -63,19 +75,24 @@ const SimulatorPanel: React.FC = () => {
         if (isSimulation) fetchArchives(true); // Auto-load latest when entering sim mode
     }, [isSimulation]);
 
-    const handleLoadArchive = async (filename: string) => {
-        if (!filename) return;
+    const handleLoadArchive = async (archiveId: string) => {
+        if (!archiveId) return;
         setLoading(true);
-        setStatus(`Loading ${filename}...`);
+        const selected = archiveFiles.find(a => a.archiveId === archiveId);
+        setStatus(`Loading ${selected?.filename || archiveId}...`);
         try {
             const api = getElectronAPI();
             if (!api) throw new Error("IPC not available");
 
-            const data = await api.invoke('load-telemetry-archive-file', filename);
-            const rawEvents = Array.isArray(data) ? data : (data.telemetry || []);
+            const raw = await api.invoke('load-telemetry-archive-file', { archiveId });
+            if (raw?.success === false) {
+                throw new Error(raw.message || 'Archive load failed');
+            }
+            const payload = raw?.success ? raw.data : raw;
+            const rawEvents = Array.isArray(payload) ? payload : (payload?.telemetry || []);
             const sorted = rawEvents.sort((a: any, b: any) => (a.ClientTimestamp || 0) - (b.ClientTimestamp || 0));
             setEvents(sorted);
-            setStatus(`Loaded ${sorted.length} events from ${filename}`);
+            setStatus(`Loaded ${sorted.length} events from ${selected?.filename || archiveId}`);
             setProgress(0);
         } catch (e: any) {
             setStatus(`Load Error: ${e.message}`);
@@ -85,7 +102,8 @@ const SimulatorPanel: React.FC = () => {
 
     const loadLatestArchive = () => {
         if (archiveFiles.length > 0) {
-            handleLoadArchive(archiveFiles[0].filename);
+            setSelectedArchive(archiveFiles[0].archiveId);
+            handleLoadArchive(archiveFiles[0].archiveId);
         } else {
             setStatus("No archives found");
         }
@@ -203,7 +221,7 @@ const SimulatorPanel: React.FC = () => {
         <div className="flex flex-col gap-4 p-4 md3-card rounded-xl border-2 border-md-sys-error">
             <div className="flex justify-between items-center">
                 <h3 className="font-black text-md-sys-error uppercase">Simulation Mode Active</h3>
-                <button onClick={toggleSimMode} className="md3-btn-tonal text-label-sm font-bold hover:bg-md-sys-error hover:text-white">
+                <button onClick={toggleSimMode} className="md3-btn-tonal text-label-sm font-bold hover:bg-md-sys-error hover:text-on-scrim">
                     Exit
                 </button>
             </div>
@@ -220,7 +238,7 @@ const SimulatorPanel: React.FC = () => {
                             >
                                 <option value="">Select an archive...</option>
                                 {archiveFiles.map(f => (
-                                    <option key={f.filename} value={f.filename}>
+                                    <option key={f.archiveId} value={f.archiveId}>
                                         {new Date(f.date).toLocaleString()} ({Math.round(f.size / 1024)} KB)
                                     </option>
                                 ))}
@@ -247,7 +265,7 @@ const SimulatorPanel: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="h-[1px] bg-md-sys-outline/10 w-full" />
+                <div className="h-1px bg-md-sys-outline/10 w-full" />
 
                 <div className="flex items-center gap-3">
                     <span className="text-label-sm font-black uppercase opacity-40 whitespace-nowrap">Manual JSON</span>
@@ -267,7 +285,7 @@ const SimulatorPanel: React.FC = () => {
                             )}
                         </button>
 
-                        <div className="flex flex-col items-center min-w-[100px]">
+                        <div className="flex flex-col items-center min-w-100px">
                             <span className="text-2xl font-black font-mono">{currentSimTime}</span>
                             <span className="text-label-sm uppercase tracking-wider opacity-60">Match Time</span>
                         </div>
@@ -288,7 +306,7 @@ const SimulatorPanel: React.FC = () => {
                         />
                     </div>
 
-                    <div className="bg-black/20 p-2 rounded font-mono text-label-sm h-24 overflow-y-auto">
+                    <div className="bg-scrim-20 p-2 rounded font-mono text-label-sm h-24 overflow-y-auto">
                         <div className="opacity-40 mb-1">Current Event: {progress}/{events.length}</div>
                         {events[progress] ? (
                             <div className="text-md-sys-primary">{JSON.stringify(events[progress], null, 2)}</div>

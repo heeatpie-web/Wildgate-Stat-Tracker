@@ -60,15 +60,18 @@ describe('artifactService', () => {
 
     it('invokes get-match-artifacts with matchId and returns object format', async () => {
       mockInvoke.mockResolvedValue({
-        images: ['/a.png'],
-        imageFiles: [{ filename: 'a.png', path: '/a.png' }],
-        telemetry: [{ event: 'test' }],
+        success: true,
+        data: {
+          images: ['/a.png'],
+          imageFiles: [{ artifactId: 'tok_1', filename: 'a.png', path: '/a.png' }],
+          telemetry: [{ event: 'test' }],
+        },
       });
       const result = await getMatchArtifactsStructured(5);
       expect(mockInvoke).toHaveBeenCalledWith('get-match-artifacts', 5);
       expect(result).toEqual({
         images: ['/a.png'],
-        imageFiles: [{ filename: 'a.png', path: '/a.png' }],
+        imageFiles: [{ artifactId: 'tok_1', filename: 'a.png', path: '/a.png' }],
         telemetry: [{ event: 'test' }],
       });
     });
@@ -102,10 +105,16 @@ describe('artifactService', () => {
     });
 
     it('invokes remove-match-artifact and returns result', async () => {
-      mockInvoke.mockResolvedValue({ success: true });
-      const result = await removeMatchArtifact(2, 'capture_123.png');
-      expect(mockInvoke).toHaveBeenCalledWith('remove-match-artifact', { matchId: 2, filename: 'capture_123.png' });
+      mockInvoke.mockResolvedValue({ success: true, data: { removed: 'capture_123.png' } });
+      const result = await removeMatchArtifact(2, 'artifact-token-1');
+      expect(mockInvoke).toHaveBeenCalledWith('remove-match-artifact', { matchId: 2, artifactId: 'artifact-token-1' });
       expect(result).toEqual({ success: true });
+    });
+
+    it('maps structured IPC failures to error result', async () => {
+      mockInvoke.mockResolvedValue({ success: false, code: 'INVALID_INPUT', message: 'Invalid or expired artifactId' });
+      const result = await removeMatchArtifact(2, 'forged-token');
+      expect(result).toEqual({ success: false, code: 'INVALID_INPUT', error: 'Invalid or expired artifactId' });
     });
   });
 
@@ -117,7 +126,7 @@ describe('artifactService', () => {
     });
 
     it('invokes add-match-artifact with matchId and returns result', async () => {
-      mockInvoke.mockResolvedValue({ success: true, added: ['/path/added_1.png'] });
+      mockInvoke.mockResolvedValue({ success: true, data: { added: ['/path/added_1.png'], canceled: false } });
       const result = await addMatchArtifact(3);
       expect(mockInvoke).toHaveBeenCalledWith('add-match-artifact', { matchId: 3 });
       expect(result).toEqual({ success: true, added: ['/path/added_1.png'] });

@@ -11,7 +11,6 @@
  * 
  * Run: node scripts/security_negative_tests.cjs
  */
-/* eslint-disable no-console */
 const path = require('path');
 
 let pass = 0;
@@ -107,6 +106,7 @@ const INVOKE_CHANNELS = [
   'list-match-artifacts',
   'remove-match-artifact', 'add-match-artifact',
   'load-archived-telemetry', 'list-telemetry-archives', 'load-telemetry-archive-file',
+  'telemetry-retention-status', 'telemetry-prune-preview', 'telemetry-prune-apply',
   'decode-telemetry-cache', 'clear-telemetry-archives',
   'clear-ocr-preprocessed', 'get-ocr-debug-dir', 'list-ocr-debug-files',
   'scan-epic-ids',
@@ -133,6 +133,7 @@ const RECEIVE_CHANNELS = [
   'window-restored',
   'update_available', 'update_downloaded',
   'hotkey-toggle-overlay',
+  'telemetry-prune-needed',
 ];
 
 // 2a. Verify dangerous channels are NOT in invoke allowlist
@@ -324,18 +325,28 @@ assert(!sanitized.includes('C:\\Users\\TestUser'), 'Fallback strips Windows file
 assert(!sanitized.includes('secrets.json'), 'Fallback strips sensitive filenames');
 
 // ============================================================
-// 6. EXTERNAL URL VALIDATION GAP
+// 6. EXTERNAL URL VALIDATION
 // ============================================================
-console.log('=== 6. External URL Validation (Gap Finding) ===\n');
+console.log('=== 6. External URL Validation Tests ===\n');
 
-// NOTE: shell.openExternal in setWindowOpenHandler has NO URL validation.
-// All URLs from renderer window.open() are passed directly to OS.
-// This is a known gap — logging for release-manager awareness.
-results.push({
-  test: 'FINDING: shell.openExternal has no URL validation',
-  result: 'ADVISORY',
-  note: 'setWindowOpenHandler at main.cjs:1671-1674 passes all URLs to shell.openExternal without filtering. While this is standard Electron behavior (deny new window + open in browser), there is no "Unsupported external link" rejection path. Risk is low because content is not user-supplied URLs, but worth documenting.'
-});
+function isAllowlistedHost(hostname, hosts) {
+  const host = String(hostname || '').toLowerCase();
+  return Array.from(hosts).some(allowed => host === allowed || host.endsWith(`.${allowed}`));
+}
+
+function validateExternalUrl(rawUrl, hosts) {
+  if (!rawUrl || typeof rawUrl !== 'string') return false;
+  let parsed;
+  try { parsed = new URL(rawUrl); } catch { return false; }
+  if (parsed.protocol !== 'https:') return false;
+  if (!isAllowlistedHost(parsed.hostname, hosts)) return false;
+  return true;
+}
+
+const EXTERNAL_HOSTS = new Set(['wildgate.app', 'docs.wildgate.app']);
+assert(validateExternalUrl('https://wildgate.app/changelog', EXTERNAL_HOSTS), 'Allow https URL on external allowlist');
+assert(!validateExternalUrl('http://wildgate.app/changelog', EXTERNAL_HOSTS), 'Reject non-https external URL');
+assert(!validateExternalUrl('https://evil.com/phish', EXTERNAL_HOSTS), 'Reject non-allowlisted external host');
 
 // ============================================================
 // SUMMARY
@@ -374,3 +385,4 @@ require('fs').writeFileSync(outPath, JSON.stringify(report, null, 2));
 console.log(`\nReport written: ${outPath}`);
 
 process.exit(fail > 0 ? 1 : 0);
+
