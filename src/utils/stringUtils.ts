@@ -1,4 +1,4 @@
-export const levenshteinDistance = (a: string, b: string): number => {
+﻿export const levenshteinDistance = (a: string, b: string): number => {
     const matrix = [];
     for (let i = 0; i <= b.length; i++) {
         matrix[i] = [i];
@@ -66,6 +66,119 @@ export const bestMatchWithScore = (target: string, candidates: string[]) => {
 };
 
 /**
+ * Longest Common Subsequence length using 1D DP.
+ */
+export const lcsLength = (a: string, b: string): number => {
+    if (!a || !b) return 0;
+    const m = a.length;
+    const n = b.length;
+    const prev = new Array<number>(n + 1).fill(0);
+    const curr = new Array<number>(n + 1).fill(0);
+
+    for (let i = 1; i <= m; i += 1) {
+        for (let j = 1; j <= n; j += 1) {
+            curr[j] = a[i - 1] === b[j - 1]
+                ? prev[j - 1] + 1
+                : Math.max(prev[j], curr[j - 1]);
+        }
+        for (let j = 0; j <= n; j += 1) {
+            prev[j] = curr[j];
+            curr[j] = 0;
+        }
+    }
+
+    return prev[n];
+};
+
+/**
+ * LCS normalized by shorter string length.
+ */
+export const lcsRatio = (a: string, b: string): number => {
+    if (!a || !b) return 0;
+    const aNorm = String(a).toLowerCase();
+    const bNorm = String(b).toLowerCase();
+    const shorter = Math.min(aNorm.length, bNorm.length);
+    if (shorter === 0) return 0;
+    return lcsLength(aNorm, bNorm) / shorter;
+};
+
+/**
+ * Character-frequency overlap score in [0,1].
+ */
+export const charFrequencyOverlap = (a: string, b: string): number => {
+    if (!a || !b) return 0;
+    const aNorm = String(a).toLowerCase();
+    const bNorm = String(b).toLowerCase();
+    const freqA: Record<string, number> = {};
+    const freqB: Record<string, number> = {};
+    for (const c of aNorm) freqA[c] = (freqA[c] || 0) + 1;
+    for (const c of bNorm) freqB[c] = (freqB[c] || 0) + 1;
+
+    let overlap = 0;
+    let total = 0;
+    const chars = new Set([...Object.keys(freqA), ...Object.keys(freqB)]);
+    for (const c of chars) {
+        overlap += Math.min(freqA[c] || 0, freqB[c] || 0);
+        total += Math.max(freqA[c] || 0, freqB[c] || 0);
+    }
+    return total === 0 ? 0 : overlap / total;
+};
+
+/**
+ * Combined variant-aware similarity score in [0,100].
+ */
+export const variantSimilarityScore = (
+    target: string,
+    candidate: string,
+    knownVariants: string[]
+): number => {
+    const baseLcs = lcsRatio(target, candidate) * 100;
+    const baseEdit = similarityScore(target, candidate);
+    const baseFreq = charFrequencyOverlap(target, candidate) * 100;
+    const baseScore = (baseLcs * 0.4) + (baseEdit * 0.3) + (baseFreq * 0.3);
+
+    let variantBoost = 0;
+    for (const variant of knownVariants || []) {
+        const vLcs = lcsRatio(target, variant) * 100;
+        const vEdit = similarityScore(target, variant);
+        const vFreq = charFrequencyOverlap(target, variant) * 100;
+        const score = (vLcs * 0.4) + (vEdit * 0.3) + (vFreq * 0.3);
+        if (score > variantBoost) variantBoost = score;
+    }
+
+    return Math.max(baseScore, variantBoost);
+};
+
+/**
+ * Best variant-aware match from candidate list.
+ */
+export const findBestVariantMatch = (
+    target: string,
+    candidates: string[],
+    misreadMap: Record<string, string[]>,
+    minScore = 55
+): { match: string; score: number } | null => {
+    if (!target || !Array.isArray(candidates) || candidates.length === 0) return null;
+
+    let bestMatch: string | null = null;
+    let bestScore = 0;
+
+    for (const candidate of candidates) {
+        const variants = misreadMap?.[candidate]
+            || Object.entries(misreadMap || {}).find(([k]) => k.toLowerCase() === candidate.toLowerCase())?.[1]
+            || [];
+        const score = variantSimilarityScore(target, candidate, variants);
+        if (score > bestScore) {
+            bestScore = score;
+            bestMatch = candidate;
+        }
+    }
+
+    if (!bestMatch || bestScore < minScore) return null;
+    return { match: bestMatch, score: bestScore };
+};
+
+/**
  * Normalizes common OCR misreadings (e.g., O for 0, I for 1 in numeric contexts)
  */
 export const normalizeOcrText = (text: string): string => {
@@ -100,16 +213,16 @@ export const isOcrNoise = (line: string): boolean => {
 export const cleanPlayerName = (name: string): string => {
     let cleaned = name.replace(/[()\[\]{}|\\\/<>,;:"'!@#$%^&*+=~`]$/, '');
     cleaned = cleaned.replace(/(?<![a-zA-Z0-9])\.$/, '');
-    cleaned = cleaned.replace(/^[\u2022\u00b7��\-_* ]+/, '');
+    cleaned = cleaned.replace(/^[\u2022\u00b7•·\-_* ]+/, '');
 
     return cleaned;
 };
 /**
- * Cleans up mission/modifier names (e.g. "GE•THE BULL T" -> "THE BULL")
+ * Cleans up mission/modifier names (e.g. "GEâ€¢THE BULL T" -> "THE BULL")
  */
 export const cleanMissionName = (name: string): string => {
     let cleaned = name.trim();
-    cleaned = cleaned.replace(/^[A-Z]{2}[\u2022\u00b7��\- ]+/, '');
+    cleaned = cleaned.replace(/^[A-Z]{2}[\u2022\u00b7•·\- ]+/, '');
     cleaned = cleaned.replace(/[ ]+[A-Z]$/, '');
 
     return cleaned.trim();
@@ -123,5 +236,6 @@ export const normalizeOcrName = (name: string): string => {
     cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
     return cleaned;
 };
+
 
 

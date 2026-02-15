@@ -268,3 +268,172 @@ Rule:
 - Decision: Close remaining open UX items via a scoped multi-file UI/runtime pass (`BUG-BATCH-004`) instead of separate micro-patches.
 - Rationale: The remaining items were tightly related interaction regressions and could be validated together with a single focused verification pass.
 - Impact: Added sound cues, pro-mode drill action hardening, overlay tab parity, and view-transition smoothing without schema/API changes.
+
+- Type: `architecture`
+- Decision: Fix dev splash rollback via centralized monotonic progress clamping in the splash writer.
+- Date: 2026-02-15
+- Options considered:
+  - Adjust retry-loop percentage formulas only.
+  - Suppress retry status updates after later startup milestones.
+  - Enforce non-decreasing percentage at the shared splash update function.
+- Rationale:
+  - Multiple startup paths emit splash updates concurrently in dev mode.
+  - Formula-only tuning still risks regressions when writers race.
+  - Central monotonic clamping fixes rollback regardless of writer ordering while preserving retry text feedback.
+- Impacted files/artifacts:
+  - `electron/main.cjs`
+  - `docs/agents/00_INTAKE.md`
+  - `docs/agents/01_PLAN.md`
+  - `docs/agents/02_EXECUTION_LOG.md`
+  - `docs/agents/03_VALIDATION.md`
+  - `docs/agents/04_HANDOFF.md`
+- Revisit trigger/expiry:
+  - Revisit when startup adopts explicit phase-based progress ownership or if we observe prolonged perceived stall near high percentages during dev startup.
+
+- Type: `architecture`
+- Decision: Keep lazy tab architecture but preload main dashboard chunks after app startup.
+- Date: 2026-02-15
+- Options considered:
+  - Remove lazy loading and eagerly bundle all dashboard views.
+  - Keep lazy loading and accept first-switch fallback flashes.
+  - Keep lazy loading and warm-import common tab chunks shortly after startup.
+- Rationale:
+  - The UX issue is first-switch chunk fetch latency, not fallback correctness.
+  - Warm import preserves code-splitting while reducing loading flashes on first tab switch.
+  - Scope stays local to `src/App.tsx` with minimal behavior risk.
+- Impacted files/artifacts:
+  - `src/App.tsx`
+  - `docs/agents/00_INTAKE.md`
+  - `docs/agents/01_PLAN.md`
+  - `docs/agents/02_EXECUTION_LOG.md`
+  - `docs/agents/03_VALIDATION.md`
+  - `docs/agents/04_HANDOFF.md`
+- Revisit trigger/expiry:
+  - Revisit if startup memory/network pressure rises noticeably or if fallback flashes still reproduce under normal startup conditions.
+
+- Type: `architecture`
+- Decision: Introduce a deterministic local OCR alias model while retaining legacy correction compatibility during transition.
+- Date: 2026-02-15
+- Options considered:
+  - Keep only legacy `ocrCorrections` count-based mapping.
+  - Replace legacy mapping immediately with a new alias model (breaking migration).
+  - Add a versioned alias model with scoring/guardrails and keep legacy dual-write during rollout.
+- Rationale:
+  - Reported OCR misread behavior requires more context-aware confidence handling than flat count thresholds.
+  - Immediate schema replacement increases migration risk across existing users.
+  - Dual-write + migration preserves backward compatibility while enabling stronger deterministic resolution.
+- Impacted files/artifacts:
+  - `src/utils/ocrAliasEngine.ts`
+  - `src/store/slices/createMappingSlice.ts`
+  - `src/store/useAppStore.ts`
+  - `src/utils/storage.ts`
+  - `src/hooks/useSmartScan.ts`
+  - `src/App.tsx`
+  - `src/components/SettingsModal.tsx`
+  - `docs/agents/03_VALIDATION.md`
+  - `docs/agents/04_HANDOFF.md`
+- Revisit trigger/expiry:
+  - Revisit once all runtime consumers no longer require legacy `ocrCorrections`; at that point remove dual-write and finalize single-model persistence.
+
+- Type: `scope`
+- Decision: Consolidate settings entry points by removing standalone sidebar Settings button and retaining Settings within Profile Hub menu.
+- Date: 2026-02-15
+- Options considered:
+  - Keep both standalone sidebar Settings and profile-menu Settings entries.
+  - Remove profile-menu Settings and keep only standalone sidebar button.
+  - Remove standalone sidebar Settings and keep profile-menu Settings as the canonical access path.
+- Rationale:
+  - User explicitly requested settings access through profile icon options.
+  - Keeping both entries duplicates navigation surface and increases tutorial/selector maintenance.
+  - This scope delivers the requested UX change with minimal runtime risk.
+- Impacted files/artifacts:
+  - `src/components/Sidebar.tsx`
+  - `src/components/Tutorial.tsx`
+  - `docs/agents/03_VALIDATION.md`
+  - `docs/agents/04_HANDOFF.md`
+- Revisit trigger/expiry:
+  - Revisit if user reports discoverability issues with settings access or if a future IA pass reintroduces global settings navigation.
+
+- Type: `scope`
+- Decision: Resolve profile button width mismatch by expanding only the profile wrapper to full width.
+- Date: 2026-02-15
+- Options considered:
+  - Leave current width as-is.
+  - Increase button padding/width directly without changing wrapper.
+  - Set profile wrapper to `w-full` so existing button `w-full` matches nav lane behavior.
+- Rationale:
+  - The mismatch came from parent width constraints, not the button itself.
+  - Wrapper-level fix is minimal and avoids unrelated visual/behavior changes.
+  - Keeps all profile-menu behavior intact while meeting requested layout parity.
+- Impacted files/artifacts:
+  - `src/components/Sidebar.tsx`
+  - `docs/agents/03_VALIDATION.md`
+  - `docs/agents/04_HANDOFF.md`
+- Revisit trigger/expiry:
+  - Revisit if sidebar density/padding system changes and profile button alignment diverges again.
+
+- Type: `architecture`
+- Decision: Decouple overlay tab selection from full-view navigation and make full-view transitions explicit actions.
+- Date: 2026-02-15
+- Options considered:
+  - Keep current overlay tab buttons exiting to full dashboard.
+  - Remove full-view transitions from overlay entirely.
+  - Keep in-overlay tab switching for `Recording/Loadout/Social` and expose separate explicit `Open Full` actions.
+- Rationale:
+  - Users expect overlay tab controls to switch overlay content, not close overlay mode.
+  - Explicit full-view actions preserve navigation power without accidental context switches.
+  - This approach resolves the reported issue with minimal routing/state complexity.
+- Impacted files/artifacts:
+  - `src/components/OverlayView.tsx`
+  - `src/components/RecordingView.tsx`
+  - `src/components/RecordingView.test.tsx`
+  - `docs/agents/03_VALIDATION.md`
+  - `docs/agents/04_HANDOFF.md`
+- Revisit trigger/expiry:
+  - Revisit if users request quick one-click overlay-to-full transitions bound to tabs again, or if overlay navigation discoverability drops.
+
+- Type: `scope`
+- Decision: Roll back Recording panel placement while preserving overlay navigation changes, and normalize view-shell padding alignment across main dashboard tabs.
+- Date: 2026-02-15
+- Options considered:
+  - Keep current recording panel order and tune only analytics/history offsets.
+  - Fully revert all recent overlay+recording changes.
+  - Restore only Recording panel placement and compact toggle behavior; keep overlay behavior and fix cross-view shell padding inconsistencies.
+- Rationale:
+  - User requested explicit rollback of Match Recording placement.
+  - User also reported broader tab-switch alignment drift (example: analytics lower than history).
+  - Selective rollback + shell normalization resolves both issues with minimum disruption to accepted overlay behavior.
+- Impacted files/artifacts:
+  - `src/components/RecordingView.tsx`
+  - `src/components/RecordingView.test.tsx`
+  - `src/components/analytics/AnalyticsShell.tsx`
+  - `src/components/HistoryTable.tsx`
+  - `src/components/PlayerHub.tsx`
+  - `src/components/smart-captures/SmartCapturesShell.tsx`
+  - `docs/agents/03_VALIDATION.md`
+  - `docs/agents/04_HANDOFF.md`
+- Revisit trigger/expiry:
+  - Revisit if users still report perceptible cross-tab alignment drift after this shell normalization, at which point adopt a stricter shared dashboard container contract in `App`.
+
+- Type: `architecture`
+- Decision: Implement adaptive OCR improvements by extending existing `ocrAliasModel` and shared resolution logic, not by adding a parallel persisted `playerMisreads` model.
+- Date: 2026-02-15
+- Options considered:
+  - Add separate `playerMisreads` persistence map and dual-write corrections.
+  - Replace existing alias model with new misread-only structure.
+  - Keep `ocrAliasModel` canonical and derive variant map at runtime for variant matching.
+- Rationale:
+  - Current code already has a richer alias model with context/count/queue/rollback semantics.
+  - Parallel persistence increases drift risk and migration complexity.
+  - Runtime-derived variant map satisfies functional goal without schema duplication.
+- Impacted files/artifacts:
+  - `src/utils/stringUtils.ts`
+  - `src/utils/ocrNameResolver.ts`
+  - `src/hooks/useSmartCapture.ts`
+  - `src/hooks/useSmartScan.ts`
+  - `src/App.tsx`
+  - `electron/preload.cjs`
+  - `electron/main.cjs`
+  - `scripts/security_negative_tests.cjs`
+- Revisit trigger/expiry:
+  - Revisit if alias-model runtime derivation causes measurable performance issues at larger corpora or if product requirements demand explicit per-player editable misread lists.

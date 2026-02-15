@@ -123,3 +123,292 @@
 - Command: `npm run -s typecheck`
   - Result: PASS
   - Evidence: TypeScript compile completed with no reported errors after BUG-BATCH-004 changes.
+
+---
+
+## Validation - 2026-02-15 - DEV-SPLASH-RETRY-001
+- Command: `npx eslint electron/main.cjs`
+  - Result: PASS
+  - Evidence: no lint violations for patched splash-progress logic.
+
+- Logic check (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - `setSplashProgress` now persists per-window payload and clamps `pct` with `Math.max(previous, requested)`.
+    - Retry-path updates in `startDevRendererWithRetry` continue to update status/detail text via same writer without lowering rendered percent.
+    - `lastSplashByWin` is still cleared in `stop()`, so a new startup cycle begins with a fresh progress state.
+
+---
+
+## Validation - 2026-02-15 - TAB-LOADING-STARTUP-001
+- Command: `npx eslint src/App.tsx`
+  - Result: PASS
+  - Evidence: no lint violations for lazy-loader preload changes.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no errors after preload implementation.
+
+- Logic check (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - `src/App.tsx` now defines loader functions for lazy dashboard views and calls them in `warmLazyDashboardViews()`.
+    - Startup effect triggers warm preload in dashboard mode (`!isOverlayMode`), so chunks are requested before first tab click.
+    - Existing Suspense fallback remains for safety if preload is delayed or fails.
+
+---
+
+## Validation - 2026-02-15 - OCR-HYDRATION-COMBINED-001
+- Command: `npm run test -- src/utils/__tests__/ocrAliasEngine.test.ts src/store/slices/__tests__/createMappingSlice.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 2 test files passed
+    - 32 tests passed
+    - Includes new alias-engine ambiguity/blocklist/compaction coverage and mapping-slice alias-resolution regressions.
+
+- Command: `npm run typecheck` (initial pass before final fix)
+  - Result: FAIL (expected during implementation)
+  - Evidence:
+    - `src/store/slices/createMappingSlice.ts(156,9)` strict typing mismatch for legacy `contexts` map (`Record<OcrAliasContext, number>`).
+  - Remediation:
+    - Added full-key normalization for legacy context map before increment in `toLegacyCorrection`.
+
+- Command: `npm run typecheck` (post-remediation)
+  - Result: PASS
+  - Evidence: `tsc --noEmit -p tsconfig.typecheck.json` completed with no errors.
+
+- Command: `npx eslint src/App.tsx src/components/SettingsModal.tsx src/hooks/useSmartScan.ts src/store/slices/createMappingSlice.ts src/store/slices/createSettingsSlice.ts src/store/useAppStore.ts src/utils/ocrAliasEngine.ts src/utils/storage.ts src/store/slices/__tests__/createMappingSlice.test.ts src/utils/__tests__/ocrAliasEngine.test.ts`
+  - Result: PASS
+  - Evidence: no lint violations on touched OCR learning/preload implementation files.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - Alias model hydrates from persisted `ocrAliasModel` or migrates from legacy `ocrCorrections`.
+    - Shared alias resolver is consumed in both smart-scan and OCR review apply flows.
+    - Startup preload now runs in staged background mode and is gated by overlay mode, store hydration, performance mode, and explicit setting toggle.
+    - Settings modal exposes OCR learning gates and startup preload toggle with persistence.
+
+---
+
+## Validation - 2026-02-15 - ADV-AUTOLEARN-V2-001
+- Command: `npm run typecheck`
+  - Result: PASS
+  - Evidence: `tsc --noEmit -p tsconfig.typecheck.json` completed with no errors after final integration changes.
+
+- Command: `npx vitest run src/utils/__tests__/ocrAliasEngine.test.ts src/store/slices/__tests__/createMappingSlice.test.ts` (initial pass)
+  - Result: FAIL (expected during implementation)
+  - Evidence:
+    - 1 failing assertion in `createMappingSlice` cleanup test (`clears resolved learning events while retaining queued items`) due timestamp cutoff edge at `olderThanMs=0`.
+  - Remediation:
+    - Updated test cutoff to deterministic aggressive value (`clearResolvedOcrLearningEvents(-1)`).
+
+- Command: `npx vitest run src/utils/__tests__/ocrAliasEngine.test.ts src/store/slices/__tests__/createMappingSlice.test.ts` (post-remediation)
+  - Result: PASS
+  - Evidence:
+    - 2 test files passed.
+    - 38 tests passed.
+
+- Command: `npx eslint src/components/SettingsModal.tsx src/App.tsx src/hooks/useSmartScan.ts src/store/slices/createMappingSlice.ts src/store/slices/createSettingsSlice.ts src/store/useAppStore.ts src/utils/ocrAliasEngine.ts src/utils/storage.ts src/components/ReviewQueueModal.tsx src/store/slices/__tests__/createMappingSlice.test.ts src/utils/__tests__/ocrAliasEngine.test.ts`
+  - Result: PASS
+  - Evidence: no lint violations on touched renderer/store/test files.
+
+- Command: `npx eslint electron/main.cjs electron/preload.cjs scripts/ocr_threshold_recommend.cjs scripts/security_negative_tests.cjs`
+  - Result: PASS
+  - Evidence: no lint violations on touched Electron/script files.
+
+- Command: `npm run ocr:threshold:recommend`
+  - Result: PASS
+  - Evidence: command produced structured JSON recommendation payload with `recommendedThresholds`, `summary`, and `reasons`.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - Settings now exposes advanced controls for OCR learning review mode, queue enablement, auto-promote threshold, adaptive preload budget, and recommendation apply/revert.
+    - `ocr-corpus-threshold-recommend` channel is available from renderer (`preload`) and returns parsed recommendation payload from main-process script execution.
+    - OCR learning queue lifecycle is wired end-to-end: queue -> approve/reject -> rollback.
+
+---
+
+## Validation - 2026-02-15 - DEV-STARTUP-HOOKS-001
+- Command: `npm run typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no errors after settings hook-order and startup-flow changes.
+
+- Command: `npx eslint src/components/SettingsModal.tsx electron/main.cjs package.json`
+  - Result: PASS (non-blocking note for package.json)
+  - Evidence:
+    - no lint violations for `src/components/SettingsModal.tsx` and `electron/main.cjs`.
+    - `package.json` reported expected "file ignored" warning due eslint config, no errors.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - Hook-order fix confirmed in `SettingsModal`: all hooks now execute before early-return branch.
+    - `electron:dev` no longer waits on Vite TCP before launching Electron, so splash can render immediately.
+    - `app.whenReady` critical path no longer awaits telemetry migration/cloud init, reducing dev startup blocking.
+
+---
+
+## Validation - 2026-02-15 - PROFILE-SETTINGS-MERGE-001
+- Command: `npm run typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no reported errors after sidebar/profile tutorial updates.
+
+- Command: `npx eslint src/components/Sidebar.tsx src/components/Tutorial.tsx`
+  - Result: PASS
+  - Evidence: no lint violations for touched UI/tutorial files.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - Standalone sidebar settings button was removed from `src/components/Sidebar.tsx`.
+    - Profile hub menu in `src/components/Sidebar.tsx` still exposes a working Settings action (`setShowSettings(true)`).
+    - Tutorial settings step now targets `profile-selector` in `src/components/Tutorial.tsx` instead of removed selector.
+
+---
+
+## Validation - 2026-02-15 - PROFILE-BUTTON-WIDTH-001
+- Command: `npx eslint src/components/Sidebar.tsx`
+  - Result: PASS
+  - Evidence: no lint violations for touched sidebar file.
+
+- Command: `npm run typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no reported errors after width-lane class fix.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - Profile wrapper in `src/components/Sidebar.tsx` now uses `className=\"relative w-full\"`.
+    - Existing profile button `w-full` now resolves to full sidebar lane width like nav buttons.
+    - No menu action/event logic changed.
+
+---
+
+## Validation - 2026-02-15 - OVERLAY-NAV-RECORDING-LAYOUT-001
+- Command: `npx vitest run src/components/RecordingView.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 1 test file passed.
+    - 4 tests passed.
+    - Includes ordering check asserting `ActionPanel` renders before `MissionPanel`.
+
+- Command: `npx eslint src/components/OverlayView.tsx src/components/RecordingView.tsx src/components/RecordingView.test.tsx`
+  - Result: PASS
+  - Evidence: no lint violations for touched overlay/recording files.
+
+- Command: `npm run typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no reported errors after overlay/layout changes.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - Overlay tab rail now acts as in-overlay navigation (`Recording`, `Loadout`, `Social`) and no longer exits overlay.
+    - Explicit full-view actions remain available via `Open Full`, `History`, and `Captures`.
+    - `RecordingView` now renders `ActionPanel` above `MissionPanel` in both wide and narrow modes.
+
+---
+
+## Validation - 2026-02-15 - RECORDING-ROLLBACK-ALIGN-001
+- Command: `npx vitest run src/components/RecordingView.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 1 test file passed.
+    - 3 tests passed.
+    - Includes compact `Actions/Loadout` tab-switch behavior and standard left-shell composition assertions.
+
+- Command: `npx eslint src/components/RecordingView.tsx src/components/RecordingView.test.tsx src/components/analytics/AnalyticsShell.tsx src/components/HistoryTable.tsx src/components/PlayerHub.tsx src/components/smart-captures/SmartCapturesShell.tsx`
+  - Result: PASS
+  - Evidence: no lint violations for touched layout/shell files.
+
+- Command: `npm run typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no reported errors after rollback/alignment updates.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - Recording view restored to prior behavior: `ActionPanel` lives in left shell (standard) and compact `Actions/Loadout` toggle is active.
+    - Analytics/Players/Smart Captures no longer apply duplicate top-level `p-3` inside App shell wrapper.
+    - History root now fills/scrolls the shell consistently (`h-full min-h-0 overflow-y-auto`), reducing tab-to-tab frame drift.
+
+---
+
+## Validation - 2026-02-15 - OCR-ADAPTIVE-RESOLUTION-001
+- Command: `npx eslint src/utils/stringUtils.ts src/utils/__tests__/stringUtils.test.ts src/utils/ocrNameResolver.ts src/utils/__tests__/ocrNameResolver.test.ts src/hooks/useSmartCapture.ts src/hooks/useSmartScan.ts src/App.tsx src/components/ocr/OCRReviewModal.tsx electron/main.cjs electron/preload.cjs scripts/security_negative_tests.cjs`
+  - Result: PASS
+  - Evidence: no lint violations for touched OCR resolver/corpus IPC/security files.
+
+- Command: `npx vitest run src/utils/__tests__/stringUtils.test.ts src/utils/__tests__/ocrNameResolver.test.ts src/store/slices/__tests__/createMappingSlice.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 3 test files passed.
+    - 62 tests passed.
+    - Includes new variant similarity and shared resolver regression coverage.
+
+- Command: `node scripts/security_negative_tests.cjs`
+  - Result: PASS
+  - Evidence:
+    - 113 pass / 0 fail.
+    - New `ocr-corpus-add-corrected-sample` invoke channel present in allowlist fixture checks.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no errors after shared resolver + corpus ingest changes.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - Shared resolver is now used in Smart Capture (`useSmartCapture`), Smart Scan (`useSmartScan`), and App OCR apply (`App.tsx`).
+    - Smart Capture canonicalization now performs canonical dedupe and contextual second-pass resolution using social graph constraints (2+ anchors, unique candidate).
+    - OCR review apply path now fires guarded non-blocking corpus auto-ingest via new IPC channel.
+    - Main-process ingest handler enforces payload quality checks and dedupes by image hash + normalized roster/modifier signature before append.
+
+- Command: `npx eslint src/hooks/useSmartCapture.ts`
+  - Result: PASS
+  - Evidence: no lint violations after opponent contextual-anchor refinement.
+
+- Command: `npx vitest run src/utils/__tests__/stringUtils.test.ts src/utils/__tests__/ocrNameResolver.test.ts src/store/slices/__tests__/createMappingSlice.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 3 test files passed.
+    - 62 tests passed.
+
+- Command: `npm run -s ocr:eval`
+  - Result: FAIL (environment/data missing)
+  - Evidence:
+    - Script aborted with `Missing file: dataset/ocr-corpus/ground-truth.json`.
+
+- Command: `npm run -s ocr:eval:sample`
+  - Result: FAIL (environment/data missing)
+  - Evidence:
+    - Script aborted with `Missing file: dataset/ocr-corpus/ground-truth.sample.json`.
+
+---
+
+## Validation - 2026-02-15 - VERSION-CHANGELOG-001
+- Command: `npx eslint src/utils/constants.ts src/utils/changelog.ts`
+  - Result: PASS
+  - Evidence: no lint violations in touched version/changelog source files.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no reported errors after metadata updates.
+
+- Command: `Select-String -Path package.json -Pattern '"version"\\s*:\\s*"2.15.0"'`
+  - Result: PASS
+  - Evidence: matched `package.json:5`.
+
+- Command: `Select-String -Path package-lock.json -Pattern '"version"\\s*:\\s*"2.15.0"'`
+  - Result: PASS
+  - Evidence: matched `package-lock.json:3` and `package-lock.json:9`.
+
+- Command: `Select-String -Path src/utils/constants.ts -Pattern 'APP_VERSION\\s*=\\s*"v2.15"'`
+  - Result: PASS
+  - Evidence: matched `src/utils/constants.ts:9`.
+
+- Command: `Select-String -Path src/utils/changelog.ts -Pattern '"v2.15"'`
+  - Result: PASS
+  - Evidence: matched `src/utils/changelog.ts:2`.

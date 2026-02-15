@@ -13,12 +13,27 @@ export type CaptureMode = 'auto' | 'deferred';
 
 /** Telemetry monitoring profile: favors lower heat, balanced behavior, or faster updates. */
 export type TelemetryPerformanceProfile = 'low-power' | 'balanced' | 'high-accuracy';
+export type OcrThresholdRecommendationMode = 'manual' | 'assisted';
+export type OcrLearningReviewMode = 'conservative' | 'balanced' | 'aggressive';
+export type DashboardPreloadView = 'analytics' | 'history' | 'smart-captures' | 'players' | 'dev-ocr';
 
 export interface OcrBestGuessThresholds {
   cloud: { player: number; mod: number; ship: number };
   merged: { player: number; mod: number; ship: number };
   local: { player: number; mod: number; ship: number };
   lowConfidenceBump: number;
+}
+
+export interface OcrThresholdHistoryEntry {
+  timestamp: number;
+  source: string;
+  thresholds: OcrBestGuessThresholds;
+}
+
+export interface DashboardPreloadStat {
+  openDurationsMs: number[];
+  switchCount: number;
+  lastVisitedAt: number;
 }
 
 export interface SettingsSlice {
@@ -39,11 +54,24 @@ export interface SettingsSlice {
   enableAutoLogRecording: boolean;
   telemetryPerformanceProfile: TelemetryPerformanceProfile;
   enableAutoBackup: boolean;
+  startupSmartPreloadEnabled: boolean;
   overlayStyle: OverlayStyle;
   visualMode: VisualMode;
   ocrMode: OcrMode;
   captureMode: CaptureMode;
   lockOcrTeams: boolean;
+  ocrLearningEnabled: boolean;
+  ocrAutoApplyMinScore: number;
+  ocrAutoApplyMinCount: number;
+  ocrLearningStrictMode: boolean;
+  ocrLearningReviewMode: OcrLearningReviewMode;
+  ocrLearningAutoPromoteCount: number;
+  ocrLearningQueueEnabled: boolean;
+  adaptivePreloadEnabled: boolean;
+  adaptivePreloadBudgetMs: number;
+  dashboardPreloadStats: Record<DashboardPreloadView, DashboardPreloadStat>;
+  ocrThresholdRecommendationMode: OcrThresholdRecommendationMode;
+  ocrThresholdHistory: OcrThresholdHistoryEntry[];
   ocrBestGuessThresholds: OcrBestGuessThresholds;
   ocrCalibration: OcrCalibration;
   tutorialCompleted: boolean;
@@ -65,18 +93,41 @@ export interface SettingsSlice {
   setEnableAutoLogRecording: (enabled: boolean) => void;
   setTelemetryPerformanceProfile: (profile: TelemetryPerformanceProfile) => void;
   setEnableAutoBackup: (enabled: boolean) => void;
+  setStartupSmartPreloadEnabled: (enabled: boolean) => void;
   setOverlayStyle: (style: OverlayStyle) => void;
   setVisualMode: (mode: VisualMode) => void;
   setOcrMode: (mode: OcrMode) => void;
   setCaptureMode: (mode: CaptureMode) => void;
   setLockOcrTeams: (enabled: boolean) => void;
+  setOcrLearningEnabled: (enabled: boolean) => void;
+  setOcrAutoApplyMinScore: (score: number) => void;
+  setOcrAutoApplyMinCount: (count: number) => void;
+  setOcrLearningStrictMode: (enabled: boolean) => void;
+  setOcrLearningReviewMode: (mode: OcrLearningReviewMode) => void;
+  setOcrLearningAutoPromoteCount: (count: number) => void;
+  setOcrLearningQueueEnabled: (enabled: boolean) => void;
+  setAdaptivePreloadEnabled: (enabled: boolean) => void;
+  setAdaptivePreloadBudgetMs: (budget: number) => void;
+  recordDashboardPreloadVisit: (view: DashboardPreloadView, openDurationMs?: number) => void;
+  resetDashboardPreloadStats: () => void;
+  setOcrThresholdRecommendationMode: (mode: OcrThresholdRecommendationMode) => void;
+  pushOcrThresholdHistory: (entry: OcrThresholdHistoryEntry) => void;
+  popOcrThresholdHistory: () => OcrThresholdHistoryEntry | null;
   setOcrBestGuessThresholds: (update: Partial<OcrBestGuessThresholds>) => void;
   setOcrCalibration: (update: Partial<OcrCalibration>) => void;
   resetOcrCalibration: () => void;
   setTutorialCompleted: (completed: boolean) => void;
 }
 
-export const createSettingsSlice: StateCreator<SettingsSlice> = (set) => ({
+const defaultPreloadStats = (): Record<DashboardPreloadView, DashboardPreloadStat> => ({
+  analytics: { openDurationsMs: [], switchCount: 0, lastVisitedAt: 0 },
+  history: { openDurationsMs: [], switchCount: 0, lastVisitedAt: 0 },
+  'smart-captures': { openDurationsMs: [], switchCount: 0, lastVisitedAt: 0 },
+  players: { openDurationsMs: [], switchCount: 0, lastVisitedAt: 0 },
+  'dev-ocr': { openDurationsMs: [], switchCount: 0, lastVisitedAt: 0 },
+});
+
+export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   activeMode: 'Artifact Brawl',
   activeUser: '',
   appearanceMode: 'twilight',
@@ -94,11 +145,24 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set) => ({
   enableAutoLogRecording: true,
   telemetryPerformanceProfile: 'balanced',
   enableAutoBackup: true,
+  startupSmartPreloadEnabled: true,
   overlayStyle: 'compact',
   visualMode: 'dense',
   ocrMode: 'both',
   captureMode: 'auto',
   lockOcrTeams: false,
+  ocrLearningEnabled: true,
+  ocrAutoApplyMinScore: 0.82,
+  ocrAutoApplyMinCount: 3,
+  ocrLearningStrictMode: true,
+  ocrLearningReviewMode: 'conservative',
+  ocrLearningAutoPromoteCount: 5,
+  ocrLearningQueueEnabled: true,
+  adaptivePreloadEnabled: true,
+  adaptivePreloadBudgetMs: 900,
+  dashboardPreloadStats: defaultPreloadStats(),
+  ocrThresholdRecommendationMode: 'assisted',
+  ocrThresholdHistory: [],
   ocrBestGuessThresholds: {
     cloud: { player: 80, mod: 82, ship: 62 },
     merged: { player: 78, mod: 80, ship: 60 },
@@ -132,11 +196,59 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set) => ({
   setEnableAutoLogRecording: (enabled) => set({ enableAutoLogRecording: enabled }),
   setTelemetryPerformanceProfile: (profile) => set({ telemetryPerformanceProfile: profile }),
   setEnableAutoBackup: (enabled) => set({ enableAutoBackup: enabled }),
+  setStartupSmartPreloadEnabled: (enabled) => set({ startupSmartPreloadEnabled: enabled }),
   setOverlayStyle: (style) => set({ overlayStyle: style }),
   setVisualMode: (mode) => set({ visualMode: mode }),
   setOcrMode: (mode) => set({ ocrMode: mode }),
   setCaptureMode: (mode) => set({ captureMode: mode }),
   setLockOcrTeams: (enabled) => set({ lockOcrTeams: enabled }),
+  setOcrLearningEnabled: (enabled) => set({ ocrLearningEnabled: enabled }),
+  setOcrAutoApplyMinScore: (score) => set({ ocrAutoApplyMinScore: Math.max(0.5, Math.min(0.99, Number(score) || 0.82)) }),
+  setOcrAutoApplyMinCount: (count) => set({ ocrAutoApplyMinCount: Math.max(1, Math.min(10, Math.round(Number(count) || 3))) }),
+  setOcrLearningStrictMode: (enabled) => set({ ocrLearningStrictMode: enabled }),
+  setOcrLearningReviewMode: (mode) => set({
+    ocrLearningReviewMode: (mode === 'aggressive' || mode === 'balanced' || mode === 'conservative')
+      ? mode
+      : 'conservative'
+  }),
+  setOcrLearningAutoPromoteCount: (count) => set({
+    ocrLearningAutoPromoteCount: Math.max(1, Math.min(20, Math.round(Number(count) || 5)))
+  }),
+  setOcrLearningQueueEnabled: (enabled) => set({ ocrLearningQueueEnabled: enabled }),
+  setAdaptivePreloadEnabled: (enabled) => set({ adaptivePreloadEnabled: enabled }),
+  setAdaptivePreloadBudgetMs: (budget) => set({
+    adaptivePreloadBudgetMs: Math.max(200, Math.min(2500, Math.round(Number(budget) || 900)))
+  }),
+  recordDashboardPreloadVisit: (view, openDurationMs) => set((state) => {
+    const current = state.dashboardPreloadStats[view] || { openDurationsMs: [], switchCount: 0, lastVisitedAt: 0 };
+    const durations = Number.isFinite(openDurationMs)
+      ? [...current.openDurationsMs, Math.max(0, Math.round(Number(openDurationMs)))].slice(-30)
+      : current.openDurationsMs;
+    return {
+      dashboardPreloadStats: {
+        ...state.dashboardPreloadStats,
+        [view]: {
+          openDurationsMs: durations,
+          switchCount: current.switchCount + 1,
+          lastVisitedAt: Date.now(),
+        }
+      }
+    };
+  }),
+  resetDashboardPreloadStats: () => set({ dashboardPreloadStats: defaultPreloadStats() }),
+  setOcrThresholdRecommendationMode: (mode) => set({
+    ocrThresholdRecommendationMode: mode === 'manual' ? 'manual' : 'assisted'
+  }),
+  pushOcrThresholdHistory: (entry) => set((state) => ({
+    ocrThresholdHistory: [entry, ...(state.ocrThresholdHistory || [])].slice(0, 20)
+  })),
+  popOcrThresholdHistory: () => {
+    const current = get().ocrThresholdHistory || [];
+    if (current.length === 0) return null;
+    const [top, ...rest] = current;
+    set({ ocrThresholdHistory: rest });
+    return top;
+  },
   setOcrBestGuessThresholds: (update) => set(state => ({
     ocrBestGuessThresholds: {
       ...state.ocrBestGuessThresholds,

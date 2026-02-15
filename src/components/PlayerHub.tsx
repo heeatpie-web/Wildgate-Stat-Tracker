@@ -211,7 +211,7 @@ const PlayerHub: React.FC = () => {
     }, [enrichedPilots, selectedPilot, mergeSearch]);
 
     return (
-        <div data-tour="view-players" className="h-full flex flex-col lg:grid lg:grid-cols-playerhub-lg xl:grid-cols-playerhub-xl gap-4 overflow-hidden players-shell-gradient rounded-2xl p-3">
+        <div data-tour="view-players" className="h-full flex flex-col lg:grid lg:grid-cols-playerhub-lg xl:grid-cols-playerhub-xl gap-4 overflow-hidden players-shell-gradient rounded-2xl">
             {/* Column 1: Roster List */}
             <div className="w-full lg:w-340px shrink-0 flex flex-col gap-3 h-full min-h-0">
                 <div className="md3-card mg-surface shadow-lg p-4 flex flex-col gap-3 shrink-0">

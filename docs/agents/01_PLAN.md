@@ -45,3 +45,75 @@
 4. `COMPLETED` - Restore overlay parity by adding mission/squadron/social tab access and quick jumps to relevant full views.
 5. `COMPLETED` - Add cross-view transition animation for smoother main view switching.
 6. `COMPLETED` - Run targeted validation and record outcomes.
+
+## Current Task Plan (DEV-SPLASH-RETRY-001)
+1. `COMPLETED` - Trace all dev startup splash progress writers and confirm root cause of percentage rollback.
+2. `COMPLETED` - Implement monotonic splash progress handling so retries never decrease shown percentage.
+3. `COMPLETED` - Run targeted validation (`npx eslint electron/main.cjs`) and code-path sanity check.
+4. `COMPLETED` - Record execution, validation, and handoff evidence; then release locks.
+
+## Current Task Plan (TAB-LOADING-STARTUP-001)
+1. `COMPLETED` - Trace tab-switch render path and confirm source of first-startup "Loading view..." flashes.
+2. `COMPLETED` - Add scoped background preloading for lazy dashboard view chunks in `src/App.tsx`.
+3. `COMPLETED` - Run targeted validation (`npx eslint src/App.tsx` + `npm run -s typecheck`).
+4. `COMPLETED` - Record execution/validation/handoff entries and release lock.
+
+## Current Task Plan (OCR-HYDRATION-COMBINED-001)
+1. `COMPLETED` - Implement deterministic OCR alias engine + mapping slice model/actions with compatibility wrapper.
+2. `COMPLETED` - Wire persistence/hydration for alias model + new settings flags in `useAppStore`.
+3. `COMPLETED` - Integrate resolver/preload controls into `useSmartScan`, `App`, and `SettingsModal`.
+4. `COMPLETED` - Add/adjust targeted unit tests for alias engine and mapping slice behavior.
+5. `COMPLETED` - Run validation (`eslint` touched files, targeted tests, `typecheck`) and record evidence/handoff.
+
+## Current Task Plan (ADV-AUTOLEARN-V2-001)
+1. `COMPLETED` - Extend OCR alias engine + mapping slice with learning event queue/history/rollback lifecycle and resolver explainability metadata.
+2. `COMPLETED` - Add advanced settings/state persistence for learning governance, recommendation mode/history, and adaptive preload controls.
+3. `COMPLETED` - Integrate learning queue actions into smart-scan/app review flows and extend Review Queue/Settings UI controls.
+4. `COMPLETED` - Implement corpus threshold recommendation script + Electron IPC exposure and wire settings apply/revert flow.
+5. `COMPLETED` - Upgrade startup preload scheduler to adaptive ordering with local usage telemetry and budget gating.
+6. `COMPLETED` - Expand tests (engine + mapping slice) and run validation (`typecheck`, targeted tests, touched-file eslint).
+
+## Current Task Plan (DEV-STARTUP-HOOKS-001)
+1. `COMPLETED` - Trace settings crash path and identify hook-order mismatch root cause.
+2. `COMPLETED` - Fix hook ordering in `SettingsModal` so hooks execute in stable order across closed/open states.
+3. `COMPLETED` - Update dev startup command so Electron launches immediately and splash can render before Vite is ready.
+4. `COMPLETED` - Reduce startup blocking by deferring/backgrounding non-critical init in `electron/main.cjs`.
+5. `COMPLETED` - Run validation (`typecheck`, targeted eslint) and record evidence.
+
+## Current Task Plan (PROFILE-SETTINGS-MERGE-001)
+1. `COMPLETED` - Locate sidebar profile hub and standalone settings entry points.
+2. `COMPLETED` - Remove standalone settings navigation button from sidebar.
+3. `COMPLETED` - Retarget tutorial settings step to profile hub selector.
+4. `COMPLETED` - Run validation (`typecheck`, targeted eslint) and record evidence.
+
+## Current Task Plan (PROFILE-BUTTON-WIDTH-001)
+1. `COMPLETED` - Inspect sidebar profile button and nav button container width classes to identify mismatch source.
+2. `COMPLETED` - Apply minimal class fix so profile wrapper uses full-width lane.
+3. `COMPLETED` - Run targeted validation (`npx eslint src/components/Sidebar.tsx`, `npm run typecheck`).
+4. `COMPLETED` - Record execution, validation, and handoff evidence.
+
+## Current Task Plan (OVERLAY-NAV-RECORDING-LAYOUT-001)
+1. `COMPLETED` - Trace overlay navigation button handlers and identify forced full-view exits.
+2. `COMPLETED` - Update overlay nav controls to in-overlay tab switching and add explicit full-view actions.
+3. `COMPLETED` - Rework recording layout ordering so Match Recording renders above Mission Intel.
+4. `COMPLETED` - Update/extend targeted RecordingView layout tests for new structure.
+5. `COMPLETED` - Run validation (`vitest`, touched-file eslint, `typecheck`) and record evidence.
+
+## Current Task Plan (RECORDING-ROLLBACK-ALIGN-001)
+1. `COMPLETED` - Restore Recording view panel placement to prior left-column behavior (with compact Actions/Loadout toggle).
+2. `COMPLETED` - Normalize dashboard shell spacing across Analytics/History/Players/Smart Captures to remove top-offset mismatch.
+3. `COMPLETED` - Update RecordingView tests to match restored behavior.
+4. `COMPLETED` - Run validation (`npx vitest`, touched-file `eslint`, `npm run typecheck`) and record evidence.
+
+## Current Task Plan (OCR-ADAPTIVE-RESOLUTION-001)
+1. `COMPLETED` - Implement shared OCR variant/context resolver foundation (`stringUtils` extensions + new shared resolver utility).
+2. `COMPLETED` - Integrate shared resolver + canonical dedupe into `useSmartCapture`, `useSmartScan`, and `App` OCR apply flow.
+3. `COMPLETED` - Add guarded corpus auto-growth pipeline from OCR review (`preload` allowlist + `main` IPC handler + `OCRReviewModal` fire-and-forget hook).
+4. `COMPLETED` - Update security allowlist negative tests and add/expand targeted unit tests for new similarity behavior.
+5. `COMPLETED` - Run validation (`typecheck`, touched-file eslint, targeted tests, security-negative tests), record evidence, and finalize handoff.
+
+## Current Task Plan (VERSION-CHANGELOG-001)
+1. `COMPLETED` - Locate authoritative app version sources and changelog file.
+2. `COMPLETED` - Bump package/app version values to the next release.
+3. `COMPLETED` - Add release notes entry for the bumped app version in `src/utils/changelog.ts`.
+4. `COMPLETED` - Run targeted validation on touched metadata files and record evidence.

@@ -2,6 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   levenshteinDistance,
   findClosestMatch,
+  lcsLength,
+  lcsRatio,
+  charFrequencyOverlap,
+  variantSimilarityScore,
+  findBestVariantMatch,
   normalizeOcrText,
   isOcrNoise,
   cleanPlayerName,
@@ -46,6 +51,46 @@ describe('findClosestMatch', () => {
 
   it('is case-insensitive', () => {
     expect(findClosestMatch('hunter', candidates)).toBe('Hunter');
+  });
+});
+
+describe('variant-aware helpers', () => {
+  it('computes LCS length and ratio', () => {
+    expect(lcsLength('adrian', 'bnfandria1nr4')).toBeGreaterThanOrEqual(6);
+    expect(lcsRatio('bnfandria1nr4', 'adrian')).toBeGreaterThan(0.8);
+  });
+
+  it('computes char frequency overlap in [0,1]', () => {
+    const score = charFrequencyOverlap('adrian', 'bnfandria1nr4');
+    expect(score).toBeGreaterThan(0);
+    expect(score).toBeLessThanOrEqual(1);
+  });
+
+  it('boosts variant similarity using known misreads', () => {
+    const noVariants = variantSimilarityScore('bnfandria1nr4', 'Adrian', []);
+    const withVariants = variantSimilarityScore('bnfandria1nr4', 'Adrian', ['aIeAdriankl']);
+    expect(withVariants).toBeGreaterThanOrEqual(noVariants);
+  });
+
+  it('finds best variant match when score is above threshold', () => {
+    const result = findBestVariantMatch(
+      'bnfandria1nr4',
+      ['Adrian', 'Charlie', 'Bob'],
+      { Adrian: ['aIeAdriankl'] },
+      55
+    );
+    expect(result?.match).toBe('Adrian');
+    expect((result?.score || 0)).toBeGreaterThanOrEqual(55);
+  });
+
+  it('returns null when no candidate reaches threshold', () => {
+    const result = findBestVariantMatch(
+      'CompletelyDifferent',
+      ['Adrian'],
+      { Adrian: ['aIeAdriankl'] },
+      75
+    );
+    expect(result).toBeNull();
   });
 });
 

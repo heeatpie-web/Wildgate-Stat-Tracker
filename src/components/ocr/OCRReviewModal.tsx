@@ -182,6 +182,33 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
       }
     });
 
+    if (corrections.length > 0 && Array.isArray(screenshots) && screenshots.length > 0) {
+      try {
+        const api = (window as any).electronAPI;
+        if (api?.invoke) {
+          const firstScreenshot = String(screenshots[0] || '');
+          const screenshotBase64 = firstScreenshot.replace(/^data:image\/\w+;base64,/, '');
+          const payload = {
+            screenshotBase64,
+            teammates: (editedData.teammates || []).map(t => t.name).filter(Boolean),
+            opponentTeams: (editedData.opponentTeams || []).map((team) => ({
+              teamName: team.teamName || '',
+              teamColor: team.color || '',
+              players: (team.players || []).map(p => p.name).filter(Boolean),
+            })),
+            modifiers: (editedData.reachModifiers || []).map(m => m.name).filter(Boolean),
+            meta: {
+              source: 'ocr-review',
+              timestamp: new Date().toISOString(),
+            },
+          };
+          void api.invoke('ocr-corpus-add-corrected-sample', payload).catch(() => undefined);
+        }
+      } catch {
+        // Non-blocking: corpus auto-growth must never block apply flow.
+      }
+    }
+
     onApply(editedData);
   };
 

@@ -180,7 +180,7 @@ export const AnalyticsShell: React.FC = () => {
     const modeBadge = currentMode === 'Artifact Brawl' ? 'bg-warning-soft text-warning border-warning-soft' : 'bg-info-soft text-info border-info-soft';
 
     return (
-        <div className="h-full flex flex-col gap-3 overflow-hidden p-3 rounded-modal analytics-shell-gradient shadow-lg">
+        <div className="h-full flex flex-col gap-3 overflow-hidden rounded-modal analytics-shell-gradient shadow-lg">
             {/* Header */}
             <div className="flex-shrink-0 rounded-card mg-surface-high backdrop-blur p-3 md:p-4">
                 <div className="flex flex-col gap-3">

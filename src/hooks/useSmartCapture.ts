@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { captureGameWindow, ocrProcessCapture, saveScreenshot, isElectron } from '../utils/electronBridge';
 import { rerunOCROnArtifact } from '../utils/artifactService';
 import type { OCRExtractedData, ScreenshotType } from '../utils/ocr/ocrTypes';
@@ -6,6 +6,12 @@ import { mergeOCRData, calculateOverallConfidence } from '../utils/ocr/ocrParser
 import { useAppStore } from '../store/useAppStore';
 import { useSoundEffects } from './useSoundEffects';
 import { findClosestMatch, normalizeOcrName } from '../utils/stringUtils';
+import {
+  buildAliasVariantMap,
+  dedupeNamedByCanonical,
+  resolveOcrName,
+  resolveWithSocialContext,
+} from '../utils/ocrNameResolver';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
 import { smartAnalyzeScreen } from '../utils/scanService';
@@ -60,6 +66,8 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const lockOcrTeams = useAppStore(s => s.lockOcrTeams);
   const pilotRegistry = useAppStore(s => s.pilotRegistry);
   const ocrCorrections = useAppStore(s => s.ocrCorrections);
+  const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
+  const playerProfiles = useAppStore(s => s.playerProfiles);
   const { visionStatus, setVisionStatus, setToast } = useUIState();
   const { playSuccess, playError: playSoundError } = useSoundEffects();
   const {
@@ -85,6 +93,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const [savedCaptures, setSavedCaptures] = useState<SavedCapture[]>([]);
   const [processingProgress, setProcessingProgress] = useState<{ current: number; total: number } | null>(null);
   const [qualityHint, setQualityHint] = useState<{ level: 'good' | 'fair' | 'poor'; message: string } | null>(null);
+  const aliasVariantMap = useMemo(() => buildAliasVariantMap(ocrAliasModel), [ocrAliasModel]);
 
   // Avoid stale closures in delayed processing (auto-bundling).
   const savedCapturesRef = useRef<SavedCapture[]>([]);
@@ -143,20 +152,20 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       const shipTypesByColor: Record<string, string> = {};
 
       const canonicalName = (rawName: string): string => {
-        const normalized = normalizeOcrName(rawName || '');
-        if (!normalized || normalized.length < 2) return '';
-
-        const direct = ocrCorrections?.[rawName] || ocrCorrections?.[normalized];
-        if (direct && direct.count >= 2) return normalizeOcrName(direct.correctedTo);
-
-        const exactKnown = (pilotRegistry || []).find(p => normalizeOcrName(p).toLowerCase() === normalized.toLowerCase());
-        if (exactKnown) return exactKnown;
-
-        const threshold = normalized.length > 8 ? 2 : 1;
-        const closest = findClosestMatch(normalized, pilotRegistry || [], threshold);
-        if (closest) return closest;
-
-        return normalized;
+        const candidates = Array.from(new Set([
+          ...(pilotRegistry || []),
+          ...Object.values(mergedTeams).flatMap(names => names || []),
+        ]));
+        return resolveOcrName({
+          rawName,
+          candidates,
+          ocrCorrections,
+          aliasModel: ocrAliasModel,
+          aliasVariantMap,
+          variantMinScore: 55,
+          shortThreshold: 1,
+          longThreshold: 2,
+        });
       };
 
       const inferFriendlyColor = (): string | null => {
@@ -258,7 +267,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     setSelectedReachModifiers,
     setTimeMin, setTimeSec, setDamageTaken,
     setSessionShipTypes,
-    ocrCorrections, pilotRegistry, lockOcrTeams,
+    ocrCorrections, ocrAliasModel, aliasVariantMap, pilotRegistry, lockOcrTeams,
     setToast
   ]);
 
@@ -310,21 +319,17 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   }, []);
 
   const resolveCanonicalName = useCallback((rawName: string): string => {
-    const normalized = normalizeOcrName(rawName || '');
-    if (!normalized || normalized.length < 2) return '';
-
-    const direct = ocrCorrections?.[rawName] || ocrCorrections?.[normalized];
-    if (direct && direct.count >= 2) return normalizeOcrName(direct.correctedTo);
-
-    const exactKnown = (pilotRegistry || []).find(p => normalizeOcrName(p).toLowerCase() === normalized.toLowerCase());
-    if (exactKnown) return exactKnown;
-
-    const threshold = normalized.length > 8 ? 2 : 1;
-    const closest = findClosestMatch(normalized, pilotRegistry || [], threshold);
-    if (closest) return closest;
-
-    return normalized;
-  }, [pilotRegistry, ocrCorrections]);
+    return resolveOcrName({
+      rawName,
+      candidates: pilotRegistry || [],
+      ocrCorrections,
+      aliasModel: ocrAliasModel,
+      aliasVariantMap,
+      variantMinScore: 55,
+      shortThreshold: 1,
+      longThreshold: 2,
+    });
+  }, [pilotRegistry, ocrCorrections, ocrAliasModel, aliasVariantMap]);
 
   const normalizeTeamName = useCallback((teamName: string): string => {
     const cleaned = normalizeOcrName(teamName || '');
@@ -337,6 +342,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     data: OCRExtractedData,
     previousData: OCRExtractedData[]
   ): OCRExtractedData => {
+    const registrySet = new Set((pilotRegistry || []).map((name) => normalizeOcrName(name).toLowerCase()));
     const normalizedTeammates = Array.from(
       new Map(
         (data.teammates || [])
@@ -348,19 +354,67 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
           .map(t => [normalizeOcrName(t.name).toLowerCase(), t])
       ).values()
     );
+    const resolvedTeammateAnchors = normalizedTeammates
+      .filter((teammate) => registrySet.has(normalizeOcrName(teammate.name).toLowerCase()))
+      .map((teammate) => teammate.name);
+    const contextualTeammates = normalizedTeammates.map((teammate) => {
+      const normalizedName = normalizeOcrName(teammate.name).toLowerCase();
+      if (registrySet.has(normalizedName)) return teammate;
+      const contextual = resolveWithSocialContext(
+        teammate.name,
+        pilotRegistry || [],
+        resolvedTeammateAnchors,
+        playerProfiles,
+        { minAnchors: 2, minPlayedWith: 1 }
+      );
+      if (!contextual) return teammate;
+      return {
+        ...teammate,
+        name: contextual,
+        confidence: Math.max(teammate.confidence || 0, 72),
+      };
+    });
+    const finalTeammates = dedupeNamedByCanonical(contextualTeammates);
+    const contextualAnchors = finalTeammates
+      .filter((teammate) => registrySet.has(normalizeOcrName(teammate.name).toLowerCase()))
+      .map((teammate) => teammate.name);
 
-    const currentTeams = (data.opponentTeams || []).map(team => ({
-      ...team,
-      teamName: normalizeTeamName(team.teamName || ''),
-      players: Array.from(
-        new Map(
-          (team.players || [])
-            .map(p => ({ ...p, name: resolveCanonicalName(p.name) }))
-            .filter(p => p.name && p.name.length > 2)
-            .map(p => [normalizeOcrName(p.name).toLowerCase(), p])
-        ).values()
-      ),
-    }));
+    const currentTeams = (data.opponentTeams || []).map((team) => {
+      const passOnePlayers = (team.players || [])
+        .map((player) => ({
+          ...player,
+          name: resolveCanonicalName(player.name),
+        }))
+        .filter((player) => player.name && player.name.length > 2);
+
+      const teamResolvedAnchors = passOnePlayers
+        .filter((player) => registrySet.has(normalizeOcrName(player.name).toLowerCase()))
+        .map((player) => player.name);
+
+      const passTwoPlayers = passOnePlayers.map((player) => {
+        const normalizedPlayer = normalizeOcrName(player.name).toLowerCase();
+        if (registrySet.has(normalizedPlayer)) return player;
+        const contextual = resolveWithSocialContext(
+          player.name,
+          pilotRegistry || [],
+          teamResolvedAnchors,
+          playerProfiles,
+          { minAnchors: 2, minPlayedWith: 1 }
+        );
+        if (!contextual) return player;
+        return {
+          ...player,
+          name: contextual,
+          confidence: Math.max(player.confidence || 0, 70),
+        };
+      });
+
+      return {
+        ...team,
+        teamName: normalizeTeamName(team.teamName || ''),
+        players: dedupeNamedByCanonical(passTwoPlayers),
+      };
+    });
 
     const historyTeams = previousData.flatMap(d => d.opponentTeams || []);
     const reconciledTeams = currentTeams.map(team => {
@@ -429,10 +483,16 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
     return {
       ...data,
-      teammates: normalizedTeammates,
+      teammates: finalTeammates,
       opponentTeams: finalTeams,
     };
-  }, [resolveCanonicalName, normalizeTeamName, lockOcrTeams]);
+  }, [
+    resolveCanonicalName,
+    normalizeTeamName,
+    lockOcrTeams,
+    pilotRegistry,
+    playerProfiles,
+  ]);
 
   const buildMergedData = useCallback((screenshots: Array<{ type: ScreenshotType; data: OCRExtractedData; timestamp: number }>): OCRExtractedData | null => {
     if (screenshots.length === 0) return null;

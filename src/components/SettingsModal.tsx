@@ -9,12 +9,26 @@ import { StorageService } from '../utils/storage';
 import { getElectronAPI } from '../utils/electronAPI';
 import { useAppStore } from '../store/useAppStore';
 import { getGCloudStatus, type GCloudStatus } from '../utils/electronBridge';
-import type { OcrMode, CaptureMode, TelemetryPerformanceProfile } from '../store/slices/createSettingsSlice';
+import type { OcrMode, CaptureMode, TelemetryPerformanceProfile, OcrLearningReviewMode, OcrThresholdRecommendationMode } from '../store/slices/createSettingsSlice';
 import { normalizeOcrName } from '../utils/stringUtils';
 import { DEFAULT_OCR_BEST_GUESS_THRESHOLDS, getPreset, detectSensitivityLevel } from './settings/ocrThresholdPresets';
 import { Button, Input } from './ui';
 
 type SettingsTabId = 'identity' | 'interface' | 'ocr-capture' | 'data';
+type DashboardStatView = 'analytics' | 'history' | 'smart-captures' | 'players' | 'dev-ocr';
+
+interface ThresholdRecommendationPayload {
+    generatedAt?: string;
+    confidenceScore?: number;
+    summary?: string;
+    reasons?: string[];
+    recommendedThresholds?: {
+        cloud: { player: number; mod: number; ship: number };
+        merged: { player: number; mod: number; ship: number };
+        local: { player: number; mod: number; ship: number };
+        lowConfidenceBump: number;
+    };
+}
 
 export const SettingsModal: React.FC = () => {
     const {
@@ -35,6 +49,7 @@ export const SettingsModal: React.FC = () => {
         showSettings, setShowSettings,
         isOverlayMode,
         updateStatus, setUpdateStatus,
+        setToast,
         setShowResetConfirm,
         setShowTutorial,
         enableAutoLogRecording, setEnableAutoLogRecording,
@@ -52,21 +67,56 @@ export const SettingsModal: React.FC = () => {
     const setShowSmartCaptureInHeader = useAppStore(s => s.setShowSmartCaptureInHeader);
     const telemetryPerformanceProfile = useAppStore(s => s.telemetryPerformanceProfile);
     const setTelemetryPerformanceProfile = useAppStore(s => s.setTelemetryPerformanceProfile);
+    const startupSmartPreloadEnabled = useAppStore(s => s.startupSmartPreloadEnabled);
+    const setStartupSmartPreloadEnabled = useAppStore(s => s.setStartupSmartPreloadEnabled);
     const lockOcrTeams = useAppStore(s => s.lockOcrTeams);
     const setLockOcrTeams = useAppStore(s => s.setLockOcrTeams);
+    const ocrLearningEnabled = useAppStore(s => s.ocrLearningEnabled);
+    const setOcrLearningEnabled = useAppStore(s => s.setOcrLearningEnabled);
+    const ocrAutoApplyMinScore = useAppStore(s => s.ocrAutoApplyMinScore);
+    const setOcrAutoApplyMinScore = useAppStore(s => s.setOcrAutoApplyMinScore);
+    const ocrAutoApplyMinCount = useAppStore(s => s.ocrAutoApplyMinCount);
+    const setOcrAutoApplyMinCount = useAppStore(s => s.setOcrAutoApplyMinCount);
+    const ocrLearningStrictMode = useAppStore(s => s.ocrLearningStrictMode);
+    const setOcrLearningStrictMode = useAppStore(s => s.setOcrLearningStrictMode);
+    const ocrLearningReviewMode = useAppStore(s => s.ocrLearningReviewMode);
+    const setOcrLearningReviewMode = useAppStore(s => s.setOcrLearningReviewMode);
+    const ocrLearningAutoPromoteCount = useAppStore(s => s.ocrLearningAutoPromoteCount);
+    const setOcrLearningAutoPromoteCount = useAppStore(s => s.setOcrLearningAutoPromoteCount);
+    const ocrLearningQueueEnabled = useAppStore(s => s.ocrLearningQueueEnabled);
+    const setOcrLearningQueueEnabled = useAppStore(s => s.setOcrLearningQueueEnabled);
+    const adaptivePreloadEnabled = useAppStore(s => s.adaptivePreloadEnabled);
+    const setAdaptivePreloadEnabled = useAppStore(s => s.setAdaptivePreloadEnabled);
+    const adaptivePreloadBudgetMs = useAppStore(s => s.adaptivePreloadBudgetMs);
+    const setAdaptivePreloadBudgetMs = useAppStore(s => s.setAdaptivePreloadBudgetMs);
+    const ocrThresholdRecommendationMode = useAppStore(s => s.ocrThresholdRecommendationMode);
+    const setOcrThresholdRecommendationMode = useAppStore(s => s.setOcrThresholdRecommendationMode);
+    const ocrThresholdHistory = useAppStore(s => s.ocrThresholdHistory);
+    const pushOcrThresholdHistory = useAppStore(s => s.pushOcrThresholdHistory);
+    const popOcrThresholdHistory = useAppStore(s => s.popOcrThresholdHistory);
     const ocrBestGuessThresholds = useAppStore(s => s.ocrBestGuessThresholds);
     const setOcrBestGuessThresholds = useAppStore(s => s.setOcrBestGuessThresholds);
+    const dashboardPreloadStats = useAppStore(s => s.dashboardPreloadStats);
+    const resetDashboardPreloadStats = useAppStore(s => s.resetDashboardPreloadStats);
     const tutorialCompleted = useAppStore(s => s.tutorialCompleted);
     const enableAutoBackup = useAppStore(s => s.enableAutoBackup);
     const setEnableAutoBackup = useAppStore(s => s.setEnableAutoBackup);
     const ocrCalibration = useAppStore(s => s.ocrCalibration);
     const setOcrCalibration = useAppStore(s => s.setOcrCalibration);
     const resetOcrCalibration = useAppStore(s => s.resetOcrCalibration);
-    const ocrCorrections = useAppStore(s => s.ocrCorrections);
-    const recordOcrCorrection = useAppStore(s => s.recordOcrCorrection);
+    const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
+    const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
+    const blockOcrAlias = useAppStore(s => s.blockOcrAlias);
+    const unblockOcrAlias = useAppStore(s => s.unblockOcrAlias);
+    const ocrLearningEvents = useAppStore(s => s.ocrLearningEvents);
+    const ocrLearningQueue = useAppStore(s => s.ocrLearningQueue);
+    const rollbackOcrLearningEvent = useAppStore(s => s.rollbackOcrLearningEvent);
+    const clearResolvedOcrLearningEvents = useAppStore(s => s.clearResolvedOcrLearningEvents);
     const [gcloudStatus, setGcloudStatus] = useState<GCloudStatus | null>(null);
     const [aliasFrom, setAliasFrom] = useState('');
     const [aliasTo, setAliasTo] = useState('');
+    const [thresholdRecBusy, setThresholdRecBusy] = useState(false);
+    const [thresholdRecommendation, setThresholdRecommendation] = useState<ThresholdRecommendationPayload | null>(null);
     const getSensitivityLevel = () => detectSensitivityLevel(ocrBestGuessThresholds);
     const applySensitivityPreset = (level: 'strict' | 'balanced' | 'lenient') => {
         setOcrBestGuessThresholds(getPreset(level));
@@ -79,6 +129,43 @@ export const SettingsModal: React.FC = () => {
             lowConfidenceBump: DEFAULT_OCR_BEST_GUESS_THRESHOLDS.lowConfidenceBump,
         });
     };
+    const runThresholdRecommendation = async () => {
+        const api = getElectronAPI();
+        if (!api) {
+            alert('Threshold recommendation is only available in the desktop app.');
+            return;
+        }
+        try {
+            setThresholdRecBusy(true);
+            const res = await api.invoke('ocr-corpus-threshold-recommend');
+            if (!res?.success) {
+                alert(`Recommendation failed: ${res?.error || 'Unknown error'}`);
+                return;
+            }
+            setThresholdRecommendation(res.recommendation || null);
+        } finally {
+            setThresholdRecBusy(false);
+        }
+    };
+    const applyThresholdRecommendation = () => {
+        if (!thresholdRecommendation?.recommendedThresholds) return;
+        pushOcrThresholdHistory({
+            timestamp: Date.now(),
+            source: 'manual-apply-recommendation',
+            thresholds: {
+                cloud: { ...ocrBestGuessThresholds.cloud },
+                merged: { ...ocrBestGuessThresholds.merged },
+                local: { ...ocrBestGuessThresholds.local },
+                lowConfidenceBump: ocrBestGuessThresholds.lowConfidenceBump,
+            }
+        });
+        setOcrBestGuessThresholds(thresholdRecommendation.recommendedThresholds);
+    };
+    const revertThresholdRecommendation = () => {
+        const prev = popOcrThresholdHistory();
+        if (!prev?.thresholds) return;
+        setOcrBestGuessThresholds(prev.thresholds);
+    };
 
     useEffect(() => {
         if (showSettings) {
@@ -89,6 +176,11 @@ export const SettingsModal: React.FC = () => {
     const [saved, setSaved] = useState(false);
     const [activeTab, setActiveTab] = useState<SettingsTabId>('interface');
     const cloudReady = !!gcloudStatus?.visionReady;
+    useEffect(() => {
+        if (isOverlayMode && activeTab === 'data') {
+            setActiveTab('interface');
+        }
+    }, [activeTab, isOverlayMode]);
 
     const handleSaveAndClose = useCallback(async () => {
         setSaved(true);
@@ -125,14 +217,30 @@ export const SettingsModal: React.FC = () => {
                 ocrMode: state.ocrMode,
                 captureMode: state.captureMode,
                 lockOcrTeams: state.lockOcrTeams,
+                ocrLearningEnabled: (state as any).ocrLearningEnabled,
+                ocrAutoApplyMinScore: (state as any).ocrAutoApplyMinScore,
+                ocrAutoApplyMinCount: (state as any).ocrAutoApplyMinCount,
+                ocrLearningStrictMode: (state as any).ocrLearningStrictMode,
+                ocrLearningReviewMode: (state as any).ocrLearningReviewMode,
+                ocrLearningAutoPromoteCount: (state as any).ocrLearningAutoPromoteCount,
+                ocrLearningQueueEnabled: (state as any).ocrLearningQueueEnabled,
+                adaptivePreloadEnabled: (state as any).adaptivePreloadEnabled,
+                adaptivePreloadBudgetMs: (state as any).adaptivePreloadBudgetMs,
+                dashboardPreloadStats: (state as any).dashboardPreloadStats,
+                ocrThresholdRecommendationMode: (state as any).ocrThresholdRecommendationMode,
+                ocrThresholdHistory: (state as any).ocrThresholdHistory,
                 ocrBestGuessThresholds: state.ocrBestGuessThresholds,
                 autoBackup: state.enableAutoBackup,
+                startupSmartPreloadEnabled: (state as any).startupSmartPreloadEnabled,
                 ocrCalibration: state.ocrCalibration,
                 tutorialCompleted: state.tutorialCompleted,
             },
             layouts: (state as any).layouts,
             timelineEvents: (state as any).timelineEvents,
-            ocrCorrections: (state as any).ocrCorrections
+            ocrCorrections: (state as any).ocrCorrections,
+            ocrAliasModel: (state as any).ocrAliasModel,
+            ocrLearningEvents: (state as any).ocrLearningEvents,
+            ocrLearningQueue: (state as any).ocrLearningQueue
         });
         setTimeout(() => {
             setSaved(false);
@@ -175,11 +283,31 @@ export const SettingsModal: React.FC = () => {
             { id: 'data', label: 'Data' },
         ];
 
-    useEffect(() => {
-        if (isOverlayMode && activeTab === 'data') {
-            setActiveTab('interface');
-        }
-    }, [activeTab, isOverlayMode]);
+    const learnedAliases = Object.values(ocrAliasModel.entries || {})
+        .flat()
+        .sort((a, b) => {
+            if (b.count !== a.count) return b.count - a.count;
+            return b.lastUpdatedAt - a.lastUpdatedAt;
+        })
+        .slice(0, 30);
+    const learningEventsRecent = (ocrLearningEvents || []).slice().sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
+    const learningQueueCount = (ocrLearningQueue || []).length;
+    const learningResolvedCount = learningEventsRecent.filter((e) => e.status !== 'queued').length;
+    const preloadViews: DashboardStatView[] = ['analytics', 'history', 'smart-captures', 'players', 'dev-ocr'];
+    const preloadRows = preloadViews
+        .map((view) => {
+            const stat = dashboardPreloadStats?.[view];
+            const durations = Array.isArray(stat?.openDurationsMs) ? stat!.openDurationsMs : [];
+            const avgDuration = durations.length > 0
+                ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length)
+                : 0;
+            return {
+                view,
+                switchCount: Number(stat?.switchCount || 0),
+                avgDuration,
+            };
+        })
+        .sort((a, b) => b.switchCount - a.switchCount);
 
     return (
         <div className="fixed inset-0 z-modal md3-dialog-scrim flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowSettings(false)}>
@@ -246,7 +374,11 @@ export const SettingsModal: React.FC = () => {
                                 const raw = normalizeOcrName(aliasFrom);
                                 const target = normalizeOcrName(aliasTo);
                                 if (!raw || !target) return;
-                                recordOcrCorrection(raw, target);
+                                recordOcrAliasCorrection(raw, target, {
+                                    source: 'settings_alias',
+                                    context: 'unknown',
+                                    confidenceWeight: 1,
+                                });
                                 setAliasFrom('');
                                 setAliasTo('');
                             }}
@@ -255,17 +387,30 @@ export const SettingsModal: React.FC = () => {
                             Add Alias
                         </Button>
                         <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-1">
-                            {Object.values(ocrCorrections)
-                                .sort((a, b) => b.count - a.count)
-                                .slice(0, 30)
-                                .map((c, idx) => (
-                                    <div key={`${c.ocrText}-${idx}`} className="md3-surface rounded-lg px-2 py-1.5 text-label-sm flex items-center justify-between">
-                                        <span className="truncate opacity-60">{c.ocrText}</span>
-                                        <span className="mx-2 opacity-40">→</span>
-                                        <span className="truncate font-bold text-md-sys-primary">{c.correctedTo}</span>
-                                        <span className="ml-2 opacity-40">x{c.count}</span>
+                            {learnedAliases.map((c, idx) => {
+                                const blocked = !!ocrAliasModel.blocklist?.[c.normalizedKey];
+                                return (
+                                    <div key={`${c.normalizedKey}-${c.targetName}-${idx}`} className="md3-surface rounded-lg px-2 py-1.5 text-label-sm flex items-center justify-between gap-2">
+                                        <span className="truncate opacity-60">{c.rawKey}</span>
+                                        <span className="mx-1 opacity-40">-&gt;</span>
+                                        <span className="truncate font-bold text-md-sys-primary">{c.targetName}</span>
+                                        <span className="ml-1 opacity-40">x{c.count}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (blocked) unblockOcrAlias(c.normalizedKey);
+                                                else blockOcrAlias(c.normalizedKey, 'settings-blocklist');
+                                            }}
+                                            className={`px-2 py-1 rounded-control text-label-xs font-bold uppercase ${blocked ? 'md3-btn-tonal text-warning' : 'md3-btn-outlined'}`}
+                                        >
+                                            {blocked ? 'Unblock' : 'Block'}
+                                        </button>
                                     </div>
-                                ))}
+                                );
+                            })}
+                            {learnedAliases.length === 0 && (
+                                <div className="text-label-sm opacity-60">No learned aliases yet.</div>
+                            )}
                         </div>
                         </section>
                     )}
@@ -415,6 +560,18 @@ export const SettingsModal: React.FC = () => {
                                         className={`w-11 h-6 rounded-full transition-colors ${enableAutoLogRecording ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
                                     >
                                         <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${enableAutoLogRecording ? 'translate-x-5' : ''}`} />
+                                    </button>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <span className="text-label-sm font-medium opacity-60 block">Startup Smart Preload</span>
+                                        <span className="text-label-sm opacity-40 uppercase font-bold">Avoid first-switch loading flashes</span>
+                                    </div>
+                                    <button
+                                        onClick={() => setStartupSmartPreloadEnabled(!startupSmartPreloadEnabled)}
+                                        className={`w-11 h-6 rounded-full transition-colors ${startupSmartPreloadEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
+                                    >
+                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${startupSmartPreloadEnabled ? 'translate-x-5' : ''}`} />
                                     </button>
                                 </div>
                                 <div className="pt-2 border-t border-md-sys-outline/10 space-y-2">
@@ -592,6 +749,277 @@ export const SettingsModal: React.FC = () => {
                             >
                                 <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${lockOcrTeams ? 'translate-x-5' : ''}`} />
                             </button>
+                        </div>
+                        <div className="mt-3 p-3 md3-surface rounded-card border border-md-sys-outline/10 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-label-sm font-semibold">OCR Learning</div>
+                                    <div className="text-label-sm opacity-60">Use correction history to auto-resolve repeated OCR misreads</div>
+                                </div>
+                                <button
+                                    onClick={() => setOcrLearningEnabled(!ocrLearningEnabled)}
+                                    className={`w-11 h-6 rounded-full transition-colors ${ocrLearningEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
+                                >
+                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${ocrLearningEnabled ? 'translate-x-5' : ''}`} />
+                                </button>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-label-sm font-semibold opacity-60">Strict Mode</div>
+                                    <div className="text-label-sm opacity-40">Require stronger confidence gap before auto-apply</div>
+                                </div>
+                                <button
+                                    onClick={() => setOcrLearningStrictMode(!ocrLearningStrictMode)}
+                                    disabled={!ocrLearningEnabled}
+                                    className={`w-11 h-6 rounded-full transition-colors ${ocrLearningStrictMode ? 'bg-md-sys-primary' : 'md3-surface-high'} relative disabled:opacity-disabled`}
+                                >
+                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${ocrLearningStrictMode ? 'translate-x-5' : ''}`} />
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 pt-1">
+                                <label className="text-label-sm opacity-60 flex items-center gap-2">
+                                    Min score
+                                    <input
+                                        type="range"
+                                        min={0.6}
+                                        max={0.95}
+                                        step={0.01}
+                                        value={ocrAutoApplyMinScore}
+                                        onChange={(e) => setOcrAutoApplyMinScore(Number(e.target.value))}
+                                        disabled={!ocrLearningEnabled}
+                                        className="flex-1"
+                                    />
+                                    <span className="font-mono text-label-sm w-10 text-right">{Math.round(ocrAutoApplyMinScore * 100)}%</span>
+                                </label>
+                                <label className="text-label-sm opacity-60 flex items-center gap-2">
+                                    Min count
+                                    <input
+                                        type="range"
+                                        min={1}
+                                        max={6}
+                                        step={1}
+                                        value={ocrAutoApplyMinCount}
+                                        onChange={(e) => setOcrAutoApplyMinCount(Number(e.target.value))}
+                                        disabled={!ocrLearningEnabled}
+                                        className="flex-1"
+                                    />
+                                    <span className="font-mono text-label-sm w-6 text-right">{ocrAutoApplyMinCount}</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div className="mt-3 p-3 md3-surface rounded-card border border-md-sys-outline/10 space-y-3">
+                            <div>
+                                <div className="text-label-sm font-semibold">Learning Review Policy</div>
+                                <div className="text-label-sm opacity-60">Control how often learned aliases are queued for confirmation</div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                                {([
+                                    { id: 'conservative' as OcrLearningReviewMode, label: 'Conservative' },
+                                    { id: 'balanced' as OcrLearningReviewMode, label: 'Balanced' },
+                                    { id: 'aggressive' as OcrLearningReviewMode, label: 'Aggressive' },
+                                ] as const).map((mode) => (
+                                    <button
+                                        key={mode.id}
+                                        onClick={() => setOcrLearningReviewMode(mode.id)}
+                                        disabled={!ocrLearningEnabled}
+                                        className={`p-2 rounded-control text-label-sm font-bold transition-all ${ocrLearningReviewMode === mode.id ? 'md3-btn-filled ring-2 ring-md-sys-primary/40' : 'md3-btn-outlined'} disabled:opacity-disabled`}
+                                    >
+                                        {mode.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-label-sm font-semibold opacity-60">Queue Learning Suggestions</div>
+                                    <div className="text-label-sm opacity-40">Keep uncertain or policy-flagged auto-resolves in review queue</div>
+                                </div>
+                                <button
+                                    onClick={() => setOcrLearningQueueEnabled(!ocrLearningQueueEnabled)}
+                                    disabled={!ocrLearningEnabled}
+                                    className={`w-11 h-6 rounded-full transition-colors ${ocrLearningQueueEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative disabled:opacity-disabled`}
+                                >
+                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${ocrLearningQueueEnabled ? 'translate-x-5' : ''}`} />
+                                </button>
+                            </div>
+                            <label className="text-label-sm opacity-60 flex items-center gap-2">
+                                Auto-promote count
+                                <input
+                                    type="range"
+                                    min={1}
+                                    max={10}
+                                    step={1}
+                                    value={ocrLearningAutoPromoteCount}
+                                    onChange={(e) => setOcrLearningAutoPromoteCount(Number(e.target.value))}
+                                    disabled={!ocrLearningEnabled}
+                                    className="flex-1"
+                                />
+                                <span className="font-mono text-label-sm w-6 text-right">{ocrLearningAutoPromoteCount}</span>
+                            </label>
+                            <div className="text-label-sm opacity-60">
+                                Queue: {learningQueueCount} pending • History: {learningEventsRecent.length} events • Resolved: {learningResolvedCount}
+                            </div>
+                        </div>
+                        <div className="mt-3 p-3 md3-surface rounded-card border border-md-sys-outline/10 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-label-sm font-semibold">Adaptive Startup Preload</div>
+                                    <div className="text-label-sm opacity-60">Prioritize heavy tabs first on startup and tune preload budget</div>
+                                </div>
+                                <button
+                                    onClick={() => setAdaptivePreloadEnabled(!adaptivePreloadEnabled)}
+                                    className={`w-11 h-6 rounded-full transition-colors ${adaptivePreloadEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
+                                >
+                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${adaptivePreloadEnabled ? 'translate-x-5' : ''}`} />
+                                </button>
+                            </div>
+                            <label className="text-label-sm opacity-60 flex items-center gap-2">
+                                Preload budget
+                                <input
+                                    type="range"
+                                    min={200}
+                                    max={2500}
+                                    step={50}
+                                    value={adaptivePreloadBudgetMs}
+                                    onChange={(e) => setAdaptivePreloadBudgetMs(Number(e.target.value))}
+                                    disabled={!adaptivePreloadEnabled}
+                                    className="flex-1"
+                                />
+                                <span className="font-mono text-label-sm w-14 text-right">{adaptivePreloadBudgetMs}ms</span>
+                            </label>
+                            <div className="space-y-1">
+                                {preloadRows.slice(0, 3).map((row) => (
+                                    <div key={row.view} className="flex items-center justify-between text-label-sm opacity-60">
+                                        <span className="uppercase tracking-wide">{row.view}</span>
+                                        <span className="font-mono">{row.switchCount} switches • avg {row.avgDuration}ms</span>
+                                    </div>
+                                ))}
+                            </div>
+                            <button
+                                onClick={() => {
+                                    resetDashboardPreloadStats();
+                                    setToast({ message: 'Adaptive preload stats reset', type: 'success' });
+                                }}
+                                className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
+                            >
+                                Reset Adaptive Stats
+                            </button>
+                        </div>
+                        <div className="mt-3 p-3 md3-surface rounded-card border border-md-sys-outline/10 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-label-sm font-semibold">Threshold Recommendation</div>
+                                    <div className="text-label-sm opacity-60">Recommend OCR confidence thresholds from corpus evaluation output</div>
+                                </div>
+                                <button
+                                    onClick={runThresholdRecommendation}
+                                    disabled={thresholdRecBusy}
+                                    className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled"
+                                >
+                                    {thresholdRecBusy ? 'Running...' : 'Run Recommender'}
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                {([
+                                    { id: 'assisted' as OcrThresholdRecommendationMode, label: 'Assisted' },
+                                    { id: 'manual' as OcrThresholdRecommendationMode, label: 'Manual' },
+                                ] as const).map((mode) => (
+                                    <button
+                                        key={mode.id}
+                                        onClick={() => setOcrThresholdRecommendationMode(mode.id)}
+                                        className={`p-2 rounded-control text-label-sm font-bold transition-all ${ocrThresholdRecommendationMode === mode.id ? 'md3-btn-filled ring-2 ring-md-sys-primary/40' : 'md3-btn-outlined'}`}
+                                    >
+                                        {mode.label}
+                                    </button>
+                                ))}
+                            </div>
+                            {thresholdRecommendation?.recommendedThresholds && (
+                                <div className="p-3 rounded-control md3-surface-high/50 border border-md-sys-outline/10 space-y-2">
+                                    <div className="text-label-sm opacity-60">
+                                        Suggested at {thresholdRecommendation.generatedAt || 'unknown time'} • confidence {Math.round((thresholdRecommendation.confidenceScore || 0) * 100)}%
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2 text-label-sm font-mono opacity-70">
+                                        <div>Cloud p/m/s: {thresholdRecommendation.recommendedThresholds.cloud.player}/{thresholdRecommendation.recommendedThresholds.cloud.mod}/{thresholdRecommendation.recommendedThresholds.cloud.ship}</div>
+                                        <div>Merged p/m/s: {thresholdRecommendation.recommendedThresholds.merged.player}/{thresholdRecommendation.recommendedThresholds.merged.mod}/{thresholdRecommendation.recommendedThresholds.merged.ship}</div>
+                                        <div>Local p/m/s: {thresholdRecommendation.recommendedThresholds.local.player}/{thresholdRecommendation.recommendedThresholds.local.mod}/{thresholdRecommendation.recommendedThresholds.local.ship}</div>
+                                    </div>
+                                    <div className="text-label-sm opacity-60">
+                                        Low-confidence bump: {thresholdRecommendation.recommendedThresholds.lowConfidenceBump}
+                                    </div>
+                                    {Array.isArray(thresholdRecommendation.reasons) && thresholdRecommendation.reasons.length > 0 && (
+                                        <div className="text-label-sm opacity-60 space-y-1">
+                                            {thresholdRecommendation.reasons.slice(0, 3).map((reason, idx) => (
+                                                <div key={`thres-reason-${idx}`}>- {reason}</div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={applyThresholdRecommendation}
+                                            className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
+                                        >
+                                            Apply Recommendation
+                                        </button>
+                                        <button
+                                            onClick={revertThresholdRecommendation}
+                                            disabled={ocrThresholdHistory.length === 0}
+                                            className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled"
+                                        >
+                                            Revert Last
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                            <div className="text-label-sm opacity-60">Threshold history depth: {ocrThresholdHistory.length}</div>
+                        </div>
+                        <div className="mt-3 p-3 md3-surface rounded-card border border-md-sys-outline/10 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-label-sm font-semibold">Learning Event History</div>
+                                    <div className="text-label-sm opacity-60">Rollback wrong auto-learns and clear old resolved items</div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        clearResolvedOcrLearningEvents();
+                                        setToast({ message: 'Resolved learning events cleared', type: 'success' });
+                                    }}
+                                    className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
+                                >
+                                    Clear Resolved
+                                </button>
+                            </div>
+                            <div className="space-y-2 max-h-44 overflow-y-auto custom-scrollbar pr-1">
+                                {learningEventsRecent.slice(0, 10).map((event) => {
+                                    const displayTarget = event.appliedName || event.suggestedName || 'n/a';
+                                    const rollbackEligible = event.status === 'approved' || event.status === 'auto_applied';
+                                    return (
+                                        <div key={event.id} className="p-2 rounded-control md3-surface-high/50 border border-md-sys-outline/10">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="text-label-sm font-semibold truncate">{event.rawText} -&gt; {displayTarget}</div>
+                                                <span className="text-label-xs font-mono uppercase opacity-60">{event.status.replace('_', ' ')}</span>
+                                            </div>
+                                            <div className="text-label-sm opacity-60 mt-1">
+                                                score {Math.round(event.score * 100)}% • count {event.count} • {event.context}
+                                            </div>
+                                            {rollbackEligible && (
+                                                <button
+                                                    onClick={() => {
+                                                        const rollback = rollbackOcrLearningEvent(event.id, 'Rollback from settings');
+                                                        if (rollback) {
+                                                            setToast({ message: `Rolled back ${event.rawText}`, type: 'success' });
+                                                        }
+                                                    }}
+                                                    className="mt-2 md3-btn-outlined px-2.5 py-1 text-label-sm font-bold text-md-sys-error"
+                                                >
+                                                    Rollback
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                                {learningEventsRecent.length === 0 && (
+                                    <div className="text-label-sm opacity-60">No learning events yet.</div>
+                                )}
+                            </div>
                         </div>
                         <div className="mt-4 p-4 md3-surface rounded-card border border-md-sys-outline/10">
                             <div className="flex items-center justify-between mb-2">

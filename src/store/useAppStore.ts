@@ -15,6 +15,7 @@ import { FormSlice, createFormSlice } from './slices/createFormSlice';
 import { MappingSlice, createMappingSlice } from './slices/createMappingSlice';
 import { SmartCapturesUIState, createSmartCapturesSlice } from './slices/createSmartCapturesSlice';
 import { StorageService } from '../utils/storage';
+import { createEmptyOcrAliasModel, migrateLegacyOcrCorrections } from '../utils/ocrAliasEngine';
 
 export type AppState = DataSlice & SettingsSlice & UISlice & SmartCapturesUIState & FormSlice & MappingSlice;
 
@@ -29,6 +30,11 @@ const customStorage: PersistStorage<AppState> = {
 
       if (!data) return null;
       const settings = data.settings || {};
+      const legacyOcrCorrections = data.ocrCorrections || {};
+      const persistedAliasModel =
+        data.ocrAliasModel && typeof data.ocrAliasModel === 'object' && data.ocrAliasModel.version === 1
+          ? data.ocrAliasModel
+          : migrateLegacyOcrCorrections(legacyOcrCorrections);
       const players = Array.isArray(data.players)
         ? data.players.filter((p: any): p is string => typeof p === 'string' && p.trim().length > 0)
         : [];
@@ -59,7 +65,10 @@ const customStorage: PersistStorage<AppState> = {
           uidMappings: data.uidMappings || { players: {}, ships: {}, weapons: {}, equipment: {} },
           uidSeedVersionApplied: data.uidSeedState?.seedVersionApplied ?? null,
           playerProfiles: data.playerProfiles || {},
-          ocrCorrections: data.ocrCorrections || {},
+          ocrCorrections: legacyOcrCorrections,
+          ocrAliasModel: persistedAliasModel || createEmptyOcrAliasModel(),
+          ocrLearningEvents: Array.isArray(data.ocrLearningEvents) ? data.ocrLearningEvents : [],
+          ocrLearningQueue: Array.isArray(data.ocrLearningQueue) ? data.ocrLearningQueue : [],
 
           // Settings
           appearanceMode: settings.mode || 'twilight',
@@ -76,12 +85,31 @@ const customStorage: PersistStorage<AppState> = {
           enableAutoLogRecording: settings.autoLog ?? true,
           telemetryPerformanceProfile: settings.telemetryPerformanceProfile || 'balanced',
           enableAutoBackup: settings.autoBackup ?? true,
+          startupSmartPreloadEnabled: settings.startupSmartPreloadEnabled ?? true,
           isAlwaysOnTop: settings.alwaysOnTop ?? false,
           overlayStyle: settings.overlayStyle || 'compact',
           visualMode: settings.visualMode || 'dense',
           ocrMode: settings.ocrMode || 'both',
           captureMode: settings.captureMode || 'auto',
           lockOcrTeams: settings.lockOcrTeams || false,
+          ocrLearningEnabled: settings.ocrLearningEnabled ?? true,
+          ocrAutoApplyMinScore: Number.isFinite(settings.ocrAutoApplyMinScore) ? Number(settings.ocrAutoApplyMinScore) : 0.82,
+          ocrAutoApplyMinCount: Number.isFinite(settings.ocrAutoApplyMinCount) ? Math.max(1, Math.round(Number(settings.ocrAutoApplyMinCount))) : 3,
+          ocrLearningStrictMode: settings.ocrLearningStrictMode ?? true,
+          ocrLearningReviewMode: settings.ocrLearningReviewMode || 'conservative',
+          ocrLearningAutoPromoteCount: Number.isFinite(settings.ocrLearningAutoPromoteCount) ? Math.max(1, Math.round(Number(settings.ocrLearningAutoPromoteCount))) : 5,
+          ocrLearningQueueEnabled: settings.ocrLearningQueueEnabled ?? true,
+          adaptivePreloadEnabled: settings.adaptivePreloadEnabled ?? true,
+          adaptivePreloadBudgetMs: Number.isFinite(settings.adaptivePreloadBudgetMs) ? Math.max(200, Math.round(Number(settings.adaptivePreloadBudgetMs))) : 900,
+          dashboardPreloadStats: settings.dashboardPreloadStats || {
+            analytics: { openDurationsMs: [], switchCount: 0, lastVisitedAt: 0 },
+            history: { openDurationsMs: [], switchCount: 0, lastVisitedAt: 0 },
+            'smart-captures': { openDurationsMs: [], switchCount: 0, lastVisitedAt: 0 },
+            players: { openDurationsMs: [], switchCount: 0, lastVisitedAt: 0 },
+            'dev-ocr': { openDurationsMs: [], switchCount: 0, lastVisitedAt: 0 },
+          },
+          ocrThresholdRecommendationMode: settings.ocrThresholdRecommendationMode || 'assisted',
+          ocrThresholdHistory: Array.isArray(settings.ocrThresholdHistory) ? settings.ocrThresholdHistory : [],
           ocrBestGuessThresholds: settings.ocrBestGuessThresholds || {
             cloud: { player: 80, mod: 82, ship: 62 },
             merged: { player: 78, mod: 80, ship: 60 },
@@ -152,6 +180,8 @@ const customStorage: PersistStorage<AppState> = {
       uidMappings: state.uidMappings,
       uidSeedState: { seedVersionApplied: state.uidSeedVersionApplied },
       playerProfiles: state.playerProfiles,
+      ocrLearningEvents: state.ocrLearningEvents,
+      ocrLearningQueue: state.ocrLearningQueue,
       settings: {
         mode: state.appearanceMode,
         theme: state.colorTheme,
@@ -167,12 +197,25 @@ const customStorage: PersistStorage<AppState> = {
         autoLog: state.enableAutoLogRecording,
         telemetryPerformanceProfile: state.telemetryPerformanceProfile,
         autoBackup: state.enableAutoBackup,
+        startupSmartPreloadEnabled: state.startupSmartPreloadEnabled,
         alwaysOnTop: state.isAlwaysOnTop,
         overlayStyle: state.overlayStyle,
         visualMode: state.visualMode,
         ocrMode: state.ocrMode,
                 captureMode: state.captureMode,
                 lockOcrTeams: state.lockOcrTeams,
+                ocrLearningEnabled: state.ocrLearningEnabled,
+                ocrAutoApplyMinScore: state.ocrAutoApplyMinScore,
+                ocrAutoApplyMinCount: state.ocrAutoApplyMinCount,
+                ocrLearningStrictMode: state.ocrLearningStrictMode,
+                ocrLearningReviewMode: state.ocrLearningReviewMode,
+                ocrLearningAutoPromoteCount: state.ocrLearningAutoPromoteCount,
+                ocrLearningQueueEnabled: state.ocrLearningQueueEnabled,
+                adaptivePreloadEnabled: state.adaptivePreloadEnabled,
+                adaptivePreloadBudgetMs: state.adaptivePreloadBudgetMs,
+                dashboardPreloadStats: state.dashboardPreloadStats,
+                ocrThresholdRecommendationMode: state.ocrThresholdRecommendationMode,
+                ocrThresholdHistory: state.ocrThresholdHistory,
                 ocrBestGuessThresholds: state.ocrBestGuessThresholds,
                 ocrCalibration: state.ocrCalibration,
                 tutorialCompleted: state.tutorialCompleted,
@@ -186,7 +229,8 @@ const customStorage: PersistStorage<AppState> = {
       },
       layouts: state.layouts,
       timelineEvents: state.timelineEvents,
-      ocrCorrections: state.ocrCorrections
+      ocrCorrections: state.ocrCorrections,
+      ocrAliasModel: state.ocrAliasModel
     };
     await StorageService.save(dbData);
   },
@@ -233,12 +277,25 @@ export const useAppStore = create<AppState>()(
         enableAutoLogRecording: state.enableAutoLogRecording,
         telemetryPerformanceProfile: state.telemetryPerformanceProfile,
         enableAutoBackup: state.enableAutoBackup,
+        startupSmartPreloadEnabled: state.startupSmartPreloadEnabled,
         isAlwaysOnTop: state.isAlwaysOnTop,
         overlayStyle: state.overlayStyle,
         visualMode: state.visualMode,
         ocrMode: state.ocrMode,
         captureMode: state.captureMode,
         lockOcrTeams: state.lockOcrTeams,
+        ocrLearningEnabled: state.ocrLearningEnabled,
+        ocrAutoApplyMinScore: state.ocrAutoApplyMinScore,
+        ocrAutoApplyMinCount: state.ocrAutoApplyMinCount,
+        ocrLearningStrictMode: state.ocrLearningStrictMode,
+        ocrLearningReviewMode: state.ocrLearningReviewMode,
+        ocrLearningAutoPromoteCount: state.ocrLearningAutoPromoteCount,
+        ocrLearningQueueEnabled: state.ocrLearningQueueEnabled,
+        adaptivePreloadEnabled: state.adaptivePreloadEnabled,
+        adaptivePreloadBudgetMs: state.adaptivePreloadBudgetMs,
+        dashboardPreloadStats: state.dashboardPreloadStats,
+        ocrThresholdRecommendationMode: state.ocrThresholdRecommendationMode,
+        ocrThresholdHistory: state.ocrThresholdHistory,
         ocrBestGuessThresholds: state.ocrBestGuessThresholds,
         ocrCalibration: state.ocrCalibration,
         tutorialCompleted: state.tutorialCompleted,
@@ -251,7 +308,10 @@ export const useAppStore = create<AppState>()(
         activeUser: state.activeUser,
         layouts: state.layouts,
         timelineEvents: state.timelineEvents,
-        ocrCorrections: state.ocrCorrections
+        ocrCorrections: state.ocrCorrections,
+        ocrAliasModel: state.ocrAliasModel,
+        ocrLearningEvents: state.ocrLearningEvents,
+        ocrLearningQueue: state.ocrLearningQueue
         // sessionTeams removed from persistence to prevent color sticking
       } as any),
     }

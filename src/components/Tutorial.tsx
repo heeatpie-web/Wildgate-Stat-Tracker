@@ -76,8 +76,8 @@ const steps: TutorialStep[] = [
     },
     {
         title: 'Settings',
-        description: 'Configure OCR, backups, UI preferences, and advanced options here.',
-        selector: 'nav-settings',
+        description: 'Open the profile hub, then choose Settings to configure OCR, backups, UI preferences, and advanced options.',
+        selector: 'profile-selector',
     },
 ];
 

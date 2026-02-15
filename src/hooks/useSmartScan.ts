@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { useAppStore } from '../store/useAppStore';
 import { isElectron } from '../utils/electronAPI';
 import { captureScreen, smartAnalyzeScreen, ScanOptions } from '../utils/scanService';
-import { findClosestMatch, normalizeOcrName, similarityScore } from '../utils/stringUtils';
+import { normalizeOcrName, similarityScore } from '../utils/stringUtils';
 import { SHIPS, UNNAMED_PLAYER_PREFIX } from '../utils/constants';
 import Logger from '../utils/logger';
+import { shouldQueueLearningReview, type OcrAliasContext } from '../utils/ocrAliasEngine';
+import { buildAliasVariantMap, resolveOcrName } from '../utils/ocrNameResolver';
 
 const OCR_THRESHOLDS = {
     REJECT: 55,
@@ -62,6 +64,18 @@ export const useSmartScan = () => {
     const ocrMode = useAppStore(state => state.ocrMode);
     const ocrCalibration = useAppStore(state => state.ocrCalibration);
     const ocrCorrections = useAppStore(state => state.ocrCorrections);
+    const ocrAliasModel = useAppStore(state => state.ocrAliasModel);
+    const resolveOcrAlias = useAppStore(state => state.resolveOcrAlias);
+    const ocrLearningEnabled = useAppStore(state => state.ocrLearningEnabled);
+    const ocrAutoApplyMinScore = useAppStore(state => state.ocrAutoApplyMinScore);
+    const ocrAutoApplyMinCount = useAppStore(state => state.ocrAutoApplyMinCount);
+    const ocrLearningStrictMode = useAppStore(state => state.ocrLearningStrictMode);
+    const ocrLearningQueueEnabled = useAppStore(state => state.ocrLearningQueueEnabled);
+    const ocrLearningReviewMode = useAppStore(state => state.ocrLearningReviewMode);
+    const ocrLearningAutoPromoteCount = useAppStore(state => state.ocrLearningAutoPromoteCount);
+    const enqueueOcrLearningReview = useAppStore(state => state.enqueueOcrLearningReview);
+    const logOcrLearningDecision = useAppStore(state => state.logOcrLearningDecision);
+    const aliasVariantMap = useMemo(() => buildAliasVariantMap(ocrAliasModel), [ocrAliasModel]);
 
     const [scanProgress, setScanProgress] = useState({ status: '', pct: 0 });
     const [scanLogs, setScanLogs] = useState<string[]>([]);
@@ -94,6 +108,14 @@ export const useSmartScan = () => {
             bestScore: top[0]?.score,
             suggestions: top
         };
+    };
+
+    const contextForMode = (mode: string): OcrAliasContext => {
+        if (mode === 'Lobby') return 'lobby';
+        if (mode === 'Tactical') return 'tactical';
+        if (mode === 'Social') return 'social';
+        if (mode === 'MatchStats') return 'matchstats';
+        return 'unknown';
     };
 
     const handleSmartScan = async () => {
@@ -175,25 +197,97 @@ export const useSmartScan = () => {
                                     Logger.debug('SmartScan', `Filtered noise name: "${rawName}" (${res.mode})`);
                                     continue;
                                 }
-                                const existingCorrection = ocrCorrections?.[rawName] || ocrCorrections?.[normalizedName];
-                                let finalName = (existingCorrection && existingCorrection.count >= 2)
-                                    ? existingCorrection.correctedTo
-                                    : normalizedName;
-                                if (existingCorrection && existingCorrection.count >= 2) {
-                                    finalName = existingCorrection.correctedTo;
-                                    Logger.debug('SmartScan', `Applied prior OCR correction: "${r.name}" -> "${finalName}"`);
+                                const aliasResolution = ocrLearningEnabled
+                                    ? resolveOcrAlias(rawName, {
+                                        context: contextForMode(res.mode),
+                                        minScore: ocrAutoApplyMinScore,
+                                        minCount: ocrAutoApplyMinCount,
+                                        strictMode: ocrLearningStrictMode,
+                                        reviewMode: ocrLearningReviewMode,
+                                        autoPromoteCount: ocrLearningAutoPromoteCount,
+                                    })
+                                    : null;
+                                const queueAutoResolve = Boolean(
+                                    aliasResolution?.resolvedName &&
+                                    ocrLearningQueueEnabled &&
+                                    shouldQueueLearningReview(aliasResolution, {
+                                        reviewMode: ocrLearningReviewMode,
+                                        minScore: ocrAutoApplyMinScore,
+                                        minCount: ocrAutoApplyMinCount,
+                                        autoPromoteCount: ocrLearningAutoPromoteCount,
+                                    })
+                                );
+                                const queueAmbiguous = Boolean(
+                                    aliasResolution?.reason === 'ambiguous' &&
+                                    aliasResolution.suggestedName &&
+                                    ocrLearningQueueEnabled
+                                );
+                                let finalName = normalizedName;
+                                if (aliasResolution?.resolvedName && !queueAutoResolve) {
+                                    finalName = aliasResolution.resolvedName;
+                                    logOcrLearningDecision({
+                                        rawText: rawName,
+                                        suggestedName: aliasResolution.suggestedName,
+                                        appliedName: aliasResolution.resolvedName,
+                                        score: aliasResolution.score,
+                                        margin: aliasResolution.margin,
+                                        count: aliasResolution.topCount,
+                                        source: 'manual_correction',
+                                        context: contextForMode(res.mode),
+                                        reason: 'auto-applied',
+                                        status: 'auto_applied',
+                                        explanation: aliasResolution.explain,
+                                    });
+                                    Logger.debug(
+                                        'SmartScan',
+                                        `Applied learned OCR alias: "${r.name}" -> "${finalName}" (${Math.round(aliasResolution.score * 100)}%)`
+                                    );
+                                }
+                                if (queueAutoResolve && aliasResolution?.suggestedName) {
+                                    enqueueOcrLearningReview({
+                                        rawText: rawName,
+                                        suggestedName: aliasResolution.suggestedName,
+                                        score: aliasResolution.score,
+                                        margin: aliasResolution.margin,
+                                        count: aliasResolution.topCount,
+                                        source: 'manual_correction',
+                                        context: contextForMode(res.mode),
+                                        reason: 'auto-resolve-needs-review',
+                                        explanation: aliasResolution.explain,
+                                    });
+                                    Logger.debug('SmartScan', `Queued OCR learning review for "${r.name}" -> "${aliasResolution.suggestedName}"`);
+                                } else if (queueAmbiguous && aliasResolution?.suggestedName) {
+                                    enqueueOcrLearningReview({
+                                        rawText: rawName,
+                                        suggestedName: aliasResolution.suggestedName,
+                                        score: aliasResolution.score,
+                                        margin: aliasResolution.margin,
+                                        count: aliasResolution.topCount,
+                                        source: 'manual_correction',
+                                        context: contextForMode(res.mode),
+                                        reason: 'ambiguous',
+                                        explanation: aliasResolution.explain,
+                                    });
                                 }
 
                                 if (teamList.includes(finalName) && !isGenericShip) continue;
 
-                                if (finalName === normalizedName) {
-                                    const threshold = finalName.length > 6 ? 2 : 1;
+                                if (!aliasResolution?.resolvedName || queueAutoResolve) {
                                     const allCandidates = [...uniqueKnownNames, ...(pilotRegistry || [])];
                                     const uniqueCandidates = Array.from(new Set(allCandidates));
-                                    const closest = findClosestMatch(finalName, uniqueCandidates, threshold);
-                                    if (closest && closest !== finalName) {
-                                        finalName = closest;
-                                        if (!teamList.includes(closest)) teamList.push(closest);
+                                    const resolvedFallback = resolveOcrName({
+                                        rawName: finalName || rawName,
+                                        candidates: uniqueCandidates,
+                                        ocrCorrections,
+                                        aliasModel: ocrAliasModel,
+                                        aliasVariantMap,
+                                        variantMinScore: 55,
+                                        shortThreshold: 1,
+                                        longThreshold: 2,
+                                    });
+                                    if (resolvedFallback && resolvedFallback !== finalName) {
+                                        finalName = resolvedFallback;
+                                        if (!teamList.includes(resolvedFallback)) teamList.push(resolvedFallback);
                                         continue;
                                     }
                                 }

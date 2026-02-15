@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { Check, X, Edit2, AlertTriangle, Trash2 } from 'lucide-react';
+import { useAppStore } from '../store/useAppStore';
 
 interface ReviewQueueModalProps {
     onClose: () => void;
@@ -22,6 +23,10 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         setSelectedOpponents
     } = useGameData();
     const { setToast } = useUIState();
+    const ocrLearningQueue = useAppStore((s) => s.ocrLearningQueue);
+    const approveOcrLearningEvent = useAppStore((s) => s.approveOcrLearningEvent);
+    const rejectOcrLearningEvent = useAppStore((s) => s.rejectOcrLearningEvent);
+    const recordOcrAliasCorrection = useAppStore((s) => s.recordOcrAliasCorrection);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState("");
 
@@ -34,7 +39,20 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         isUnknown: true
     }));
 
-    const allItems = [...pendingReviews, ...unknownItems];
+    const learningItems = (ocrLearningQueue || []).map((item) => ({
+        id: item.id,
+        value: `${item.rawText} -> ${item.suggestedName}`,
+        rawValue: item.rawText,
+        suggestedName: item.suggestedName,
+        context: `OCR Learning (${item.context})`,
+        type: 'ocr_learning_review',
+        originalConfidence: Math.round(item.score * 100),
+        isLearning: true,
+        learningEventId: item.eventId,
+        explanation: item.explanation || [],
+    }));
+
+    const allItems = [...learningItems, ...pendingReviews, ...unknownItems];
 
     const replaceNameInSession = (oldName: string, newName: string) => {
         if (oldName === newName) return;
@@ -53,6 +71,11 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             startEdit(review);
             return;
         }
+        if (review.isLearning) {
+            approveOcrLearningEvent(review.learningEventId);
+            setToast({ message: `Approved OCR learning: "${review.rawValue}" -> "${review.suggestedName}"`, type: 'success' });
+            return;
+        }
 
         if (review.type === 'roster_candidate') {
             addToRegistry(review.value);
@@ -68,6 +91,11 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
     const handleDelete = (review: any) => {
         if (review.isUnknown) {
             setToast({ message: "Cannot delete unknown ID yet", type: 'error' });
+            return;
+        }
+        if (review.isLearning) {
+            rejectOcrLearningEvent(review.learningEventId, 'Rejected from review queue');
+            setToast({ message: "Learning suggestion rejected", type: 'success' });
             return;
         }
 
@@ -95,6 +123,19 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         if (review.isUnknown) {
             addMapping(review.id, editValue);
             setToast({ message: `Mapped ID to "${editValue}"`, type: 'success' });
+            setEditingId(null);
+            return;
+        }
+        if (review.isLearning) {
+            const corrected = editValue.trim();
+            rejectOcrLearningEvent(review.learningEventId, `Edited to "${corrected}"`);
+            recordOcrAliasCorrection(review.rawValue || review.value, corrected, {
+                source: 'review_modal',
+                context: 'unknown',
+                confidenceWeight: 1,
+                decisionId: review.learningEventId,
+            });
+            setToast({ message: `Applied correction "${review.rawValue}" -> "${corrected}"`, type: 'success' });
             setEditingId(null);
             return;
         }
@@ -231,6 +272,13 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                             ))}
                                         </div>
                                     )}
+                                </div>
+                            )}
+                            {!editingId && review.isLearning && Array.isArray(review.explanation) && review.explanation.length > 0 && (
+                                <div className="mt-2 text-label-sm opacity-60 space-y-1">
+                                    {review.explanation.slice(0, 3).map((line: string, idx: number) => (
+                                        <div key={`${review.id}_exp_${idx}`}>- {line}</div>
+                                    ))}
                                 </div>
                             )}
                         </div>

@@ -183,7 +183,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
                 )}
             </div>
 
-            <div ref={profileMenuRef} className="relative" data-tour="profile-selector">
+            <div ref={profileMenuRef} className="relative w-full" data-tour="profile-selector">
                 <button
                     type="button"
                     ref={profileButtonRef}
@@ -282,25 +282,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
                     </div>
                 )}
             </div>
-
-            <button
-                onClick={() => {
-                    setShowSettings(true);
-                    closeDrawerIfNeeded();
-                }}
-                data-tour="nav-settings"
-                aria-label="Open settings"
-                className={`w-full py-2.5 premium-nav-item md3-nav-item sidebar-nav-item flex items-center text-md-sys-on-surface/60 transition-all duration-150 group relative ${
-                    showLabels ? 'justify-start px-3 gap-2.5' : 'justify-center'
-                }`}
-                title="Settings"
-            >
-                <span className="sidebar-nav-accent" aria-hidden />
-                <span className="md3-nav-icon premium-nav-icon">
-                    <Settings size={18} />
-                </span>
-                {showLabels && <span className="text-label-xs font-semibold tracking-wide-02 leading-tight">Settings</span>}
-            </button>
 
         </nav>
     );

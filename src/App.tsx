@@ -19,23 +19,68 @@ import { DevTools } from './components/DevTools';
 import { TelemetryPanel } from './components/TelemetryPanel';
 import Tutorial from './components/Tutorial';
 import { WindowResizer } from './components/WindowResizer';
-const AnalyticsPanel = React.lazy(() => import('./components/AnalyticsPanel'));
-const HistoryTable = React.lazy(() => import('./components/HistoryTable'));
+type LazyDashboardView = 'analytics' | 'history' | 'smart-captures' | 'players' | 'dev-ocr';
+type LazyDashboardModule = { default: React.ComponentType<any> };
+const lazyDashboardStatus: Record<LazyDashboardView, 'idle' | 'loading' | 'ready' | 'error'> = {
+    analytics: 'idle',
+    history: 'idle',
+    'smart-captures': 'idle',
+    players: 'idle',
+    'dev-ocr': 'idle',
+};
+const lazyDashboardPromises: Partial<Record<LazyDashboardView, Promise<LazyDashboardModule>>> = {};
+const lazyDashboardLoaders: Record<LazyDashboardView, () => Promise<LazyDashboardModule>> = {
+    analytics: () => import('./components/AnalyticsPanel'),
+    history: () => import('./components/HistoryTable'),
+    'smart-captures': () => import('./components/SmartCapturesPanel'),
+    players: () => import('./components/PlayerHub'),
+    'dev-ocr': () => import('./components/DevOCRPanel'),
+};
+const isLazyDashboardView = (view: string): view is LazyDashboardView =>
+    view === 'analytics' ||
+    view === 'history' ||
+    view === 'smart-captures' ||
+    view === 'players' ||
+    view === 'dev-ocr';
+const loadDashboardChunk = (view: LazyDashboardView): Promise<LazyDashboardModule> => {
+    if (lazyDashboardPromises[view]) return lazyDashboardPromises[view] as Promise<LazyDashboardModule>;
+    lazyDashboardStatus[view] = 'loading';
+    const task = lazyDashboardLoaders[view]()
+        .then((mod) => {
+            lazyDashboardStatus[view] = 'ready';
+            return mod;
+        })
+        .catch((error) => {
+            lazyDashboardStatus[view] = 'error';
+            throw error;
+        });
+    lazyDashboardPromises[view] = task;
+    return task;
+};
+const loadAnalyticsPanel = () => loadDashboardChunk('analytics');
+const AnalyticsPanel = React.lazy(loadAnalyticsPanel);
+const loadHistoryTable = () => loadDashboardChunk('history');
+const HistoryTable = React.lazy(loadHistoryTable);
 import { APP_VERSION, getShipCapacity, Match, MatchResult } from './types';
 import { CHANGELOG } from './utils/changelog';
 import { Toast } from './components/Toast';
 import { IdMapper } from './components/IdMapper';
-const DevOCRPanel = React.lazy(() => import('./components/DevOCRPanel'));
-const SmartCapturesPanel = React.lazy(() => import('./components/SmartCapturesPanel'));
-const PlayerHub = React.lazy(() => import('./components/PlayerHub'));
+const loadDevOCRPanel = () => loadDashboardChunk('dev-ocr');
+const DevOCRPanel = React.lazy(loadDevOCRPanel);
+const loadSmartCapturesPanel = () => loadDashboardChunk('smart-captures');
+const SmartCapturesPanel = React.lazy(loadSmartCapturesPanel);
+const loadPlayerHub = () => loadDashboardChunk('players');
+const PlayerHub = React.lazy(loadPlayerHub);
 const MatchRecordingPage = React.lazy(() => import('./components/MatchRecordingPage').then(m => ({ default: m.MatchRecordingPage })));
 import { OCRReviewModal } from './components/ocr/OCRReviewModal';
 import type { OCRExtractedData } from './utils/ocr/ocrTypes';
 import { useAppStore } from './store/useAppStore';
 import { getElectronAPI } from './utils/electronAPI';
-import { findClosestMatch, normalizeOcrName, similarityScore } from './utils/stringUtils';
+import { normalizeOcrName, similarityScore } from './utils/stringUtils';
 import { StorageService } from './utils/storage';
 import { playSoundCue } from './utils/soundCues';
+import { shouldQueueLearningReview } from './utils/ocrAliasEngine';
+import { buildAliasVariantMap, resolveOcrName } from './utils/ocrNameResolver';
 
 interface TelemetryRetentionStatus {
     exceedsLimits: boolean;
@@ -83,7 +128,21 @@ const App: React.FC = () => {
     const handledTelemetryDraftPostmatchPromptIdsRef = React.useRef<Set<number>>(new Set());
     const setTutorialCompleted = useAppStore(s => s.setTutorialCompleted);
     const isStoreLoading = useAppStore(s => s.isLoading);
+    const startupSmartPreloadEnabled = useAppStore(s => s.startupSmartPreloadEnabled);
+    const adaptivePreloadEnabled = useAppStore(s => s.adaptivePreloadEnabled);
+    const adaptivePreloadBudgetMs = useAppStore(s => s.adaptivePreloadBudgetMs);
+    const dashboardPreloadStats = useAppStore(s => s.dashboardPreloadStats);
+    const recordDashboardPreloadVisit = useAppStore(s => s.recordDashboardPreloadVisit);
     const welcomeBackToastShownRef = React.useRef(false);
+    const [preloadedViews, setPreloadedViews] = useState<Record<LazyDashboardView, boolean>>({
+        analytics: lazyDashboardStatus.analytics === 'ready',
+        history: lazyDashboardStatus.history === 'ready',
+        'smart-captures': lazyDashboardStatus['smart-captures'] === 'ready',
+        players: lazyDashboardStatus.players === 'ready',
+        'dev-ocr': lazyDashboardStatus['dev-ocr'] === 'ready',
+    });
+    const preloadStartedRef = React.useRef(false);
+    const viewOpenStartRef = React.useRef<Partial<Record<LazyDashboardView, number>>>({});
 
     const {
         isOverlayMode, setIsOverlayMode,
@@ -115,7 +174,7 @@ const App: React.FC = () => {
         setSessionShipTypes
     } = useGameData();
 
-    const { overlayStyle, soundEnabled } = useUserPreferences();
+    const { overlayStyle, soundEnabled, performanceMode } = useUserPreferences();
 
     const { logFeed, logStatus } = useLogMonitor();
 
@@ -225,6 +284,142 @@ const App: React.FC = () => {
         window.addEventListener('keydown', onTrapTab);
         return () => window.removeEventListener('keydown', onTrapTab);
     }, [mobileNavOpen, isCompactNav]);
+
+    useEffect(() => {
+        if (isOverlayMode || isStoreLoading || performanceMode || !startupSmartPreloadEnabled) return;
+        if (preloadStartedRef.current) return;
+        preloadStartedRef.current = true;
+
+        let cancelled = false;
+        const defaultQueue: LazyDashboardView[] = ['analytics', 'history', 'smart-captures', 'players', 'dev-ocr'];
+        const canUseAdaptive = adaptivePreloadEnabled && ((navigator.hardwareConcurrency || 8) > 4);
+        const viewStats = dashboardPreloadStats || {};
+        let queue: LazyDashboardView[] = [...defaultQueue];
+
+        if (canUseAdaptive) {
+            const scores = defaultQueue.map((view) => {
+                const stat = viewStats[view] || { openDurationsMs: [], switchCount: 0, lastVisitedAt: 0 };
+                const maxSwitch = Math.max(1, ...defaultQueue.map((v) => Number(viewStats[v]?.switchCount || 0)));
+                const p95 = (() => {
+                    const arr = [...(stat.openDurationsMs || [])].sort((a, b) => a - b);
+                    if (arr.length === 0) return 0;
+                    const idx = Math.min(arr.length - 1, Math.floor(arr.length * 0.95));
+                    return arr[idx] || 0;
+                })();
+                const p95All = defaultQueue.map((v) => {
+                    const arr = [...((viewStats[v]?.openDurationsMs) || [])].sort((a, b) => a - b);
+                    if (arr.length === 0) return 0;
+                    const idx = Math.min(arr.length - 1, Math.floor(arr.length * 0.95));
+                    return arr[idx] || 0;
+                });
+                const maxP95 = Math.max(1, ...p95All);
+                const switchFrequencyNorm = Math.min(1, Number(stat.switchCount || 0) / maxSwitch);
+                const p95Norm = Math.min(1, p95 / maxP95);
+                const daysSince = stat.lastVisitedAt
+                    ? Math.max(0, (Date.now() - Number(stat.lastVisitedAt)) / (24 * 60 * 60 * 1000))
+                    : 999;
+                const recencyBoost = Math.max(0, 1 - (Math.min(7, daysSince) / 7));
+                const priorityScore = (0.55 * switchFrequencyNorm) + (0.35 * p95Norm) + (0.1 * recencyBoost);
+                return { view, priorityScore };
+            });
+            queue = scores
+                .sort((a, b) => b.priorityScore - a.priorityScore)
+                .map((item) => item.view);
+        }
+        if (isLazyDashboardView(activeView)) {
+            queue = [activeView, ...queue.filter((v) => v !== activeView)];
+        }
+        const idleIds: number[] = [];
+        const timeoutIds: number[] = [];
+
+        const markReady = (view: LazyDashboardView) => {
+            setPreloadedViews(prev => prev[view] ? prev : { ...prev, [view]: true });
+        };
+
+        const runNext = () => {
+            if (cancelled || queue.length === 0) return;
+            const nextView = queue.shift() as LazyDashboardView;
+            if (lazyDashboardStatus[nextView] === 'error') {
+                if (!cancelled) scheduleNext();
+                return;
+            }
+            void loadDashboardChunk(nextView)
+                .then(() => {
+                    if (!cancelled) markReady(nextView);
+                })
+                .catch(() => { })
+                .finally(() => {
+                    if (!cancelled) scheduleNext();
+                });
+        };
+
+        const scheduleNext = () => {
+            if (cancelled || queue.length === 0) return;
+            const requestIdle = (window as any).requestIdleCallback as ((callback: IdleRequestCallback, opts?: { timeout: number }) => number) | undefined;
+            const cancelIdle = (window as any).cancelIdleCallback as ((id: number) => void) | undefined;
+            if (requestIdle) {
+                const id = requestIdle(() => runNext(), { timeout: Math.max(350, Math.min(1600, adaptivePreloadBudgetMs)) });
+                idleIds.push(id);
+                return;
+            }
+            const delay = queue.length >= 4
+                ? 0
+                : Math.max(40, Math.floor(adaptivePreloadBudgetMs / Math.max(2, queue.length * 2)));
+            const timeout = window.setTimeout(runNext, delay);
+            timeoutIds.push(timeout);
+            if (!cancelIdle) return;
+        };
+
+        scheduleNext();
+        return () => {
+            cancelled = true;
+            const cancelIdle = (window as any).cancelIdleCallback as ((id: number) => void) | undefined;
+            idleIds.forEach((id) => cancelIdle?.(id));
+            timeoutIds.forEach((id) => window.clearTimeout(id));
+        };
+    }, [
+        isOverlayMode,
+        isStoreLoading,
+        performanceMode,
+        startupSmartPreloadEnabled,
+        adaptivePreloadEnabled,
+        adaptivePreloadBudgetMs,
+        dashboardPreloadStats,
+        activeView
+    ]);
+
+    useEffect(() => {
+        if (!isLazyDashboardView(activeView)) return;
+        if (lazyDashboardStatus[activeView] !== 'ready') {
+            viewOpenStartRef.current[activeView] = Date.now();
+            recordDashboardPreloadVisit(activeView);
+            return;
+        }
+        setPreloadedViews(prev => prev[activeView] ? prev : { ...prev, [activeView]: true });
+        const start = viewOpenStartRef.current[activeView];
+        if (start) {
+            const duration = Math.max(0, Date.now() - start);
+            recordDashboardPreloadVisit(activeView, duration);
+            delete viewOpenStartRef.current[activeView];
+        } else {
+            recordDashboardPreloadVisit(activeView);
+        }
+    }, [activeView, recordDashboardPreloadVisit]);
+
+    useEffect(() => {
+        const interval = window.setInterval(() => {
+            const tracked = Object.entries(viewOpenStartRef.current) as Array<[LazyDashboardView, number]>;
+            if (tracked.length === 0) return;
+            tracked.forEach(([view, startedAt]) => {
+                if (lazyDashboardStatus[view] !== 'ready') return;
+                setPreloadedViews(prev => prev[view] ? prev : { ...prev, [view]: true });
+                const duration = Math.max(0, Date.now() - startedAt);
+                recordDashboardPreloadVisit(view, duration);
+                delete viewOpenStartRef.current[view];
+            });
+        }, 160);
+        return () => window.clearInterval(interval);
+    }, [recordDashboardPreloadVisit]);
 
     // Apply persisted always-on-top setting on startup
     useEffect(() => {
@@ -466,29 +661,93 @@ const App: React.FC = () => {
     }, showWizard);
 
     const handleApplyOCRData = useCallback((data: OCRExtractedData) => {
-        const ocrCorrections = useAppStore.getState().ocrCorrections;
-
         const resolvePlayerName = (ocrName: string, existingList: string[]): string => {
             if (!ocrName || ocrName.length < 2) return ocrName;
             const normalized = normalizeOcrName(ocrName);
-            const correction = ocrCorrections?.[ocrName] || ocrCorrections?.[normalized];
-            if (correction && correction.count >= 2) {
-                console.log(`[OCR-Resolve] "${ocrName}" → correction: "${correction.correctedTo}" (seen ${correction.count}x)`);
-                return correction.correctedTo;
+            const state = useAppStore.getState();
+            if (state.ocrLearningEnabled) {
+                const aliasResolution = state.resolveOcrAlias(ocrName, {
+                    context: 'matchstats',
+                    minScore: state.ocrAutoApplyMinScore,
+                    minCount: state.ocrAutoApplyMinCount,
+                    strictMode: state.ocrLearningStrictMode,
+                    reviewMode: state.ocrLearningReviewMode,
+                    autoPromoteCount: state.ocrLearningAutoPromoteCount,
+                });
+                const queueAutoResolve = Boolean(
+                    aliasResolution.resolvedName &&
+                    state.ocrLearningQueueEnabled &&
+                    shouldQueueLearningReview(aliasResolution, {
+                        reviewMode: state.ocrLearningReviewMode,
+                        minScore: state.ocrAutoApplyMinScore,
+                        minCount: state.ocrAutoApplyMinCount,
+                        autoPromoteCount: state.ocrLearningAutoPromoteCount,
+                    })
+                );
+                if (queueAutoResolve && aliasResolution.suggestedName) {
+                    state.enqueueOcrLearningReview({
+                        rawText: ocrName,
+                        suggestedName: aliasResolution.suggestedName,
+                        score: aliasResolution.score,
+                        margin: aliasResolution.margin,
+                        count: aliasResolution.topCount,
+                        source: 'manual_correction',
+                        context: 'matchstats',
+                        reason: 'auto-resolve-needs-review',
+                        explanation: aliasResolution.explain,
+                    });
+                } else if (aliasResolution.resolvedName) {
+                    state.logOcrLearningDecision({
+                        rawText: ocrName,
+                        suggestedName: aliasResolution.suggestedName,
+                        appliedName: aliasResolution.resolvedName,
+                        score: aliasResolution.score,
+                        margin: aliasResolution.margin,
+                        count: aliasResolution.topCount,
+                        source: 'manual_correction',
+                        context: 'matchstats',
+                        reason: 'auto-applied',
+                        status: 'auto_applied',
+                        explanation: aliasResolution.explain,
+                    });
+                    console.log(`[OCR-Resolve] "${ocrName}" -> learned alias: "${aliasResolution.resolvedName}" (${Math.round(aliasResolution.score * 100)}%)`);
+                    return aliasResolution.resolvedName;
+                }
+                if (
+                    state.ocrLearningQueueEnabled &&
+                    aliasResolution.reason === 'ambiguous' &&
+                    aliasResolution.suggestedName
+                ) {
+                    state.enqueueOcrLearningReview({
+                        rawText: ocrName,
+                        suggestedName: aliasResolution.suggestedName,
+                        score: aliasResolution.score,
+                        margin: aliasResolution.margin,
+                        count: aliasResolution.topCount,
+                        source: 'manual_correction',
+                        context: 'matchstats',
+                        reason: 'ambiguous',
+                        explanation: aliasResolution.explain,
+                    });
+                }
             }
             const allKnown = [...new Set([...existingList, ...pilotRegistry])];
-            const exactCI = allKnown.find(n => n.toLowerCase() === normalized.toLowerCase());
-            if (exactCI) {
-                console.log(`[OCR-Resolve] "${ocrName}" → exact match: "${exactCI}"`);
-                return exactCI;
+            const resolved = resolveOcrName({
+                rawName: ocrName,
+                candidates: allKnown,
+                ocrCorrections: state.ocrCorrections,
+                aliasModel: state.ocrAliasModel,
+                aliasVariantMap: buildAliasVariantMap(state.ocrAliasModel),
+                variantMinScore: 55,
+                shortThreshold: 1,
+                longThreshold: 2,
+            });
+            if (resolved.toLowerCase() !== normalized.toLowerCase()) {
+                console.log(`[OCR-Resolve] "${ocrName}" -> shared resolver match: "${resolved}"`);
+            } else {
+                console.log(`[OCR-Resolve] "${ocrName}" -> no stronger match found, using normalized: "${resolved}"`);
             }
-            const fuzzy = findClosestMatch(normalized, allKnown);
-            if (fuzzy) {
-                console.log(`[OCR-Resolve] "${ocrName}" → fuzzy match: "${fuzzy}" (from "${normalized}")`);
-                return fuzzy;
-            }
-            console.log(`[OCR-Resolve] "${ocrName}" → no match found, using normalized: "${normalized}"`);
-            return normalized;
+            return resolved;
         };
 
         const buildRosterSuggestions = (name: string) => {
@@ -684,9 +943,11 @@ const App: React.FC = () => {
         }
     };
 
+    const lazyActiveView = isLazyDashboardView(activeView) ? activeView : null;
+    const activeViewWarm = lazyActiveView ? preloadedViews[lazyActiveView] : false;
     const viewFallback = (
         <div className="h-full w-full flex items-center justify-center text-body font-semibold text-md-sys-on-surface/60">
-            Loading view...
+            {activeViewWarm ? 'Opening view...' : 'Loading view...'}
         </div>
     );
 

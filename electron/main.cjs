@@ -4,6 +4,7 @@ const DiscordRPC = require('discord-rpc');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const http = require('http');
 const https = require('https');
 const fsPromises = require('fs').promises;
@@ -655,6 +656,52 @@ function normalizeStringList(list) {
   return list.map(v => String(v || '').trim()).filter(Boolean);
 }
 
+function normalizeOpponentTeamsForCorpus(teams) {
+  if (!Array.isArray(teams)) return [];
+  return teams
+    .map((team) => {
+      const teamName = String(team?.teamName || '').trim();
+      const teamColor = String(team?.teamColor || '').trim();
+      const players = normalizeStringList(team?.players || []);
+      return {
+        teamName,
+        teamColor,
+        players,
+      };
+    })
+    .filter((team) => team.teamName || team.players.length > 0);
+}
+
+function normalizeScreenshotBase64(value) {
+  if (!value) return '';
+  return String(value)
+    .replace(/^data:image\/\w+;base64,/, '')
+    .replace(/\s+/g, '')
+    .trim();
+}
+
+function buildCorpusSampleSignature({ teammates, opponentTeams, modifiers }) {
+  const normalizedTeams = normalizeStringList(teammates || []).map((n) => n.toLowerCase()).sort();
+  const normalizedModifiers = normalizeStringList(modifiers || []).map((n) => n.toLowerCase()).sort();
+  const normalizedOpponents = normalizeOpponentTeamsForCorpus(opponentTeams || [])
+    .map((team) => ({
+      teamName: String(team.teamName || '').toLowerCase(),
+      teamColor: String(team.teamColor || '').toLowerCase(),
+      players: normalizeStringList(team.players || []).map((name) => name.toLowerCase()).sort(),
+    }))
+    .sort((a, b) => {
+      const keyA = `${a.teamName}|${a.teamColor}|${a.players.join(',')}`;
+      const keyB = `${b.teamName}|${b.teamColor}|${b.players.join(',')}`;
+      return keyA.localeCompare(keyB);
+    });
+  const signaturePayload = JSON.stringify({
+    teammates: normalizedTeams,
+    opponentTeams: normalizedOpponents,
+    modifiers: normalizedModifiers,
+  });
+  return crypto.createHash('sha1').update(signaturePayload).digest('hex');
+}
+
 // Force app name to match productName so app.getPath('userData') resolves
 // to the same directory in both dev and production (e.g. "Wildgate Stat Tracker").
 // Without this, dev mode uses the package "name" field which differs from productName.
@@ -818,25 +865,32 @@ function buildDevSplashDataUrl(targetUrl) {
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
 }
 
-function setSplashProgress(targetWin, pct, status, detail = '') {
-  if (!targetWin || targetWin.isDestroyed()) return;
-  const safePct = Math.max(0, Math.min(100, Number(pct) || 0));
-  const statusArg = JSON.stringify(String(status || 'Loading...'));
-  const detailArg = JSON.stringify(String(detail || ''));
-  const js = `window.__setSplashProgress && window.__setSplashProgress(${safePct}, ${statusArg}, ${detailArg});`;
-  targetWin.webContents.executeJavaScript(js, true).catch(() => { });
-}
-
-/** Last splash payload sent (for deduplication). Keyed by win.id so multiple windows don't share state. */
+/** Last splash payload sent (for dedupe + monotonic percent). Keyed by win.id. */
 const lastSplashByWin = new Map();
 
-function setSplashProgressDedupe(targetWin, pct, status, detail = '') {
+function setSplashProgress(targetWin, pct, status, detail = '') {
   if (!targetWin || targetWin.isDestroyed()) return;
   const key = targetWin.id;
   const prev = lastSplashByWin.get(key);
-  const same = prev && prev.pct === pct && prev.status === status && prev.detail === detail;
+  const requestedPct = Math.max(0, Math.min(100, Number(pct) || 0));
+  // Dev startup has multiple progress writers; keep splash percent monotonic.
+  const safePct = Math.max(prev?.pct ?? 0, requestedPct);
+  const payload = {
+    pct: safePct,
+    status: String(status || 'Loading...'),
+    detail: String(detail || ''),
+  };
+  const same = prev && prev.pct === payload.pct && prev.status === payload.status && prev.detail === payload.detail;
   if (same) return;
-  lastSplashByWin.set(key, { pct, status, detail });
+  lastSplashByWin.set(key, payload);
+
+  const statusArg = JSON.stringify(payload.status);
+  const detailArg = JSON.stringify(payload.detail);
+  const js = `window.__setSplashProgress && window.__setSplashProgress(${payload.pct}, ${statusArg}, ${detailArg});`;
+  targetWin.webContents.executeJavaScript(js, true).catch(() => { });
+}
+
+function setSplashProgressDedupe(targetWin, pct, status, detail = '') {
   setSplashProgress(targetWin, pct, status, detail);
 }
 
@@ -922,7 +976,7 @@ function startDevRendererWithRetry(win, targetUrl) {
         if (isFirst || isHeartbeat) {
           setSplashProgressDedupe(win, Math.min(92, 16 + attempt * 2), 'Waiting for dev server...', `Retrying connection (attempt ${attempt})`);
         }
-        const delay = Math.min(2000, 150 + (attempt * 125));
+        const delay = Math.min(1400, 90 + (attempt * 90));
         inFlight = false;
         retryTimer = setTimeout(tryLoad, delay);
         return;
@@ -936,7 +990,7 @@ function startDevRendererWithRetry(win, targetUrl) {
       if (isFirst || isHeartbeat) {
         setSplashProgressDedupe(win, Math.min(92, 16 + attempt * 2), 'Waiting for dev server...', `Retrying connection (attempt ${attempt})`);
       }
-      const delay = Math.min(2000, 150 + (attempt * 125));
+      const delay = Math.min(1400, 90 + (attempt * 90));
       inFlight = false;
       retryTimer = setTimeout(tryLoad, delay);
     }
@@ -953,7 +1007,7 @@ function startDevRendererWithRetry(win, targetUrl) {
       win.show();
     }
   }).catch(() => { });
-  retryTimer = setTimeout(tryLoad, 150);
+  retryTimer = setTimeout(tryLoad, 25);
 }
 
 function createTray() {
@@ -2049,13 +2103,14 @@ ipcMain.handle('gcloud-backfill-screenshots', async () => {
 
 app.whenReady().then(async () => {
   devMark('app whenReady');
-  createTray();
   createWindow();
-  try {
-    await ensureTelemetryHistoryMigrated();
-  } catch (e) {
+  createTray();
+
+  // Do not block renderer startup on telemetry history migration.
+  void ensureTelemetryHistoryMigrated().catch((e) => {
     console.warn('[TelemetryRetention] Migration check failed:', e?.message || e);
-  }
+  });
+
   if (!telemetryRetentionTimer) {
     telemetryRetentionTimer = setInterval(() => {
       emitTelemetryPruneNeededIfNecessary(false).catch((e) => {
@@ -2067,7 +2122,10 @@ app.whenReady().then(async () => {
     console.warn('[TelemetryRetention] startup check failed:', e?.message || e);
   });
   if (isDev) setSplashProgress(win, 20, 'Preparing services...', 'Starting startup tasks');
-  telemetryArchiveHelpers.cleanupOldArchives(telemetryArchiveHelpers.getArchiveDir(app));
+  // Archive cleanup can be expensive with many files; run off the critical path.
+  setTimeout(() => {
+    telemetryArchiveHelpers.cleanupOldArchives(telemetryArchiveHelpers.getArchiveDir(app));
+  }, 0);
   if (isDev) setSplashProgress(win, 35, 'Preparing OCR...', 'Registering OCR handlers');
   registerOCRHandlers(win);  // Register new OCR IPC handlers (pass win for hide-during-capture)
   if (isDev) setSplashProgress(win, 50, 'OCR ready', 'Checking cloud integrations');
@@ -2080,10 +2138,18 @@ app.whenReady().then(async () => {
   const GCLOUD_BUCKET = process.env.WILDGATE_GCLOUD_BUCKET || 'wildgate-training-heeatpie';
   if (fs.existsSync(GCLOUD_KEY)) {
     if (isDev) setSplashProgress(win, 60, 'Initializing cloud OCR...', 'Connecting to Google Cloud');
-    gcloudService.initialize(GCLOUD_KEY);
-    await gcloudSyncService.initialize(GCLOUD_KEY, GCLOUD_BUCKET);
-    geminiService.initialize(GCLOUD_KEY);
-    if (isDev) setSplashProgress(win, 75, 'Cloud services ready', 'Finalizing app startup');
+    // Keep cloud init in the background so dev splash can appear immediately.
+    void (async () => {
+      try {
+        gcloudService.initialize(GCLOUD_KEY);
+        await gcloudSyncService.initialize(GCLOUD_KEY, GCLOUD_BUCKET);
+        geminiService.initialize(GCLOUD_KEY);
+        if (isDev) setSplashProgress(win, 92, 'Cloud services ready', 'Renderer loading');
+      } catch (e) {
+        console.warn('[GCloud] Background init failed:', e?.message || e);
+        if (isDev) setSplashProgress(win, 72, 'Cloud OCR disabled', 'Background init failed');
+      }
+    })();
   } else {
     console.warn('[GCloud] Key file not found, GCloud services disabled');
     if (isDev) setSplashProgress(win, 72, 'Cloud OCR disabled', 'No credentials found');
@@ -2419,6 +2485,40 @@ ipcMain.handle('ocr-corpus-eval', async () => {
   }
 });
 
+ipcMain.handle('ocr-corpus-threshold-recommend', async () => {
+  try {
+    await ensureCorpusDefaults();
+    const recommendScript = path.join(app.getAppPath(), 'scripts', 'ocr_threshold_recommend.cjs');
+    if (!fs.existsSync(recommendScript)) {
+      return { success: false, error: `Missing threshold recommendation script at ${recommendScript}` };
+    }
+
+    const result = await runNodeScript(recommendScript, [
+      '--report', path.join(OCR_CORPUS_REPORTS_DIR, 'latest.json'),
+      '--baseline', path.join(OCR_CORPUS_DIR, 'baseline.json')
+    ]);
+
+    if (result.code !== 0) {
+      return { success: false, error: result.stderr || result.stdout || 'Threshold recommendation failed' };
+    }
+
+    let recommendation = null;
+    try {
+      recommendation = JSON.parse(String(result.stdout || '{}'));
+    } catch {
+      return { success: false, error: 'Threshold recommendation output was not valid JSON' };
+    }
+
+    return {
+      success: true,
+      recommendation,
+      output: result.stdout
+    };
+  } catch (e) {
+    return { success: false, error: e.message || String(e) };
+  }
+});
+
 ipcMain.handle('ocr-corpus-promote-baseline', async () => {
   try {
     await ensureCorpusDefaults();
@@ -2504,6 +2604,98 @@ ipcMain.handle('ocr-corpus-import-images', async () => {
     return { success: true, imported, skipped, canceled: false };
   } catch (e) {
     return { success: false, error: e.message || String(e) };
+  }
+});
+
+ipcMain.handle('ocr-corpus-add-corrected-sample', async (event, payload = {}) => {
+  try {
+    await ensureCorpusDefaults();
+
+    const screenshotBase64 = normalizeScreenshotBase64(payload?.screenshotBase64);
+    if (!screenshotBase64) {
+      return { success: false, error: 'No screenshot data' };
+    }
+
+    const teammates = normalizeStringList(payload?.teammates);
+    const opponentTeams = normalizeOpponentTeamsForCorpus(payload?.opponentTeams);
+    const modifiers = normalizeStringList(payload?.modifiers);
+    const totalOpponentPlayers = opponentTeams.reduce((sum, team) => sum + (team.players?.length || 0), 0);
+    if ((teammates.length + totalOpponentPlayers + modifiers.length) === 0) {
+      return { success: false, error: 'Insufficient correction data for corpus sample' };
+    }
+
+    let buffer;
+    try {
+      buffer = Buffer.from(screenshotBase64, 'base64');
+    } catch {
+      return { success: false, error: 'Invalid screenshot base64 payload' };
+    }
+    if (!buffer || buffer.length < 1024) {
+      return { success: false, error: 'Screenshot payload too small' };
+    }
+
+    const imageHash = crypto.createHash('sha1').update(buffer).digest('hex');
+    const signature = buildCorpusSampleSignature({ teammates, opponentTeams, modifiers });
+
+    const truthPath = path.join(OCR_CORPUS_DIR, 'ground-truth.json');
+    let truth;
+    try {
+      truth = JSON.parse(await fsPromises.readFile(truthPath, 'utf8'));
+    } catch {
+      truth = { version: 1, samples: [] };
+    }
+    const samples = Array.isArray(truth?.samples) ? truth.samples : [];
+
+    const duplicate = samples.find((sample) => {
+      const sampleHash = String(sample?.meta?.imageHash || '');
+      const sampleSignature = String(sample?.meta?.signature || '');
+      return sampleHash === imageHash && sampleSignature === signature;
+    });
+    if (duplicate) {
+      return { success: true, sampleId: duplicate.sampleId, deduped: true };
+    }
+
+    const imagesDir = path.join(OCR_CORPUS_DIR, 'images');
+    await fsPromises.mkdir(imagesDir, { recursive: true });
+
+    const existingIds = new Set(samples.map((s) => String(s?.sampleId || '')).filter(Boolean));
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const baseId = `correction_${ts}_${imageHash.slice(0, 8)}`;
+    let sampleId = baseId;
+    let counter = 1;
+    while (existingIds.has(sampleId)) {
+      sampleId = `${baseId}_${counter}`;
+      counter += 1;
+    }
+
+    const imageName = `${sampleId}.png`;
+    const imagePath = path.join(imagesDir, imageName);
+    await fsPromises.writeFile(imagePath, buffer);
+    const relImagePath = `images/${imageName}`;
+
+    samples.push({
+      sampleId,
+      imagePath: relImagePath,
+      teammates,
+      opponentTeams,
+      modifiers,
+      source: 'auto-correction',
+      addedAt: new Date().toISOString(),
+      meta: {
+        imageHash,
+        signature,
+      },
+    });
+
+    await fsPromises.writeFile(truthPath, JSON.stringify({
+      version: typeof truth?.version === 'number' ? truth.version : 1,
+      samples,
+    }, null, 2), 'utf8');
+
+    await syncCorpusToRepo('auto-correction');
+    return { success: true, sampleId, deduped: false };
+  } catch (e) {
+    return { success: false, error: e?.message || String(e) };
   }
 });
 

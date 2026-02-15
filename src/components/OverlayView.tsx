@@ -48,6 +48,14 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
         setIsOverlayMode(false);
     };
 
+    const openCurrentTabInFullView = () => {
+        if (overlayTab === 'Social') {
+            exitOverlayToView('analytics', 'social');
+            return;
+        }
+        exitOverlayToView('recording');
+    };
+
     /**
      * Track whether the mouse is currently hovering over an interactive panel.
      * This ref prevents stale closures from causing the stuck state.
@@ -95,8 +103,8 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
     const OverlayTabRail = (
         <div className="grid grid-cols-3 gap-1 md3-surface rounded-control p-1 border border-md-sys-outline/10">
             {([
-                { id: 'Mission' as const, icon: LayoutTemplate, label: 'Mission' },
-                { id: 'Squadron' as const, icon: Rocket, label: 'Squadron' },
+                { id: 'Mission' as const, icon: LayoutTemplate, label: 'Recording' },
+                { id: 'Squadron' as const, icon: Rocket, label: 'Loadout' },
                 { id: 'Social' as const, icon: Users, label: 'Social' },
             ] as const).map(tab => (
                 <button
@@ -225,20 +233,21 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                         </div>
                     </div>
                     <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 flex flex-col gap-2">
+                        {OverlayTabRail}
                         <div className="grid grid-cols-3 gap-2">
                             <button
                                 type="button"
-                                onClick={() => exitOverlayToView('recording')}
+                                onClick={openCurrentTabInFullView}
                                 className="md3-btn-tonal h-8 text-label-xs font-bold uppercase"
                             >
-                                Recording
+                                Open Full
                             </button>
                             <button
                                 type="button"
-                                onClick={() => exitOverlayToView('analytics', 'social')}
+                                onClick={() => exitOverlayToView('history')}
                                 className="md3-btn-tonal h-8 text-label-xs font-bold uppercase"
                             >
-                                Social
+                                History
                             </button>
                             <button
                                 type="button"
@@ -248,7 +257,9 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                                 Captures
                             </button>
                         </div>
-                        {OverlayTabRail}
+                        <div data-tour="action-panel" className="shrink-0">
+                            <ActionPanel variant="default" onSmartCaptureData={onSmartCaptureData} />
+                        </div>
                         <div className="shrink-0">
                             {renderOverlayPanel(false)}
                         </div>
@@ -271,7 +282,6 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                                 )}
                             </div>
                         )}
-                        <ActionPanel variant="default" onSmartCaptureData={onSmartCaptureData} />
                     </div>
                 </div>
                 <WindowResizer />
@@ -333,20 +343,14 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                             <ActionPanel variant="transparent" onSmartCaptureData={onSmartCaptureData} />
                         </div>
                         <div className="flex flex-col justify-start min-h-0 border-l border-md-sys-outline/20 pl-3 gap-2">
+                            {OverlayTabRail}
                             <div className="grid grid-cols-3 gap-1">
                                 <button
                                     type="button"
-                                    onClick={() => exitOverlayToView('recording')}
+                                    onClick={openCurrentTabInFullView}
                                     className="md3-btn-tonal h-7 text-label-xs font-bold uppercase"
                                 >
-                                    Record
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => exitOverlayToView('analytics', 'social')}
-                                    className="md3-btn-tonal h-7 text-label-xs font-bold uppercase"
-                                >
-                                    Social
+                                    Open Full
                                 </button>
                                 <button
                                     type="button"
@@ -355,8 +359,14 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                                 >
                                     History
                                 </button>
+                                <button
+                                    type="button"
+                                    onClick={() => exitOverlayToView('smart-captures')}
+                                    className="md3-btn-tonal h-7 text-label-xs font-bold uppercase"
+                                >
+                                    Captures
+                                </button>
                             </div>
-                            {OverlayTabRail}
                             <div className="min-h-0">
                                 {renderOverlayPanel(true)}
                             </div>

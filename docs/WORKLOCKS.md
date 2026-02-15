@@ -53,6 +53,75 @@ Use this row format when claiming:
 
 | File | Owner | Started (UTC) | Released (UTC) | Purpose |
 |---|---|---|---|---|
+| `src/utils/stringUtils.ts` | builder | 2026-02-15T19:10:00Z | 2026-02-15T19:45:00Z | OCR scope: add variant similarity functions for adaptive name resolution |
+| `src/utils/ocrNameResolver.ts` | builder | 2026-02-15T19:10:00Z | 2026-02-15T19:45:00Z | OCR scope: shared resolver utility (variant/context/dedupe support) |
+| `src/hooks/useSmartScan.ts` | builder | 2026-02-15T19:10:00Z | 2026-02-15T19:45:00Z | OCR scope: integrate shared resolver in smart scan path |
+| `src/App.tsx` | builder | 2026-02-15T19:10:00Z | 2026-02-15T19:45:00Z | OCR scope: integrate shared resolver in OCR apply flow |
+| `electron/main.cjs` | builder | 2026-02-15T19:10:00Z | 2026-02-15T19:45:00Z | OCR scope: guarded corpus auto-ingest IPC handler for OCR review corrections |
+| `electron/preload.cjs` | builder | 2026-02-15T19:10:00Z | 2026-02-15T19:45:00Z | OCR scope: allowlist new corpus auto-ingest invoke channel |
+| `scripts/security_negative_tests.cjs` | builder | 2026-02-15T19:10:00Z | 2026-02-15T19:45:00Z | OCR scope: keep IPC/security allowlist tests aligned for new channel |
+| `src/utils/__tests__/stringUtils.test.ts` | builder | 2026-02-15T19:10:00Z | 2026-02-15T19:45:00Z | OCR scope: add regression tests for variant matching functions |
+| `docs/agents/DECISIONS.md` | project-manager | 2026-02-15T12:20:10Z | 2026-02-15T12:22:40Z | RECORDING-ROLLBACK-ALIGN-001: document selective rollback + shell normalization decision |
+| `docs/agents/04_HANDOFF.md` | release-manager | 2026-02-15T12:20:10Z | 2026-02-15T12:22:40Z | RECORDING-ROLLBACK-ALIGN-001: add handoff summary for rollback/alignment patch |
+| `docs/agents/03_VALIDATION.md` | debugger | 2026-02-15T12:20:10Z | 2026-02-15T12:22:40Z | RECORDING-ROLLBACK-ALIGN-001: record vitest/eslint/typecheck evidence |
+| `docs/agents/02_EXECUTION_LOG.md` | debugger | 2026-02-15T12:20:10Z | 2026-02-15T12:22:40Z | RECORDING-ROLLBACK-ALIGN-001: execution lifecycle + PM feedback cycle |
+| `docs/agents/01_PLAN.md` | project-manager | 2026-02-15T12:20:10Z | 2026-02-15T12:22:40Z | RECORDING-ROLLBACK-ALIGN-001: add task plan steps |
+| `docs/agents/00_INTAKE.md` | project-manager | 2026-02-15T12:20:10Z | 2026-02-15T12:22:40Z | RECORDING-ROLLBACK-ALIGN-001: add intake/scope/done condition |
+| `src/components/smart-captures/SmartCapturesShell.tsx` | debugger | 2026-02-15T12:17:20Z | 2026-02-15T12:19:20Z | RECORDING-ROLLBACK-ALIGN-001: remove duplicate top-level shell padding |
+| `src/components/PlayerHub.tsx` | debugger | 2026-02-15T12:17:20Z | 2026-02-15T12:19:20Z | RECORDING-ROLLBACK-ALIGN-001: remove duplicate top-level shell padding |
+| `src/components/HistoryTable.tsx` | debugger | 2026-02-15T12:17:20Z | 2026-02-15T12:19:20Z | RECORDING-ROLLBACK-ALIGN-001: normalize root h/overflow contract for shell alignment |
+| `src/components/analytics/AnalyticsShell.tsx` | debugger | 2026-02-15T12:17:20Z | 2026-02-15T12:19:20Z | RECORDING-ROLLBACK-ALIGN-001: remove duplicate top-level shell padding |
+| `src/components/RecordingView.test.tsx` | debugger | 2026-02-15T12:15:40Z | 2026-02-15T12:19:20Z | RECORDING-ROLLBACK-ALIGN-001: restore tests for prior recording panel placement behavior |
+| `src/components/RecordingView.tsx` | debugger | 2026-02-15T12:15:40Z | 2026-02-15T12:19:20Z | RECORDING-ROLLBACK-ALIGN-001: move Match Recording panel back to left shell with compact tab toggle |
+| `docs/agents/DECISIONS.md` | project-manager | 2026-02-15T12:10:30Z | 2026-02-15T12:13:20Z | OVERLAY-NAV-RECORDING-LAYOUT-001: record architecture decision for explicit full-view actions |
+| `docs/agents/04_HANDOFF.md` | release-manager | 2026-02-15T12:10:30Z | 2026-02-15T12:13:20Z | OVERLAY-NAV-RECORDING-LAYOUT-001: add handoff closure and risks |
+| `docs/agents/03_VALIDATION.md` | debugger | 2026-02-15T12:10:30Z | 2026-02-15T12:13:20Z | OVERLAY-NAV-RECORDING-LAYOUT-001: log test/lint/typecheck evidence |
+| `docs/agents/02_EXECUTION_LOG.md` | debugger | 2026-02-15T12:10:30Z | 2026-02-15T12:13:20Z | OVERLAY-NAV-RECORDING-LAYOUT-001: execution lifecycle + PM feedback record |
+| `docs/agents/01_PLAN.md` | project-manager | 2026-02-15T12:10:30Z | 2026-02-15T12:13:20Z | OVERLAY-NAV-RECORDING-LAYOUT-001: plan steps and completion state |
+| `docs/agents/00_INTAKE.md` | project-manager | 2026-02-15T12:10:30Z | 2026-02-15T12:13:20Z | OVERLAY-NAV-RECORDING-LAYOUT-001: intake constraints/done condition |
+| `src/components/RecordingView.test.tsx` | debugger | 2026-02-15T12:03:50Z | 2026-02-15T12:10:00Z | OVERLAY-NAV-RECORDING-LAYOUT-001: update layout tests for action/mission ordering |
+| `src/components/RecordingView.tsx` | debugger | 2026-02-15T12:02:40Z | 2026-02-15T12:10:00Z | OVERLAY-NAV-RECORDING-LAYOUT-001: move match recording panel above mission intel |
+| `src/components/OverlayView.tsx` | debugger | 2026-02-15T12:01:20Z | 2026-02-15T12:10:00Z | OVERLAY-NAV-RECORDING-LAYOUT-001: keep overlay tab switches in-overlay and add explicit open-full actions |
+| `docs/agents/DECISIONS.md` | project-manager | 2026-02-15T11:56:00Z | 2026-02-15T11:58:20Z | PROFILE-BUTTON-WIDTH-001: record minimal scope decision for wrapper-width fix |
+| `docs/agents/04_HANDOFF.md` | release-manager | 2026-02-15T11:56:00Z | 2026-02-15T11:58:20Z | PROFILE-BUTTON-WIDTH-001: add handoff summary for sidebar width parity |
+| `docs/agents/03_VALIDATION.md` | debugger | 2026-02-15T11:56:00Z | 2026-02-15T11:58:20Z | PROFILE-BUTTON-WIDTH-001: add eslint/typecheck/manual evidence |
+| `docs/agents/02_EXECUTION_LOG.md` | debugger | 2026-02-15T11:56:00Z | 2026-02-15T11:58:20Z | PROFILE-BUTTON-WIDTH-001: log execution + PM feedback cycle |
+| `docs/agents/01_PLAN.md` | project-manager | 2026-02-15T11:56:00Z | 2026-02-15T11:58:20Z | PROFILE-BUTTON-WIDTH-001: add task plan steps |
+| `docs/agents/00_INTAKE.md` | project-manager | 2026-02-15T11:56:00Z | 2026-02-15T11:58:20Z | PROFILE-BUTTON-WIDTH-001: add intake/constraints/done condition |
+| `src/components/Sidebar.tsx` | debugger | 2026-02-15T11:54:40Z | 2026-02-15T11:55:20Z | PROFILE-BUTTON-WIDTH-001: set profile wrapper to `w-full` for nav-width parity |
+| `docs/agents/04_HANDOFF.md` | release-manager | 2026-02-15T11:52:30Z | 2026-02-15T11:53:50Z | PROFILE-SETTINGS-MERGE-001: add handoff closure summary |
+| `docs/agents/03_VALIDATION.md` | debugger | 2026-02-15T11:52:30Z | 2026-02-15T11:53:50Z | PROFILE-SETTINGS-MERGE-001: record typecheck/eslint/manual verification evidence |
+| `src/components/Tutorial.tsx` | debugger | 2026-02-15T11:48:00Z | 2026-02-15T11:50:10Z | PROFILE-SETTINGS-MERGE-001: retarget settings tutorial step to profile selector |
+| `src/components/Sidebar.tsx` | debugger | 2026-02-15T11:48:00Z | 2026-02-15T11:50:10Z | PROFILE-SETTINGS-MERGE-001: remove standalone settings button and keep profile-menu settings action |
+| `src/components/SettingsModal.tsx` | debugger | 2026-02-15T18:40:00Z | 2026-02-15T18:45:39Z | DEV-STARTUP-HOOKS-001: fix hook-order crash by moving effect above early return |
+| `package.json` | debugger | 2026-02-15T18:40:00Z | 2026-02-15T18:45:39Z | DEV-STARTUP-HOOKS-001: remove wait-on from dev scripts for earlier splash visibility |
+| `electron/main.cjs` | debugger | 2026-02-15T18:40:00Z | 2026-02-15T18:45:39Z | DEV-STARTUP-HOOKS-001: defer non-critical init and tighten dev retry timing |
+| `src/utils/ocrAliasEngine.ts` | debugger | 2026-02-15T18:14:23Z | 2026-02-15T18:35:11Z | ADV-AUTOLEARN-V2-001: learning governance event/queue model and resolver explainability |
+| `src/store/slices/createMappingSlice.ts` | debugger | 2026-02-15T18:14:23Z | 2026-02-15T18:35:11Z | ADV-AUTOLEARN-V2-001: queue/history/rollback actions for OCR learning decisions |
+| `src/store/slices/createSettingsSlice.ts` | debugger | 2026-02-15T18:14:23Z | 2026-02-15T18:35:11Z | ADV-AUTOLEARN-V2-001: advanced learning/preload/recommendation settings |
+| `src/store/useAppStore.ts` | debugger | 2026-02-15T18:14:23Z | 2026-02-15T18:35:11Z | ADV-AUTOLEARN-V2-001: hydrate/persist advanced OCR learning and preload state |
+| `src/utils/storage.ts` | debugger | 2026-02-15T18:14:23Z | 2026-02-15T18:35:11Z | ADV-AUTOLEARN-V2-001: storage typing for advanced OCR learning state |
+| `src/hooks/useSmartScan.ts` | debugger | 2026-02-15T18:14:23Z | 2026-02-15T18:35:11Z | ADV-AUTOLEARN-V2-001: queue/log OCR learning decisions during scan flow |
+| `src/App.tsx` | debugger | 2026-02-15T18:14:23Z | 2026-02-15T18:35:11Z | ADV-AUTOLEARN-V2-001: adaptive preload ordering + OCR review decision routing |
+| `src/components/SettingsModal.tsx` | debugger | 2026-02-15T18:14:23Z | 2026-02-15T18:35:11Z | ADV-AUTOLEARN-V2-001: advanced learning controls and threshold recommendation UI |
+| `src/components/ReviewQueueModal.tsx` | debugger | 2026-02-15T18:14:23Z | 2026-02-15T18:35:11Z | ADV-AUTOLEARN-V2-001: OCR learning review queue approval/rejection/edit actions |
+| `scripts/ocr_threshold_recommend.cjs` | debugger | 2026-02-15T18:14:23Z | 2026-02-15T18:35:11Z | ADV-AUTOLEARN-V2-001: corpus metric-based threshold recommendation script |
+| `electron/main.cjs` | debugger | 2026-02-15T18:14:23Z | 2026-02-15T18:35:11Z | ADV-AUTOLEARN-V2-001: main-process IPC handler for recommendation execution |
+| `electron/preload.cjs` | debugger | 2026-02-15T18:14:23Z | 2026-02-15T18:35:11Z | ADV-AUTOLEARN-V2-001: allowlist recommendation channel for renderer invoke |
+| `package.json` | debugger | 2026-02-15T18:14:23Z | 2026-02-15T18:35:11Z | ADV-AUTOLEARN-V2-001: add recommendation npm script |
+| `src/utils/__tests__/ocrAliasEngine.test.ts` | debugger | 2026-02-15T18:14:23Z | 2026-02-15T18:35:11Z | ADV-AUTOLEARN-V2-001: alias engine regression coverage for queue policy/rollback |
+| `src/store/slices/__tests__/createMappingSlice.test.ts` | debugger | 2026-02-15T18:14:23Z | 2026-02-15T18:35:11Z | ADV-AUTOLEARN-V2-001: mapping slice queue lifecycle regression coverage |
+| `src/store/slices/createMappingSlice.ts` | debugger | 2026-02-15T17:42:00Z | 2026-02-15T18:04:16Z | OCR-HYDRATION-COMBINED-001: add deterministic OCR alias model/actions and compatibility wrapper |
+| `src/store/useAppStore.ts` | debugger | 2026-02-15T17:42:00Z | 2026-02-15T18:04:16Z | OCR-HYDRATION-COMBINED-001: persist/migrate alias model + new settings flags |
+| `src/store/slices/createSettingsSlice.ts` | debugger | 2026-02-15T17:42:00Z | 2026-02-15T18:04:16Z | OCR-HYDRATION-COMBINED-001: add OCR learning/preload controls |
+| `src/hooks/useSmartScan.ts` | debugger | 2026-02-15T17:42:00Z | 2026-02-15T18:04:16Z | OCR-HYDRATION-COMBINED-001: wire shared alias resolver into scan path |
+| `src/App.tsx` | debugger | 2026-02-15T17:42:00Z | 2026-02-15T18:04:16Z | OCR-HYDRATION-COMBINED-001: add staged preload scheduler and fallback behavior gating |
+| `src/components/SettingsModal.tsx` | debugger | 2026-02-15T17:42:00Z | 2026-02-15T18:04:16Z | OCR-HYDRATION-COMBINED-001: expose OCR learning + startup preload controls |
+| `src/utils/ocrAliasEngine.ts` | debugger | 2026-02-15T17:42:00Z | 2026-02-15T18:04:16Z | OCR-HYDRATION-COMBINED-001: new deterministic OCR alias scoring engine |
+| `src/utils/__tests__/ocrAliasEngine.test.ts` | debugger | 2026-02-15T17:42:00Z | 2026-02-15T18:04:16Z | OCR-HYDRATION-COMBINED-001: unit coverage for scoring/ambiguity guardrails |
+| `src/store/slices/__tests__/createMappingSlice.test.ts` | debugger | 2026-02-15T17:42:00Z | 2026-02-15T18:04:16Z | OCR-HYDRATION-COMBINED-001: regression coverage for alias model and migration paths |
+| `src/App.tsx` | debugger | 2026-02-15T17:36:00Z | 2026-02-15T17:37:28Z | TAB-LOADING-STARTUP-001: preload lazy dashboard views to avoid first-switch loading fallback |
+| `electron/main.cjs` | debugger | 2026-02-15T17:31:00Z | 2026-02-15T17:33:17Z | DEV-SPLASH-RETRY-001: prevent dev splash progress rollback while dev-server retries are active |
 | `src/components/OverlayView.tsx` | debugger | 2026-02-15T03:46:16Z | 2026-02-15T04:13:43Z | BUG-BATCH-004: overlay tab parity (mission/squadron/social) and quick access |
 | `src/components/analytics/AnalyticsShell.tsx` | debugger | 2026-02-15T03:46:16Z | 2026-02-15T04:13:43Z | BUG-BATCH-004: pro-mode drill click reliability and external subview navigation hook |
 | `src/components/Toast.tsx` | debugger | 2026-02-15T03:46:16Z | 2026-02-15T04:13:43Z | BUG-BATCH-004: add audio cues tied to toast lifecycle |

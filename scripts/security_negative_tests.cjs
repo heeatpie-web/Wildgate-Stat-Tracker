@@ -111,8 +111,9 @@ const INVOKE_CHANNELS = [
   'clear-ocr-preprocessed', 'get-ocr-debug-dir', 'list-ocr-debug-files',
   'scan-epic-ids',
   'read-file-base64', 'open-path',
-  'ocr-corpus-load', 'ocr-corpus-save', 'ocr-corpus-eval', 'ocr-corpus-promote-baseline',
+  'ocr-corpus-load', 'ocr-corpus-save', 'ocr-corpus-eval', 'ocr-corpus-threshold-recommend', 'ocr-corpus-promote-baseline',
   'ocr-corpus-import-images', 'ocr-corpus-run-pipeline', 'ocr-corpus-sync-to-repo',
+  'ocr-corpus-list-images', 'ocr-corpus-read-image', 'ocr-corpus-add-corrected-sample',
   'get-gcloud-status',
   'test-gcloud-upload',
   'gcloud-backfill-screenshots',
@@ -178,6 +179,7 @@ assert(new Set(RECEIVE_CHANNELS).size === RECEIVE_CHANNELS.length, 'No duplicate
 assert(INVOKE_CHANNELS.includes('open-path'), 'open-path is in invoke allowlist');
 assert(INVOKE_CHANNELS.includes('read-file-base64'), 'read-file-base64 is in invoke allowlist');
 assert(INVOKE_CHANNELS.includes('ocr-process-capture'), 'ocr-process-capture is in invoke allowlist');
+assert(INVOKE_CHANNELS.includes('ocr-corpus-add-corrected-sample'), 'ocr-corpus-add-corrected-sample is in invoke allowlist');
 
 // ============================================================
 // 3. CORPUS FILE NAME VALIDATION

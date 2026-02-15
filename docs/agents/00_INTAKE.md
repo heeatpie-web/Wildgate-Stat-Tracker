@@ -147,3 +147,260 @@
   - Risk Tier: `T2`
   - Execution Path: `FULL_PATH`
   - Reason: multi-file, user-visible runtime interaction updates across core app surfaces.
+
+---
+
+## Intake - 2026-02-15 - DEV-SPLASH-RETRY-001
+- Goal: fix dev-mode startup splash where progress can jump backward (for example 90% to ~30%) while retrying dev server connection.
+- Constraints:
+  - Keep scope narrow to dev startup splash/probe logic in `electron/main.cjs`.
+  - Do not change packaged/production startup behavior.
+  - Preserve retry behavior and status visibility when dev server is actually unavailable.
+- Out-of-scope:
+  - Vite config or dev server process management changes.
+  - Splash visual redesign.
+  - Broad startup refactors outside splash progress handling.
+- Done condition:
+  - Splash progress percentage is monotonic in dev startup (no backward jumps).
+  - Retry status text/detail still updates while waiting for dev server.
+  - Validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: `T1`
+  - Execution Path: `FULL_PATH`
+  - Reason: runtime behavior change in Electron dev startup path.
+
+---
+
+## Intake - 2026-02-15 - TAB-LOADING-STARTUP-001
+- Goal: remove first-startup tab-switch "Loading view..." flashes when moving between dashboard views.
+- Constraints:
+  - Keep scope narrow to dashboard view-loading behavior in `src/App.tsx`.
+  - Preserve existing lazy-loading architecture and fallback for true slow/failure cases.
+  - Avoid broad navigation/layout refactors.
+- Out-of-scope:
+  - Sidebar redesign or routing-system changes.
+  - Replacing React lazy/suspense across the app.
+  - Unrelated startup/performance tuning.
+- Done condition:
+  - Main dashboard tab chunks are preloaded in background after startup.
+  - First switches between common tabs no longer depend on on-demand lazy fetch at click time.
+  - Validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: `T1`
+  - Execution Path: `FULL_PATH`
+  - Reason: runtime UX behavior change in startup/tab navigation path.
+
+---
+
+## Intake - 2026-02-15 - OCR-HYDRATION-COMBINED-001
+- Goal: implement combined MVP-plus feature set:
+  - deterministic local OCR active-learning model with guardrails,
+  - startup/view hydration preload overhaul to reduce first-switch loading flashes.
+- Constraints:
+  - Keep implementation local-only (no cloud/model backend dependencies).
+  - Preserve current OCR/manual correction UX while improving resolution quality.
+  - Preserve lazy-loading architecture and Suspense safety fallback.
+  - Keep data persistence backward-compatible with existing `ocrCorrections`.
+- Out-of-scope:
+  - Cloud sync of learning model.
+  - LLM-assisted correction disambiguation.
+  - Full navigation/router rewrite.
+  - Breaking persistence schema changes without compatibility layer.
+- Done condition:
+  - OCR alias model/actions exist with deterministic scoring, ambiguity guardrails, and compatibility wrapper.
+  - OCR resolution call-sites use shared resolver in scan/app flows.
+  - Startup preload is staged/gated (hydration/perf mode/settings) and fallback behavior is safer.
+  - Settings expose OCR learning + preload controls.
+  - Validation evidence logged (`eslint`, `typecheck`, targeted tests).
+- AOM_V2:
+  - Risk Tier: `T3`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file runtime behavior and persistence changes across store, OCR pipeline, and startup rendering.
+
+---
+
+## Intake - 2026-02-15 - ADV-AUTOLEARN-V2-001
+- Goal: implement the full advanced auto-learning bundle after MVP:
+  - OCR learning conflict-review + rollback governance.
+  - Corpus-driven threshold recommendation pipeline with safe apply/revert.
+  - Adaptive startup preload scheduler using local usage telemetry.
+- Constraints:
+  - Preserve compatibility with existing `ocrCorrections` + `ocrAliasModel` persistence.
+  - Keep behavior safe by default (conservative staged rollout).
+  - No cloud sync/backend dependencies; local-only logic and persistence.
+  - Avoid breaking existing OCR capture/review flows.
+- Out-of-scope:
+  - Remote model training/sync.
+  - Router/navigation architecture rewrite.
+  - Destructive data migrations.
+- Done condition:
+  - OCR learning queue/history/rollback model and actions are implemented and wired into runtime review flows.
+  - Settings expose advanced learning controls, threshold recommendation run/apply/revert, and history visibility.
+  - Adaptive preload ordering is usage-aware with hard gating/budget controls and fallback behavior.
+  - Validation evidence recorded (`typecheck`, targeted tests, touched-file eslint).
+- AOM_V2:
+  - Risk Tier: `T3`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-surface runtime behavior and persistence changes across OCR decisioning, settings UX, and startup performance path.
+
+---
+
+## Intake - 2026-02-15 - DEV-STARTUP-HOOKS-001
+- Goal: improve perceived `npm run electron:dev` startup speed and fix Settings crash: `Rendered more hooks than during the previous render`.
+- Constraints:
+  - Keep scope narrow to dev startup flow and settings hook ordering.
+  - Preserve existing OCR/cloud/telemetry functionality.
+  - Keep production (`app.isPackaged`) behavior unchanged.
+- Out-of-scope:
+  - Large startup architecture rewrite.
+  - UI redesign of splash screen.
+  - Removal of cloud OCR features.
+- Done condition:
+  - Settings modal no longer triggers hook-order runtime error on open.
+  - Dev command launches Electron immediately (no pre-wait for Vite) so splash appears earlier.
+  - Non-critical startup tasks are deferred/backgrounded to reduce blocking during dev boot.
+  - Validation evidence recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: runtime behavior changes in startup path + React hook safety fix in live UI component.
+
+---
+
+## Intake - 2026-02-15 - PROFILE-SETTINGS-MERGE-001
+- Goal: remove standalone sidebar Settings button and route settings access through the profile hub (profile icon menu).
+- Constraints:
+  - Keep profile hub behavior intact.
+  - Preserve settings accessibility (must still be reachable in one click from profile icon, then Settings option).
+  - Keep scope narrow to sidebar/tutorial wiring.
+- Out-of-scope:
+  - Header redesign.
+  - Settings modal behavior changes.
+  - Profile management flow rewrite.
+- Done condition:
+  - Standalone sidebar settings button is removed.
+  - Profile menu still contains working Settings action.
+  - Tutorial no longer references removed `nav-settings` target.
+  - Validation evidence recorded (`typecheck`, targeted eslint).
+- AOM_V2:
+  - Risk Tier: `T1`
+  - Execution Path: `FULL_PATH`
+  - Reason: user-facing navigation behavior and tutorial selector update.
+
+---
+
+## Intake - 2026-02-15 - PROFILE-BUTTON-WIDTH-001
+- Goal: make the sidebar profile button the same width lane as other navigation buttons.
+- Constraints:
+  - Keep scope narrow to sidebar button/layout classes only.
+  - Do not change profile-menu behavior, actions, or settings routing.
+  - Preserve collapsed/mobile sidebar behavior.
+- Out-of-scope:
+  - Sidebar visual redesign.
+  - Profile menu content changes.
+  - Navigation interaction changes.
+- Done condition:
+  - Profile button uses the same full-width lane as nav buttons.
+  - Visual mismatch from wrapper-width collapse is removed.
+  - Validation evidence recorded (`typecheck`, touched-file eslint).
+- AOM_V2:
+  - Risk Tier: `T0`
+  - Execution Path: `FAST_PATH`
+  - Reason: single-file class-only UI layout adjustment with no behavior/schema changes.
+
+---
+
+## Intake - 2026-02-15 - OVERLAY-NAV-RECORDING-LAYOUT-001
+- Goal: keep overlay tab clicks inside overlay (no forced full-view), add explicit full-view actions, and place Match Recording above Mission Intel in recording layouts.
+- Constraints:
+  - Keep scope narrow to `OverlayView` and `RecordingView` layout/navigation behavior.
+  - Preserve existing full-view navigation capability via explicit controls.
+  - Preserve overlay mode stability and existing panel functionality.
+- Out-of-scope:
+  - Broad redesign of overlay window chrome.
+  - Changes to OCR/telemetry pipeline behavior.
+  - Routing-system changes.
+- Done condition:
+  - Overlay tab controls (Recording/Loadout/Social) no longer exit overlay.
+  - Explicit controls exist for opening full dashboard views.
+  - Recording layout renders Match Recording above Mission Intel.
+  - Validation evidence recorded (`vitest`, touched-file eslint, `typecheck`).
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: runtime UI behavior updates across overlay navigation and recording layout.
+
+---
+
+## Intake - 2026-02-15 - RECORDING-ROLLBACK-ALIGN-001
+- Goal:
+  - move Match Recording panel back to prior placement in Recording view,
+  - fix cross-tab dashboard alignment drift where Analytics appears lower than History and panel framing feels inconsistent.
+- Constraints:
+  - Keep scope narrow to layout/container composition in recording and dashboard views.
+  - Preserve overlay navigation behavior delivered in prior fix (explicit full-view actions, in-overlay tab switching).
+  - Avoid data/store/schema/API changes.
+- Out-of-scope:
+  - OCR/telemetry logic changes.
+  - Sidebar/navigation information architecture changes.
+  - Broad analytics/history UI redesign.
+- Done condition:
+  - Recording view restores previous left-column Match Recording placement (including compact Actions/Loadout toggle behavior).
+  - Analytics, History, Players, and Smart Captures align to a consistent top/frame contract during sidebar tab switching.
+  - Validation evidence recorded (`vitest`, touched-file eslint, `typecheck`).
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: runtime user-facing layout behavior changes across multiple dashboard views.
+
+---
+
+## Intake - 2026-02-15 - OCR-ADAPTIVE-RESOLUTION-001
+- Goal: implement adaptive OCR learning improvements so corrected names generalize across different garbles, contextual disambiguation is available when safe, OCR review deduplicates same-player repeats across session captures, and corrections can auto-grow corpus truth data.
+- Constraints:
+  - Preserve `ocrAliasModel` as canonical OCR-learning model (no parallel `playerMisreads` persistence model).
+  - Keep behavior conservative to avoid false-positive name resolution.
+  - Keep corpus auto-growth non-blocking for user flow and aligned with existing Electron corpus/security model.
+  - Keep changes additive/backward-compatible with legacy `ocrCorrections`.
+- In scope:
+  - New similarity functions (`lcsRatio`, char-overlap, variant-aware score/match).
+  - Shared resolver utility and integration in `useSmartCapture`, `useSmartScan`, and `App` OCR apply path.
+  - Session-level canonical dedupe in OCR review/apply data path.
+  - New IPC channel/handler for guarded auto-corpus ingest from OCR review corrections.
+  - Security allowlist + negative-test updates for new IPC channel.
+- Out-of-scope:
+  - OCR engine replacement/refactor (Tesseract/cloud merge algorithms).
+  - Persistence schema migration replacing `ocrAliasModel`.
+  - UI redesign outside OCR review/capture behavior needed for this feature.
+- Done condition:
+  - Variant-aware matching is available and used in all targeted OCR name-resolution paths.
+  - Context pass can resolve unresolved names only under strict unambiguous social-graph constraints.
+  - OCR review/apply path avoids duplicate same-player entries from multi-image session variants.
+  - Corrected OCR review can append deduped corpus sample through new guarded IPC route.
+  - Validation evidence exists in `docs/agents/03_VALIDATION.md` for lint/typecheck/tests/security test.
+- AOM_V2:
+  - Risk Tier: `T3`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file runtime behavior changes across OCR decisioning flows + new Electron IPC write path.
+
+---
+
+## Intake - 2026-02-15 - VERSION-CHANGELOG-001
+- Goal: update app version and release notes for the latest shipped OCR adaptive improvements.
+- Constraints:
+  - Keep scope narrow to version constants and changelog source.
+  - Keep semantic versioning aligned between package version and in-app `APP_VERSION`.
+  - Do not modify runtime logic outside version/changelog metadata.
+- Out-of-scope:
+  - Feature implementation changes.
+  - UI behavior/layout changes.
+  - Build/release pipeline script changes.
+- Done condition:
+  - `package.json` version is bumped.
+  - `APP_VERSION` reflects the same release line.
+  - `src/utils/changelog.ts` includes a new entry for the bumped version.
+  - Validation evidence recorded for touched files.
+- AOM_V2:
+  - Risk Tier: `T0`
+  - Execution Path: `FAST_PATH`
+  - Reason: metadata-only update with no runtime behavior change.

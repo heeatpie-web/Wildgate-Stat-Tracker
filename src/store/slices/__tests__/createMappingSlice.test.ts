@@ -151,8 +151,148 @@ describe('createMappingSlice', () => {
     it('returns undefined for unknown text', () => {
       expect(store.getState().getOcrCorrection('xyz')).toBeUndefined();
     });
+
+    it('keeps alias model in sync when legacy correction API is used', () => {
+      store.getState().recordOcrCorrection('Adrlan', 'Adrian');
+      const model = store.getState().ocrAliasModel;
+      expect(model.entries['adrlan']).toBeDefined();
+      expect(model.entries['adrlan'][0].targetName).toBe('Adrian');
+    });
   });
 
+  describe('ocrAliasModel', () => {
+    it('resolves learned alias when score/count gates pass', () => {
+      store.getState().recordOcrAliasCorrection('Adrlan', 'Adrian', { context: 'lobby', confidenceWeight: 1 });
+      store.getState().recordOcrAliasCorrection('Adrlan', 'Adrian', { context: 'lobby', confidenceWeight: 1 });
+      store.getState().recordOcrAliasCorrection('Adrlan', 'Adrian', { context: 'lobby', confidenceWeight: 1 });
+      const result = store.getState().resolveOcrAlias('Adrlan', {
+        context: 'lobby',
+        minScore: 0.2,
+        minCount: 3,
+        strictMode: false,
+      });
+      expect(result.resolvedName).toBe('Adrian');
+      expect(result.reason).toBe('resolved');
+    });
+
+    it('blocks and unblocks alias resolution', () => {
+      store.getState().recordOcrAliasCorrection('Adrlan', 'Adrian', { context: 'lobby', confidenceWeight: 1 });
+      store.getState().recordOcrAliasCorrection('Adrlan', 'Adrian', { context: 'lobby', confidenceWeight: 1 });
+      store.getState().recordOcrAliasCorrection('Adrlan', 'Adrian', { context: 'lobby', confidenceWeight: 1 });
+      store.getState().blockOcrAlias('Adrlan', 'test');
+      const blocked = store.getState().resolveOcrAlias('Adrlan');
+      expect(blocked.blocked).toBe(true);
+      expect(blocked.reason).toBe('blocklisted');
+
+      store.getState().unblockOcrAlias('Adrlan');
+      const after = store.getState().resolveOcrAlias('Adrlan', {
+        context: 'lobby',
+        minScore: 0.2,
+        minCount: 3,
+        strictMode: false,
+      });
+      expect(after.blocked).toBe(false);
+      expect(after.suggestedName).toBe('Adrian');
+    });
+  });
+
+  describe('ocrLearningQueue lifecycle', () => {
+    it('queues, approves, and removes learning events from queue', () => {
+      const queued = store.getState().enqueueOcrLearningReview({
+        rawText: 'Adrlan',
+        suggestedName: 'Adrian',
+        score: 0.88,
+        margin: 0.09,
+        count: 3,
+        context: 'matchstats',
+        reason: 'auto-resolve-needs-review',
+      });
+      expect(queued).toBeTruthy();
+      expect(store.getState().ocrLearningQueue.length).toBe(1);
+
+      const approved = store.getState().approveOcrLearningEvent(queued!.eventId);
+      expect(approved?.status).toBe('approved');
+      expect(store.getState().ocrLearningQueue.length).toBe(0);
+      const resolution = store.getState().resolveOcrAlias('Adrlan', {
+        context: 'matchstats',
+        minScore: 0.2,
+        minCount: 1,
+        strictMode: false,
+      });
+      expect(resolution.suggestedName).toBe('Adrian');
+    });
+
+    it('rejects queued learning events', () => {
+      const queued = store.getState().enqueueOcrLearningReview({
+        rawText: 'Myspel',
+        suggestedName: 'MySpell',
+        score: 0.77,
+        margin: 0.03,
+        count: 2,
+        context: 'lobby',
+        reason: 'ambiguous',
+      });
+      expect(queued).toBeTruthy();
+      const rejected = store.getState().rejectOcrLearningEvent(queued!.eventId, 'manual reject');
+      expect(rejected?.status).toBe('rejected');
+      expect(store.getState().ocrLearningQueue.length).toBe(0);
+    });
+
+    it('rolls back auto-applied events and blocks alias key', () => {
+      const event = store.getState().logOcrLearningDecision({
+        rawText: 'Adrlan',
+        suggestedName: 'Adrian',
+        appliedName: 'Adrian',
+        score: 0.9,
+        margin: 0.12,
+        count: 5,
+        context: 'matchstats',
+        status: 'auto_applied',
+        reason: 'auto-applied',
+      });
+      expect(event).toBeTruthy();
+      store.getState().recordOcrAliasCorrection('Adrlan', 'Adrian', {
+        source: 'manual_correction',
+        context: 'matchstats',
+        confidenceWeight: 1,
+        decisionId: event!.id,
+      });
+
+      const rolled = store.getState().rollbackOcrLearningEvent(event!.id, 'test rollback');
+      expect(rolled?.status).toBe('rolled_back');
+      const blocked = store.getState().resolveOcrAlias('Adrlan');
+      expect(blocked.reason).toBe('blocklisted');
+    });
+
+    it('clears resolved learning events while retaining queued items', () => {
+      const queued = store.getState().enqueueOcrLearningReview({
+        rawText: 'QueueMe',
+        suggestedName: 'QueueTarget',
+        score: 0.7,
+        margin: 0.02,
+        count: 1,
+        context: 'unknown',
+      });
+      const resolved = store.getState().logOcrLearningDecision({
+        rawText: 'DoneOne',
+        suggestedName: 'DoneTarget',
+        appliedName: 'DoneTarget',
+        score: 0.95,
+        margin: 0.22,
+        count: 7,
+        status: 'auto_applied',
+        reason: 'auto-applied',
+      });
+      expect(queued).toBeTruthy();
+      expect(resolved).toBeTruthy();
+
+      store.getState().clearResolvedOcrLearningEvents(-1);
+      const events = store.getState().ocrLearningEvents;
+      expect(events.every(e => e.status === 'queued')).toBe(true);
+      expect(store.getState().ocrLearningQueue.length).toBe(1);
+      expect(store.getState().ocrLearningQueue[0].eventId).toBe(queued!.eventId);
+    });
+  });
   // ── Legacy Mapping Operations ──
 
   describe('addMapping / removeMapping', () => {
@@ -228,3 +368,5 @@ describe('createMappingSlice', () => {
     });
   });
 });
+
+

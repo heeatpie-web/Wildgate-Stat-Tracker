@@ -1,4 +1,10 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v2.15": [
+    "OCR: Added adaptive name resolution with variant-aware similarity scoring (LCS, edit similarity, and character overlap).",
+    "OCR: Integrated shared canonical resolver across capture, scan, and apply flows with stricter contextual disambiguation.",
+    "OCR: Review corrections can now auto-grow the corpus through a guarded, deduplicated IPC ingest path.",
+    "Reliability: Improved OCR session canonicalization and duplicate-name collapse for teammate and opponent lists."
+  ],
   "v2.14": [
     "Corpus: Added opponent team name and team color inputs in the plain-text ground truth workflow.",
     "Corpus: Image thumbnails in corpus mode now open in a full-size lightbox preview.",

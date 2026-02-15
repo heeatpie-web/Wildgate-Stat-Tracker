@@ -1,4 +1,5 @@
 import { getElectronAPI } from './electronAPI';
+import type { OcrAliasModel, OcrLearningEvent, OcrLearningQueueItem } from './ocrAliasEngine';
 export interface StorageData {
   matches: any[];
   players: string[];
@@ -7,6 +8,9 @@ export interface StorageData {
   pilotNotes: Record<string, string>;
   playerIdMap?: Record<string, string>;
   ocrCorrections?: Record<string, any>;
+  ocrAliasModel?: OcrAliasModel;
+  ocrLearningEvents?: OcrLearningEvent[];
+  ocrLearningQueue?: OcrLearningQueueItem[];
   settings: Record<string, any>;
   layouts: any;
   lastActivity: number;
