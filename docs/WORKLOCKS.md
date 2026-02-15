@@ -53,6 +53,40 @@ Use this row format when claiming:
 
 | File | Owner | Started (UTC) | Released (UTC) | Purpose |
 |---|---|---|---|---|
+| `src/components/OverlayView.tsx` | debugger | 2026-02-15T03:46:16Z | 2026-02-15T04:13:43Z | BUG-BATCH-004: overlay tab parity (mission/squadron/social) and quick access |
+| `src/components/analytics/AnalyticsShell.tsx` | debugger | 2026-02-15T03:46:16Z | 2026-02-15T04:13:43Z | BUG-BATCH-004: pro-mode drill click reliability and external subview navigation hook |
+| `src/components/Toast.tsx` | debugger | 2026-02-15T03:46:16Z | 2026-02-15T04:13:43Z | BUG-BATCH-004: add audio cues tied to toast lifecycle |
+| `src/utils/soundCues.ts` | debugger | 2026-02-15T03:46:16Z | 2026-02-15T04:13:43Z | BUG-BATCH-004: centralized UI sound cue synthesis utility |
+| `src/App.tsx` | debugger | 2026-02-15T03:46:16Z | 2026-02-15T04:13:43Z | BUG-BATCH-004: add view-switch cue + transition wrapper |
+| `src/index.css` | debugger | 2026-02-15T03:46:16Z | 2026-02-15T04:13:43Z | BUG-BATCH-004: view transition animation styles |
+| `src/components/SettingsModal.tsx` | debugger | 2026-02-15T03:36:26Z | 2026-02-15T03:37:08Z | BUG-BATCH-003: tabbed settings hierarchy clarity pass |
+| `src/components/RecordingView.tsx` | debugger | 2026-02-15T03:29:14Z | 2026-02-15T03:32:39Z | BUG-BATCH-002: recording layout clipping fix for constrained heights |
+| `src/components/RecordingView.test.tsx` | debugger | 2026-02-15T03:29:14Z | 2026-02-15T03:32:39Z | BUG-BATCH-002: regression test coverage for constrained-height fallback layout |
+| `src/components/SmartCapturesPanel.tsx` | debugger | 2026-02-15T03:06:00Z | 2026-02-15T03:15:43Z | BUG-BATCH-001: OCR apply persistence/fuzzy/cap fixes, wizard entry, queue classification, auto-repair attempt |
+| `src/components/recording/SquadronPanel.tsx` | debugger | 2026-02-15T03:06:00Z | 2026-02-15T03:15:43Z | BUG-BATCH-001: normalize telemetry ship indicator matching |
+| `src/components/recording/RosterPanel.tsx` | debugger | 2026-02-15T03:06:00Z | 2026-02-15T03:15:43Z | BUG-BATCH-001: reduce selected teammate chip font size |
+| `src/components/SettingsModal.tsx` | debugger | 2026-02-15T03:06:00Z | 2026-02-15T03:15:43Z | BUG-BATCH-001: telemetry profile visibility + capture mode copy clarity |
+| `src/index.css` | debugger | 2026-02-15T03:06:00Z | 2026-02-15T03:15:43Z | BUG-BATCH-001: expanded perf-lite blur/shadow reduction |
+| `docs/agents/00_INTAKE.md` | project-manager | 2026-02-15T03:10:00Z | 2026-02-15T03:15:43Z | BUG-BATCH-001 intake record |
+| `docs/agents/01_PLAN.md` | project-manager | 2026-02-15T03:10:00Z | 2026-02-15T03:15:43Z | BUG-BATCH-001 plan record |
+| `docs/agents/02_EXECUTION_LOG.md` | debugger | 2026-02-15T03:10:00Z | 2026-02-15T03:15:43Z | BUG-BATCH-001 execution record |
+| `docs/agents/03_VALIDATION.md` | debugger | 2026-02-15T03:10:00Z | 2026-02-15T03:15:43Z | BUG-BATCH-001 validation evidence |
+| `docs/agents/04_HANDOFF.md` | release-manager | 2026-02-15T03:10:00Z | 2026-02-15T03:15:43Z | BUG-BATCH-001 handoff summary |
+| `docs/agents/DECISIONS.md` | project-manager | 2026-02-15T03:10:00Z | 2026-02-15T03:15:43Z | BUG-BATCH-001 prioritization decision entry |
+| `src/store/slices/createSettingsSlice.ts` | debugger | 2026-02-14T22:22:00Z | 2026-02-14T22:31:36Z | Add telemetry performance profile setting and setter |
+| `src/hooks/useLogMonitor.ts` | debugger | 2026-02-15T02:58:27Z | 2026-02-15T03:02:00Z | TELEMETRY-BASTION-001: allow ship/hero telemetry resolution from raw fields without GUID |
+| `docs/agents/00_INTAKE.md` | project-manager | 2026-02-15T03:02:01Z | 2026-02-15T03:03:00Z | TELEMETRY-BASTION-001 intake record |
+| `docs/agents/01_PLAN.md` | project-manager | 2026-02-15T03:02:01Z | 2026-02-15T03:03:00Z | TELEMETRY-BASTION-001 plan record |
+| `docs/agents/02_EXECUTION_LOG.md` | debugger | 2026-02-15T03:02:01Z | 2026-02-15T03:03:00Z | TELEMETRY-BASTION-001 execution + PM feedback record |
+| `docs/agents/03_VALIDATION.md` | debugger | 2026-02-15T03:02:01Z | 2026-02-15T03:03:00Z | TELEMETRY-BASTION-001 validation evidence |
+| `docs/agents/04_HANDOFF.md` | release-manager | 2026-02-15T03:02:01Z | 2026-02-15T03:03:00Z | TELEMETRY-BASTION-001 handoff summary |
+| `src/store/useAppStore.ts` | debugger | 2026-02-14T22:22:00Z | 2026-02-14T22:31:36Z | Persist telemetry performance profile across launches |
+| `src/components/SettingsModal.tsx` | debugger | 2026-02-14T22:22:00Z | 2026-02-14T22:31:36Z | Add Low Power / Balanced / High Accuracy control |
+| `src/hooks/useLogMonitor.ts` | debugger | 2026-02-14T22:22:00Z | 2026-02-14T22:31:36Z | Send selected telemetry performance profile to main process |
+| `electron/main.cjs` | debugger | 2026-02-14T22:22:00Z | 2026-02-14T22:31:36Z | Apply telemetry monitoring profile to polling/write behavior |
+| `electron/handlers/artifactHandlers.cjs` | debugger | 2026-02-14T22:16:52Z | 2026-02-14T22:21:21Z | Diagnose and fix screenshot bundling regression causing missing smart-capture links |
+| `src/hooks/useMatchSubmission.ts` | debugger | 2026-02-14T22:16:52Z | 2026-02-14T22:21:21Z | Enforce artifact path synchronization between stored files and match history rows |
+| `src/hooks/__tests__/useMatchSubmission.test.ts` | debugger | 2026-02-14T22:16:52Z | 2026-02-14T22:21:21Z | Add regression test coverage for artifact sync behavior |
 | `docs/agents/PM_TODO.md` | project-manager | 2026-02-13T22:40:00Z | 2026-02-13T22:55:00Z | Canonical PM delegation board update with IDs, statuses, dependencies, and wave sequencing |
 | `docs/agents/04_HANDOFF.md` | project-manager | 2026-02-13T22:40:00Z | 2026-02-13T22:55:00Z | Temporary PM handoff ownership for delegation-board documentation cycle |
 | `docs/agents/03_VALIDATION.md` | project-manager | 2026-02-13T22:40:00Z | 2026-02-13T22:55:00Z | Temporary PM validation ownership for delegation-board evidence cycle |

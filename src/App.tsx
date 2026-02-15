@@ -35,6 +35,7 @@ import { useAppStore } from './store/useAppStore';
 import { getElectronAPI } from './utils/electronAPI';
 import { findClosestMatch, normalizeOcrName, similarityScore } from './utils/stringUtils';
 import { StorageService } from './utils/storage';
+import { playSoundCue } from './utils/soundCues';
 
 interface TelemetryRetentionStatus {
     exceedsLimits: boolean;
@@ -114,7 +115,7 @@ const App: React.FC = () => {
         setSessionShipTypes
     } = useGameData();
 
-    const { overlayStyle } = useUserPreferences();
+    const { overlayStyle, soundEnabled } = useUserPreferences();
 
     const { logFeed, logStatus } = useLogMonitor();
 
@@ -141,6 +142,7 @@ const App: React.FC = () => {
     }, [activeUser, isStoreLoading, setToast]);
 
     const overlayTransitionRef = React.useRef(false);
+    const viewSwitchSoundArmedRef = React.useRef(false);
     useEffect(() => {
         const body = document.body;
         if (isOverlayMode) {
@@ -159,6 +161,15 @@ const App: React.FC = () => {
             overlayTransitionRef.current = false;
         }
     }, [isOverlayMode, overlayStyle]);
+
+    useEffect(() => {
+        if (!soundEnabled) return;
+        if (!viewSwitchSoundArmedRef.current) {
+            viewSwitchSoundArmedRef.current = true;
+            return;
+        }
+        playSoundCue('navigate');
+    }, [activeView, soundEnabled]);
 
     useEffect(() => {
         const onResize = () => {
@@ -752,7 +763,9 @@ const App: React.FC = () => {
 
                             <main className="flex-1 overflow-hidden bg-md-sys-surface rounded-card">
                                 <Suspense fallback={viewFallback}>
-                                    {renderActiveView()}
+                                    <div key={activeView} className="h-full app-view-transition">
+                                        {renderActiveView()}
+                                    </div>
                                 </Suspense>
                             </main>
                         </div>

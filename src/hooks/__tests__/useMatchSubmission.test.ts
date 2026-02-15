@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useMatchSubmission } from '../useMatchSubmission';
-import { bundleMatchArtifacts } from '../../utils/artifactService';
+import { bundleMatchArtifacts, getMatchArtifactsStructured } from '../../utils/artifactService';
 
 const setToast = vi.fn();
 const setShowWizard = vi.fn();
@@ -96,6 +96,7 @@ vi.mock('../../hooks/useSoundEffects', () => ({
 
 vi.mock('../../utils/artifactService', () => ({
   bundleMatchArtifacts: vi.fn().mockResolvedValue([]),
+  getMatchArtifactsStructured: vi.fn().mockResolvedValue({ images: [], imageFiles: [], telemetry: [] }),
 }));
 
 vi.mock('../../utils/storage', () => ({
@@ -150,6 +151,8 @@ describe('useMatchSubmission', () => {
     });
     vi.mocked(bundleMatchArtifacts).mockReset();
     vi.mocked(bundleMatchArtifacts).mockResolvedValue([]);
+    vi.mocked(getMatchArtifactsStructured).mockReset();
+    vi.mocked(getMatchArtifactsStructured).mockResolvedValue({ images: [], imageFiles: [], telemetry: [] });
   });
 
   it('returns initiateSubmission, processFinalSubmission, and submitting', () => {
@@ -419,5 +422,60 @@ describe('useMatchSubmission', () => {
     expect(updatedMatch.id).toBe(draftId);
     expect(updatedMatch.result).toBe('Win');
     expect(updatedMatch.subType).toBe('Combat');
+  });
+
+  it('syncs on-disk match artifacts even when bundling finds none', async () => {
+    const diskArtifact = 'C:\\Users\\Tester\\AppData\\Roaming\\wildgate\\match_artifacts\\555\\capture_1.png';
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.pendingMatchData = {
+      id: 555,
+      timestamp: 1_700_000_000_000,
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: [],
+      opponents: [],
+      kills: {},
+      reachModifiers: [],
+      artifacts: [],
+      time: '10:00',
+    };
+    mockStoreState.showWizard = 'Win';
+    mockStoreState.matches = [{
+      id: 555,
+      timestamp: 1_700_000_000_000,
+      date: '1/1/2024',
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: { 'AI Legion': 0 },
+      result: 'Draw',
+      subType: 'Telemetry Draft',
+      artifacts: [],
+      ocrState: 'queued',
+    }];
+    vi.mocked(bundleMatchArtifacts).mockResolvedValue([]);
+    vi.mocked(getMatchArtifactsStructured).mockResolvedValue({
+      images: [diskArtifact],
+      imageFiles: [],
+      telemetry: [],
+    });
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    await act(async () => {
+      await result.current.processFinalSubmission('Combat');
+    });
+
+    const updatedWithArtifact = updateMatch.mock.calls
+      .map(([match]) => match)
+      .find((match) => Array.isArray(match?.artifacts) && match.artifacts.includes(diskArtifact));
+
+    expect(updatedWithArtifact).toBeDefined();
+    expect(bundleMatchArtifacts).toHaveBeenCalled();
+    expect(getMatchArtifactsStructured).toHaveBeenCalledWith(555);
   });
 });

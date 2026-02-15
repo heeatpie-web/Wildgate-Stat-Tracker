@@ -9,10 +9,12 @@ import { StorageService } from '../utils/storage';
 import { getElectronAPI } from '../utils/electronAPI';
 import { useAppStore } from '../store/useAppStore';
 import { getGCloudStatus, type GCloudStatus } from '../utils/electronBridge';
-import type { OcrMode, CaptureMode } from '../store/slices/createSettingsSlice';
+import type { OcrMode, CaptureMode, TelemetryPerformanceProfile } from '../store/slices/createSettingsSlice';
 import { normalizeOcrName } from '../utils/stringUtils';
 import { DEFAULT_OCR_BEST_GUESS_THRESHOLDS, getPreset, detectSensitivityLevel } from './settings/ocrThresholdPresets';
 import { Button, Input } from './ui';
+
+type SettingsTabId = 'identity' | 'interface' | 'ocr-capture' | 'data';
 
 export const SettingsModal: React.FC = () => {
     const {
@@ -48,6 +50,8 @@ export const SettingsModal: React.FC = () => {
     const setCaptureMode = useAppStore(s => s.setCaptureMode);
     const showSmartCaptureInHeader = useAppStore(s => s.showSmartCaptureInHeader);
     const setShowSmartCaptureInHeader = useAppStore(s => s.setShowSmartCaptureInHeader);
+    const telemetryPerformanceProfile = useAppStore(s => s.telemetryPerformanceProfile);
+    const setTelemetryPerformanceProfile = useAppStore(s => s.setTelemetryPerformanceProfile);
     const lockOcrTeams = useAppStore(s => s.lockOcrTeams);
     const setLockOcrTeams = useAppStore(s => s.setLockOcrTeams);
     const ocrBestGuessThresholds = useAppStore(s => s.ocrBestGuessThresholds);
@@ -83,6 +87,7 @@ export const SettingsModal: React.FC = () => {
     }, [showSettings]);
 
     const [saved, setSaved] = useState(false);
+    const [activeTab, setActiveTab] = useState<SettingsTabId>('interface');
     const cloudReady = !!gcloudStatus?.visionReady;
 
     const handleSaveAndClose = useCallback(async () => {
@@ -114,6 +119,7 @@ export const SettingsModal: React.FC = () => {
                 showTimer: state.showSessionTimer,
                 bgUrl: state.customBgUrl,
                 autoLog: state.enableAutoLogRecording,
+                telemetryPerformanceProfile: state.telemetryPerformanceProfile,
                 alwaysOnTop: (state as any).isAlwaysOnTop,
                 overlayStyle: state.overlayStyle,
                 ocrMode: state.ocrMode,
@@ -156,6 +162,25 @@ export const SettingsModal: React.FC = () => {
         getElectronAPI()?.send('restart_app');
     };
 
+    const settingsTabs: Array<{ id: SettingsTabId; label: string }> = isOverlayMode
+        ? [
+            { id: 'identity', label: 'Identity' },
+            { id: 'interface', label: 'Interface' },
+            { id: 'ocr-capture', label: 'OCR/Capture' },
+        ]
+        : [
+            { id: 'identity', label: 'Identity' },
+            { id: 'interface', label: 'Interface' },
+            { id: 'ocr-capture', label: 'OCR/Capture' },
+            { id: 'data', label: 'Data' },
+        ];
+
+    useEffect(() => {
+        if (isOverlayMode && activeTab === 'data') {
+            setActiveTab('interface');
+        }
+    }, [activeTab, isOverlayMode]);
+
     return (
         <div className="fixed inset-0 z-modal md3-dialog-scrim flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowSettings(false)}>
             <div
@@ -173,11 +198,31 @@ export const SettingsModal: React.FC = () => {
                     </button>
                 </div>
 
+                <div className="px-5 py-3 border-b border-md-sys-outline/10">
+                    <div className={`grid gap-2 ${settingsTabs.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+                        {settingsTabs.map(tab => (
+                            <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => setActiveTab(tab.id)}
+                                aria-pressed={activeTab === tab.id}
+                                className={`h-9 rounded-control text-label-sm font-bold uppercase tracking-wide transition-all ${activeTab === tab.id
+                                    ? 'md3-btn-filled ring-2 ring-md-sys-primary/40'
+                                    : 'md3-btn-tonal opacity-70 hover:opacity-100'
+                                    }`}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
                 {/* Modal Content - Scrollable */}
                 <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
 
                     {/* Alias & authority (primary) */}
-                    <section className="md3-surface p-5 rounded-card border border-md-sys-outline/10">
+                    {activeTab === 'identity' && (
+                        <section className="md3-surface p-5 rounded-card border border-md-sys-outline/10">
                         <h3 className="text-label-lg font-bold text-md-sys-on-surface mb-1">Alias & authority</h3>
                         <p className="text-body text-md-sys-on-surface/60 mb-4">This identity is used for session and analytics.</p>
                         <div className="grid grid-cols-2 gap-2 mb-3">
@@ -222,10 +267,12 @@ export const SettingsModal: React.FC = () => {
                                     </div>
                                 ))}
                         </div>
-                    </section>
+                        </section>
+                    )}
 
                     {/* Appearance Section */}
-                    <section>
+                    {activeTab === 'interface' && (
+                        <section>
                         <h3 className="text-label-sm font-bold uppercase tracking-wide opacity-60 flex items-center gap-2 mb-4">
                             <Palette size={16} /> Appearance
                         </h3>
@@ -370,6 +417,49 @@ export const SettingsModal: React.FC = () => {
                                         <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${enableAutoLogRecording ? 'translate-x-5' : ''}`} />
                                     </button>
                                 </div>
+                                <div className="pt-2 border-t border-md-sys-outline/10 space-y-2">
+                                    <div>
+                                        <span className="text-label-sm font-medium opacity-60 block">Telemetry Performance</span>
+                                        <span className="text-label-sm opacity-40 uppercase font-bold">Monitoring load profile</span>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {[
+                                            {
+                                                id: 'low-power' as TelemetryPerformanceProfile,
+                                                label: 'Low Power',
+                                                desc: 'Cooler, slower updates'
+                                            },
+                                            {
+                                                id: 'balanced' as TelemetryPerformanceProfile,
+                                                label: 'Balanced',
+                                                desc: 'Recommended default'
+                                            },
+                                            {
+                                                id: 'high-accuracy' as TelemetryPerformanceProfile,
+                                                label: 'High Accuracy',
+                                                desc: 'Faster, heavier polling'
+                                            },
+                                        ].map(opt => (
+                                            <button
+                                                key={opt.id}
+                                                onClick={() => setTelemetryPerformanceProfile(opt.id)}
+                                                className={`p-2.5 rounded-control text-center transition-all ${telemetryPerformanceProfile === opt.id
+                                                    ? 'md3-btn-filled ring-2 ring-md-sys-primary/40'
+                                                    : 'md3-btn-outlined'
+                                                    }`}
+                                                title={opt.desc}
+                                            >
+                                                <div className="text-label-sm font-bold">{opt.label}</div>
+                                                <div className="text-label-sm opacity-60">{opt.desc}</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {!enableAutoLogRecording && (
+                                        <div className="text-label-sm text-md-sys-on-surface/55">
+                                            Auto Log Recording is currently off. The selected profile will apply when telemetry monitoring is enabled.
+                                        </div>
+                                    )}
+                                </div>
                                 <div className="flex justify-between items-center pt-2 border-t border-md-sys-outline/10">
                                     <div>
                                         <span className="text-label-sm font-medium opacity-60 block">Developer Mode</span>
@@ -412,10 +502,12 @@ export const SettingsModal: React.FC = () => {
                                 </button>
                             </div>
                         </div>
-                    </section>
+                        </section>
+                    )}
 
                     {/* Overlay Style Section */}
-                    <section className="md3-surface-high/50 backdrop-blur-sm p-5 rounded-card border border-md-sys-outline/10">
+                    {activeTab === 'interface' && (
+                        <section className="md3-surface-high/50 backdrop-blur-sm p-5 rounded-card border border-md-sys-outline/10">
                         <h3 className="text-label-sm font-bold uppercase tracking-wide opacity-60 flex items-center gap-2 mb-4">
                             Overlay Style
                         </h3>
@@ -435,10 +527,12 @@ export const SettingsModal: React.FC = () => {
                                 <div className="text-label-sm opacity-60">Float over game</div>
                             </button>
                         </div>
-                    </section>
+                        </section>
+                    )}
 
                     {/* OCR Engine Section */}
-                    <section className="md3-surface-high/50 backdrop-blur-sm p-5 rounded-card border border-md-sys-outline/10">
+                    {activeTab === 'ocr-capture' && (
+                        <section className="md3-surface-high/50 backdrop-blur-sm p-5 rounded-card border border-md-sys-outline/10">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-label-sm font-bold uppercase tracking-wide opacity-60 flex items-center gap-2">
                                 OCR Engine
@@ -562,15 +656,17 @@ export const SettingsModal: React.FC = () => {
                                 </span>
                             </div>
                         )}
-                    </section>
+                        </section>
+                    )}
 
                     {/* Capture Mode */}
-                    <section className="md3-surface-high/50 backdrop-blur-sm p-4 rounded-card border border-md-sys-outline/10">
+                    {activeTab === 'ocr-capture' && (
+                        <section className="md3-surface-high/50 backdrop-blur-sm p-4 rounded-card border border-md-sys-outline/10">
                         <h3 className="text-body font-bold mb-3">Capture Mode</h3>
                         <div className="grid grid-cols-2 gap-2">
                             {[
-                                { id: 'auto' as CaptureMode, label: 'Auto OCR', desc: 'Capture now, OCR after a short pause (bundles bursts)' },
-                                { id: 'deferred' as CaptureMode, label: 'Screenshot-First', desc: 'Save now, OCR later' },
+                                { id: 'auto' as CaptureMode, label: 'Capture Now + Auto OCR', desc: 'Capture immediately, OCR runs automatically after a short pause' },
+                                { id: 'deferred' as CaptureMode, label: 'Capture Now, OCR Later', desc: 'Capture immediately, run OCR manually from Smart Captures queue' },
                             ].map(opt => (
                                 <button
                                     key={opt.id}
@@ -595,10 +691,11 @@ export const SettingsModal: React.FC = () => {
                                 OCR runs automatically after about 4 seconds of no new captures, so multiple captures bundle into one batch.
                             </div>
                         )}
-                    </section>
+                        </section>
+                    )}
 
                     {/* Data & Updates Section - Full Mode Only */}
-                    {!isOverlayMode && (
+                    {activeTab === 'data' && !isOverlayMode && (
                         <section>
                             <h3 className="text-label-sm font-bold uppercase tracking-wide opacity-60 flex items-center gap-2 mb-4 mt-6">
                                 <FileJson size={16} /> Data & Updates

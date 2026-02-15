@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertCircle, CheckCircle, Info, X } from 'lucide-react';
+import { useUserPreferences } from '../providers/UserPreferencesProvider';
+import { playSoundCue } from '../utils/soundCues';
 
 export interface ToastProps {
   message: string;
@@ -10,10 +12,29 @@ export interface ToastProps {
 }
 
 export const Toast: React.FC<ToastProps> = ({ message, type = 'info', duration = 5000, onClose }) => {
+  const { soundEnabled } = useUserPreferences();
+
   useEffect(() => {
     const timer = setTimeout(onClose, duration);
     return () => clearTimeout(timer);
   }, [duration, onClose]);
+
+  useEffect(() => {
+    if (!soundEnabled) return;
+    if (type === 'success') {
+      playSoundCue('success');
+      return;
+    }
+    if (type === 'error') {
+      playSoundCue('error');
+      return;
+    }
+    if (type === 'warning') {
+      playSoundCue('warning');
+      return;
+    }
+    playSoundCue('info');
+  }, [message, soundEnabled, type]);
 
   const bg = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : type === 'warning' ? 'bg-warning' : 'bg-info';
   const icon = type === 'success' ? <CheckCircle size={20}/> : type === 'error' ? <AlertCircle size={20}/> : type === 'warning' ? <AlertCircle size={20}/> : <Info size={20}/>;

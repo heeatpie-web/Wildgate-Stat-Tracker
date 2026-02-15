@@ -67,6 +67,10 @@ describe('RecordingView', () => {
 
     render(<RecordingView />);
 
+    const root = document.querySelector('[data-tour="view-recording"]');
+    expect(root).not.toBeNull();
+    expect(root?.className).toContain('overflow-y-auto');
+
     // Compact tab bar exists (use first match in case of duplicates).
     const actionsBtns = screen.getAllByRole('button', { name: /actions/i });
     const loadoutBtns = screen.getAllByRole('button', { name: /loadout/i });

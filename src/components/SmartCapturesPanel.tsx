@@ -5,7 +5,7 @@ import {
     ShieldCheck, Crosshair, Users, AlertTriangle, FileText,
     ScanEye, RefreshCw, Plus, ImageOff, Trash2, Upload, Camera, Zap, Loader2, FolderOpen,
 } from 'lucide-react';
-import { Match, SHIPS, getShipColor, OpponentTeam, Loadout } from '../types';
+import { Match, SHIPS, getShipColor, OpponentTeam, Loadout, getShipCapacity } from '../types';
 import { UI_REACH_MODIFIERS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT, SYSTEMS } from '../utils/constants';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
@@ -46,9 +46,10 @@ import { QueueCollapseToggle } from './smart-captures/QueueCollapseToggle';
 import { QueueItemRichPreview } from './smart-captures/QueueItemRichPreview';
 import { SmartCaptureSummaryBar } from './smart-captures/detail/SmartCaptureSummaryBar';
 import { SmartCaptureActionBar } from './smart-captures/detail/SmartCaptureActionBar';
+import { findClosestMatch, normalizeOcrName } from '../utils/stringUtils';
 
 const SmartCapturesPanel: React.FC = () => {
-    const { matches, updateMatch, pilotRegistry, setSelectedTeammates, setSelectedOpponents, setActiveShip, setSessionTeams, setSessionShipTypes, setSelectedReachModifiers, selectedTeammates, selectedOpponents, sessionTeams } = useGameData();
+    const { matches, updateMatch, pilotRegistry, setSelectedTeammates, setSelectedOpponents, setActiveShip, setSessionTeams, setSessionShipTypes, setSelectedReachModifiers, selectedTeammates, selectedOpponents, sessionTeams, activeShip } = useGameData();
     const { activeUser, setToast, smartCapturesFocusMatchId, setSmartCapturesFocusMatchId } = useUIState();
     const ocrMode = useAppStore(s => s.ocrMode);
     const setOcrMode = useAppStore(s => s.setOcrMode);
@@ -77,11 +78,20 @@ const SmartCapturesPanel: React.FC = () => {
     const [isResizing, setIsResizing] = useState(false);
     const [repairBusy, setRepairBusy] = useState(false);
     const [repairResult, setRepairResult] = useState<ArtifactRepairResult | null>(null);
+    const autoRepairAttemptedRef = useRef(false);
     const normalizeModifierName = useCallback((name: string) => {
         const match = UI_REACH_MODIFIERS.find(m => m.toLowerCase() === name.toLowerCase());
         return match || name;
     }, []);
-
+    const resolveRosterName = useCallback((rawName: string) => {
+        const normalized = normalizeOcrName(rawName || '');
+        if (!normalized || normalized.length < 2) return '';
+        const exact = pilotRegistry.find(p => normalizeOcrName(p).toLowerCase() === normalized.toLowerCase());
+        if (exact) return exact;
+        const threshold = normalized.length > 8 ? 2 : 1;
+        const fuzzy = findClosestMatch(normalized, pilotRegistry, threshold);
+        return fuzzy || normalized;
+    }, [pilotRegistry]);
     useEffect(() => {
         if (!isResizing) return;
         const onMove = (event: MouseEvent) => {
@@ -98,8 +108,36 @@ const SmartCapturesPanel: React.FC = () => {
         };
     }, [isResizing]);
 
+    useEffect(() => {
+        if (autoRepairAttemptedRef.current) return;
+        autoRepairAttemptedRef.current = true;
+        let cancelled = false;
+        const runAutoRepair = async () => {
+            try {
+                const preview = await previewArtifactRepair();
+                if (cancelled) return;
+                const planned = preview.summary?.plannedLinks || 0;
+                if (planned <= 0) return;
+                const applied = await applyArtifactRepair();
+                if (cancelled) return;
+                const linked = applied.summary?.appliedLinks || 0;
+                if (linked > 0) {
+                    setRepairResult(applied);
+                    setToast({ message: `Auto-repaired ${linked} artifact link${linked === 1 ? '' : 's'}.`, type: 'success' });
+                }
+            } catch {
+                // Non-blocking background attempt.
+            }
+        };
+        void runAutoRepair();
+        return () => {
+            cancelled = true;
+        };
+    }, [setToast]);
+
 
     const isWorkQueueItem = useCallback((m: Match) => {
+        if (m.ocrState && m.ocrState !== 'saved') return true;
         const hasArtifacts = (m.artifacts?.length || 0) > 0;
         const hasOcr = !!m.ocrDebug;
         if (!hasArtifacts && !hasOcr) return false;
@@ -648,20 +686,44 @@ const SmartCapturesPanel: React.FC = () => {
                                     onPrev={goPrevQueue}
                                     onResolve={() => {
                                         if (!selectedMatch) return;
-                                        updateMatch({ ...selectedMatch, ocrReviewedAt: Date.now(), ocrState: 'saved' });
+                                        const latest = useAppStore.getState().matches.find(m => m.id === selectedMatch.id) || selectedMatch;
+                                        updateMatch({ ...latest, ocrReviewedAt: Date.now(), ocrState: 'saved' });
                                         if (queueOnly) {
                                             setTimeout(() => goNextQueue(), 0);
                                         }
                                     }}
                                     onApplyToSession={(data) => {
-                                        if (data.playerShip?.shipType) setActiveShip(data.playerShip.shipType, 'ocr');
+                                        const detectedShip = data.playerShip?.shipType || '';
+                                        if (detectedShip) setActiveShip(detectedShip, 'ocr');
+                                        const shipForCapacity = detectedShip || activeShip || SHIPS[0];
+                                        const maxTeammates = Math.max(0, getShipCapacity(shipForCapacity) - 1);
+
                                         if (data.teammates?.length > 0) {
-                                            const newNames = data.teammates.map(t => t.name).filter(n => n && !selectedTeammates.includes(n));
-                                            if (newNames.length > 0) setSelectedTeammates([...selectedTeammates, ...newNames].slice(0, 4));
+                                            const existing = new Set(selectedTeammates.map(n => normalizeOcrName(n).toLowerCase()));
+                                            const merged = [...selectedTeammates];
+                                            for (const raw of data.teammates.map(t => t.name).filter(Boolean)) {
+                                                const resolved = resolveRosterName(raw);
+                                                if (!resolved) continue;
+                                                const key = normalizeOcrName(resolved).toLowerCase();
+                                                if (existing.has(key)) continue;
+                                                if (merged.length >= maxTeammates) break;
+                                                merged.push(resolved);
+                                                existing.add(key);
+                                            }
+                                            setSelectedTeammates(merged);
                                         }
                                         if (data.opponentTeams?.length > 0) {
-                                            const oppNames = data.opponentTeams.flatMap(t => t.players.map(p => p.name)).filter(n => n && !selectedOpponents.includes(n));
-                                            if (oppNames.length > 0) setSelectedOpponents([...selectedOpponents, ...oppNames]);
+                                            const existingOpp = new Set(selectedOpponents.map(n => normalizeOcrName(n).toLowerCase()));
+                                            const mergedOpp = [...selectedOpponents];
+                                            for (const raw of data.opponentTeams.flatMap(t => t.players.map(p => p.name)).filter(Boolean)) {
+                                                const resolved = resolveRosterName(raw);
+                                                if (!resolved) continue;
+                                                const key = normalizeOcrName(resolved).toLowerCase();
+                                                if (existingOpp.has(key)) continue;
+                                                mergedOpp.push(resolved);
+                                                existingOpp.add(key);
+                                            }
+                                            setSelectedOpponents(mergedOpp);
                                             const newTeams = { ...sessionTeams };
                                             const newShipTypes: Record<string, string> = {};
                                             data.opponentTeams.forEach(team => {
@@ -671,7 +733,8 @@ const SmartCapturesPanel: React.FC = () => {
                                                 }
                                                 if (!newTeams[colorKey]) newTeams[colorKey] = [];
                                                 team.players.forEach(p => {
-                                                    if (p.name && !newTeams[colorKey].includes(p.name)) newTeams[colorKey].push(p.name);
+                                                    const resolved = resolveRosterName(p.name || '');
+                                                    if (resolved && !newTeams[colorKey].includes(resolved)) newTeams[colorKey].push(resolved);
                                                 });
                                                 if (team.shipType) newShipTypes[colorKey] = team.shipType;
                                             });
@@ -695,15 +758,23 @@ const SmartCapturesPanel: React.FC = () => {
                                             const matchUpdates: Partial<Match> = { ocrReviewedAt: Date.now(), ocrState: 'saved' as const };
                                             if (data.playerShip?.shipType) matchUpdates.ship = data.playerShip.shipType;
                                             if (data.teammates?.length > 0) {
-                                                matchUpdates.teammates = data.teammates.map(t => t.name).slice(0, 4);
+                                                const resolvedTeam = data.teammates
+                                                    .map(t => resolveRosterName(t.name || ''))
+                                                    .filter(Boolean);
+                                                matchUpdates.teammates = Array.from(new Set(resolvedTeam)).slice(0, maxTeammates);
                                             }
                                             if (data.opponentTeams?.length > 0) {
-                                                matchUpdates.opponents = data.opponentTeams.flatMap(t => t.players.map(p => p.name));
+                                                const resolvedOpps = data.opponentTeams
+                                                    .flatMap(t => t.players.map(p => resolveRosterName(p.name || '')))
+                                                    .filter(Boolean);
+                                                matchUpdates.opponents = Array.from(new Set(resolvedOpps));
                                                 matchUpdates.opponentTeams = data.opponentTeams.map(t => ({
                                                     teamName: t.teamName || 'Unknown Team',
                                                     shipType: t.shipType || '',
                                                     color: t.color || 'unknown',
-                                                    players: t.players.map(p => p.name),
+                                                    players: t.players
+                                                        .map(p => resolveRosterName(p.name || ''))
+                                                        .filter(Boolean),
                                                 }));
                                             }
                                             const mods = data.reachModifiers ?? [];
@@ -712,7 +783,8 @@ const SmartCapturesPanel: React.FC = () => {
                                                 const rawMods = [...mods.map(m => m.name), ...haz];
                                                 matchUpdates.reachModifiers = Array.from(new Set(rawMods.map(m => normalizeModifierName(m)).filter(Boolean)));
                                             }
-                                            updateMatch({ ...selectedMatch, ...matchUpdates });
+                                            const latest = useAppStore.getState().matches.find(m => m.id === selectedMatch.id) || selectedMatch;
+                                            updateMatch({ ...latest, ...matchUpdates });
                                             if (queueOnly) setTimeout(() => goNextQueue(), 0);
                                         }
                                     }}
@@ -908,11 +980,51 @@ const SmartMatchDetail: React.FC<{
         details: true,
         rerun: false,
     });
-    const { setToast, setActiveView } = useUIState();
+    const { setToast, setActiveView, setShowWizard } = useUIState();
     const normalizeModifierName = useCallback((name: string) => {
         const match = UI_REACH_MODIFIERS.find(m => m.toLowerCase() === name.toLowerCase());
         return match || name;
     }, []);
+    const resolveRosterName = useCallback((rawName: string) => {
+        const normalized = normalizeOcrName(rawName || '');
+        if (!normalized || normalized.length < 2) return '';
+        const exact = pilotRegistry.find(p => normalizeOcrName(p).toLowerCase() === normalized.toLowerCase());
+        if (exact) return exact;
+        const threshold = normalized.length > 8 ? 2 : 1;
+        const fuzzy = findClosestMatch(normalized, pilotRegistry, threshold);
+        return fuzzy || normalized;
+    }, [pilotRegistry]);
+    const openWizardForMatch = useCallback(() => {
+        const wizardResult = (match.result === 'Win' || match.result === 'Loss' || match.result === 'Draw')
+            ? match.result
+            : 'Draw';
+        useAppStore.getState().setPendingMatchData({
+            id: match.id,
+            timestamp: match.timestamp,
+            mode: match.mode,
+            player: match.player,
+            teammates: [...(match.teammates || [])],
+            opponents: [...(match.opponents || [])],
+            hero: match.hero,
+            ship: match.ship,
+            loadout: match.loadout,
+            weapons: match.weapons || {},
+            reachModifiers: [...(match.reachModifiers || [])],
+            kills: { ...(match.kills || {}) },
+            time: match.time || '',
+            poiEasy: match.poiEasy || 0,
+            poiMedium: match.poiMedium || 0,
+            poiEpic: match.poiEpic || 0,
+            damageTaken: match.damageTaken || 0,
+            notes: match.notes || '',
+            artifacts: [...(match.artifacts || [])],
+            ocrState: match.ocrState,
+            opponentTeams: match.opponentTeams || undefined,
+            ocrDebug: match.ocrDebug || undefined,
+        } as Partial<Match>);
+        setShowWizard(wizardResult);
+        setToast({ message: 'Opened wizard for this match', type: 'info' });
+    }, [match, setShowWizard, setToast]);
 
     useEffect(() => {
         setArtifacts({ images: [], imageFiles: [], telemetry: [] });
@@ -1261,16 +1373,24 @@ const SmartMatchDetail: React.FC<{
     const handleApplyReviewData = (data: OCRExtractedData) => {
         const updates: Partial<Match> = {};
         if (data.playerShip?.shipType) updates.ship = data.playerShip.shipType;
+        const shipForCapacity = updates.ship || match.ship || '';
+        const maxTeammates = Math.max(0, getShipCapacity(shipForCapacity) - 1);
         if (data.teammates?.length > 0) {
-            updates.teammates = data.teammates.map(t => t.name);
+            const resolvedTeam = data.teammates
+                .map(t => resolveRosterName(t.name || ''))
+                .filter(Boolean);
+            updates.teammates = Array.from(new Set(resolvedTeam)).slice(0, maxTeammates);
         }
         if (data.opponentTeams?.length > 0) {
-            updates.opponents = data.opponentTeams.flatMap(t => t.players.map(p => p.name));
+            const resolvedOpps = data.opponentTeams
+                .flatMap(t => t.players.map(p => resolveRosterName(p.name || '')))
+                .filter(Boolean);
+            updates.opponents = Array.from(new Set(resolvedOpps));
             updates.opponentTeams = data.opponentTeams.map(t => ({
                 teamName: t.teamName || 'Unknown Team',
                 shipType: t.shipType || '',
                 color: t.color || 'unknown',
-                players: t.players.map(p => p.name),
+                players: t.players.map(p => resolveRosterName(p.name || '')).filter(Boolean),
             }));
         }
         const reachModifiers = data.reachModifiers ?? [];
@@ -1437,6 +1557,13 @@ const SmartMatchDetail: React.FC<{
                                 title="View in History"
                             >
                                 History
+                            </button>
+                            <button
+                                onClick={openWizardForMatch}
+                                className="md3-btn-tonal px-2.5 py-1.5 text-label-xs font-bold"
+                                title="Open wizard for manual edits"
+                            >
+                                Wizard
                             </button>
                         </SmartCaptureActionBar>
                     </div>

@@ -243,3 +243,28 @@ Rule:
 - A decision without revisit trigger is incomplete.
 
 
+
+- Date: 2026-02-15
+- Decision: TELEMETRY-BASTION-001 interpreted as telemetry loadout parsing reliability issue, scoped to `src/hooks/useLogMonitor.ts`.
+- Rationale: Hero/ship auto-selection was GUID-gated; raw-only telemetry payloads could be skipped.
+- Impact: Implemented key normalization and raw-field fallback without changing OCR, UI, or data schema.
+
+- Date: 2026-02-15
+- Decision: BUG-BATCH-001 prioritized data-integrity and OCR-apply correctness over broad settings/navigation redesign.
+- Rationale: User-reported regressions around OCR apply/session sync were causing direct workflow breakage; layout IA changes are lower immediate risk.
+- Impact: Implemented targeted fixes in Smart Captures/Recording/Settings and deferred broader IA/navigation tasks to a separate pass.
+
+- Date: 2026-02-15
+- Decision: Interpret "continue" as proceeding to the next deferred high-friction bug in the same list (`RecordingView` bottom clipping) before broader IA redesign.
+- Rationale: This issue directly blocks core match-recording usability and had a clearly identifiable, low-risk layout root cause.
+- Impact: Implemented constrained-height layout fallback in `src/components/RecordingView.tsx` and added regression assertion in `src/components/RecordingView.test.tsx`.
+
+- Date: 2026-02-15
+- Decision: Implement tabbed section hierarchy in `SettingsModal` as a minimal clarity pass without changing settings semantics.
+- Rationale: User explicitly requested clickable hierarchy breakdown; tab gating gives clear IA with low technical risk.
+- Impact: Added tab navigation + section gating in `src/components/SettingsModal.tsx`; no setting value model changes.
+
+- Date: 2026-02-15
+- Decision: Close remaining open UX items via a scoped multi-file UI/runtime pass (`BUG-BATCH-004`) instead of separate micro-patches.
+- Rationale: The remaining items were tightly related interaction regressions and could be validated together with a single focused verification pass.
+- Impact: Added sound cues, pro-mode drill action hardening, overlay tab parity, and view-transition smoothing without schema/API changes.

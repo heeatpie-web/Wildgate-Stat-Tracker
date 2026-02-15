@@ -63,10 +63,10 @@ function registerArtifactHandlers(ipcMain, ctx) {
       if (!fs.existsSync(matchDir)) fs.mkdirSync(matchDir, { recursive: true });
 
       const bundledNames = new Set();
-      const bundledKeys = new Set();
+      const bundledSizes = new Set();
       const state = {
         bundledNames,
-        bundledKeys,
+        bundledSizes,
         onCopy: (srcPath, destPath, file) => {
           if (gcloudSyncService.isInitialized) {
             return gcloudSyncService.uploadFile(destPath, `match_artifacts/${matchId}/${file}`)

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { AnalyticsView, AnalyticsTimeRange, DrillDownTarget } from '../../types';
 import { Activity, ArrowLeft, Download, LayoutGrid, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
@@ -85,6 +85,22 @@ export const AnalyticsShell: React.FC = () => {
         setIsProMode(false);
     };
 
+    useEffect(() => {
+        const onExternalNavigate = (evt: Event) => {
+            const customEvt = evt as CustomEvent<{ view?: AnalyticsView; proMode?: boolean }>;
+            const targetView = customEvt?.detail?.view;
+            const nextProMode = customEvt?.detail?.proMode;
+            if (targetView && Object.prototype.hasOwnProperty.call(VIEW_LABELS, targetView)) {
+                setCurrentView(targetView);
+            }
+            if (typeof nextProMode === 'boolean') {
+                setIsProMode(nextProMode);
+            }
+        };
+        window.addEventListener('analytics:navigate-view', onExternalNavigate as EventListener);
+        return () => window.removeEventListener('analytics:navigate-view', onExternalNavigate as EventListener);
+    }, []);
+
     const isInteractiveTarget = (target: EventTarget | null) => {
         const el = target as HTMLElement | null;
         if (!el) return false;
@@ -107,9 +123,17 @@ export const AnalyticsShell: React.FC = () => {
             }}
             className="group relative rounded-card cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary"
         >
-            <div className="absolute right-3 top-3 z-10 px-2 py-1 rounded-pill text-label-xs font-bold uppercase tracking-wide bg-md-sys-primary/12 text-md-sys-primary opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">
+            <button
+                type="button"
+                data-no-pro-drill
+                onClick={(e) => {
+                    e.stopPropagation();
+                    openDetailedFromPro(view);
+                }}
+                className="absolute right-3 top-3 z-10 px-2 py-1 rounded-pill text-label-xs font-bold uppercase tracking-wide bg-md-sys-primary/12 text-md-sys-primary opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity"
+            >
                 Open detail
-            </div>
+            </button>
             {content}
         </div>
     );

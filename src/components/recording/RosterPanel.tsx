@@ -155,7 +155,7 @@ export const RosterPanel: React.FC = () => {
                                 <button
                                     key={p}
                                     onClick={() => toggleTeammate(p)}
-                                    className="md3-chip md3-chip--selected px-2 py-1 text-label-sm font-semibold"
+                                    className="md3-chip md3-chip--selected px-2 py-1 text-label-xs font-semibold"
                                 >
                                     {p}
                                 </button>

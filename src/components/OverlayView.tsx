@@ -1,19 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { MissionPanel } from './recording/MissionPanel';
 import { ActionPanel } from './recording/ActionPanel';
+import { SquadronPanel } from './recording/SquadronPanel';
 import { WindowResizer } from './WindowResizer';
-import { X, Minus, LayoutTemplate, GripHorizontal, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Minus, LayoutTemplate, GripHorizontal, ChevronDown, ChevronUp, Users, Rocket } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { getElectronAPI } from '../utils/electronAPI';
+import { useGameData } from '../providers/GameDataProvider';
+import { calculateSocialData } from '../utils/analyticsSocial';
+import type { AnalyticsView } from '../types';
 
 interface OverlayViewProps {
     onSmartCaptureData?: (data: any) => void;
 }
 
 export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) => {
-    const { setIsOverlayMode, showWizard, devMode } = useUIState();
+    const { setIsOverlayMode, showWizard, devMode, overlayTab, setOverlayTab, setActiveView, activeMode } = useUIState();
     const { overlayStyle } = useUserPreferences();
+    const { matches } = useGameData();
     const [missionPanelCollapsed, setMissionPanelCollapsed] = useState(false);
     const [devToolsCollapsed, setDevToolsCollapsed] = useState(true);
 
@@ -21,6 +26,27 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
     const handleClose = () => getElectronAPI()?.send('close-window');
 
     const isTransparent = overlayStyle === 'transparent';
+
+    const modeMatches = useMemo(
+        () => (matches || []).filter(m => m.mode === activeMode),
+        [activeMode, matches],
+    );
+    const socialData = useMemo(() => calculateSocialData(modeMatches), [modeMatches]);
+    const topWingmen = socialData.teammates.slice(0, 4);
+    const topRivals = [...socialData.opponents].reverse().slice(0, 4);
+
+    const exitOverlayToView = (
+        view: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr',
+        analyticsSubview?: AnalyticsView,
+    ) => {
+        setActiveView(view);
+        if (view === 'analytics' && analyticsSubview) {
+            window.dispatchEvent(new CustomEvent('analytics:navigate-view', {
+                detail: { view: analyticsSubview, proMode: false },
+            }));
+        }
+        setIsOverlayMode(false);
+    };
 
     /**
      * Track whether the mouse is currently hovering over an interactive panel.
@@ -66,6 +92,105 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
         getElectronAPI()?.send('set-ignore-mouse-events', false);
     }, [isTransparent, showWizard]);
 
+    const OverlayTabRail = (
+        <div className="grid grid-cols-3 gap-1 md3-surface rounded-control p-1 border border-md-sys-outline/10">
+            {([
+                { id: 'Mission' as const, icon: LayoutTemplate, label: 'Mission' },
+                { id: 'Squadron' as const, icon: Rocket, label: 'Squadron' },
+                { id: 'Social' as const, icon: Users, label: 'Social' },
+            ] as const).map(tab => (
+                <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setOverlayTab(tab.id)}
+                    className={`h-8 rounded-control text-label-xs font-bold uppercase tracking-wide flex items-center justify-center gap-1 transition-all ${overlayTab === tab.id
+                        ? 'bg-md-sys-primary text-md-sys-onPrimary'
+                        : 'text-md-sys-on-surface/65 hover:bg-md-sys-on-surface/5'
+                        }`}
+                >
+                    <tab.icon size={12} />
+                    <span>{tab.label}</span>
+                </button>
+            ))}
+        </div>
+    );
+
+    const SocialOverlayPanel = (
+        <div className={`${isTransparent ? 'bg-transparent p-0' : 'md3-card recording-inside-panel p-3 mg-surface shadow-lg'} h-full flex flex-col gap-3`}>
+            <div className="flex items-center justify-between">
+                <h3 className="text-label-sm font-bold uppercase tracking-wide opacity-70">Social Pulse</h3>
+                <button
+                    type="button"
+                    onClick={() => exitOverlayToView('analytics', 'social')}
+                    className="md3-btn-tonal px-2.5 py-1 text-label-xs font-bold uppercase"
+                >
+                    Open Full
+                </button>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+                <div className="md3-surface rounded-control p-2">
+                    <div className="text-label-xs font-bold uppercase opacity-50 mb-1">Top Wingmen</div>
+                    {topWingmen.length === 0 ? (
+                        <div className="text-label-sm opacity-50">No teammate data yet</div>
+                    ) : (
+                        topWingmen.map(([name, stat]) => {
+                            const wr = Math.round((stat.wins / Math.max(1, stat.total)) * 100);
+                            return (
+                                <div key={`wing-${name}`} className="flex items-center justify-between text-label-sm py-0.5">
+                                    <span className="truncate max-w-70p">{name}</span>
+                                    <span className="font-mono text-success">{wr}%</span>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+                <div className="md3-surface rounded-control p-2">
+                    <div className="text-label-xs font-bold uppercase opacity-50 mb-1">Tough Opponents</div>
+                    {topRivals.length === 0 ? (
+                        <div className="text-label-sm opacity-50">No opponent data yet</div>
+                    ) : (
+                        topRivals.map(([name, stat]) => {
+                            const wr = Math.round((stat.wins / Math.max(1, stat.total)) * 100);
+                            return (
+                                <div key={`rival-${name}`} className="flex items-center justify-between text-label-sm py-0.5">
+                                    <span className="truncate max-w-70p">{name}</span>
+                                    <span className="font-mono text-danger">{wr}%</span>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderOverlayPanel = (transparentVariant: boolean) => {
+        if (overlayTab === 'Squadron') {
+            return <SquadronPanel density="compact" />;
+        }
+        if (overlayTab === 'Social') {
+            return SocialOverlayPanel;
+        }
+        if (!transparentVariant) {
+            return (
+                <>
+                    <button
+                        type="button"
+                        onClick={() => setMissionPanelCollapsed(!missionPanelCollapsed)}
+                        className="w-full flex items-center justify-between px-2 py-1.5 rounded-control text-label-sm font-medium text-md-sys-on-surface/80 hover:bg-md-sys-on-surface/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary"
+                        aria-expanded={!missionPanelCollapsed}
+                        title={missionPanelCollapsed ? 'Show Mission' : 'Minimize Mission'}
+                    >
+                        <span>Mission</span>
+                        {missionPanelCollapsed ? <ChevronDown size={14} aria-hidden /> : <ChevronUp size={14} aria-hidden />}
+                    </button>
+                    {!missionPanelCollapsed && <MissionPanel variant="default" accordionMode={true} />}
+                </>
+            );
+        }
+        return <MissionPanel variant="transparent" accordionMode={true} />;
+    };
+
     if (!isTransparent) {
         return (
             <>
@@ -100,18 +225,32 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                         </div>
                     </div>
                     <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 flex flex-col gap-2">
-                        <div className="shrink-0">
+                        <div className="grid grid-cols-3 gap-2">
                             <button
                                 type="button"
-                                onClick={() => setMissionPanelCollapsed(!missionPanelCollapsed)}
-                                className="w-full flex items-center justify-between px-2 py-1.5 rounded-control text-label-sm font-medium text-md-sys-on-surface/80 hover:bg-md-sys-on-surface/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary"
-                                aria-expanded={!missionPanelCollapsed}
-                                title={missionPanelCollapsed ? 'Show Mission' : 'Minimize Mission'}
+                                onClick={() => exitOverlayToView('recording')}
+                                className="md3-btn-tonal h-8 text-label-xs font-bold uppercase"
                             >
-                                <span>Mission</span>
-                                {missionPanelCollapsed ? <ChevronDown size={14} aria-hidden /> : <ChevronUp size={14} aria-hidden />}
+                                Recording
                             </button>
-                            {!missionPanelCollapsed && <MissionPanel variant="default" accordionMode={true} />}
+                            <button
+                                type="button"
+                                onClick={() => exitOverlayToView('analytics', 'social')}
+                                className="md3-btn-tonal h-8 text-label-xs font-bold uppercase"
+                            >
+                                Social
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => exitOverlayToView('smart-captures')}
+                                className="md3-btn-tonal h-8 text-label-xs font-bold uppercase"
+                            >
+                                Captures
+                            </button>
+                        </div>
+                        {OverlayTabRail}
+                        <div className="shrink-0">
+                            {renderOverlayPanel(false)}
                         </div>
                         {devMode && (
                             <div className="shrink-0">
@@ -193,8 +332,34 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                         <div className="flex flex-col justify-start gap-2 min-h-0">
                             <ActionPanel variant="transparent" onSmartCaptureData={onSmartCaptureData} />
                         </div>
-                        <div className="flex flex-col justify-start min-h-0 border-l border-md-sys-outline/20 pl-3">
-                            <MissionPanel variant="transparent" accordionMode={true} />
+                        <div className="flex flex-col justify-start min-h-0 border-l border-md-sys-outline/20 pl-3 gap-2">
+                            <div className="grid grid-cols-3 gap-1">
+                                <button
+                                    type="button"
+                                    onClick={() => exitOverlayToView('recording')}
+                                    className="md3-btn-tonal h-7 text-label-xs font-bold uppercase"
+                                >
+                                    Record
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => exitOverlayToView('analytics', 'social')}
+                                    className="md3-btn-tonal h-7 text-label-xs font-bold uppercase"
+                                >
+                                    Social
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => exitOverlayToView('history')}
+                                    className="md3-btn-tonal h-7 text-label-xs font-bold uppercase"
+                                >
+                                    History
+                                </button>
+                            </div>
+                            {OverlayTabRail}
+                            <div className="min-h-0">
+                                {renderOverlayPanel(true)}
+                            </div>
                         </div>
                     </div>
                 </div>

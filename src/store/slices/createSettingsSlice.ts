@@ -11,6 +11,9 @@ export type OcrMode = 'local' | 'cloud' | 'both' | 'hybrid-plus';
 /** Capture behavior: auto runs OCR immediately, deferred saves screenshot first. */
 export type CaptureMode = 'auto' | 'deferred';
 
+/** Telemetry monitoring profile: favors lower heat, balanced behavior, or faster updates. */
+export type TelemetryPerformanceProfile = 'low-power' | 'balanced' | 'high-accuracy';
+
 export interface OcrBestGuessThresholds {
   cloud: { player: number; mod: number; ship: number };
   merged: { player: number; mod: number; ship: number };
@@ -34,6 +37,7 @@ export interface SettingsSlice {
   showSessionTimer: boolean;
   customBgUrl: string;
   enableAutoLogRecording: boolean;
+  telemetryPerformanceProfile: TelemetryPerformanceProfile;
   enableAutoBackup: boolean;
   overlayStyle: OverlayStyle;
   visualMode: VisualMode;
@@ -59,6 +63,7 @@ export interface SettingsSlice {
   setShowSessionTimer: (show: boolean) => void;
   setCustomBgUrl: (url: string) => void;
   setEnableAutoLogRecording: (enabled: boolean) => void;
+  setTelemetryPerformanceProfile: (profile: TelemetryPerformanceProfile) => void;
   setEnableAutoBackup: (enabled: boolean) => void;
   setOverlayStyle: (style: OverlayStyle) => void;
   setVisualMode: (mode: VisualMode) => void;
@@ -87,6 +92,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set) => ({
   showSessionTimer: true,
   customBgUrl: '',
   enableAutoLogRecording: true,
+  telemetryPerformanceProfile: 'balanced',
   enableAutoBackup: true,
   overlayStyle: 'compact',
   visualMode: 'dense',
@@ -124,6 +130,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set) => ({
   setShowSessionTimer: (show) => set({ showSessionTimer: show }),
   setCustomBgUrl: (url) => set({ customBgUrl: url }),
   setEnableAutoLogRecording: (enabled) => set({ enableAutoLogRecording: enabled }),
+  setTelemetryPerformanceProfile: (profile) => set({ telemetryPerformanceProfile: profile }),
   setEnableAutoBackup: (enabled) => set({ enableAutoBackup: enabled }),
   setOverlayStyle: (style) => set({ overlayStyle: style }),
   setVisualMode: (mode) => set({ visualMode: mode }),

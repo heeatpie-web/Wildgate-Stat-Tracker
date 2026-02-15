@@ -22,6 +22,10 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
 
   const shipTelemetryActive = Boolean(telemetryDetectedShip || shipSource === 'telemetry');
   const prospectorTelemetryActive = Boolean(telemetryDetectedHero || heroSource === 'telemetry');
+  const toShipKey = (value: string | undefined) => (value || '').split('(')[0].trim().toLowerCase();
+  const sameShip = (a: string | undefined, b: string | undefined) => toShipKey(a) && toShipKey(a) === toShipKey(b);
+  const hasShipManualOverride = Boolean(telemetryDetectedShip && activeShip && !sameShip(telemetryDetectedShip, activeShip));
+  const hasHeroManualOverride = Boolean(telemetryDetectedHero && activeHero && telemetryDetectedHero !== activeHero);
 
   const sourceChip = (label: string, source?: 'manual' | 'telemetry' | 'ocr') => {
     if (!source || source === 'manual') return null;
@@ -69,14 +73,14 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
           <div className="text-label-sm font-semibold text-md-sys-on-surface/55">
             <span className="text-info font-black uppercase tracking-wide mr-2">Telemetry</span>
             Detected ship: <span className="font-black">{telemetryDetectedShip.split('(')[0].trim()}</span>
-            {activeShip && telemetryDetectedShip !== activeShip ? <span className="opacity-60"> (manual override)</span> : null}
+            {hasShipManualOverride ? <span className="opacity-60"> (manual override)</span> : null}
           </div>
         )}
         {(telemetryDetectedHero && heroSource !== 'telemetry') && (
           <div className="text-label-sm font-semibold text-md-sys-on-surface/55">
             <span className="text-info font-black uppercase tracking-wide mr-2">Telemetry</span>
             Detected prospector: <span className="font-black">{telemetryDetectedHero}</span>
-            {activeHero && telemetryDetectedHero !== activeHero ? <span className="opacity-60"> (manual override)</span> : null}
+            {hasHeroManualOverride ? <span className="opacity-60"> (manual override)</span> : null}
           </div>
         )}
 
@@ -94,7 +98,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
                   }`}
               >
                 {s.split('(')[0].trim()}
-                {telemetryDetectedShip === s && (
+                {sameShip(telemetryDetectedShip, s) && (
                   <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-info" title="Detected from telemetry" />
                 )}
               </button>
@@ -152,14 +156,14 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
         <div className="text-label-sm font-semibold text-md-sys-on-surface/55">
           <span className="text-info font-black uppercase tracking-wide mr-2">Telemetry</span>
           Detected ship: <span className="font-black">{telemetryDetectedShip.split('(')[0].trim()}</span>
-          {activeShip && telemetryDetectedShip !== activeShip ? <span className="opacity-60"> (manual override)</span> : null}
+          {hasShipManualOverride ? <span className="opacity-60"> (manual override)</span> : null}
         </div>
       )}
       {(telemetryDetectedHero && heroSource !== 'telemetry') && (
         <div className="text-label-sm font-semibold text-md-sys-on-surface/55">
           <span className="text-info font-black uppercase tracking-wide mr-2">Telemetry</span>
           Detected prospector: <span className="font-black">{telemetryDetectedHero}</span>
-          {activeHero && telemetryDetectedHero !== activeHero ? <span className="opacity-60"> (manual override)</span> : null}
+          {hasHeroManualOverride ? <span className="opacity-60"> (manual override)</span> : null}
         </div>
       )}
 
@@ -175,7 +179,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
               }`}
           >
             {s.split('(')[0].trim()}
-            {telemetryDetectedShip === s && (
+            {sameShip(telemetryDetectedShip, s) && (
               <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-info" title="Detected from telemetry" />
             )}
           </button>

@@ -16,6 +16,7 @@ const ipcRenderer = getElectronAPI();
  * Updates the global telemetryStatus to feed into the SystemPulse consolidated indicator.
  */
 export const useLogMonitor = (activeUser?: string) => {
+    const telemetryPerformanceProfile = useAppStore(s => s.telemetryPerformanceProfile);
     const {
         addMatch, updateMatch,
         playerIdMap, updatePlayerIdMapping,
@@ -215,11 +216,11 @@ export const useLogMonitor = (activeUser?: string) => {
     useEffect(() => {
         if (!ipcRenderer) return;
         if (enableAutoLogRecording) {
-            ipcRenderer.send('start-log-monitoring');
+            ipcRenderer.send('start-log-monitoring', { performanceProfile: telemetryPerformanceProfile });
         } else {
             ipcRenderer.send('stop-log-monitoring');
         }
-    }, [enableAutoLogRecording]);
+    }, [enableAutoLogRecording, telemetryPerformanceProfile]);
 
     useEffect(() => {
         if (isMatchInProgress && !wasMatchInProgressRef.current) {
@@ -324,18 +325,27 @@ export const useLogMonitor = (activeUser?: string) => {
                             const partial = list.find(item => item.toLowerCase().startsWith(lower) || lower.startsWith(item.toLowerCase().split('(')[0].trim()));
                             return partial || null;
                         };
+                        const getLoadoutField = (obj: Record<string, any>, keys: string[]) => {
+                            for (const key of keys) {
+                                if (obj[key] != null) return obj[key];
+                            }
+                            for (const [k, v] of Object.entries(obj)) {
+                                if (keys.includes(k.toLowerCase())) return v;
+                            }
+                            return undefined;
+                        };
 
-                        const rawHeroGuid = loadout.guidHero || loadout.heroGuid || loadout.guid_hero;
+                        const rawHeroGuid = getLoadoutField(loadout, ['guidhero', 'heroguid', 'guid_hero', 'heroid', 'hero_id']);
+                        const rawHero = getLoadoutField(loadout, ['hero', 'heroname', 'hero_name']);
                         const heroGuid = rawHeroGuid ? rawHeroGuid.split(':')[1] || rawHeroGuid : undefined;
                         if (heroGuid) {
-                            heroName = knownMappings[heroGuid] || HERO_GUIDS[heroGuid];
+                            heroName = uidMappings.players[heroGuid] || knownMappings[heroGuid] || HERO_GUIDS[heroGuid];
 
                             if (!heroName) {
-                                const rawHero = loadout.hero || loadout.heroName || loadout.hero_name;
-                                if (rawHero && !rawHero.includes(':')) {
-                                    const matched = fuzzyMatchList(rawHero, [...CHARACTERS]);
+                                if (rawHero && !String(rawHero).includes(':')) {
+                                    const matched = fuzzyMatchList(String(rawHero), [...CHARACTERS]);
                                     if (matched) heroName = matched;
-                                    else heroName = rawHero;
+                                    else heroName = String(rawHero);
                                 }
 
                                 if (!heroName) {
@@ -349,19 +359,26 @@ export const useLogMonitor = (activeUser?: string) => {
                                 setActiveHero(heroName, 'telemetry');
                                 Logger.info('LogMonitor', `Auto-selected prospector: ${heroName}`);
                             }
+                        } else if (rawHero && !String(rawHero).includes(':')) {
+                            const matched = fuzzyMatchList(String(rawHero), [...CHARACTERS]);
+                            heroName = matched || String(rawHero);
+                            if (heroName && heroName !== activeHeroRef.current) {
+                                setActiveHero(heroName, 'telemetry');
+                                Logger.info('LogMonitor', `Auto-selected prospector from raw telemetry: ${heroName}`);
+                            }
                         }
 
-                        const rawShipGuid = loadout.guidShip || loadout.shipGuid || loadout.guid_ship;
+                        const rawShipGuid = getLoadoutField(loadout, ['guidship', 'shipguid', 'guid_ship', 'shipid', 'ship_id']);
+                        const rawShip = getLoadoutField(loadout, ['ship', 'shipname', 'ship_name']);
                         const shipGuid = rawShipGuid ? rawShipGuid.split(':')[1] || rawShipGuid : undefined;
                         if (shipGuid) {
                             shipName = uidMappings.ships[shipGuid] || knownMappings[shipGuid] || SHIP_GUIDS[shipGuid];
 
                             if (!shipName) {
-                                const rawShip = loadout.ship || loadout.shipName || loadout.ship_name;
-                                if (rawShip && !rawShip.includes(':')) {
-                                    const matched = fuzzyMatchList(rawShip, [...SHIPS]);
+                                if (rawShip && !String(rawShip).includes(':')) {
+                                    const matched = fuzzyMatchList(String(rawShip), [...SHIPS]);
                                     if (matched) shipName = matched;
-                                    else shipName = rawShip;
+                                    else shipName = String(rawShip);
                                 }
 
                                 if (!shipName) {
@@ -374,6 +391,13 @@ export const useLogMonitor = (activeUser?: string) => {
                             if (shipName && !shipName.startsWith('Unknown') && shipName !== activeShipRef.current) {
                                 setActiveShip(shipName, 'telemetry');
                                 Logger.info('LogMonitor', `Auto-selected ship: ${shipName}`);
+                            }
+                        } else if (rawShip && !String(rawShip).includes(':')) {
+                            const matched = fuzzyMatchList(String(rawShip), [...SHIPS]);
+                            shipName = matched || String(rawShip);
+                            if (shipName && shipName !== activeShipRef.current) {
+                                setActiveShip(shipName, 'telemetry');
+                                Logger.info('LogMonitor', `Auto-selected ship from raw telemetry: ${shipName}`);
                             }
                         }
                         const resolveGuid = (guid: string, db: Record<string, string>, type: 'Weapon' | 'Equipment') => {

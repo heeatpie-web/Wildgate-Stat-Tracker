@@ -5,7 +5,7 @@ import { useAppStore } from '../store/useAppStore';
 import { Match } from '../types';
 import confetti from 'canvas-confetti';
 import { useSoundEffects } from '../hooks/useSoundEffects';
-import { bundleMatchArtifacts } from '../utils/artifactService';
+import { bundleMatchArtifacts, getMatchArtifactsStructured } from '../utils/artifactService';
 import { StorageService } from '../utils/storage';
 import Logger from '../utils/logger';
 
@@ -25,6 +25,8 @@ const sanitizeLoadoutSlots = (loadout: Match['loadout'] | null) => {
         equipment: (loadout.equipment || []).filter(Boolean).slice(0, 2),
     };
 };
+
+const toArtifactKey = (value: string) => value.replace(/[\\/]+/g, '\\').toLowerCase();
 
 export const useMatchSubmission = () => {
     const {
@@ -255,16 +257,40 @@ export const useMatchSubmission = () => {
             const fallbackWindowMs = totalDurationSecs > 0
                 ? totalDurationSecs * 1000
                 : DEFAULT_ARTIFACT_LOOKBACK_MS;
+            const telemetryDraftStart = existingMatch?.subType === 'Telemetry Draft'
+                ? Number(matchTimestamp || 0)
+                : 0;
             // Use the actual telemetry/manual match start when available.
             // When duration/timer context is unavailable, use a bounded lookback window.
-            const matchStart = (typeof matchStartTime === 'number' && matchStartTime > 0)
-                ? matchStartTime
-                : (matchEnd - fallbackWindowMs);
+            let matchStart = matchEnd - fallbackWindowMs;
+            if (typeof matchStartTime === 'number' && matchStartTime > 0) {
+                matchStart = matchStartTime;
+            } else if (telemetryDraftStart > 0 && telemetryDraftStart <= matchEnd) {
+                matchStart = telemetryDraftStart;
+            }
 
-            const artifacts = await bundleMatchArtifacts(newMatch.id, matchStart, matchEnd);
-            if (artifacts.length > 0) {
-                Logger.info('Submission', `Bundled ${artifacts.length} artifacts for match ${newMatch.id}`);
-                const mergedArtifacts = Array.from(new Set([...(newMatch.artifacts || []), ...artifacts]));
+            const bundledArtifacts = await bundleMatchArtifacts(newMatch.id, matchStart, matchEnd);
+            const structuredArtifacts = await getMatchArtifactsStructured(newMatch.id);
+            const diskArtifacts = Array.isArray(structuredArtifacts.images) ? structuredArtifacts.images : [];
+            const mergedArtifacts: string[] = [];
+            const seenArtifactKeys = new Set<string>();
+            const pushArtifact = (artifactPath?: string) => {
+                if (!artifactPath || typeof artifactPath !== 'string' || !artifactPath.trim()) return;
+                const key = toArtifactKey(artifactPath.trim());
+                if (seenArtifactKeys.has(key)) return;
+                seenArtifactKeys.add(key);
+                mergedArtifacts.push(artifactPath.trim());
+            };
+            (newMatch.artifacts || []).forEach(pushArtifact);
+            bundledArtifacts.forEach(pushArtifact);
+            diskArtifacts.forEach(pushArtifact);
+
+            const existingArtifacts = newMatch.artifacts || [];
+            const artifactsChanged = mergedArtifacts.length !== existingArtifacts.length
+                || mergedArtifacts.some((artifactPath, index) => artifactPath !== existingArtifacts[index]);
+
+            if (artifactsChanged) {
+                Logger.info('Submission', `Synced ${mergedArtifacts.length} artifact(s) for match ${newMatch.id} (bundled=${bundledArtifacts.length}, disk=${diskArtifacts.length})`);
                 const updated = { ...newMatch, artifacts: mergedArtifacts };
                 updateMatch(updated);
                 await StorageService.flush();

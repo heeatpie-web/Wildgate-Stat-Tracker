@@ -10,21 +10,46 @@ interface RecordingViewProps {
 }
 
 export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData }) => {
+    const containerRef = React.useRef<HTMLDivElement | null>(null);
     const [viewport, setViewport] = React.useState(() => ({
         w: typeof window !== 'undefined' ? window.innerWidth : 1920,
         h: typeof window !== 'undefined' ? window.innerHeight : 1080,
     }));
 
     React.useEffect(() => {
-        const onResize = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
+        const measure = () => {
+            const el = containerRef.current;
+            if (!el) return;
+            const rect = el.getBoundingClientRect();
+            const next = {
+                w: Math.round(rect.width) || window.innerWidth,
+                h: Math.round(rect.height) || window.innerHeight,
+            };
+            setViewport((prev) => (prev.w === next.w && prev.h === next.h ? prev : next));
+        };
+
+        const onResize = () => measure();
+        measure();
         window.addEventListener('resize', onResize);
-        return () => window.removeEventListener('resize', onResize);
+
+        let observer: ResizeObserver | null = null;
+        if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+            observer = new ResizeObserver(() => measure());
+            observer.observe(containerRef.current);
+        }
+
+        return () => {
+            window.removeEventListener('resize', onResize);
+            observer?.disconnect();
+        };
     }, []);
 
-    // The left Recording panel must never scroll at 1080p+ and should not introduce scrollbars at 1366x768.
-    // On shorter heights, we swap content via tabs instead of allowing a scroll container.
+    // Use measured container size (not raw window size) so mode switching follows available dashboard space.
     const isNarrow = viewport.w < 1100;
-    const density: 'standard' | 'compact' = (viewport.h < 900 || isNarrow) ? 'compact' : 'standard';
+    const isHeightConstrained = viewport.h < 1000;
+    const density: 'standard' | 'compact' = (isHeightConstrained || isNarrow) ? 'compact' : 'standard';
+    const shouldScrollLeftPanel = !isNarrow && isHeightConstrained;
+    const shouldScrollWideLayout = !isNarrow && isHeightConstrained;
     const [leftTab, setLeftTab] = React.useState<'actions' | 'loadout'>('actions');
 
     React.useEffect(() => {
@@ -56,7 +81,7 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
     ) : null;
 
     const LeftPanel = (
-        <div className="recording-left-shell min-h-0 flex flex-col gap-4 overflow-hidden rounded-2xl p-4">
+        <div className={`recording-left-shell min-h-0 ${!isNarrow ? 'h-full' : ''} flex flex-col gap-4 rounded-2xl p-4 ${shouldScrollLeftPanel ? 'overflow-y-auto custom-scrollbar pr-1' : 'overflow-hidden'}`}>
             {LeftTabBar}
             {density === 'standard' ? (
                 <>
@@ -68,13 +93,13 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
                     </div>
                 </>
             ) : (
-                <div className="min-h-0 overflow-hidden">
+                <div className="min-h-0">
                     {leftTab === 'actions' ? (
-                        <div data-tour="action-panel" className="min-h-0 overflow-hidden">
+                        <div data-tour="action-panel" className="min-h-0">
                             <ActionPanel onSmartCaptureData={onSmartCaptureData} density="compact" />
                         </div>
                     ) : (
-                        <div className="min-h-0 overflow-hidden">
+                        <div className="min-h-0">
                             <SquadronPanel density="compact" />
                         </div>
                     )}
@@ -83,46 +108,43 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
         </div>
     );
 
-    if (isNarrow) {
-        // Stack on narrow widths; the view scrolls, but the Recording panel itself never does.
-        return (
-            <div data-tour="view-recording" className="h-full min-h-0 overflow-y-auto custom-scrollbar p-4 pb-6">
-                <div className="sticky top-0 z-10 mb-4">
-                    {LeftPanel}
+    return (
+        <div ref={containerRef} className="h-full min-h-0 w-full">
+            {isNarrow ? (
+                // Stack on narrow widths; the view scrolls, but the Recording panel itself never does.
+                <div data-tour="view-recording" className="h-full min-h-0 overflow-y-auto custom-scrollbar p-4 pb-6">
+                    <div className="sticky top-0 z-10 mb-4">
+                        {LeftPanel}
+                    </div>
+                    <div className="min-h-0 flex flex-col gap-4">
+                        <div className="min-h-420px">
+                            <RosterPanel />
+                        </div>
+                        <div className="min-h-420px">
+                            <MissionPanel accordionMode />
+                        </div>
+                    </div>
                 </div>
-                <div className="min-h-0 flex flex-col gap-4">
-                    <div className="min-h-420px">
+            ) : (
+                // Wide layout: allow root scrolling only when height constrained to avoid clipping.
+                <div
+                    data-tour="view-recording"
+                    className={`h-full min-h-0 grid gap-4 p-4 pb-6 ${shouldScrollWideLayout ? 'overflow-y-auto custom-scrollbar' : 'overflow-hidden'}`}
+                    style={{ gridTemplateColumns: 'minmax(240px, 300px) minmax(320px, 1fr) minmax(420px, 1.65fr)' }}
+                >
+                    <div className="min-h-0 overflow-hidden">
+                        {LeftPanel}
+                    </div>
+
+                    <div className="min-h-0 overflow-hidden">
                         <RosterPanel />
                     </div>
-                    <div className="min-h-420px">
+
+                    <div className="min-h-0 overflow-hidden">
                         <MissionPanel accordionMode />
                     </div>
                 </div>
-            </div>
-        );
-    }
-
-    return (
-        // Avoid nested scrollbars inside the dashboard grid. Panels manage their own overflow.
-        <div
-            data-tour="view-recording"
-            className="h-full min-h-0 grid gap-4 p-4 pb-6 overflow-hidden"
-            style={{ gridTemplateColumns: 'minmax(240px, 300px) minmax(320px, 1fr) minmax(420px, 1.65fr)' }}
-        >
-            {/* Left Column: Recording panel (must not scroll). */}
-            <div className="min-h-0 overflow-hidden">
-                {LeftPanel}
-            </div>
-
-            {/* Center: Roster Manager */}
-            <div className="min-h-0 overflow-hidden">
-                <RosterPanel />
-            </div>
-
-            {/* Right: Mission Intel */}
-            <div className="min-h-0 overflow-hidden">
-                <MissionPanel accordionMode />
-            </div>
+            )}
         </div>
     );
 };

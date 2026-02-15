@@ -1395,6 +1395,38 @@ ipcMain.handle('epic-request', async (event, payload = {}) => {
 let LOG_PATH = '';
 let logMonitorInterval = null;
 let lastLogContent = null;
+let logMonitorProfile = 'balanced';
+let logMonitorLastDecodeAt = 0;
+let logMonitorLastSnapshotWriteAt = 0;
+
+function resolveLogMonitorProfile(input) {
+  const raw = String(input || '').trim().toLowerCase();
+  if (raw === 'low-power' || raw === 'low_power' || raw === 'lowpower') return 'low-power';
+  if (raw === 'high-accuracy' || raw === 'high_accuracy' || raw === 'highaccuracy') return 'high-accuracy';
+  return 'balanced';
+}
+
+function getLogMonitorConfig(profile) {
+  if (profile === 'low-power') {
+    return {
+      pollMs: 5000,
+      minDecodeIntervalMs: 5000,
+      snapshotWriteIntervalMs: 30000,
+    };
+  }
+  if (profile === 'high-accuracy') {
+    return {
+      pollMs: 1000,
+      minDecodeIntervalMs: 750,
+      snapshotWriteIntervalMs: 3000,
+    };
+  }
+  return {
+    pollMs: 2000,
+    minDecodeIntervalMs: 1500,
+    snapshotWriteIntervalMs: 10000,
+  };
+}
 
 // Optimization: Use Buffer for fast byte shifting + Async Chunking if needed
 async function decodeLog() {
@@ -1465,8 +1497,12 @@ async function decodeLog() {
   }
 }
 
-ipcMain.on('start-log-monitoring', () => {
+ipcMain.on('start-log-monitoring', (_event, options = {}) => {
   if (logMonitorInterval) clearInterval(logMonitorInterval);
+  logMonitorProfile = resolveLogMonitorProfile(options && typeof options === 'object' ? options.performanceProfile : null);
+  const monitorCfg = getLogMonitorConfig(logMonitorProfile);
+  logMonitorLastDecodeAt = 0;
+  logMonitorLastSnapshotWriteAt = 0;
 
   const localAppData = path.join(app.getPath('home'), 'AppData', 'Local');
   const pathNebula = path.join(localAppData, 'Nebula', 'Saved', 'Logs', 'AccelByteTelemetryCache');
@@ -1483,13 +1519,14 @@ ipcMain.on('start-log-monitoring', () => {
     LOG_PATH = pathNebula;
   }
 
-  console.log("Starting log monitoring...", LOG_PATH);
+  console.log(`Starting log monitoring... ${LOG_PATH} (profile=${logMonitorProfile}, poll=${monitorCfg.pollMs}ms)`);
 
   // Initial status
   if (win) {
     win.webContents.send('log-status', {
       exists: fs.existsSync(LOG_PATH),
       path: LOG_PATH,
+      profile: logMonitorProfile,
       lastCheck: Date.now()
     });
   }
@@ -1509,6 +1546,11 @@ ipcMain.on('start-log-monitoring', () => {
 
       // Only read if modified
       if (stats && stats.mtimeMs !== lastMtime) {
+        const now = Date.now();
+        if ((now - logMonitorLastDecodeAt) < monitorCfg.minDecodeIntervalMs) {
+          return;
+        }
+        logMonitorLastDecodeAt = now;
         lastMtime = stats.mtimeMs;
 
         const data = await decodeLog();
@@ -1519,6 +1561,7 @@ ipcMain.on('start-log-monitoring', () => {
             exists,
             path: LOG_PATH,
             size: stats.size,
+            profile: logMonitorProfile,
             lastCheck: Date.now(),
             dataFound: !!(data && !hasError),
             error: hasError ? data.error : null,
@@ -1529,42 +1572,55 @@ ipcMain.on('start-log-monitoring', () => {
             const usableTelemetryEvents = extractUsableTelemetryEvents(data);
             // Also Send Data
             win.webContents.send('log-data', data);
-            telemetryArchiveHelpers.archiveTelemetry(telemetryArchiveHelpers.getArchiveDir(app), data);
-
-            try {
-              const historyResult = await appendTelemetryHistoryEvents(usableTelemetryEvents);
-              if (historyResult.addedCount > 0) {
-                console.log(`[Persistence] Appended ${historyResult.addedCount} usable telemetry event(s).`);
-              }
-              await maybeCompactTelemetryHistory();
-              if (historyResult.addedCount > 0) {
-                await emitTelemetryPruneNeededIfNecessary(false);
-              }
-            } catch (err) {
-              console.error("[Persistence] Failed to append telemetry history:", err);
+            const hasUsableTelemetry = usableTelemetryEvents.length > 0;
+            if (hasUsableTelemetry) {
+              telemetryArchiveHelpers.archiveTelemetry(telemetryArchiveHelpers.getArchiveDir(app), data);
             }
 
-            // Save a compact usable-telemetry snapshot (not full decoded payload).
-            try {
-              const decodedSavePath = path.join(app.getPath('userData'), 'telemetry_latest_decoded.json');
-              await fsPromises.writeFile(decodedSavePath, JSON.stringify({
-                generatedAt: Date.now(),
-                telemetry: usableTelemetryEvents,
-              }));
-            } catch (e) { console.error("Failed to save decoded logs", e); }
+            let historyResult = { addedCount: 0, skippedCount: 0 };
+            if (hasUsableTelemetry) {
+              try {
+                historyResult = await appendTelemetryHistoryEvents(usableTelemetryEvents);
+                if (historyResult.addedCount > 0) {
+                  console.log(`[Persistence] Appended ${historyResult.addedCount} usable telemetry event(s).`);
+                }
+                await maybeCompactTelemetryHistory();
+                if (historyResult.addedCount > 0) {
+                  await emitTelemetryPruneNeededIfNecessary(false);
+                }
+              } catch (err) {
+                console.error("[Persistence] Failed to append telemetry history:", err);
+              }
+            }
+
+            // Save a compact usable-telemetry snapshot (not full decoded payload),
+            // but throttle writes to avoid unnecessary disk churn.
+            const snapshotDue = (Date.now() - logMonitorLastSnapshotWriteAt) >= monitorCfg.snapshotWriteIntervalMs;
+            if (hasUsableTelemetry && snapshotDue) {
+              try {
+                const decodedSavePath = path.join(app.getPath('userData'), 'telemetry_latest_decoded.json');
+                await fsPromises.writeFile(decodedSavePath, JSON.stringify({
+                  generatedAt: Date.now(),
+                  telemetry: usableTelemetryEvents,
+                }));
+                logMonitorLastSnapshotWriteAt = Date.now();
+              } catch (e) { console.error("Failed to save decoded logs", e); }
+            } else if (historyResult.addedCount === 0) {
+              // No-op: nothing new to persist this tick.
+            }
           }
 
         }
       } else if (!exists && win) {
         // Notify if lost file
-        win.webContents.send('log-status', { exists: false, path: LOG_PATH, lastCheck: Date.now() });
+        win.webContents.send('log-status', { exists: false, path: LOG_PATH, profile: logMonitorProfile, lastCheck: Date.now() });
       }
     } catch (tickErr) {
       console.error('[LogMonitor] Tick error:', tickErr);
     } finally {
       telemetryLogTickInProgress = false;
     }
-  }, 2000);
+  }, monitorCfg.pollMs);
 });
 
 ipcMain.handle('load-archived-telemetry', async () => {
