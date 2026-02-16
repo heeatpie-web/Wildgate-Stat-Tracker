@@ -27,6 +27,7 @@ export const IdMapper: React.FC = () => {
         knownMappings,
         playerProfiles,
         addMapping,
+        setUidMapping,
         removeMapping,
         importMappings,
         getPlayerRole,
@@ -46,12 +47,24 @@ export const IdMapper: React.FC = () => {
     const handleSave = (id: string) => {
         const name = nameInputs[id];
         if (name && name.trim()) {
-            addMapping(id, name.trim());
+            const trimmed = name.trim();
+            const unknownType = detectedUnknowns[id]?.type;
+            if (unknownType === 'Hero') {
+                setUidMapping('players', id, trimmed);
+            } else if (unknownType === 'Ship') {
+                setUidMapping('ships', id, trimmed);
+            } else if (unknownType === 'Weapon') {
+                setUidMapping('weapons', id, trimmed);
+            } else if (unknownType === 'Equipment') {
+                setUidMapping('equipment', id, trimmed);
+            } else {
+                addMapping(id, trimmed);
+            }
             const newInputs = { ...nameInputs };
             delete newInputs[id];
             setNameInputs(newInputs);
             setToast({ message: "Mapping Saved", type: 'success' });
-            Logger.info('IdMapper', `Saved mapping: ${id} -> ${name.trim()}`);
+            Logger.info('IdMapper', `Saved mapping: ${id} -> ${trimmed}`);
         }
     };
 
@@ -242,7 +255,7 @@ export const IdMapper: React.FC = () => {
                                         <div key={id} className="flex items-center justify-between md3-surface-high/50 px-3 py-2 rounded text-label-sm group">
                                             <div className="flex items-center gap-3 overflow-hidden">
                                                 <span className="font-bold text-md-sys-primary truncate">{name}</span>
-                                                <RoleBadge role={role} />
+                                                {role !== 'unknown' && <RoleBadge role={role} />}
                                                 {profile && (
                                                     <span className="text-label-sm opacity-40">
                                                         {profile.sightings}x seen

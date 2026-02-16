@@ -53,6 +53,11 @@ Use this row format when claiming:
 
 | File | Owner | Started (UTC) | Released (UTC) | Purpose |
 |---|---|---|---|---|
+| `src/hooks/useLogMonitor.ts` | debugger | 2026-02-15T17:00:00Z | 2026-02-15T17:16:00Z | Telemetry scope: add loadout weapon/equipment extraction + safer unknown registration |
+| `src/components/IdMapper.tsx` | debugger | 2026-02-15T17:00:00Z | 2026-02-15T17:16:00Z | Mapper scope: type-aware unknown-ID save routing to UID domain mappings |
+| `src/components/recording/ActionPanel.tsx` | debugger | 2026-02-15T17:00:00Z | 2026-02-15T17:16:00Z | Recording scope: show telemetry-detected weapons/equipment in status summary |
+| `src/hooks/useLogMonitor.ts` | debugger | 2026-02-15T16:49:48Z | 2026-02-15T16:54:07Z | Telemetry scope: fix ship GUID/name resolution causing UNKNOWN ID spam and sticky ship detection |
+| `src/components/IdMapper.tsx` | debugger | 2026-02-15T16:49:48Z | 2026-02-15T16:54:07Z | Mapper scope: remove misleading UNKNOWN role badge for mapped IDs without relationship data |
 | `src/utils/stringUtils.ts` | builder | 2026-02-15T19:10:00Z | 2026-02-15T19:45:00Z | OCR scope: add variant similarity functions for adaptive name resolution |
 | `src/utils/ocrNameResolver.ts` | builder | 2026-02-15T19:10:00Z | 2026-02-15T19:45:00Z | OCR scope: shared resolver utility (variant/context/dedupe support) |
 | `src/hooks/useSmartScan.ts` | builder | 2026-02-15T19:10:00Z | 2026-02-15T19:45:00Z | OCR scope: integrate shared resolver in smart scan path |

@@ -973,3 +973,82 @@
   - Review ask: approve closure of metadata-only version/changelog update.
 - `PM Response` | `APPROVED`
   - Reason: requested scope completed with consistent version metadata and passing checks.
+
+---
+
+## 2026-02-15 - IDMAPPER-TELEMETRY-SHIP-001
+- Scope: fix misleading `Unknown` mapper labeling and ship telemetry unknown-ID/ship-sticky regressions.
+
+## Work Entries
+- 16:50Z
+  - Traced issue paths:
+    - `src/components/IdMapper.tsx` known-tab role badge always renders, including `unknown`, which is misleading for mapped IDs that simply have no relationship history yet.
+    - `src/hooks/useLogMonitor.ts` ship parsing accepted `shipid/ship_id` as GUID candidates; non-GUID values could be registered as unknown ships and degrade subsequent ship resolution.
+
+- 16:54Z
+  - Implemented telemetry ship parsing hardening in `src/hooks/useLogMonitor.ts`:
+    - Added GUID normalization helper and strict 32-hex GUID gate.
+    - Removed `shipid/ship_id` from primary GUID extraction path.
+    - Improved raw ship fuzzy matching (normalized + contains matching).
+    - Avoided promoting unmatched raw ship strings directly into active ship selection.
+
+- 16:56Z
+  - Implemented mapper UI clarity fix in `src/components/IdMapper.tsx`:
+    - Known mappings no longer display the `Unknown` role badge when relationship role is `unknown`.
+    - Existing non-unknown relationship badges remain unchanged.
+
+- 17:00Z
+  - Ran targeted validation on touched files (`eslint`, `typecheck`), both passed.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `IDMAPPER-TELEMETRY-SHIP-001#1/#2/#3/#4/#5` | Owner: `debugger`
+  - Delta: fixed GUID qualification and ship fallback logic in telemetry parser; removed misleading unknown role badge in known ID mappings.
+  - Evidence pointers:
+    - `src/hooks/useLogMonitor.ts`
+    - `src/components/IdMapper.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of the mapper/telemetry regression fix.
+- `PM Response` | `APPROVED`
+  - Reason: narrow-scope regressions addressed with conservative parsing guardrails and passing checks.
+
+---
+
+## 2026-02-15 - IDMAPPER-TELEMETRY-LOADOUT-002
+- Scope: follow-up fixes for mapper unknown labeling persistence + telemetry tracking of prospector weapons/equipment.
+
+## Work Entries
+- 17:05Z
+  - Updated `src/components/IdMapper.tsx` unknown-save flow:
+    - type-aware mapping routes:
+      - `Hero` -> `setUidMapping('players', ...)`
+      - `Ship` -> `setUidMapping('ships', ...)`
+      - `Weapon` -> `setUidMapping('weapons', ...)`
+      - `Equipment` -> `setUidMapping('equipment', ...)`
+    - fallback remains `addMapping` for generic entries.
+
+- 17:09Z
+  - Expanded telemetry loadout extraction in `src/hooks/useLogMonitor.ts`:
+    - added broader candidate extraction for weapon/equipment GUID/name fields.
+    - normalized GUID handling and conservative unknown registration (GUID-shaped only).
+    - resolved names now combine GUID map and raw-name fuzzy matching.
+    - weapon telemetry now syncs into `activeWeapons` via `setActiveWeapons`.
+
+- 17:12Z
+  - Updated `src/components/recording/ActionPanel.tsx` telemetry summary:
+    - added weapons/equipment display rows.
+    - telemetry info panel now appears for weapons/equipment even if ship/hero chips are absent.
+
+- 17:14Z
+  - Ran targeted validation (`eslint`, `typecheck`), both passed.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `IDMAPPER-TELEMETRY-LOADOUT-002#1/#2/#3/#4/#5` | Owner: `debugger`
+  - Delta: added type-aware unknown-ID mapping and extended telemetry loadout tracking/visibility for weapons + equipment.
+  - Evidence pointers:
+    - `src/components/IdMapper.tsx`
+    - `src/hooks/useLogMonitor.ts`
+    - `src/components/recording/ActionPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of follow-up mapper/loadout telemetry fixes.
+- `PM Response` | `APPROVED`
+  - Reason: requested follow-up behavior delivered with narrow runtime changes and passing checks.

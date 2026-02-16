@@ -412,3 +412,40 @@
 - Command: `Select-String -Path src/utils/changelog.ts -Pattern '"v2.15"'`
   - Result: PASS
   - Evidence: matched `src/utils/changelog.ts:2`.
+
+---
+
+## Validation - 2026-02-15 - IDMAPPER-TELEMETRY-SHIP-001
+- Command: `npx eslint src/hooks/useLogMonitor.ts src/components/IdMapper.tsx`
+  - Result: PASS
+  - Evidence: no lint violations on touched telemetry/mapper files.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no reported errors after telemetry/mapper fixes.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - `src/hooks/useLogMonitor.ts` now qualifies ship GUIDs only when values match stable 32-hex GUID format.
+    - Non-GUID `shipid/ship_id` values no longer trigger unknown-ship registration.
+    - Raw ship fallback uses fuzzy matching to known ship names and does not set arbitrary unmatched raw strings as active ship.
+    - `src/components/IdMapper.tsx` no longer renders `Unknown` role badge on known mappings with unresolved relationship role.
+
+---
+
+## Validation - 2026-02-15 - IDMAPPER-TELEMETRY-LOADOUT-002
+- Command: `npx eslint src/components/IdMapper.tsx src/hooks/useLogMonitor.ts src/components/recording/ActionPanel.tsx`
+  - Result: PASS
+  - Evidence: no lint violations on touched mapper/telemetry/action-panel files.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no reported errors after follow-up mapper/loadout telemetry changes.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - Unknown-ID save in mapper is now type-aware and writes to the correct UID domain (`players/ships/weapons/equipment`).
+    - Telemetry loadout parsing resolves weapons/equipment from broader GUID and raw-name candidate fields.
+    - Telemetry summary in ActionPanel now includes weapons/equipment rows and can render when only those are present.

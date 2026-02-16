@@ -404,3 +404,50 @@
   - Risk Tier: `T0`
   - Execution Path: `FAST_PATH`
   - Reason: metadata-only update with no runtime behavior change.
+
+---
+
+## Intake - 2026-02-15 - IDMAPPER-TELEMETRY-SHIP-001
+- Goal: fix two telemetry/identity regressions:
+  - ID Mapper shows misleading `Unknown` next to already identified/linked IDs.
+  - Ship telemetry over-registers unknown ship IDs and can stick on one ship (reported as Bastion) instead of reflecting ship changes.
+- Constraints:
+  - Keep scope narrow to ID-mapper presentation and telemetry loadout ship parsing.
+  - Do not change unrelated OCR/match-submission flows.
+  - Preserve unknown-ID tracking for genuinely unresolved GUIDs.
+- Out-of-scope:
+  - UI redesign of ID Mapper.
+  - Broad telemetry parser refactor.
+  - Changes to persisted schema.
+- Done condition:
+  - Known/mapped IDs in ID Mapper no longer display a misleading `Unknown` role badge by default.
+  - Ship telemetry no longer registers volatile/non-GUID identifiers as unknown ship GUIDs.
+  - Ship name extraction from raw telemetry is robust enough to avoid sticky fallback behavior when ship changes.
+  - Targeted validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: runtime logic change in telemetry parsing plus user-facing mapper output adjustment.
+
+---
+
+## Intake - 2026-02-15 - IDMAPPER-TELEMETRY-LOADOUT-002
+- Goal: address follow-up behavior:
+  - domain-labeled IDs (Hero/Ship/Weapon/Equipment) should not appear as generic unknown in mapper-linked outcomes.
+  - telemetry should explicitly track prospector loadout weapons and equipment with better extraction coverage and UI visibility.
+- Constraints:
+  - Keep scope narrow to ID mapper save flow + telemetry loadout parsing + ActionPanel telemetry summary.
+  - Preserve existing mapping and telemetry workflows.
+  - No persistence schema changes.
+- Out-of-scope:
+  - Full ID mapper redesign.
+  - Telemetry protocol redesign.
+- Done condition:
+  - Unknown-ID save in mapper writes to the correct `uidMappings` domain by detected type.
+  - Telemetry extracts weapon/equipment from both GUID and raw-name candidates with conservative unknown handling.
+  - Telemetry summary shows detected weapons/equipment in recording action panel.
+  - Validation evidence is recorded.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: runtime telemetry logic + user-visible recording panel output update.

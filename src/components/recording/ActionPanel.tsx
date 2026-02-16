@@ -38,6 +38,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         setMatchStartTime, setIsMatchInProgress,
         activeShip, shipSource, telemetryDetectedShip,
         activeHero, heroSource, telemetryDetectedHero,
+        currentLoadout,
         pendingReviews,
         detectedUnknowns
     } = useGameData();
@@ -446,7 +447,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                 )}
 
                 {/* Telemetry Detection Indicators */}
-                {(telemetryDetectedShip || telemetryDetectedHero) && (
+                {(telemetryDetectedShip || telemetryDetectedHero || (currentLoadout?.weapons?.length || 0) > 0 || (currentLoadout?.equipment?.length || 0) > 0) && (
                     <div className="mg-surface rounded-card p-2 border border-info/15 space-y-1">
                         {telemetryDetectedShip && (
                             <div className="flex items-center gap-2 text-label-sm">
@@ -466,6 +467,22 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                                 {activeHero && telemetryDetectedHero !== activeHero && (
                                     <span className="opacity-60 text-label-xs">(overridden)</span>
                                 )}
+                            </div>
+                        )}
+                        {Array.isArray(currentLoadout?.weapons) && currentLoadout.weapons.length > 0 && (
+                            <div className="flex items-start gap-2 text-label-sm">
+                                <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
+                                <span className="text-md-sys-on-surface/80 break-words">
+                                    {currentLoadout.weapons.join(', ')}
+                                </span>
+                            </div>
+                        )}
+                        {Array.isArray(currentLoadout?.equipment) && currentLoadout.equipment.length > 0 && (
+                            <div className="flex items-start gap-2 text-label-sm">
+                                <span className="font-bold uppercase tracking-wide text-info">Equipment</span>
+                                <span className="text-md-sys-on-surface/80 break-words">
+                                    {currentLoadout.equipment.join(', ')}
+                                </span>
                             </div>
                         )}
                     </div>
@@ -589,7 +606,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                 )}
 
                 {/* Telemetry Detection Indicators */}
-                {(telemetryDetectedShip || telemetryDetectedHero) && (
+                {(telemetryDetectedShip || telemetryDetectedHero || (currentLoadout?.weapons?.length || 0) > 0 || (currentLoadout?.equipment?.length || 0) > 0) && (
                     <div className="mg-surface rounded-card p-2 border border-info/15 space-y-1">
                         {telemetryDetectedShip && (
                             <div className="flex items-center gap-2 text-label-sm">
@@ -609,6 +626,22 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                                 {activeHero && telemetryDetectedHero !== activeHero && (
                                     <span className="opacity-60 text-label-xs">(overridden)</span>
                                 )}
+                            </div>
+                        )}
+                        {Array.isArray(currentLoadout?.weapons) && currentLoadout.weapons.length > 0 && (
+                            <div className="flex items-start gap-2 text-label-sm">
+                                <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
+                                <span className="text-md-sys-on-surface/80 break-words">
+                                    {currentLoadout.weapons.join(', ')}
+                                </span>
+                            </div>
+                        )}
+                        {Array.isArray(currentLoadout?.equipment) && currentLoadout.equipment.length > 0 && (
+                            <div className="flex items-start gap-2 text-label-sm">
+                                <span className="font-bold uppercase tracking-wide text-info">Equipment</span>
+                                <span className="text-md-sys-on-surface/80 break-words">
+                                    {currentLoadout.equipment.join(', ')}
+                                </span>
                             </div>
                         )}
                     </div>

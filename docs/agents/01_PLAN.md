@@ -117,3 +117,17 @@
 2. `COMPLETED` - Bump package/app version values to the next release.
 3. `COMPLETED` - Add release notes entry for the bumped app version in `src/utils/changelog.ts`.
 4. `COMPLETED` - Run targeted validation on touched metadata files and record evidence.
+
+## Current Task Plan (IDMAPPER-TELEMETRY-SHIP-001)
+1. `COMPLETED` - Trace ID Mapper badge rendering and telemetry ship GUID/name extraction to identify precise failure points.
+2. `COMPLETED` - Patch telemetry ship parsing in `src/hooks/useLogMonitor.ts` to reject non-GUID IDs and improve raw ship-name extraction.
+3. `COMPLETED` - Patch `src/components/IdMapper.tsx` to avoid misleading `Unknown` role badge for already mapped IDs.
+4. `COMPLETED` - Run targeted validation (`eslint` touched files + `typecheck`) and log evidence.
+5. `COMPLETED` - Record execution decisions and handoff summary.
+
+## Current Task Plan (IDMAPPER-TELEMETRY-LOADOUT-002)
+1. `COMPLETED` - Update ID mapper unknown-save flow to write type-aware mappings (`players/ships/weapons/equipment`).
+2. `COMPLETED` - Expand telemetry loadout extraction to capture weapon/equipment candidates from additional GUID/name fields.
+3. `COMPLETED` - Surface telemetry-detected weapons/equipment in `ActionPanel` status summary.
+4. `COMPLETED` - Run targeted validation (`eslint` touched files + `typecheck`) and log evidence.
+5. `COMPLETED` - Record execution addendum and handoff notes.

@@ -320,11 +320,27 @@ export const useLogMonitor = (activeUser?: string) => {
                         const fuzzyMatchList = (raw: string, list: string[]): string | null => {
                             if (!raw) return null;
                             const lower = raw.toLowerCase();
+                            const normalized = lower.replace(/[^a-z0-9]+/g, ' ').trim();
                             const exact = list.find(item => item.toLowerCase() === lower);
                             if (exact) return exact;
+                            const normalizedExact = list.find(item => item.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() === normalized);
+                            if (normalizedExact) return normalizedExact;
+                            const contains = list.find((item) => {
+                                const short = item.toLowerCase().split('(')[0].trim();
+                                return lower.includes(short) || normalized.includes(short);
+                            });
+                            if (contains) return contains;
                             const partial = list.find(item => item.toLowerCase().startsWith(lower) || lower.startsWith(item.toLowerCase().split('(')[0].trim()));
                             return partial || null;
                         };
+                        const normalizeGuid = (value: unknown): string => {
+                            if (value == null) return '';
+                            const raw = String(value).trim();
+                            if (!raw) return '';
+                            const afterColon = raw.includes(':') ? (raw.split(':').pop() || '') : raw;
+                            return afterColon.replace(/[{}-]/g, '').trim();
+                        };
+                        const isStableGuid = (value: string): boolean => /^[A-F0-9]{32}$/i.test(value);
                         const getLoadoutField = (obj: Record<string, any>, keys: string[]) => {
                             for (const key of keys) {
                                 if (obj[key] != null) return obj[key];
@@ -368,9 +384,11 @@ export const useLogMonitor = (activeUser?: string) => {
                             }
                         }
 
-                        const rawShipGuid = getLoadoutField(loadout, ['guidship', 'shipguid', 'guid_ship', 'shipid', 'ship_id']);
+                        const rawShipGuid = getLoadoutField(loadout, ['guidship', 'shipguid', 'guid_ship']);
+                        const rawShipId = getLoadoutField(loadout, ['shipid', 'ship_id']);
                         const rawShip = getLoadoutField(loadout, ['ship', 'shipname', 'ship_name']);
-                        const shipGuid = rawShipGuid ? rawShipGuid.split(':')[1] || rawShipGuid : undefined;
+                        const guidCandidate = normalizeGuid(rawShipGuid || rawShipId);
+                        const shipGuid = isStableGuid(guidCandidate) ? guidCandidate : undefined;
                         if (shipGuid) {
                             shipName = uidMappings.ships[shipGuid] || knownMappings[shipGuid] || SHIP_GUIDS[shipGuid];
 
@@ -392,41 +410,90 @@ export const useLogMonitor = (activeUser?: string) => {
                                 setActiveShip(shipName, 'telemetry');
                                 Logger.info('LogMonitor', `Auto-selected ship: ${shipName}`);
                             }
-                        } else if (rawShip && !String(rawShip).includes(':')) {
+                        } else if (rawShip) {
                             const matched = fuzzyMatchList(String(rawShip), [...SHIPS]);
-                            shipName = matched || String(rawShip);
+                            shipName = matched || '';
                             if (shipName && shipName !== activeShipRef.current) {
                                 setActiveShip(shipName, 'telemetry');
                                 Logger.info('LogMonitor', `Auto-selected ship from raw telemetry: ${shipName}`);
                             }
                         }
+                        const extractByKeys = (obj: Record<string, any>, keys: string[]): string[] => {
+                            const out: string[] = [];
+                            for (const key of keys) {
+                                const val = getLoadoutField(obj, [key]);
+                                if (val == null) continue;
+                                if (Array.isArray(val)) {
+                                    for (const item of val) {
+                                        if (item != null) out.push(String(item));
+                                    }
+                                } else {
+                                    out.push(String(val));
+                                }
+                            }
+                            return out.filter(Boolean);
+                        };
                         const resolveGuid = (guid: string, db: Record<string, string>, type: 'Weapon' | 'Equipment') => {
                             if (!guid) return null;
-                            const clean = guid.split(':')[1] || guid;
+                            const clean = normalizeGuid(guid);
+                            if (!clean) return null;
                             const domain = type === 'Weapon' ? 'weapons' : 'equipment';
                             const name = uidMappings[domain][clean] || knownMappings[clean] || db[clean];
                             if (!name) {
-                                registerUnknownId(clean, type);
+                                if (isStableGuid(clean)) {
+                                    registerUnknownId(clean, type);
+                                }
                                 return null;
                             }
                             return name;
                         };
-                        const weapon1 = resolveGuid(loadout.guidWeaponPrimary, WEAPON_GUIDS, 'Weapon');
-                        const weapon2 = resolveGuid(loadout.guidWeaponSecondary, WEAPON_GUIDS, 'Weapon');
-                        const weapon3 = resolveGuid(loadout.guidWeaponTertiary, WEAPON_GUIDS, 'Weapon');
-                        const equip1 = resolveGuid(loadout.guidEquipmentPrimary, EQUIPMENT_GUIDS, 'Equipment');
-                        const equip2 = resolveGuid(loadout.guidEquipmentSecondary, EQUIPMENT_GUIDS, 'Equipment');
-                        const equip3 = resolveGuid(loadout.guidEquipmentTertiary, EQUIPMENT_GUIDS, 'Equipment');
+                        const weaponGuidCandidates = extractByKeys(loadout, [
+                            'guidWeaponPrimary', 'guidWeaponSecondary', 'guidWeaponTertiary',
+                            'weaponGuidPrimary', 'weaponGuidSecondary', 'weaponGuidTertiary',
+                            'guid_weapon_primary', 'guid_weapon_secondary', 'guid_weapon_tertiary',
+                            'weapons', 'weaponGuids',
+                        ]);
+                        const equipmentGuidCandidates = extractByKeys(loadout, [
+                            'guidEquipmentPrimary', 'guidEquipmentSecondary', 'guidEquipmentTertiary',
+                            'equipmentGuidPrimary', 'equipmentGuidSecondary', 'equipmentGuidTertiary',
+                            'guid_equipment_primary', 'guid_equipment_secondary', 'guid_equipment_tertiary',
+                            'equipment', 'equipmentGuids',
+                        ]);
+                        const weaponNameCandidates = extractByKeys(loadout, [
+                            'weaponPrimary', 'weaponSecondary', 'weaponTertiary',
+                            'weaponNamePrimary', 'weaponNameSecondary', 'weaponNameTertiary',
+                            'weapon_name_primary', 'weapon_name_secondary', 'weapon_name_tertiary',
+                            'weaponNames',
+                        ]);
+                        const equipmentNameCandidates = extractByKeys(loadout, [
+                            'equipmentPrimary', 'equipmentSecondary', 'equipmentTertiary',
+                            'equipmentNamePrimary', 'equipmentNameSecondary', 'equipmentNameTertiary',
+                            'equipment_name_primary', 'equipment_name_secondary', 'equipment_name_tertiary',
+                            'equipmentNames',
+                        ]);
+                        const resolvedWeapons = Array.from(new Set([
+                            ...weaponGuidCandidates.map((g) => resolveGuid(g, WEAPON_GUIDS, 'Weapon')).filter(Boolean) as string[],
+                            ...weaponNameCandidates.map((n) => fuzzyMatchList(n, Object.values(WEAPON_GUIDS))).filter(Boolean) as string[],
+                        ]));
+                        const resolvedEquipment = Array.from(new Set([
+                            ...equipmentGuidCandidates.map((g) => resolveGuid(g, EQUIPMENT_GUIDS, 'Equipment')).filter(Boolean) as string[],
+                            ...equipmentNameCandidates.map((n) => fuzzyMatchList(n, Object.values(EQUIPMENT_GUIDS))).filter(Boolean) as string[],
+                        ]));
                         const finalHero = (heroName && !heroName.startsWith('Unknown')) ? heroName : currentLoadoutRef.current?.hero;
                         const finalShip = (shipName && !shipName.startsWith('Unknown')) ? shipName : currentLoadoutRef.current?.ship;
 
                         const nextLoadout: Loadout = {
                             hero: finalHero || heroName,
                             ship: finalShip || shipName,
-                            weapons: [weapon1, weapon2, weapon3].filter(Boolean) as string[],
-                            equipment: [equip1, equip2, equip3].filter(Boolean) as string[]
+                            weapons: resolvedWeapons,
+                            equipment: resolvedEquipment
                         };
                         setCurrentLoadout(nextLoadout);
+                        if (nextLoadout.weapons.length > 0) {
+                            const weaponSet: Record<string, number> = {};
+                            nextLoadout.weapons.forEach((w) => { weaponSet[w] = 1; });
+                            setActiveWeapons(weaponSet);
+                        }
                         if (!telemetryDraftMatchIdRef.current && isMatchInProgressRef.current) {
                             createTelemetryDraftIfNeeded(gameTime, nextLoadout);
                         }

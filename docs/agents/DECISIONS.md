@@ -437,3 +437,22 @@ Rule:
   - `scripts/security_negative_tests.cjs`
 - Revisit trigger/expiry:
   - Revisit if alias-model runtime derivation causes measurable performance issues at larger corpora or if product requirements demand explicit per-player editable misread lists.
+
+- Type: `logic-safety`
+- Decision: Treat only stable 32-hex identifiers as ship GUIDs in telemetry loadout parsing, and use raw ship-name fuzzy matching as fallback without registering unknown IDs for non-GUID fields.
+- Date: 2026-02-15
+- Options considered:
+  - Keep using `shipid/ship_id` as GUID candidates and register unknowns for all misses.
+  - Disable unknown-ship registration entirely.
+  - Restrict GUID path to stable GUID-shaped values and keep unknown registration only for those misses.
+- Rationale:
+  - Telemetry payloads may include volatile/non-GUID ship IDs, creating noisy UNKNOWN entries and sticky ship fallback behavior.
+  - Restricting GUID qualification preserves unknown tracking for true GUID misses while preventing mapper spam.
+  - Raw ship-name fallback keeps auto-detection useful when GUIDs are absent.
+- Impacted files/artifacts:
+  - `src/hooks/useLogMonitor.ts`
+  - `src/components/IdMapper.tsx`
+  - `docs/agents/03_VALIDATION.md`
+  - `docs/agents/04_HANDOFF.md`
+- Revisit trigger/expiry:
+  - Revisit if telemetry vendor format changes to a non-32-hex canonical ship identifier.

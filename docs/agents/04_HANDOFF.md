@@ -497,3 +497,60 @@
 
 ## Remaining / Risks
 - None for runtime behavior; this was metadata-only and does not alter feature logic.
+
+---
+
+## Handoff - 2026-02-15 - IDMAPPER-TELEMETRY-SHIP-001
+## Status
+- Completed.
+
+## What Changed
+- Updated telemetry ship parsing in `src/hooks/useLogMonitor.ts`:
+  - added strict GUID qualification (`32` hex chars) before treating values as ship GUIDs.
+  - limited primary ship GUID extraction to explicit GUID fields (`guidship`, `shipguid`, `guid_ship`).
+  - improved raw ship-name fuzzy matching (normalized/contains matching).
+  - prevented unmatched raw ship strings from being promoted to active ship selection.
+- Updated mapper display in `src/components/IdMapper.tsx`:
+  - suppress `Unknown` role badge for entries already present in Known mappings tab.
+
+## What Was Verified
+- `npx eslint src/hooks/useLogMonitor.ts src/components/IdMapper.tsx` passed.
+- `npm run -s typecheck` passed.
+- Manual logic verification confirms:
+  - non-GUID ship IDs no longer create UNKNOWN ship entries in mapper.
+  - ship selection can update from raw telemetry matches without sticky fallback to previous ship.
+  - known ID mappings no longer show misleading `Unknown` role chip by default.
+
+## Remaining / Risks
+- Ship telemetry still depends on quality/shape of raw loadout payload names; if upstream names drift far from canonical ship strings, mapping may need additional aliases.
+
+---
+
+## Handoff - 2026-02-15 - IDMAPPER-TELEMETRY-LOADOUT-002
+## Status
+- Completed.
+
+## What Changed
+- `src/components/IdMapper.tsx`
+  - unknown-ID save flow is now domain-aware by detected type:
+    - Hero -> `uidMappings.players`
+    - Ship -> `uidMappings.ships`
+    - Weapon -> `uidMappings.weapons`
+    - Equipment -> `uidMappings.equipment`
+  - generic fallback remains available.
+- `src/hooks/useLogMonitor.ts`
+  - expanded telemetry extraction for weapon/equipment GUID and name candidates.
+  - improved resolution pipeline combines GUID-map and raw-name fuzzy matching.
+  - conservative unknown registration remains GUID-only for unresolved IDs.
+  - updates `activeWeapons` when telemetry provides weapon set.
+- `src/components/recording/ActionPanel.tsx`
+  - telemetry status panel now shows detected weapons/equipment.
+  - panel can appear when only loadout weapons/equipment are detected.
+
+## What Was Verified
+- `npx eslint src/components/IdMapper.tsx src/hooks/useLogMonitor.ts src/components/recording/ActionPanel.tsx` passed.
+- `npm run -s typecheck` passed.
+- Manual logic verification confirms mapper type-routing and telemetry loadout visibility are active.
+
+## Remaining / Risks
+- Weapon/equipment mapping coverage still depends on available GUID/name dictionaries; unknown but non-GUID free-text values are intentionally ignored to avoid noisy false positives.
