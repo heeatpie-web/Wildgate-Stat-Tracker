@@ -2,6 +2,12 @@ import { StateCreator } from 'zustand';
 import { CHARACTERS, SHIPS, KillMap, getShipCapacity } from '../../types';
 import { DataSource, getPriority } from './createDataSlice';
 
+const getMaxTeammatesForShip = (ship: string): number => {
+    const capacity = getShipCapacity(ship || '');
+    const normalizedCapacity = capacity > 1 ? capacity : 4;
+    return Math.max(0, normalizedCapacity - 1);
+};
+
 export interface FormSlice {
     selectedTeammates: string[];
     selectedOpponents: string[];
@@ -87,7 +93,7 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
         selectedTeammates: typeof teammates === 'function' ? teammates(state.selectedTeammates) : teammates
     })),
     toggleTeammate: (name) => set((state) => {
-        const maxTeammates = getShipCapacity(state.activeShip) - 1;
+        const maxTeammates = getMaxTeammatesForShip(state.activeShip);
         if (state.selectedTeammates.includes(name)) return { selectedTeammates: state.selectedTeammates.filter(t => t !== name) };
         if (state.selectedTeammates.length < maxTeammates) return { selectedTeammates: [...state.selectedTeammates, name] };
         return {};
@@ -119,7 +125,7 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
         const currentP = getPriority(state.shipSource);
         const newP = getPriority(source);
         if (newP >= currentP || !state.shipSource) {
-            const maxTeammates = getShipCapacity(ship) - 1;
+            const maxTeammates = getMaxTeammatesForShip(ship);
             const newTeammates = state.selectedTeammates.filter((_, i) => i < maxTeammates);
             return { activeShip: ship, shipSource: source, selectedTeammates: newTeammates, ...telemetryUpdate };
         }

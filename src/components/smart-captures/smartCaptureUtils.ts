@@ -11,6 +11,7 @@ export const RESULT_COLORS: Record<string, string> = {
     Win: 'bg-success',
     Loss: 'bg-danger',
     Draw: 'bg-neutral',
+    Ongoing: 'bg-info',
 };
 
 export type SpecConfidenceLevel = 'success' | 'warning' | 'danger';
@@ -163,6 +164,7 @@ export const getCollapsedQueueGlyph = (match: Match): CollapsedQueueGlyph => {
     if (match.result === 'Win') return 'win';
     if (match.result === 'Loss') return 'loss';
     if (match.result === 'Draw') return 'draw';
+    if (match.result === 'Ongoing') return 'queued';
 
     return 'queued';
 };

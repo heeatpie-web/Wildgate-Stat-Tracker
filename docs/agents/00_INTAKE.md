@@ -258,6 +258,36 @@
 - Done condition:
   - Settings modal no longer triggers hook-order runtime error on open.
   - Dev command launches Electron immediately (no pre-wait for Vite) so splash appears earlier.
+
+---
+
+## Intake - 2026-02-16 - BUG-BATCH-006
+- Goal: complete the remaining requested fixes from the expanded bug list:
+  - header Smart Capture reliability,
+  - Intelligence Review button routing/mounting,
+  - telemetry drafts represented as ongoing (not draw),
+  - Win placement fallback shown as first place,
+  - Players tab pending OCR roster approvals,
+  - teammate-cap consistency and non-local telemetry loadout guardrails.
+- Constraints:
+  - Keep changes targeted to existing flows and data model.
+  - Preserve wizard/result workflow semantics (Win/Loss/Draw submission flow remains explicit).
+  - Avoid destructive migrations; only safe compatibility hydration updates.
+- Out-of-scope:
+  - New OCR model quality tuning.
+  - Broad UI redesign beyond the requested UX fixes.
+  - Backend/cloud workflow changes.
+- Done condition:
+  - Smart Capture requests are consumable through a durable channel even if DOM event timing races.
+  - Review queue opens from recording panel via mounted modal.
+  - Telemetry drafts are stored/displayed as `Ongoing`; analytics excludes ongoing matches from completed-result metrics.
+  - Win rows with missing placement render as first place and final submission defaults placement to `1`.
+  - Players view exposes approve/dismiss actions for pending OCR roster candidates.
+  - Validation evidence recorded for touched logic and targeted regressions.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: user-visible runtime behavior updates across telemetry, capture routing, analytics filtering, and UI review flows.
   - Non-critical startup tasks are deferred/backgrounded to reduce blocking during dev boot.
   - Validation evidence recorded in `docs/agents/03_VALIDATION.md`.
 - AOM_V2:
@@ -470,3 +500,98 @@
   - Risk Tier: `T1`
   - Execution Path: `FULL_PATH`
   - Reason: runtime behavior change in Electron main process.
+
+## Intake - 2026-02-16 - BUG-BATCH-005
+- Goal: implement a focused reliability pass for OCR review, Smart Captures, telemetry draft submission bundling, and corpus workflow gaps reported in the latest bug list.
+- Constraints:
+  - Keep scope targeted to high-impact bugs in OCR apply, Smart Captures, corpus mode, and telemetry loadout parsing.
+  - Preserve existing persistence schema and IPC contracts where possible.
+  - Favor additive UX controls over broad redesign.
+- In scope:
+  - OCR review lightbox layering fix and richer opponent/team editing in apply modal.
+  - Smart Captures teammate-capacity fallback for unknown ship and artifact auto-repair toast spam suppression.
+  - Smart Captures bulk action to merge selected matches.
+  - Wizard/final-submission bundling so live mission stats (POI/elims/damage/notes/roster) are persisted with telemetry draft-derived submissions.
+  - Corpus mode reliability (packaged eval script resolution, corpus image refresh/load robustness, import resilience).
+  - Corpus plain-entry workflow support for up to 4 opponent teams (with ship + players).
+  - Telemetry loadout extraction hardening for ship/prospector/weapon/equipment auto-selection coverage.
+  - OCR correction input backspace/edit regression fix.
+  - OCR review roster-match clarity and queue-to-roster-candidate action for unmatched names.
+- Out-of-scope:
+  - Full settings IA redesign.
+  - OCR model architecture replacement.
+  - Large data/schema migrations.
+- Done condition:
+  - Targeted fixes are implemented in code and validated (`eslint`, `typecheck`, targeted tests).
+  - Validation evidence and handoff are recorded.
+- AOM_V2:
+  - Risk Tier: `T3`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file runtime behavior changes across OCR review UX, submission logic, telemetry parsing, and Electron corpus tooling.
+
+---
+
+## Intake - 2026-02-16 - SMOKE-PERF-CONSENSUS-001
+- Goal: run the visual smoke test and provide an evidence-based consensus on reported overheating/performance concerns.
+- Constraints:
+  - Keep scope narrow to validation + diagnostics only.
+  - No runtime feature/code changes in this task.
+  - Use existing smoke tooling and inspect current telemetry monitor code paths.
+- Out-of-scope:
+  - New optimization implementation.
+  - UI redesign or workflow changes.
+  - New benchmark harness work.
+- Done condition:
+  - Smoke command runs and report evidence is captured.
+  - Consensus is documented with concrete poll/decode interval evidence.
+- AOM_V2:
+  - Risk Tier: `T1`
+  - Execution Path: `FULL_PATH`
+  - Reason: runtime diagnostic assessment with user-facing reliability/performance impact.
+
+---
+
+## Intake - 2026-02-16 - THERMAL-FIX-001
+- Goal: implement three targeted runtime fixes for overheating/performance pressure:
+  1) dirty-only DB flush in renderer storage layer,
+  2) correct telemetry log-path preference order,
+  3) reduce archive write churn by avoiding no-op rewrites and repeated full-file parse overhead.
+- Constraints:
+  - Keep scope narrow to thermal/perf fixes requested in this turn.
+  - Preserve persistence durability semantics and telemetry feature behavior.
+  - Avoid schema/API breaking changes.
+- Out-of-scope:
+  - Broad telemetry architecture redesign.
+  - UI redesign and unrelated feature work.
+  - New benchmark harness.
+- Done condition:
+  - `src/utils/storage.ts` flushes only when unsaved changes exist.
+  - `electron/main.cjs` prefers Wildgate telemetry cache path before Nebula fallback.
+  - `electron/helpers/telemetryArchiveHelpers.cjs` avoids no-op archive rewrites and repeated full-file parse per tick.
+  - Targeted validation (`typecheck`, touched-file `eslint`) is green and logged.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: runtime behavior changes in persistence and telemetry pipeline paths.
+
+---
+
+## Intake - 2026-02-16 - OCR-ALIAS-CLEANUP-001
+- Goal: fix name-adjuster hygiene by allowing direct removal of nonsensical OCR alias mappings and reducing accidental bad manual alias links.
+- Constraints:
+  - Keep scope narrow to OCR alias settings flow and mapping slice behavior.
+  - Preserve existing alias learning queue/review workflows.
+  - No persistence schema migration.
+- Out-of-scope:
+  - Bulk alias redesign.
+  - OCR model/recognition changes.
+  - Automatic historical alias pruning heuristics.
+- Done condition:
+  - Settings alias list supports direct removal of an alias mapping row.
+  - Store exposes deterministic alias removal action that removes the chosen alias target for a key.
+  - Manual settings alias add flow adds a lightweight confirmation step for suspicious low-similarity pairs.
+  - Targeted lint/typecheck/tests pass and are logged.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: runtime mapping logic and UI interaction behavior changes across multiple files.

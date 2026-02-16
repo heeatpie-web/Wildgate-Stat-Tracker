@@ -122,7 +122,7 @@ export const useLogMonitor = (activeUser?: string) => {
         weapons: {},
         reachModifiers: [],
         kills: { 'AI Legion': 0 },
-        result: 'Draw',
+        result: 'Ongoing',
         subType: 'Telemetry Draft',
         time: '00:00',
         damageTaken: 0,
@@ -306,13 +306,79 @@ export const useLogMonitor = (activeUser?: string) => {
                     if (localId && activeUserRef.current && !playerIdMapRef.current[localId]) {
                         updatePlayerIdMapping(localId, activeUserRef.current);
                     }
+                    const normalizeName = (value: unknown) => String(value || '').trim().toLowerCase();
+                    const collectIds = (...values: unknown[]) => Array.from(new Set(
+                        values
+                            .flat()
+                            .map((v) => String(v || '').trim())
+                            .filter(Boolean)
+                    ));
+                    const collectNames = (...values: unknown[]) => Array.from(new Set(
+                        values
+                            .flat()
+                            .map((v) => normalizeName(v))
+                            .filter(Boolean)
+                    ));
+                    const actorIds = collectIds(
+                        payload.accountId,
+                        payload.account_id,
+                        payload.userId,
+                        payload.user_id,
+                        payload.playerId,
+                        payload.player_id,
+                        payload.actorId,
+                        payload.actor_id,
+                        payload.clientAccountId,
+                        payload.client_account_id,
+                    );
+                    const actorNames = collectNames(
+                        payload.displayName,
+                        payload.display_name,
+                        payload.playerName,
+                        payload.player_name,
+                        payload.name,
+                        payload.callsign,
+                    );
+                    const localIds = collectIds(
+                        localId,
+                        e.Payload?.context?.client?.accountId,
+                        e.payload?.context?.client?.accountId,
+                    );
+                    const localNames = collectNames(
+                        activeUserRef.current,
+                        ...localIds.map((id) => playerIdMapRef.current[id]),
+                    );
+                    let shouldApplyLoadout = true;
+                    if (localIds.length > 0 && actorIds.length > 0) {
+                        shouldApplyLoadout = actorIds.some((id) => localIds.includes(id));
+                    } else if (localNames.length > 0 && actorNames.length > 0) {
+                        shouldApplyLoadout = actorNames.some((name) => localNames.includes(name));
+                    } else if (actorIds.length > 0 && localNames.length > 0) {
+                        shouldApplyLoadout = actorIds.some((id) => {
+                            const mapped = normalizeName(playerIdMapRef.current[id]);
+                            return !!mapped && localNames.includes(mapped);
+                        });
+                    }
                     let loadout: any = payload.loadout || payload.Loadout || payload.loadOut || payload.LoadOut ||
                         payload.characterLoadout || payload.character_loadout || payload.playerLoadout || payload.player_loadout ||
                         payload.currentLoadout || payload.current_loadout || payload.loadoutData;
                     if (Array.isArray(loadout)) loadout = loadout[0];
                     if (loadout?.loadout) loadout = loadout.loadout;
                     if (loadout?.Loadout) loadout = loadout.Loadout;
-                    if (loadout) {
+                    if (!loadout || typeof loadout !== 'object') {
+                        const loadoutSignals = new Set([
+                            'guidhero', 'heroguid', 'hero', 'heroname',
+                            'guidship', 'shipguid', 'ship', 'shipname',
+                            'guidweaponprimary', 'guidweaponsecondary', 'weaponprimary', 'weaponnameprimary',
+                            'guidequipmentprimary', 'guidequipmentsecondary', 'equipmentprimary', 'equipmentnameprimary',
+                        ]);
+                        const payloadKeysLower = Object.keys(payload || {}).map((k) => k.toLowerCase());
+                        const hasSignals = payloadKeysLower.some((k) => loadoutSignals.has(k));
+                        if (hasSignals) {
+                            loadout = payload;
+                        }
+                    }
+                    if (loadout && shouldApplyLoadout) {
                         const { knownMappings, uidMappings, registerUnknownId } = useAppStore.getState();
 
                         let heroName = '';
@@ -353,15 +419,20 @@ export const useLogMonitor = (activeUser?: string) => {
 
                         const rawHeroGuid = getLoadoutField(loadout, ['guidhero', 'heroguid', 'guid_hero', 'heroid', 'hero_id']);
                         const rawHero = getLoadoutField(loadout, ['hero', 'heroname', 'hero_name']);
-                        const heroGuid = rawHeroGuid ? rawHeroGuid.split(':')[1] || rawHeroGuid : undefined;
+                        const normalizedHeroGuid = normalizeGuid(rawHeroGuid);
+                        const heroGuid = isStableGuid(normalizedHeroGuid) ? normalizedHeroGuid : undefined;
+                        const heroRawValue = String(rawHero || '');
+                        const heroNameHint = heroRawValue.includes(':')
+                            ? (heroRawValue.split(':').pop() || heroRawValue)
+                            : heroRawValue;
                         if (heroGuid) {
                             heroName = uidMappings.players[heroGuid] || knownMappings[heroGuid] || HERO_GUIDS[heroGuid];
 
                             if (!heroName) {
-                                if (rawHero && !String(rawHero).includes(':')) {
-                                    const matched = fuzzyMatchList(String(rawHero), [...CHARACTERS]);
+                                if (heroNameHint) {
+                                    const matched = fuzzyMatchList(heroNameHint, [...CHARACTERS]);
                                     if (matched) heroName = matched;
-                                    else heroName = String(rawHero);
+                                    else heroName = heroNameHint;
                                 }
 
                                 if (!heroName) {
@@ -375,9 +446,9 @@ export const useLogMonitor = (activeUser?: string) => {
                                 setActiveHero(heroName, 'telemetry');
                                 Logger.info('LogMonitor', `Auto-selected prospector: ${heroName}`);
                             }
-                        } else if (rawHero && !String(rawHero).includes(':')) {
-                            const matched = fuzzyMatchList(String(rawHero), [...CHARACTERS]);
-                            heroName = matched || String(rawHero);
+                        } else if (heroNameHint) {
+                            const matched = fuzzyMatchList(heroNameHint, [...CHARACTERS]);
+                            heroName = matched || heroNameHint;
                             if (heroName && heroName !== activeHeroRef.current) {
                                 setActiveHero(heroName, 'telemetry');
                                 Logger.info('LogMonitor', `Auto-selected prospector from raw telemetry: ${heroName}`);
@@ -387,16 +458,20 @@ export const useLogMonitor = (activeUser?: string) => {
                         const rawShipGuid = getLoadoutField(loadout, ['guidship', 'shipguid', 'guid_ship']);
                         const rawShipId = getLoadoutField(loadout, ['shipid', 'ship_id']);
                         const rawShip = getLoadoutField(loadout, ['ship', 'shipname', 'ship_name']);
+                        const shipRawValue = String(rawShip || '');
+                        const shipNameHint = shipRawValue.includes(':')
+                            ? (shipRawValue.split(':').pop() || shipRawValue)
+                            : shipRawValue;
                         const guidCandidate = normalizeGuid(rawShipGuid || rawShipId);
                         const shipGuid = isStableGuid(guidCandidate) ? guidCandidate : undefined;
                         if (shipGuid) {
                             shipName = uidMappings.ships[shipGuid] || knownMappings[shipGuid] || SHIP_GUIDS[shipGuid];
 
                             if (!shipName) {
-                                if (rawShip && !String(rawShip).includes(':')) {
-                                    const matched = fuzzyMatchList(String(rawShip), [...SHIPS]);
+                                if (shipNameHint) {
+                                    const matched = fuzzyMatchList(shipNameHint, [...SHIPS]);
                                     if (matched) shipName = matched;
-                                    else shipName = String(rawShip);
+                                    else shipName = shipNameHint;
                                 }
 
                                 if (!shipName) {
@@ -410,8 +485,8 @@ export const useLogMonitor = (activeUser?: string) => {
                                 setActiveShip(shipName, 'telemetry');
                                 Logger.info('LogMonitor', `Auto-selected ship: ${shipName}`);
                             }
-                        } else if (rawShip) {
-                            const matched = fuzzyMatchList(String(rawShip), [...SHIPS]);
+                        } else if (shipNameHint) {
+                            const matched = fuzzyMatchList(shipNameHint, [...SHIPS]);
                             shipName = matched || '';
                             if (shipName && shipName !== activeShipRef.current) {
                                 setActiveShip(shipName, 'telemetry');
@@ -450,26 +525,32 @@ export const useLogMonitor = (activeUser?: string) => {
                         const weaponGuidCandidates = extractByKeys(loadout, [
                             'guidWeaponPrimary', 'guidWeaponSecondary', 'guidWeaponTertiary',
                             'weaponGuidPrimary', 'weaponGuidSecondary', 'weaponGuidTertiary',
+                            'primaryWeaponGuid', 'secondaryWeaponGuid', 'tertiaryWeaponGuid',
+                            'weapon_guid_primary', 'weapon_guid_secondary', 'weapon_guid_tertiary',
                             'guid_weapon_primary', 'guid_weapon_secondary', 'guid_weapon_tertiary',
-                            'weapons', 'weaponGuids',
+                            'weapons', 'weaponGuids', 'weaponIds', 'weaponSlots',
                         ]);
                         const equipmentGuidCandidates = extractByKeys(loadout, [
                             'guidEquipmentPrimary', 'guidEquipmentSecondary', 'guidEquipmentTertiary',
                             'equipmentGuidPrimary', 'equipmentGuidSecondary', 'equipmentGuidTertiary',
+                            'primaryEquipmentGuid', 'secondaryEquipmentGuid', 'tertiaryEquipmentGuid',
+                            'equipment_guid_primary', 'equipment_guid_secondary', 'equipment_guid_tertiary',
                             'guid_equipment_primary', 'guid_equipment_secondary', 'guid_equipment_tertiary',
-                            'equipment', 'equipmentGuids',
+                            'equipment', 'equipmentGuids', 'equipmentIds', 'equipmentSlots',
                         ]);
                         const weaponNameCandidates = extractByKeys(loadout, [
                             'weaponPrimary', 'weaponSecondary', 'weaponTertiary',
+                            'primaryWeapon', 'secondaryWeapon', 'tertiaryWeapon',
                             'weaponNamePrimary', 'weaponNameSecondary', 'weaponNameTertiary',
                             'weapon_name_primary', 'weapon_name_secondary', 'weapon_name_tertiary',
-                            'weaponNames',
+                            'weaponNames', 'weaponDisplayNames', 'loadoutWeapons',
                         ]);
                         const equipmentNameCandidates = extractByKeys(loadout, [
                             'equipmentPrimary', 'equipmentSecondary', 'equipmentTertiary',
+                            'primaryEquipment', 'secondaryEquipment', 'tertiaryEquipment',
                             'equipmentNamePrimary', 'equipmentNameSecondary', 'equipmentNameTertiary',
                             'equipment_name_primary', 'equipment_name_secondary', 'equipment_name_tertiary',
-                            'equipmentNames',
+                            'equipmentNames', 'equipmentDisplayNames', 'loadoutEquipment',
                         ]);
                         const resolvedWeapons = Array.from(new Set([
                             ...weaponGuidCandidates.map((g) => resolveGuid(g, WEAPON_GUIDS, 'Weapon')).filter(Boolean) as string[],
@@ -483,10 +564,14 @@ export const useLogMonitor = (activeUser?: string) => {
                         const finalShip = (shipName && !shipName.startsWith('Unknown')) ? shipName : currentLoadoutRef.current?.ship;
 
                         const nextLoadout: Loadout = {
-                            hero: finalHero || heroName,
-                            ship: finalShip || shipName,
-                            weapons: resolvedWeapons,
-                            equipment: resolvedEquipment
+                            hero: finalHero || heroName || currentLoadoutRef.current?.hero || null,
+                            ship: finalShip || shipName || currentLoadoutRef.current?.ship || null,
+                            weapons: resolvedWeapons.length > 0
+                                ? resolvedWeapons
+                                : (currentLoadoutRef.current?.weapons || []),
+                            equipment: resolvedEquipment.length > 0
+                                ? resolvedEquipment
+                                : (currentLoadoutRef.current?.equipment || [])
                         };
                         setCurrentLoadout(nextLoadout);
                         if (nextLoadout.weapons.length > 0) {
@@ -498,6 +583,8 @@ export const useLogMonitor = (activeUser?: string) => {
                             createTelemetryDraftIfNeeded(gameTime, nextLoadout);
                         }
                         updateTelemetryDraftFromLoadout(nextLoadout, gameTime);
+                    } else if (loadout && !shouldApplyLoadout) {
+                        Logger.debug('LogMonitor', `Skipped non-local loadout event: ${name}`);
                     }
                     const actions: TelemetryActions = {
                         setTimeMin, setTimeSec,

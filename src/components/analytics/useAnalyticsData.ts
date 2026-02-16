@@ -109,14 +109,18 @@ export const useAnalyticsData = (timeRange: AnalyticsTimeRange, lastN: number = 
         () => matches.filter(m => m.mode === activeMode).sort((a, b) => a.timestamp - b.timestamp),
         [matches, activeMode]
     );
+    const completedModeMatches = useMemo(
+        () => modeMatches.filter((m) => m.result !== 'Ongoing'),
+        [modeMatches]
+    );
 
     const filteredMatches = useMemo(() => {
-        if (timeRange === 'lastN') return modeMatches.slice(-lastN);
+        if (timeRange === 'lastN') return completedModeMatches.slice(-lastN);
         if (timeRange === 'today' || timeRange === 'week' || timeRange === 'month') {
-            return modeMatches.filter(m => m.timestamp >= rangeStart);
+            return completedModeMatches.filter(m => m.timestamp >= rangeStart);
         }
-        return modeMatches;
-    }, [modeMatches, timeRange, lastN, rangeStart]);
+        return completedModeMatches;
+    }, [completedModeMatches, timeRange, lastN, rangeStart]);
 
     const wantOverview = view === 'overview' || view === 'reactor' || view === 'essay' || !view;
     const wantSession = wantOverview || view === 'session';

@@ -10,7 +10,7 @@ import { getElectronAPI } from '../utils/electronAPI';
 import { useAppStore } from '../store/useAppStore';
 import { getGCloudStatus, type GCloudStatus } from '../utils/electronBridge';
 import type { OcrMode, CaptureMode, TelemetryPerformanceProfile, OcrLearningReviewMode, OcrThresholdRecommendationMode } from '../store/slices/createSettingsSlice';
-import { normalizeOcrName } from '../utils/stringUtils';
+import { normalizeOcrName, similarityScore } from '../utils/stringUtils';
 import { DEFAULT_OCR_BEST_GUESS_THRESHOLDS, getPreset, detectSensitivityLevel } from './settings/ocrThresholdPresets';
 import { Button, Input } from './ui';
 
@@ -106,6 +106,7 @@ export const SettingsModal: React.FC = () => {
     const resetOcrCalibration = useAppStore(s => s.resetOcrCalibration);
     const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
     const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
+    const removeOcrAliasCorrection = useAppStore(s => s.removeOcrAliasCorrection);
     const blockOcrAlias = useAppStore(s => s.blockOcrAlias);
     const unblockOcrAlias = useAppStore(s => s.unblockOcrAlias);
     const ocrLearningEvents = useAppStore(s => s.ocrLearningEvents);
@@ -115,6 +116,7 @@ export const SettingsModal: React.FC = () => {
     const [gcloudStatus, setGcloudStatus] = useState<GCloudStatus | null>(null);
     const [aliasFrom, setAliasFrom] = useState('');
     const [aliasTo, setAliasTo] = useState('');
+    const [pendingSuspiciousAliasPair, setPendingSuspiciousAliasPair] = useState<string | null>(null);
     const [thresholdRecBusy, setThresholdRecBusy] = useState(false);
     const [thresholdRecommendation, setThresholdRecommendation] = useState<ThresholdRecommendationPayload | null>(null);
     const getSensitivityLevel = () => detectSensitivityLevel(ocrBestGuessThresholds);
@@ -290,6 +292,9 @@ export const SettingsModal: React.FC = () => {
             return b.lastUpdatedAt - a.lastUpdatedAt;
         })
         .slice(0, 30);
+    const manualAliasPairKey = `${normalizeOcrName(aliasFrom).toLowerCase()}=>${normalizeOcrName(aliasTo).toLowerCase()}`;
+    const manualAliasSimilarity = similarityScore(normalizeOcrName(aliasFrom), normalizeOcrName(aliasTo));
+    const manualAliasNeedsConfirmation = manualAliasSimilarity < 35;
     const learningEventsRecent = (ocrLearningEvents || []).slice().sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
     const learningQueueCount = (ocrLearningQueue || []).length;
     const learningResolvedCount = learningEventsRecent.filter((e) => e.status !== 'queued').length;
@@ -374,11 +379,20 @@ export const SettingsModal: React.FC = () => {
                                 const raw = normalizeOcrName(aliasFrom);
                                 const target = normalizeOcrName(aliasTo);
                                 if (!raw || !target) return;
+                                if (manualAliasNeedsConfirmation && pendingSuspiciousAliasPair !== manualAliasPairKey) {
+                                    setPendingSuspiciousAliasPair(manualAliasPairKey);
+                                    setToast({
+                                        message: 'Alias names look unrelated. Click Add Alias again to confirm this mapping.',
+                                        type: 'warning',
+                                    });
+                                    return;
+                                }
                                 recordOcrAliasCorrection(raw, target, {
                                     source: 'settings_alias',
                                     context: 'unknown',
                                     confidenceWeight: 1,
                                 });
+                                setPendingSuspiciousAliasPair(null);
                                 setAliasFrom('');
                                 setAliasTo('');
                             }}
@@ -404,6 +418,21 @@ export const SettingsModal: React.FC = () => {
                                             className={`px-2 py-1 rounded-control text-label-xs font-bold uppercase ${blocked ? 'md3-btn-tonal text-warning' : 'md3-btn-outlined'}`}
                                         >
                                             {blocked ? 'Unblock' : 'Block'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const removed = removeOcrAliasCorrection(c.rawKey, c.targetName);
+                                                if (removed) {
+                                                    setToast({
+                                                        message: `Removed alias ${c.rawKey} -> ${c.targetName}`,
+                                                        type: 'success',
+                                                    });
+                                                }
+                                            }}
+                                            className="px-2 py-1 rounded-control text-label-xs font-bold uppercase md3-btn-outlined text-md-sys-error"
+                                        >
+                                            Remove
                                         </button>
                                     </div>
                                 );

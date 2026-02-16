@@ -6,8 +6,8 @@
 
 /** The two competitive game modes available in Wildgate. */
 export type GameMode = 'Artifact Brawl' | 'Fleet Battle';
-/** Possible outcomes for a completed match. */
-export type MatchResult = 'Win' | 'Loss' | 'Draw';
+/** Possible outcomes for a match. */
+export type MatchResult = 'Win' | 'Loss' | 'Draw' | 'Ongoing';
 /** Supported colorblind filter modes, applied via SVG filters in index.html. */
 export type ColorblindMode = 'none' | 'protanopia' | 'deuteranopia' | 'tritanopia';
 
@@ -63,7 +63,7 @@ export interface Match {
   weapons?: Record<string, number>; // Legacy/Usage stats
   reachModifiers: string[];
   kills: KillMap;
-  result: 'Win' | 'Loss' | 'Draw';
+  result: MatchResult;
   subType: string;
   placement?: number;
   damageTaken?: number;

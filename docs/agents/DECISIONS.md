@@ -456,3 +456,143 @@ Rule:
   - `docs/agents/04_HANDOFF.md`
 - Revisit trigger/expiry:
   - Revisit if telemetry vendor format changes to a non-32-hex canonical ship identifier.
+
+- Type: `scope`
+- Decision: implement the latest bug list as a targeted high-impact reliability pass (BUG-BATCH-005) instead of broad architecture redesign.
+- Date: 2026-02-16
+- Options considered:
+  - Full UI/IA refactor of OCR + corpus workflows.
+  - Minimal one-file hotfix only.
+  - Multi-file targeted patch set for reported blockers without schema changes.
+- Rationale:
+  - Reported issues spanned OCR apply UX, Smart Captures persistence, telemetry bundling, and corpus tooling; a one-file patch was insufficient.
+  - Full redesign would create delivery risk and exceed requested scope.
+  - Targeted multi-file patch resolves blockers while preserving current architecture.
+- Impacted files/artifacts:
+  - `src/components/ocr/OCRReviewModal.tsx`
+  - `src/components/SmartCapturesPanel.tsx`
+  - `src/hooks/useMatchSubmission.ts`
+  - `src/hooks/useLogMonitor.ts`
+  - `src/components/DevOCRPanel.tsx`
+  - `electron/main.cjs`
+  - `package.json`
+- Revisit trigger/expiry:
+  - Revisit if users request deeper corpus/settings information architecture changes beyond current reliability fixes.
+
+- Type: `architecture`
+- Decision: represent telemetry draft matches as `Ongoing` until final result selection, with hydration migration from legacy draft `Draw` rows.
+- Date: 2026-02-16
+- Options considered:
+  - Keep telemetry drafts as `Draw`.
+  - Keep telemetry drafts without result value.
+  - Add explicit `Ongoing` result and migrate legacy draft rows.
+- Rationale:
+  - `Draw` is terminal and was misrepresenting in-progress/draft records.
+  - Explicit ongoing state preserves intent and avoids analytics/result confusion.
+  - Compatibility migration avoids data loss and prevents mixed semantics in existing stores.
+- Impacted files/artifacts:
+  - `src/types.ts`
+  - `src/hooks/useLogMonitor.ts`
+  - `src/store/useAppStore.ts`
+  - `src/components/HistoryTable.tsx`
+  - `src/utils/analytics.ts`
+  - `src/utils/analyticsSocial.ts`
+- Revisit trigger/expiry:
+  - Revisit if product introduces a richer draft-state machine beyond a single `Ongoing` result.
+
+- Type: `reliability`
+- Decision: add a durable UI-state smart-capture request channel and keep event dispatch as compatibility fallback.
+- Date: 2026-02-16
+- Options considered:
+  - Keep event-only dispatch/listener model.
+  - Move all capture logic into App-level hook.
+  - Add store-backed request channel consumed by ActionPanel while preserving existing event path.
+- Rationale:
+  - Event-only timing could drop requests if listener mounted late.
+  - Full capture architecture rewrite was out of scope.
+  - Hybrid channel fixes reliability with minimal behavior surface change.
+- Impacted files/artifacts:
+  - `src/providers/UIStateProvider.tsx`
+  - `src/components/Header.tsx`
+  - `src/components/Wizard.tsx`
+  - `src/components/recording/ActionPanel.tsx`
+  - `src/App.tsx`
+- Revisit trigger/expiry:
+  - Revisit if capture orchestration moves to a centralized command bus and DOM events are removed.
+
+- Type: `data-integrity`
+- Decision: exclude `Ongoing` matches from completed-result analytics while keeping them visible in history filters and UI.
+- Date: 2026-02-16
+- Options considered:
+  - Include ongoing matches in all analytics denominators.
+  - Hide ongoing matches entirely.
+  - Keep ongoing visible but remove from win/loss/draw KPI aggregations.
+- Rationale:
+  - Ongoing matches should not dilute completed-result metrics.
+  - Visibility in history is still useful for review and follow-up.
+- Impacted files/artifacts:
+  - `src/components/analytics/useAnalyticsData.ts`
+  - `src/utils/analytics.ts`
+  - `src/utils/analyticsSocial.ts`
+  - `src/components/HistoryTable.tsx`
+- Revisit trigger/expiry:
+  - Revisit if analytics dashboard adds a dedicated live/in-progress analytics mode.
+
+- Type: `diagnostics`
+- Decision: treat telemetry monitor cadence (especially `high-accuracy`) as the primary consensus source for reported overheating risk.
+- Date: 2026-02-16
+- Options considered:
+  - Attribute heating to generic Electron rendering load.
+  - Attribute heating to OCR/corpus workflows by default.
+  - Use concrete poll/decode/write cadence analysis from telemetry runtime path.
+- Rationale:
+  - Runtime code shows a frequent full-file decode path tied to telemetry monitoring profile.
+  - Profile settings directly control thermal-relevant cadence and provide immediate mitigation (low-power).
+  - Other recurring timers are much lower frequency and less likely to dominate sustained heat.
+- Impacted files/artifacts:
+  - `electron/main.cjs`
+  - `src/hooks/useLogMonitor.ts`
+  - `src/components/SettingsModal.tsx`
+  - `docs/agents/03_VALIDATION.md`
+  - `docs/agents/04_HANDOFF.md`
+- Revisit trigger/expiry:
+  - Revisit after collecting real runtime CPU/temperature telemetry on representative hardware.
+
+- Type: `performance`
+- Decision: implement thermal mitigation as a narrow three-part runtime patch (dirty-only DB flush, Wildgate-first log source, archive no-op write elimination + cache).
+- Date: 2026-02-16
+- Options considered:
+  - Do only telemetry poll interval tuning.
+  - Full telemetry pipeline redesign.
+  - Targeted runtime churn reductions in existing architecture.
+- Rationale:
+  - User observed overheating even in low-power mode, indicating non-profile contributors.
+  - Dirty-only persistence and archive no-op suppression remove avoidable disk churn with low regression risk.
+  - Source-path preference correction reduces risk of monitoring stale/wrong telemetry file.
+- Impacted files/artifacts:
+  - `src/utils/storage.ts`
+  - `electron/main.cjs`
+  - `electron/helpers/telemetryArchiveHelpers.cjs`
+  - `docs/agents/03_VALIDATION.md`
+  - `docs/agents/04_HANDOFF.md`
+- Revisit trigger/expiry:
+  - Revisit if users still report overheating after this patch; next step would be explicit runtime CPU/IO instrumentation and profile-driven auto-throttling.
+
+- Type: `ux-safety`
+- Decision: add a two-click confirmation guard only for suspicious manual alias adds in Settings (very low name similarity), while allowing normal typo-like aliases in one click.
+- Date: 2026-02-16
+- Options considered:
+  - Keep one-click add for all alias pairs.
+  - Add a blocking modal confirm for every alias add.
+  - Add a lightweight second-click confirm only when names are likely unrelated.
+- Rationale:
+  - User reported nonsensical mappings likely introduced manually.
+  - Always-on confirmations would slow normal correction workflow.
+  - Conditional confirm lowers accidental bad mappings without disrupting common use.
+- Impacted files/artifacts:
+  - `src/components/SettingsModal.tsx`
+  - `src/store/slices/createMappingSlice.ts`
+  - `src/store/slices/__tests__/createMappingSlice.test.ts`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if false-positive warnings appear frequently; threshold can be tuned or replaced with richer fuzzy-context checks.

@@ -19,6 +19,13 @@ interface RenameModalState {
     oldName?: string;
 }
 
+interface SmartCaptureRequest {
+    requestId: string;
+    activeUser: string | null;
+    source?: string;
+    matchId?: string | number | null;
+}
+
 interface UIStateContextType {
     activeMode: GameMode;
     setActiveMode: (mode: GameMode) => void;
@@ -44,6 +51,14 @@ interface UIStateContextType {
 
     showReviewQueue: boolean;
     setShowReviewQueue: (show: boolean) => void;
+    smartCaptureRequest: SmartCaptureRequest | null;
+    requestSmartCapture: (request: {
+        activeUser?: string | null;
+        source?: string;
+        matchId?: string | number | null;
+        requestId?: string;
+    }) => string;
+    clearSmartCaptureRequest: (requestId?: string) => void;
 
     showChangelog: boolean;
     setShowChangelog: (show: boolean) => void;
@@ -135,14 +150,40 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [renameValue, setRenameValue] = React.useState<string>("");
     const [hiddenForScan, setHiddenForScan] = React.useState(false);
     const [showReviewQueue, setShowReviewQueue] = React.useState(false);
+    const [smartCaptureRequest, setSmartCaptureRequest] = React.useState<SmartCaptureRequest | null>(null);
+
+    const requestSmartCapture = React.useCallback((request: {
+        activeUser?: string | null;
+        source?: string;
+        matchId?: string | number | null;
+        requestId?: string;
+    }) => {
+        const requestId = request.requestId || `sc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        setSmartCaptureRequest({
+            requestId,
+            activeUser: request.activeUser ?? null,
+            source: request.source,
+            matchId: request.matchId ?? null,
+        });
+        return requestId;
+    }, []);
+
+    const clearSmartCaptureRequest = React.useCallback((requestId?: string) => {
+        setSmartCaptureRequest((current) => {
+            if (!current) return null;
+            if (!requestId || current.requestId === requestId) return null;
+            return current;
+        });
+    }, []);
 
     const value = useMemo(() => ({
         ...store,
         renameModal, setRenameModal,
         renameValue, setRenameValue,
         showReviewQueue, setShowReviewQueue,
+        smartCaptureRequest, requestSmartCapture, clearSmartCaptureRequest,
         hiddenForScan, setHiddenForScan,
-    }), [store, renameModal, renameValue, hiddenForScan, showReviewQueue]);
+    }), [store, renameModal, renameValue, hiddenForScan, showReviewQueue, smartCaptureRequest, requestSmartCapture, clearSmartCaptureRequest]);
 
     return (
         <UIStateContext.Provider value={value}>

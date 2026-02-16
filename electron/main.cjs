@@ -647,6 +647,23 @@ function runNodeScript(scriptPath, args = []) {
   });
 }
 
+function resolveBundledScript(scriptName) {
+  const candidates = [
+    path.join(app.getAppPath(), 'scripts', scriptName),
+    path.join(process.resourcesPath || '', 'app.asar.unpacked', 'scripts', scriptName),
+    path.join(process.resourcesPath || '', 'scripts', scriptName),
+    path.resolve(__dirname, '..', 'scripts', scriptName),
+  ];
+  for (const candidate of candidates) {
+    try {
+      if (candidate && fs.existsSync(candidate)) return candidate;
+    } catch {
+      // Try next candidate.
+    }
+  }
+  return path.join(app.getAppPath(), 'scripts', scriptName);
+}
+
 function sampleIdFromPath(filePath) {
   const base = path.basename(filePath, path.extname(filePath));
   return base.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -1564,10 +1581,10 @@ ipcMain.on('start-log-monitoring', (_event, options = {}) => {
   const pathWildgate = path.join(localAppData, 'Wildgate', 'Saved', 'Logs', 'AccelByteTelemetryCache');
 
   // Logic: Prefer Wildgate (Local) if exists, else Nebula (Game)
-  if (fs.existsSync(pathNebula)) {
-    LOG_PATH = pathNebula;
-  } else if (fs.existsSync(pathWildgate)) {
+  if (fs.existsSync(pathWildgate)) {
     LOG_PATH = pathWildgate;
+  } else if (fs.existsSync(pathNebula)) {
+    LOG_PATH = pathNebula;
   } else {
     // If neither exists, check if we have a saved DECODED log to fallback on?
     // For now default to Nebula path to keep watching
@@ -2377,18 +2394,20 @@ ipcMain.handle('ocr-corpus-list-images', async () => {
     const imagesDir = path.join(OCR_CORPUS_DIR, 'images');
     const files = [];
     try {
-      const entries = await fsPromises.readdir(imagesDir, { withFileTypes: true });
-      for (const e of entries) {
-        if (e.isFile()) {
-          const ext = path.extname(e.name).toLowerCase();
-          if (ALLOWED_FILE_EXTENSIONS.has(ext)) {
-            files.push({ name: e.name, relativePath: `images/${e.name}` });
-          }
-        }
+      const relFiles = await listFilesRecursive(imagesDir);
+      for (const rel of relFiles) {
+        const ext = path.extname(rel).toLowerCase();
+        if (!ALLOWED_FILE_EXTENSIONS.has(ext)) continue;
+        const normalizedRel = rel.replace(/\\/g, '/');
+        files.push({
+          name: path.basename(normalizedRel),
+          relativePath: `images/${normalizedRel}`,
+        });
       }
     } catch {
       // no images dir yet
     }
+    files.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
     return { success: true, files };
   } catch (e) {
     return { success: false, error: e.message || String(e) };
@@ -2456,7 +2475,7 @@ ipcMain.handle('ocr-corpus-save', async (event, name, content) => {
 ipcMain.handle('ocr-corpus-eval', async () => {
   try {
     await ensureCorpusDefaults();
-    const evalScript = path.join(app.getAppPath(), 'scripts', 'ocr_corpus_eval.cjs');
+    const evalScript = resolveBundledScript('ocr_corpus_eval.cjs');
     if (!fs.existsSync(evalScript)) {
       return { success: false, error: `Missing eval script at ${evalScript}` };
     }
@@ -2492,7 +2511,7 @@ ipcMain.handle('ocr-corpus-eval', async () => {
 ipcMain.handle('ocr-corpus-threshold-recommend', async () => {
   try {
     await ensureCorpusDefaults();
-    const recommendScript = path.join(app.getAppPath(), 'scripts', 'ocr_threshold_recommend.cjs');
+    const recommendScript = resolveBundledScript('ocr_threshold_recommend.cjs');
     if (!fs.existsSync(recommendScript)) {
       return { success: false, error: `Missing threshold recommendation script at ${recommendScript}` };
     }
@@ -2526,7 +2545,7 @@ ipcMain.handle('ocr-corpus-threshold-recommend', async () => {
 ipcMain.handle('ocr-corpus-promote-baseline', async () => {
   try {
     await ensureCorpusDefaults();
-    const promoteScript = path.join(app.getAppPath(), 'scripts', 'ocr_promote_baseline.cjs');
+    const promoteScript = resolveBundledScript('ocr_promote_baseline.cjs');
     if (!fs.existsSync(promoteScript)) {
       return { success: false, error: `Missing baseline script at ${promoteScript}` };
     }
@@ -2562,7 +2581,12 @@ ipcMain.handle('ocr-corpus-import-images', async () => {
     const corpusImagesDir = path.join(OCR_CORPUS_DIR, 'images');
     await fsPromises.mkdir(corpusImagesDir, { recursive: true });
     const truthPath = path.join(OCR_CORPUS_DIR, 'ground-truth.json');
-    const truth = JSON.parse(await fsPromises.readFile(truthPath, 'utf8'));
+    let truth;
+    try {
+      truth = JSON.parse(await fsPromises.readFile(truthPath, 'utf8'));
+    } catch {
+      truth = { version: 1, samples: [] };
+    }
     const samples = Array.isArray(truth.samples) ? truth.samples : [];
     const existingIds = new Set(samples.map(s => s.sampleId));
 

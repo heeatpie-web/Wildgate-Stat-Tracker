@@ -35,6 +35,20 @@ const friendlyError = (raw: string): string => {
     return raw.replace(/[A-Z]:\\[^\s]+/gi, '[path]').replace(/\b[a-z-]+:[a-z-]+\b/gi, '[channel]');
 };
 
+interface PlainOpponentTeamDraft {
+    teamName: string;
+    color: string;
+    shipType: string;
+    players: string;
+}
+
+const buildDefaultOpponentTeamDraft = (index: number): PlainOpponentTeamDraft => ({
+    teamName: `Enemy Team ${index + 1}`,
+    color: 'unknown',
+    shipType: '',
+    players: '',
+});
+
 const DevOCRPanel: React.FC = () => {
     const { matches, updateMatch } = useGameData();
     const { activeUser } = useUIState();
@@ -56,10 +70,10 @@ const DevOCRPanel: React.FC = () => {
     const [corpusStatus, setCorpusStatus] = useState('');
     const [corpusBusy, setCorpusBusy] = useState(false);
     const [plainTeammates, setPlainTeammates] = useState('');
-    const [plainOpponents, setPlainOpponents] = useState('');
     const [plainModifiers, setPlainModifiers] = useState('');
-    const [plainOpponentTeamName, setPlainOpponentTeamName] = useState('Enemy');
-    const [plainOpponentTeamColor, setPlainOpponentTeamColor] = useState('red');
+    const [plainOpponentTeams, setPlainOpponentTeams] = useState<PlainOpponentTeamDraft[]>(
+        () => Array.from({ length: 4 }, (_, idx) => buildDefaultOpponentTeamDraft(idx))
+    );
     const [corpusImageList, setCorpusImageList] = useState<{ name: string; relativePath: string }[]>([]);
     const [corpusImageThumbs, setCorpusImageThumbs] = useState<Record<string, string>>({});
 
@@ -70,12 +84,7 @@ const DevOCRPanel: React.FC = () => {
     useEffect(() => {
         if (tab === 'Corpus') {
             void loadCorpusFiles();
-            const api = getElectronAPI();
-            if (api) {
-                api.invoke('ocr-corpus-list-images').then((res: any) => {
-                    if (res?.success && Array.isArray(res.files)) setCorpusImageList(res.files);
-                });
-            }
+            void refreshCorpusImages();
         }
     }, [tab]);
 
@@ -237,11 +246,27 @@ const DevOCRPanel: React.FC = () => {
             if (latest?.success) setCorpusLatestReport(latest.content || '');
             if (index?.success) setCorpusIndex(index.content || '');
 
+            await refreshCorpusImages();
             setCorpusStatus('Corpus files loaded');
         } catch (e: any) {
             setCorpusStatus(`Load failed: ${friendlyError(e.message)}`);
         } finally {
             setCorpusBusy(false);
+        }
+    };
+
+    const refreshCorpusImages = async () => {
+        try {
+            const api = getElectronAPI();
+            if (!api) throw new Error('IPC not available');
+            const res = await api.invoke('ocr-corpus-list-images');
+            if (!res?.success || !Array.isArray(res.files)) {
+                setCorpusImageList([]);
+                return;
+            }
+            setCorpusImageList(res.files);
+        } catch {
+            setCorpusImageList([]);
         }
     };
 
@@ -293,6 +318,7 @@ const DevOCRPanel: React.FC = () => {
                 setCorpusStatus(`Imported ${res.imported} image(s), skipped ${res.skipped}`);
             }
             await loadCorpusFiles();
+            await refreshCorpusImages();
         } catch (e: any) {
             setCorpusStatus(`Import failed: ${friendlyError(e.message)}`);
         } finally {
@@ -366,13 +392,29 @@ const DevOCRPanel: React.FC = () => {
 
     const parsePlainList = (raw: string): string[] =>
         raw.split(/[\n,]/).map(s => s.trim()).filter(Boolean);
+    const updatePlainOpponentTeam = (index: number, patch: Partial<PlainOpponentTeamDraft>) => {
+        setPlainOpponentTeams((prev) => prev.map((team, idx) => (
+            idx === index ? { ...team, ...patch } : team
+        )));
+    };
 
     const handlePlainTruthSubmit = () => {
         const teammates = parsePlainList(plainTeammates);
-        const opponents = parsePlainList(plainOpponents);
         const modifiers = parsePlainList(plainModifiers);
-        const opponentTeamName = plainOpponentTeamName.trim() || 'Enemy';
-        const opponentTeamColor = (plainOpponentTeamColor || 'unknown').trim().toLowerCase();
+        const opponentTeams = (plainOpponentTeams || [])
+            .map((team) => {
+                const players = parsePlainList(team.players || '').slice(0, 4);
+                const teamName = (team.teamName || '').trim() || 'Enemy';
+                const color = (team.color || 'unknown').trim().toLowerCase() || 'unknown';
+                const shipType = (team.shipType || '').trim() || 'Unknown';
+                return {
+                    teamName,
+                    color,
+                    shipType,
+                    players,
+                };
+            })
+            .filter((team) => team.players.length > 0);
         let truth: { version: number; samples: any[] };
         try {
             truth = corpusTruth ? JSON.parse(corpusTruth) : { version: 1, samples: [] };
@@ -385,12 +427,7 @@ const DevOCRPanel: React.FC = () => {
             sampleId: `plain-${Date.now()}`,
             imagePath,
             teammates,
-            opponentTeams: opponents.length ? [{
-                teamName: opponentTeamName,
-                color: opponentTeamColor,
-                shipType: 'Unknown',
-                players: opponents
-            }] : [],
+            opponentTeams,
             modifiers,
         };
         samples.push(newSample);
@@ -398,11 +435,20 @@ const DevOCRPanel: React.FC = () => {
         setCorpusStatus('Ground truth updated from plain text. Click Save to write ground-truth.json.');
     };
 
+    const inferImageMime = (relativePath: string) => {
+        const ext = relativePath.split('.').pop()?.toLowerCase();
+        if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+        if (ext === 'webp') return 'image/webp';
+        if (ext === 'bmp') return 'image/bmp';
+        if (ext === 'gif') return 'image/gif';
+        return 'image/png';
+    };
+
     const loadThumb = async (relativePath: string): Promise<string | null> => {
         if (corpusImageThumbs[relativePath]) return corpusImageThumbs[relativePath];
         const b64 = await getElectronAPI()?.invoke('ocr-corpus-read-image', relativePath);
         if (!b64) return null;
-        const src = `data:image/png;base64,${b64}`;
+        const src = `data:${inferImageMime(relativePath)};base64,${b64}`;
         setCorpusImageThumbs(prev => ({ ...prev, [relativePath]: src }));
         return src;
     };
@@ -593,20 +639,20 @@ const DevOCRPanel: React.FC = () => {
                             <button onClick={runCorpusEval} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-md-sys-primary text-md-sys-on-primary font-bold text-label-sm disabled:opacity-disabled">Run Eval</button>
                             <button onClick={promoteCorpusBaseline} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-success-soft text-success border border-success-soft-strong font-bold text-label-sm disabled:opacity-disabled">Promote Baseline</button>
                         </div>
-                        <p className="text-label-sm opacity-secondary mt-3">Flow: import → run OCR → evaluate → promote baseline. Keep ground truth and predictions in sync before eval.</p>
+                        <p className="text-label-sm opacity-secondary mt-3">
+                            Workflow: 1) Import images 2) curate ground truth 3) run corpus OCR 4) run eval 5) promote baseline.
+                        </p>
                     </div>
 
                     <div className="md3-card md3-surface-high rounded-card border border-md-sys-outline/10 p-4 mb-4">
                         <h3 className="text-label-lg font-bold text-md-sys-on-surface mb-1">Ground truth (plain text)</h3>
-                        <p className="text-label-sm text-md-sys-on-surface/60 mb-3">One name per line or comma-separated. Update merges one sample into ground truth; then Save.</p>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                        <p className="text-label-sm text-md-sys-on-surface/60 mb-3">
+                            Create one sample quickly: teammates/modifiers plus up to 4 enemy teams (up to 4 players each). Then click Update ground truth and Save.
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                             <div>
                                 <label className="text-label-sm font-semibold text-md-sys-on-surface/80 block mb-1">Teammates</label>
                                 <textarea value={plainTeammates} onChange={e => setPlainTeammates(e.target.value)} className="w-full min-h-80px md3-surface-low rounded-control p-2 text-label-sm outline-none border border-md-sys-outline/20" placeholder="One per line or comma" />
-                            </div>
-                            <div>
-                                <label className="text-label-sm font-semibold text-md-sys-on-surface/80 block mb-1">Opponents</label>
-                                <textarea value={plainOpponents} onChange={e => setPlainOpponents(e.target.value)} className="w-full min-h-80px md3-surface-low rounded-control p-2 text-label-sm outline-none border border-md-sys-outline/20" placeholder="One per line or comma" />
                             </div>
                             <div>
                                 <label className="text-label-sm font-semibold text-md-sys-on-surface/80 block mb-1">Modifiers (optional)</label>
@@ -614,31 +660,44 @@ const DevOCRPanel: React.FC = () => {
                             </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                            <div>
-                                <label className="text-label-sm font-semibold text-md-sys-on-surface/80 block mb-1">Opponent Team Name</label>
-                                <input
-                                    value={plainOpponentTeamName}
-                                    onChange={e => setPlainOpponentTeamName(e.target.value)}
-                                    className="w-full h-10 md3-surface-low rounded-control px-3 text-label-sm outline-none border border-md-sys-outline/20"
-                                    placeholder="Enemy Team"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-label-sm font-semibold text-md-sys-on-surface/80 block mb-1">Opponent Team Color</label>
-                                <select
-                                    value={plainOpponentTeamColor}
-                                    onChange={e => setPlainOpponentTeamColor(e.target.value)}
-                                    className="w-full h-10 md3-surface-low rounded-control px-3 text-label-sm outline-none border border-md-sys-outline/20"
-                                >
-                                    <option value="red">Red</option>
-                                    <option value="orange">Orange</option>
-                                    <option value="yellow">Yellow</option>
-                                    <option value="green">Green</option>
-                                    <option value="blue">Blue</option>
-                                    <option value="purple">Purple</option>
-                                    <option value="unknown">Unknown</option>
-                                </select>
-                            </div>
+                            {plainOpponentTeams.map((team, index) => (
+                                <div key={`plain-team-${index}`} className="rounded-control border border-md-sys-outline/15 p-3 bg-md-sys-surface-container-low space-y-2">
+                                    <div className="text-label-xs font-bold uppercase opacity-60">Opponent Team {index + 1}</div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <input
+                                            value={team.teamName}
+                                            onChange={(e) => updatePlainOpponentTeam(index, { teamName: e.target.value })}
+                                            className="w-full h-9 md3-surface-low rounded-control px-3 text-label-sm outline-none border border-md-sys-outline/20"
+                                            placeholder="Team name"
+                                        />
+                                        <select
+                                            value={team.color}
+                                            onChange={(e) => updatePlainOpponentTeam(index, { color: e.target.value })}
+                                            className="w-full h-9 md3-surface-low rounded-control px-3 text-label-sm outline-none border border-md-sys-outline/20"
+                                        >
+                                            <option value="red">Red</option>
+                                            <option value="orange">Orange</option>
+                                            <option value="yellow">Yellow</option>
+                                            <option value="green">Green</option>
+                                            <option value="blue">Blue</option>
+                                            <option value="purple">Purple</option>
+                                            <option value="unknown">Unknown</option>
+                                        </select>
+                                    </div>
+                                    <input
+                                        value={team.shipType}
+                                        onChange={(e) => updatePlainOpponentTeam(index, { shipType: e.target.value })}
+                                        className="w-full h-9 md3-surface-low rounded-control px-3 text-label-sm outline-none border border-md-sys-outline/20"
+                                        placeholder="Ship type (optional)"
+                                    />
+                                    <textarea
+                                        value={team.players}
+                                        onChange={(e) => updatePlainOpponentTeam(index, { players: e.target.value })}
+                                        className="w-full min-h-70px md3-surface-low rounded-control p-2 text-label-sm outline-none border border-md-sys-outline/20"
+                                        placeholder="Players (one per line or comma, up to 4)"
+                                    />
+                                </div>
+                            ))}
                         </div>
                         <button onClick={handlePlainTruthSubmit} disabled={corpusBusy} className="rounded-control md3-btn-filled px-4 py-2 text-label-sm font-bold disabled:opacity-disabled">
                             Update ground truth

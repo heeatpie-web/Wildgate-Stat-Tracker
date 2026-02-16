@@ -28,6 +28,8 @@ const uiState = {
   activeUser: 'Alec',
   setShowReviewQueue: vi.fn(),
   setShowIdMapper: vi.fn(),
+  smartCaptureRequest: null as any,
+  clearSmartCaptureRequest: vi.fn(),
   setToast: vi.fn(),
 };
 
@@ -122,6 +124,7 @@ describe('ActionPanel', () => {
       processingProgress: null,
       qualityHint: null,
     });
+    uiState.smartCaptureRequest = null;
 
     vi.clearAllMocks();
   });
@@ -156,6 +159,23 @@ describe('ActionPanel', () => {
       expect(smartCaptureActions.capture).toHaveBeenCalledWith('Alec');
     });
     expect(smartScan.handleSmartScan).not.toHaveBeenCalled();
+  });
+
+  it('consumes smart capture request from shared UI state channel', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    uiState.smartCaptureRequest = {
+      requestId: 'header_1',
+      activeUser: 'Alec',
+      matchId: 42,
+      source: 'header',
+    };
+
+    render(<ActionPanel />);
+
+    await waitFor(() => {
+      expect(smartCaptureActions.capture).toHaveBeenCalledWith('Alec', 42);
+    });
+    expect(uiState.clearSmartCaptureRequest).toHaveBeenCalledWith('header_1');
   });
 
   it('sends pending smart capture payload into review callback and clears pending state', async () => {

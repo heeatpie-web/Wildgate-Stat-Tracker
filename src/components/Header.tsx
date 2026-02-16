@@ -38,6 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
         setIsOverlayMode,
         setShowTutorial,
         setToast,
+        requestSmartCapture,
         devMode, setDevMode,
         visionStatus
     } = useUIState();
@@ -72,8 +73,13 @@ export const Header: React.FC<HeaderProps> = ({
         try {
             if (activeView !== 'recording') setActiveView('recording');
             const captureMatchId = resolveHeaderCaptureMatchId();
+            const requestId = requestSmartCapture({
+                activeUser: activeUser || null,
+                source: 'header',
+                matchId: captureMatchId,
+            });
             window.dispatchEvent(new CustomEvent('smart-capture-request', {
-                detail: { activeUser: activeUser || null, source: 'header', matchId: captureMatchId }
+                detail: { activeUser: activeUser || null, source: 'header', matchId: captureMatchId, requestId }
             }));
         } catch (e: any) {
             setToast({ message: e?.message || 'Smart capture failed', type: 'error' });

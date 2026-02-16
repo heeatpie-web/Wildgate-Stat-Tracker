@@ -22,6 +22,11 @@ const STYLE_BY_RESULT: Record<MatchResult, React.CSSProperties> = {
     background: 'color-mix(in srgb, var(--color-draw), transparent 35%)',
     borderColor: 'color-mix(in srgb, var(--color-draw), transparent 20%)',
   },
+  Ongoing: {
+    color: 'var(--md-sys-color-info)',
+    background: 'color-mix(in srgb, var(--md-sys-color-info), transparent 85%)',
+    borderColor: 'color-mix(in srgb, var(--md-sys-color-info), transparent 65%)',
+  },
 };
 
 export const OutcomePill: React.FC<OutcomePillProps> = ({ result, className = '' }) => {

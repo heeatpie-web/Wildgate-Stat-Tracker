@@ -8,6 +8,52 @@ const fs = require('fs');
 const fsPromises = require('fs').promises;
 
 const ARCHIVE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+const archiveStateByPath = new Map();
+
+function normalizeEvents(data) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data.telemetry)) return data.telemetry;
+  return [data];
+}
+
+function telemetryEventSignature(event) {
+  if (!event || typeof event !== 'object') return '';
+  const ts = event.ClientTimestamp ?? event.timestamp ?? event.ts ?? '';
+  const name = event.EventName ?? event.eventName ?? event.type ?? '';
+  const matchId = event.matchId ?? event.MatchId ?? event.sessionId ?? event.SessionId ?? '';
+  return `${String(ts)}_${String(name)}_${String(matchId)}`;
+}
+
+async function readArchiveEventsFromDisk(archivePath) {
+  if (!fs.existsSync(archivePath)) return [];
+  try {
+    const content = JSON.parse(await fsPromises.readFile(archivePath, 'utf8'));
+    return normalizeEvents(content);
+  } catch {
+    return [];
+  }
+}
+
+async function getArchiveState(archivePath) {
+  const existing = archiveStateByPath.get(archivePath);
+  if (existing) return existing;
+
+  const events = await readArchiveEventsFromDisk(archivePath);
+  const signatures = new Set();
+  for (const evt of events) {
+    const signature = telemetryEventSignature(evt);
+    if (signature) signatures.add(signature);
+  }
+
+  const state = { events, signatures };
+  archiveStateByPath.set(archivePath, state);
+  return state;
+}
+
+function clearArchiveState(archivePath) {
+  archiveStateByPath.delete(archivePath);
+}
 
 /**
  * @param {import('electron').App} app
@@ -41,6 +87,7 @@ function cleanupOldArchives(archiveDir, maxAgeMs = ARCHIVE_MAX_AGE_MS) {
       const stat = fs.statSync(filePath);
       if (now - stat.mtimeMs > maxAgeMs) {
         fs.unlinkSync(filePath);
+        clearArchiveState(filePath);
         cleaned++;
       }
     });
@@ -70,29 +117,21 @@ async function archiveTelemetry(archiveDir, data) {
 
     const safeMatchId = matchId.toString().replace(/[^a-z0-9_-]/gi, '_');
     const archivePath = path.join(archiveDir, `match_${safeMatchId}.json`);
+    const state = await getArchiveState(archivePath);
+    const newEvents = normalizeEvents(data);
+    let addedCount = 0;
 
-    let combinedData = [];
-    if (fs.existsSync(archivePath)) {
-      try {
-        const content = fs.readFileSync(archivePath, 'utf8');
-        combinedData = JSON.parse(content);
-        if (!Array.isArray(combinedData)) combinedData = [combinedData];
-      } catch (e) { combinedData = []; }
+    for (const event of newEvents) {
+      const signature = telemetryEventSignature(event);
+      if (signature && state.signatures.has(signature)) continue;
+      if (signature) state.signatures.add(signature);
+      state.events.push(event);
+      addedCount += 1;
     }
 
-    let newEvents = [];
-    if (data.telemetry && Array.isArray(data.telemetry)) newEvents = data.telemetry;
-    else if (Array.isArray(data)) newEvents = data;
-    else newEvents = [data];
-
-    const existingSignatures = new Set(combinedData.map(e => `${e.ClientTimestamp}_${e.EventName}`));
-    newEvents.forEach(e => {
-      const sig = `${e.ClientTimestamp}_${e.EventName}`;
-      if (!existingSignatures.has(sig)) combinedData.push(e);
-    });
-
-    combinedData.sort((a, b) => (a.ClientTimestamp || 0) - (b.ClientTimestamp || 0));
-    await fsPromises.writeFile(archivePath, JSON.stringify(combinedData, null, 2));
+    // Skip expensive rewrites when this tick introduced no new archive events.
+    if (addedCount === 0) return;
+    await fsPromises.writeFile(archivePath, JSON.stringify(state.events), 'utf8');
   } catch (e) {
     console.error('Failed to archive telemetry:', e);
   }
@@ -164,7 +203,11 @@ async function loadArchiveFile(archiveDir, filename) {
 async function clearArchiveFiles(archiveDir) {
   if (!fs.existsSync(archiveDir)) return { success: true, count: 0 };
   const files = (await fsPromises.readdir(archiveDir)).filter(f => f.endsWith('.json'));
-  await Promise.all(files.map(file => fsPromises.unlink(path.join(archiveDir, file))));
+  await Promise.all(files.map((file) => {
+    const fullPath = path.join(archiveDir, file);
+    clearArchiveState(fullPath);
+    return fsPromises.unlink(fullPath);
+  }));
   return { success: true, count: files.length };
 }
 

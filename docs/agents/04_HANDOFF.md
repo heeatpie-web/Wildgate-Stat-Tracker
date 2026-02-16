@@ -573,3 +573,184 @@
 
 ## Remaining / Risks
 - If you need DevTools temporarily, launch with `WILDGATE_ALLOW_DEVTOOLS=1`.
+
+---
+
+## Handoff - 2026-02-16 - BUG-BATCH-005
+## Status
+- Completed.
+
+## What Changed
+- OCR review/apply UX and data controls:
+  - `src/components/ocr/OCRReviewModal.tsx`
+  - Added reliable screenshot lightbox layering, editable opponent team metadata, add/remove players and teams, teammate add action, roster-match badges, and queue-to-roster-candidate action for unmatched names.
+
+- OCR correction edit regression:
+  - `src/components/OcrCorrectionModal.tsx`
+  - Fixed input value precedence causing backspace/edit lockups.
+
+- Smart Captures reliability + merge tooling:
+  - `src/components/SmartCapturesPanel.tsx`
+  - Fixed unknown-ship teammate capacity fallback, suppressed repeated auto-repair toast spam, integrated roster-candidate queueing, and added selected-match merge bulk action.
+
+- App-level OCR apply parity:
+  - `src/App.tsx`
+  - Added queue-to-roster callback wiring and unknown-ship teammate-cap fallback.
+
+- Submission data bundling integrity:
+  - `src/hooks/useMatchSubmission.ts`
+  - Finalized match now uses live wizard/session values (kills/POIs/damage/notes/roster) merged with pending telemetry draft data.
+
+- Corpus mode reliability and packaged eval support:
+  - `electron/main.cjs`
+  - `package.json`
+  - `src/components/DevOCRPanel.tsx`
+  - Added robust script resolution paths for packaged corpus scripts, recursive image listing, import parse fallback, immediate image refresh after import/load, MIME-aware image previews, clearer workflow copy, and 4-team plain-entry support.
+
+- Telemetry loadout auto-select hardening:
+  - `src/hooks/useLogMonitor.ts`
+  - Added payload-level loadout fallback, normalized hero parsing, broader weapon/equipment extraction keys, and preservation of existing loadout slots when events are partial.
+
+## What Was Verified
+- Touched-file eslint passed.
+- Typecheck passed.
+- Targeted `useMatchSubmission` vitest suite passed.
+- Manual behavior checks performed for core UX/runtime paths listed in validation.
+
+## Remaining / Risks
+- Match-merge heuristics are conservative and designed for split/duplicate match records; users can still produce semantically odd merges if intentionally combining unrelated matches.
+- Corpus plain-entry now supports 4 opponent teams with up to 4 players each by UI guidance, but free-text input still allows malformed names until saved/validated.
+
+---
+
+## Handoff - 2026-02-16 - BUG-BATCH-006
+## Status
+- Completed.
+
+## What Changed
+- Smart Capture reliability channel:
+  - `src/providers/UIStateProvider.tsx`
+  - `src/components/Header.tsx`
+  - `src/components/Wizard.tsx`
+  - `src/components/recording/ActionPanel.tsx`
+  - Added durable UI-state request/consume path for smart capture requests; kept event dispatch compatibility.
+
+- Intelligence Review routing:
+  - `src/App.tsx`
+  - Mounted `ReviewQueueModal` so recording-panel “Intelligence Review Required” opens the actual review queue.
+
+- Ongoing telemetry draft semantics:
+  - `src/types.ts`
+  - `src/hooks/useLogMonitor.ts`
+  - `src/store/useAppStore.ts`
+  - Telemetry draft matches now use `result: 'Ongoing'`; hydration upgrades old telemetry drafts from `Draw` to `Ongoing`.
+
+- Win placement fallback:
+  - `src/hooks/useMatchSubmission.ts`
+  - `src/components/SmartCapturesPanel.tsx`
+  - Win submissions now default to placement `1` when empty; Smart Captures detail now displays `#1` for wins missing explicit placement.
+
+- Players-tab pending roster approvals:
+  - `src/components/PlayerHub.tsx`
+  - Added pending OCR roster-candidate approval/dismiss UI in Players tab.
+
+- Teammate cap + telemetry ownership hardening:
+  - `src/store/slices/createFormSlice.ts`
+  - `src/components/SmartCapturesPanel.tsx`
+  - `src/hooks/useLogMonitor.ts`
+  - Unknown-ship teammate cap now safely falls back to 4-player behavior, and loadout auto-apply ignores non-local telemetry actor events.
+
+- Analytics exclusion for ongoing matches:
+  - `src/components/analytics/useAnalyticsData.ts`
+  - `src/utils/analytics.ts`
+  - `src/utils/analyticsSocial.ts`
+  - Ongoing matches are excluded from completed-result KPIs and rollups.
+
+## What Was Verified
+- Typecheck passed.
+- Touched-file eslint passed.
+- Targeted regression suites passed:
+  - 10 files / 105 tests.
+  - Additional 3 files / 23 tests for adjacent smart-capture + telemetry + IPC paths.
+
+## Remaining / Risks
+- Loadout ownership gating depends on telemetry actor identifiers/names; if upstream payloads omit both actor ID and actor name, fallback may still accept ambiguous loadout payloads.
+- Historical analytics now excludes ongoing matches, but old exported reports generated before this patch will still contain legacy calculations.
+
+---
+
+## Handoff - 2026-02-16 - SMOKE-PERF-CONSENSUS-001
+## Status
+- Completed.
+
+## What Changed
+- No runtime/product code changes in this task.
+- Added diagnostic records in agent docs and validated smoke artifacts.
+
+## What Was Verified
+- Smoke run completed and generated `.visual/report.md`.
+- Telemetry performance-profile path is wired end-to-end (`Settings` -> `useLogMonitor` -> `electron/main.cjs`).
+- Overheating consensus is evidence-based:
+  - Primary contributor is telemetry monitor decode cadence in `high-accuracy` mode.
+  - `low-power` materially reduces poll/decode/write frequency.
+
+## Remaining / Risks
+- No direct thermal sensor telemetry is captured by the app, so consensus is based on runtime workload characteristics rather than hardware temperature logs.
+- If users stay in `high-accuracy` with continuous live telemetry updates, elevated CPU/IO and heat risk remains expected.
+
+---
+
+## Handoff - 2026-02-16 - THERMAL-FIX-001
+## Status
+- Completed.
+
+## What Changed
+- `src/utils/storage.ts`
+  - Added dirty-state version tracking and gated failsafe interval flush so writes happen only when unsaved data exists.
+  - `flush()` now no-ops (and resolves pending save promises) when current state is already persisted.
+
+- `electron/main.cjs`
+  - Corrected telemetry source path preference in log monitor startup:
+    - `Wildgate` path first,
+    - `Nebula` fallback.
+
+- `electron/helpers/telemetryArchiveHelpers.cjs`
+  - Added per-archive in-memory state cache (event list + signature set).
+  - Skips archive write when no new deduped events were added in that tick.
+  - Cache invalidation wired into archive cleanup/clear paths.
+
+## What Was Verified
+- `npm run -s typecheck` passed.
+- `npx eslint src/utils/storage.ts electron/main.cjs electron/helpers/telemetryArchiveHelpers.cjs` passed.
+- Manual code-path verification confirms dirty-only persistence and reduced no-op archive write behavior.
+
+## Remaining / Risks
+- Archive state cache is process-local; if archive files are externally modified while app is running, cache may lag until next restart/clear path.
+- This patch reduces write churn and parse overhead, but it does not add hardware thermal telemetry; OS/GPU drivers and other apps can still contribute to overheating.
+
+---
+
+## Handoff - 2026-02-16 - OCR-ALIAS-CLEANUP-001
+## Status
+- Completed.
+
+## What Changed
+- `src/store/slices/createMappingSlice.ts`
+  - Added `removeOcrAliasCorrection(ocrText, correctedTo)` to explicitly remove a learned alias mapping.
+  - Removal clears both alias-model entry and legacy `ocrCorrections` mirror keys for that pair.
+
+- `src/components/SettingsModal.tsx`
+  - Added `Remove` action per learned alias row in Identity -> Alias & authority.
+  - Added suspicious-manual-alias guard: very low-similarity alias pairs require a second click to confirm add.
+
+- `src/store/slices/__tests__/createMappingSlice.test.ts`
+  - Added regression test ensuring alias removal clears model + legacy correction entries.
+
+## What Was Verified
+- `npx eslint src/store/slices/createMappingSlice.ts src/components/SettingsModal.tsx src/store/slices/__tests__/createMappingSlice.test.ts` passed.
+- `npx vitest run src/store/slices/__tests__/createMappingSlice.test.ts` passed (`33/33` tests).
+- `npm run -s typecheck` passed.
+
+## Remaining / Risks
+- Similarity-based warning threshold is intentionally conservative; some unusual but valid aliases may require the second confirmation click.
+- This patch does not auto-clean existing bad aliases in bulk; cleanup is manual via per-row remove.

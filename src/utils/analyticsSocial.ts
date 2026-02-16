@@ -5,10 +5,11 @@
 import { Match, CHARACTERS, SHIPS } from '../types';
 
 export const calculateSocialData = (matches: Match[]) => {
+    const completedMatches = matches.filter((m) => m.result !== 'Ongoing');
     const teammates: Record<string, { wins: number, total: number }> = {};
     const opponents: Record<string, { wins: number, total: number }> = {};
 
-    matches.forEach(m => {
+    completedMatches.forEach(m => {
         m.teammates.forEach(t => {
             if (!teammates[t]) teammates[t] = { wins: 0, total: 0 };
             teammates[t].total++;
@@ -35,6 +36,7 @@ export const calculateSocialData = (matches: Match[]) => {
 };
 
 export const calculateSynergyMatrix = (matches: Match[]) => {
+    const completedMatches = matches.filter((m) => m.result !== 'Ongoing');
     const matrix: Record<string, Record<string, { wins: number, total: number }>> = {};
 
     // Init Matrix
@@ -44,7 +46,7 @@ export const calculateSynergyMatrix = (matches: Match[]) => {
         CHARACTERS.forEach(c => matrix[cleanShip][c] = { wins: 0, total: 0 });
     });
 
-    matches.forEach(m => {
+    completedMatches.forEach(m => {
         const s = (m.ship || 'Unknown').split('(')[0];
         const h = m.hero || 'Unknown';
         if (matrix[s] && matrix[s][h]) {

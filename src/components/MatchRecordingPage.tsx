@@ -16,6 +16,7 @@ const RESULT_COLORS: Record<string, string> = {
     Win: 'bg-success',
     Loss: 'bg-danger',
     Draw: 'bg-slate-500',
+    Ongoing: 'bg-info',
 };
 
 const SOURCE_BADGE: Record<string, { label: string; color: string }> = {

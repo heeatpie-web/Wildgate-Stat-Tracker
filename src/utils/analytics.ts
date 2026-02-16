@@ -7,9 +7,12 @@
  */
 import { Match, CHARACTERS, SHIPS, Insight, UI_REACH_MODIFIERS, TimePatternData, StreakData, StreakPoint, SessionSummaryData, DaySummary, PeriodComparisonData, PeriodStats, KillEfficiencyData, PlacementData, MomentumData } from '../types';
 
+const isCompletedMatch = (match: Match): boolean => match.result !== 'Ongoing';
+
 /** Generates prioritized insight cards from match history. */
 export const calculateInsights = (matches: Match[]): Insight[] => {
     const validMatches: Match[] = matches.filter(m => {
+        if (!isCompletedMatch(m)) return false;
         const isZeroDamage = (Number(m.damageTaken) || 0) === 0;
         const isZeroTime = !m.time || m.time === '00:00' || m.time === '0:00';
         return !(isZeroDamage && isZeroTime);
@@ -201,7 +204,7 @@ export const calculateInsights = (matches: Match[]): Insight[] => {
     // Advanced Insights (Opponent/Artifact)
     const opponentStats: Record<string, { wins: number, total: number }> = {};
     const artifactStats: Record<string, { wins: number, total: number }> = {};
-    matches.forEach(m => {
+    validMatches.forEach(m => {
         (m.opponents || []).forEach(o => {
             if (!opponentStats[o]) opponentStats[o] = { wins: 0, total: 0 };
             opponentStats[o].total++;
@@ -303,7 +306,7 @@ export const calculateDeathCauseAnalytics = (matches: Match[]): Insight[] => {
  */
 export const calculatePoiCorrelation = (matches: Match[]): Insight[] => {
     const insights: Insight[] = [];
-    const validMatches = matches.filter(m => m.result);
+    const validMatches = matches.filter(isCompletedMatch);
 
     if (validMatches.length < 10) return []; // Need enough data
 
@@ -384,7 +387,7 @@ export const calculateLoadoutAnalytics = (matches: Match[]): {
     insights: Insight[];
 } => {
     const weaponStats: Record<string, { wins: number; total: number; avgDamage: number; totalDamage: number }> = {};
-    const validMatches = matches.filter(m => m.loadout?.weapons && Object.keys(m.loadout.weapons).length > 0);
+    const validMatches = matches.filter(m => isCompletedMatch(m) && m.loadout?.weapons && Object.keys(m.loadout.weapons).length > 0);
 
     validMatches.forEach(m => {
         const weapons = m.loadout?.weapons || {};
@@ -465,6 +468,7 @@ const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /** Extract hour-of-day and day-of-week patterns from match timestamps. */
 export const calculateTimePatterns = (matches: Match[]): TimePatternData => {
+    const completedMatches = matches.filter(isCompletedMatch);
     const byHourMap: Record<number, { matches: number; wins: number }> = {};
     const byDayMap: Record<number, { matches: number; wins: number }> = {};
     const heatmapMap: Record<string, { matches: number; wins: number }> = {};
@@ -472,7 +476,7 @@ export const calculateTimePatterns = (matches: Match[]): TimePatternData => {
     for (let h = 0; h < 24; h++) byHourMap[h] = { matches: 0, wins: 0 };
     for (let d = 0; d < 7; d++) byDayMap[d] = { matches: 0, wins: 0 };
 
-    matches.forEach(m => {
+    completedMatches.forEach(m => {
         const date = new Date(m.timestamp);
         const hour = date.getHours();
         const day = date.getDay();
@@ -513,7 +517,7 @@ export const calculateTimePatterns = (matches: Match[]): TimePatternData => {
 
 /** Walk matches chronologically and compute win/loss streak history. */
 export const calculateStreakHistory = (matches: Match[]): StreakData => {
-    const sorted = [...matches].sort((a, b) => a.timestamp - b.timestamp);
+    const sorted = matches.filter(isCompletedMatch).sort((a, b) => a.timestamp - b.timestamp);
     const timeline: StreakPoint[] = [];
     let currentStreak = 0;
     let longestWin = 0;
@@ -554,9 +558,10 @@ export const calculateStreakHistory = (matches: Match[]): StreakData => {
 
 /** Group matches by calendar date and compute daily summaries. */
 export const calculateSessionSummary = (matches: Match[]): SessionSummaryData => {
+    const completedMatches = matches.filter(isCompletedMatch);
     const byDate: Record<string, Match[]> = {};
 
-    matches.forEach(m => {
+    completedMatches.forEach(m => {
         const dateKey = new Date(m.timestamp).toISOString().split('T')[0];
         if (!byDate[dateKey]) byDate[dateKey] = [];
         byDate[dateKey].push(m);
@@ -624,6 +629,7 @@ export const calculateSessionSummary = (matches: Match[]): SessionSummaryData =>
 
 /** Compare stats between this week/month and previous week/month. */
 export const calculatePeriodComparison = (matches: Match[]): PeriodComparisonData => {
+    const completedMatches = matches.filter(isCompletedMatch);
     const now = new Date();
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
@@ -649,10 +655,10 @@ export const calculatePeriodComparison = (matches: Match[]): PeriodComparisonDat
         };
     };
 
-    const thisWeekMatches = matches.filter(m => m.timestamp >= startOfWeek.getTime());
-    const lastWeekMatches = matches.filter(m => m.timestamp >= startOfLastWeek.getTime() && m.timestamp < startOfWeek.getTime());
-    const thisMonthMatches = matches.filter(m => m.timestamp >= startOfMonth.getTime());
-    const lastMonthMatches = matches.filter(m => m.timestamp >= startOfLastMonth.getTime() && m.timestamp < startOfMonth.getTime());
+    const thisWeekMatches = completedMatches.filter(m => m.timestamp >= startOfWeek.getTime());
+    const lastWeekMatches = completedMatches.filter(m => m.timestamp >= startOfLastWeek.getTime() && m.timestamp < startOfWeek.getTime());
+    const thisMonthMatches = completedMatches.filter(m => m.timestamp >= startOfMonth.getTime());
+    const lastMonthMatches = completedMatches.filter(m => m.timestamp >= startOfLastMonth.getTime() && m.timestamp < startOfMonth.getTime());
 
     const thisWeek = computePeriodStats(thisWeekMatches);
     const lastWeek = computePeriodStats(lastWeekMatches);
@@ -678,7 +684,7 @@ export const calculatePeriodComparison = (matches: Match[]): PeriodComparisonDat
 
 /** Compute rolling kill efficiency trends and breakdowns by ship/hero. */
 export const calculateKillEfficiency = (matches: Match[]): KillEfficiencyData => {
-    const sorted = [...matches].sort((a, b) => a.timestamp - b.timestamp);
+    const sorted = matches.filter(isCompletedMatch).sort((a, b) => a.timestamp - b.timestamp);
     const windowSize = 10;
 
     const timeline = sorted.map((m, i) => {
@@ -734,7 +740,7 @@ export const calculateKillEfficiency = (matches: Match[]): KillEfficiencyData =>
 
 /** Build placement distribution histogram from Fleet Battle matches. */
 export const calculatePlacementDistribution = (matches: Match[]): PlacementData | null => {
-    const withPlacement = matches.filter(m => m.placement != null && m.placement > 0);
+    const withPlacement = matches.filter(m => isCompletedMatch(m) && m.placement != null && m.placement > 0);
     if (withPlacement.length < 5) return null;
 
     const buckets: Record<number, number> = {};
@@ -761,7 +767,7 @@ export const calculatePlacementDistribution = (matches: Match[]): PlacementData 
 
 /** Compute rolling performance momentum score (0-100). */
 export const calculatePerformanceMomentum = (matches: Match[], windowSize = 10): MomentumData => {
-    const sorted = [...matches].sort((a, b) => a.timestamp - b.timestamp);
+    const sorted = matches.filter(isCompletedMatch).sort((a, b) => a.timestamp - b.timestamp);
 
     // Compute normalization baselines
     const allKills = sorted.map(m => Object.values(m.kills || {}).reduce((a, b) => a + b, 0));

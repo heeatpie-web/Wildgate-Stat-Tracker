@@ -478,4 +478,29 @@ describe('useMatchSubmission', () => {
     expect(bundleMatchArtifacts).toHaveBeenCalled();
     expect(getMatchArtifactsStructured).toHaveBeenCalledWith(555);
   });
+
+  it('defaults placement to first when submitting a win without explicit placement', async () => {
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.pendingPlacement = null;
+    mockStoreState.pendingMatchData = {
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: [],
+      opponents: [],
+      kills: {},
+      reachModifiers: [],
+      time: '08:00',
+    };
+    mockStoreState.showWizard = 'Win';
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    await act(async () => {
+      await result.current.processFinalSubmission('Combat');
+    });
+
+    expect(addMatch).toHaveBeenCalled();
+    const [submitted] = addMatch.mock.calls[0];
+    expect(submitted.placement).toBe(1);
+  });
 });

@@ -47,9 +47,13 @@ const customStorage: PersistStorage<AppState> = {
 
       // Recovery: reset stale 'processing' ocrState back to 'queued'
       // (OCR was interrupted by app close/crash)
-      const recoveredMatches = (data.matches || []).map((m: any) =>
-        m.ocrState === 'processing' ? { ...m, ocrState: 'queued' } : m
-      );
+      const recoveredMatches = (data.matches || []).map((m: any) => {
+        const recovered = m.ocrState === 'processing' ? { ...m, ocrState: 'queued' } : m;
+        if (recovered?.subType === 'Telemetry Draft' && (!recovered.result || recovered.result === 'Draw')) {
+          return { ...recovered, result: 'Ongoing' };
+        }
+        return recovered;
+      });
 
       return {
         state: {

@@ -137,3 +137,38 @@
 2. `COMPLETED` - Gate runtime `open-devtools` IPC behind explicit env opt-in flag.
 3. `COMPLETED` - Run targeted validation (`eslint electron/main.cjs` + `typecheck`).
 4. `COMPLETED` - Record execution/validation/handoff.
+
+## Current Task Plan (BUG-BATCH-005)
+1. `COMPLETED` - Patch OCR review + Smart Captures flow gaps (overlay layering, opponent/team editing, roster candidate queueing, teammate-capacity fallback, artifact toast spam control, correction-input edit fix).
+2. `COMPLETED` - Patch telemetry-to-submission data bundling so wizard edits persist into finalized matches.
+3. `COMPLETED` - Patch corpus mode reliability (script resolution for packaged runs, import/list/load refresh robustness, workflow clarity updates, multi-team plain-entry input).
+4. `COMPLETED` - Add selected-match merge action in Smart Captures tools.
+5. `COMPLETED` - Harden telemetry loadout parsing fallback/coverage for hero/ship/weapon/equipment auto-selection.
+6. `COMPLETED` - Run validation (`eslint` touched files, `typecheck`, targeted vitest) and record handoff.
+
+## Current Task Plan (BUG-BATCH-006)
+1. `COMPLETED` - Implement durable Smart Capture request channel and wire Header/Wizard/telemetry prompt emitters to it.
+2. `COMPLETED` - Mount `ReviewQueueModal` in `App` so recording-panel Intelligence Review opens actionable review UI.
+3. `COMPLETED` - Convert telemetry draft result semantics to `Ongoing` and add hydration compatibility migration for old draft rows.
+4. `COMPLETED` - Implement Win placement fallback (`#1`) in Smart Captures display and final submission persistence.
+5. `COMPLETED` - Add Players-tab pending OCR roster candidate approval/dismiss controls.
+6. `COMPLETED` - Enforce teammate-cap consistency for unknown ships and guard telemetry loadout auto-apply to local player context.
+7. `COMPLETED` - Exclude ongoing matches from completed-result analytics aggregations and run targeted validation suites.
+
+## Current Task Plan (SMOKE-PERF-CONSENSUS-001)
+1. `COMPLETED` - Execute smoke test and capture report evidence.
+2. `COMPLETED` - Inspect telemetry/polling/runtime timer code paths for likely thermal load contributors.
+3. `COMPLETED` - Record validation evidence and summarize consensus with actionable operator guidance.
+
+## Current Task Plan (THERMAL-FIX-001)
+1. `COMPLETED` - Implement dirty-only flush guard in `src/utils/storage.ts` so periodic failsafe writes only run for unsaved state.
+2. `COMPLETED` - Fix telemetry log source preference order in `electron/main.cjs` (`Wildgate` first, `Nebula` fallback).
+3. `COMPLETED` - Optimize telemetry archive helper to skip no-op writes and reduce repeated full-file parse overhead.
+4. `COMPLETED` - Run targeted validation (`npm run -s typecheck`, touched-file `eslint`) and log evidence.
+5. `COMPLETED` - Record execution decisions/handoff and release locks.
+
+## Current Task Plan (OCR-ALIAS-CLEANUP-001)
+1. `COMPLETED` - Add explicit alias-removal action in mapping slice and keep legacy correction map in sync.
+2. `COMPLETED` - Wire Settings alias manager UI with remove action and suspicious manual-add confirmation guard.
+3. `COMPLETED` - Add targeted regression test coverage for alias-removal behavior.
+4. `COMPLETED` - Run targeted validation (`eslint`, `typecheck`, focused vitest) and record evidence/handoff.

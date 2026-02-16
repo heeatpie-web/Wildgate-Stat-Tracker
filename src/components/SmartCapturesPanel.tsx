@@ -46,10 +46,12 @@ import { QueueCollapseToggle } from './smart-captures/QueueCollapseToggle';
 import { QueueItemRichPreview } from './smart-captures/QueueItemRichPreview';
 import { SmartCaptureSummaryBar } from './smart-captures/detail/SmartCaptureSummaryBar';
 import { SmartCaptureActionBar } from './smart-captures/detail/SmartCaptureActionBar';
-import { findClosestMatch, normalizeOcrName } from '../utils/stringUtils';
+import { findClosestMatch, normalizeOcrName, similarityScore } from '../utils/stringUtils';
+
+let autoArtifactRepairAttempted = false;
 
 const SmartCapturesPanel: React.FC = () => {
-    const { matches, updateMatch, pilotRegistry, setSelectedTeammates, setSelectedOpponents, setActiveShip, setSessionTeams, setSessionShipTypes, setSelectedReachModifiers, selectedTeammates, selectedOpponents, sessionTeams, activeShip } = useGameData();
+    const { matches, updateMatch, deleteMatch, pilotRegistry, setSelectedTeammates, setSelectedOpponents, setActiveShip, setSessionTeams, setSessionShipTypes, setSelectedReachModifiers, selectedTeammates, selectedOpponents, sessionTeams, activeShip } = useGameData();
     const { activeUser, setToast, smartCapturesFocusMatchId, setSmartCapturesFocusMatchId } = useUIState();
     const ocrMode = useAppStore(s => s.ocrMode);
     const setOcrMode = useAppStore(s => s.setOcrMode);
@@ -67,6 +69,8 @@ const SmartCapturesPanel: React.FC = () => {
     const setQueueOnly = useAppStore(s => s.setQueueOnly);
     const showResolved = useAppStore(s => s.showResolved);
     const setShowResolved = useAppStore(s => s.setShowResolved);
+    const addPendingReview = useAppStore(s => s.addPendingReview);
+    const pendingReviews = useAppStore(s => s.pendingReviews);
     const queueCollapsed = useAppStore(s => s.queueCollapsed);
     const toggleQueueCollapsed = useAppStore(s => s.toggleQueueCollapsed);
     const [captureState, captureActions] = useSmartCapture();
@@ -78,7 +82,6 @@ const SmartCapturesPanel: React.FC = () => {
     const [isResizing, setIsResizing] = useState(false);
     const [repairBusy, setRepairBusy] = useState(false);
     const [repairResult, setRepairResult] = useState<ArtifactRepairResult | null>(null);
-    const autoRepairAttemptedRef = useRef(false);
     const normalizeModifierName = useCallback((name: string) => {
         const match = UI_REACH_MODIFIERS.find(m => m.toLowerCase() === name.toLowerCase());
         return match || name;
@@ -92,6 +95,46 @@ const SmartCapturesPanel: React.FC = () => {
         const fuzzy = findClosestMatch(normalized, pilotRegistry, threshold);
         return fuzzy || normalized;
     }, [pilotRegistry]);
+    const getMaxTeammatesForShip = useCallback((shipType?: string | null) => {
+        const capacity = getShipCapacity(shipType || '');
+        const normalizedCapacity = capacity > 1 ? capacity : 4;
+        return Math.max(0, normalizedCapacity - 1);
+    }, []);
+    const queueRosterCandidate = useCallback((rawName: string) => {
+        const normalized = normalizeOcrName(rawName || '');
+        if (!normalized || normalized.length < 2) return;
+        const hasExact = pilotRegistry.some((pilot) => (
+            normalizeOcrName(pilot).toLowerCase() === normalized.toLowerCase()
+        ));
+        if (hasExact) return;
+
+        const pendingSet = new Set(
+            (pendingReviews || [])
+                .filter((review) => review.type === 'roster_candidate')
+                .map((review) => normalizeOcrName(review.value).toLowerCase())
+        );
+        if (pendingSet.has(normalized.toLowerCase())) return;
+
+        const scored = pilotRegistry
+            .map((pilot) => ({
+                name: pilot,
+                score: similarityScore(normalized, normalizeOcrName(pilot)),
+            }))
+            .sort((a, b) => b.score - a.score);
+        const suggestions = scored.filter((entry) => entry.score > 0).slice(0, 3);
+        addPendingReview({
+            id: `sc_roster_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            type: 'roster_candidate',
+            value: normalized,
+            originalConfidence: 100,
+            context: 'Smart Captures OCR Review',
+            bestMatch: suggestions[0]?.name,
+            bestScore: suggestions[0]?.score,
+            suggestions,
+            source: 'ocr',
+        });
+        setToast({ message: `Queued roster candidate: ${normalized}`, type: 'info' });
+    }, [addPendingReview, pendingReviews, pilotRegistry, setToast]);
     useEffect(() => {
         if (!isResizing) return;
         const onMove = (event: MouseEvent) => {
@@ -109,8 +152,8 @@ const SmartCapturesPanel: React.FC = () => {
     }, [isResizing]);
 
     useEffect(() => {
-        if (autoRepairAttemptedRef.current) return;
-        autoRepairAttemptedRef.current = true;
+        if (autoArtifactRepairAttempted) return;
+        autoArtifactRepairAttempted = true;
         let cancelled = false;
         const runAutoRepair = async () => {
             try {
@@ -123,7 +166,6 @@ const SmartCapturesPanel: React.FC = () => {
                 const linked = applied.summary?.appliedLinks || 0;
                 if (linked > 0) {
                     setRepairResult(applied);
-                    setToast({ message: `Auto-repaired ${linked} artifact link${linked === 1 ? '' : 's'}.`, type: 'success' });
                 }
             } catch {
                 // Non-blocking background attempt.
@@ -133,7 +175,7 @@ const SmartCapturesPanel: React.FC = () => {
         return () => {
             cancelled = true;
         };
-    }, [setToast]);
+    }, []);
 
 
     const isWorkQueueItem = useCallback((m: Match) => {
@@ -320,6 +362,120 @@ const SmartCapturesPanel: React.FC = () => {
         exportJSONFile(payload, `smart_captures_selected_${ids.length}_${Date.now()}`);
         setToast({ message: `Exported ${ids.length} selected match${ids.length === 1 ? '' : 'es'} as JSON`, type: 'success' });
     }, [matches, selectedIds, setToast]);
+    const bulkMergeSelected = useCallback(() => {
+        const ids = Array.from(selectedIds);
+        if (ids.length < 2) {
+            setToast({ message: 'Select at least two matches to merge.', type: 'warning' });
+            return;
+        }
+        const selected = matches
+            .filter((match) => selectedIds.has(match.id))
+            .sort((a, b) => b.timestamp - a.timestamp);
+        if (selected.length < 2) {
+            setToast({ message: 'Select at least two matches to merge.', type: 'warning' });
+            return;
+        }
+
+        const keep = selected[0];
+        const mergeFrom = selected.slice(1);
+        const parseDurationSecs = (time: string | undefined) => {
+            if (!time) return 0;
+            const [minRaw, secRaw] = String(time).split(':');
+            const min = Number(minRaw);
+            const sec = Number(secRaw);
+            if (!Number.isFinite(min) || !Number.isFinite(sec)) return 0;
+            return (Math.max(0, min) * 60) + Math.max(0, sec);
+        };
+        const pickLongerTime = (a?: string, b?: string) => (
+            parseDurationSecs(a) >= parseDurationSecs(b) ? (a || b || '') : (b || a || '')
+        );
+        const toUnique = (values: string[]) => Array.from(new Set(values.filter(Boolean)));
+        const mergeOpponentTeams = (allTeams: Array<OpponentTeam[] | undefined>) => {
+            const mergedMap = new Map<string, OpponentTeam>();
+            allTeams.forEach((teams) => {
+                (teams || []).forEach((team) => {
+                    const key = `${team.color || 'unknown'}|${team.teamName || 'Unknown Team'}|${team.shipType || ''}`;
+                    const existing = mergedMap.get(key);
+                    if (!existing) {
+                        mergedMap.set(key, {
+                            teamName: team.teamName || 'Unknown Team',
+                            shipType: team.shipType || '',
+                            color: team.color || 'unknown',
+                            players: toUnique([...(team.players || [])]),
+                        });
+                        return;
+                    }
+                    mergedMap.set(key, {
+                        ...existing,
+                        players: toUnique([...(existing.players || []), ...(team.players || [])]),
+                    });
+                });
+            });
+            return Array.from(mergedMap.values());
+        };
+        const mergedKills = { ...(keep.kills || {}) };
+        mergeFrom.forEach((match) => {
+            Object.entries(match.kills || {}).forEach(([ship, count]) => {
+                const nextCount = Number(count) || 0;
+                mergedKills[ship] = Math.max(Number(mergedKills[ship]) || 0, nextCount);
+            });
+        });
+        const mergedLoadout = {
+            hero: keep.loadout?.hero || mergeFrom.find((match) => match.loadout?.hero)?.loadout?.hero || null,
+            ship: keep.loadout?.ship || mergeFrom.find((match) => match.loadout?.ship)?.loadout?.ship || null,
+            weapons: toUnique([
+                ...(keep.loadout?.weapons || []),
+                ...mergeFrom.flatMap((match) => match.loadout?.weapons || []),
+            ]).slice(0, 2),
+            equipment: toUnique([
+                ...(keep.loadout?.equipment || []),
+                ...mergeFrom.flatMap((match) => match.loadout?.equipment || []),
+            ]).slice(0, 2),
+        };
+        const mergedTimeline = [
+            ...(keep.timelineEvents || []),
+            ...mergeFrom.flatMap((match) => match.timelineEvents || []),
+        ].sort((a: any, b: any) => (Number(a?.timestamp) || 0) - (Number(b?.timestamp) || 0));
+        const merged = {
+            ...keep,
+            teammates: toUnique([...(keep.teammates || []), ...mergeFrom.flatMap((match) => match.teammates || [])]),
+            opponents: toUnique([...(keep.opponents || []), ...mergeFrom.flatMap((match) => match.opponents || [])]),
+            hero: keep.hero || mergeFrom.find((match) => match.hero)?.hero || '',
+            ship: keep.ship || mergeFrom.find((match) => match.ship)?.ship || '',
+            loadout: mergedLoadout,
+            reachModifiers: toUnique([...(keep.reachModifiers || []), ...mergeFrom.flatMap((match) => match.reachModifiers || [])]),
+            kills: mergedKills,
+            placement: keep.placement || mergeFrom.find((match) => match.placement)?.placement,
+            damageTaken: Math.max(keep.damageTaken || 0, ...mergeFrom.map((match) => match.damageTaken || 0)),
+            time: mergeFrom.reduce((acc, match) => pickLongerTime(acc, match.time), keep.time || ''),
+            poiEasy: Math.max(keep.poiEasy || 0, ...mergeFrom.map((match) => match.poiEasy || 0)),
+            poiMedium: Math.max(keep.poiMedium || 0, ...mergeFrom.map((match) => match.poiMedium || 0)),
+            poiEpic: Math.max(keep.poiEpic || 0, ...mergeFrom.map((match) => match.poiEpic || 0)),
+            artifactSource: keep.artifactSource || mergeFrom.find((match) => match.artifactSource)?.artifactSource,
+            killedBy: keep.killedBy || mergeFrom.find((match) => match.killedBy)?.killedBy,
+            killedByShip: keep.killedByShip || mergeFrom.find((match) => match.killedByShip)?.killedByShip,
+            opponentTeams: mergeOpponentTeams([keep.opponentTeams, ...mergeFrom.map((match) => match.opponentTeams)]),
+            eliminatedByTeam: keep.eliminatedByTeam || mergeFrom.find((match) => match.eliminatedByTeam)?.eliminatedByTeam,
+            notes: [keep.notes, ...mergeFrom.map((match) => match.notes)]
+                .filter(Boolean)
+                .join('\n')
+                .trim(),
+            timelineEvents: mergedTimeline,
+            artifacts: toUnique([...(keep.artifacts || []), ...mergeFrom.flatMap((match) => match.artifacts || [])]),
+            ocrDebug: keep.ocrDebug || mergeFrom.find((match) => match.ocrDebug)?.ocrDebug,
+            ocrState: keep.ocrState || mergeFrom.find((match) => match.ocrState)?.ocrState,
+            ocrReviewedAt: keep.ocrReviewedAt || mergeFrom.find((match) => match.ocrReviewedAt)?.ocrReviewedAt,
+        } as Match;
+
+        updateMatch(merged);
+        mergeFrom.forEach((match) => deleteMatch(match.id));
+        setSelectedIds(new Set([merged.id]));
+        setSelectedMatchId(merged.id);
+        setToast({
+            message: `Merged ${selected.length} matches into #${getQueueDisplayNumber(merged.id, globalOrderedMatchIds)}`,
+            type: 'success',
+        });
+    }, [deleteMatch, globalOrderedMatchIds, matches, selectedIds, setSelectedMatchId, setToast, updateMatch]);
 
     const bulkRerunOcrSelected = useCallback(async () => {
         const ids = Array.from(selectedIds);
@@ -696,12 +852,13 @@ const SmartCapturesPanel: React.FC = () => {
                                         const detectedShip = data.playerShip?.shipType || '';
                                         if (detectedShip) setActiveShip(detectedShip, 'ocr');
                                         const shipForCapacity = detectedShip || activeShip || SHIPS[0];
-                                        const maxTeammates = Math.max(0, getShipCapacity(shipForCapacity) - 1);
+                                        const maxTeammates = getMaxTeammatesForShip(shipForCapacity);
 
                                         if (data.teammates?.length > 0) {
                                             const existing = new Set(selectedTeammates.map(n => normalizeOcrName(n).toLowerCase()));
                                             const merged = [...selectedTeammates];
                                             for (const raw of data.teammates.map(t => t.name).filter(Boolean)) {
+                                                queueRosterCandidate(raw);
                                                 const resolved = resolveRosterName(raw);
                                                 if (!resolved) continue;
                                                 const key = normalizeOcrName(resolved).toLowerCase();
@@ -716,6 +873,7 @@ const SmartCapturesPanel: React.FC = () => {
                                             const existingOpp = new Set(selectedOpponents.map(n => normalizeOcrName(n).toLowerCase()));
                                             const mergedOpp = [...selectedOpponents];
                                             for (const raw of data.opponentTeams.flatMap(t => t.players.map(p => p.name)).filter(Boolean)) {
+                                                queueRosterCandidate(raw);
                                                 const resolved = resolveRosterName(raw);
                                                 if (!resolved) continue;
                                                 const key = normalizeOcrName(resolved).toLowerCase();
@@ -788,6 +946,7 @@ const SmartCapturesPanel: React.FC = () => {
                                             if (queueOnly) setTimeout(() => goNextQueue(), 0);
                                         }
                                     }}
+                                    onQueueRosterCandidate={queueRosterCandidate}
                                 />
                             ) : (
                                 <div className="h-full flex items-center justify-center p-4">
@@ -838,9 +997,10 @@ const SmartCapturesPanel: React.FC = () => {
                             <Button type="button" variant="secondary" className="px-3 py-2 text-label-sm font-bold rounded-control" onClick={() => selectVisible('all')} disabled={bulkBusy || visibleMatches.length === 0} title="Select all visible matches">Select Visible ({visibleMatches.length})</Button>
                             <Button type="button" variant="secondary" className="px-3 py-2 text-label-sm font-bold rounded-control" onClick={bulkResolveVisible} disabled={bulkBusy || visibleMatches.length === 0} title="Resolve every currently visible match row">Resolve Visible</Button>
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-4 gap-2">
                             <Button type="button" className="px-3 py-2 text-label-sm font-bold rounded-control" onClick={() => { resolveMatches(Array.from(selectedIds)); setToast({ message: 'Resolved selected', type: 'success' }); }} disabled={bulkBusy || selectedIds.size === 0} title="Mark selected as resolved">Resolve</Button>
                             <Button type="button" variant="secondary" className="px-3 py-2 text-label-sm font-bold rounded-control" onClick={bulkRerunOcrSelected} disabled={bulkBusy || selectedIds.size === 0} loading={bulkBusy} title="Rerun OCR on selected">{bulkBusy ? 'Working...' : 'Rerun OCR'}</Button>
+                            <Button type="button" variant="secondary" className="px-3 py-2 text-label-sm font-bold rounded-control" onClick={bulkMergeSelected} disabled={bulkBusy || selectedIds.size < 2} title="Merge selected matches into one">Merge</Button>
                             <Button type="button" variant="tertiary" className="px-3 py-2 text-label-sm font-bold rounded-control border border-md-sys-outline/20" onClick={bulkExportSelectedJson} disabled={bulkBusy || selectedIds.size === 0} title="Export selected JSON">Export JSON</Button>
                         </div>
                         {selectedIds.size > 0 && (
@@ -953,7 +1113,8 @@ const SmartMatchDetail: React.FC<{
     onPrev?: () => void;
     onResolve?: () => void;
     onApplyToSession?: (data: OCRExtractedData) => void;
-}> = ({ match, displayNumber, onUpdate, activeUser, ocrMode, pilotRegistry, queueOnly = false, onNext, onPrev, onResolve, onApplyToSession }) => {
+    onQueueRosterCandidate?: (name: string) => void;
+}> = ({ match, displayNumber, onUpdate, activeUser, ocrMode, pilotRegistry, queueOnly = false, onNext, onPrev, onResolve, onApplyToSession, onQueueRosterCandidate }) => {
     const [artifacts, setArtifacts] = useState<{ images: string[], imageFiles: ArtifactFile[], telemetry: any[] }>({ images: [], imageFiles: [], telemetry: [] });
     const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
     const screenshotsSectionRef = useRef<HTMLDivElement | null>(null);
@@ -997,7 +1158,7 @@ const SmartMatchDetail: React.FC<{
     const openWizardForMatch = useCallback(() => {
         const wizardResult = (match.result === 'Win' || match.result === 'Loss' || match.result === 'Draw')
             ? match.result
-            : 'Draw';
+            : 'Win';
         useAppStore.getState().setPendingMatchData({
             id: match.id,
             timestamp: match.timestamp,
@@ -1099,16 +1260,26 @@ const SmartMatchDetail: React.FC<{
     const addPlayer = () => {
         if (!addingPlayer || !newPlayerName.trim()) { setAddingPlayer(null); setNewPlayerName(''); return; }
         const field = addingPlayer === 'teammate' ? 'teammates' : 'opponents';
-        if (addingPlayer === 'teammate' && (match.teammates || []).length >= 4) {
-            setToast({ message: 'Teammates are limited to 4', type: 'warning' });
-            setAddingPlayer(null);
-            setNewPlayerName('');
-            return;
+        if (addingPlayer === 'teammate') {
+            const maxTeammates = maxTeammatesForShip(match.ship || '');
+            if ((match.teammates || []).length >= maxTeammates) {
+                setToast({ message: `Teammates are limited to ${maxTeammates}`, type: 'warning' });
+                setAddingPlayer(null);
+                setNewPlayerName('');
+                return;
+            }
         }
         const arr = [...(match[field] || []), newPlayerName.trim()];
         onUpdate({ ...match, [field]: arr });
         setAddingPlayer(null);
         setNewPlayerName('');
+    };
+
+    const applyResult = (result: 'Win' | 'Loss' | 'Draw') => {
+        const placement = result === 'Win'
+            ? (match.placement || 1)
+            : match.placement;
+        onUpdate({ ...match, result, placement });
     };
 
     const renderPlayerChips = (players: string[], type: 'teammate' | 'opponent') => {
@@ -1369,19 +1540,39 @@ const SmartMatchDetail: React.FC<{
         const payload = buildRerunJsonPayload();
         openJsonViewer(payload, 'Full OCR JSON');
     };
+    const maxTeammatesForShip = (shipType?: string | null) => {
+        const capacity = getShipCapacity(shipType || '');
+        const normalizedCapacity = capacity > 1 ? capacity : 4;
+        return Math.max(0, normalizedCapacity - 1);
+    };
 
     const handleApplyReviewData = (data: OCRExtractedData) => {
         const updates: Partial<Match> = {};
         if (data.playerShip?.shipType) updates.ship = data.playerShip.shipType;
         const shipForCapacity = updates.ship || match.ship || '';
-        const maxTeammates = Math.max(0, getShipCapacity(shipForCapacity) - 1);
+        const maxTeammates = maxTeammatesForShip(shipForCapacity);
+        const maybeQueueRoster = (rawName: string) => {
+            const normalized = normalizeOcrName(rawName || '');
+            if (!normalized || !onQueueRosterCandidate) return;
+            const exact = pilotRegistry.find((pilot) => (
+                normalizeOcrName(pilot).toLowerCase() === normalized.toLowerCase()
+            ));
+            if (exact) return;
+            const threshold = normalized.length > 8 ? 2 : 1;
+            const fuzzy = findClosestMatch(normalized, pilotRegistry, threshold);
+            if (!fuzzy) onQueueRosterCandidate(normalized);
+        };
         if (data.teammates?.length > 0) {
+            data.teammates.forEach((teammate) => maybeQueueRoster(teammate.name || ''));
             const resolvedTeam = data.teammates
                 .map(t => resolveRosterName(t.name || ''))
                 .filter(Boolean);
             updates.teammates = Array.from(new Set(resolvedTeam)).slice(0, maxTeammates);
         }
         if (data.opponentTeams?.length > 0) {
+            data.opponentTeams.forEach((team) => {
+                team.players.forEach((player) => maybeQueueRoster(player.name || ''));
+            });
             const resolvedOpps = data.opponentTeams
                 .flatMap(t => t.players.map(p => resolveRosterName(p.name || '')))
                 .filter(Boolean);
@@ -1456,13 +1647,13 @@ const SmartMatchDetail: React.FC<{
             const k = e.key.toLowerCase();
             if (k === '1') {
                 e.preventDefault();
-                onUpdate({ ...match, result: 'Win' });
+                applyResult('Win');
             } else if (k === '2') {
                 e.preventDefault();
-                onUpdate({ ...match, result: 'Loss' });
+                applyResult('Loss');
             } else if (k === '3') {
                 e.preventDefault();
-                onUpdate({ ...match, result: 'Draw' });
+                applyResult('Draw');
             } else if (k === 'n' && queueOnly && onNext) {
                 e.preventDefault();
                 onNext();
@@ -1490,7 +1681,7 @@ const SmartMatchDetail: React.FC<{
 
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [match, onUpdate, rerunning, reviewData, onApplyToSession]);
+    }, [applyResult, match, onUpdate, rerunning, reviewData, onApplyToSession]);
 
     return (
         <div className="p-4 lg:p-5 space-y-3 sc-detail-workspace">
@@ -1573,7 +1764,7 @@ const SmartMatchDetail: React.FC<{
                             {(['Win', 'Loss', 'Draw'] as const).map(r => (
                                 <button
                                     key={r}
-                                    onClick={() => onUpdate({ ...match, result: r })}
+                                    onClick={() => applyResult(r)}
                                     className={`px-3 py-1.5 rounded-lg text-label-sm font-bold transition-all flex items-center gap-1.5 ${
                                         match.result === r
                                             ? r === 'Win' ? 'bg-success/20 text-success border border-success/30'
@@ -1623,7 +1814,7 @@ const SmartMatchDetail: React.FC<{
                             readOnly
                         />
                         <EditableStatCard
-                            icon={<Trophy size={14} className="text-warning" />} label="Place" value={match.placement ? `#${match.placement}` : '--'}
+                            icon={<Trophy size={14} className="text-warning" />} label="Place" value={match.placement ? `#${match.placement}` : (match.result === 'Win' ? '#1' : '--')}
                             onSave={(v) => onUpdate({ ...match, placement: parseInt(v.replace('#', '')) || undefined })}
                             placeholder="#"
                         />
@@ -2268,6 +2459,7 @@ const SmartMatchDetail: React.FC<{
                     onCancel={() => setReviewData(null)}
                     pilotRegistry={pilotRegistry}
                     screenshots={artifacts.images}
+                    onQueueRosterCandidate={onQueueRosterCandidate}
                 />
             )}
 

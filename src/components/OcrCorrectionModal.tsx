@@ -238,7 +238,11 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                                                         <input
                                                             type="text"
                                                             placeholder="Link to..."
-                                                            value={searchQuery[player.name] || corrections[player.name] || ''}
+                                                            value={
+                                                                Object.prototype.hasOwnProperty.call(searchQuery, player.name)
+                                                                    ? (searchQuery[player.name] || '')
+                                                                    : (corrections[player.name] || '')
+                                                            }
                                                             onChange={e => setSearchQuery(prev => ({ ...prev, [player.name]: e.target.value }))}
                                                             className="bg-transparent text-body w-28 outline-none"
                                                         />

@@ -9,5 +9,10 @@ describe('OutcomePill', () => {
     render(<OutcomePill result="Win" />);
     expect(screen.getByText('Win')).toBeInTheDocument();
   });
+
+  it('renders ongoing label', () => {
+    render(<OutcomePill result="Ongoing" />);
+    expect(screen.getByText('Ongoing')).toBeInTheDocument();
+  });
 });
 

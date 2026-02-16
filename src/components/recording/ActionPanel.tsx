@@ -47,6 +47,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         activeUser,
         setShowReviewQueue,
         setShowIdMapper,
+        smartCaptureRequest,
+        clearSmartCaptureRequest,
         setToast
     } = useUIState();
 
@@ -192,6 +194,24 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         window.addEventListener('smart-capture-request', onCaptureRequest as EventListener);
         return () => window.removeEventListener('smart-capture-request', onCaptureRequest as EventListener);
     }, [triggerSmartCapture, activeUser]);
+
+    React.useEffect(() => {
+        if (!smartCaptureRequest?.requestId) return;
+        const requestId = smartCaptureRequest.requestId;
+        if (handledCaptureRequestRef.current === requestId) {
+            clearSmartCaptureRequest(requestId);
+            return;
+        }
+        handledCaptureRequestRef.current = requestId;
+        const requestedUser = smartCaptureRequest.activeUser;
+        const requestedMatchId = smartCaptureRequest.matchId;
+        if (requestedMatchId != null && requestedMatchId !== '') {
+            void triggerSmartCapture(requestedUser ?? activeUser ?? null, requestedMatchId);
+        } else {
+            void triggerSmartCapture(requestedUser ?? activeUser ?? null);
+        }
+        clearSmartCaptureRequest(requestId);
+    }, [activeUser, clearSmartCaptureRequest, smartCaptureRequest, triggerSmartCapture]);
 
     React.useEffect(() => {
         if (isProcessing && !processingToastShownRef.current) {

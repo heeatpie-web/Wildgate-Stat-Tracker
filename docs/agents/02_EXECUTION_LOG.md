@@ -1080,3 +1080,296 @@
   - Review ask: approve closure of runtime devtools-disable patch.
 - `PM Response` | `APPROVED`
   - Reason: requested runtime behavior achieved with minimal scoped change and passing checks.
+
+---
+
+## 2026-02-16 - BUG-BATCH-005
+- Scope: implement the approved multi-bug fix plan across OCR review, Smart Captures, telemetry submission bundling, corpus mode, and telemetry loadout extraction.
+
+## Work Entries
+- 09:32Z
+  - Confirmed high-impact implementation set and mapped each requested bug to concrete files.
+
+- 09:34Z
+  - Updated `src/components/ocr/OCRReviewModal.tsx`:
+    - raised modal/lightbox layering (`z-modal-top` + `z-top`) to prevent review controls obscuring screenshot inspection.
+    - added editable opponent team name/ship/color controls.
+    - added add/remove opponent team and add/remove opponent player actions.
+    - added teammate add action.
+    - added roster-match status badges (`Roster`, fuzzy suggestion) and `+ Roster` queue action for unmatched names.
+
+- 09:36Z
+  - Updated `src/components/OcrCorrectionModal.tsx` to fix backspace/edit lockup:
+    - corrected input value precedence so cleared search text no longer snaps back to previously selected correction.
+
+- 09:39Z
+  - Updated `src/components/SmartCapturesPanel.tsx`:
+    - unknown-ship teammate cap fallback now defaults to 4-player capacity (max 3 teammates) instead of dropping to zero.
+    - auto-repair now runs once per app session and no longer emits repeated success toasts on each panel visit.
+    - added roster-candidate queue helper with dedupe + suggestion scoring.
+    - wired `onQueueRosterCandidate` through Smart Match detail -> OCR review modal.
+    - added bulk `Merge` action for selected matches (union/merge core fields, remove merged source matches).
+
+- 09:41Z
+  - Updated `src/App.tsx`:
+    - added reusable roster-candidate queue callback and wired it into OCR review modal.
+    - fixed unknown-ship teammate cap fallback in app-level OCR apply path.
+
+- 09:42Z
+  - Updated `src/hooks/useMatchSubmission.ts`:
+    - final submission now merges live wizard/session edits (teammates/opponents, kills, POIs, damage, notes) with pending telemetry draft payload.
+    - adjusted social sighting bundling to use resolved final teammate/opponent lists.
+
+- 09:45Z
+  - Updated corpus reliability paths:
+    - `electron/main.cjs`: added packaged-script resolver fallback for corpus eval/recommend/promote scripts; recursive corpus image listing; tolerant ground-truth parse during image import.
+    - `package.json`: include `scripts/ocr*.cjs` in packaged build files.
+    - `src/components/DevOCRPanel.tsx`: image-list refresh after load/import, MIME-aware image preview decoding, clearer workflow text, and plain-entry support for 4 opponent teams with team color/ship/players.
+
+- 09:48Z
+  - Updated `src/hooks/useLogMonitor.ts`:
+    - fallback to payload-level loadout signals when nested loadout object is absent.
+    - normalized hero GUID handling and robust raw hero/ship hint parsing.
+    - expanded weapon/equipment key coverage.
+    - preserved previously known weapons/equipment when current event omits those slots.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `BUG-BATCH-005#1/#2/#3/#4/#5/#6` | Owner: `debugger`
+  - Delta: implemented multi-surface reliability fixes for OCR review, Smart Captures, telemetry submission bundling, corpus mode, and telemetry loadout extraction.
+  - Evidence pointers:
+    - `src/components/ocr/OCRReviewModal.tsx`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/hooks/useMatchSubmission.ts`
+    - `src/hooks/useLogMonitor.ts`
+    - `src/components/DevOCRPanel.tsx`
+    - `electron/main.cjs`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of BUG-BATCH-005 implementation pass.
+- `PM Response` | `APPROVED`
+  - Reason: targeted bug list items were implemented with passing lint/typecheck/tests and no schema break.
+
+---
+
+## 2026-02-16 - BUG-BATCH-005-EVAL-EXT-001
+- Scope: user-requested expanded evaluation coverage after BUG-BATCH-005 implementation.
+
+## Work Entries
+- 16:54Z
+  - Ran packaged-script smoke checks from extracted archive scripts in `tmp-user-data/packaged-extract/scripts` against known-good OCR corpus fixtures in `.claude/worktrees/quizzical-bhabha/dataset/ocr-corpus`.
+  - Executed full + sample flows for:
+    - `ocr_corpus_eval.cjs`
+    - `ocr_threshold_recommend.cjs`
+    - `ocr_promote_baseline.cjs`
+  - Captured outputs in `tmp-user-data/packaged-smoke`.
+
+- 16:55Z
+  - Ran targeted regression tests for telemetry/OCR matching + corpus/security IPC contract:
+    - `src/hooks/__tests__/useMatchSubmission.test.ts`
+    - `src/hooks/__tests__/useSmartCapture.test.ts`
+    - `src/utils/__tests__/telemetryProcessor.test.ts`
+    - `src/utils/__tests__/ocrAliasEngine.test.ts`
+    - `src/utils/__tests__/ocrNameResolver.test.ts`
+    - `electron/security/ipcValidation.test.ts`
+
+- 16:56Z
+  - Ran repo-script parity checks versus packaged-script outputs using identical fixture inputs.
+  - Confirmed parity for both full + sample evaluations:
+    - report summary metrics matched.
+    - threshold recommendation payloads matched (`recommendedThresholds`).
+
+- 17:09Z
+  - Ran automated Electron app corpus image workflow smoke:
+    - launched app with Playwright Electron runner.
+    - mocked file picker (`dialog.showOpenDialog`) in main process to return two fixture images.
+    - invoked renderer IPC workflow:
+      - `ocr-corpus-import-images`
+      - `ocr-corpus-list-images`
+      - `ocr-corpus-read-image`
+      - `ocr-corpus-load('ground-truth.json')`
+  - Verified import/list/read path end-to-end:
+    - import reported `success: true`, `imported: 2`, `skipped: 0`.
+    - listed image set included imported fixtures.
+    - read-image returned non-empty base64 payload.
+    - `ground-truth.json` contained imported sample entries.
+
+---
+
+## 2026-02-16 - BUG-BATCH-006
+- Scope: complete remaining user-reported reliability/UX tasks not fully closed by BUG-BATCH-005.
+
+## Work Entries
+- 18:58Z
+  - Added durable smart-capture request channel in `src/providers/UIStateProvider.tsx`:
+    - `smartCaptureRequest` state,
+    - `requestSmartCapture(...)`,
+    - `clearSmartCaptureRequest(...)`.
+  - Wired `Header`, `Wizard`, and telemetry draft prompt in `App` to publish into this channel while preserving existing DOM event for compatibility.
+
+- 19:05Z
+  - Mounted `ReviewQueueModal` in `src/App.tsx` using `showReviewQueue` state from `UIStateProvider`, fixing recording-panel Intelligence Review routing.
+
+- 19:10Z
+  - Implemented ongoing-result semantics:
+    - `src/types.ts` adds `MatchResult = 'Win' | 'Loss' | 'Draw' | 'Ongoing'`.
+    - `src/hooks/useLogMonitor.ts` telemetry drafts now create with `result: 'Ongoing'`.
+    - `src/store/useAppStore.ts` hydration migration upgrades legacy telemetry drafts (`Draw`/missing) to `Ongoing`.
+
+- 19:16Z
+  - Applied placement/result UX fixes:
+    - `src/hooks/useMatchSubmission.ts` defaults placement to `1` for Win submissions when unset.
+    - `src/components/SmartCapturesPanel.tsx` displays Win placement fallback as `#1`.
+    - Smart Captures result actions now route through shared result-applier.
+
+- 19:22Z
+  - Added Players-tab pending roster approvals in `src/components/PlayerHub.tsx`:
+    - surfaces `roster_candidate` queue items,
+    - inline `Approve` / `Dismiss` actions,
+    - deduped queue resolution and user toasts.
+
+- 19:27Z
+  - Completed teammate-cap + telemetry ship-ownership guardrails:
+    - `src/store/slices/createFormSlice.ts` safe unknown-ship fallback to 4-player cap logic.
+    - `src/components/SmartCapturesPanel.tsx` teammate manual add now respects ship-based cap.
+    - `src/hooks/useLogMonitor.ts` skips non-local loadout events via actor/local identity checks.
+
+- 19:34Z
+  - Updated completed-result analytics behavior:
+    - `src/components/analytics/useAnalyticsData.ts`,
+    - `src/utils/analytics.ts`,
+    - `src/utils/analyticsSocial.ts`.
+  - Ongoing matches are excluded from win/loss/draw aggregations and related derived metrics.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `BUG-BATCH-006#1/#2/#3/#4/#5/#6/#7` | Owner: `debugger`
+  - Delta:
+    - fixed smart-capture request durability,
+    - mounted review queue modal,
+    - switched telemetry drafts to ongoing state,
+    - added placement fallback + players-tab approvals,
+    - aligned teammate caps and analytics filtering behavior.
+  - Evidence pointers:
+    - `src/providers/UIStateProvider.tsx`
+    - `src/components/recording/ActionPanel.tsx`
+    - `src/App.tsx`
+    - `src/hooks/useLogMonitor.ts`
+    - `src/hooks/useMatchSubmission.ts`
+    - `src/components/PlayerHub.tsx`
+    - `src/utils/analytics.ts`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure for BUG-BATCH-006 as the remaining open fix set from user list.
+- `PM Response` | `APPROVED`
+  - Reason: remaining reliability/UX items addressed with passing targeted validation and no schema-breaking migration.
+
+---
+
+## 2026-02-16 - SMOKE-PERF-CONSENSUS-001
+- Scope: run smoke and assess overheating consensus from concrete runtime paths.
+
+## Work Entries
+- 13:30Z
+  - Verified smoke artifact output in `.visual/report.md` from `snap:views` compare run.
+  - Confirmed all 5 dashboard views processed with generated diff artifacts.
+
+- 13:31Z
+  - Inspected telemetry monitor profile mapping and poll/decode/write cadence in `electron/main.cjs`.
+  - Confirmed profile behavior:
+    - low-power: poll 5000ms, decode throttle 5000ms, snapshot write 30000ms.
+    - balanced: poll 2000ms, decode throttle 1500ms, snapshot write 10000ms.
+    - high-accuracy: poll 1000ms, decode throttle 750ms, snapshot write 3000ms.
+
+- 13:32Z
+  - Inspected renderer/main periodic timers for secondary background load.
+  - Confirmed telemetry loop is the dominant high-frequency path; other periodic checks are comparatively low-frequency (e.g., prune check every 10 minutes, status heartbeat every 20 seconds).
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `SMOKE-PERF-CONSENSUS-001#1/#2/#3` | Owner: `debugger`
+  - Delta: smoke verified and overheating consensus generated from actual runtime intervals/config paths.
+  - Evidence pointers:
+    - `.visual/report.md`
+    - `electron/main.cjs`
+    - `src/hooks/useLogMonitor.ts`
+    - `src/components/SettingsModal.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve diagnostic-only closure with no code modifications.
+- `PM Response` | `APPROVED`
+  - Reason: scope held to diagnostics/validation; evidence complete.
+- 13:38Z
+  - Re-ran `npm run -s snap:views` in this turn to provide fresh smoke evidence.
+  - Result remained stable vs prior run (same mismatch percentages across the 5 tracked views).
+
+---
+
+## 2026-02-16 - THERMAL-FIX-001
+- Scope: implement targeted runtime thermal/performance fixes requested by user.
+
+## Work Entries
+- 13:58Z
+  - Updated `src/utils/storage.ts` to use dirty-state version tracking.
+  - Added `pendingVersion`/`lastPersistedVersion` guard so periodic failsafe flush only writes when unsaved changes exist.
+  - Preserved lifecycle flush hooks (`beforeunload`, `pagehide`, hidden, error/unhandledrejection), but no-op when not dirty.
+
+- 14:00Z
+  - Corrected telemetry monitor log source preference in `electron/main.cjs`.
+  - `start-log-monitoring` now checks Wildgate log path first, then Nebula fallback, matching intended behavior and comment.
+
+- 14:03Z
+  - Optimized `electron/helpers/telemetryArchiveHelpers.cjs` archive churn path:
+    - Added per-archive in-memory state cache (events + signature set).
+    - Eliminated repeated full-file parse on each telemetry tick for same archive path.
+    - Added no-op write skip when no new deduped events were added.
+    - Cleared archive cache entries on cleanup and clear operations.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `THERMAL-FIX-001#1/#2/#3/#4/#5` | Owner: `debugger`
+  - Delta:
+    - dirty-only periodic flush,
+    - Wildgate-first telemetry path selection,
+    - archive no-op write elimination + cached state for reduced churn.
+  - Evidence pointers:
+    - `src/utils/storage.ts`
+    - `electron/main.cjs`
+    - `electron/helpers/telemetryArchiveHelpers.cjs`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure for thermal-fix patch set.
+- `PM Response` | `APPROVED`
+  - Reason: scope-targeted runtime optimizations landed with passing targeted validation and no contract/schema changes.
+
+---
+
+## 2026-02-16 - OCR-ALIAS-CLEANUP-001
+- Scope: fix bad manual name-adjuster alias hygiene by enabling direct alias removal and adding a low-risk guard for suspicious manual alias links.
+
+## Work Entries
+- 21:58Z
+  - Claimed active locks for alias cleanup implementation files and required agent artifacts.
+
+- 21:59Z
+  - Extended mapping slice (`src/store/slices/createMappingSlice.ts`) with `removeOcrAliasCorrection(ocrText, correctedTo)`:
+    - removes the selected alias target from `ocrAliasModel`,
+    - synchronizes legacy `ocrCorrections` mirror keys,
+    - logs deterministic removal action for traceability.
+
+- 22:00Z
+  - Updated Settings alias manager (`src/components/SettingsModal.tsx`):
+    - added per-row `Remove` action for learned aliases,
+    - added warning-confirm flow for suspicious manual adds (very low similarity pairs require second click),
+    - surfaced success/warning toasts for user feedback.
+
+- 22:00Z
+  - Added regression coverage in `src/store/slices/__tests__/createMappingSlice.test.ts`:
+    - verifies alias removal clears both alias-model row and legacy correction entries.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-ALIAS-CLEANUP-001#1/#2/#3/#4` | Owner: `debugger`
+  - Delta:
+    - direct alias delete path now exists in store + settings UI,
+    - suspicious manual mapping requires explicit second confirmation click,
+    - targeted regression test added and passing.
+  - Evidence pointers:
+    - `src/store/slices/createMappingSlice.ts`
+    - `src/components/SettingsModal.tsx`
+    - `src/store/slices/__tests__/createMappingSlice.test.ts`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure for OCR-ALIAS-CLEANUP-001.
+- `PM Response` | `APPROVED`
+  - Reason: user-facing alias cleanup gap is closed with constrained scope and passing targeted validation.

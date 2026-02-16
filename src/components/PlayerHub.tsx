@@ -39,11 +39,14 @@ const PlayerHub: React.FC = () => {
         mergePilots,
         undoLastMerge,
         mergeHistory,
+        pendingReviews,
+        addToRegistry,
+        removePendingReview,
         matches,
         playerProfiles,
         setDrillDownTarget,
     } = useGameData();
-    const { setActiveView } = useUIState();
+    const { setActiveView, setToast } = useUIState();
 
     const [searchTerm, setSearchTerm] = useState('');
     const [sortMode, setSortMode] = useState<SortMode>('favorites');
@@ -60,6 +63,17 @@ const PlayerHub: React.FC = () => {
     const [playersPage, setPlayersPage] = useState(1);
 
     const socialData = useMemo(() => calculateSocialData(matches), [matches]);
+    const pendingRosterCandidates = useMemo(() => {
+        const seen = new Set<string>();
+        return (pendingReviews || [])
+            .filter((review) => review.type === 'roster_candidate' && review.value && review.value.trim().length > 0)
+            .filter((review) => {
+                const key = review.value.trim().toLowerCase();
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+    }, [pendingReviews]);
 
     const teammateMap = useMemo(() => {
         const map: Record<string, { wins: number; total: number }> = {};
@@ -210,6 +224,22 @@ const PlayerHub: React.FC = () => {
             .slice(0, 20);
     }, [enrichedPilots, selectedPilot, mergeSearch]);
 
+    const resolveRosterCandidate = (candidate: { id: string; value: string }, action: 'approve' | 'dismiss') => {
+        const value = candidate.value.trim();
+        if (!value) return;
+        if (action === 'approve') {
+            addToRegistry(value);
+            setToast({ message: `Added "${value}" to roster`, type: 'success' });
+        }
+        const key = value.toLowerCase();
+        (pendingReviews || [])
+            .filter((review) => review.type === 'roster_candidate' && review.value.trim().toLowerCase() === key)
+            .forEach((review) => removePendingReview(review.id));
+        if (action === 'dismiss') {
+            setToast({ message: `Dismissed pending roster candidate "${value}"`, type: 'info' });
+        }
+    };
+
     return (
         <div data-tour="view-players" className="h-full flex flex-col lg:grid lg:grid-cols-playerhub-lg xl:grid-cols-playerhub-xl gap-4 overflow-hidden players-shell-gradient rounded-2xl">
             {/* Column 1: Roster List */}
@@ -282,6 +312,40 @@ const PlayerHub: React.FC = () => {
                         </div>
                     );
                 })()}
+
+                {pendingRosterCandidates.length > 0 && (
+                    <div className="md3-card mg-surface shadow-lg p-3 border border-info/20 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                            <div className="text-label-sm font-semibold uppercase tracking-wide text-info">Pending OCR roster approvals</div>
+                            <span className="text-label-xs font-bold px-2 py-0.5 rounded-pill bg-info-soft text-info">
+                                {pendingRosterCandidates.length}
+                            </span>
+                        </div>
+                        <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                            {pendingRosterCandidates.map((candidate) => (
+                                <div key={candidate.id} className="flex items-center justify-between gap-2 rounded-lg border border-md-sys-outline/10 px-2.5 py-1.5">
+                                    <span className="text-label-sm font-semibold truncate">{candidate.value}</span>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => resolveRosterCandidate(candidate, 'approve')}
+                                            className="px-2 py-1 rounded-md text-label-xs font-bold bg-success/15 text-success hover:bg-success/25"
+                                        >
+                                            Approve
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => resolveRosterCandidate(candidate, 'dismiss')}
+                                            className="px-2 py-1 rounded-md text-label-xs font-bold bg-md-sys-on-surface/10 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/15"
+                                        >
+                                            Dismiss
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1 flex flex-col">
                     {filtered.length === 0 ? (

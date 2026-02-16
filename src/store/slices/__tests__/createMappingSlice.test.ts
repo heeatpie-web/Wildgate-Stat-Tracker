@@ -194,6 +194,26 @@ describe('createMappingSlice', () => {
       expect(after.blocked).toBe(false);
       expect(after.suggestedName).toBe('Adrian');
     });
+
+    it('removes a learned alias mapping and legacy correction entries', () => {
+      store.getState().recordOcrAliasCorrection('kfFartingPuppy', 'AlixerThus', {
+        context: 'unknown',
+        source: 'settings_alias',
+        confidenceWeight: 1,
+      });
+      store.getState().recordOcrAliasCorrection('kfFartingPuppy', 'AlixerThus', {
+        context: 'unknown',
+        source: 'settings_alias',
+        confidenceWeight: 1,
+      });
+
+      const removed = store.getState().removeOcrAliasCorrection('kfFartingPuppy', 'AlixerThus');
+
+      expect(removed).toBe(true);
+      expect(store.getState().ocrAliasModel.entries['kffartingpuppy']).toBeUndefined();
+      expect(store.getState().getOcrCorrection('kfFartingPuppy')).toBeUndefined();
+      expect(store.getState().getOcrCorrection('kffartingpuppy')).toBeUndefined();
+    });
   });
 
   describe('ocrLearningQueue lifecycle', () => {

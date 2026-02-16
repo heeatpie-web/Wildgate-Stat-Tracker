@@ -466,3 +466,168 @@
   - Evidence:
     - `open-devtools` IPC handler now returns without opening DevTools unless `WILDGATE_ALLOW_DEVTOOLS=1`.
     - Startup auto-open remains disabled (commented `openDevTools` call unchanged).
+
+---
+
+## Validation - 2026-02-16 - BUG-BATCH-005
+- Command: `npx eslint src/App.tsx src/components/DevOCRPanel.tsx src/components/OcrCorrectionModal.tsx src/components/SmartCapturesPanel.tsx src/components/ocr/OCRReviewModal.tsx src/hooks/useLogMonitor.ts src/hooks/useMatchSubmission.ts electron/main.cjs`
+  - Result: PASS
+  - Evidence: no lint violations on touched implementation files.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed without errors after all BUG-BATCH-005 changes.
+
+- Command: `npx vitest run src/hooks/__tests__/useMatchSubmission.test.ts`
+  - Result: PASS
+  - Evidence: `10/10` tests passed; submission flow regressions remained green after bundling logic updates.
+
+- Manual logic checks
+  - Result: PASS
+  - Evidence:
+    - OCR review modal supports editing/adding opponent teams and players; unmatched names can be queued to roster review.
+    - Smart Captures no longer drops teammate OCR apply to zero when ship capacity is unknown.
+    - Smart Captures auto artifact repair no longer produces repeated stacked success toasts on each panel open.
+    - Smart Captures bulk tools now include selected-match merge action.
+    - Corpus UI refreshes imported images immediately and packaged eval script resolution no longer hardcodes a single app path.
+    - Telemetry loadout parsing now handles payload-level fallback and broader weapon/equipment key coverage.
+
+---
+
+## Validation - 2026-02-16 - BUG-BATCH-005-EVAL-EXT-001
+- Command: packaged-script smoke batch (PowerShell):
+  - `node tmp-user-data/packaged-extract/scripts/ocr_corpus_eval.cjs --truth ".claude/worktrees/quizzical-bhabha/dataset/ocr-corpus/ground-truth.json" --pred ".claude/worktrees/quizzical-bhabha/dataset/ocr-corpus/predictions.latest.json" --baseline ".claude/worktrees/quizzical-bhabha/dataset/ocr-corpus/baseline.json" --out "tmp-user-data/packaged-smoke/reports/latest.from-packaged.json"`
+  - `node tmp-user-data/packaged-extract/scripts/ocr_threshold_recommend.cjs --report "tmp-user-data/packaged-smoke/reports/latest.from-packaged.json" --baseline ".claude/worktrees/quizzical-bhabha/dataset/ocr-corpus/baseline.json"`
+  - `node tmp-user-data/packaged-extract/scripts/ocr_promote_baseline.cjs --report "tmp-user-data/packaged-smoke/reports/latest.from-packaged.json" --baseline "tmp-user-data/packaged-smoke/baseline.promoted.from-packaged.json"`
+  - `node tmp-user-data/packaged-extract/scripts/ocr_corpus_eval.cjs --truth ".claude/worktrees/quizzical-bhabha/dataset/ocr-corpus/ground-truth.sample.json" --pred ".claude/worktrees/quizzical-bhabha/dataset/ocr-corpus/predictions.sample.json" --baseline ".claude/worktrees/quizzical-bhabha/dataset/ocr-corpus/baseline.sample.json" --out "tmp-user-data/packaged-smoke/reports/sample.from-packaged.json"`
+  - `node tmp-user-data/packaged-extract/scripts/ocr_threshold_recommend.cjs --report "tmp-user-data/packaged-smoke/reports/sample.from-packaged.json" --baseline ".claude/worktrees/quizzical-bhabha/dataset/ocr-corpus/baseline.sample.json"`
+  - `node tmp-user-data/packaged-extract/scripts/ocr_promote_baseline.cjs --report "tmp-user-data/packaged-smoke/reports/sample.from-packaged.json" --baseline "tmp-user-data/packaged-smoke/baseline.promoted.sample.from-packaged.json"`
+  - Result: PASS
+  - Evidence:
+    - All 6 packaged-script invocations completed successfully.
+    - Full-set report generated at `tmp-user-data/packaged-smoke/reports/latest.from-packaged.json` (26 samples).
+    - Sample report generated at `tmp-user-data/packaged-smoke/reports/sample.from-packaged.json` (2 samples).
+    - Recommendation outputs generated for both runs and baseline promotion wrote expected files.
+
+- Command: `npx vitest run src/hooks/__tests__/useMatchSubmission.test.ts src/hooks/__tests__/useSmartCapture.test.ts src/utils/__tests__/telemetryProcessor.test.ts src/utils/__tests__/ocrAliasEngine.test.ts src/utils/__tests__/ocrNameResolver.test.ts electron/security/ipcValidation.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 6 test files passed.
+    - 42 tests passed.
+    - Includes telemetry submission bundling path, smart capture hook, OCR alias/name resolver, and IPC allowlist validation.
+
+- Command: repo-script parity batch (PowerShell):
+  - `node scripts/ocr_corpus_eval.cjs --truth ".claude/worktrees/quizzical-bhabha/dataset/ocr-corpus/ground-truth.json" --pred ".claude/worktrees/quizzical-bhabha/dataset/ocr-corpus/predictions.latest.json" --baseline ".claude/worktrees/quizzical-bhabha/dataset/ocr-corpus/baseline.json" --out "tmp-user-data/repo-smoke/reports/latest.from-repo.json"`
+  - `node scripts/ocr_threshold_recommend.cjs --report "tmp-user-data/repo-smoke/reports/latest.from-repo.json" --baseline ".claude/worktrees/quizzical-bhabha/dataset/ocr-corpus/baseline.json"`
+  - `node scripts/ocr_promote_baseline.cjs --report "tmp-user-data/repo-smoke/reports/latest.from-repo.json" --baseline "tmp-user-data/repo-smoke/baseline.promoted.from-repo.json"`
+  - `node scripts/ocr_corpus_eval.cjs --truth ".claude/worktrees/quizzical-bhabha/dataset/ocr-corpus/ground-truth.sample.json" --pred ".claude/worktrees/quizzical-bhabha/dataset/ocr-corpus/predictions.sample.json" --baseline ".claude/worktrees/quizzical-bhabha/dataset/ocr-corpus/baseline.sample.json" --out "tmp-user-data/repo-smoke/reports/sample.from-repo.json"`
+  - `node scripts/ocr_threshold_recommend.cjs --report "tmp-user-data/repo-smoke/reports/sample.from-repo.json" --baseline ".claude/worktrees/quizzical-bhabha/dataset/ocr-corpus/baseline.sample.json"`
+  - `node scripts/ocr_promote_baseline.cjs --report "tmp-user-data/repo-smoke/reports/sample.from-repo.json" --baseline "tmp-user-data/repo-smoke/baseline.promoted.sample.from-repo.json"`
+  - Result: PASS
+  - Evidence:
+    - Full-run parity checks: `teammateRecallEqual`, `opponentRecallEqual`, `modifierRecallEqual`, `teamGroupingAccuracyEqual`, `sessionUsablePassRateEqual`, `recommendationThresholdsEqual` all `True`.
+    - Sample-run parity checks: above fields plus `teamColorAccuracyEqual` all `True`.
+
+- Command: Electron corpus image workflow smoke (Playwright Electron + mocked file picker)
+  - Result: PASS
+  - Evidence:
+    - Fixture prep created two import files:
+      - `tmp-user-data/corpus-e2e-fixtures/smoke-import-a.png`
+      - `tmp-user-data/corpus-e2e-fixtures/smoke-import-b.jpg`
+    - Runtime output:
+      - `importResult.success: true`
+      - `importResult.imported: 2`
+      - `importResult.skipped: 0`
+      - `listSuccess: true`
+      - `listedIncludesFixture: true`
+      - `readTarget: images/smoke-import-a.png`
+      - `readBase64Length: 92` (non-empty image payload)
+    - `truthHasImportedSample: true`
+    - Confirms end-to-end corpus image import, list, and read/open data path from renderer invoke through main-process handlers.
+
+---
+
+## Validation - 2026-02-16 - BUG-BATCH-006
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no errors after smart-capture channel, ongoing-result, players-tab, and analytics updates.
+
+- Command: `npx eslint src/App.tsx src/providers/UIStateProvider.tsx src/components/Header.tsx src/components/Wizard.tsx src/components/recording/ActionPanel.tsx src/store/slices/createFormSlice.ts src/hooks/useLogMonitor.ts src/store/useAppStore.ts src/hooks/useMatchSubmission.ts src/components/SmartCapturesPanel.tsx src/components/HistoryTable.tsx src/components/MatchRecordingPage.tsx src/components/PlayerHub.tsx src/components/history/historyUtils.ts src/components/smart-captures/smartCaptureUtils.ts src/components/smart-captures/primitives/OutcomePill.tsx src/utils/analytics.ts src/utils/analyticsSocial.ts src/components/analytics/useAnalyticsData.ts src/components/Header.test.tsx src/components/recording/ActionPanel.test.tsx src/store/slices/__tests__/createFormSlice.test.ts src/hooks/__tests__/useMatchSubmission.test.ts src/components/smart-captures/smartCaptureUtils.test.ts src/components/smart-captures/primitives/OutcomePill.test.tsx src/components/history/historyUtils.test.ts`
+  - Result: PASS
+  - Evidence: no lint violations for touched runtime and regression test files.
+
+- Command: `npx vitest run src/components/Header.test.tsx src/components/recording/ActionPanel.test.tsx src/store/slices/__tests__/createFormSlice.test.ts src/hooks/__tests__/useMatchSubmission.test.ts src/components/smart-captures/smartCaptureUtils.test.ts src/components/smart-captures/primitives/OutcomePill.test.tsx src/components/history/historyUtils.test.ts src/utils/__tests__/analytics.test.ts src/utils/__tests__/analyticsSocial.test.ts src/utils/__tests__/analyticsV2.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 10 files passed.
+    - 105 tests passed.
+    - Includes new regressions for placement fallback, smart-capture request channel consumption, ongoing-aware history styling, and teammate cap fallback.
+
+- Command: `npx vitest run src/hooks/__tests__/useSmartCapture.test.ts src/utils/__tests__/telemetryProcessor.test.ts electron/security/ipcValidation.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 3 files passed.
+    - 23 tests passed.
+    - Confirms adjacent smart-capture/telemetry/security paths remain green after BUG-BATCH-006.
+
+---
+
+## Validation - 2026-02-16 - SMOKE-PERF-CONSENSUS-001
+- Command: `npm run -s snap:views`
+  - Result: PASS
+  - Evidence:
+    - Visual report generated at `.visual/report.md`.
+    - Processed views: `recording`, `analytics`, `smart-captures`, `players`, `history`.
+    - Compare output includes mismatch stats and color diff artifacts.
+
+- Command: code-path inspection (`electron/main.cjs`, `src/hooks/useLogMonitor.ts`, `src/components/SettingsModal.tsx`, `src/components/SystemPulse.tsx`)
+  - Result: PASS (diagnostic)
+  - Evidence:
+    - `start-log-monitoring` receives selected telemetry performance profile from renderer.
+    - Main-process profile config confirms high-accuracy mode has 1s polling + aggressive decode/write cadence.
+    - Lower-impact periodic timers (20s UI heartbeat, 10m retention check) are not primary thermal drivers relative to telemetry decode loop.
+
+- Command: `npm run -s snap:views` (rerun in current turn)
+  - Result: PASS
+  - Evidence:
+    - `recording` mismatch `10.43%`
+    - `analytics` mismatch `7.2%`
+    - `smart-captures` mismatch `12.93%`
+    - `players` mismatch `5.18%`
+    - `history` mismatch `9.11%`
+
+---
+
+## Validation - 2026-02-16 - THERMAL-FIX-001
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no errors after thermal-fix runtime edits.
+
+- Command: `npx eslint src/utils/storage.ts electron/main.cjs electron/helpers/telemetryArchiveHelpers.cjs`
+  - Result: PASS
+  - Evidence: no lint violations on touched persistence/telemetry files.
+
+- Manual logic checks
+  - Result: PASS
+  - Evidence:
+    - `StorageService` interval flush now gates on unsaved state and avoids periodic durable writes when data is unchanged.
+    - Telemetry monitoring source selection in `start-log-monitoring` now evaluates Wildgate path before Nebula fallback.
+    - Archive helper no longer rewrites archive file when dedupe adds zero events and no longer reparses existing archive file on every call for same path.
+
+---
+
+## Validation - 2026-02-16 - OCR-ALIAS-CLEANUP-001
+- Command: `npx eslint src/store/slices/createMappingSlice.ts src/components/SettingsModal.tsx src/store/slices/__tests__/createMappingSlice.test.ts`
+  - Result: PASS
+  - Evidence: no lint violations in touched implementation and regression-test files.
+
+- Command: `npx vitest run src/store/slices/__tests__/createMappingSlice.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 1 file passed.
+    - 33 tests passed.
+    - Includes new coverage that `removeOcrAliasCorrection(...)` clears alias-model + legacy correction mirrors.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no errors after mapping/action + settings UI changes.

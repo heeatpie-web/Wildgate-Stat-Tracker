@@ -180,6 +180,9 @@ export const useMatchSubmission = () => {
             sessionTeams, sessionShipTypes,
             activeHero, activeShip,
             selectedReachModifiers,
+            selectedTeammates, selectedOpponents,
+            kills, poiEasy, poiMedium, poiEpic,
+            damageTaken, currentNote,
             matches
         } = state;
 
@@ -204,6 +207,28 @@ export const useMatchSubmission = () => {
                 playDefeat();
             }
             const finalTime = (timeMin || timeSec) ? `${timeMin || '00'}:${timeSec || '00'}` : (pendingMatchData.time || "00:00");
+            const finalTeammates = (selectedTeammates && selectedTeammates.length > 0)
+                ? selectedTeammates
+                : (pendingMatchData.teammates || []);
+            const finalOpponents = (selectedOpponents && selectedOpponents.length > 0)
+                ? selectedOpponents
+                : (pendingMatchData.opponents || []);
+            const pendingKills = pendingMatchData.kills || {};
+            const liveKills = kills || {};
+            const finalKills = Object.entries({ ...pendingKills, ...liveKills }).reduce<Record<string, number>>((acc, [ship, value]) => {
+                const parsed = Number(value) || 0;
+                if (parsed > 0) acc[ship] = parsed;
+                return acc;
+            }, {});
+            const finalDamageTaken = Math.max(
+                Number(pendingMatchData.damageTaken) || 0,
+                Number.parseInt(String(damageTaken || ''), 10) || 0
+            );
+            const finalPoiEasy = Math.max(Number(pendingMatchData.poiEasy) || 0, Number(poiEasy) || 0);
+            const finalPoiMedium = Math.max(Number(pendingMatchData.poiMedium) || 0, Number(poiMedium) || 0);
+            const finalPoiEpic = Math.max(Number(pendingMatchData.poiEpic) || 0, Number(poiEpic) || 0);
+            const finalNotes = currentNote || pendingMatchData.notes || '';
+            const finalPlacement = pendingPlacement || (showWizard === 'Win' ? 1 : undefined);
 
             const resolvedHero = pickFirstKnown(pendingMatchData.hero, currentLoadout?.hero, activeHero);
             const resolvedShip = pickFirstKnown(pendingMatchData.ship, currentLoadout?.ship, activeShip);
@@ -221,24 +246,24 @@ export const useMatchSubmission = () => {
                 date: new Date(matchTimestamp).toLocaleDateString(),
                 mode: pendingMatchData.mode || activeMode,
                 player: pendingMatchData.player || activeUser,
-                teammates: pendingMatchData.teammates || [],
-                opponents: pendingMatchData.opponents || [],
+                teammates: finalTeammates,
+                opponents: finalOpponents,
                 hero: resolvedHero,
                 ship: resolvedShip,
                 loadout: mergedLoadout,
                 reachModifiers: finalMods,
-                kills: pendingMatchData.kills || {},
+                kills: Object.keys(finalKills).length > 0 ? finalKills : pendingKills,
                 result: (showWizard || 'Win') as 'Win' | 'Loss' | 'Draw',
                 subType: subType || 'Combat',
-                placement: pendingPlacement || undefined,
-                damageTaken: pendingMatchData.damageTaken || 0,
+                placement: finalPlacement,
+                damageTaken: finalDamageTaken,
                 time: finalTime,
-                poiEasy: pendingMatchData.poiEasy || 0,
-                poiMedium: pendingMatchData.poiMedium || 0,
-                poiEpic: pendingMatchData.poiEpic || 0,
+                poiEasy: finalPoiEasy,
+                poiMedium: finalPoiMedium,
+                poiEpic: finalPoiEpic,
                 killedBy: pendingKilledBy || undefined,
                 killedByShip: pendingKilledByShip || undefined,
-                notes: pendingMatchData.notes || "",
+                notes: finalNotes,
                 timelineEvents: [...(timelineEvents || [])],
                 artifacts: [...(existingMatch?.artifacts || pendingMatchData.artifacts || [])],
                 ocrDebug: pendingMatchData?.ocrDebug || undefined,
@@ -297,8 +322,8 @@ export const useMatchSubmission = () => {
             } else {
                 Logger.info('Submission', `No artifacts bundled for match ${newMatch.id}`);
             }
-            const myTeam = [activeUser, ...(pendingMatchData.teammates || [])];
-            const explicitOpponents = (pendingMatchData.opponents || []);
+            const myTeam = [activeUser, ...finalTeammates];
+            const explicitOpponents = finalOpponents;
 
             Object.entries(sessionTeams || {}).forEach(([color, players]) => {
                 players.forEach(p => {

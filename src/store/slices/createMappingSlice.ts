@@ -110,6 +110,7 @@ export interface MappingSlice {
         confidenceWeight?: number;
         decisionId?: string;
     }) => void;
+    removeOcrAliasCorrection: (ocrText: string, correctedTo: string) => boolean;
     getOcrCorrection: (ocrText: string) => OcrCorrection | undefined;
     resolveOcrAlias: (ocrText: string, opts?: {
         context?: OcrAliasContext;
@@ -234,6 +235,18 @@ const decrementLegacyCorrection = (
             timestamp: Date.now(),
         },
     };
+};
+
+const removeLegacyCorrection = (
+    map: Record<string, OcrCorrection>,
+    key: string,
+    target: string
+): Record<string, OcrCorrection> => {
+    const current = map[key];
+    if (!current) return map;
+    if (normalizeOcrName(current.correctedTo) !== normalizeOcrName(target)) return map;
+    const { [key]: _removed, ...rest } = map;
+    return rest;
 };
 
 // ============================================================================
@@ -388,6 +401,47 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
             context: 'unknown',
             confidenceWeight: 0.6,
         });
+    },
+
+    removeOcrAliasCorrection: (ocrText, correctedTo) => {
+        const raw = normalizeOcrName(ocrText);
+        const normalizedRaw = raw.toLowerCase();
+        const target = normalizeOcrName(correctedTo);
+        if (!raw || !target) return false;
+
+        let removed = false;
+        set((state) => {
+            const entries = state.ocrAliasModel.entries[normalizedRaw] || [];
+            const entry = entries.find((candidate) =>
+                normalizeOcrName(candidate.targetName).toLowerCase() === target.toLowerCase()
+            );
+            if (!entry) return {};
+
+            let nextAliasModel = state.ocrAliasModel;
+            const removeCount = Math.max(1, Number(entry.count || 1));
+            for (let i = 0; i < removeCount; i += 1) {
+                nextAliasModel = removeAliasCorrection(nextAliasModel, {
+                    ocrText: raw,
+                    correctedTo: target,
+                });
+            }
+
+            let nextLegacy = removeLegacyCorrection(state.ocrCorrections, raw, target);
+            if (normalizedRaw && normalizedRaw !== raw) {
+                nextLegacy = removeLegacyCorrection(nextLegacy, normalizedRaw, target);
+            }
+
+            removed = true;
+            return {
+                ocrAliasModel: nextAliasModel,
+                ocrCorrections: nextLegacy,
+            };
+        });
+
+        if (removed) {
+            Logger.info('MappingSlice', `OCR alias removed: "${raw}" -> "${target}"`);
+        }
+        return removed;
     },
 
     getOcrCorrection: (ocrText) => get().ocrCorrections[ocrText],

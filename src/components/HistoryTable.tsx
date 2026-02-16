@@ -47,7 +47,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
     const [bulkOcrBusy, setBulkOcrBusy] = useState(false);
 
     const [filtersOpen, setFiltersOpen] = useState(false);
-    const [filterResult, setFilterResult] = useState<'all' | 'Win' | 'Loss' | 'Draw'>('all');
+    const [filterResult, setFilterResult] = useState<'all' | 'Win' | 'Loss' | 'Draw' | 'Ongoing'>('all');
     const [filterShip, setFilterShip] = useState<string>('all');
     const [filterModifier, setFilterModifier] = useState<string>('all');
     const [filterDateFrom, setFilterDateFrom] = useState<string>('');
@@ -266,14 +266,19 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
     };
 
     /* ── derived stats for summary strip ── */
-    const wins = useMemo(() => filteredMatches.filter(m => m.result === 'Win').length, [filteredMatches]);
-    const losses = useMemo(() => filteredMatches.filter(m => m.result === 'Loss').length, [filteredMatches]);
-    const draws = useMemo(() => filteredMatches.length - wins - losses, [filteredMatches, wins, losses]);
-    const winRate = filteredMatches.length > 0 ? Math.round((wins / filteredMatches.length) * 100) : 0;
+    const completedMatches = useMemo(
+        () => filteredMatches.filter(m => m.result !== 'Ongoing'),
+        [filteredMatches]
+    );
+    const wins = useMemo(() => completedMatches.filter(m => m.result === 'Win').length, [completedMatches]);
+    const losses = useMemo(() => completedMatches.filter(m => m.result === 'Loss').length, [completedMatches]);
+    const draws = useMemo(() => completedMatches.filter(m => m.result === 'Draw').length, [completedMatches]);
+    const ongoing = useMemo(() => filteredMatches.filter(m => m.result === 'Ongoing').length, [filteredMatches]);
+    const winRate = completedMatches.length > 0 ? Math.round((wins / completedMatches.length) * 100) : 0;
 
     const currentStreak = useMemo(() => {
-        if (sortedMatches.length === 0) return { type: 'none' as const, count: 0 };
-        const sorted = [...filteredMatches].sort((a, b) => b.timestamp - a.timestamp);
+        if (completedMatches.length === 0) return { type: 'none' as const, count: 0 };
+        const sorted = [...completedMatches].sort((a, b) => b.timestamp - a.timestamp);
         const firstResult = sorted[0]?.result;
         if (firstResult !== 'Win' && firstResult !== 'Loss') return { type: 'none' as const, count: 0 };
         let count = 0;
@@ -282,7 +287,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
             else break;
         }
         return { type: firstResult as 'Win' | 'Loss', count };
-    }, [filteredMatches, sortedMatches.length]);
+    }, [completedMatches]);
 
     const totalPages = itemsPerPage === 'Infinity' ? 1 : Math.ceil(sortedMatches.length / (itemsPerPage as number)) || 1;
 
@@ -301,7 +306,9 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                         <div className="text-label-sm font-bold uppercase tracking-wide-12 text-md-sys-on-surface/60 mb-1">Win Rate</div>
                         <div className="flex items-baseline gap-2">
                             <span className="text-2xl font-black tracking-tight text-success">{winRate}%</span>
-                            <span className="text-label-sm font-semibold text-md-sys-on-surface/40">{wins}W / {losses}L{draws > 0 ? ` / ${draws}D` : ''}</span>
+                            <span className="text-label-sm font-semibold text-md-sys-on-surface/40">
+                                {wins}W / {losses}L{draws > 0 ? ` / ${draws}D` : ''}{ongoing > 0 ? ` / ${ongoing}O` : ''}
+                            </span>
                         </div>
                     </div>
                     <div className="relative overflow-hidden rounded-card border border-md-sys-outline/10 p-4 backdrop-blur-xl" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 25%)' }}>
@@ -378,7 +385,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                             <div className="flex flex-col gap-1">
                                 <label className="text-label-xs font-bold uppercase tracking-wider text-md-sys-on-surface/40">Result</label>
                                 <div className="flex gap-1">
-                                    {(['all', 'Win', 'Loss', 'Draw'] as const).map(r => (
+                                    {(['all', 'Win', 'Loss', 'Draw', 'Ongoing'] as const).map(r => (
                                         <button
                                             key={r}
                                             onClick={() => setFilterResult(r)}
@@ -387,6 +394,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                                     ? r === 'Win' ? 'bg-success/20 text-success border border-success/30'
                                                     : r === 'Loss' ? 'bg-danger/20 text-danger border border-danger/30'
                                                     : r === 'Draw' ? 'bg-info/20 text-info border border-info/30'
+                                                    : r === 'Ongoing' ? 'bg-info-soft text-info border border-info/30'
                                                     : 'bg-md-sys-primary/15 text-md-sys-primary border border-md-sys-primary/30'
                                                     : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/[0.06] border border-transparent'
                                             }`}
@@ -606,6 +614,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                         {group.matches.map(m => {
                                             const isWin = m.result === 'Win';
                                             const isLoss = m.result === 'Loss';
+                                            const isOngoing = m.result === 'Ongoing';
                                             const hazards = m.reachModifiers || [];
 
                                             return (
@@ -616,22 +625,39 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                                 >
                                                     {/* left accent bar */}
                                                     <td className="w-1 p-0 relative">
-                                                        <div className={`absolute inset-y-0 left-0 w-3px rounded-r-full transition-all ${isWin ? 'bg-success' : isLoss ? 'bg-danger' : 'bg-info'} opacity-70 group-hover:opacity-100`} />
+                                                        <div className={`absolute inset-y-0 left-0 w-3px rounded-r-full transition-all ${
+                                                            isWin ? 'bg-success'
+                                                                : isLoss ? 'bg-danger'
+                                                                    : isOngoing ? 'bg-info'
+                                                                        : 'bg-neutral'
+                                                        } opacity-70 group-hover:opacity-100`} />
                                                     </td>
 
                                                     {/* outcome */}
                                                     <td className="px-3 py-4">
                                                         <div className="flex items-center gap-2.5">
-                                                            <div className={`w-8 h-8 rounded-control flex items-center justify-center ${isWin ? 'bg-success/15' : isLoss ? 'bg-danger/15' : 'bg-info/15'}`}>
+                                                            <div className={`w-8 h-8 rounded-control flex items-center justify-center ${
+                                                                isWin ? 'bg-success/15'
+                                                                    : isLoss ? 'bg-danger/15'
+                                                                        : isOngoing ? 'bg-info/15'
+                                                                            : 'bg-neutral/15'
+                                                            }`}>
                                                                 {isWin
                                                                     ? <Trophy size={14} className="text-success" />
                                                                     : isLoss
                                                                         ? <X size={14} className="text-danger" />
-                                                                        : <TrendingUp size={14} className="text-info" />
+                                                                        : isOngoing
+                                                                            ? <Clock size={14} className="text-info" />
+                                                                            : <TrendingUp size={14} className="text-md-sys-on-surface/70" />
                                                                 }
                                                             </div>
                                                             <div>
-                                                                <span className={`text-body font-bold ${isWin ? 'text-success' : isLoss ? 'text-danger' : 'text-info'}`}>
+                                                                <span className={`text-body font-bold ${
+                                                                    isWin ? 'text-success'
+                                                                        : isLoss ? 'text-danger'
+                                                                            : isOngoing ? 'text-info'
+                                                                                : 'text-md-sys-on-surface/70'
+                                                                }`}>
                                                                     {m.result}
                                                                 </span>
                                                                 <div className="text-label-sm text-md-sys-on-surface/40 font-medium">{m.subType || 'Combat'}</div>
@@ -812,7 +838,15 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                         <div className="flex justify-between items-start border-b border-md-sys-outline/[0.06] pb-5">
                             <div>
                                 <div className="text-label-sm font-semibold uppercase text-md-sys-on-surface/40 tracking-wide-14 mb-1.5">Mission Report</div>
-                                <h2 className={`text-4xl font-black uppercase tracking-tight ${selectedMatchForDetails.result === 'Win' ? 'text-success' : selectedMatchForDetails.result === 'Loss' ? 'text-danger' : 'text-md-sys-on-surface'}`}>{selectedMatchForDetails.result}</h2>
+                                <h2 className={`text-4xl font-black uppercase tracking-tight ${
+                                    selectedMatchForDetails.result === 'Win'
+                                        ? 'text-success'
+                                        : selectedMatchForDetails.result === 'Loss'
+                                            ? 'text-danger'
+                                            : selectedMatchForDetails.result === 'Ongoing'
+                                                ? 'text-info'
+                                                : 'text-md-sys-on-surface'
+                                }`}>{selectedMatchForDetails.result}</h2>
                                 <div className="text-body font-semibold text-md-sys-on-surface/60 mt-0.5">{selectedMatchForDetails.subType || 'Combat'}</div>
                             </div>
                             <div className="flex items-center gap-2">

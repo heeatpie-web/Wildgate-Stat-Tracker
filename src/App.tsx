@@ -17,6 +17,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { ResetConfirmModal } from './components/ResetConfirmModal';
 import { DevTools } from './components/DevTools';
 import { TelemetryPanel } from './components/TelemetryPanel';
+import { ReviewQueueModal } from './components/ReviewQueueModal';
 import Tutorial from './components/Tutorial';
 import { WindowResizer } from './components/WindowResizer';
 type LazyDashboardView = 'analytics' | 'history' | 'smart-captures' | 'players' | 'dev-ocr';
@@ -101,6 +102,8 @@ interface TelemetryDraftPromptState {
     phase: 'midmatch' | 'postmatch';
 }
 
+type FinalMatchResult = Exclude<MatchResult, 'Ongoing'>;
+
 const formatBytes = (bytes: number): string => {
     if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
     const units = ['B', 'KB', 'MB', 'GB'];
@@ -115,7 +118,7 @@ const formatBytes = (bytes: number): string => {
 
 const App: React.FC = () => {
     const [ocrReviewData, setOcrReviewData] = useState<OCRExtractedData | null>(null);
-    const [ocrGateOutcome, setOcrGateOutcome] = useState<MatchResult | null>(null);
+    const [ocrGateOutcome, setOcrGateOutcome] = useState<FinalMatchResult | null>(null);
     const [telemetryPruneStatus, setTelemetryPruneStatus] = useState<TelemetryRetentionStatus | null>(null);
     const [telemetryPruneBusy, setTelemetryPruneBusy] = useState(false);
     const [telemetryDraftPrompt, setTelemetryDraftPrompt] = useState<TelemetryDraftPromptState | null>(null);
@@ -155,6 +158,8 @@ const App: React.FC = () => {
         toast, setToast,
         updateStatus, setUpdateStatus,
         hiddenForScan,
+        showReviewQueue, setShowReviewQueue,
+        requestSmartCapture,
         showIdMapper, setShowIdMapper,
         sidebarCollapsed, setSidebarCollapsed
     } = useUIState();
@@ -530,11 +535,17 @@ const App: React.FC = () => {
 
     const handleTelemetryDraftSmartCapture = useCallback(() => {
         if (!telemetryDraftPrompt) return;
+        const requestId = requestSmartCapture({
+            activeUser: activeUser || null,
+            source: 'telemetry-draft-prompt',
+            requestId: `telemetry-draft-${telemetryDraftPrompt.matchId}-${Date.now()}`,
+            matchId: telemetryDraftPrompt.matchId,
+        });
         window.dispatchEvent(new CustomEvent('smart-capture-request', {
             detail: {
                 activeUser: activeUser || null,
                 source: 'telemetry-draft-prompt',
-                requestId: `telemetry-draft-${telemetryDraftPrompt.matchId}-${Date.now()}`,
+                requestId,
                 matchId: telemetryDraftPrompt.matchId,
             },
         }));
@@ -545,9 +556,9 @@ const App: React.FC = () => {
             return;
         }
         setToast({ message: 'Smart Capture started. You can submit result when ready.', type: 'info' });
-    }, [activeUser, setToast, telemetryDraftPrompt]);
+    }, [activeUser, requestSmartCapture, setToast, telemetryDraftPrompt]);
 
-    const handleTelemetryDraftResult = useCallback((result: MatchResult) => {
+    const handleTelemetryDraftResult = useCallback((result: FinalMatchResult) => {
         if (!telemetryDraftPrompt || telemetryDraftPrompt.phase !== 'postmatch') return;
         const draft = matches.find(m => m.id === telemetryDraftPrompt.matchId);
         if (!draft) {
@@ -659,6 +670,35 @@ const App: React.FC = () => {
         onWin: () => { setPendingMatchData({}); setShowWizard('Win'); },
         onLoss: () => { setPendingMatchData({}); setShowWizard('Loss'); }
     }, showWizard);
+    const queueRosterCandidate = useCallback((rawName: string) => {
+        const normalized = normalizeOcrName(rawName || '');
+        if (!normalized || normalized.length < 2) return;
+        const hasExact = pilotRegistry.some((pilot) => (
+            normalizeOcrName(pilot).toLowerCase() === normalized.toLowerCase()
+        ));
+        if (hasExact) return;
+        const pendingValues = new Set((pendingReviews || [])
+            .filter((review) => review.type === 'roster_candidate')
+            .map((review) => normalizeOcrName(review.value).toLowerCase()));
+        if (pendingValues.has(normalized.toLowerCase())) return;
+        const scored = pilotRegistry.map((pilot) => ({
+            name: pilot,
+            score: similarityScore(normalized, normalizeOcrName(pilot)),
+        })).sort((a, b) => b.score - a.score);
+        const suggestions = scored.filter((entry) => entry.score > 0).slice(0, 3);
+        addPendingReview({
+            id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            type: 'roster_candidate',
+            value: normalized,
+            originalConfidence: 100,
+            context: 'OCR Review',
+            bestMatch: suggestions[0]?.name,
+            bestScore: suggestions[0]?.score,
+            suggestions,
+            source: 'ocr',
+        });
+        setToast({ message: `Queued roster candidate: ${normalized}`, type: 'info' });
+    }, [addPendingReview, pendingReviews, pilotRegistry, setToast]);
 
     const handleApplyOCRData = useCallback((data: OCRExtractedData) => {
         const resolvePlayerName = (ocrName: string, existingList: string[]): string => {
@@ -802,7 +842,8 @@ const App: React.FC = () => {
         });
 
         const currentShip = useAppStore.getState().activeShip;
-        const maxTeammates = getShipCapacity(currentShip) - 1;
+        const shipCapacity = getShipCapacity(currentShip || '');
+        const maxTeammates = Math.max(0, (shipCapacity > 1 ? shipCapacity : 4) - 1);
         data.teammates.forEach(teammate => {
             const resolved = resolvePlayerName(teammate.name, selectedTeammates);
             if (resolved && !selectedTeammates.some(t => t.toLowerCase() === resolved.toLowerCase())) {
@@ -893,7 +934,7 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const onOcrGateRequest = (evt: Event) => {
-            const customEvt = evt as CustomEvent<{ result?: MatchResult; data?: OCRExtractedData }>;
+            const customEvt = evt as CustomEvent<{ result?: FinalMatchResult; data?: OCRExtractedData }>;
             const result = customEvt?.detail?.result;
             const data = customEvt?.detail?.data;
             if (!result || !data) return;
@@ -1043,6 +1084,9 @@ const App: React.FC = () => {
             <SettingsModal />
             <ResetConfirmModal />
             <Wizard />
+            {showReviewQueue && (
+                <ReviewQueueModal onClose={() => setShowReviewQueue(false)} />
+            )}
 
             {showTutorial && (
                 <Tutorial
@@ -1198,6 +1242,7 @@ const App: React.FC = () => {
                     } : undefined}
                     stepLabel={ocrGateOutcome ? 'Step 1 of 2' : undefined}
                     pilotRegistry={pilotRegistry}
+                    onQueueRosterCandidate={queueRosterCandidate}
                 />
             )}
         </div>

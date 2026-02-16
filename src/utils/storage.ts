@@ -38,9 +38,13 @@ const LEGACY_KEYS = [
 let saveTimeout: any = null;
 let pendingResolvers: Array<(ok: boolean) => void> = [];
 let lastData: StorageData | null = null;
+let lastPersistedVersion = 0;
+let pendingVersion = 0;
 let lastAutoBackupCount: number | null = null;
 let lifecycleGuardsBound = false;
 let intervalFlushHandle: any = null;
+
+const hasUnsavedChanges = () => pendingVersion > lastPersistedVersion;
 
 const emptyUidMappings = () => ({
   players: {} as Record<string, string>,
@@ -155,7 +159,7 @@ export const StorageService = {
 
     // Failsafe in case lifecycle hooks are skipped/crash occurs.
     intervalFlushHandle = window.setInterval(() => {
-      if (lastData) void this.flush();
+      if (lastData && hasUnsavedChanges()) void this.flush();
     }, 3000);
   },
 
@@ -240,12 +244,18 @@ export const StorageService = {
   async save(data: StorageData) {
     this.ensureLifecycleGuards();
     lastData = data;
+    pendingVersion += 1;
     if (saveTimeout) clearTimeout(saveTimeout);
 
     return new Promise<boolean>((resolve) => {
       pendingResolvers.push(resolve);
       saveTimeout = setTimeout(async () => {
-        const ok = await writeNow(lastData as StorageData);
+        const snapshot = lastData;
+        const snapshotVersion = pendingVersion;
+        const ok = snapshot ? await writeNow(snapshot) : true;
+        if (ok) {
+          lastPersistedVersion = Math.max(lastPersistedVersion, snapshotVersion);
+        }
         saveTimeout = null;
         const resolvers = pendingResolvers;
         pendingResolvers = [];
@@ -260,7 +270,19 @@ export const StorageService = {
       clearTimeout(saveTimeout);
       saveTimeout = null;
     }
-    const ok = await writeNow(lastData);
+    if (!hasUnsavedChanges()) {
+      const resolvers = pendingResolvers;
+      pendingResolvers = [];
+      resolvers.forEach(r => r(true));
+      return true;
+    }
+
+    const snapshot = lastData;
+    const snapshotVersion = pendingVersion;
+    const ok = await writeNow(snapshot);
+    if (ok) {
+      lastPersistedVersion = Math.max(lastPersistedVersion, snapshotVersion);
+    }
     const resolvers = pendingResolvers;
     pendingResolvers = [];
     resolvers.forEach(r => r(ok));

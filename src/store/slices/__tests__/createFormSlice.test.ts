@@ -35,6 +35,15 @@ describe('createFormSlice', () => {
       expect(store.getState().selectedTeammates).not.toContain('D');
     });
 
+    it('uses a safe 4-player fallback when ship capacity is unknown', () => {
+      store.getState().setActiveShip('Unknown Ship');
+      store.getState().toggleTeammate('A');
+      store.getState().toggleTeammate('B');
+      store.getState().toggleTeammate('C');
+      store.getState().toggleTeammate('D');
+      expect(store.getState().selectedTeammates).toEqual(['A', 'B', 'C']);
+    });
+
     it('allows more teammates on larger ships', () => {
       // Hunter (4 Player) → max 3 teammates
       store.getState().toggleTeammate('A');

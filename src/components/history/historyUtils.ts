@@ -32,5 +32,6 @@ export const formatDayHeader = (timestamp: number): string => {
 export const getRowBg = (m: Match): string => {
     if (m.result === 'Win') return 'bg-success/10 hover:bg-success/20';
     if (m.result === 'Loss') return 'bg-danger/10 hover:bg-danger/20';
-    return 'bg-info/10 hover:bg-info/20';
+    if (m.result === 'Ongoing') return 'bg-info/10 hover:bg-info/20';
+    return 'bg-neutral/10 hover:bg-neutral/20';
 };

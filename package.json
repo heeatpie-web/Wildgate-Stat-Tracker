@@ -102,6 +102,7 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "scripts/ocr*.cjs",
       "!**/*.map",
       "!**/*.d.ts",
       "!**/*.spec.ts",

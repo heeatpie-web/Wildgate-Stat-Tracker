@@ -15,6 +15,7 @@ const uiState = {
   setShowSettings: vi.fn(),
   setToast: vi.fn(),
   setShowWelcome: vi.fn(),
+  requestSmartCapture: vi.fn().mockReturnValue('sc_req_1'),
   devMode: false,
   setDevMode: vi.fn(),
   visionStatus: 'idle',
@@ -104,7 +105,12 @@ describe('Header', () => {
     expect(eventSpy).toHaveBeenCalledTimes(1);
 
     const event = eventSpy.mock.calls[0][0] as CustomEvent;
-    expect(event.detail).toEqual({ activeUser: 'Alec', source: 'header', matchId: null });
+    expect(uiState.requestSmartCapture).toHaveBeenCalledWith({
+      activeUser: 'Alec',
+      source: 'header',
+      matchId: null,
+    });
+    expect(event.detail).toEqual({ activeUser: 'Alec', source: 'header', matchId: null, requestId: 'sc_req_1' });
 
     window.removeEventListener('smart-capture-request', eventSpy as EventListener);
   });
@@ -127,7 +133,7 @@ describe('Header', () => {
 
     expect(eventSpy).toHaveBeenCalledTimes(1);
     const event = eventSpy.mock.calls[0][0] as CustomEvent;
-    expect(event.detail).toEqual({ activeUser: 'Alec', source: 'header', matchId: 9001 });
+    expect(event.detail).toEqual({ activeUser: 'Alec', source: 'header', matchId: 9001, requestId: 'sc_req_1' });
 
     window.removeEventListener('smart-capture-request', eventSpy as EventListener);
   });

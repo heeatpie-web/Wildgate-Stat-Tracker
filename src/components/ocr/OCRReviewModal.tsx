@@ -7,7 +7,6 @@ import {
   Ship,
   MapPin,
   Trash2,
-  Edit2,
   Plus,
   ChevronDown,
   ChevronUp,
@@ -15,10 +14,10 @@ import {
   Eye,
 } from 'lucide-react';
 import { LocalImage } from '../LocalImage';
-import type { OCRExtractedData, ExtractedPlayer, ExtractedModifier, ExtractedOpponentTeam } from '../../utils/ocr/ocrTypes';
+import type { OCRExtractedData, ExtractedOpponentTeam, TeamColor } from '../../utils/ocr/ocrTypes';
 import { SHIPS, UI_REACH_MODIFIERS } from '../../utils/constants';
 import { useAppStore } from '../../store/useAppStore';
-import { normalizeOcrName } from '../../utils/stringUtils';
+import { findClosestMatch, normalizeOcrName } from '../../utils/stringUtils';
 
 interface OCRReviewModalProps {
   data: OCRExtractedData;
@@ -28,6 +27,7 @@ interface OCRReviewModalProps {
   stepLabel?: string;
   pilotRegistry: string[];
   screenshots?: string[];
+  onQueueRosterCandidate?: (name: string) => void;
 }
 
 export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
@@ -38,6 +38,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
   stepLabel,
   pilotRegistry,
   screenshots,
+  onQueueRosterCandidate,
 }) => {
   const recordOcrCorrection = useAppStore(s => s.recordOcrCorrection);
   const ocrBestGuessThresholds = useAppStore(s => s.ocrBestGuessThresholds);
@@ -55,6 +56,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
     opponents: true,
   });
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const [newTeammateName, setNewTeammateName] = useState('');
   const confidenceSummary = useMemo(() => {
     const avg = (vals: number[]) => vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
     const teammateConf = avg((editedData.teammates || []).map(t => t.confidence || 0));
@@ -133,12 +135,89 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
       teammates: prev.teammates.filter((_, i) => i !== index),
     }));
   };
+  const addTeammate = () => {
+    const next = normalizeOcrName(newTeammateName);
+    if (!next) return;
+    setEditedData(prev => ({
+      ...prev,
+      teammates: [
+        ...prev.teammates,
+        { name: next, confidence: 100, rawText: next },
+      ],
+    }));
+    setNewTeammateName('');
+  };
   const updateTeammate = (index: number, name: string) => {
     setEditedData(prev => ({
       ...prev,
       teammates: prev.teammates.map((t, i) =>
         i === index ? { ...t, name, confidence: 100 } : t
       ),
+    }));
+  };
+  const updateOpponentPlayer = (teamIndex: number, playerIndex: number, name: string) => {
+    setEditedData(prev => ({
+      ...prev,
+      opponentTeams: prev.opponentTeams.map((team, ti) => (
+        ti === teamIndex
+          ? {
+            ...team,
+            players: team.players.map((player, pi) => (
+              pi === playerIndex
+                ? { ...player, name, confidence: 100 }
+                : player
+            )),
+          }
+          : team
+      )),
+    }));
+  };
+  const updateOpponentTeam = (
+    teamIndex: number,
+    updates: Partial<ExtractedOpponentTeam>
+  ) => {
+    setEditedData(prev => ({
+      ...prev,
+      opponentTeams: prev.opponentTeams.map((team, ti) => (
+        ti === teamIndex ? { ...team, ...updates } : team
+      )),
+    }));
+  };
+  const addOpponentPlayer = (teamIndex: number) => {
+    setEditedData(prev => ({
+      ...prev,
+      opponentTeams: prev.opponentTeams.map((team, ti) => (
+        ti === teamIndex
+          ? {
+            ...team,
+            players: [
+              ...team.players,
+              { name: '', confidence: 100, rawText: '' },
+            ],
+          }
+          : team
+      )),
+    }));
+  };
+  const addOpponentTeam = () => {
+    setEditedData(prev => ({
+      ...prev,
+      opponentTeams: [
+        ...prev.opponentTeams,
+        {
+          teamName: `Enemy Team ${prev.opponentTeams.length + 1}`,
+          shipType: '',
+          color: 'red',
+          players: [],
+          confidence: 100,
+        },
+      ],
+    }));
+  };
+  const removeOpponentTeam = (teamIndex: number) => {
+    setEditedData(prev => ({
+      ...prev,
+      opponentTeams: prev.opponentTeams.filter((_, ti) => ti !== teamIndex),
     }));
   };
   const removeOpponent = (teamIndex: number, playerIndex: number) => {
@@ -148,8 +227,25 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
         ti === teamIndex
           ? { ...team, players: team.players.filter((_, pi) => pi !== playerIndex) }
           : team
-      ).filter(team => team.players.length > 0),
+      ),
     }));
+  };
+  const getRosterMatchMeta = (name: string) => {
+    const normalized = normalizeOcrName(name || '');
+    if (!normalized) return { type: 'new' as const, label: '' };
+    const exact = pilotRegistry.find((pilot) => (
+      normalizeOcrName(pilot).toLowerCase() === normalized.toLowerCase()
+    ));
+    if (exact) return { type: 'exact' as const, label: exact };
+    const threshold = normalized.length > 8 ? 2 : 1;
+    const fuzzy = findClosestMatch(normalized, pilotRegistry, threshold);
+    if (fuzzy) return { type: 'fuzzy' as const, label: fuzzy };
+    return { type: 'new' as const, label: normalized };
+  };
+  const queueRosterCandidate = (name: string) => {
+    const normalized = normalizeOcrName(name || '');
+    if (!normalized || !onQueueRosterCandidate) return;
+    onQueueRosterCandidate(normalized);
   };
   const handleApply = () => {
     const original = originalDataRef.current;
@@ -243,8 +339,8 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 md3-dialog-scrim backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="md3-dialog rounded-modal shadow-2xl max-w-2xl w-full max-h-90vh overflow-hidden flex flex-col">
+    <div className="fixed inset-0 md3-dialog-scrim backdrop-blur-sm z-modal-top flex items-center justify-center p-4">
+        <div className="md3-dialog rounded-modal shadow-2xl max-w-2xl w-full max-h-90vh overflow-hidden flex flex-col relative z-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="md3-surface-high p-2 rounded-card">
@@ -457,30 +553,76 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                 {editedData.teammates.length === 0 ? (
                   <p className="text-label-sm opacity-40 italic">No teammates detected</p>
                 ) : (
-                  editedData.teammates.map((teammate, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-2 md3-surface-high rounded-card p-2"
-                    >
-                      <input
-                        type="text"
-                        value={teammate.name}
-                        onChange={(e) => updateTeammate(index, e.target.value)}
-                        list="pilot-suggestions"
-                        className="md3-textfield md3-textfield--outlined flex-1 text-body"
-                      />
-                      <span className={`text-label-sm ${getConfidenceColor(teammate.confidence)}`}>
-                        {teammate.confidence.toFixed(0)}%
-                      </span>
-                      <button
-                        onClick={() => removeTeammate(index)}
-                        className="md3-icon-btn text-danger"
+                  editedData.teammates.map((teammate, index) => {
+                    const matchMeta = getRosterMatchMeta(teammate.name);
+                    return (
+                      <div
+                        key={index}
+                        className="flex items-center gap-2 md3-surface-high rounded-card p-2"
                       >
-                        <Trash2 size={14} className="text-danger" />
-                      </button>
-                    </div>
-                  ))
+                        <input
+                          type="text"
+                          value={teammate.name}
+                          onChange={(e) => updateTeammate(index, e.target.value)}
+                          list="pilot-suggestions"
+                          className="md3-textfield md3-textfield--outlined flex-1 text-body"
+                        />
+                        {matchMeta.type === 'exact' && (
+                          <span className="text-label-sm text-success font-semibold">Roster</span>
+                        )}
+                        {matchMeta.type === 'fuzzy' && (
+                          <span className="text-label-sm text-warning font-semibold" title={`Fuzzy match: ${matchMeta.label}`}>
+                            ~ {matchMeta.label}
+                          </span>
+                        )}
+                        {matchMeta.type === 'new' && (
+                          <button
+                            type="button"
+                            onClick={() => queueRosterCandidate(teammate.name)}
+                            className="md3-btn-text text-label-sm text-info px-2 py-1"
+                            title="Queue as roster candidate"
+                            disabled={!onQueueRosterCandidate}
+                          >
+                            + Roster
+                          </button>
+                        )}
+                        <span className={`text-label-sm ${getConfidenceColor(teammate.confidence)}`}>
+                          {teammate.confidence.toFixed(0)}%
+                        </span>
+                        <button
+                          onClick={() => removeTeammate(index)}
+                          className="md3-icon-btn text-danger"
+                        >
+                          <Trash2 size={14} className="text-danger" />
+                        </button>
+                      </div>
+                    );
+                  })
                 )}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newTeammateName}
+                    onChange={(e) => setNewTeammateName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addTeammate();
+                      }
+                    }}
+                    list="pilot-suggestions"
+                    placeholder="Add teammate"
+                    className="md3-textfield md3-textfield--outlined flex-1 text-body"
+                  />
+                  <button
+                    type="button"
+                    onClick={addTeammate}
+                    className="md3-btn-text text-label-sm"
+                  >
+                    <Plus size={14} />
+                    Add
+                  </button>
+                </div>
                 <datalist id="pilot-suggestions">
                   {pilotRegistry.map(pilot => (
                     <option key={pilot} value={pilot} />
@@ -520,37 +662,116 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                             'bg-gray-500'
                           }`}
                         />
-                        <span className="text-body font-medium opacity-60">
-                          {team.teamName || 'Unknown Team'}
-                        </span>
-                        <span className="text-label-sm opacity-40">
-                          {team.shipType}
-                        </span>
+                        <input
+                          type="text"
+                          value={team.teamName || ''}
+                          onChange={(e) => updateOpponentTeam(teamIndex, { teamName: e.target.value })}
+                          placeholder="Team name"
+                          className="md3-textfield md3-textfield--outlined flex-1 text-body"
+                        />
+                        <input
+                          type="text"
+                          value={team.shipType || ''}
+                          onChange={(e) => updateOpponentTeam(teamIndex, { shipType: e.target.value })}
+                          list="ship-suggestions"
+                          placeholder="Ship"
+                          className="md3-textfield md3-textfield--outlined w-36 text-body"
+                        />
+                        <select
+                          value={team.color || 'unknown'}
+                          onChange={(e) => updateOpponentTeam(teamIndex, { color: e.target.value as TeamColor })}
+                          className="md3-textfield md3-textfield--outlined w-24 text-body"
+                        >
+                          <option value="red">Red</option>
+                          <option value="orange">Orange</option>
+                          <option value="yellow">Yellow</option>
+                          <option value="green">Green</option>
+                          <option value="blue">Blue</option>
+                          <option value="purple">Purple</option>
+                          <option value="unknown">Unknown</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => removeOpponentTeam(teamIndex)}
+                          className="md3-icon-btn text-danger"
+                          title="Remove team"
+                        >
+                          <Trash2 size={12} className="text-danger" />
+                        </button>
                       </div>
                       <div className="space-y-1">
                         {team.players.map((player, playerIndex) => (
-                          <div
-                            key={playerIndex}
-                            className="flex items-center gap-2 pl-5"
-                          >
-                            <span className="flex-1 text-body opacity-60">
-                              {player.name}
-                            </span>
-                            <span className={`text-label-sm ${getConfidenceColor(player.confidence)}`}>
-                              {player.confidence.toFixed(0)}%
-                            </span>
-                            <button
-                              onClick={() => removeOpponent(teamIndex, playerIndex)}
-                              className="md3-icon-btn text-danger"
-                            >
-                              <Trash2 size={12} className="text-danger" />
-                            </button>
-                          </div>
+                          (() => {
+                            const matchMeta = getRosterMatchMeta(player.name);
+                            return (
+                              <div
+                                key={playerIndex}
+                                className="flex items-center gap-2 pl-5"
+                              >
+                                <input
+                                  type="text"
+                                  value={player.name}
+                                  onChange={(e) => updateOpponentPlayer(teamIndex, playerIndex, e.target.value)}
+                                  list="pilot-suggestions"
+                                  className="md3-textfield md3-textfield--outlined flex-1 text-body"
+                                />
+                                {matchMeta.type === 'exact' && (
+                                  <span className="text-label-sm text-success font-semibold">Roster</span>
+                                )}
+                                {matchMeta.type === 'fuzzy' && (
+                                  <span className="text-label-sm text-warning font-semibold" title={`Fuzzy match: ${matchMeta.label}`}>
+                                    ~ {matchMeta.label}
+                                  </span>
+                                )}
+                                {matchMeta.type === 'new' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => queueRosterCandidate(player.name)}
+                                    className="md3-btn-text text-label-sm text-info px-2 py-1"
+                                    title="Queue as roster candidate"
+                                    disabled={!onQueueRosterCandidate}
+                                  >
+                                    + Roster
+                                  </button>
+                                )}
+                                <span className={`text-label-sm ${getConfidenceColor(player.confidence)}`}>
+                                  {player.confidence.toFixed(0)}%
+                                </span>
+                                <button
+                                  onClick={() => removeOpponent(teamIndex, playerIndex)}
+                                  className="md3-icon-btn text-danger"
+                                >
+                                  <Trash2 size={12} className="text-danger" />
+                                </button>
+                              </div>
+                            );
+                          })()
                         ))}
+                        <button
+                          type="button"
+                          onClick={() => addOpponentPlayer(teamIndex)}
+                          className="md3-btn-text text-label-sm text-info mt-1"
+                        >
+                          <Plus size={12} />
+                          Add Player
+                        </button>
                       </div>
                     </div>
                   ))
                 )}
+                <button
+                  type="button"
+                  onClick={addOpponentTeam}
+                  className="md3-btn-text text-label-sm"
+                >
+                  <Plus size={14} />
+                  Add Opponent Team
+                </button>
+                <datalist id="ship-suggestions">
+                  {SHIPS.map((ship) => (
+                    <option key={ship} value={ship} />
+                  ))}
+                </datalist>
               </div>
             )}
           </div>
@@ -617,7 +838,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
       </div>
       {lightboxIdx !== null && screenshots && screenshots[lightboxIdx] && (
         <div
-          className="fixed inset-0 z-lightbox bg-scrim-90 flex items-center justify-center p-8"
+          className="fixed inset-0 z-top bg-scrim-90 flex items-center justify-center p-8"
           onClick={() => setLightboxIdx(null)}
         >
           <button

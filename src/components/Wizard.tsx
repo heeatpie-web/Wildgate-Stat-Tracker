@@ -38,7 +38,7 @@ export const Wizard: React.FC = () => {
         poiEpic, setPoiEpic
     } = useGameData();
 
-    const { showWizard, setShowWizard, isOverlayMode, activeMode, activeUser, setToast } = useUIState();
+    const { showWizard, setShowWizard, isOverlayMode, activeMode, activeUser, setToast, requestSmartCapture } = useUIState();
     const { processFinalSubmission, submitting } = useMatchSubmission();
 
     React.useEffect(() => {
@@ -68,11 +68,17 @@ export const Wizard: React.FC = () => {
     const showPlacement = isDefeat && activeMode === 'Artifact Brawl' && selectedWinType === 'Combat';
     const handleWizardSmartCapture = () => {
         const pendingMatchId = Number((pendingMatchData as Match | null)?.id || 0);
+        const requestId = requestSmartCapture({
+            activeUser: activeUser || null,
+            source: 'wizard',
+            matchId: Number.isInteger(pendingMatchId) && pendingMatchId > 0 ? pendingMatchId : null,
+            requestId: `wizard-${Date.now()}`,
+        });
         window.dispatchEvent(new CustomEvent('smart-capture-request', {
             detail: {
                 activeUser: activeUser || null,
                 source: 'wizard',
-                requestId: `wizard-${Date.now()}`,
+                requestId,
                 matchId: Number.isInteger(pendingMatchId) && pendingMatchId > 0 ? pendingMatchId : null,
             }
         }));

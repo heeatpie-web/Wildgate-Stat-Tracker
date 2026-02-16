@@ -43,6 +43,7 @@ describe('smartCaptureUtils', () => {
     expect(RESULT_COLORS.Win).toBe('bg-success');
     expect(RESULT_COLORS.Loss).toBe('bg-danger');
     expect(RESULT_COLORS.Draw).toBe('bg-neutral');
+    expect(RESULT_COLORS.Ongoing).toBe('bg-info');
   });
 
   it('defines OCR state metadata for all pipeline states', () => {
@@ -139,6 +140,7 @@ describe('smartCaptureUtils', () => {
     expect(getCollapsedQueueGlyph(makeMatch({ result: 'Win' }))).toBe('win');
     expect(getCollapsedQueueGlyph(makeMatch({ result: 'Loss' }))).toBe('loss');
     expect(getCollapsedQueueGlyph(makeMatch({ result: 'Draw' }))).toBe('draw');
+    expect(getCollapsedQueueGlyph(makeMatch({ result: 'Ongoing' }))).toBe('queued');
     expect(getCollapsedQueueGlyph(makeMatch({ result: 'Draw', ocrState: 'saved' }))).toBe('saved');
     expect(getCollapsedQueueGlyph(makeMatch({ ocrState: 'error' }))).toBe('error');
   });

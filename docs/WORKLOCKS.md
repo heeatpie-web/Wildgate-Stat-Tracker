@@ -251,3 +251,45 @@ Lock Class:
 - New lock rows must use role names only.
 - Legacy owner labels remain in history but cannot be used in new active rows.
 
+| `docs/agents/00_INTAKE.md` | project-manager | `hot` | 2026-02-16T13:33:45Z | 2026-02-16T13:36:20Z | SMOKE-PERF-CONSENSUS-001 intake record |
+| `docs/agents/01_PLAN.md` | project-manager | `hot` | 2026-02-16T13:33:45Z | 2026-02-16T13:36:20Z | SMOKE-PERF-CONSENSUS-001 plan record |
+| `docs/agents/02_EXECUTION_LOG.md` | debugger | `hot` | 2026-02-16T13:33:45Z | 2026-02-16T13:36:20Z | SMOKE-PERF-CONSENSUS-001 execution record |
+| `docs/agents/03_VALIDATION.md` | verifier | `hot` | 2026-02-16T13:33:45Z | 2026-02-16T13:36:20Z | SMOKE-PERF-CONSENSUS-001 validation evidence |
+| `docs/agents/04_HANDOFF.md` | release-manager | `hot` | 2026-02-16T13:33:45Z | 2026-02-16T13:36:20Z | SMOKE-PERF-CONSENSUS-001 handoff summary |
+| `docs/agents/DECISIONS.md` | project-manager | `hot` | 2026-02-16T13:33:45Z | 2026-02-16T13:36:20Z | SMOKE-PERF-CONSENSUS-001 diagnostics decision entry |
+| src/utils/storage.ts | debugger | exclusive | 2026-02-16T13:43:18Z | 2026-02-16T14:43:18Z | THERMAL-FIX-001 dirty-only persistence flush |
+| electron/main.cjs | debugger | hot | 2026-02-16T13:43:18Z | 2026-02-16T14:43:18Z | THERMAL-FIX-001 telemetry path preference correction |
+| electron/helpers/telemetryArchiveHelpers.cjs | debugger | hot | 2026-02-16T13:43:18Z | 2026-02-16T14:43:18Z | THERMAL-FIX-001 archive write dedupe/cache optimization |
+| docs/agents/01_PLAN.md | project-manager | hot | 2026-02-16T13:45:02Z | 2026-02-16T14:05:02Z | THERMAL-FIX-001 status update |
+| docs/agents/02_EXECUTION_LOG.md | debugger | hot | 2026-02-16T13:45:02Z | 2026-02-16T14:05:02Z | THERMAL-FIX-001 execution log update |
+| docs/agents/03_VALIDATION.md | verifier | hot | 2026-02-16T13:45:02Z | 2026-02-16T14:05:02Z | THERMAL-FIX-001 validation evidence update |
+| docs/agents/04_HANDOFF.md | release-manager | hot | 2026-02-16T13:45:02Z | 2026-02-16T14:05:02Z | THERMAL-FIX-001 handoff update |
+| docs/agents/DECISIONS.md | project-manager | hot | 2026-02-16T13:45:02Z | 2026-02-16T14:05:02Z | THERMAL-FIX-001 decisions update |
+| src/utils/storage.ts | debugger | exclusive | 2026-02-16T13:46:00Z | 2026-02-16T13:46:00Z | THERMAL-FIX-001 lock released |
+| electron/main.cjs | debugger | hot | 2026-02-16T13:46:00Z | 2026-02-16T13:46:00Z | THERMAL-FIX-001 lock released |
+| electron/helpers/telemetryArchiveHelpers.cjs | debugger | hot | 2026-02-16T13:46:00Z | 2026-02-16T13:46:00Z | THERMAL-FIX-001 lock released |
+| docs/agents/01_PLAN.md | project-manager | hot | 2026-02-16T13:46:00Z | 2026-02-16T13:46:00Z | THERMAL-FIX-001 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | hot | 2026-02-16T13:46:00Z | 2026-02-16T13:46:00Z | THERMAL-FIX-001 lock released |
+| docs/agents/03_VALIDATION.md | verifier | hot | 2026-02-16T13:46:00Z | 2026-02-16T13:46:00Z | THERMAL-FIX-001 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | hot | 2026-02-16T13:46:00Z | 2026-02-16T13:46:00Z | THERMAL-FIX-001 lock released |
+| docs/agents/DECISIONS.md | project-manager | hot | 2026-02-16T13:46:00Z | 2026-02-16T13:46:00Z | THERMAL-FIX-001 lock released |
+| docs/agents/PM_TODO.md | project-manager | hot | 2026-02-16T14:54:07Z | 2026-02-16T15:04:07Z | USER-REQ clear outdated PM backlog |
+| docs/agents/PM_TODO.md | project-manager | hot | 2026-02-16T14:54:26Z | 2026-02-16T14:54:26Z | USER-REQ clear outdated PM backlog lock released |
+| src/store/slices/createMappingSlice.ts | debugger | hot | 2026-02-16T21:58:53Z | 2026-02-16T22:58:53Z | OCR-ALIAS-CLEANUP-001 add direct alias removal action for bad manual mappings |
+| src/components/SettingsModal.tsx | debugger | hot | 2026-02-16T21:58:53Z | 2026-02-16T22:58:53Z | OCR-ALIAS-CLEANUP-001 expose remove control and suspicious-manual-add confirmation |
+| src/store/slices/__tests__/createMappingSlice.test.ts | verifier | hot | 2026-02-16T21:58:53Z | 2026-02-16T22:58:53Z | OCR-ALIAS-CLEANUP-001 add regression coverage for alias removal action |
+| docs/agents/00_INTAKE.md | project-manager | hot | 2026-02-16T21:58:53Z | 2026-02-16T22:58:53Z | OCR-ALIAS-CLEANUP-001 intake record |
+| docs/agents/01_PLAN.md | project-manager | hot | 2026-02-16T21:58:53Z | 2026-02-16T22:58:53Z | OCR-ALIAS-CLEANUP-001 plan record |
+| docs/agents/02_EXECUTION_LOG.md | debugger | hot | 2026-02-16T21:58:53Z | 2026-02-16T22:58:53Z | OCR-ALIAS-CLEANUP-001 execution log updates |
+| docs/agents/03_VALIDATION.md | verifier | hot | 2026-02-16T21:58:53Z | 2026-02-16T22:58:53Z | OCR-ALIAS-CLEANUP-001 validation evidence |
+| docs/agents/04_HANDOFF.md | release-manager | hot | 2026-02-16T21:58:53Z | 2026-02-16T22:58:53Z | OCR-ALIAS-CLEANUP-001 handoff summary |
+| docs/agents/DECISIONS.md | project-manager | hot | 2026-02-16T21:58:53Z | 2026-02-16T22:58:53Z | OCR-ALIAS-CLEANUP-001 scope/safety decisions |
+| src/store/slices/createMappingSlice.ts | debugger | hot | 2026-02-16T22:02:22Z | 2026-02-16T22:02:22Z | OCR-ALIAS-CLEANUP-001 lock released |
+| src/components/SettingsModal.tsx | debugger | hot | 2026-02-16T22:02:22Z | 2026-02-16T22:02:22Z | OCR-ALIAS-CLEANUP-001 lock released |
+| src/store/slices/__tests__/createMappingSlice.test.ts | verifier | hot | 2026-02-16T22:02:22Z | 2026-02-16T22:02:22Z | OCR-ALIAS-CLEANUP-001 lock released |
+| docs/agents/00_INTAKE.md | project-manager | hot | 2026-02-16T22:02:22Z | 2026-02-16T22:02:22Z | OCR-ALIAS-CLEANUP-001 lock released |
+| docs/agents/01_PLAN.md | project-manager | hot | 2026-02-16T22:02:22Z | 2026-02-16T22:02:22Z | OCR-ALIAS-CLEANUP-001 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | hot | 2026-02-16T22:02:22Z | 2026-02-16T22:02:22Z | OCR-ALIAS-CLEANUP-001 lock released |
+| docs/agents/03_VALIDATION.md | verifier | hot | 2026-02-16T22:02:22Z | 2026-02-16T22:02:22Z | OCR-ALIAS-CLEANUP-001 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | hot | 2026-02-16T22:02:22Z | 2026-02-16T22:02:22Z | OCR-ALIAS-CLEANUP-001 lock released |
+| docs/agents/DECISIONS.md | project-manager | hot | 2026-02-16T22:02:22Z | 2026-02-16T22:02:22Z | OCR-ALIAS-CLEANUP-001 lock released |
