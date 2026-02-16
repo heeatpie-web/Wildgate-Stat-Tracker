@@ -131,3 +131,9 @@
 3. `COMPLETED` - Surface telemetry-detected weapons/equipment in `ActionPanel` status summary.
 4. `COMPLETED` - Run targeted validation (`eslint` touched files + `typecheck`) and log evidence.
 5. `COMPLETED` - Record execution addendum and handoff notes.
+
+## Current Task Plan (DISABLE-RUNTIME-DEVTOOLS-001)
+1. `COMPLETED` - Trace all DevTools open paths in Electron main process.
+2. `COMPLETED` - Gate runtime `open-devtools` IPC behind explicit env opt-in flag.
+3. `COMPLETED` - Run targeted validation (`eslint electron/main.cjs` + `typecheck`).
+4. `COMPLETED` - Record execution/validation/handoff.

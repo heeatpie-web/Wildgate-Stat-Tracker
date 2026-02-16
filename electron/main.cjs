@@ -30,6 +30,7 @@ const {
   URL_ALLOWLIST_DISABLED,
 } = require('./security/ipcValidation.cjs');
 const isDev = !app.isPackaged;
+const ALLOW_RUNTIME_DEVTOOLS = process.env.WILDGATE_ALLOW_DEVTOOLS === '1';
 const DEV_SERVER_URL = process.env.WILDGATE_DEV_SERVER_URL || 'http://localhost:5173';
 const USER_DATA_ROOT = path.resolve(app.getPath('userData'));
 const OCR_CORPUS_DIR = path.join(USER_DATA_ROOT, 'ocr-corpus');
@@ -1973,7 +1974,10 @@ function createWindow() {
     telemetryArchiveTokenRegistry.removeScope(getTelemetryArchiveScope(webContentsId));
   });
 
-  ipcMain.on('open-devtools', () => win.webContents.openDevTools());
+  ipcMain.on('open-devtools', () => {
+    if (!win || !ALLOW_RUNTIME_DEVTOOLS) return;
+    win.webContents.openDevTools();
+  });
   ipcMain.on('minimize-window', () => { if (win) win.minimize(); });
   ipcMain.on('skip-taskbar', (event, skip) => { if (win) win.setSkipTaskbar(skip); });
   ipcMain.on('restore-window', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });

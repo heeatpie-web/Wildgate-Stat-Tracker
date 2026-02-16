@@ -1052,3 +1052,31 @@
   - Review ask: approve closure of follow-up mapper/loadout telemetry fixes.
 - `PM Response` | `APPROVED`
   - Reason: requested follow-up behavior delivered with narrow runtime changes and passing checks.
+
+---
+
+## 2026-02-15 - DISABLE-RUNTIME-DEVTOOLS-001
+- Scope: prevent runtime console/DevTools opening unless explicitly opted in.
+
+## Work Entries
+- 17:24Z
+  - Verified startup auto-open is already disabled in `electron/main.cjs` (`openDevTools` call commented).
+  - Identified remaining runtime path: IPC listener `open-devtools`.
+
+- 17:26Z
+  - Added `ALLOW_RUNTIME_DEVTOOLS` env gate:
+    - `WILDGATE_ALLOW_DEVTOOLS=1` required to open DevTools.
+    - default behavior is no-op when IPC `open-devtools` is triggered.
+
+- 17:28Z
+  - Validation completed (`eslint` + `typecheck`) PASS.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `DISABLE-RUNTIME-DEVTOOLS-001#1/#2/#3/#4` | Owner: `debugger`
+  - Delta: runtime DevTools opening is disabled by default and opt-in via env only.
+  - Evidence pointers:
+    - `electron/main.cjs`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of runtime devtools-disable patch.
+- `PM Response` | `APPROVED`
+  - Reason: requested runtime behavior achieved with minimal scoped change and passing checks.

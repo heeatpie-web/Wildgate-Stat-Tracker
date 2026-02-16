@@ -451,3 +451,22 @@
   - Risk Tier: `T2`
   - Execution Path: `FULL_PATH`
   - Reason: runtime telemetry logic + user-visible recording panel output update.
+
+---
+
+## Intake - 2026-02-15 - DISABLE-RUNTIME-DEVTOOLS-001
+- Goal: prevent the Chromium DevTools console from opening during normal app runtime.
+- Constraints:
+  - Keep scope narrow to Electron main-process DevTools open path.
+  - Preserve ability to re-enable explicitly for debugging when needed.
+- Out-of-scope:
+  - UI redesign.
+  - Broader Electron window behavior changes.
+- Done condition:
+  - Runtime `open-devtools` IPC no longer opens DevTools by default.
+  - DevTools can be explicitly re-enabled only through an opt-in env flag.
+  - Validation evidence recorded.
+- AOM_V2:
+  - Risk Tier: `T1`
+  - Execution Path: `FULL_PATH`
+  - Reason: runtime behavior change in Electron main process.

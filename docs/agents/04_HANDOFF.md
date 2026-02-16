@@ -554,3 +554,22 @@
 
 ## Remaining / Risks
 - Weapon/equipment mapping coverage still depends on available GUID/name dictionaries; unknown but non-GUID free-text values are intentionally ignored to avoid noisy false positives.
+
+---
+
+## Handoff - 2026-02-15 - DISABLE-RUNTIME-DEVTOOLS-001
+## Status
+- Completed.
+
+## What Changed
+- `electron/main.cjs`
+  - Added `ALLOW_RUNTIME_DEVTOOLS` gate (`WILDGATE_ALLOW_DEVTOOLS=1`).
+  - Runtime IPC `open-devtools` now no-ops unless that gate is enabled.
+  - Startup auto-open behavior remains disabled.
+
+## What Was Verified
+- `npx eslint electron/main.cjs` passed.
+- `npm run -s typecheck` passed.
+
+## Remaining / Risks
+- If you need DevTools temporarily, launch with `WILDGATE_ALLOW_DEVTOOLS=1`.

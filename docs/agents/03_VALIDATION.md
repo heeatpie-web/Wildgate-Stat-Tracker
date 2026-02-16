@@ -449,3 +449,20 @@
     - Unknown-ID save in mapper is now type-aware and writes to the correct UID domain (`players/ships/weapons/equipment`).
     - Telemetry loadout parsing resolves weapons/equipment from broader GUID and raw-name candidate fields.
     - Telemetry summary in ActionPanel now includes weapons/equipment rows and can render when only those are present.
+
+---
+
+## Validation - 2026-02-15 - DISABLE-RUNTIME-DEVTOOLS-001
+- Command: `npx eslint electron/main.cjs`
+  - Result: PASS
+  - Evidence: no lint violations after runtime-devtools gating patch.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no errors after Electron main change.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - `open-devtools` IPC handler now returns without opening DevTools unless `WILDGATE_ALLOW_DEVTOOLS=1`.
+    - Startup auto-open remains disabled (commented `openDevTools` call unchanged).
