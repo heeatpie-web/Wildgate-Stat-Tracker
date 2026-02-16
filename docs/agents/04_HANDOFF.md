@@ -784,3 +784,33 @@
 
 ## Remaining / Risks
 - This patch improves clarity/copy only; it does not alter OCR extraction quality or correction persistence logic.
+
+---
+
+## Handoff - 2026-02-16 - OCR-CORRECTION-DELETE-002
+## Status
+- Completed.
+
+## What Changed
+- `src/components/SmartCapturesPanel.tsx`
+  - Added explicit Smart Captures delete controls:
+    - `Delete` for selected matches in Bulk Actions.
+    - `Delete` action in per-match detail bar.
+  - Both delete paths are confirm-gated and clean up selection/focus state.
+
+- `src/components/ocr/OCRReviewModal.tsx`
+  - Added first-time tutorial helper (dismissable, persisted).
+  - Added per-name match reasoning hints under editable name fields.
+  - Added "Name changes in this review" panel with per-item `Undo` and `Undo All`.
+
+- `src/components/OcrCorrectionModal.tsx`
+  - Clarified correction helper language and learning intent.
+  - Updated action labels to be more explicit (`Auto Fill Confident`, `Apply and Learn`, `Close for Now`).
+
+## What Was Verified
+- `npx eslint src/components/SmartCapturesPanel.tsx src/components/ocr/OCRReviewModal.tsx src/components/OcrCorrectionModal.tsx` passed.
+- `npm run -s typecheck` passed.
+
+## Remaining / Risks
+- Delete flow is immediate after confirmation and does not include a trash bin/recovery feature.
+- First-time tutorial visibility uses local storage; clearing app storage will show it again.

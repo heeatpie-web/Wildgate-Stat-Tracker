@@ -31,6 +31,17 @@ interface OCRReviewModalProps {
   onQueueRosterCandidate?: (name: string) => void;
 }
 
+interface NameChangeRecord {
+  id: string;
+  scope: 'teammate' | 'opponent';
+  teamIndex?: number;
+  playerIndex: number;
+  original: string;
+  current: string;
+}
+
+const OCR_REVIEW_COACHMARK_KEY = 'wst_ocr_review_helper_seen_v3';
+
 export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
   data,
   onApply,
@@ -58,6 +69,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
   });
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [newTeammateName, setNewTeammateName] = useState('');
+  const [showCoachmark, setShowCoachmark] = useState(false);
   const confidenceSummary = useMemo(() => {
     const avg = (vals: number[]) => vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
     const teammateConf = avg((editedData.teammates || []).map(t => t.confidence || 0));
@@ -74,6 +86,47 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
   const extraModifiers = editedData.reachModifiers.filter(
     m => !UI_REACH_MODIFIERS.some(u => u.toLowerCase() === m.name.toLowerCase())
   );
+  const nameChanges = useMemo<NameChangeRecord[]>(() => {
+    const original = originalDataRef.current;
+    const changes: NameChangeRecord[] = [];
+
+    (original.teammates || []).forEach((teammate, index) => {
+      const edited = editedData.teammates[index];
+      if (!edited) return;
+      const originalName = normalizeOcrName(teammate.name || '');
+      const currentName = normalizeOcrName(edited.name || '');
+      if (!originalName || !currentName || originalName === currentName) return;
+      changes.push({
+        id: `teammate_${index}`,
+        scope: 'teammate',
+        playerIndex: index,
+        original: originalName,
+        current: currentName,
+      });
+    });
+
+    (original.opponentTeams || []).forEach((team, teamIndex) => {
+      const editedTeam = editedData.opponentTeams[teamIndex];
+      if (!editedTeam) return;
+      (team.players || []).forEach((player, playerIndex) => {
+        const editedPlayer = editedTeam.players[playerIndex];
+        if (!editedPlayer) return;
+        const originalName = normalizeOcrName(player.name || '');
+        const currentName = normalizeOcrName(editedPlayer.name || '');
+        if (!originalName || !currentName || originalName === currentName) return;
+        changes.push({
+          id: `opponent_${teamIndex}_${playerIndex}`,
+          scope: 'opponent',
+          teamIndex,
+          playerIndex,
+          original: originalName,
+          current: currentName,
+        });
+      });
+    });
+
+    return changes;
+  }, [editedData]);
   useEffect(() => {
     const hazardMods = (data.hazards || []).map((h: string) => ({
       name: normalizeModifierName(h),
@@ -92,6 +145,24 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
     setEditedData(normalized);
     originalDataRef.current = normalized;
   }, [data]);
+
+  useEffect(() => {
+    try {
+      const seen = window.localStorage.getItem(OCR_REVIEW_COACHMARK_KEY) === '1';
+      setShowCoachmark(!seen);
+    } catch {
+      setShowCoachmark(true);
+    }
+  }, []);
+
+  const dismissCoachmark = () => {
+    setShowCoachmark(false);
+    try {
+      window.localStorage.setItem(OCR_REVIEW_COACHMARK_KEY, '1');
+    } catch {
+      // No-op: local storage may be unavailable.
+    }
+  };
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -243,10 +314,82 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
     if (fuzzy) return { type: 'fuzzy' as const, label: fuzzy };
     return { type: 'new' as const, label: normalized };
   };
+  const getRosterMatchHint = (meta: ReturnType<typeof getRosterMatchMeta>) => {
+    if (meta.type === 'exact') {
+      return { text: 'Exact roster match', tone: 'text-success' };
+    }
+    if (meta.type === 'fuzzy') {
+      return { text: `Looks like ${meta.label}`, tone: 'text-warning' };
+    }
+    return { text: 'Not in roster yet', tone: 'text-info' };
+  };
   const queueRosterCandidate = (name: string) => {
     const normalized = normalizeOcrName(name || '');
     if (!normalized || !onQueueRosterCandidate) return;
     onQueueRosterCandidate(normalized);
+  };
+  const undoNameChange = (change: NameChangeRecord) => {
+    setEditedData((prev) => {
+      if (change.scope === 'teammate') {
+        return {
+          ...prev,
+          teammates: prev.teammates.map((teammate, index) => (
+            index === change.playerIndex
+              ? { ...teammate, name: change.original, confidence: 100 }
+              : teammate
+          )),
+        };
+      }
+      return {
+        ...prev,
+        opponentTeams: prev.opponentTeams.map((team, teamIndex) => {
+          if (teamIndex !== change.teamIndex) return team;
+          return {
+            ...team,
+            players: team.players.map((player, playerIndex) => (
+              playerIndex === change.playerIndex
+                ? { ...player, name: change.original, confidence: 100 }
+                : player
+            )),
+          };
+        }),
+      };
+    });
+  };
+  const undoAllNameChanges = () => {
+    setEditedData((prev) => {
+      const original = originalDataRef.current;
+      const originalTeammates = original.teammates || [];
+      const originalOpponentTeams = original.opponentTeams || [];
+      return {
+        ...prev,
+        teammates: prev.teammates.map((teammate, index) => {
+          const originalTeammate = originalTeammates[index];
+          if (!originalTeammate?.name) return teammate;
+          return {
+            ...teammate,
+            name: normalizeOcrName(originalTeammate.name),
+            confidence: 100,
+          };
+        }),
+        opponentTeams: prev.opponentTeams.map((team, teamIndex) => {
+          const originalTeam = originalOpponentTeams[teamIndex];
+          if (!originalTeam) return team;
+          return {
+            ...team,
+            players: team.players.map((player, playerIndex) => {
+              const originalPlayer = originalTeam.players[playerIndex];
+              if (!originalPlayer?.name) return player;
+              return {
+                ...player,
+                name: normalizeOcrName(originalPlayer.name),
+                confidence: 100,
+              };
+            }),
+          };
+        }),
+      };
+    });
   };
   const handleApply = () => {
     const original = originalDataRef.current;
@@ -391,6 +534,27 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
               <div className={`text-label-sm font-bold ${getConfidenceColor(confidenceSummary.modConf)}`}>{Math.round(confidenceSummary.modConf)}%</div>
             </div>
           </div>
+          {showCoachmark && (
+            <div className="md3-banner md3-banner--info">
+              <Info size={16} className="mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-body font-medium">Quick Tutorial</p>
+                <p className="text-label-sm opacity-60 mt-0.5">
+                  1) Fix any wrong name. 2) Check team/ship/modifiers. 3) Press <span className="font-semibold">Apply and Learn</span>.
+                </p>
+                <p className="text-label-sm opacity-60 mt-0.5">
+                  Every correction here helps OCR make better guesses next time.
+                </p>
+                <button
+                  type="button"
+                  onClick={dismissCoachmark}
+                  className="mt-2 md3-btn-tonal px-2.5 py-1 text-label-sm font-bold"
+                >
+                  Got It
+                </button>
+              </div>
+            </div>
+          )}
           <div className="md3-banner md3-banner--info">
             <Info size={16} className="mt-0.5 flex-shrink-0" />
             <div>
@@ -403,6 +567,38 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
               </p>
             </div>
           </div>
+          {nameChanges.length > 0 && (
+            <div className="md3-surface-high rounded-card border border-md-sys-outline/10 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-label-sm font-semibold">
+                  Name changes in this review ({nameChanges.length})
+                </div>
+                <button
+                  type="button"
+                  onClick={undoAllNameChanges}
+                  className="md3-btn-text text-label-sm font-bold"
+                >
+                  Undo All
+                </button>
+              </div>
+              <div className="space-y-1 max-h-28 overflow-y-auto custom-scrollbar pr-1">
+                {nameChanges.map((change) => (
+                  <div key={change.id} className="flex items-center justify-between gap-2 rounded-control md3-surface p-2">
+                    <div className="text-label-sm truncate">
+                      {change.original} -&gt; {change.current}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => undoNameChange(change)}
+                      className="md3-btn-text text-label-sm font-semibold"
+                    >
+                      Undo
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {screenshots && screenshots.length > 0 && (
             <div className="md3-card rounded-card overflow-hidden">
               <button
@@ -571,18 +767,24 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                 ) : (
                   editedData.teammates.map((teammate, index) => {
                     const matchMeta = getRosterMatchMeta(teammate.name);
+                    const matchHint = getRosterMatchHint(matchMeta);
                     return (
                       <div
                         key={index}
                         className="flex items-center gap-2 md3-surface-high rounded-card p-2"
                       >
-                        <input
-                          type="text"
-                          value={teammate.name}
-                          onChange={(e) => updateTeammate(index, e.target.value)}
-                          list="pilot-suggestions"
-                          className="md3-textfield md3-textfield--outlined flex-1 text-body"
-                        />
+                        <div className="flex-1 min-w-0">
+                          <input
+                            type="text"
+                            value={teammate.name}
+                            onChange={(e) => updateTeammate(index, e.target.value)}
+                            list="pilot-suggestions"
+                            className="md3-textfield md3-textfield--outlined w-full text-body"
+                          />
+                          <div className={`mt-1 text-label-xs ${matchHint.tone}`}>
+                            {matchHint.text}
+                          </div>
+                        </div>
                         {matchMeta.type === 'exact' && (
                           <span className="text-label-sm text-success font-semibold">Roster</span>
                         )}
@@ -719,18 +921,24 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                         {team.players.map((player, playerIndex) => (
                           (() => {
                             const matchMeta = getRosterMatchMeta(player.name);
+                            const matchHint = getRosterMatchHint(matchMeta);
                             return (
                               <div
                                 key={playerIndex}
                                 className="flex items-center gap-2 pl-5"
                               >
-                                <input
-                                  type="text"
-                                  value={player.name}
-                                  onChange={(e) => updateOpponentPlayer(teamIndex, playerIndex, e.target.value)}
-                                  list="pilot-suggestions"
-                                  className="md3-textfield md3-textfield--outlined flex-1 text-body"
-                                />
+                                <div className="flex-1 min-w-0">
+                                  <input
+                                    type="text"
+                                    value={player.name}
+                                    onChange={(e) => updateOpponentPlayer(teamIndex, playerIndex, e.target.value)}
+                                    list="pilot-suggestions"
+                                    className="md3-textfield md3-textfield--outlined w-full text-body"
+                                  />
+                                  <div className={`mt-1 text-label-xs ${matchHint.tone}`}>
+                                    {matchHint.text}
+                                  </div>
+                                </div>
                                 {matchMeta.type === 'exact' && (
                                   <span className="text-label-sm text-success font-semibold">Roster</span>
                                 )}

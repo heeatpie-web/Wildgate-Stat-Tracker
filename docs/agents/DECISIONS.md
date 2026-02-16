@@ -614,3 +614,38 @@ Rule:
   - `docs/agents/03_VALIDATION.md`
 - Revisit trigger/expiry:
   - Revisit if users still report confusion; next step would be a one-time guided coachmark around the correction popup entry point.
+
+- Type: `safety`
+- Decision: expose Smart Captures deletion directly in UI (single and bulk) but require explicit confirmation for every delete action.
+- Date: 2026-02-16
+- Options considered:
+  - Keep deletion hidden/out-of-flow.
+  - Add one-click delete for speed.
+  - Add visible delete actions with confirm prompts.
+- Rationale:
+  - User requested explicit delete capability in Smart Captures.
+  - Match deletion is destructive; confirm prompts reduce accidental loss.
+  - This keeps scope narrow without introducing a full trash/restore subsystem.
+- Impacted files/artifacts:
+  - `src/components/SmartCapturesPanel.tsx`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if users request undo/recovery; next step would be soft-delete with restore window.
+
+- Type: `ux-guidance`
+- Decision: add first-time OCR review tutorial and inline reason/undo hints directly in correction modal, persisted with local storage.
+- Date: 2026-02-16
+- Options considered:
+  - Always show long instruction text.
+  - Add no tutorial and rely on labels only.
+  - Add concise first-time tutorial + inline hints and undo visibility.
+- Rationale:
+  - User asked for clearer correction popup and higher feature adoption.
+  - First-time tutorial reduces repeated clutter for experienced users.
+  - Inline reason/undo improves confidence when editing OCR names.
+- Impacted files/artifacts:
+  - `src/components/ocr/OCRReviewModal.tsx`
+  - `src/components/OcrCorrectionModal.tsx`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if users still struggle; next step would be guided stepper with telemetry-based completion tracking.

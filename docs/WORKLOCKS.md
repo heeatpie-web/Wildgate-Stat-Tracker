@@ -309,3 +309,21 @@ Lock Class:
 | docs/agents/03_VALIDATION.md | verifier | hot | 2026-02-16T22:09:03Z | 2026-02-16T22:09:03Z | OCR-CORRECTION-POPUP-CLARITY-001 lock released |
 | docs/agents/04_HANDOFF.md | release-manager | hot | 2026-02-16T22:09:03Z | 2026-02-16T22:09:03Z | OCR-CORRECTION-POPUP-CLARITY-001 lock released |
 | docs/agents/DECISIONS.md | project-manager | hot | 2026-02-16T22:09:03Z | 2026-02-16T22:09:03Z | OCR-CORRECTION-POPUP-CLARITY-001 lock released |
+| src/components/SmartCapturesPanel.tsx | ui-designer | hot | 2026-02-16T22:10:00Z | 2026-02-16T23:10:00Z | OCR-CORRECTION-DELETE-002 add single/bulk delete controls + CTA clarity follow-ups |
+| src/components/ocr/OCRReviewModal.tsx | ui-designer | hot | 2026-02-16T22:10:00Z | 2026-02-16T23:10:00Z | OCR-CORRECTION-DELETE-002 add first-time helper, reason hints, and undo review list |
+| src/components/OcrCorrectionModal.tsx | ui-designer | hot | 2026-02-16T22:10:00Z | 2026-02-16T23:10:00Z | OCR-CORRECTION-DELETE-002 improve wizard correction copy/action clarity |
+| docs/agents/00_INTAKE.md | project-manager | hot | 2026-02-16T22:10:00Z | 2026-02-16T23:10:00Z | OCR-CORRECTION-DELETE-002 intake update |
+| docs/agents/01_PLAN.md | project-manager | hot | 2026-02-16T22:10:00Z | 2026-02-16T23:10:00Z | OCR-CORRECTION-DELETE-002 plan update |
+| docs/agents/02_EXECUTION_LOG.md | debugger | hot | 2026-02-16T22:10:00Z | 2026-02-16T23:10:00Z | OCR-CORRECTION-DELETE-002 execution log update |
+| docs/agents/03_VALIDATION.md | verifier | hot | 2026-02-16T22:10:00Z | 2026-02-16T23:10:00Z | OCR-CORRECTION-DELETE-002 validation update |
+| docs/agents/04_HANDOFF.md | release-manager | hot | 2026-02-16T22:10:00Z | 2026-02-16T23:10:00Z | OCR-CORRECTION-DELETE-002 handoff update |
+| docs/agents/DECISIONS.md | project-manager | hot | 2026-02-16T22:10:00Z | 2026-02-16T23:10:00Z | OCR-CORRECTION-DELETE-002 decision updates |
+| src/components/SmartCapturesPanel.tsx | ui-designer | hot | 2026-02-16T22:15:36Z | 2026-02-16T22:15:36Z | OCR-CORRECTION-DELETE-002 lock released |
+| src/components/ocr/OCRReviewModal.tsx | ui-designer | hot | 2026-02-16T22:15:36Z | 2026-02-16T22:15:36Z | OCR-CORRECTION-DELETE-002 lock released |
+| src/components/OcrCorrectionModal.tsx | ui-designer | hot | 2026-02-16T22:15:36Z | 2026-02-16T22:15:36Z | OCR-CORRECTION-DELETE-002 lock released |
+| docs/agents/00_INTAKE.md | project-manager | hot | 2026-02-16T22:15:36Z | 2026-02-16T22:15:36Z | OCR-CORRECTION-DELETE-002 lock released |
+| docs/agents/01_PLAN.md | project-manager | hot | 2026-02-16T22:15:36Z | 2026-02-16T22:15:36Z | OCR-CORRECTION-DELETE-002 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | hot | 2026-02-16T22:15:36Z | 2026-02-16T22:15:36Z | OCR-CORRECTION-DELETE-002 lock released |
+| docs/agents/03_VALIDATION.md | verifier | hot | 2026-02-16T22:15:36Z | 2026-02-16T22:15:36Z | OCR-CORRECTION-DELETE-002 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | hot | 2026-02-16T22:15:36Z | 2026-02-16T22:15:36Z | OCR-CORRECTION-DELETE-002 lock released |
+| docs/agents/DECISIONS.md | project-manager | hot | 2026-02-16T22:15:36Z | 2026-02-16T22:15:36Z | OCR-CORRECTION-DELETE-002 lock released |

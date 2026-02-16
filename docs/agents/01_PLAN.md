@@ -178,3 +178,9 @@
 2. `COMPLETED` - Update OCR review popup content/labels to make correction purpose and usage explicit.
 3. `COMPLETED` - Update Smart Captures review CTA wording to emphasize correction/training behavior.
 4. `COMPLETED` - Run targeted validation (`eslint` touched files + `typecheck`) and record evidence/handoff.
+
+## Current Task Plan (OCR-CORRECTION-DELETE-002)
+1. `COMPLETED` - Extend Smart Captures OCR review popup with first-time guidance, per-name match reason hints, and visible undo controls for edits.
+2. `COMPLETED` - Improve legacy wizard correction modal copy/action labels to clarify learning behavior.
+3. `COMPLETED` - Add explicit match-delete actions in Smart Captures (single-item and selected bulk) with confirmation prompts.
+4. `COMPLETED` - Run targeted validation (`eslint` touched files + `typecheck`) and record execution/handoff evidence.

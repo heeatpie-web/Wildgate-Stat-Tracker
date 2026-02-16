@@ -355,6 +355,37 @@ const SmartCapturesPanel: React.FC = () => {
         setToast({ message: `Resolved ${visibleMatches.length} visible match${visibleMatches.length === 1 ? '' : 'es'}`, type: 'success' });
     }, [visibleMatches, resolveMatches, setToast]);
 
+    const removeMatchesByIds = useCallback((ids: number[]) => {
+        if (!ids.length) return;
+        const idSet = new Set(ids);
+        const remaining = [...matches]
+            .filter((match) => !idSet.has(match.id))
+            .sort((a, b) => b.timestamp - a.timestamp);
+        idSet.forEach((id) => deleteMatch(id));
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            idSet.forEach((id) => next.delete(id));
+            return next;
+        });
+        if (selectedMatchId != null && idSet.has(selectedMatchId)) {
+            setSelectedMatchId(remaining[0]?.id ?? null);
+        }
+    }, [deleteMatch, matches, selectedMatchId, setSelectedMatchId]);
+
+    const bulkDeleteSelected = useCallback(() => {
+        const ids = Array.from(selectedIds);
+        if (ids.length === 0) {
+            setToast({ message: 'Select at least one match to delete.', type: 'warning' });
+            return;
+        }
+        const confirmed = window.confirm(
+            `Delete ${ids.length} selected match${ids.length === 1 ? '' : 'es'}? This cannot be undone.`
+        );
+        if (!confirmed) return;
+        removeMatchesByIds(ids);
+        setToast({ message: `Deleted ${ids.length} match${ids.length === 1 ? '' : 'es'}.`, type: 'success' });
+    }, [removeMatchesByIds, selectedIds, setToast]);
+
     const bulkExportSelectedJson = useCallback(() => {
         const ids = Array.from(selectedIds);
         if (ids.length === 0) return;
@@ -476,6 +507,14 @@ const SmartCapturesPanel: React.FC = () => {
             type: 'success',
         });
     }, [deleteMatch, globalOrderedMatchIds, matches, selectedIds, setSelectedMatchId, setToast, updateMatch]);
+
+    const handleDeleteSingleMatch = useCallback((target: Match) => {
+        const matchNumber = getQueueDisplayNumber(target.id, globalOrderedMatchIds);
+        const confirmed = window.confirm(`Delete match #${matchNumber}? This cannot be undone.`);
+        if (!confirmed) return;
+        removeMatchesByIds([target.id]);
+        setToast({ message: `Deleted match #${matchNumber}.`, type: 'success' });
+    }, [globalOrderedMatchIds, removeMatchesByIds, setToast]);
 
     const bulkRerunOcrSelected = useCallback(async () => {
         const ids = Array.from(selectedIds);
@@ -947,6 +986,7 @@ const SmartCapturesPanel: React.FC = () => {
                                         }
                                     }}
                                     onQueueRosterCandidate={queueRosterCandidate}
+                                    onDeleteMatch={handleDeleteSingleMatch}
                                 />
                             ) : (
                                 <div className="h-full flex items-center justify-center p-4">
@@ -965,11 +1005,11 @@ const SmartCapturesPanel: React.FC = () => {
                                             </div>
                                             <div className="rounded-control md3-surface p-2 border border-md-sys-outline/10">
                                                 <div className="text-label-xs font-bold text-md-sys-primary uppercase">2. Review</div>
-                                                <div className="text-label-xs text-md-sys-on-surface/62 mt-1">Fix OCR fields and hazards.</div>
+                                                <div className="text-label-xs text-md-sys-on-surface/62 mt-1">Fix names, teams, and OCR fields.</div>
                                             </div>
                                             <div className="rounded-control md3-surface p-2 border border-md-sys-outline/10">
                                                 <div className="text-label-xs font-bold text-md-sys-primary uppercase">3. Approve</div>
-                                                <div className="text-label-xs text-md-sys-on-surface/62 mt-1">Resolve and auto-open next.</div>
+                                                <div className="text-label-xs text-md-sys-on-surface/62 mt-1">Apply and teach OCR for later captures.</div>
                                             </div>
                                         </div>
                                     </div>
@@ -997,10 +1037,11 @@ const SmartCapturesPanel: React.FC = () => {
                             <Button type="button" variant="secondary" className="px-3 py-2 text-label-sm font-bold rounded-control" onClick={() => selectVisible('all')} disabled={bulkBusy || visibleMatches.length === 0} title="Select all visible matches">Select Visible ({visibleMatches.length})</Button>
                             <Button type="button" variant="secondary" className="px-3 py-2 text-label-sm font-bold rounded-control" onClick={bulkResolveVisible} disabled={bulkBusy || visibleMatches.length === 0} title="Resolve every currently visible match row">Resolve Visible</Button>
                         </div>
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
                             <Button type="button" className="px-3 py-2 text-label-sm font-bold rounded-control" onClick={() => { resolveMatches(Array.from(selectedIds)); setToast({ message: 'Resolved selected', type: 'success' }); }} disabled={bulkBusy || selectedIds.size === 0} title="Mark selected as resolved">Resolve</Button>
                             <Button type="button" variant="secondary" className="px-3 py-2 text-label-sm font-bold rounded-control" onClick={bulkRerunOcrSelected} disabled={bulkBusy || selectedIds.size === 0} loading={bulkBusy} title="Rerun OCR on selected">{bulkBusy ? 'Working...' : 'Rerun OCR'}</Button>
                             <Button type="button" variant="secondary" className="px-3 py-2 text-label-sm font-bold rounded-control" onClick={bulkMergeSelected} disabled={bulkBusy || selectedIds.size < 2} title="Merge selected matches into one">Merge</Button>
+                            <Button type="button" variant="tertiary" className="px-3 py-2 text-label-sm font-bold rounded-control border border-danger/35 text-danger" onClick={bulkDeleteSelected} disabled={bulkBusy || selectedIds.size === 0} title="Delete selected matches permanently">Delete</Button>
                             <Button type="button" variant="tertiary" className="px-3 py-2 text-label-sm font-bold rounded-control border border-md-sys-outline/20" onClick={bulkExportSelectedJson} disabled={bulkBusy || selectedIds.size === 0} title="Export selected JSON">Export JSON</Button>
                         </div>
                         {selectedIds.size > 0 && (
@@ -1114,7 +1155,8 @@ const SmartMatchDetail: React.FC<{
     onResolve?: () => void;
     onApplyToSession?: (data: OCRExtractedData) => void;
     onQueueRosterCandidate?: (name: string) => void;
-}> = ({ match, displayNumber, onUpdate, activeUser, ocrMode, pilotRegistry, queueOnly = false, onNext, onPrev, onResolve, onApplyToSession, onQueueRosterCandidate }) => {
+    onDeleteMatch?: (match: Match) => void;
+}> = ({ match, displayNumber, onUpdate, activeUser, ocrMode, pilotRegistry, queueOnly = false, onNext, onPrev, onResolve, onApplyToSession, onQueueRosterCandidate, onDeleteMatch }) => {
     const [artifacts, setArtifacts] = useState<{ images: string[], imageFiles: ArtifactFile[], telemetry: any[] }>({ images: [], imageFiles: [], telemetry: [] });
     const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
     const screenshotsSectionRef = useRef<HTMLDivElement | null>(null);
@@ -1760,6 +1802,16 @@ const SmartMatchDetail: React.FC<{
                             >
                                 Wizard
                             </button>
+                            {onDeleteMatch && (
+                                <button
+                                    onClick={() => onDeleteMatch(match)}
+                                    className="md3-btn-text px-2.5 py-1.5 text-label-xs font-bold text-danger inline-flex items-center gap-1"
+                                    title="Delete this match"
+                                >
+                                    <Trash2 size={11} />
+                                    Delete
+                                </button>
+                            )}
                         </SmartCaptureActionBar>
                     </div>
 

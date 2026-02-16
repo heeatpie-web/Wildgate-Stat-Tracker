@@ -616,3 +616,25 @@
   - Risk Tier: `T1`
   - Execution Path: `FULL_PATH`
   - Reason: user-facing UI copy/interaction updates across existing OCR review surfaces.
+
+---
+
+## Intake - 2026-02-16 - OCR-CORRECTION-DELETE-002
+- Goal: continue OCR correction UX hardening by adding clearer guided correction cues (including wizard popup improvements and inline change undo visibility) and add explicit match-delete options in Smart Captures.
+- Constraints:
+  - Keep scope limited to OCR correction surfaces and Smart Captures actions.
+  - Preserve existing OCR processing and persistence logic.
+  - Keep deletion flow intentionally confirm-gated to reduce accidental data loss.
+- Out-of-scope:
+  - OCR model/parsing changes.
+  - Full Smart Captures IA redesign.
+  - New trash/recovery backend.
+- Done condition:
+  - OCR review popup includes first-time micro tutorial guidance, clearer per-name match reasoning, and visible change undo controls.
+  - Wizard correction popup copy/buttons are clearer and training intent is explicit.
+  - Smart Captures exposes delete options for both selected rows and single-match detail actions with confirmation.
+  - Targeted lint/typecheck validation evidence is recorded.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: user-facing behavior updates across OCR review UI and destructive match action controls.

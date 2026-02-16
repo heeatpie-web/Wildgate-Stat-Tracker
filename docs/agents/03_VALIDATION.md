@@ -642,3 +642,14 @@
 - Command: `npm run -s typecheck`
   - Result: PASS
   - Evidence: TypeScript compile completed successfully after OCR popup clarity copy/label updates.
+
+---
+
+## Validation - 2026-02-16 - OCR-CORRECTION-DELETE-002
+- Command: `npx eslint src/components/SmartCapturesPanel.tsx src/components/ocr/OCRReviewModal.tsx src/components/OcrCorrectionModal.tsx`
+  - Result: PASS
+  - Evidence: no lint violations after delete-action + correction-UX updates.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no errors after Smart Captures delete controls and OCR popup enhancements.

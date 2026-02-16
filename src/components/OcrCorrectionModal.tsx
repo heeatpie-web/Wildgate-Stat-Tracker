@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, Check, AlertTriangle, User, Ship, Search } from 'lucide-react';
+import { X, Check, AlertTriangle, User, Ship, Search, Info } from 'lucide-react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useAppStore } from '../store/useAppStore';
 import Logger from '../utils/logger';
@@ -149,7 +149,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <User size={20} className="text-md-sys-primary" />
-                        <h2 className="text-title font-bold">Review Detected Players</h2>
+                        <h2 className="text-title font-bold">Review and Correct Detected Players</h2>
                         <span className="md3-chip text-label-sm font-mono">
                             {detectedPlayers.length} found
                         </span>
@@ -157,6 +157,19 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                     <button onClick={onClose} className="md3-icon-btn" title="Close">
                         <X size={18} />
                     </button>
+                </div>
+
+                <div className="md3-banner md3-banner--info">
+                    <Info size={16} className="mt-0.5 flex-shrink-0" />
+                    <div>
+                        <p className="text-body font-medium">How this helps</p>
+                        <p className="text-label-sm opacity-60 mt-0.5">
+                            Pick the real player name for each OCR guess, then press <span className="font-semibold">Apply and Learn</span>.
+                        </p>
+                        <p className="text-label-sm opacity-60 mt-0.5">
+                            These links are remembered, so OCR gets better in future matches.
+                        </p>
+                    </div>
                 </div>
 
                 {/* Player List */}
@@ -237,7 +250,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                                                         <Search size={12} className="opacity-60" />
                                                         <input
                                                             type="text"
-                                                            placeholder="Link to..."
+                                                            placeholder="Search roster or type name..."
                                                             value={
                                                                 Object.prototype.hasOwnProperty.call(searchQuery, player.name)
                                                                     ? (searchQuery[player.name] || '')
@@ -320,22 +333,24 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({ isOpen, 
                         onClick={onClose}
                         className="md3-btn-text"
                     >
-                        Skip Review
+                        Close for Now
                     </button>
 
                     <div className="flex items-center gap-2">
                         <button
                             onClick={handleAcceptAllHigh}
                             className="md3-btn-tonal"
+                            title="Auto-fill players that already have strong confidence"
                         >
-                            Auto-Accept High
+                            Auto Fill Confident
                         </button>
                         <button
                             onClick={handleSubmitCorrections}
                             className="md3-btn-filled flex items-center gap-2"
+                            title="Save all reviewed links so future OCR can reuse them"
                         >
                             <Check size={16} />
-                            Apply Corrections
+                            Apply and Learn
                         </button>
                     </div>
                 </div>

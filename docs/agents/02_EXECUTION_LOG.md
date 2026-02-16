@@ -1409,3 +1409,42 @@
   - Review ask: approve closure for OCR-CORRECTION-POPUP-CLARITY-001.
 - `PM Response` | `APPROVED`
   - Reason: request satisfied via focused UI clarity changes without behavior regressions.
+
+---
+
+## 2026-02-16 - OCR-CORRECTION-DELETE-002
+- Scope: continue popup clarity hardening and add explicit Smart Captures delete options (single + bulk).
+
+## Work Entries
+- 22:11Z
+  - Updated `src/components/SmartCapturesPanel.tsx`:
+    - added confirm-gated bulk deletion (`Delete` in tools for selected rows),
+    - added confirm-gated single-match deletion in detail action bar (`Delete`),
+    - centralized selection cleanup + next-match focus behavior after delete.
+
+- 22:12Z
+  - Updated `src/components/ocr/OCRReviewModal.tsx`:
+    - added first-time micro tutorial card (dismissable, persisted via localStorage),
+    - added per-name roster reasoning hints (`Exact roster match`, `Looks like X`, `Not in roster yet`),
+    - added "Name changes in this review" list with per-change undo and undo-all.
+
+- 22:13Z
+  - Updated `src/components/OcrCorrectionModal.tsx`:
+    - clarified correction helper copy and training intent,
+    - improved input placeholder text for correction lookup,
+    - renamed actions for clarity (`Auto Fill Confident`, `Apply and Learn`, `Close for Now`).
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-CORRECTION-DELETE-002#1/#2/#3/#4` | Owner: `ui-designer`
+  - Delta:
+    - correction popup now has first-time guidance + clearer reasons + local undo visibility,
+    - wizard correction popup copy is clearer,
+    - Smart Captures now exposes explicit delete actions with confirmation.
+  - Evidence pointers:
+    - `src/components/ocr/OCRReviewModal.tsx`
+    - `src/components/OcrCorrectionModal.tsx`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure for OCR-CORRECTION-DELETE-002.
+- `PM Response` | `APPROVED`
+  - Reason: requested UX/delete scope completed with passing targeted validation and safety confirmations for destructive actions.
