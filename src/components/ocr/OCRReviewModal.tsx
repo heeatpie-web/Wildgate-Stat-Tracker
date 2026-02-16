@@ -12,6 +12,7 @@ import {
   ChevronUp,
   Image,
   Eye,
+  Info,
 } from 'lucide-react';
 import { LocalImage } from '../LocalImage';
 import type { OCRExtractedData, ExtractedOpponentTeam, TeamColor } from '../../utils/ocr/ocrTypes';
@@ -347,7 +348,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
               <Ship className="text-accent" size={20} />
             </div>
             <div>
-              <h2 className="text-title font-bold">Review Captured Data</h2>
+              <h2 className="text-title font-bold">Review and Correct OCR Data</h2>
               {stepLabel && (
                 <p className="text-label-sm font-bold uppercase tracking-widest text-md-sys-primary mt-0.5">{stepLabel}</p>
               )}
@@ -358,6 +359,9 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                 <span className={getConfidenceColor(editedData.overallConfidence)}>
                   {editedData.overallConfidence.toFixed(0)}% Confidence
                 </span>
+              </p>
+              <p className="text-label-sm opacity-40">
+                Fix names here, then apply to teach OCR for future captures.
               </p>
             </div>
           </div>
@@ -385,6 +389,18 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
             <div className="md3-surface-high rounded-card p-2 text-center">
               <div className="text-label-xs uppercase opacity-60">Modifiers</div>
               <div className={`text-label-sm font-bold ${getConfidenceColor(confidenceSummary.modConf)}`}>{Math.round(confidenceSummary.modConf)}%</div>
+            </div>
+          </div>
+          <div className="md3-banner md3-banner--info">
+            <Info size={16} className="mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-body font-medium">Name Correction Helper</p>
+              <p className="text-label-sm opacity-60 mt-0.5">
+                Edit any wrong player name, then press <span className="font-semibold">Apply and Learn</span>. This saves your corrections so future OCR runs are more accurate.
+              </p>
+              <p className="text-label-sm opacity-60 mt-0.5">
+                Badge guide: <span className="font-semibold text-success">Roster</span> = exact match, <span className="font-semibold text-warning">~ Name</span> = fuzzy match, <span className="font-semibold text-info">+ Roster</span> = queue as new roster candidate.
+              </p>
             </div>
           </div>
           {screenshots && screenshots.length > 0 && (
@@ -822,17 +838,18 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
           <button
             onClick={applyBestGuess}
             className="md3-btn-tonal flex items-center gap-2"
-            title="Apply only high-confidence OCR fields"
+            title="Apply only high-confidence fields without requiring full manual review"
           >
             <Check size={16} />
-            Apply Best Guess
+            Quick Apply (High Confidence)
           </button>
           <button
             onClick={handleApply}
             className="md3-btn-filled flex items-center gap-2"
+            title="Apply all reviewed edits and save name corrections for future OCR"
           >
             <Check size={16} />
-            Apply Data
+            Apply and Learn
           </button>
         </div>
       </div>

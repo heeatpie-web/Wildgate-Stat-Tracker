@@ -1373,3 +1373,39 @@
   - Review ask: approve closure for OCR-ALIAS-CLEANUP-001.
 - `PM Response` | `APPROVED`
   - Reason: user-facing alias cleanup gap is closed with constrained scope and passing targeted validation.
+
+---
+
+## 2026-02-16 - OCR-CORRECTION-POPUP-CLARITY-001
+- Scope: improve clarity of the Smart Captures OCR correction popup so users better understand that name edits improve future OCR.
+
+## Work Entries
+- 22:06Z
+  - Confirmed popup surface: `src/components/ocr/OCRReviewModal.tsx` opened from Smart Captures review CTAs in `src/components/SmartCapturesPanel.tsx`.
+
+- 22:07Z
+  - Updated `src/components/ocr/OCRReviewModal.tsx`:
+    - clarified modal title to correction-focused wording,
+    - added concise helper copy under header,
+    - added info banner explaining correction/training effect and badge meanings (`Roster`, `~ Name`, `+ Roster`),
+    - renamed footer actions for clarity (`Quick Apply (High Confidence)`, `Apply and Learn`) with explicit tooltips.
+
+- 22:08Z
+  - Updated `src/components/SmartCapturesPanel.tsx` review entry CTA labels:
+    - compact button `Finalize` -> `Correct`,
+    - primary post-processing CTA `Finalize Entry` -> `Review and Correct Names`,
+    - added tooltips clarifying this opens OCR correction popup.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-CORRECTION-POPUP-CLARITY-001#1/#2/#3/#4` | Owner: `ui-designer`
+  - Delta:
+    - popup now explicitly teaches correction workflow purpose,
+    - action labels now communicate effect and intent,
+    - Smart Captures entry CTAs now clearly point to name-correction behavior.
+  - Evidence pointers:
+    - `src/components/ocr/OCRReviewModal.tsx`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure for OCR-CORRECTION-POPUP-CLARITY-001.
+- `PM Response` | `APPROVED`
+  - Reason: request satisfied via focused UI clarity changes without behavior regressions.

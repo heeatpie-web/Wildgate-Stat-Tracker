@@ -1738,8 +1738,12 @@ const SmartMatchDetail: React.FC<{
                                 </button>
                             )}
                             {reviewData && (
-                                <button onClick={() => setReviewData(reviewData)} className="md3-btn-filled px-2.5 py-1.5 text-label-xs font-bold">
-                                    Finalize
+                                <button
+                                    onClick={() => setReviewData(reviewData)}
+                                    className="md3-btn-filled px-2.5 py-1.5 text-label-xs font-bold"
+                                    title="Open OCR correction popup"
+                                >
+                                    Correct
                                 </button>
                             )}
                             <button
@@ -2315,9 +2319,10 @@ const SmartMatchDetail: React.FC<{
                                     <button
                                         onClick={() => setReviewData(reviewData)}
                                         className="flex-1 min-w-40 md3-btn-filled px-4 py-2.5 font-semibold text-body transition-all flex items-center justify-center gap-2"
+                                        title="Open OCR correction popup to fix names before applying"
                                     >
                                         <ScanEye size={16} />
-                                        Finalize Entry
+                                        Review and Correct Names
                                     </button>
                                     {onApplyToSession && (
                                         <button

@@ -754,3 +754,33 @@
 ## Remaining / Risks
 - Similarity-based warning threshold is intentionally conservative; some unusual but valid aliases may require the second confirmation click.
 - This patch does not auto-clean existing bad aliases in bulk; cleanup is manual via per-row remove.
+
+---
+
+## Handoff - 2026-02-16 - OCR-CORRECTION-POPUP-CLARITY-001
+## Status
+- Completed.
+
+## What Changed
+- `src/components/ocr/OCRReviewModal.tsx`
+  - Updated review modal wording to emphasize correction workflow purpose.
+  - Added a dedicated helper banner that explains:
+    - editing names improves future OCR,
+    - what roster badges mean (`Roster`, `~ Name`, `+ Roster`).
+  - Clarified action labels:
+    - `Apply Best Guess` -> `Quick Apply (High Confidence)`,
+    - `Apply Data` -> `Apply and Learn`.
+  - Added clearer tooltips for apply actions.
+
+- `src/components/SmartCapturesPanel.tsx`
+  - Updated review-entry CTA labels to be correction-oriented:
+    - `Finalize` -> `Correct`,
+    - `Finalize Entry` -> `Review and Correct Names`.
+  - Added tooltips to indicate this opens the OCR correction popup.
+
+## What Was Verified
+- `npx eslint src/components/ocr/OCRReviewModal.tsx src/components/SmartCapturesPanel.tsx` passed.
+- `npm run -s typecheck` passed.
+
+## Remaining / Risks
+- This patch improves clarity/copy only; it does not alter OCR extraction quality or correction persistence logic.

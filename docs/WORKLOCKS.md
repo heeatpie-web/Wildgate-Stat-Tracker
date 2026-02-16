@@ -293,3 +293,19 @@ Lock Class:
 | docs/agents/03_VALIDATION.md | verifier | hot | 2026-02-16T22:02:22Z | 2026-02-16T22:02:22Z | OCR-ALIAS-CLEANUP-001 lock released |
 | docs/agents/04_HANDOFF.md | release-manager | hot | 2026-02-16T22:02:22Z | 2026-02-16T22:02:22Z | OCR-ALIAS-CLEANUP-001 lock released |
 | docs/agents/DECISIONS.md | project-manager | hot | 2026-02-16T22:02:22Z | 2026-02-16T22:02:22Z | OCR-ALIAS-CLEANUP-001 lock released |
+| src/components/ocr/OCRReviewModal.tsx | ui-designer | hot | 2026-02-16T22:06:38Z | 2026-02-16T23:06:38Z | OCR-CORRECTION-POPUP-CLARITY-001 improve correction popup instructions and action labels |
+| src/components/SmartCapturesPanel.tsx | ui-designer | hot | 2026-02-16T22:06:38Z | 2026-02-16T23:06:38Z | OCR-CORRECTION-POPUP-CLARITY-001 clarify Smart Captures entry CTA for correction popup |
+| docs/agents/00_INTAKE.md | project-manager | hot | 2026-02-16T22:06:38Z | 2026-02-16T23:06:38Z | OCR-CORRECTION-POPUP-CLARITY-001 intake record |
+| docs/agents/01_PLAN.md | project-manager | hot | 2026-02-16T22:06:38Z | 2026-02-16T23:06:38Z | OCR-CORRECTION-POPUP-CLARITY-001 plan record |
+| docs/agents/02_EXECUTION_LOG.md | debugger | hot | 2026-02-16T22:06:38Z | 2026-02-16T23:06:38Z | OCR-CORRECTION-POPUP-CLARITY-001 execution log updates |
+| docs/agents/03_VALIDATION.md | verifier | hot | 2026-02-16T22:06:38Z | 2026-02-16T23:06:38Z | OCR-CORRECTION-POPUP-CLARITY-001 validation evidence |
+| docs/agents/04_HANDOFF.md | release-manager | hot | 2026-02-16T22:06:38Z | 2026-02-16T23:06:38Z | OCR-CORRECTION-POPUP-CLARITY-001 handoff summary |
+| docs/agents/DECISIONS.md | project-manager | hot | 2026-02-16T22:06:38Z | 2026-02-16T23:06:38Z | OCR-CORRECTION-POPUP-CLARITY-001 UI decision log |
+| src/components/ocr/OCRReviewModal.tsx | ui-designer | hot | 2026-02-16T22:09:03Z | 2026-02-16T22:09:03Z | OCR-CORRECTION-POPUP-CLARITY-001 lock released |
+| src/components/SmartCapturesPanel.tsx | ui-designer | hot | 2026-02-16T22:09:03Z | 2026-02-16T22:09:03Z | OCR-CORRECTION-POPUP-CLARITY-001 lock released |
+| docs/agents/00_INTAKE.md | project-manager | hot | 2026-02-16T22:09:03Z | 2026-02-16T22:09:03Z | OCR-CORRECTION-POPUP-CLARITY-001 lock released |
+| docs/agents/01_PLAN.md | project-manager | hot | 2026-02-16T22:09:03Z | 2026-02-16T22:09:03Z | OCR-CORRECTION-POPUP-CLARITY-001 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | hot | 2026-02-16T22:09:03Z | 2026-02-16T22:09:03Z | OCR-CORRECTION-POPUP-CLARITY-001 lock released |
+| docs/agents/03_VALIDATION.md | verifier | hot | 2026-02-16T22:09:03Z | 2026-02-16T22:09:03Z | OCR-CORRECTION-POPUP-CLARITY-001 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | hot | 2026-02-16T22:09:03Z | 2026-02-16T22:09:03Z | OCR-CORRECTION-POPUP-CLARITY-001 lock released |
+| docs/agents/DECISIONS.md | project-manager | hot | 2026-02-16T22:09:03Z | 2026-02-16T22:09:03Z | OCR-CORRECTION-POPUP-CLARITY-001 lock released |

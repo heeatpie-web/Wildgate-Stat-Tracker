@@ -595,3 +595,24 @@
   - Risk Tier: `T2`
   - Execution Path: `FULL_PATH`
   - Reason: runtime mapping logic and UI interaction behavior changes across multiple files.
+
+---
+
+## Intake - 2026-02-16 - OCR-CORRECTION-POPUP-CLARITY-001
+- Goal: make the Smart Captures OCR correction popup clearer so users understand and use the correction workflow more often.
+- Constraints:
+  - Keep scope focused on popup clarity (copy, labels, instructional affordances) and immediate Smart Captures entry CTA wording.
+  - Preserve current OCR apply/correction behavior and data model.
+  - Follow `docs/agents/UI_MASTERPLAN.md` style and hierarchy patterns.
+- Out-of-scope:
+  - OCR logic/model changes.
+  - New review workflow architecture.
+  - Broader navigation redesign.
+- Done condition:
+  - OCR review popup includes explicit, concise “how this helps” guidance and clearer action labels.
+  - Smart Captures entry button text clearly communicates that review supports correcting names/teaching OCR.
+  - Targeted lint/typecheck validation is recorded.
+- AOM_V2:
+  - Risk Tier: `T1`
+  - Execution Path: `FULL_PATH`
+  - Reason: user-facing UI copy/interaction updates across existing OCR review surfaces.

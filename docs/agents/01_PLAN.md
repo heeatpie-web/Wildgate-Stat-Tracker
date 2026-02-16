@@ -172,3 +172,9 @@
 2. `COMPLETED` - Wire Settings alias manager UI with remove action and suspicious manual-add confirmation guard.
 3. `COMPLETED` - Add targeted regression test coverage for alias-removal behavior.
 4. `COMPLETED` - Run targeted validation (`eslint`, `typecheck`, focused vitest) and record evidence/handoff.
+
+## Current Task Plan (OCR-CORRECTION-POPUP-CLARITY-001)
+1. `COMPLETED` - Identify Smart Captures OCR correction popup entry points and define minimal clarity changes.
+2. `COMPLETED` - Update OCR review popup content/labels to make correction purpose and usage explicit.
+3. `COMPLETED` - Update Smart Captures review CTA wording to emphasize correction/training behavior.
+4. `COMPLETED` - Run targeted validation (`eslint` touched files + `typecheck`) and record evidence/handoff.

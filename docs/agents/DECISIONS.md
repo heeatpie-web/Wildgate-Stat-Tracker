@@ -596,3 +596,21 @@ Rule:
   - `docs/agents/03_VALIDATION.md`
 - Revisit trigger/expiry:
   - Revisit if false-positive warnings appear frequently; threshold can be tuned or replaced with richer fuzzy-context checks.
+
+- Type: `ux-copy`
+- Decision: prioritize explicit instructional copy in Smart Captures OCR review popup over terse labels, while keeping existing workflow/actions unchanged.
+- Date: 2026-02-16
+- Options considered:
+  - Keep terse labels and rely on implicit user understanding.
+  - Add larger workflow redesign/tutorial step.
+  - Add concise in-context helper copy + clearer action labels in existing popup and entry CTA.
+- Rationale:
+  - User reported the correction popup was unclear and easy to miss.
+  - In-context hints improve discoverability with minimal disruption and low regression risk.
+  - Full workflow redesign was out of scope for this request.
+- Impacted files/artifacts:
+  - `src/components/ocr/OCRReviewModal.tsx`
+  - `src/components/SmartCapturesPanel.tsx`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if users still report confusion; next step would be a one-time guided coachmark around the correction popup entry point.

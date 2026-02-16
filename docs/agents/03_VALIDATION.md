@@ -631,3 +631,14 @@
 - Command: `npm run -s typecheck`
   - Result: PASS
   - Evidence: TypeScript compile completed with no errors after mapping/action + settings UI changes.
+
+---
+
+## Validation - 2026-02-16 - OCR-CORRECTION-POPUP-CLARITY-001
+- Command: `npx eslint src/components/ocr/OCRReviewModal.tsx src/components/SmartCapturesPanel.tsx`
+  - Result: PASS
+  - Evidence: no lint violations in touched popup/CTA UI files.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed successfully after OCR popup clarity copy/label updates.
