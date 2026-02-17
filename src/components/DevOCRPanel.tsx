@@ -8,6 +8,7 @@ import { useUIState } from '../providers/UIStateProvider';
 import { bundleMatchArtifacts } from '../utils/artifactService';
 import { getElectronAPI } from '../utils/electronAPI';
 import { useAppStore } from '../store/useAppStore';
+import Logger from '../utils/logger';
 
 /**
  * Translate raw backend/IPC error messages into user-safe copy.
@@ -42,6 +43,26 @@ interface PlainOpponentTeamDraft {
     players: string;
 }
 
+interface OcrDebugFile {
+    name: string;
+    path: string;
+    time?: number;
+    date?: number;
+    size?: number;
+}
+
+const toErrorMessage = (error: unknown, fallback: string): string => {
+    if (error instanceof Error && error.message) return error.message;
+    if (typeof error === 'string' && error.trim().length > 0) return error;
+    return fallback;
+};
+
+const hasSamplesArray = (value: unknown): value is { samples: unknown[] } => (
+    typeof value === 'object' &&
+    value !== null &&
+    Array.isArray((value as { samples?: unknown[] }).samples)
+);
+
 const buildDefaultOpponentTeamDraft = (index: number): PlainOpponentTeamDraft => ({
     teamName: `Enemy Team ${index + 1}`,
     color: 'unknown',
@@ -58,8 +79,8 @@ const DevOCRPanel: React.FC = () => {
     const [ocrResult, setOcrResult] = useState<OCRExtractedData | null>(null);
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState("");
-    const [recentFiles, setRecentFiles] = useState<any[]>([]);
-    const [currentFile, setCurrentFile] = useState<any>(null);
+    const [recentFiles, setRecentFiles] = useState<OcrDebugFile[]>([]);
+    const [currentFile, setCurrentFile] = useState<OcrDebugFile | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
     const [corpusTruth, setCorpusTruth] = useState('');
@@ -93,10 +114,14 @@ const DevOCRPanel: React.FC = () => {
             const api = getElectronAPI();
             if (api) {
                 const files = await api.invoke('list-ocr-debug-files');
-                setRecentFiles(files);
+                if (Array.isArray(files)) {
+                    setRecentFiles(files as OcrDebugFile[]);
+                } else {
+                    setRecentFiles([]);
+                }
             }
-        } catch (e) {
-            console.error("Failed to load recent files", e);
+        } catch (error: unknown) {
+            Logger.error('DevOCRPanel', 'Failed to load recent files', error);
         }
     };
 
@@ -110,16 +135,19 @@ const DevOCRPanel: React.FC = () => {
                 setImageSrc(`data:image/png;base64,${base64}`);
                 setOcrResult(null);
 
-                const found = recentFiles.find(f => f.path === filePath) || { name: filePath.split(/[\\/]/).pop(), path: filePath };
+                const found = recentFiles.find(f => f.path === filePath) || {
+                    name: filePath.split(/[\\/]/).pop() || filePath,
+                    path: filePath
+                };
                 setCurrentFile(found);
 
                 setStatus("Loaded: " + found.name);
             } else {
                 throw new Error("ElectronAPI not available");
             }
-        } catch (e: any) {
-            console.error("Failed to load file", e);
-            const errMsg = friendlyError(e.message);
+        } catch (error: unknown) {
+            Logger.error('DevOCRPanel', 'Failed to load OCR debug file', error);
+            const errMsg = friendlyError(toErrorMessage(error, 'File load failed'));
             setStatus(`Could not load file: ${errMsg}`);
             setLoadError(`Could not load file: ${errMsg}`);
         }
@@ -150,7 +178,10 @@ const DevOCRPanel: React.FC = () => {
                 const end = m.timestamp;
                 const start = end - (durationMs || 1800000); // broadened fallback to 30m
 
-                console.log(`[RetroBundle] Scanning for match ${m.id} from ${new Date(start).toLocaleTimeString()} to ${new Date(end).toLocaleTimeString()}`);
+                Logger.debug(
+                    'RetroBundle',
+                    `Scanning for match ${m.id} from ${new Date(start).toLocaleTimeString()} to ${new Date(end).toLocaleTimeString()}`
+                );
                 const artifacts = await bundleMatchArtifacts(m.id, start, end);
                 if (artifacts && artifacts.length > 0) {
                     const updated = { ...m, artifacts };
@@ -158,7 +189,7 @@ const DevOCRPanel: React.FC = () => {
                     count++;
                     setStatus(`Bundled Match ${m.id} (${artifacts.length} file(s))`);
                 } else {
-                    console.log(`[RetroBundle] No artifacts found for match ${m.id}`);
+                    Logger.debug('RetroBundle', `No artifacts found for match ${m.id}`);
                 }
             } catch (e) {
                 errors++;
@@ -181,8 +212,8 @@ const DevOCRPanel: React.FC = () => {
             } else {
                 setStatus(`Finished: ${result.message}`);
             }
-        } catch (e: any) {
-            setStatus(`Decode failed: ${friendlyError(e.message)}`);
+        } catch (error: unknown) {
+            setStatus(`Decode failed: ${friendlyError(toErrorMessage(error, 'Decode failed'))}`);
         }
         setLoading(false);
     };
@@ -218,9 +249,9 @@ const DevOCRPanel: React.FC = () => {
             } else {
                 setStatus("OCR could not extract data. Try a clearer screenshot or switch OCR mode.");
             }
-        } catch (e: any) {
-            setStatus(`OCR failed: ${friendlyError(e.message)}`);
-            console.error("OCR Error:", e);
+        } catch (error: unknown) {
+            setStatus(`OCR failed: ${friendlyError(toErrorMessage(error, 'OCR failed'))}`);
+            Logger.error('DevOCRPanel', 'OCR run failed', error);
         }
         setLoading(false);
     };
@@ -248,8 +279,8 @@ const DevOCRPanel: React.FC = () => {
 
             await refreshCorpusImages();
             setCorpusStatus('Corpus files loaded');
-        } catch (e: any) {
-            setCorpusStatus(`Load failed: ${friendlyError(e.message)}`);
+        } catch (error: unknown) {
+            setCorpusStatus(`Load failed: ${friendlyError(toErrorMessage(error, 'Load failed'))}`);
         } finally {
             setCorpusBusy(false);
         }
@@ -279,8 +310,8 @@ const DevOCRPanel: React.FC = () => {
             const res = await api.invoke('ocr-corpus-save', name, content);
             if (!res?.success) throw new Error(res?.error || 'Save failed');
             setCorpusStatus(`Saved ${name}`);
-        } catch (e: any) {
-            setCorpusStatus(`Save failed: ${friendlyError(e.message)}`);
+        } catch (error: unknown) {
+            setCorpusStatus(`Save failed: ${friendlyError(toErrorMessage(error, 'Save failed'))}`);
         } finally {
             setCorpusBusy(false);
         }
@@ -297,8 +328,8 @@ const DevOCRPanel: React.FC = () => {
             if (res.report) setCorpusLatestReport(JSON.stringify(res.report, null, 2));
             setCorpusStatus('Evaluation complete');
             await loadCorpusFiles();
-        } catch (e: any) {
-            setCorpusStatus(`Eval failed: ${friendlyError(e.message)}`);
+        } catch (error: unknown) {
+            setCorpusStatus(`Eval failed: ${friendlyError(toErrorMessage(error, 'Eval failed'))}`);
         } finally {
             setCorpusBusy(false);
         }
@@ -319,8 +350,8 @@ const DevOCRPanel: React.FC = () => {
             }
             await loadCorpusFiles();
             await refreshCorpusImages();
-        } catch (e: any) {
-            setCorpusStatus(`Import failed: ${friendlyError(e.message)}`);
+        } catch (error: unknown) {
+            setCorpusStatus(`Import failed: ${friendlyError(toErrorMessage(error, 'Import failed'))}`);
         } finally {
             setCorpusBusy(false);
         }
@@ -336,8 +367,8 @@ const DevOCRPanel: React.FC = () => {
             if (!res?.success) throw new Error(res?.error || 'Pipeline OCR failed');
             setCorpusStatus(`Pipeline done: processed ${res.processed}/${res.total}, failed ${res.failed}`);
             await loadCorpusFiles();
-        } catch (e: any) {
-            setCorpusStatus(`Pipeline failed: ${friendlyError(e.message)}`);
+        } catch (error: unknown) {
+            setCorpusStatus(`Pipeline failed: ${friendlyError(toErrorMessage(error, 'Pipeline failed'))}`);
         } finally {
             setCorpusBusy(false);
         }
@@ -353,8 +384,8 @@ const DevOCRPanel: React.FC = () => {
             if (!res?.success) throw new Error(res?.error || 'Promote failed');
             setCorpusStatus('Baseline promoted');
             await loadCorpusFiles();
-        } catch (e: any) {
-            setCorpusStatus(`Promote failed: ${friendlyError(e.message)}`);
+        } catch (error: unknown) {
+            setCorpusStatus(`Promote failed: ${friendlyError(toErrorMessage(error, 'Promote failed'))}`);
         } finally {
             setCorpusBusy(false);
         }
@@ -370,8 +401,8 @@ const DevOCRPanel: React.FC = () => {
             if (!res?.success) throw new Error(res?.error || 'Sync failed');
             if (res?.synced) setCorpusStatus(`Synced ${res.copied} file(s) to dataset/ocr-corpus`);
             else setCorpusStatus(`Sync skipped (${res.reason || 'disabled'})`);
-        } catch (e: any) {
-            setCorpusStatus(`Sync failed: ${friendlyError(e.message)}`);
+        } catch (error: unknown) {
+            setCorpusStatus(`Sync failed: ${friendlyError(toErrorMessage(error, 'Sync failed'))}`);
         } finally {
             setCorpusBusy(false);
         }
@@ -382,7 +413,7 @@ const DevOCRPanel: React.FC = () => {
         try {
             const parsed = JSON.parse(content);
             if (Array.isArray(parsed)) return parsed.length;
-            if (parsed && Array.isArray((parsed as any).samples)) return (parsed as any).samples.length;
+            if (hasSamplesArray(parsed)) return parsed.samples.length;
             if (parsed && typeof parsed === 'object') return Object.keys(parsed).length;
         } catch {
             return 0;
@@ -415,7 +446,7 @@ const DevOCRPanel: React.FC = () => {
                 };
             })
             .filter((team) => team.players.length > 0);
-        let truth: { version: number; samples: any[] };
+        let truth: { version: number; samples: Array<Record<string, unknown>> };
         try {
             truth = corpusTruth ? JSON.parse(corpusTruth) : { version: 1, samples: [] };
         } catch {
@@ -528,8 +559,8 @@ const DevOCRPanel: React.FC = () => {
                                         const res = await api.invoke('clear-telemetry-archives');
                                         if (res.success) setStatus(`Cleared ${res.count} file(s).`);
                                         else setStatus(`Cleanup failed: ${friendlyError(res.message)}`);
-                                    } catch (e: any) {
-                                        setStatus(`Cleanup failed: ${friendlyError(e.message)}`);
+                                    } catch (error: unknown) {
+                                        setStatus(`Cleanup failed: ${friendlyError(toErrorMessage(error, 'Cleanup failed'))}`);
                                     }
                                     setLoading(false);
                                 }
@@ -556,8 +587,8 @@ const DevOCRPanel: React.FC = () => {
                                         const res = await api.invoke('clear-ocr-preprocessed');
                                         if (res.success) setStatus(`Cleared ${res.deletedCount} preprocessed image(s).`);
                                         else setStatus(`Cleanup failed: ${friendlyError(res.error)}`);
-                                    } catch (e: any) {
-                                        setStatus(`Cleanup failed: ${friendlyError(e.message)}`);
+                                    } catch (error: unknown) {
+                                        setStatus(`Cleanup failed: ${friendlyError(toErrorMessage(error, 'Cleanup failed'))}`);
                                     }
                                     setLoading(false);
                                 }
@@ -585,8 +616,8 @@ const DevOCRPanel: React.FC = () => {
 
                                     // Open the folder in explorer
                                     await api.invoke('open-path', debugDir);
-                                } catch (e: any) {
-                                    setStatus(`Could not open folder: ${friendlyError(e.message)}`);
+                                } catch (error: unknown) {
+                                    setStatus(`Could not open folder: ${friendlyError(toErrorMessage(error, 'Could not open folder'))}`);
                                 }
                                 setLoading(false);
                             }}
@@ -962,7 +993,8 @@ const DevOCRPanel: React.FC = () => {
                                         {recentFiles.map((f, i) => {
                                             const isRaw = f.name.includes('raw_capture');
                                             const isMatch = f.name.startsWith('Match');
-                                            const displayTime = new Date(f.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                            const fileTime = Number(f.time || f.date || Date.now());
+                                            const displayTime = new Date(fileTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
                                             // Determine active state
                                             const isActive = currentFile?.path === f.path;

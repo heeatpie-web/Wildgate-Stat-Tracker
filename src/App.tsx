@@ -62,7 +62,7 @@ const loadAnalyticsPanel = () => loadDashboardChunk('analytics');
 const AnalyticsPanel = React.lazy(loadAnalyticsPanel);
 const loadHistoryTable = () => loadDashboardChunk('history');
 const HistoryTable = React.lazy(loadHistoryTable);
-import { APP_VERSION, getShipCapacity, Match, MatchResult } from './types';
+import { APP_VERSION, Match, MatchResult } from './types';
 import { CHANGELOG } from './utils/changelog';
 import { Toast } from './components/Toast';
 import { IdMapper } from './components/IdMapper';
@@ -83,6 +83,8 @@ import { playSoundCue } from './utils/soundCues';
 import { shouldQueueLearningReview } from './utils/ocrAliasEngine';
 import { buildAliasVariantMap, resolveOcrName } from './utils/ocrNameResolver';
 import { assignDeterministicTeamColors, buildPlayerColorHints } from './utils/ocr/teamColorAssignment';
+import { capTeammatePlayers, getMaxTeammatesForShip } from './utils/teamLimits';
+import Logger from './utils/logger';
 
 interface TelemetryRetentionStatus {
     exceedsLimits: boolean;
@@ -190,7 +192,7 @@ const App: React.FC = () => {
         sessionStartTime,
         setPendingMatchData,
         pilotRegistry,
-        selectedTeammates, setSelectedTeammates,
+        setSelectedTeammates,
         selectedOpponents, setSelectedOpponents,
         activeShip, setActiveShip,
         selectedReachModifiers, setSelectedReachModifiers,
@@ -806,7 +808,10 @@ const App: React.FC = () => {
                         status: 'auto_applied',
                         explanation: aliasResolution.explain,
                     });
-                    console.log(`[OCR-Resolve] "${ocrName}" -> learned alias: "${aliasResolution.resolvedName}" (${Math.round(aliasResolution.score * 100)}%)`);
+                    Logger.debug(
+                        'OCR-Resolve',
+                        `"${ocrName}" -> learned alias: "${aliasResolution.resolvedName}" (${Math.round(aliasResolution.score * 100)}%)`
+                    );
                     return aliasResolution.resolvedName;
                 }
                 if (
@@ -839,9 +844,9 @@ const App: React.FC = () => {
                 longThreshold: 2,
             });
             if (resolved.toLowerCase() !== normalized.toLowerCase()) {
-                console.log(`[OCR-Resolve] "${ocrName}" -> shared resolver match: "${resolved}"`);
+                Logger.debug('OCR-Resolve', `"${ocrName}" -> shared resolver match: "${resolved}"`);
             } else {
-                console.log(`[OCR-Resolve] "${ocrName}" -> no stronger match found, using normalized: "${resolved}"`);
+                Logger.debug('OCR-Resolve', `"${ocrName}" -> no stronger match found, using normalized: "${resolved}"`);
             }
             return resolved;
         };
@@ -909,18 +914,25 @@ const App: React.FC = () => {
             }
         });
 
-        const currentShip = useAppStore.getState().activeShip;
-        const shipCapacity = getShipCapacity(currentShip || '');
-        const maxTeammates = Math.max(0, (shipCapacity > 1 ? shipCapacity : 4) - 1);
-        data.teammates.forEach(teammate => {
-            const resolved = resolvePlayerName(teammate.name, selectedTeammates);
-            if (resolved && !selectedTeammates.some(t => t.toLowerCase() === resolved.toLowerCase())) {
-                setSelectedTeammates((prev: string[]) => {
-                    if (prev.length >= maxTeammates) return prev;
-                    return prev.some(t => t.toLowerCase() === resolved.toLowerCase()) ? prev : [...prev, resolved];
-                });
-            }
-        });
+        const shipForCapacity = data.playerShip?.shipType || useAppStore.getState().activeShip || activeShip;
+        const maxTeammates = getMaxTeammatesForShip(shipForCapacity);
+        const cappedTeammates = capTeammatePlayers(data.teammates, shipForCapacity);
+        if (cappedTeammates.length > 0) {
+            setSelectedTeammates((prev: string[]) => {
+                const merged = [...prev];
+                const existing = new Set(merged.map((name) => normalizeOcrName(name).toLowerCase()));
+                for (const teammate of cappedTeammates) {
+                    const resolved = resolvePlayerName(teammate.name, merged);
+                    if (!resolved) continue;
+                    const key = normalizeOcrName(resolved).toLowerCase();
+                    if (!key || existing.has(key)) continue;
+                    if (merged.length >= maxTeammates) break;
+                    merged.push(resolved);
+                    existing.add(key);
+                }
+                return merged;
+            });
+        }
 
         const seenOpponentPlayers = new Set<string>();
         const unresolvedTeams = data.opponentTeams.map((team) => {
@@ -990,12 +1002,16 @@ const App: React.FC = () => {
         });
 
         setOcrReviewData(null);
-        setToast({ message: `Applied OCR data: ${data.teammates.length} teammates, ${data.reachModifiers.length} modifiers`, type: 'success' });
+        const rawTeammateCount = Array.isArray(data.teammates) ? data.teammates.length : 0;
+        const teammateCountLabel = rawTeammateCount > cappedTeammates.length
+            ? `${cappedTeammates.length}/${rawTeammateCount}`
+            : String(cappedTeammates.length);
+        setToast({ message: `Applied OCR data: ${teammateCountLabel} teammates, ${data.reachModifiers.length} modifiers`, type: 'success' });
         if (ocrGateOutcome) {
             setShowWizard(ocrGateOutcome);
             setOcrGateOutcome(null);
         }
-    }, [pilotRegistry, selectedTeammates, setSelectedTeammates, selectedOpponents, setSelectedOpponents, setActiveShip, selectedReachModifiers, setSelectedReachModifiers, setToast, addPendingReview, pendingReviews, sessionTeams, setSessionTeams, setSessionShipTypes, ocrGateOutcome, setShowWizard]);
+    }, [pilotRegistry, activeShip, setSelectedTeammates, selectedOpponents, setSelectedOpponents, setActiveShip, selectedReachModifiers, setSelectedReachModifiers, setToast, addPendingReview, pendingReviews, sessionTeams, setSessionTeams, setSessionShipTypes, ocrGateOutcome, setShowWizard]);
 
     useEffect(() => {
         const lastSeen = localStorage.getItem('wg_last_seen_version');

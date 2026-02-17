@@ -3,10 +3,20 @@
  * Provides a safe interface to Electron IPC from the renderer process
  */
 
-import type { CaptureResult, OCRProcessResult } from './ocr/ocrTypes';
+import type { CaptureResult, OCRExtractedData, OCRProcessResult } from './ocr/ocrTypes';
 import { getElectronAPI, isElectron as _isElectron } from './electronAPI';
+import Logger from './logger';
 
 const getIpcRenderer = () => getElectronAPI();
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const toErrorMessage = (error: unknown, fallback: string): string => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string' && error.trim().length > 0) return error;
+  return fallback;
+};
 
 /**
  * Check if running in Electron
@@ -25,8 +35,8 @@ export async function captureGameWindow(): Promise<CaptureResult> {
   try {
     const result = await ipc.invoke('capture-game-window');
     return result;
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Capture failed' };
+  } catch (error: unknown) {
+    return { success: false, error: toErrorMessage(error, 'Capture failed') };
   }
 }
 
@@ -40,7 +50,7 @@ export async function captureGameWindow(): Promise<CaptureResult> {
 export async function ocrProcessCapture(
   imageBase64: string,
   activeUser?: string | null,
-  existingData?: any,
+  existingData?: OCRExtractedData | null,
   ocrMode: 'local' | 'cloud' | 'both' | 'hybrid-plus' = 'both'
 ): Promise<OCRProcessResult> {
   const ipc = getIpcRenderer();
@@ -51,8 +61,8 @@ export async function ocrProcessCapture(
   try {
     const result = await ipc.invoke('ocr-process-capture', imageBase64, activeUser || null, existingData || null, ocrMode);
     return result;
-  } catch (error: any) {
-    return { success: false, error: error.message || 'OCR processing failed' };
+  } catch (error: unknown) {
+    return { success: false, error: toErrorMessage(error, 'OCR processing failed') };
   }
 }
 
@@ -76,8 +86,8 @@ export async function saveScreenshot(
       return { success: false, error: raw.message || raw.error || 'Save failed' };
     }
     return raw;
-  } catch (error: any) {
-    return { success: false, error: error.message || 'Save failed' };
+  } catch (error: unknown) {
+    return { success: false, error: toErrorMessage(error, 'Save failed') };
   }
 }
 
@@ -131,14 +141,25 @@ export async function saveOcrDebug(dataUrl: string, filename: string): Promise<s
  * @param imagePath - Absolute path to the image file on disk.
  * @returns Detected text and annotation data, or null if unavailable.
  */
-export async function gcloudOcrScan(imagePath: string): Promise<{ fullText: string; annotations: any[] } | null> {
+export async function gcloudOcrScan(imagePath: string): Promise<{ fullText: string; annotations: unknown[] } | null> {
   const ipc = getIpcRenderer();
   if (!ipc) return null;
 
   try {
-    return await ipc.invoke('gcloud-ocr-scan', imagePath);
-  } catch (error: any) {
-    console.error('[ElectronBridge] GCloud OCR Error:', error);
+    const result = await ipc.invoke('gcloud-ocr-scan', imagePath);
+    if (
+      isRecord(result) &&
+      typeof result.fullText === 'string' &&
+      Array.isArray(result.annotations)
+    ) {
+      return {
+        fullText: result.fullText,
+        annotations: result.annotations,
+      };
+    }
+    return null;
+  } catch (error: unknown) {
+    Logger.error('ElectronBridge', 'GCloud OCR request failed', error);
     return null;
   }
 }
@@ -154,8 +175,8 @@ export async function syncTrainingSample(sampleId: string): Promise<{ success: b
 
   try {
     return await ipc.invoke('sync-training-sample', sampleId);
-  } catch (error: any) {
-    console.error('[ElectronBridge] Training Sync Error:', error);
+  } catch (error: unknown) {
+    Logger.error('ElectronBridge', 'Training sample sync failed', error);
     return null;
   }
 }

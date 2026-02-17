@@ -48,7 +48,6 @@ Rules:
 | `electron/geminiService.cjs` | builder | 2026-02-13T15:35:00Z | builder role bound: OCR/structured refinement ownership (Lane C) |
 | `src/hooks/useSmartCapture.ts` | builder | 2026-02-13T15:35:00Z | builder role bound: smart capture flow ownership (Lane C) |
 | `src/components/recording/ActionPanel.tsx` | builder | 2026-02-13T15:35:00Z | builder role bound: recording/action panel ownership (Lane C) |
-
 ## Copy-Paste Lock Entry
 
 Use this row format when claiming:
@@ -66,6 +65,37 @@ Use this row format when claiming:
 
 | File | Owner | Started (UTC) | Released (UTC) | Purpose |
 |---|---|---|---|---|
+| `docs/agents/00_INTAKE.md` | project-manager | 2026-02-17T15:02:06Z | 2026-02-17T15:03:41Z | REFACTOR-CLOSEOUT-007 intake record for end-to-end closure of unfinished giant refactor |
+| `docs/agents/01_PLAN.md` | project-manager | 2026-02-17T15:02:06Z | 2026-02-17T15:03:41Z | REFACTOR-CLOSEOUT-007 closeout step tracking |
+| `docs/agents/02_EXECUTION_LOG.md` | debugger | 2026-02-17T15:02:06Z | 2026-02-17T15:03:41Z | REFACTOR-CLOSEOUT-007 execution + PM feedback cycle entries |
+| `docs/agents/03_VALIDATION.md` | verifier | 2026-02-17T15:02:06Z | 2026-02-17T15:03:41Z | REFACTOR-CLOSEOUT-007 full quality-gate evidence logging |
+| `docs/agents/04_HANDOFF.md` | release-manager | 2026-02-17T15:02:06Z | 2026-02-17T15:03:41Z | REFACTOR-CLOSEOUT-007 final closure handoff |
+| `docs/agents/DECISIONS.md` | project-manager | 2026-02-17T15:02:06Z | 2026-02-17T15:03:41Z | REFACTOR-CLOSEOUT-007 closure/scope decision log |
+| `docs/WORKLOCKS.md` | debugger | 2026-02-17T15:02:06Z | 2026-02-17T15:03:41Z | REFACTOR-CLOSEOUT-007 lock table maintenance |
+| `src/utils/electronBridge.ts` | builder | 2026-02-17T15:33:34Z | 2026-02-17T15:40:47Z | AUDIT-REMEDIATION-005 OCR/telemetry runtime hardening: remove remaining IPC `any` and unsafe catch typing |
+| `src/utils/logger.ts` | builder | 2026-02-17T15:33:34Z | 2026-02-17T15:40:47Z | AUDIT-REMEDIATION-005 OCR/telemetry runtime hardening: suppress production console spam and remove logger `any` typing |
+| `src/App.tsx` | builder | 2026-02-17T15:33:34Z | 2026-02-17T15:40:47Z | AUDIT-REMEDIATION-005 OCR/telemetry runtime hardening: replace direct OCR debug console logs with structured logger |
+| `src/components/DevOCRPanel.tsx` | builder | 2026-02-17T15:33:34Z | 2026-02-17T15:40:47Z | AUDIT-REMEDIATION-005 OCR/telemetry runtime hardening: remove `any` catches/state and direct console usage |
+| `electron/helpers/artifactHelpers.cjs` | builder | 2026-02-17T15:33:34Z | 2026-02-17T15:40:47Z | AUDIT-REMEDIATION-005 OCR/telemetry runtime hardening: canonical telemetry archive normalization in artifact bundling |
+| `electron/helpers/telemetryArchiveHelpers.cjs` | builder | 2026-02-17T15:33:34Z | 2026-02-17T15:40:47Z | AUDIT-REMEDIATION-005 OCR/telemetry runtime hardening: reuse canonical archive normalization helpers |
+| `docs/TELEMETRY_PIPELINE.md` | project-manager | 2026-02-17T15:33:34Z | 2026-02-17T15:40:47Z | AUDIT-REMEDIATION-005 telemetry archive normalization documentation alignment |
+| `src/App.tsx` | builder | 2026-02-17T08:21:25Z | 2026-02-17T08:29:02Z | OCR-TEAM-CAP-HARDEN-006: enforce teammate cap in OCR apply flow before wizard/session propagation |
+| `src/hooks/useMatchSubmission.ts` | builder | 2026-02-17T08:21:25Z | 2026-02-17T08:29:02Z | OCR-TEAM-CAP-HARDEN-006: enforce teammate cap at submission boundary for pending draft/final match writes |
+| `src/components/SmartCapturesPanel.tsx` | builder | 2026-02-17T08:21:25Z | 2026-02-17T08:29:02Z | OCR-TEAM-CAP-HARDEN-006: cap rerun/apply teammate writes in Smart Captures wizard flows |
+| `src/utils/teamLimits.ts` | builder | 2026-02-17T08:21:25Z | 2026-02-17T08:29:02Z | OCR-TEAM-CAP-HARDEN-006: shared ship-capacity teammate cap utility |
+| `src/utils/__tests__/teamLimits.test.ts` | verifier | 2026-02-17T08:21:25Z | 2026-02-17T08:29:02Z | OCR-TEAM-CAP-HARDEN-006: focused regression tests for teammate cap utility |
+| `src/utils/scan/imageUtils.ts` | builder | 2026-02-17T19:45:00Z | 2026-02-17T19:50:00Z | IQR-NAME-SOURCE-001: capture and return OCR debug screenshot path for review provenance |
+| `src/store/slices/createDataSlice.ts` | builder | 2026-02-17T19:45:00Z | 2026-02-17T19:50:00Z | IQR-NAME-SOURCE-001: extend pending review schema with source screenshot metadata |
+| `src/hooks/useSmartScan.ts` | builder | 2026-02-17T19:45:00Z | 2026-02-17T19:50:00Z | IQR-NAME-SOURCE-001: attach source screenshot metadata to low-confidence player-name review entries |
+| `src/components/ReviewQueueModal.tsx` | ui-designer | 2026-02-17T19:45:00Z | 2026-02-17T19:50:00Z | IQR-NAME-SOURCE-001: surface per-entry source details and screenshot preview action in intelligence review modal |
+| `src/components/ReviewQueueModal.test.tsx` | verifier | 2026-02-17T19:45:00Z | 2026-02-17T19:50:00Z | IQR-NAME-SOURCE-001: add regression coverage for source screenshot affordance in review queue |
+| `docs/agents/00_INTAKE.md` | project-manager | 2026-02-17T19:45:00Z | 2026-02-17T19:50:00Z | IQR-NAME-SOURCE-001 intake normalization and acceptance criteria |
+| `docs/agents/01_PLAN.md` | project-manager | 2026-02-17T19:45:00Z | 2026-02-17T19:50:00Z | IQR-NAME-SOURCE-001 plan/status tracking |
+| `docs/agents/02_EXECUTION_LOG.md` | debugger | 2026-02-17T19:45:00Z | 2026-02-17T19:50:00Z | IQR-NAME-SOURCE-001 execution log and PM feedback cycle entries |
+| `docs/agents/03_VALIDATION.md` | verifier | 2026-02-17T19:45:00Z | 2026-02-17T19:50:00Z | IQR-NAME-SOURCE-001 validation command/evidence logging |
+| `docs/agents/04_HANDOFF.md` | release-manager | 2026-02-17T19:45:00Z | 2026-02-17T19:50:00Z | IQR-NAME-SOURCE-001 handoff summary |
+| `docs/agents/DECISIONS.md` | project-manager | 2026-02-17T19:45:00Z | 2026-02-17T19:50:00Z | IQR-NAME-SOURCE-001 scope and UI-source provenance decisions |
+| `docs/WORKLOCKS.md` | debugger | 2026-02-17T19:45:00Z | 2026-02-17T19:50:00Z | IQR-NAME-SOURCE-001 lock table maintenance |
 | `src/hooks/useLogMonitor.ts` | builder | 2026-02-17T18:57:00Z | 2026-02-17T19:04:00Z | AUDIT-REMEDIATION-003: remove high-risk telemetry event/loadout `any` usage in runtime monitor path |
 | `src/App.tsx` | builder | 2026-02-17T18:57:00Z | 2026-02-17T19:04:00Z | AUDIT-REMEDIATION-003: tighten telemetry prune/idle-callback typing and remove runtime `any` casts |
 | `src/store/slices/createUISlice.ts` | builder | 2026-02-17T18:57:00Z | 2026-02-17T19:04:00Z | AUDIT-REMEDIATION-003: replace telemetry status setter `any` with explicit typed partial payload |
@@ -421,3 +451,37 @@ Lock Class:
 | docs/agents/03_VALIDATION.md | verifier | 2026-02-17T19:08:00Z | 2026-02-17T20:27:35Z | AUDIT-REMEDIATION-004 lock released |
 | docs/agents/04_HANDOFF.md | release-manager | 2026-02-17T19:08:00Z | 2026-02-17T20:27:35Z | AUDIT-REMEDIATION-004 lock released |
 | docs/agents/DECISIONS.md | project-manager | 2026-02-17T19:08:00Z | 2026-02-17T20:27:35Z | AUDIT-REMEDIATION-004 lock released |
+| src/components/Wizard.tsx | builder | 2026-02-17T05:13:56Z | 2026-02-17T05:58:56Z | RESULT-HOOK-CRASH-310-001 fix hook-order crash when result buttons open wizard |
+| src/components/Wizard.test.tsx | verifier | 2026-02-17T05:13:56Z | 2026-02-17T05:58:56Z | RESULT-HOOK-CRASH-310-001 add regression coverage for closed->open wizard render path |
+| docs/agents/00_INTAKE.md | project-manager | 2026-02-17T05:13:56Z | 2026-02-17T05:58:56Z | RESULT-HOOK-CRASH-310-001 intake record |
+| docs/agents/01_PLAN.md | project-manager | 2026-02-17T05:13:56Z | 2026-02-17T05:58:56Z | RESULT-HOOK-CRASH-310-001 plan record |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-17T05:13:56Z | 2026-02-17T05:58:56Z | RESULT-HOOK-CRASH-310-001 execution log updates |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-17T05:13:56Z | 2026-02-17T05:58:56Z | RESULT-HOOK-CRASH-310-001 validation evidence |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-17T05:13:56Z | 2026-02-17T05:58:56Z | RESULT-HOOK-CRASH-310-001 handoff summary |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-17T05:13:56Z | 2026-02-17T05:58:56Z | RESULT-HOOK-CRASH-310-001 scope/implementation decisions |
+| docs/WORKLOCKS.md | debugger | 2026-02-17T05:13:56Z | 2026-02-17T05:58:56Z | RESULT-HOOK-CRASH-310-001 lock maintenance |
+| src/components/Wizard.tsx | builder | 2026-02-17T05:17:15Z | 2026-02-17T05:17:15Z | RESULT-HOOK-CRASH-310-001 lock released |
+| src/components/Wizard.test.tsx | verifier | 2026-02-17T05:17:15Z | 2026-02-17T05:17:15Z | RESULT-HOOK-CRASH-310-001 lock released |
+| docs/agents/00_INTAKE.md | project-manager | 2026-02-17T05:17:15Z | 2026-02-17T05:17:15Z | RESULT-HOOK-CRASH-310-001 lock released |
+| docs/agents/01_PLAN.md | project-manager | 2026-02-17T05:17:15Z | 2026-02-17T05:17:15Z | RESULT-HOOK-CRASH-310-001 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-17T05:17:15Z | 2026-02-17T05:17:15Z | RESULT-HOOK-CRASH-310-001 lock released |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-17T05:17:15Z | 2026-02-17T05:17:15Z | RESULT-HOOK-CRASH-310-001 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-17T05:17:15Z | 2026-02-17T05:17:15Z | RESULT-HOOK-CRASH-310-001 lock released |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-17T05:17:15Z | 2026-02-17T05:17:15Z | RESULT-HOOK-CRASH-310-001 lock released |
+| docs/WORKLOCKS.md | debugger | 2026-02-17T05:17:15Z | 2026-02-17T05:17:15Z | RESULT-HOOK-CRASH-310-001 lock released |
+| src/components/OcrCorrectionModal.test.tsx | verifier | 2026-02-17T06:04:41Z | 2026-02-17T06:51:38Z | WIZARD-HOOK-AUDIT-002 add modal transition regression coverage for OCR correction wizard flow |
+| docs/agents/00_INTAKE.md | project-manager | 2026-02-17T06:04:41Z | 2026-02-17T06:51:38Z | WIZARD-HOOK-AUDIT-002 intake record |
+| docs/agents/01_PLAN.md | project-manager | 2026-02-17T06:04:41Z | 2026-02-17T06:51:38Z | WIZARD-HOOK-AUDIT-002 plan record |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-17T06:04:41Z | 2026-02-17T06:51:38Z | WIZARD-HOOK-AUDIT-002 execution log updates |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-17T06:04:41Z | 2026-02-17T06:51:38Z | WIZARD-HOOK-AUDIT-002 validation evidence |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-17T06:04:41Z | 2026-02-17T06:51:38Z | WIZARD-HOOK-AUDIT-002 handoff summary |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-17T06:04:41Z | 2026-02-17T06:51:38Z | WIZARD-HOOK-AUDIT-002 scope and safety decisions |
+| docs/WORKLOCKS.md | debugger | 2026-02-17T06:04:41Z | 2026-02-17T06:51:38Z | WIZARD-HOOK-AUDIT-002 lock maintenance |
+| src/components/OcrCorrectionModal.test.tsx | verifier | 2026-02-17T06:17:01Z | 2026-02-17T06:17:01Z | WIZARD-HOOK-AUDIT-002 lock released |
+| docs/agents/00_INTAKE.md | project-manager | 2026-02-17T06:17:01Z | 2026-02-17T06:17:01Z | WIZARD-HOOK-AUDIT-002 lock released |
+| docs/agents/01_PLAN.md | project-manager | 2026-02-17T06:17:01Z | 2026-02-17T06:17:01Z | WIZARD-HOOK-AUDIT-002 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-17T06:17:01Z | 2026-02-17T06:17:01Z | WIZARD-HOOK-AUDIT-002 lock released |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-17T06:17:01Z | 2026-02-17T06:17:01Z | WIZARD-HOOK-AUDIT-002 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-17T06:17:01Z | 2026-02-17T06:17:01Z | WIZARD-HOOK-AUDIT-002 lock released |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-17T06:17:01Z | 2026-02-17T06:17:01Z | WIZARD-HOOK-AUDIT-002 lock released |
+| docs/WORKLOCKS.md | debugger | 2026-02-17T06:17:01Z | 2026-02-17T06:17:01Z | WIZARD-HOOK-AUDIT-002 lock released |

@@ -3,6 +3,7 @@ import type { Match } from '../types';
 import type { TimelineEvent } from '../store/slices/createDataSlice';
 import type { OcrCorrection, PlayerProfile } from '../store/slices/createMappingSlice';
 import type { OcrAliasModel, OcrLearningEvent, OcrLearningQueueItem } from './ocrAliasEngine';
+import Logger from './logger';
 
 type StringMap = Record<string, string>;
 
@@ -58,6 +59,7 @@ const LEGACY_KEYS = [
   'wg_language', 'wg_show_session_timer', 'wg_custom_bg_url',
   'wg_layouts_v11', 'wg_last_activity'
 ];
+const LEGACY_V13_CHECK_KEY = 'wg_v13_migration_checked_v1';
 
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 let pendingResolvers: Array<(ok: boolean) => void> = [];
@@ -78,6 +80,21 @@ const parseJsonSafely = (value: string): unknown => {
     return JSON.parse(value);
   } catch {
     return null;
+  }
+};
+
+const hasLocalStorage = (): boolean =>
+  typeof localStorage !== 'undefined';
+
+const shouldCheckLegacyV13 = (): boolean =>
+  hasLocalStorage() && localStorage.getItem(LEGACY_V13_CHECK_KEY) !== '1';
+
+const markLegacyV13Checked = () => {
+  if (!hasLocalStorage()) return;
+  try {
+    localStorage.setItem(LEGACY_V13_CHECK_KEY, '1');
+  } catch {
+    // Non-fatal: migration checks are an optimization.
   }
 };
 
@@ -283,7 +300,7 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
     merged.uidSeedState = { seedVersionApplied: seedVersion };
     return merged;
   } catch (error) {
-    console.warn('[UIDSeed] Failed to load seed mappings', error);
+    Logger.warn('UIDSeed', 'Failed to load seed mappings', error);
     return merged;
   }
 };
@@ -302,7 +319,7 @@ const maybeAutoBackup = async (data: StorageData) => {
   try {
     await ipc.invoke('db-backup');
   } catch (error) {
-    console.warn('[AutoBackup] Failed to create backup:', error);
+    Logger.warn('AutoBackup', 'Failed to create backup', error);
   }
 };
 
@@ -317,12 +334,12 @@ const writeNow = async (data: StorageData): Promise<boolean> => {
       try {
         localStorage.setItem('wg_db', JSON.stringify(data));
       } catch (error) {
-        console.warn('LocalStorage write failed', error);
+        Logger.warn('Storage', 'LocalStorage write failed', error);
       }
     }
     return true;
   } catch (error) {
-    console.error('Failed to write DB', error);
+    Logger.error('Storage', 'Failed to write DB', error);
     return false;
   }
 };
@@ -363,8 +380,9 @@ export const StorageService = {
   async init(): Promise<StorageData | null> {
     this.ensureLifecycleGuards();
     const ipc = getElectronAPI();
+    const checkLegacyV13 = shouldCheckLegacyV13();
     if (!ipc) {
-      console.log('Running in Web Mode (localStorage fallback)');
+      Logger.info('Storage', 'Running in Web Mode (localStorage fallback)');
       if (typeof localStorage !== 'undefined') {
         const webDB = localStorage.getItem('wg_db');
         if (webDB) {
@@ -377,12 +395,15 @@ export const StorageService = {
         const dbData = await ipc.invoke('db-read');
         const normalized = coerceStorageData(dbData);
         if (normalized) {
-          console.log('Database loaded from disk.');
+          Logger.info('Storage', 'Database loaded from disk');
+          if (normalized.storageMeta?.legacyV13MigratedAt) {
+            markLegacyV13Checked();
+          }
           const seeded = await applyUidSeed(normalized);
           return rememberLoadedData(seeded);
         }
       } catch (error) {
-        console.error('Failed to read DB', error);
+        Logger.error('Storage', 'Failed to read DB', error);
       }
       if (typeof localStorage !== 'undefined') {
         const webDB = localStorage.getItem('wg_db');
@@ -396,9 +417,9 @@ export const StorageService = {
         }
       }
     }
-    const hasLegacyData = typeof localStorage !== 'undefined' && localStorage.getItem('wg_v13_matches');
+    const hasLegacyData = checkLegacyV13 && hasLocalStorage() && localStorage.getItem('wg_v13_matches');
     if (hasLegacyData) {
-      console.log('Migrating from Legacy LocalStorage...');
+      Logger.info('Storage', 'Migrating from legacy localStorage');
       const migrationData: StorageData = {
         ...createDefaultStorageData(),
         matches: coerceStorageData({ matches: parseJsonSafely(localStorage.getItem('wg_v13_matches') || '[]') })?.matches || [],
@@ -423,6 +444,7 @@ export const StorageService = {
         },
       };
       await this.save(migrationData);
+      markLegacyV13Checked();
       if (ipc) {
         LEGACY_KEYS.forEach((key) => {
           const val = localStorage.getItem(key);
@@ -435,6 +457,9 @@ export const StorageService = {
 
       const seeded = await applyUidSeed(migrationData);
       return rememberLoadedData(seeded);
+    }
+    if (checkLegacyV13) {
+      markLegacyV13Checked();
     }
     const seeded = await applyUidSeed(createDefaultStorageData());
     return rememberLoadedData(seeded);

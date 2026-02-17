@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
-import { Check, X, Edit2, AlertTriangle, Trash2 } from 'lucide-react';
+import { Check, X, Edit2, AlertTriangle, Trash2, Image as ImageIcon } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import type { PendingReview } from '../store/slices/createDataSlice';
+import { LocalImage } from './LocalImage';
 
 interface ReviewQueueModalProps {
     onClose: () => void;
@@ -39,6 +40,9 @@ const isUnknownReview = (review: ReviewItem): review is UnknownReviewItem =>
 const isLearningReview = (review: ReviewItem): review is LearningReviewItem =>
     review.type === 'ocr_learning_review';
 
+const isPendingReviewItem = (review: ReviewItem): review is PendingReview =>
+    !isUnknownReview(review) && !isLearningReview(review);
+
 export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) => {
     const {
         pendingReviews,
@@ -60,6 +64,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
     const recordOcrAliasCorrection = useAppStore((s) => s.recordOcrAliasCorrection);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState("");
+    const [sourcePreview, setSourcePreview] = useState<{ src: string; label: string } | null>(null);
 
     const normalizeName = (value: string) => value.trim();
     const namesEqual = (a: string, b: string) => normalizeName(a).toLowerCase() === normalizeName(b).toLowerCase();
@@ -75,6 +80,20 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             out.push(normalized);
         });
         return out;
+    };
+    const formatCaptureTime = (timestamp?: number) => {
+        if (!timestamp || !Number.isFinite(timestamp)) return '';
+        return new Date(timestamp).toLocaleString();
+    };
+    const getReviewSourceDetails = (review: ReviewItem) => {
+        if (!isPendingReviewItem(review)) return null;
+        const sourceCapture = review.sourceCapture;
+        if (!sourceCapture) return null;
+        return {
+            screenshotPath: sourceCapture.screenshotPath,
+            screenshotLabel: sourceCapture.screenshotLabel || 'Captured Screenshot',
+            capturedAtLabel: formatCaptureTime(sourceCapture.capturedAt),
+        };
     };
 
     const unknownItems: UnknownReviewItem[] = Object.entries(detectedUnknowns).map(([id, data]) => ({
@@ -255,7 +274,9 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                 </div>
 
                 <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar md3-dialog-content">
-                    {allItems.map(review => (
+                    {allItems.map(review => {
+                        const sourceDetails = getReviewSourceDetails(review);
+                        return (
                         <div key={review.id} className="md3-card rounded-card p-3 border border-md-sys-outline-variant/30 animate-fade-in">
                             <div className="flex justify-between items-start mb-2">
                                 <div>
@@ -302,7 +323,37 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                 </div>
                             )}
 
-                            {!editingId && review.type === 'roster_candidate' && (
+                            {editingId !== review.id && sourceDetails && (
+                                <div className="mt-2 rounded-control md3-surface-high px-2.5 py-2 flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                        <div className="text-label-sm font-semibold text-md-sys-on-surface/70 truncate">
+                                            Source: {sourceDetails.screenshotLabel}
+                                        </div>
+                                        {sourceDetails.capturedAtLabel && (
+                                            <div className="text-label-sm text-md-sys-on-surface/50">
+                                                Captured: {sourceDetails.capturedAtLabel}
+                                            </div>
+                                        )}
+                                        {!sourceDetails.screenshotPath && (
+                                            <div className="text-label-sm text-md-sys-on-surface/40">
+                                                Screenshot unavailable for this entry.
+                                            </div>
+                                        )}
+                                    </div>
+                                    {sourceDetails.screenshotPath && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setSourcePreview({ src: sourceDetails.screenshotPath as string, label: sourceDetails.screenshotLabel })}
+                                            className="md3-btn-tonal px-2.5 py-1.5 text-label-sm font-bold whitespace-nowrap inline-flex items-center gap-1.5"
+                                        >
+                                            <ImageIcon size={14} />
+                                            View Source
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            {editingId !== review.id && review.type === 'roster_candidate' && (
                                 <div className="mt-2 space-y-2">
                                     {review.bestScore != null && (
                                         <div className="text-label-sm text-md-sys-on-surface/60">
@@ -331,7 +382,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                     )}
                                 </div>
                             )}
-                            {!editingId && isLearningReview(review) && Array.isArray(review.explanation) && review.explanation.length > 0 && (
+                            {editingId !== review.id && isLearningReview(review) && Array.isArray(review.explanation) && review.explanation.length > 0 && (
                                 <div className="mt-2 text-label-sm opacity-60 space-y-1">
                                     {review.explanation.slice(0, 3).map((line: string, idx: number) => (
                                         <div key={`${review.id}_exp_${idx}`}>- {line}</div>
@@ -339,7 +390,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                 </div>
                             )}
                         </div>
-                    ))}
+                    )})}
                 </div>
 
                 <div className="md3-dialog-actions">
@@ -348,6 +399,39 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                     </button>
                 </div>
             </div>
+            {sourcePreview && (
+                <div
+                    className="fixed inset-0 z-modal-top bg-scrim-90 backdrop-blur-sm flex items-center justify-center p-4"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        setSourcePreview(null);
+                    }}
+                >
+                    <div
+                        className="md3-dialog rounded-modal w-full max-w-5xl max-h-80vh overflow-hidden"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="md3-banner md3-banner--info">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <ImageIcon size={18} />
+                                <div className="text-title font-bold truncate">
+                                    {sourcePreview.label}
+                                </div>
+                            </div>
+                            <button onClick={() => setSourcePreview(null)} className="md3-icon-btn" title="Close Source Preview">
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <div className="p-3 md3-surface-high max-h-80vh overflow-auto">
+                            <LocalImage
+                                src={sourcePreview.src}
+                                alt={sourcePreview.label}
+                                className="w-full h-auto object-contain rounded-control"
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

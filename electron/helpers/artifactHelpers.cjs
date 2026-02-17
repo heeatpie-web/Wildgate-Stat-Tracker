@@ -6,6 +6,7 @@
 const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
+const { normalizeEvents } = require('./telemetryArchiveHelpers.cjs');
 
 const IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.bmp', '.webp'];
 const TIME_MARGIN_MS = { before: 5000, after: 30000 };
@@ -85,7 +86,7 @@ async function copyTelemetryInWindow(telemetryDir, matchDir, startTime, endTime)
     try {
       const srcPath = path.join(telemetryDir, file);
       const content = JSON.parse(await fsPromises.readFile(srcPath, 'utf-8'));
-      const events = Array.isArray(content) ? content : (content.telemetry || []);
+      const events = normalizeEvents(content);
       const hasOverlap = events.some(e => {
         const t = e.ClientTimestamp || e.timestamp || e.EventTimestamp;
         return t && t >= startTime - TIME_MARGIN_MS.before && t <= endTime + TIME_MARGIN_MS.after;

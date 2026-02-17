@@ -31,9 +31,9 @@
 
 ## Maintenance
 - [ ] Keep `GUIDE.md` and `docs/` updated as architecture evolves.
-- [ ] Clean up legacy `ocr-debug/` path usage â€” deferred, still actively used by scan pipeline (`lobbyScan`, `matchScan`, `tacticalScan`, `DevOCRPanel`).
+- [x] Clarified `ocr-debug/` path lifecycle - compatibility capture path remains supported intentionally; no deferred cleanup task.
 
 ## Priority Now (Friend Beta Readiness)
-- [ ] **Ship-to-Friends 24h Gate** — Freeze new features and require all before sharing build: (1) 
+- [ ] **Ship-to-Friends 24h Gate** ï¿½ Freeze new features and require all before sharing build: (1) 
 pm test PASS, (2) 
 pm run build PASS, (3) 30-minute no-crash smoke run, (4) OCR core flow PASS (capture -> review -> save), (5) update path validated once or explicitly disabled with user-facing note, (6) version + changelog visible in-app.

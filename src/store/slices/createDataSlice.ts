@@ -52,6 +52,13 @@ export interface MergeHistoryEntry {
 }
 
 /** An OCR result flagged for manual review before acceptance. */
+export interface PendingReviewSource {
+  screenshotPath?: string;
+  screenshotLabel?: string;
+  capturedAt?: number;
+}
+
+/** An OCR result flagged for manual review before acceptance. */
 export interface PendingReview {
   id: string;
   type: 'player_name' | 'modifier' | 'ship_type' | 'roster_candidate';
@@ -62,6 +69,7 @@ export interface PendingReview {
   bestScore?: number;
   suggestions?: Array<{ name: string; score: number }>;
   source?: 'ocr' | 'telemetry' | 'manual';
+  sourceCapture?: PendingReviewSource;
 }
 
 /** A timestamped event entry for the session timeline. */

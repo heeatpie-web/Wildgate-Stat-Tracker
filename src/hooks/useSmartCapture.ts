@@ -12,6 +12,7 @@ import {
   resolveOcrName,
   resolveWithSocialContext,
 } from '../utils/ocrNameResolver';
+import { capTeammatePlayers } from '../utils/teamLimits';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
 import { smartAnalyzeScreen } from '../utils/scanService';
@@ -375,7 +376,10 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         confidence: Math.max(teammate.confidence || 0, 72),
       };
     });
-    const finalTeammates = dedupeNamedByCanonical(contextualTeammates);
+    const finalTeammates = capTeammatePlayers(
+      dedupeNamedByCanonical(contextualTeammates),
+      data.playerShip?.shipType
+    );
     const contextualAnchors = finalTeammates
       .filter((teammate) => registrySet.has(normalizeOcrName(teammate.name).toLowerCase()))
       .map((teammate) => teammate.name);
@@ -522,6 +526,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     else if (hasTacticalMap) screenshotType = 'tactical_map';
 
     const overallConfidence = calculateOverallConfidence(merged);
+    const mergedTeammates = capTeammatePlayers(merged.teammates || [], merged.playerShip?.shipType);
 
     return {
       screenshotType,
@@ -529,7 +534,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       playerTeamName: undefined,
       reachModifiers: merged.reachModifiers || [],
       enemyShips: [],
-      teammates: merged.teammates || [],
+      teammates: mergedTeammates,
       opponentTeams: merged.opponentTeams || [],
       overallConfidence,
       captureTimestamp: Date.now(),
@@ -547,13 +552,17 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     const scope = normalizeMatchScope(matchId) || 'unscoped';
     const previous = pendingDataByScopeRef.current[scope];
     if (!previous) {
+      const cappedTeammates = capTeammatePlayers(
+        normalizedData.teammates || [],
+        normalizedData.playerShip?.shipType
+      );
       const created = {
         screenshotType: normalizedData.screenshotType,
         playerShip: normalizedData.playerShip,
         playerTeamName: undefined,
         reachModifiers: normalizedData.reachModifiers || [],
         enemyShips: [],
-        teammates: normalizedData.teammates || [],
+        teammates: cappedTeammates,
         opponentTeams: normalizedData.opponentTeams || [],
         overallConfidence: normalizedData.overallConfidence || 0,
         captureTimestamp: Date.now(),
@@ -572,12 +581,17 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     });
     const screenshotType = normalizedData.screenshotType !== 'unknown'
       ? normalizedData.screenshotType : previous.screenshotType;
+    const shipForTeammateCap = merged.playerShip?.shipType || previous.playerShip?.shipType || normalizedData.playerShip?.shipType;
+    const cappedMergedTeammates = capTeammatePlayers(
+      (merged.teammates || previous.teammates) || [],
+      shipForTeammateCap
+    );
     const updated = {
       ...previous,
       screenshotType,
       playerShip: merged.playerShip || previous.playerShip,
       reachModifiers: merged.reachModifiers || previous.reachModifiers,
-      teammates: merged.teammates || previous.teammates,
+      teammates: cappedMergedTeammates,
       opponentTeams: merged.opponentTeams || previous.opponentTeams,
       overallConfidence: calculateOverallConfidence(merged),
       captureTimestamp: Date.now(),

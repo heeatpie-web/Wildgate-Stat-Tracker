@@ -8,6 +8,7 @@ import { useSoundEffects } from '../hooks/useSoundEffects';
 import { bundleMatchArtifacts, getMatchArtifactsStructured } from '../utils/artifactService';
 import { StorageService } from '../utils/storage';
 import Logger from '../utils/logger';
+import { capTeammateNames } from '../utils/teamLimits';
 
 const DEFAULT_ARTIFACT_LOOKBACK_MS = 10 * 60 * 1000;
 const parseDurationSecs = (value: string | undefined): number => {
@@ -127,13 +128,20 @@ export const useMatchSubmission = () => {
             ? selectedReachModifiers
             : (unresolvedDraft?.reachModifiers || []);
         const resolvedKills = hasActiveKills ? kills : (unresolvedDraft?.kills || kills);
+        const teammateShipForCap = pickFirstKnown(
+            activeShip,
+            currentLoadout?.ship,
+            unresolvedDraft?.loadout?.ship,
+            unresolvedDraft?.ship
+        );
+        const cappedResolvedTeammates = capTeammateNames(resolvedTeammates, teammateShipForCap);
 
         const data: Partial<Match> = {
             id: unresolvedDraft?.id,
             timestamp: unresolvedDraft?.timestamp,
             mode: unresolvedDraft?.mode || activeMode,
             player: unresolvedDraft?.player || activeUser,
-            teammates: resolvedTeammates,
+            teammates: cappedResolvedTeammates,
             opponents: resolvedOpponents,
             hero: pickFirstKnown(activeHero, currentLoadout?.hero, unresolvedDraft?.loadout?.hero, unresolvedDraft?.hero) || undefined,
             ship: pickFirstKnown(activeShip, currentLoadout?.ship, unresolvedDraft?.loadout?.ship, unresolvedDraft?.ship) || undefined,
@@ -207,9 +215,12 @@ export const useMatchSubmission = () => {
                 playDefeat();
             }
             const finalTime = (timeMin || timeSec) ? `${timeMin || '00'}:${timeSec || '00'}` : (pendingMatchData.time || "00:00");
-            const finalTeammates = (selectedTeammates && selectedTeammates.length > 0)
+            const resolvedHero = pickFirstKnown(pendingMatchData.hero, currentLoadout?.hero, activeHero);
+            const resolvedShip = pickFirstKnown(pendingMatchData.ship, currentLoadout?.ship, activeShip);
+            const finalTeammatesRaw = (selectedTeammates && selectedTeammates.length > 0)
                 ? selectedTeammates
                 : (pendingMatchData.teammates || []);
+            const finalTeammates = capTeammateNames(finalTeammatesRaw, resolvedShip);
             const finalOpponents = (selectedOpponents && selectedOpponents.length > 0)
                 ? selectedOpponents
                 : (pendingMatchData.opponents || []);
@@ -229,9 +240,6 @@ export const useMatchSubmission = () => {
             const finalPoiEpic = Math.max(Number(pendingMatchData.poiEpic) || 0, Number(poiEpic) || 0);
             const finalNotes = currentNote || pendingMatchData.notes || '';
             const finalPlacement = pendingPlacement || (showWizard === 'Win' ? 1 : undefined);
-
-            const resolvedHero = pickFirstKnown(pendingMatchData.hero, currentLoadout?.hero, activeHero);
-            const resolvedShip = pickFirstKnown(pendingMatchData.ship, currentLoadout?.ship, activeShip);
             const pendingMatchId = Number(pendingMatchData.id || 0);
             const existingMatch = Number.isInteger(pendingMatchId) && pendingMatchId > 0
                 ? (Array.isArray(matches) ? matches.find((m: Match) => m.id === pendingMatchId) : undefined)

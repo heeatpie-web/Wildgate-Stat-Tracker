@@ -57,6 +57,16 @@ export const Wizard: React.FC = () => {
         return Object.values(sessionTeams).reduce((sum, players) => sum + (players as string[]).length, 0);
     }, [sessionTeams]);
 
+    const loadoutDraft = React.useMemo(() => {
+        const base = pendingMatchData?.loadout || currentLoadout || null;
+        return {
+            hero: base?.hero || null,
+            ship: base?.ship || null,
+            weapons: [base?.weapons?.[0] || '', base?.weapons?.[1] || ''],
+            equipment: [base?.equipment?.[0] || '', base?.equipment?.[1] || ''],
+        };
+    }, [currentLoadout, pendingMatchData?.loadout]);
+
     if (!showWizard || !pendingMatchData) return null;
 
     const isDefeat = showWizard === 'Loss';
@@ -68,15 +78,6 @@ export const Wizard: React.FC = () => {
     const inputBaseClass = 'mg-surface-primary bg-md-sys-primary/5 font-bold outline-none text-center rounded-xl border border-md-sys-primary/10 transition-all focus:border-md-sys-primary/40 focus:bg-md-sys-primary/10';
 
     const showPlacement = isDefeat && activeMode === 'Artifact Brawl' && selectedWinType === 'Combat';
-    const loadoutDraft = React.useMemo(() => {
-        const base = pendingMatchData.loadout || currentLoadout || null;
-        return {
-            hero: base?.hero || null,
-            ship: base?.ship || null,
-            weapons: [base?.weapons?.[0] || '', base?.weapons?.[1] || ''],
-            equipment: [base?.equipment?.[0] || '', base?.equipment?.[1] || ''],
-        };
-    }, [currentLoadout, pendingMatchData.loadout]);
     const updateLoadoutSlot = (kind: 'weapons' | 'equipment', slotIndex: number, value: string) => {
         const nextWeapons = [...loadoutDraft.weapons];
         const nextEquipment = [...loadoutDraft.equipment];

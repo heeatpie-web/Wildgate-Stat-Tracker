@@ -882,3 +882,178 @@
   - Risk Tier: `T2`
   - Execution Path: `FULL_PATH`
   - Reason: multi-file behavior changes in OCR/session apply and submission flow with persisted settings impact.
+
+---
+
+## Intake - 2026-02-17 - IQR-NAME-SOURCE-001
+- Goal: make each `Intelligence Review Required` player-name entry traceable to its originating capture so unclear OCR names can be validated against source evidence.
+- Intent confirmation block:
+  - Goal: show provenance per player-name review item.
+  - Constraints: keep scope narrow to review-entry metadata + review modal UI; preserve existing confirm/edit/delete behavior.
+  - Done: reviewer can open source screenshot context directly from each relevant entry.
+- Constraints:
+  - Keep implementation limited to review queue data + UI surfaces directly used by `Intelligence Review Required`.
+  - Do not change OCR extraction heuristics or roster merge logic.
+  - Preserve existing queue action semantics (confirm/edit/delete/merge) and current styling system.
+- In scope:
+  - Extend pending review model with optional source screenshot metadata.
+  - Capture source screenshot path during Smart Scan and attach it to queued `player_name` items.
+  - Surface source metadata in `ReviewQueueModal` with a direct screenshot preview action.
+  - Add focused regression test coverage for source screenshot visibility.
+- Out-of-scope:
+  - OCR model/threshold tuning.
+  - Reworking Smart Captures OCRReview modal behavior.
+  - Any broad queue architecture refactor beyond provenance fields.
+- Done condition:
+  - New low-confidence `player_name` queue entries include source capture metadata when available.
+  - `ReviewQueueModal` shows source provenance and supports viewing the captured screenshot for those entries.
+  - Existing queue actions remain passing under focused tests and typecheck.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: runtime + UI behavior update across multiple files with user-facing review workflow impact.
+
+---
+
+## Intake - 2026-02-17 - RESULT-HOOK-CRASH-310-001
+- Goal: fix the runtime crash that occurs when clicking Win/Loss/Draw in the recording interface.
+- Intent confirmation block:
+  - Goal: remove the React hook-order crash on result button clicks.
+  - Constraints: keep scope narrow to the submission/wizard render path; preserve existing result/OCR/wizard behavior.
+  - Done: clicking result buttons no longer throws React #310, and targeted validation passes.
+- Constraints:
+  - No UX redesign or flow changes outside the hook-order fix.
+  - Keep OCR prompt/background branching behavior unchanged.
+  - Keep persistence/store contracts unchanged.
+- In scope:
+  - Patch hook ordering in the wizard/result render path.
+  - Add focused regression coverage for closed->open wizard transition.
+  - Run targeted lint/typecheck/tests.
+- Out-of-scope:
+  - Broader submission refactors.
+  - Any unrelated OCR/model adjustments.
+- Done condition:
+  - Result button click path does not crash.
+  - Targeted tests pass and no new lint/type errors.
+  - Execution/validation/handoff docs updated with evidence.
+- AOM_V2:
+  - Risk Tier: T2
+  - Execution Path: FULL_PATH
+  - Reason: runtime behavior crash in user-facing submission flow with multi-file code/test + validation updates.
+
+---
+
+## Intake - 2026-02-17 - WIZARD-HOOK-AUDIT-002
+- Goal: harden the remaining wizard-style UI flows against hook-order regressions after the result wizard crash fix.
+- Intent confirmation block:
+  - Goal: ensure other wizard/modal flows do not trigger React hook-order crashes.
+  - Constraints: keep scope limited to wizard/modal render-safety and focused regression tests; no UX changes.
+  - Done: wizard-style components are audited and covered by focused transition tests.
+- Constraints:
+  - No behavior or styling redesign.
+  - Preserve existing wizard/modal interactions.
+  - Keep validation focused to touched files + typecheck.
+- In scope:
+  - Audit wizard/modal components for hook-after-guard patterns.
+  - Add focused regression tests for additional wizard-style modal transitions.
+  - Record evidence and decisions.
+- Out-of-scope:
+  - Broad UI refactors.
+  - Non-wizard component bugfixes.
+- Done condition:
+  - No additional hook-order violations in audited wizard/modal components.
+  - New focused tests pass with lint + typecheck.
+  - AGENTS docs updated with execution and evidence.
+- AOM_V2:
+  - Risk Tier: T1
+  - Execution Path: FULL_PATH
+  - Reason: user-facing runtime stability hardening in modal/wizard flows with tests/docs updates.
+
+---
+
+## Intake - 2026-02-17 - OCR-TEAM-CAP-HARDEN-006
+- Goal: stop OCR/wizard flows from producing teammate lists larger than ship capacity (user reported 12+ teammates still appearing).
+- Intent confirmation block:
+  - Goal: enforce one hard teammate cap across all OCR apply/review/submission paths, not only the form setter.
+  - Constraints: keep scope narrow to teammate-cap enforcement in OCR/wizard/session code paths; no unrelated UI redesign.
+  - Done: OCR-derived teammate data is capped consistently (ship-aware) in review/apply/submission flows, and validation evidence is recorded.
+- Constraints:
+  - Preserve existing OCR/opponent/modifier behavior outside teammate-cap logic.
+  - Do not alter persistence model shape or broad workflow sequencing.
+  - Keep fix targeted to the bug path and regression-safe utilities/tests.
+- In scope:
+  - Add shared teammate-cap utility (dedupe + ship-capacity cap).
+  - Apply utility in OCR review/apply/session/submission paths that can still store uncapped teammate arrays.
+  - Add focused regression tests for teammate-cap utility behavior.
+- Out-of-scope:
+  - OCR model/threshold tuning.
+  - Broad refactors of match recording UX.
+  - Non-teammate data contract changes.
+- Done condition:
+  - OCR workflows no longer leave > ship-capacity teammate lists in session/pending/match outputs.
+  - Targeted validation passes and evidence is logged in `03_VALIDATION`.
+  - Execution/handoff docs updated for this task.
+- AOM_V2:
+  - Risk Tier: T2
+  - Execution Path: FULL_PATH
+  - Reason: runtime behavior fix across multiple OCR/wizard/submission paths with regression-test updates.
+
+---
+
+## Intake - 2026-02-17 - REFACTOR-CLOSEOUT-007
+- Goal: fully close the unfinished giant refactor by validating the combined dirty refactor state end-to-end and finalizing closure artifacts.
+- Intent confirmation block:
+  - Goal: finish refactor closure without additional user prompts.
+  - Constraints: no scope expansion beyond final integration validation/closeout and required docs/locks hygiene.
+  - Done: full quality gates pass on the integrated refactor state and all `docs/agents/*` closure records are complete.
+- Constraints:
+  - Keep code scope narrow: only fix issues surfaced by full quality-gate validation.
+  - Do not revert unrelated existing changes.
+  - Complete required AGENTS workflow artifacts (`00`-`04`, decisions, locks).
+- In scope:
+  - Audit current dirty refactor state for unresolved failures.
+  - Run full quality gate (`lint + test + typecheck + build`) against combined state.
+  - Apply any required fixes if gates fail.
+  - Record execution/validation evidence and final handoff.
+- Out-of-scope:
+  - New feature work unrelated to refactor closeout.
+  - Broad redesign/refactor not required by failing validation evidence.
+  - Release/package publishing.
+- Done condition:
+  - `ci:quality` passes for the combined refactor state.
+  - No unresolved closeout blockers remain for this lane.
+  - `docs/agents/04_HANDOFF.md` contains final closeout status and residual risk notes.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: integration-level closure and release-gate validation over multi-file runtime refactor changes.
+
+---
+
+## Intake - 2026-02-17 - AUDIT-REMEDIATION-005
+- Goal: close the remaining audit findings around runtime `any` usage, production console logging, telemetry archive shape normalization, and legacy startup migration overhead.
+- Intent confirmation block:
+  - Goal: fix the concrete issues still present from the remaining-audit report.
+  - Constraints: keep scope to the listed runtime/typing/debt items; avoid unrelated refactors.
+  - Done: targeted files are hardened, validations pass, and closure evidence is recorded.
+- Constraints:
+  - Preserve existing runtime behavior and IPC contracts.
+  - Keep telemetry archive compatibility for legacy files.
+  - Do not expand into repo-wide `any` elimination.
+- In scope:
+  - Remove remaining `any` and unsafe catch typing in `src/utils/electronBridge.ts` and related runtime helper paths.
+  - Reduce production console noise in runtime code (`src/utils/storage.ts`, `src/utils/logger.ts`, `src/App.tsx`, `src/components/DevOCRPanel.tsx`).
+  - Replace ad-hoc telemetry archive shape handling in Electron artifact bundling helpers with shared normalization helper usage.
+  - Add a one-time legacy localStorage migration-check marker in `src/utils/storage.ts` to reduce startup debt.
+- Out-of-scope:
+  - Broad analytics/UI typing cleanup outside target files.
+  - Removal of `ocr-debug` capture support from pipeline.
+  - Breaking telemetry archive format migration.
+- Done condition:
+  - Targeted files above no longer contain the listed high-risk `any`/`console` patterns.
+  - Typecheck/lint/tests/build gates pass.
+  - Execution/validation/handoff/decisions and lock lifecycle are updated.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file runtime hardening touching IPC, persistence, and telemetry artifact boundaries.

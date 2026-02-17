@@ -70,6 +70,28 @@ describe('ReviewQueueModal', () => {
     expect(gameData.removePendingReview).toHaveBeenCalledWith('p1');
   });
 
+  it('shows source screenshot context for player_name entries when available', async () => {
+    const { ReviewQueueModal } = await import('./ReviewQueueModal');
+    gameData.pendingReviews = [{
+      id: 'p_source',
+      type: 'player_name',
+      value: 'Pil0tOne',
+      originalConfidence: 63,
+      context: 'Lobby',
+      sourceCapture: {
+        screenshotPath: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP8z8DwHwAFgwJ/l4s46QAAAABJRU5ErkJggg==',
+        screenshotLabel: 'capture_test.png',
+        capturedAt: 1739731200000,
+      },
+    }];
+
+    render(<ReviewQueueModal onClose={vi.fn()} />);
+    expect(screen.getByText('Source: capture_test.png')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /view source/i }));
+    expect(screen.getByAltText('capture_test.png')).toBeInTheDocument();
+  });
+
   it('editing a player_name updates team references, selected lists, and roster', async () => {
     const { ReviewQueueModal } = await import('./ReviewQueueModal');
     gameData.pendingReviews = [{

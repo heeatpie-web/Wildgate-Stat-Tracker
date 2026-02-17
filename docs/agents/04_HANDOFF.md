@@ -1133,3 +1133,192 @@
 ## Remaining / Risks
 - Deterministic fallback assignment is stable and hint-aware, but still depends on OCR extraction quality when no prior hint context exists.
 - Background OCR mode intentionally does not block wizard entry; users who prefer explicit gating should keep prompt mode (default).
+
+---
+
+## Handoff - 2026-02-17 - IQR-NAME-SOURCE-001
+## Status
+- Completed.
+
+## What Changed
+- `src/store/slices/createDataSlice.ts`
+  - Added `PendingReviewSource` and optional `PendingReview.sourceCapture` for provenance metadata.
+
+- `src/utils/scan/imageUtils.ts`
+  - `captureScreen()` now returns optional `debugPath` (saved OCR debug screenshot absolute path) with capture payload.
+
+- `src/hooks/useSmartScan.ts`
+  - Low-confidence `player_name` queue items now include `sourceCapture` metadata (`screenshotPath`, `screenshotLabel`, `capturedAt`) and explicit OCR source tagging.
+
+- `src/components/ReviewQueueModal.tsx`
+  - Added source context display on review items when provenance exists.
+  - Added `View Source` action to open the original capture screenshot in a modal preview.
+
+- `src/components/ReviewQueueModal.test.tsx`
+  - Added regression test for source context and source preview flow.
+
+## What Was Verified
+- `npx vitest run src/components/ReviewQueueModal.test.tsx` passed (`5/5` tests).
+- Touched-file lint passed.
+- `npm run -s typecheck` passed.
+
+## Remaining / Risks
+- Existing pre-change queue entries will not have source metadata; those continue to show normal review actions without source preview.
+- Current provenance links to whole-capture screenshots, not per-name cropped regions.
+
+---
+
+## Handoff - 2026-02-17 - RESULT-HOOK-CRASH-310-001
+## Status
+- Completed.
+
+## What Changed
+- `src/components/Wizard.tsx`
+  - Fixed hook-order crash by moving `loadoutDraft` `useMemo` above the `showWizard/pendingMatchData` early return.
+  - Updated memo input to null-safe access (`pendingMatchData?.loadout`) so the hook can run consistently when the wizard is closed.
+
+- `src/components/Wizard.test.tsx`
+  - Added regression test confirming closed -> open wizard transition does not throw.
+  - Test specifically covers the result-button activation path that previously produced React `#310`.
+
+## What Was Verified
+- `npx vitest run src/components/Wizard.test.tsx src/components/recording/ActionPanel.test.tsx` passed (`15/15` tests).
+- `npx eslint src/components/Wizard.tsx src/components/Wizard.test.tsx` passed.
+- `npm run -s typecheck` passed.
+
+## Remaining / Risks
+- Full `npm run -s test` / `npm run -s build` were not re-run in this narrow crash fix pass.
+- Existing unrelated dirty worktree changes remain untouched.
+
+---
+
+## Handoff - 2026-02-17 - WIZARD-HOOK-AUDIT-002
+## Status
+- Completed.
+
+## What Changed
+- `src/components/OcrCorrectionModal.test.tsx`
+  - Added focused regression coverage for wizard-style modal stability:
+    - verifies closed -> open transition does not throw,
+    - verifies ignore/undo-ignore action flow remains stable.
+
+- Wizard/modal audit outcome
+  - Performed component-level hook-order audit (AST-based) across `src/components`.
+  - No additional hook-after-return guard violations found after the `Wizard` fix.
+
+## What Was Verified
+- `npx eslint src/components/OcrCorrectionModal.test.tsx src/components/Wizard.tsx src/components/Wizard.test.tsx` passed.
+- `npm run -s typecheck` passed.
+- `npx vitest run src/components/OcrCorrectionModal.test.tsx src/components/Wizard.test.tsx src/components/recording/ActionPanel.test.tsx` passed (`17/17` tests).
+
+## Remaining / Risks
+- Full `npm run -s test` / `npm run -s build` were not re-run for this focused hardening pass.
+- Audit/test coverage is focused on wizard/modal hook-order and transition stability, not broad UI runtime behavior.
+
+---
+
+## Handoff - 2026-02-17 - OCR-TEAM-CAP-HARDEN-006
+## Status
+- Completed.
+
+## What Changed
+- Added shared teammate-cap utility:
+  - `src/utils/teamLimits.ts`
+  - `src/utils/__tests__/teamLimits.test.ts`
+  - Provides ship-aware teammate cap (`fallback max teammates = 3`) with dedupe for names and OCR teammate objects.
+
+- Unified cap enforcement in form + OCR/wizard/session/submission paths:
+  - `src/store/slices/createFormSlice.ts`: central teammate sanitizer now uses shared utility.
+  - `src/hooks/useSmartCapture.ts`: capped teammates during canonicalization, merged pending data, and merged OCR summaries.
+  - `src/App.tsx`: OCR apply now caps teammates before session write and reports capped/applied count.
+  - `src/components/SmartCapturesPanel.tsx`: capped rerun/apply teammate writes and replaced local teammate slicing with shared utility.
+  - `src/hooks/useMatchSubmission.ts`: capped teammate lists both when creating pending match data and during final submission.
+
+## What Was Verified
+- `npx vitest run src/utils/__tests__/teamLimits.test.ts src/store/slices/__tests__/createFormSlice.test.ts src/hooks/__tests__/useMatchSubmission.test.ts src/hooks/__tests__/useSmartCapture.test.ts` passed (`39/39` tests).
+- Touched-file lint passed.
+- `npm run -s typecheck` passed.
+
+## Remaining / Risks
+- This pass intentionally targets teammate-cap integrity only; it does not retune teammate-vs-opponent OCR classification quality.
+- Existing historical matches with oversized teammate arrays remain unchanged unless edited/reprocessed.
+
+---
+
+## Handoff - 2026-02-17 - REFACTOR-CLOSEOUT-007
+## Status
+- Completed.
+
+## What Changed
+- Performed integrated closeout of the unfinished giant refactor:
+  - audited the combined dirty refactor state across OCR/wizard/review/data lanes,
+  - executed full release-quality gates against the integrated state,
+  - finalized closeout workflow artifacts and lock records.
+
+- No additional code patches were required during this closeout pass because integrated gates were already green.
+
+## What Was Verified
+- `npm run -s ci:quality` passed end-to-end:
+  - lint: PASS
+  - test: PASS (36 files, 405 tests)
+  - typecheck: PASS
+  - build: PASS
+
+## Remaining / Risks
+- This closeout validates the current integrated working tree state; it does not include packaging/publishing.
+- Existing unrelated in-progress/staged work outside this closure scope was intentionally not reverted.
+
+---
+
+## Handoff - 2026-02-17 - AUDIT-REMEDIATION-005
+## Status
+- Completed.
+
+## What Changed
+- `src/utils/electronBridge.ts`
+  - Removed runtime `any` usage from catch handlers and bridge signatures.
+  - Typed OCR merge payload input (`existingData`) and tightened GCloud OCR response handling.
+  - Replaced direct `console.error` paths with structured logger reporting.
+
+- `src/utils/logger.ts`
+  - Replaced `any` with `unknown` in log payload signatures.
+  - Added production-aware console suppression while preserving debug output in non-production/forced-debug mode.
+  - Removed `window as any` access for app-version capture.
+
+- `src/utils/storage.ts`
+  - Replaced direct `console.*` with `Logger`.
+  - Added one-time legacy migration-check marker (`wg_v13_migration_checked_v1`) to reduce repeated startup legacy checks.
+  - Preserved existing migration/backup behavior.
+
+- `src/App.tsx`
+  - Replaced OCR resolution debug `console.log` statements with `Logger.debug`.
+
+- `src/components/DevOCRPanel.tsx`
+  - Removed remaining `any` from state/catch/parsing paths in this file.
+  - Switched direct console logging to structured logger usage.
+
+- `electron/helpers/artifactHelpers.cjs`
+  - Replaced ad-hoc telemetry archive shape parsing with shared `normalizeEvents()` helper.
+
+- `electron/helpers/telemetryArchiveHelpers.cjs`
+  - Exported `normalizeEvents()` for helper reuse.
+  - Gated info-level helper console output in production.
+
+- `docs/TELEMETRY_PIPELINE.md`
+  - Updated pipeline documentation to require canonical archive normalizers rather than ad-hoc defensive shape checks.
+
+- `TODO.md`
+  - Reclassified `ocr-debug/` maintenance note as an intentional compatibility path (no deferred cleanup marker).
+
+## What Was Verified
+- Touched-file lint passed.
+- `npm run -s typecheck` passed.
+- `npm run -s ci:quality` passed (36 files, 405 tests, typecheck, build, lint).
+- Targeted grep checks confirmed:
+  - no `@ts-ignore` in `src/components/DashboardLayout.tsx`,
+  - no direct `console.*` in requested runtime files,
+  - no ad-hoc telemetry archive shape check in patched helper/docs paths.
+
+## Remaining / Risks
+- This pass intentionally targets the listed audit issues only; broader repo-wide `any` removal remains available as future work.
+- Electron helper error logs still emit on failure paths by design.

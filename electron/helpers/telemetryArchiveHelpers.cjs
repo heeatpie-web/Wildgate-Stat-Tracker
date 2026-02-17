@@ -9,6 +9,13 @@ const fsPromises = require('fs').promises;
 
 const ARCHIVE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 const archiveStateByPath = new Map();
+const shouldInfoLog = process.env.NODE_ENV !== 'production';
+
+function infoLog(...args) {
+  if (shouldInfoLog) {
+    console.log(...args);
+  }
+}
 
 function normalizeEvents(data) {
   if (!data) return [];
@@ -91,7 +98,7 @@ function cleanupOldArchives(archiveDir, maxAgeMs = ARCHIVE_MAX_AGE_MS) {
         cleaned++;
       }
     });
-    if (cleaned > 0) console.log(`Cleaned up ${cleaned} old telemetry archives.`);
+    if (cleaned > 0) infoLog(`Cleaned up ${cleaned} old telemetry archives.`);
   } catch (e) {
     console.error('Archive cleanup error:', e);
   }
@@ -161,7 +168,7 @@ async function loadArchivedTelemetry(archiveDir) {
       } catch (e) { /* Skip corrupted files */ }
     }));
 
-    console.log(`Loaded ${allEvents.length} events from ${files.length} archived files.`);
+    infoLog(`Loaded ${allEvents.length} events from ${files.length} archived files.`);
     return allEvents;
   } catch (e) {
     console.error('Failed to load archived telemetry:', e);
@@ -212,6 +219,7 @@ async function clearArchiveFiles(archiveDir) {
 }
 
 module.exports = {
+  normalizeEvents,
   getArchiveDir,
   ensureArchiveDir,
   cleanupOldArchives,

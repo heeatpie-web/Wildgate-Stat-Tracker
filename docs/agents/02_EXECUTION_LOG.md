@@ -1949,3 +1949,345 @@
   - Review ask: approve closure of AUDIT-REMEDIATION-004.
 - PM Response | APPROVED
   - Reason: remaining partials are implemented with deterministic behavior and full validation evidence.
+
+---
+
+## 2026-02-17 - IQR-NAME-SOURCE-001
+- Scope: add source provenance for `Intelligence Review Required` player-name queue entries and expose source screenshot preview in the review modal.
+
+## Work Entries
+- 19:45Z
+  - Added intake/plan/lock records for `IQR-NAME-SOURCE-001`.
+  - Confirmed narrow scope: only pending-review provenance metadata + `ReviewQueueModal` display/actions.
+
+- 19:46Z
+  - Updated `src/store/slices/createDataSlice.ts`:
+    - added `PendingReviewSource` type and optional `sourceCapture` field on `PendingReview`.
+
+- 19:47Z
+  - Updated `src/utils/scan/imageUtils.ts`:
+    - `captureScreen()` now awaits `save-ocr-debug` and returns optional `debugPath` alongside `dataUrl` + filename.
+
+- 19:47Z
+  - Updated `src/hooks/useSmartScan.ts`:
+    - attached `sourceCapture` (`screenshotPath`, `screenshotLabel`, `capturedAt`) and `source: 'ocr'` when queueing low-confidence `player_name` entries.
+
+- 19:48Z
+  - Updated `src/components/ReviewQueueModal.tsx`:
+    - added per-item source context rendering when `sourceCapture` is present,
+    - added `View Source` action to open screenshot preview overlay using `LocalImage`.
+
+- 19:48Z
+  - Updated `src/components/ReviewQueueModal.test.tsx`:
+    - added regression test confirming source context visibility and source preview action for `player_name` items.
+
+## PM Feedback Cycle
+- PM-FEEDBACK-REQ | Step: `IQR-NAME-SOURCE-001#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - pending-review type now carries optional source capture metadata,
+    - Smart Scan now links low-confidence player-name review entries to the saved capture artifact,
+    - review queue now surfaces per-entry source context and screenshot preview action,
+    - focused regression + lint + typecheck validation completed.
+  - Evidence pointers:
+    - `src/store/slices/createDataSlice.ts`
+    - `src/utils/scan/imageUtils.ts`
+    - `src/hooks/useSmartScan.ts`
+    - `src/components/ReviewQueueModal.tsx`
+    - `src/components/ReviewQueueModal.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `IQR-NAME-SOURCE-001`.
+- PM Response | `APPROVED`
+  - Reason: requested provenance visibility for review queue player-name entries delivered with focused validation evidence and no scope drift.
+
+---
+
+## 2026-02-17 - RESULT-HOOK-CRASH-310-001
+- Scope: fix React `#310` crash triggered by result button (`Win`/`Loss`/`Draw`) clicks by stabilizing hook order in the wizard render path.
+
+## Work Entries
+- 05:14Z
+  - Added intake, plan, and lock records for `RESULT-HOOK-CRASH-310-001`.
+  - Confirmed narrow scope: runtime crash fix + focused regression coverage only.
+
+- 05:17Z
+  - Root-cause confirmation:
+    - `src/components/Wizard.tsx` called `React.useMemo` (`loadoutDraft`) only after `if (!showWizard || !pendingMatchData) return null;`.
+    - When result buttons open the wizard, render transitioned from fewer hooks to more hooks, causing React `#310`.
+
+- 05:19Z
+  - Patched `src/components/Wizard.tsx`:
+    - moved `loadoutDraft` `useMemo` above the early return,
+    - made `pendingMatchData` access null-safe (`pendingMatchData?.loadout`) for closed-state renders,
+    - preserved existing wizard/result/OCR behavior.
+
+- 05:21Z
+  - Added `src/components/Wizard.test.tsx`:
+    - regression test verifies closed -> open wizard transition does not throw,
+    - test renders `Wizard` with `showWizard=null`, then rerenders with `showWizard='Win'` and pending data.
+
+- 05:25Z
+  - Validation completed:
+    - focused vitest suite,
+    - touched-file eslint,
+    - typecheck.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `RESULT-HOOK-CRASH-310-001#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - fixed hook-order bug in wizard activation path by making all hooks unconditional,
+    - added focused regression test for result-triggered wizard open transition,
+    - validated with targeted tests + lint + typecheck.
+  - Evidence pointers:
+    - `src/components/Wizard.tsx`
+    - `src/components/Wizard.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `RESULT-HOOK-CRASH-310-001`.
+- `PM Response` | `APPROVED`
+  - Reason: crash repro path is addressed with direct hook-order correction and focused validation evidence.
+
+---
+
+## 2026-02-17 - WIZARD-HOOK-AUDIT-002
+- Scope: audit and harden remaining wizard/modal flows against hook-order regressions after RESULT-HOOK-CRASH-310-001.
+
+## Work Entries
+- 06:05Z
+  - Added intake/plan/lock records for `WIZARD-HOOK-AUDIT-002`.
+  - Confirmed narrow scope: wizard/modal render-safety audit + focused regression coverage.
+
+- 06:07Z
+  - Performed AST-level audit of `src/components/**/*.tsx` for top-level hook calls after return guards.
+  - Result: no additional hook-after-guard violations found in wizard/modal components.
+
+- 06:10Z
+  - Added `src/components/OcrCorrectionModal.test.tsx` with focused regression coverage:
+    - closed -> open transition does not throw,
+    - ignore -> undo-ignore action flow remains functional.
+
+- 06:13Z
+  - Fixed new test mock compatibility:
+    - updated `useAppStore` mock to support both selector and non-selector invocation forms used by `OcrCorrectionModal`.
+
+- 06:16Z
+  - Validation completed:
+    - focused wizard/modal vitest suite,
+    - touched-file eslint,
+    - typecheck.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `WIZARD-HOOK-AUDIT-002#2/#3/#4` | Owner: `builder`
+  - Delta:
+    - audited remaining wizard/modal component hook ordering and found no additional violations,
+    - added focused regression tests for `OcrCorrectionModal` open transition and action safety,
+    - revalidated existing `Wizard` + result-flow tests in the same run.
+  - Evidence pointers:
+    - `src/components/OcrCorrectionModal.test.tsx`
+    - `src/components/Wizard.tsx`
+    - `src/components/Wizard.test.tsx`
+    - `src/components/recording/ActionPanel.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `WIZARD-HOOK-AUDIT-002`.
+- `PM Response` | `APPROVED`
+  - Reason: wizard/modal hardening complete with no additional hook-order defects found and focused regression coverage added.
+
+---
+
+## 2026-02-17 - OCR-TEAM-CAP-HARDEN-006
+- Scope: enforce ship-capacity teammate caps across OCR review/apply/session/submission paths that could still store uncapped teammate lists.
+
+## Work Entries
+- 08:21Z
+  - Added intake/plan entries and lock claims for `OCR-TEAM-CAP-HARDEN-006`.
+  - Confirmed narrow scope: teammate-cap hardening only (no OCR model tuning).
+
+- 08:24Z
+  - Added `src/utils/teamLimits.ts` shared utility:
+    - `getMaxTeammatesForShip`
+    - `capTeammateNames`
+    - `capTeammatePlayers`
+  - Standardized fallback behavior to 4-player default (`max teammates = 3`) when ship capacity is unknown.
+
+- 08:25Z
+  - Updated `src/store/slices/createFormSlice.ts` to use shared cap utility in central teammate sanitizer.
+
+- 08:27Z
+  - Updated `src/hooks/useSmartCapture.ts`:
+    - capped teammate lists during OCR canonicalization,
+    - capped teammate lists when merging capture batches into pending OCR data,
+    - capped teammate lists in merged OCR summary output.
+  - Goal: prevent oversized teammate arrays from accumulating before review/apply.
+
+- 08:29Z
+  - Updated `src/App.tsx` OCR apply flow:
+    - capped OCR teammates before applying to session state,
+    - merged teammates in one capped pass,
+    - updated toast count to show capped/applied teammate count.
+
+- 08:31Z
+  - Updated `src/components/SmartCapturesPanel.tsx`:
+    - capped rerun-derived `match.teammates` writes,
+    - replaced ad-hoc teammate slicing with shared cap utility in review/apply updates,
+    - unified capacity helper usage to shared utility.
+
+- 08:33Z
+  - Updated `src/hooks/useMatchSubmission.ts`:
+    - capped teammate lists when creating pending match data from telemetry/session context,
+    - capped teammate lists again at final submission boundary for safety.
+
+- 08:34Z
+  - Added focused regression tests: `src/utils/__tests__/teamLimits.test.ts`.
+
+## Inter-Agent Request Lifecycle
+- Request ID: `OCR-TEAM-CAP-HARDEN-006-R1` | Sender: `project-manager` -> Receiver: `builder`
+  - `OPEN`: Implement shared teammate-cap utility and wire into OCR apply/review/submission paths.
+  - `ACK`: Builder accepted scope and began utility-first implementation.
+  - `IN_PROGRESS`: Utility + path integrations applied across App/SmartCapture/SmartCapturesPanel/useMatchSubmission/createFormSlice.
+  - `READY_FOR_REVIEW`: Focused tests + lint + typecheck completed; evidence recorded in `docs/agents/03_VALIDATION.md`.
+  - `CLOSED`: PM response approved with evidence pointers below.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-TEAM-CAP-HARDEN-006#1/#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - introduced shared teammate-cap utility and removed duplicated cap logic across key OCR/wizard paths,
+    - hardened pending OCR merge, Smart Captures rerun/apply, App OCR apply, and submission boundaries,
+    - added focused regression tests for teammate cap behavior.
+  - Evidence pointers:
+    - `src/utils/teamLimits.ts`
+    - `src/utils/__tests__/teamLimits.test.ts`
+    - `src/hooks/useSmartCapture.ts`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/App.tsx`
+    - `src/hooks/useMatchSubmission.ts`
+    - `src/store/slices/createFormSlice.ts`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-TEAM-CAP-HARDEN-006`.
+- `PM Response` | `APPROVED`
+  - Reason: teammate cap is now enforced at all affected OCR/session boundaries with focused passing validation evidence.
+
+---
+
+## 2026-02-17 - REFACTOR-CLOSEOUT-007
+- Scope: finalize the unfinished giant refactor by validating the combined working tree end-to-end and completing formal closeout records.
+
+## Work Entries
+- 15:02Z
+  - Accepted "full close" request and constrained scope to refactor closeout only.
+  - Started repo-wide state audit to identify unresolved/incomplete lanes and dirty-file footprint.
+
+- 15:04Z
+  - Audited current state:
+    - confirmed multi-lane refactor modifications present across OCR/wizard/review/data/docs paths,
+    - confirmed existing lane docs were marked complete but lacked one final integrated closeout pass over the combined state.
+
+- 15:06Z
+  - Executed full integrated quality gates:
+    - `npm run -s ci:quality` (lint + test + typecheck + build).
+  - Result: PASS; no additional code fixes required for closeout.
+
+- 15:07Z
+  - Opened dedicated closeout intake/plan records and lock claims.
+  - Began closeout documentation updates (`03_VALIDATION`, `04_HANDOFF`, decisions, plan status).
+
+## Inter-Agent Request Lifecycle
+- Request ID: `REFACTOR-CLOSEOUT-007-R1` | Sender: `project-manager` -> Receiver: `builder`
+  - `OPEN`: perform final integrated closeout of unfinished giant refactor.
+  - `ACK`: builder accepted no-question full-close instruction and initiated repo-wide audit.
+  - `IN_PROGRESS`: full quality gate execution and closeout artifact updates.
+  - `READY_FOR_REVIEW`: all gates green and closeout docs prepared with evidence pointers.
+  - `CLOSED`: PM response approved based on integrated gate evidence.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `REFACTOR-CLOSEOUT-007#1/#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - completed integrated refactor state audit and confirmed closure scope,
+    - ran full `ci:quality` release gates on combined working tree,
+    - finalized closeout intake/plan/validation/handoff artifacts and lock maintenance.
+  - Evidence pointers:
+    - `docs/agents/00_INTAKE.md`
+    - `docs/agents/01_PLAN.md`
+    - `docs/agents/03_VALIDATION.md`
+    - `docs/agents/04_HANDOFF.md`
+    - `docs/WORKLOCKS.md`
+  - Review ask: approve final closure of unfinished giant refactor lane.
+- `PM Response` | `APPROVED`
+  - Reason: integrated quality gates passed and closure artifacts satisfy workflow evidence requirements.
+
+---
+
+## 2026-02-17 - AUDIT-REMEDIATION-005
+- Scope: resolve remaining audit findings in runtime typing, production logging behavior, telemetry archive normalization, and legacy startup debt in targeted files only.
+
+## Work Entries
+- 15:33Z
+  - Added intake + plan entry for `AUDIT-REMEDIATION-005`.
+  - Claimed temporary locks for touched runtime files and telemetry docs/helper files.
+
+- 15:34Z
+  - Patched `src/utils/logger.ts`:
+    - replaced `any` payload/error types with `unknown`,
+    - gated console emission behind production-aware check,
+    - removed `window as any` usage for app version lookup.
+
+- 15:35Z
+  - Patched `src/utils/electronBridge.ts`:
+    - removed runtime `any` from catches and payload typing,
+    - typed `existingData` as `OCRExtractedData | null`,
+    - added shape validation for `gcloudOcrScan`,
+    - routed error reporting through `Logger` instead of direct `console.error`.
+
+- 15:36Z
+  - Patched `src/utils/storage.ts`:
+    - replaced direct `console.*` with `Logger`,
+    - added one-time legacy migration check marker (`wg_v13_migration_checked_v1`),
+    - preserved existing migration behavior while reducing repeated startup legacy checks.
+
+- 15:37Z
+  - Patched `src/App.tsx` to replace direct OCR resolution `console.log` statements with `Logger.debug`.
+
+- 15:38Z
+  - Patched `src/components/DevOCRPanel.tsx`:
+    - removed `any` from state/catches/parsing paths,
+    - added safe error-message normalization helper,
+    - replaced direct `console.*` with structured `Logger` usage.
+
+- 15:39Z
+  - Patched telemetry archive normalization:
+    - `electron/helpers/artifactHelpers.cjs` now uses shared `normalizeEvents()` helper,
+    - `electron/helpers/telemetryArchiveHelpers.cjs` exports `normalizeEvents` and gates info logs in production,
+    - `docs/TELEMETRY_PIPELINE.md` updated to document canonical normalizers and remove ad-hoc-shape guidance.
+  - Updated `TODO.md` maintenance line to remove deferred legacy wording for `ocr-debug/` and mark it as an intentional compatibility path.
+
+- 15:40Z
+  - Validation completed:
+    - touched-file eslint PASS,
+    - `npm run -s typecheck` PASS,
+    - `npm run -s ci:quality` PASS (tests/typecheck/build/lint).
+
+## Inter-Agent Request Lifecycle
+- Request ID: `AUDIT-REMEDIATION-005-R1` | Sender: `project-manager` -> Receiver: `builder`
+  - `OPEN`: close remaining audit findings in scoped runtime files.
+  - `ACK`: builder accepted narrow remediation scope and began patches.
+  - `IN_PROGRESS`: typing/logging/telemetry/legacy-marker patches applied.
+  - `READY_FOR_REVIEW`: lint/typecheck/full gates passed with evidence captured.
+  - `CLOSED`: PM response approved with evidence pointers.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `AUDIT-REMEDIATION-005#1/#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - removed remaining runtime `any` usage in targeted bridge/dev panel/logger paths,
+    - eliminated direct console usage in flagged runtime files and centralized log gating,
+    - replaced ad-hoc telemetry archive shape check in artifact helper with shared normalizer,
+    - added one-time legacy migration check marker in storage startup path.
+  - Evidence pointers:
+    - `src/utils/electronBridge.ts`
+    - `src/utils/logger.ts`
+    - `src/utils/storage.ts`
+    - `src/App.tsx`
+    - `src/components/DevOCRPanel.tsx`
+    - `electron/helpers/artifactHelpers.cjs`
+    - `electron/helpers/telemetryArchiveHelpers.cjs`
+    - `docs/TELEMETRY_PIPELINE.md`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `AUDIT-REMEDIATION-005`.
+- `PM Response` | `APPROVED`
+  - Reason: targeted audit findings were remediated without scope drift and full quality gates passed.

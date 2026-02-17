@@ -1,7 +1,13 @@
 import Logger from '../logger';
 import { getElectronAPI } from '../electronAPI';
 
-export const captureScreen = async (): Promise<{ dataUrl: string, filename: string } | null> => {
+export interface CapturedScreenImage {
+    dataUrl: string;
+    filename: string;
+    debugPath?: string;
+}
+
+export const captureScreen = async (): Promise<CapturedScreenImage | null> => {
     Logger.startTimer('capture', 'OCR', 'Screen Capture');
     try {
         const api = getElectronAPI();
@@ -13,8 +19,17 @@ export const captureScreen = async (): Promise<{ dataUrl: string, filename: stri
         if (dataUrl) {
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
             const filename = `capture_${timestamp}.png`;
-            api.invoke('save-ocr-debug', { dataUrl, filename });
-            return { dataUrl, filename };
+            let debugPath: string | null = null;
+            try {
+                debugPath = await api.invoke('save-ocr-debug', { dataUrl, filename });
+            } catch (saveError) {
+                Logger.warn('OCR', 'Failed to persist OCR debug screenshot', saveError);
+            }
+            return {
+                dataUrl,
+                filename,
+                debugPath: debugPath || undefined,
+            };
         }
         throw new Error("Capture returned empty data");
     } catch (e) {

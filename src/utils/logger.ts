@@ -12,7 +12,7 @@ interface LogEntry {
     level: LogLevel;
     category: string;
     message: string;
-    data?: any;
+    data?: unknown;
     duration?: number;
 }
 
@@ -28,6 +28,23 @@ const activeTimers: Map<string, PerformanceTimer> = new Map();
 let lastPersistedIndex = 0;
 
 const getIPC = () => getElectronAPI();
+const isProdBuild = (
+    typeof process !== 'undefined' &&
+    typeof process.env?.NODE_ENV === 'string' &&
+    process.env.NODE_ENV.toLowerCase() === 'production'
+);
+
+interface LoggerWindow extends Window {
+    __APP_VERSION__?: string;
+    __WG_FORCE_CONSOLE_LOGS__?: boolean;
+}
+
+const getLoggerWindow = (): LoggerWindow | null => (
+    typeof window === 'undefined' ? null : (window as LoggerWindow)
+);
+
+const shouldEmitConsoleLogs = (): boolean =>
+    !isProdBuild || getLoggerWindow()?.__WG_FORCE_CONSOLE_LOGS__ === true;
 
 const formatEntry = (entry: LogEntry): string => {
     const base = `[${entry.timestamp}] [${entry.level.toUpperCase()}] [${entry.category}] ${entry.message}`;
@@ -52,7 +69,9 @@ const addEntry = (entry: LogEntry) => {
     };
 
     const formatted = formatEntry(entry);
-    console.log(`%c${formatted}`, styles[entry.level], entry.data || '');
+    if (shouldEmitConsoleLogs()) {
+        console.log(`%c${formatted}`, styles[entry.level], entry.data || '');
+    }
 
     // Persist to file periodically (every 50 entries or on error)
     if (entry.level === 'error' || LOG_BUFFER.length % 50 === 0) {
@@ -75,7 +94,7 @@ const persistLogs = async () => {
 };
 
 export const Logger = {
-    debug: (category: string, message: string, data?: any) => {
+    debug: (category: string, message: string, data?: unknown) => {
         addEntry({
             timestamp: new Date().toISOString(),
             level: 'debug',
@@ -85,7 +104,7 @@ export const Logger = {
         });
     },
 
-    info: (category: string, message: string, data?: any) => {
+    info: (category: string, message: string, data?: unknown) => {
         addEntry({
             timestamp: new Date().toISOString(),
             level: 'info',
@@ -95,7 +114,7 @@ export const Logger = {
         });
     },
 
-    warn: (category: string, message: string, data?: any) => {
+    warn: (category: string, message: string, data?: unknown) => {
         addEntry({
             timestamp: new Date().toISOString(),
             level: 'warn',
@@ -105,7 +124,7 @@ export const Logger = {
         });
     },
 
-    error: (category: string, message: string, error?: any) => {
+    error: (category: string, message: string, error?: unknown) => {
         addEntry({
             timestamp: new Date().toISOString(),
             level: 'error',
@@ -163,7 +182,7 @@ export const Logger = {
             action: context?.action,
             extra: context?.extra,
             timestamp: new Date().toISOString(),
-            appVersion: (window as any).__APP_VERSION__ || 'unknown',
+            appVersion: getLoggerWindow()?.__APP_VERSION__ || 'unknown',
         };
         addEntry({
             timestamp: report.timestamp,

@@ -898,3 +898,184 @@
     - Smart Captures apply/review paths now assign deterministic opponent colors and suppress duplicate player fanout by normalized key.
     - ActionPanel result flow now supports persisted background OCR mode (prompt remains default).
     - Settings modal exposes explicit Result Button OCR Flow mode selection and persistence.
+
+---
+
+## Validation - 2026-02-17 - IQR-NAME-SOURCE-001
+- Command: `npx vitest run src/components/ReviewQueueModal.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 1 file passed.
+    - 5 tests passed.
+    - Includes new regression case for source screenshot provenance visibility and preview action.
+
+- Command: `npx eslint src/utils/scan/imageUtils.ts src/store/slices/createDataSlice.ts src/hooks/useSmartScan.ts src/components/ReviewQueueModal.tsx src/components/ReviewQueueModal.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations across all touched implementation + test files.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile completed with no errors after provenance metadata additions and review-modal UI updates.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - low-confidence `player_name` entries now receive `sourceCapture` metadata from Smart Scan capture context.
+    - review queue cards with source metadata now show source label/time and `View Source` screenshot preview affordance.
+    - entries without source metadata degrade safely with no action regressions.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `IQR-NAME-SOURCE-001` after the command evidence above.
+
+---
+
+## Validation - 2026-02-17 - RESULT-HOOK-CRASH-310-001
+- Command: `npx vitest run src/components/Wizard.test.tsx src/components/recording/ActionPanel.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 2 files passed.
+    - 15 tests passed.
+    - Includes new wizard closed->open transition regression test and existing result-flow coverage.
+
+- Command: `npx eslint src/components/Wizard.tsx src/components/Wizard.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in touched implementation and test files.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile completed with no errors after hook-order fix.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - result button click now opens wizard without introducing additional hook calls on subsequent render,
+    - loadoutDraft memo executes consistently whether wizard is closed or open.
+
+- Environment note:
+  - Initial non-escalated vitest run failed with `spawn EPERM` while loading vite config in sandbox.
+  - Re-ran focused vitest command outside sandbox and captured passing evidence above.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `RESULT-HOOK-CRASH-310-001`.
+
+---
+
+## Validation - 2026-02-17 - WIZARD-HOOK-AUDIT-002
+- Command: `node (AST audit script over src/components)`
+  - Result: PASS
+  - Evidence:
+    - No top-level hook-after-return guard violations detected in component scan.
+    - Confirms no additional wizard/modal hook-order defects beyond previously fixed `Wizard` path.
+
+- Command: `npx eslint src/components/OcrCorrectionModal.test.tsx src/components/Wizard.tsx src/components/Wizard.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in touched wizard/modal implementation + tests.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile completed with no errors after adding modal regression tests.
+
+- Command: `npx vitest run src/components/OcrCorrectionModal.test.tsx src/components/Wizard.test.tsx src/components/recording/ActionPanel.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 3 files passed.
+    - 17 tests passed.
+    - Includes new OcrCorrectionModal transition/action safety tests and existing result-wizard flow coverage.
+
+- Environment note:
+  - Initial non-escalated focused vitest run failed with `spawn EPERM` while loading vite config in sandbox.
+  - Re-ran the same vitest command outside sandbox and captured passing evidence above.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `WIZARD-HOOK-AUDIT-002`.
+
+---
+
+## Validation - 2026-02-17 - OCR-TEAM-CAP-HARDEN-006
+- Command: `npx vitest run src/utils/__tests__/teamLimits.test.ts src/store/slices/__tests__/createFormSlice.test.ts src/hooks/__tests__/useMatchSubmission.test.ts src/hooks/__tests__/useSmartCapture.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 4 files passed.
+    - 39 tests passed.
+    - Confirms new teammate-cap utility behavior and no regressions in key form/submission/capture flows.
+
+- Command: `npx eslint src/App.tsx src/components/SmartCapturesPanel.tsx src/hooks/useSmartCapture.ts src/hooks/useMatchSubmission.ts src/store/slices/createFormSlice.ts src/utils/teamLimits.ts src/utils/__tests__/teamLimits.test.ts`
+  - Result: PASS
+  - Evidence:
+    - no lint violations across touched implementation + test files.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile completed with no errors after shared teammate-cap integration.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - OCR pending/merged data now caps teammate arrays using ship-capacity fallback rules.
+    - Smart Captures rerun/apply and submission boundaries now apply the same cap utility.
+    - App OCR apply flow now reports capped teammate count in success toast.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-TEAM-CAP-HARDEN-006`.
+
+---
+
+## Validation - 2026-02-17 - REFACTOR-CLOSEOUT-007
+- Command: `npm run -s ci:quality`
+  - Result: PASS
+  - Evidence:
+    - Lint stage passed (no eslint failures).
+    - Test stage passed: 36 files, 405 tests.
+    - Typecheck stage passed.
+    - Build stage passed (Vite production build complete).
+
+- Integration check (manual)
+  - Result: PASS
+  - Evidence:
+    - Combined dirty refactor state validated end-to-end without additional code fixes.
+    - No blocking runtime/build/test regressions remain for closeout scope.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `REFACTOR-CLOSEOUT-007`.
+
+---
+
+## Validation - 2026-02-17 - AUDIT-REMEDIATION-005
+- Command: `npx eslint src/utils/electronBridge.ts src/utils/logger.ts src/utils/storage.ts src/App.tsx src/components/DevOCRPanel.tsx electron/helpers/artifactHelpers.cjs electron/helpers/telemetryArchiveHelpers.cjs`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in all touched runtime/helper files.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile completed after removing targeted `any` usage and tightening catches/state types.
+
+- Command: `npm run -s ci:quality`
+  - Result: PASS
+  - Evidence:
+    - test: 36 files, 405 tests passed,
+    - typecheck: passed,
+    - build: passed,
+    - lint: passed.
+
+- Command: `rg -n "\\bany\\b|@ts-ignore|console\\.(log|warn|error)" src/utils/storage.ts src/components/DashboardLayout.tsx src/utils/electronBridge.ts src/hooks/useLogMonitor.ts src/App.tsx src/components/DevOCRPanel.tsx`
+  - Result: PASS (targeted issue verification)
+  - Evidence:
+    - no runtime `any`/`@ts-ignore`/direct `console.*` matches in requested target code paths,
+    - only comment text with the word "any" remains in non-type comments.
+
+- Command: `rg -n "Array\\.isArray\\(content\\) \\? content : \\(content\\.telemetry \\|\\| \\[\\]\\)" electron/helpers/artifactHelpers.cjs docs/TELEMETRY_PIPELINE.md`
+  - Result: PASS
+  - Evidence:
+    - no remaining ad-hoc archive-shape checks in patched artifact helper/docs guidance.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `AUDIT-REMEDIATION-005`.

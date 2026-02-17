@@ -1,29 +1,11 @@
 import { StateCreator } from 'zustand';
-import { CHARACTERS, SHIPS, KillMap, getShipCapacity } from '../../types';
+import { CHARACTERS, SHIPS, KillMap } from '../../types';
 import { DataSource, getPriority } from './createDataSlice';
 import type { Match } from '../../types';
-
-const getMaxTeammatesForShip = (ship: string): number => {
-    const capacity = getShipCapacity(ship || '');
-    const normalizedCapacity = capacity > 1 ? capacity : 4;
-    return Math.max(0, normalizedCapacity - 1);
-};
+import { capTeammateNames } from '../../utils/teamLimits';
 
 const sanitizeTeammates = (teammates: string[] | null | undefined, ship: string): string[] => {
-    const maxTeammates = getMaxTeammatesForShip(ship);
-    if (!Array.isArray(teammates) || maxTeammates <= 0) return [];
-    const unique: string[] = [];
-    const seen = new Set<string>();
-    for (const raw of teammates) {
-        const cleaned = String(raw || '').trim();
-        if (!cleaned) continue;
-        const key = cleaned.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-        unique.push(cleaned);
-        if (unique.length >= maxTeammates) break;
-    }
-    return unique;
+    return capTeammateNames(teammates, ship);
 };
 
 const sanitizeNames = (values: string[] | null | undefined): string[] => {

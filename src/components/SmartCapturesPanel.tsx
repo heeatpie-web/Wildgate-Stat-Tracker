@@ -5,7 +5,7 @@ import {
     ShieldCheck, Crosshair, Users, AlertTriangle, FileText,
     ScanEye, RefreshCw, Plus, ImageOff, Trash2, Upload, Camera, Zap, Loader2, FolderOpen,
 } from 'lucide-react';
-import { Match, SHIPS, getShipColor, OpponentTeam, Loadout, getShipCapacity } from '../types';
+import { Match, SHIPS, getShipColor, OpponentTeam, Loadout } from '../types';
 import { UI_REACH_MODIFIERS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT, SYSTEMS } from '../utils/constants';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
@@ -57,6 +57,7 @@ import { SmartCaptureActionBar } from './smart-captures/detail/SmartCaptureActio
 import { findClosestMatch, normalizeOcrName, similarityScore } from '../utils/stringUtils';
 import { getTelemetryEventTimestamp, type TelemetryArchiveEvent } from '../utils/telemetryArchive';
 import type { TimelineEvent } from '../store/slices/createDataSlice';
+import { capTeammateNames, getMaxTeammatesForShip as getMaxTeammatesForShipLimit } from '../utils/teamLimits';
 
 let autoArtifactRepairAttempted = false;
 
@@ -130,11 +131,9 @@ const SmartCapturesPanel: React.FC = () => {
         const fuzzy = findClosestMatch(normalized, pilotRegistry, threshold);
         return fuzzy || normalized;
     }, [pilotRegistry]);
-    const getMaxTeammatesForShip = useCallback((shipType?: string | null) => {
-        const capacity = getShipCapacity(shipType || '');
-        const normalizedCapacity = capacity > 1 ? capacity : 4;
-        return Math.max(0, normalizedCapacity - 1);
-    }, []);
+    const getMaxTeammatesForShip = useCallback((shipType?: string | null) => (
+        getMaxTeammatesForShipLimit(shipType)
+    ), []);
     const queueRosterCandidate = useCallback((rawName: string) => {
         const normalized = normalizeOcrName(rawName || '');
         if (!normalized || normalized.length < 2) return;
@@ -652,11 +651,13 @@ const SmartCapturesPanel: React.FC = () => {
                     color: rerunAssignedColors[index] || 'unknown',
                 }));
                 const nextOpponents = nextOppTeams.flatMap(t => t.players);
+                const shipForTeammateCap = combined.playerShip?.shipType || match.ship || '';
+                const cappedTeammates = capTeammateNames(nextTeammates, shipForTeammateCap);
 
                 const updated: Match = {
                     ...match,
                     ship: combined.playerShip?.shipType ? combined.playerShip.shipType : match.ship,
-                    teammates: nextTeammates.length > 0 ? nextTeammates : match.teammates,
+                    teammates: cappedTeammates.length > 0 ? cappedTeammates : match.teammates,
                     opponents: nextOpponents.length > 0 ? nextOpponents : match.opponents,
                     opponentTeams: nextOppTeams.length > 0 ? nextOppTeams : match.opponentTeams,
                     reachModifiers: (combined.reachModifiers || []).map(m => m.name).filter(Boolean) as string[],
@@ -1051,7 +1052,7 @@ const SmartCapturesPanel: React.FC = () => {
                                                 const resolvedTeam = data.teammates
                                                     .map(t => resolveRosterName(t.name || ''))
                                                     .filter(Boolean);
-                                                matchUpdates.teammates = Array.from(new Set(resolvedTeam)).slice(0, maxTeammates);
+                                                matchUpdates.teammates = capTeammateNames(resolvedTeam, shipForCapacity);
                                             }
                                             if (resolvedOpponentTeams.length > 0) {
                                                 const resolvedOpps = resolvedOpponentTeams.flatMap((team) => team.players).filter(Boolean);
@@ -1679,17 +1680,12 @@ const SmartMatchDetail: React.FC<{
         const payload = buildRerunJsonPayload();
         openJsonViewer(payload, 'Full OCR JSON');
     };
-    const maxTeammatesForShip = (shipType?: string | null) => {
-        const capacity = getShipCapacity(shipType || '');
-        const normalizedCapacity = capacity > 1 ? capacity : 4;
-        return Math.max(0, normalizedCapacity - 1);
-    };
+    const maxTeammatesForShip = (shipType?: string | null) => getMaxTeammatesForShipLimit(shipType);
 
     const handleApplyReviewData = (data: OCRExtractedData) => {
         const updates: Partial<Match> = {};
         if (data.playerShip?.shipType) updates.ship = data.playerShip.shipType;
         const shipForCapacity = updates.ship || match.ship || '';
-        const maxTeammates = maxTeammatesForShip(shipForCapacity);
         const maybeQueueRoster = (rawName: string) => {
             const normalized = normalizeOcrName(rawName || '');
             if (!normalized || !onQueueRosterCandidate) return;
@@ -1706,7 +1702,7 @@ const SmartMatchDetail: React.FC<{
             const resolvedTeam = data.teammates
                 .map(t => resolveRosterName(t.name || ''))
                 .filter(Boolean);
-            updates.teammates = Array.from(new Set(resolvedTeam)).slice(0, maxTeammates);
+            updates.teammates = capTeammateNames(resolvedTeam, shipForCapacity);
         }
         if (data.opponentTeams?.length > 0) {
             data.opponentTeams.forEach((team) => {

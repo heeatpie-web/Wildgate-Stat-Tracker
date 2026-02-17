@@ -51,10 +51,14 @@ Each poll:
 ]
 ```
 
-This means code reading archives must check:
+Canonical normalization is provided by helpers:
+- Electron: `normalizeEvents()` in `electron/helpers/telemetryArchiveHelpers.cjs`
+- Renderer: `normalizeTelemetryArchivePayload()` / `normalizeTelemetryArchiveCollection()` in `src/utils/telemetryArchive.ts`
+
+Avoid ad-hoc shape checks. Use the shared normalizers instead.
 ```javascript
 const content = JSON.parse(fileData);
-const events = Array.isArray(content) ? content : (content.telemetry || []);
+const events = normalizeEvents(content);
 ```
 
 ### Deduplication
@@ -92,7 +96,7 @@ The renderer receives events via the `log-data` channel:
 The bundler scans `telemetry_archive/` for JSON files whose events overlap the match time window:
 
 ```javascript
-const events = Array.isArray(content) ? content : (content.telemetry || []);
+const events = normalizeEvents(content);
 const hasOverlap = events.some(e => {
   const t = e.ClientTimestamp || e.timestamp || e.EventTimestamp;
   return t && t >= startTime - 5000 && t <= endTime + 30000;
@@ -108,8 +112,8 @@ Matching files are copied to `match_artifacts/<matchId>/`.
 ```javascript
 const artifacts = await getMatchArtifactsStructured(match.id);
 // artifacts.telemetry is an array of parsed JSON file contents
-// Each element may be a raw array OR an object with .telemetry property
-const events = Array.isArray(tFile) ? tFile : (tFile.telemetry || []);
+// Renderer side is normalized via normalizeTelemetryArchiveCollection()
+const events = normalizeTelemetryArchivePayload(tFile);
 ```
 
 ## IPC Handlers

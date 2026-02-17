@@ -244,3 +244,44 @@
 3. COMPLETED - Add and update targeted tests for color assignment and background OCR mode behavior.
 4. COMPLETED - Run focused validation (eslint, typecheck, targeted vitest) and full gates (test, build).
 5. COMPLETED - Update execution/validation/handoff/decision docs and release locks.
+
+## Current Task Plan (IQR-NAME-SOURCE-001)
+1. `COMPLETED` - Add intake/plan/lock entries and confirm narrow scope + acceptance criteria for review-entry provenance.
+2. `COMPLETED` - Extend pending review data model and capture pipeline to carry optional source screenshot metadata.
+3. `COMPLETED` - Update `ReviewQueueModal` UI to display per-entry source provenance and open source screenshot preview.
+4. `COMPLETED` - Add focused regression coverage for source screenshot affordance and preserve existing review actions.
+5. `COMPLETED` - Run focused validation (`vitest` target, touched-file `eslint`, `typecheck`) and record execution/validation/handoff/decision entries.
+
+## Current Task Plan (RESULT-HOOK-CRASH-310-001)
+1. `COMPLETED` - Record intake/plan/locks for the result-button crash fix and confirm scope boundaries.
+2. `COMPLETED` - Patch `src/components/Wizard.tsx` to enforce stable hook ordering across closed/open states.
+3. `COMPLETED` - Add focused regression test for result-triggered wizard open transition.
+4. `COMPLETED` - Run focused validation (`vitest`, touched-file `eslint`, `typecheck`) and capture evidence.
+5. `COMPLETED` - Update execution/validation/handoff/decisions logs and release locks.
+
+## Current Task Plan (WIZARD-HOOK-AUDIT-002)
+1. `COMPLETED` - Record intake/plan/locks and audit wizard/modal components for hook-order guard regressions.
+2. `COMPLETED` - Add focused transition regression tests for remaining wizard-style modal flows.
+3. `COMPLETED` - Run focused validation (`vitest`, touched-file `eslint`, `typecheck`) and capture evidence.
+4. `COMPLETED` - Update execution/validation/handoff/decision logs and release locks.
+
+## Current Task Plan (OCR-TEAM-CAP-HARDEN-006)
+1. `COMPLETED` - Add a shared ship-capacity teammate-cap utility and wire it into OCR/wizard/session paths that can still carry uncapped teammate arrays.
+2. `COMPLETED` - Apply cap utility to submission boundary (`useMatchSubmission`) and Smart Captures rerun/update paths to prevent oversized teammate writes.
+3. `COMPLETED` - Add focused regression tests for cap utility behavior (dedupe + ship/fallback limits).
+4. `COMPLETED` - Run targeted validation (`vitest` focused, touched-file `eslint`, `typecheck`) and record evidence in `03_VALIDATION`.
+5. `COMPLETED` - Complete execution log + PM feedback cycle + handoff updates and release locks.
+
+## Current Task Plan (REFACTOR-CLOSEOUT-007)
+1. `COMPLETED` - Audit the combined dirty refactor state and determine whether unresolved runtime/build/test issues remain.
+2. `COMPLETED` - Run full quality gates (`npm run -s ci:quality`) against the integrated refactor state.
+3. `COMPLETED` - Apply only gate-driven fixes if failures occur, then re-run failing gates to green.
+4. `COMPLETED` - Record execution, validation evidence, and PM feedback cycle entries for closeout.
+5. `COMPLETED` - Publish final handoff summary and release temporary closeout locks.
+
+## Current Task Plan (AUDIT-REMEDIATION-005)
+1. `COMPLETED` - Record intake/lock claims and patch remaining `any` + console/runtime hardening issues in target files.
+2. `COMPLETED` - Replace ad-hoc telemetry archive shape parsing in Electron artifact helper flow with shared normalizer usage.
+3. `COMPLETED` - Add one-time legacy localStorage migration-check marker and preserve startup compatibility behavior.
+4. `COMPLETED` - Run focused validation (`eslint` touched files, targeted `vitest`, `typecheck`) and then `npm run -s ci:quality`.
+5. `COMPLETED` - Update execution/validation/handoff/decision logs and release temporary locks.

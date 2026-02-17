@@ -144,6 +144,11 @@ export const useSmartScan = () => {
                 };
 
                 const res = await smartAnalyzeScreen(img.dataUrl, { ...options, ocrMode, ocrCalibration }, activeUser || null);
+                const sourceCapture = {
+                    screenshotPath: img.debugPath,
+                    screenshotLabel: img.filename,
+                    capturedAt: Date.now(),
+                };
 
                 if (res.mode === 'MatchStats' && res.matchData) {
                     if (res.matchData.time) {
@@ -181,7 +186,9 @@ export const useSmartScan = () => {
                                         type: 'player_name',
                                         value: r.name,
                                         originalConfidence: r.confidence,
-                                        context: res.mode
+                                        context: res.mode,
+                                        source: 'ocr',
+                                        sourceCapture,
                                     });
                                 }
 

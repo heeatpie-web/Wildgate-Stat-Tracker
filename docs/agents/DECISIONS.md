@@ -898,3 +898,125 @@ Rule:
   - Revisit if OCR engine begins emitting reliable, unique team IDs/colors directly and fallback assignment becomes unnecessary.
 
 
+
+- Type: `review-provenance`
+- Decision: store optional `sourceCapture` metadata directly on `PendingReview` entries and populate it during Smart Scan capture, rather than introducing a separate cross-reference store.
+- Date: 2026-02-17
+- Options considered:
+  - Keep current context-only review items with no capture link.
+  - Add a separate source map keyed by review ID.
+  - Add optional inline metadata on `PendingReview` for screenshot path/label/timestamp.
+- Rationale:
+  - User needed immediate per-entry traceability in `Intelligence Review Required`.
+  - Inline optional metadata is the smallest behavior-preserving change with minimal join complexity.
+  - Existing queue items remain backward-compatible because source fields are optional.
+- Impacted files/artifacts:
+  - `src/store/slices/createDataSlice.ts`
+  - `src/utils/scan/imageUtils.ts`
+  - `src/hooks/useSmartScan.ts`
+  - `src/components/ReviewQueueModal.tsx`
+  - `src/components/ReviewQueueModal.test.tsx`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if review provenance must support multiple evidence assets per entry (e.g., per-name crops, OCR line bounding boxes, or telemetry event traces).
+
+- Type: `runtime-stability`
+- Decision: move `loadoutDraft` `useMemo` above the wizard early-return guard so hook count is identical for closed and open renders.
+- Date: 2026-02-17
+- Options considered:
+  - Keep hook below early return and attempt to avoid rerender path.
+  - Replace memo with inline object each render.
+  - Keep memoization but make it unconditional and null-safe.
+- Rationale:
+  - React `#310` indicates hook-order mismatch (`Rendered more hooks than during the previous render`).
+  - The existing wizard code executed an extra hook only when `showWizard` was truthy.
+  - Unconditional memo preserves behavior/perf while removing the crash path.
+- Impacted files/artifacts:
+  - `src/components/Wizard.tsx`
+  - `src/components/Wizard.test.tsx`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit only if wizard state management is refactored away from conditional early-return rendering.
+
+- Type: `scope-control`
+- Decision: treat "fix other wizards" as a wizard/modal hook-order hardening pass, including audit plus focused regression coverage, instead of broad UI refactor.
+- Date: 2026-02-17
+- Options considered:
+  - Patch multiple wizard/modal components preemptively without evidence.
+  - Audit for actual hook-order defects and add targeted tests where needed.
+- Rationale:
+  - User requested stability, but unnecessary structural edits increase regression risk.
+  - AST audit showed no additional hook-order defects in remaining wizard/modal components.
+  - Focused tests provide ongoing safety for the known wizard/modal transition paths.
+- Impacted files/artifacts:
+  - `src/components/OcrCorrectionModal.test.tsx`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if new wizard/modal components are added or if runtime reports indicate another hook-order invariant.
+
+- Type: `data-integrity`
+- Decision: enforce teammate capacity with a shared utility at OCR/session/submission boundaries, not only in form-state setters.
+- Date: 2026-02-17
+- Options considered:
+  - Keep cap only in `setSelectedTeammates` and rely on downstream setter usage.
+  - Add local one-off caps in each affected file.
+  - Introduce a shared cap utility and apply it consistently in OCR pending/review/apply/submission paths.
+- Rationale:
+  - User reported teammate overflow despite prior setter-level cap, indicating uncapped intermediary OCR/match paths remained.
+  - Shared utility avoids drift between App, Smart Capture, Smart Captures, and submission flows.
+  - Boundary-level capping is safer than assuming every path always routes through the same setter.
+- Impacted files/artifacts:
+  - `src/utils/teamLimits.ts`
+  - `src/utils/__tests__/teamLimits.test.ts`
+  - `src/store/slices/createFormSlice.ts`
+  - `src/hooks/useSmartCapture.ts`
+  - `src/components/SmartCapturesPanel.tsx`
+  - `src/App.tsx`
+  - `src/hooks/useMatchSubmission.ts`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if ship-capacity rules change (e.g., non-2/3/4-player capacities) or if OCR pipeline starts emitting explicit squad-size metadata.
+
+- Type: `scope-control`
+- Decision: close out the unfinished giant refactor by executing integrated release gates on the combined working tree and only applying code changes if gates fail.
+- Date: 2026-02-17
+- Options considered:
+  - Continue incremental lane-by-lane polishing without full integrated verification.
+  - Force additional proactive refactors despite green targeted lanes.
+  - Run full integrated `ci:quality` and gate any further code edits strictly on failures.
+- Rationale:
+  - User explicitly requested full closure without additional questions.
+  - The repository contained many completed lane changes but needed one definitive integrated quality pass.
+  - Gate-driven closeout avoids scope drift while ensuring release readiness.
+- Impacted files/artifacts:
+  - `docs/agents/00_INTAKE.md`
+  - `docs/agents/01_PLAN.md`
+  - `docs/agents/02_EXECUTION_LOG.md`
+  - `docs/agents/03_VALIDATION.md`
+  - `docs/agents/04_HANDOFF.md`
+  - `docs/WORKLOCKS.md`
+- Revisit trigger/expiry:
+  - Revisit if a new batch of refactor changes lands after this closeout and invalidates integrated gate results.
+
+- Type: `runtime-hardening`
+- Decision: remediate only the remaining high-impact audit findings (typed IPC bridge catches, production-console suppression in runtime paths, telemetry archive normalizer reuse, and one-time legacy migration marker) without expanding into repo-wide typing cleanup.
+- Date: 2026-02-17
+- Options considered:
+  - Run a repo-wide `any` purge pass immediately.
+  - Limit remediation to the concrete unresolved findings and verify with full quality gates.
+- Rationale:
+  - User request targeted specific unresolved findings and asked for completion without scope drift.
+  - A focused pass reduces regression risk while closing the highest-risk runtime/debt items.
+  - Full `ci:quality` pass provides integrated confidence without forcing broad refactor churn.
+- Impacted files/artifacts:
+  - `src/utils/electronBridge.ts`
+  - `src/utils/logger.ts`
+  - `src/utils/storage.ts`
+  - `src/App.tsx`
+  - `src/components/DevOCRPanel.tsx`
+  - `electron/helpers/artifactHelpers.cjs`
+  - `electron/helpers/telemetryArchiveHelpers.cjs`
+  - `docs/TELEMETRY_PIPELINE.md`
+  - `TODO.md`
+- Revisit trigger/expiry:
+  - Revisit when scheduling a dedicated repo-wide typing cleanup lane (analytics/util/UI leftovers) after current runtime hardening priorities.
