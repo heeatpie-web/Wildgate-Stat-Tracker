@@ -3,12 +3,13 @@ import { useGameData } from '../providers/GameDataProvider';
 import { processTelemetryEvent, TelemetryContext, TelemetryActions } from '../utils/telemetryProcessor';
 import Logger from '../utils/logger';
 import { getElectronAPI } from '../utils/electronAPI';
+import {
+    getTelemetryEventTimestamp,
+    normalizeTelemetryArchivePayload,
+    type TelemetryArchiveEvent,
+} from '../utils/telemetryArchive';
 
-interface SimEvent {
-    ClientTimestamp: number;
-    EventName: string;
-    Payload: any;
-}
+type SimEvent = TelemetryArchiveEvent;
 
 interface TelemetryArchiveEntry {
     archiveId: string;
@@ -16,6 +17,9 @@ interface TelemetryArchiveEntry {
     date: number;
     size: number;
 }
+
+const errorMessage = (error: unknown): string =>
+    error instanceof Error ? error.message : 'Unknown error';
 
 const SimulatorPanel: React.FC = () => {
     const {
@@ -65,9 +69,9 @@ const SimulatorPanel: React.FC = () => {
                 setSelectedArchive(list[0].archiveId);
                 handleLoadArchive(list[0].archiveId);
             }
-        } catch (e: any) {
-            console.error("Failed to list archives", e);
-            setStatus(`List Error: ${e.message}`);
+        } catch (error) {
+            console.error("Failed to list archives", error);
+            setStatus(`List Error: ${errorMessage(error)}`);
         }
     };
 
@@ -89,13 +93,15 @@ const SimulatorPanel: React.FC = () => {
                 throw new Error(raw.message || 'Archive load failed');
             }
             const payload = raw?.success ? raw.data : raw;
-            const rawEvents = Array.isArray(payload) ? payload : (payload?.telemetry || []);
-            const sorted = rawEvents.sort((a: any, b: any) => (a.ClientTimestamp || 0) - (b.ClientTimestamp || 0));
+            const rawEvents = normalizeTelemetryArchivePayload(payload);
+            const sorted = [...rawEvents].sort(
+                (a, b) => getTelemetryEventTimestamp(a) - getTelemetryEventTimestamp(b)
+            );
             setEvents(sorted);
             setStatus(`Loaded ${sorted.length} events from ${selected?.filename || archiveId}`);
             setProgress(0);
-        } catch (e: any) {
-            setStatus(`Load Error: ${e.message}`);
+        } catch (error) {
+            setStatus(`Load Error: ${errorMessage(error)}`);
         }
         setLoading(false);
     };
@@ -119,11 +125,12 @@ const SimulatorPanel: React.FC = () => {
             try {
                 const content = evt.target?.result as string;
                 const parsed = JSON.parse(content);
-                // Handle different array formats (direct array or wrapper)
-                const rawEvents = Array.isArray(parsed) ? parsed : (parsed.telemetry || []);
+                const rawEvents = normalizeTelemetryArchivePayload(parsed);
 
                 // Sort by timestamp
-                const sorted = rawEvents.sort((a: any, b: any) => (a.ClientTimestamp || 0) - (b.ClientTimestamp || 0));
+                const sorted = [...rawEvents].sort(
+                    (a, b) => getTelemetryEventTimestamp(a) - getTelemetryEventTimestamp(b)
+                );
 
                 setEvents(sorted);
                 setStatus(`Loaded ${sorted.length} events.`);
@@ -179,23 +186,24 @@ const SimulatorPanel: React.FC = () => {
                 setTimeMin, setTimeSec,
                 setIsMatchInProgress,
                 setMatchStartTime,
-                setOverlayPhase: (p: any) => setOverlayPhase(p), // Type cast if needed
+                setOverlayPhase,
                 setToast: (t) => Logger.info('Sim', t.message), // Don't spam real toasts
                 updatePlayerIdMapping,
                 setShowWizard: () => {}, // No-op for simulation
             };
 
+            const startSeconds = events[0] ? getTelemetryEventTimestamp(events[0]) : 0;
+            const currentSeconds = getTelemetryEventTimestamp(event);
+
             const context: TelemetryContext = {
-                matchStartTime: events[0].ClientTimestamp * 1000,
+                matchStartTime: startSeconds * 1000,
                 isMatchInProgress: true, // Force true for sim usually
                 playerIdMap,
                 pilotRegistry
             };
 
             // Update Time Display
-            const startTime = events[0].ClientTimestamp;
-            const curTime = event.ClientTimestamp;
-            const diff = curTime - startTime;
+            const diff = Math.max(0, currentSeconds - startSeconds);
             const m = Math.floor(diff / 60);
             const s = Math.floor(diff % 60);
             setCurrentSimTime(`${m}:${s.toString().padStart(2, '0')}`);

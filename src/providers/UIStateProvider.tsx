@@ -8,6 +8,7 @@ import React, { createContext, useContext, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useShallow } from 'zustand/react/shallow';
 import { GameMode } from '../types';
+import type { TelemetryStatusState } from '../store/slices/createUISlice';
 
 interface ToastData {
     message: string;
@@ -97,9 +98,9 @@ interface UIStateContextType {
     showIdMapper: boolean;
     setShowIdMapper: (show: boolean) => void;
     visionStatus: 'idle' | 'capturing' | 'scanning' | 'processing';
-    telemetryStatus: any;
+    telemetryStatus: TelemetryStatusState;
     setVisionStatus: (status: 'idle' | 'capturing' | 'scanning' | 'processing') => void;
-    setTelemetryStatus: (status: any) => void;
+    setTelemetryStatus: (status: Partial<TelemetryStatusState>) => void;
     smartCapturesFocusMatchId: number | null;
     setSmartCapturesFocusMatchId: (id: number | null) => void;
 }

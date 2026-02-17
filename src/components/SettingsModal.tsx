@@ -9,7 +9,14 @@ import { StorageService } from '../utils/storage';
 import { getElectronAPI } from '../utils/electronAPI';
 import { useAppStore } from '../store/useAppStore';
 import { getGCloudStatus, type GCloudStatus } from '../utils/electronBridge';
-import type { OcrMode, CaptureMode, TelemetryPerformanceProfile, OcrLearningReviewMode, OcrThresholdRecommendationMode } from '../store/slices/createSettingsSlice';
+import type {
+    OcrMode,
+    CaptureMode,
+    ResultOcrFlowMode,
+    TelemetryPerformanceProfile,
+    OcrLearningReviewMode,
+    OcrThresholdRecommendationMode
+} from '../store/slices/createSettingsSlice';
 import { normalizeOcrName, similarityScore } from '../utils/stringUtils';
 import { DEFAULT_OCR_BEST_GUESS_THRESHOLDS, getPreset, detectSensitivityLevel } from './settings/ocrThresholdPresets';
 import { Button, Input } from './ui';
@@ -63,6 +70,8 @@ export const SettingsModal: React.FC = () => {
     const setOcrMode = useAppStore(s => s.setOcrMode);
     const captureMode = useAppStore(s => s.captureMode);
     const setCaptureMode = useAppStore(s => s.setCaptureMode);
+    const resultOcrFlowMode = useAppStore(s => s.resultOcrFlowMode);
+    const setResultOcrFlowMode = useAppStore(s => s.setResultOcrFlowMode);
     const showSmartCaptureInHeader = useAppStore(s => s.showSmartCaptureInHeader);
     const setShowSmartCaptureInHeader = useAppStore(s => s.setShowSmartCaptureInHeader);
     const telemetryPerformanceProfile = useAppStore(s => s.telemetryPerformanceProfile);
@@ -218,6 +227,7 @@ export const SettingsModal: React.FC = () => {
                 overlayStyle: state.overlayStyle,
                 ocrMode: state.ocrMode,
                 captureMode: state.captureMode,
+                resultOcrFlowMode: state.resultOcrFlowMode,
                 lockOcrTeams: state.lockOcrTeams,
                 ocrLearningEnabled: (state as any).ocrLearningEnabled,
                 ocrAutoApplyMinScore: (state as any).ocrAutoApplyMinScore,
@@ -1148,6 +1158,35 @@ export const SettingsModal: React.FC = () => {
                                 OCR runs automatically after about 4 seconds of no new captures, so multiple captures bundle into one batch.
                             </div>
                         )}
+                        <div className="mt-4 pt-4 border-t border-md-sys-outline/10">
+                            <h4 className="text-label-sm font-bold mb-2">Result Button OCR Flow</h4>
+                            <div className="grid grid-cols-2 gap-2">
+                                {[
+                                    {
+                                        id: 'prompt' as ResultOcrFlowMode,
+                                        label: 'Prompt Before OCR',
+                                        desc: 'Result click asks before processing queued captures.',
+                                    },
+                                    {
+                                        id: 'background' as ResultOcrFlowMode,
+                                        label: 'Background OCR',
+                                        desc: 'Open wizard instantly and run queued OCR in the background.',
+                                    },
+                                ].map((opt) => (
+                                    <button
+                                        key={opt.id}
+                                        onClick={() => setResultOcrFlowMode(opt.id)}
+                                        className={`p-3 rounded-control text-center transition-all ${resultOcrFlowMode === opt.id
+                                            ? 'md3-btn-filled ring-2 ring-md-sys-primary/50'
+                                            : 'md3-btn-outlined'
+                                            }`}
+                                    >
+                                        <div className="text-label-sm font-bold">{opt.label}</div>
+                                        <div className="text-label-sm opacity-60">{opt.desc}</div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                         </section>
                     )}
 

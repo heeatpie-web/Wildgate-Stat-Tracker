@@ -16,10 +16,16 @@ import { MappingSlice, createMappingSlice } from './slices/createMappingSlice';
 import { SmartCapturesUIState, createSmartCapturesSlice } from './slices/createSmartCapturesSlice';
 import { StorageService } from '../utils/storage';
 import { createEmptyOcrAliasModel, migrateLegacyOcrCorrections } from '../utils/ocrAliasEngine';
+import type { Match } from '../types';
 
 export type AppState = DataSlice & SettingsSlice & UISlice & SmartCapturesUIState & FormSlice & MappingSlice;
 
 let _hydrated = false;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isMatchRecord = (value: unknown): value is Match => isRecord(value);
 
 const customStorage: PersistStorage<AppState> = {
   getItem: async (name) => {
@@ -36,7 +42,7 @@ const customStorage: PersistStorage<AppState> = {
           ? data.ocrAliasModel
           : migrateLegacyOcrCorrections(legacyOcrCorrections);
       const players = Array.isArray(data.players)
-        ? data.players.filter((p: any): p is string => typeof p === 'string' && p.trim().length > 0)
+        ? data.players.filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
         : [];
       const persistedActiveUser = typeof settings.activeUser === 'string' ? settings.activeUser.trim() : '';
       const matchedActiveUser = persistedActiveUser
@@ -47,9 +53,11 @@ const customStorage: PersistStorage<AppState> = {
 
       // Recovery: reset stale 'processing' ocrState back to 'queued'
       // (OCR was interrupted by app close/crash)
-      const recoveredMatches = (data.matches || []).map((m: any) => {
-        const recovered = m.ocrState === 'processing' ? { ...m, ocrState: 'queued' } : m;
-        if (recovered?.subType === 'Telemetry Draft' && (!recovered.result || recovered.result === 'Draw')) {
+      const recoveredMatches = (Array.isArray(data.matches) ? data.matches : [])
+        .filter(isMatchRecord)
+        .map((match) => {
+        const recovered = match.ocrState === 'processing' ? { ...match, ocrState: 'queued' as const } : match;
+        if (recovered.subType === 'Telemetry Draft' && (!recovered.result || recovered.result === 'Draw')) {
           return { ...recovered, result: 'Ongoing' };
         }
         return recovered;
@@ -95,6 +103,7 @@ const customStorage: PersistStorage<AppState> = {
           visualMode: settings.visualMode || 'dense',
           ocrMode: settings.ocrMode || 'both',
           captureMode: settings.captureMode || 'auto',
+          resultOcrFlowMode: settings.resultOcrFlowMode === 'background' ? 'background' : 'prompt',
           lockOcrTeams: settings.lockOcrTeams || false,
           ocrLearningEnabled: settings.ocrLearningEnabled ?? true,
           ocrAutoApplyMinScore: Number.isFinite(settings.ocrAutoApplyMinScore) ? Number(settings.ocrAutoApplyMinScore) : 0.82,
@@ -207,6 +216,7 @@ const customStorage: PersistStorage<AppState> = {
         visualMode: state.visualMode,
         ocrMode: state.ocrMode,
                 captureMode: state.captureMode,
+                resultOcrFlowMode: state.resultOcrFlowMode,
                 lockOcrTeams: state.lockOcrTeams,
                 ocrLearningEnabled: state.ocrLearningEnabled,
                 ocrAutoApplyMinScore: state.ocrAutoApplyMinScore,
@@ -287,6 +297,7 @@ export const useAppStore = create<AppState>()(
         visualMode: state.visualMode,
         ocrMode: state.ocrMode,
         captureMode: state.captureMode,
+        resultOcrFlowMode: state.resultOcrFlowMode,
         lockOcrTeams: state.lockOcrTeams,
         ocrLearningEnabled: state.ocrLearningEnabled,
         ocrAutoApplyMinScore: state.ocrAutoApplyMinScore,

@@ -17,13 +17,21 @@ import {
     previewArtifactRepair,
     applyArtifactRepair,
     type ArtifactRepairResult,
+    type RerunOcrResult,
     ArtifactFile,
 } from '../utils/artifactService';
 import { getElectronAPI } from '../utils/electronAPI';
 import { useAppStore } from '../store/useAppStore';
+import type { CaptureMode, OcrMode } from '../store/slices/createSettingsSlice';
 import { OCRReviewModal } from './ocr/OCRReviewModal';
 import { mergeOCRData, calculateOverallConfidence } from '../utils/ocr/ocrParser';
-import type { OCRExtractedData } from '../utils/ocr/ocrTypes';
+import type { ExtractedModifier, OCRExtractedData } from '../utils/ocr/ocrTypes';
+import {
+    assignDeterministicTeamColors,
+    buildPlayerColorHints,
+    buildPlayerColorHintsFromOpponentTeams,
+    normalizeTeamColor,
+} from '../utils/ocr/teamColorAssignment';
 import { useSmartCapture, type SavedCapture } from '../hooks/useSmartCapture';
 import { LocalImage } from './LocalImage';
 import { exportJSONFile } from '../utils/export';
@@ -47,8 +55,35 @@ import { QueueItemRichPreview } from './smart-captures/QueueItemRichPreview';
 import { SmartCaptureSummaryBar } from './smart-captures/detail/SmartCaptureSummaryBar';
 import { SmartCaptureActionBar } from './smart-captures/detail/SmartCaptureActionBar';
 import { findClosestMatch, normalizeOcrName, similarityScore } from '../utils/stringUtils';
+import { getTelemetryEventTimestamp, type TelemetryArchiveEvent } from '../utils/telemetryArchive';
+import type { TimelineEvent } from '../store/slices/createDataSlice';
 
 let autoArtifactRepairAttempted = false;
+
+const CAPTURE_MODE_VALUES: CaptureMode[] = ['auto', 'deferred'];
+const OCR_MODE_VALUES: OcrMode[] = ['local', 'cloud', 'both', 'hybrid-plus'];
+
+const isCaptureMode = (value: string): value is CaptureMode =>
+    CAPTURE_MODE_VALUES.includes(value as CaptureMode);
+
+const isOcrMode = (value: string): value is OcrMode =>
+    OCR_MODE_VALUES.includes(value as OcrMode);
+
+const errorMessage = (error: unknown): string =>
+    error instanceof Error ? error.message : 'Unknown error';
+
+const normalizeModifierEntries = (
+    entries: Array<string | ExtractedModifier>,
+    normalizeModifierName: (name: string) => string
+): ExtractedModifier[] => entries.map((entry) => {
+    if (typeof entry === 'string') {
+        return { name: normalizeModifierName(entry), confidence: 70, rawText: entry };
+    }
+    return {
+        ...entry,
+        name: normalizeModifierName(entry.name),
+    };
+});
 
 const SmartCapturesPanel: React.FC = () => {
     const { matches, updateMatch, deleteMatch, pilotRegistry, setSelectedTeammates, setSelectedOpponents, setActiveShip, setSessionTeams, setSessionShipTypes, setSelectedReachModifiers, selectedTeammates, selectedOpponents, sessionTeams, activeShip } = useGameData();
@@ -466,7 +501,14 @@ const SmartCapturesPanel: React.FC = () => {
         const mergedTimeline = [
             ...(keep.timelineEvents || []),
             ...mergeFrom.flatMap((match) => match.timelineEvents || []),
-        ].sort((a: any, b: any) => (Number(a?.timestamp) || 0) - (Number(b?.timestamp) || 0));
+        ]
+            .filter((evt): evt is TimelineEvent => (
+                typeof evt === 'object' &&
+                evt !== null &&
+                'timestamp' in evt &&
+                typeof (evt as { timestamp?: unknown }).timestamp === 'number'
+            ))
+            .sort((a, b) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0));
         const merged = {
             ...keep,
             teammates: toUnique([...(keep.teammates || []), ...mergeFrom.flatMap((match) => match.teammates || [])]),
@@ -540,12 +582,13 @@ const SmartCapturesPanel: React.FC = () => {
 
                 updateMatch({ ...match, ocrState: 'processing' });
                 const settled = await Promise.allSettled(imagePaths.map(p => rerunOCROnArtifact(p, activeUser, ocrMode)));
-                const results = settled.map((s, i) => {
+                type BulkRerunResult = RerunOcrResult & { imagePath: string };
+                const results: BulkRerunResult[] = settled.map((s, i) => {
                     if (s.status === 'fulfilled') return { ...s.value, imagePath: imagePaths[i] };
                     return { success: false, error: (s as PromiseRejectedResult).reason?.message || 'Unknown error', imagePath: imagePaths[i] };
                 });
 
-                const successful = results.filter((r: any) => r.success && r.data);
+                const successful = results.filter((r): r is BulkRerunResult & { success: true; data: OCRExtractedData } => !!(r.success && r.data));
                 if (successful.length === 0) continue;
 
                 let merged: Partial<OCRExtractedData> = {
@@ -555,15 +598,17 @@ const SmartCapturesPanel: React.FC = () => {
                     opponentTeams: [],
                 };
 
-                for (const r of successful as any[]) {
-                    const baseMods = (r.data?.reachModifiers || []).map((m: any) =>
-                        typeof m === 'string' ? { name: m, confidence: 70, rawText: m } : m
+                for (const r of successful) {
+                    const baseMods = normalizeModifierEntries(
+                        (r.data?.reachModifiers || []) as Array<string | ExtractedModifier>,
+                        normalizeModifierName
                     );
-                    const hazardMods = (r.data?.hazards || []).map((h: string) => ({ name: h, confidence: 80, rawText: h }));
-                    const allMods = [...baseMods, ...hazardMods].map((m: any) => ({
-                        ...m,
-                        name: normalizeModifierName(m.name),
+                    const hazardMods: ExtractedModifier[] = (r.data?.hazards || []).map((h: string) => ({
+                        name: normalizeModifierName(h),
+                        confidence: 80,
+                        rawText: h
                     }));
+                    const allMods = [...baseMods, ...hazardMods];
                     merged = mergeOCRData(merged, {
                         playerShip: r.data.playerShip,
                         reachModifiers: allMods,
@@ -572,7 +617,7 @@ const SmartCapturesPanel: React.FC = () => {
                     });
                 }
 
-                const lastData = (successful as any[])[successful.length - 1].data as OCRExtractedData;
+                const lastData = successful[successful.length - 1].data;
                 const combinedConfidence = calculateOverallConfidence(merged);
                 const combined: OCRExtractedData = {
                     screenshotType: lastData.screenshotType || 'unknown',
@@ -591,11 +636,20 @@ const SmartCapturesPanel: React.FC = () => {
                 };
 
                 const nextTeammates = (combined.teammates || []).map(t => t.name).filter(Boolean) as string[];
-                const nextOppTeams = (combined.opponentTeams || []).map(t => ({
+                const unresolvedOppTeams: OpponentTeam[] = (combined.opponentTeams || []).map(t => ({
                     teamName: t.teamName || 'Team',
                     shipType: t.shipType || '',
-                    color: (t.color || 'unknown') as any,
-                    players: (t.players || []).map(p => p.name).filter(Boolean) as string[],
+                    color: t.color || 'unknown',
+                    players: Array.from(new Set((t.players || []).map(p => p.name).filter(Boolean) as string[])),
+                }));
+                const mergedHints = {
+                    ...buildPlayerColorHintsFromOpponentTeams(match.opponentTeams || []),
+                    ...buildPlayerColorHints(sessionTeams),
+                };
+                const rerunAssignedColors = assignDeterministicTeamColors(unresolvedOppTeams, { playerColorHints: mergedHints });
+                const nextOppTeams: OpponentTeam[] = unresolvedOppTeams.map((team, index) => ({
+                    ...team,
+                    color: rerunAssignedColors[index] || 'unknown',
                 }));
                 const nextOpponents = nextOppTeams.flatMap(t => t.players);
 
@@ -604,13 +658,20 @@ const SmartCapturesPanel: React.FC = () => {
                     ship: combined.playerShip?.shipType ? combined.playerShip.shipType : match.ship,
                     teammates: nextTeammates.length > 0 ? nextTeammates : match.teammates,
                     opponents: nextOpponents.length > 0 ? nextOpponents : match.opponents,
-                    opponentTeams: nextOppTeams.length > 0 ? (nextOppTeams as any) : match.opponentTeams,
+                    opponentTeams: nextOppTeams.length > 0 ? nextOppTeams : match.opponentTeams,
                     reachModifiers: (combined.reachModifiers || []).map(m => m.name).filter(Boolean) as string[],
                     ocrDebug: {
                         rawText: combined.rawText,
                         confidence: combined.overallConfidence,
                         source: combined.ocrSource || match.ocrDebug?.source,
-                        mergeStats: combined.mergeStats as any,
+                        mergeStats: combined.mergeStats ? {
+                            total: combined.mergeStats.total,
+                            agreed: combined.mergeStats.agreed,
+                            cloudPreferred: combined.mergeStats.cloudPreferred,
+                            localOnly: combined.mergeStats.localOnly,
+                            cloudOnly: combined.mergeStats.cloudOnly,
+                            conflicts: combined.mergeStats.conflicts,
+                        } : undefined,
                         timestamp: Date.now(),
                     },
                     ocrState: 'reviewing',
@@ -620,12 +681,12 @@ const SmartCapturesPanel: React.FC = () => {
             }
 
             setToast({ message: `OCR rerun complete for ${ids.length} selected match${ids.length === 1 ? '' : 'es'}`, type: 'success' });
-        } catch (e) {
-            setToast({ message: `Bulk OCR rerun failed: ${(e as any)?.message || 'Unknown error'}`, type: 'error' });
+        } catch (error) {
+            setToast({ message: `Bulk OCR rerun failed: ${errorMessage(error)}`, type: 'error' });
         } finally {
             setBulkBusy(false);
         }
-    }, [activeUser, matches, normalizeModifierName, ocrMode, selectedIds, setToast, updateMatch]);
+    }, [activeUser, matches, normalizeModifierName, ocrMode, selectedIds, sessionTeams, setToast, updateMatch]);
 
     const handlePreviewArtifactRepair = useCallback(async () => {
         setRepairBusy(true);
@@ -634,8 +695,8 @@ const SmartCapturesPanel: React.FC = () => {
             setRepairResult(result);
             const planned = result.summary?.plannedLinks || 0;
             setToast({ message: planned > 0 ? `Artifact repair preview: ${planned} links found` : 'Artifact repair preview: no missing links found', type: planned > 0 ? 'info' : 'success' });
-        } catch (e: any) {
-            setToast({ message: `Artifact repair preview failed: ${e?.message || 'Unknown error'}`, type: 'error' });
+        } catch (error) {
+            setToast({ message: `Artifact repair preview failed: ${errorMessage(error)}`, type: 'error' });
         } finally {
             setRepairBusy(false);
         }
@@ -660,8 +721,8 @@ const SmartCapturesPanel: React.FC = () => {
             });
             const updatedMatches = result.summary?.updatedMatches || 0;
             setToast({ message: updatedMatches > 0 ? `Artifact repair applied to ${updatedMatches} match${updatedMatches === 1 ? '' : 'es'}` : 'Artifact repair applied: nothing changed', type: 'success' });
-        } catch (e: any) {
-            setToast({ message: `Artifact repair apply failed: ${e?.message || 'Unknown error'}`, type: 'error' });
+        } catch (error) {
+            setToast({ message: `Artifact repair apply failed: ${errorMessage(error)}`, type: 'error' });
         } finally {
             setRepairBusy(false);
         }
@@ -740,7 +801,10 @@ const SmartCapturesPanel: React.FC = () => {
                                                 <select
                                                     aria-label="Capture mode"
                                                     value={captureMode}
-                                                    onChange={(e) => setCaptureMode(e.target.value as any)}
+                                                    onChange={(e) => {
+                                                        const next = e.target.value;
+                                                        if (isCaptureMode(next)) setCaptureMode(next);
+                                                    }}
                                                     className="h-9 px-2 md3-surface rounded-control text-label-sm font-semibold outline-none"
                                                 >
                                                     <option value="auto">Capture: Now</option>
@@ -749,7 +813,10 @@ const SmartCapturesPanel: React.FC = () => {
                                                 <select
                                                     aria-label="OCR mode"
                                                     value={ocrMode}
-                                                    onChange={(e) => setOcrMode(e.target.value as any)}
+                                                    onChange={(e) => {
+                                                        const next = e.target.value;
+                                                        if (isOcrMode(next)) setOcrMode(next);
+                                                    }}
                                                     className="h-9 px-2 md3-surface rounded-control text-label-sm font-semibold outline-none"
                                                 >
                                                     <option value="local">OCR: Local</option>
@@ -908,30 +975,56 @@ const SmartCapturesPanel: React.FC = () => {
                                             }
                                             setSelectedTeammates(merged);
                                         }
+                                        let resolvedOpponentTeams: OpponentTeam[] = [];
                                         if (data.opponentTeams?.length > 0) {
+                                            data.opponentTeams.forEach((team) => {
+                                                team.players.forEach((player) => queueRosterCandidate(player.name || ''));
+                                            });
+                                            const unresolvedOpponentTeams: OpponentTeam[] = data.opponentTeams.map((team) => ({
+                                                teamName: team.teamName || 'Unknown Team',
+                                                shipType: team.shipType || '',
+                                                color: team.color || 'unknown',
+                                                players: Array.from(
+                                                    new Map(
+                                                        team.players
+                                                            .map((player) => resolveRosterName(player.name || ''))
+                                                            .filter(Boolean)
+                                                            .map((name) => [normalizeOcrName(name).toLowerCase(), name])
+                                                    ).values()
+                                                ),
+                                            }));
+                                            const assignedOpponentColors = assignDeterministicTeamColors(unresolvedOpponentTeams, {
+                                                playerColorHints: buildPlayerColorHints(sessionTeams),
+                                            });
+                                            resolvedOpponentTeams = unresolvedOpponentTeams.map((team, index) => ({
+                                                ...team,
+                                                color: assignedOpponentColors[index] || 'unknown',
+                                            }));
+
                                             const existingOpp = new Set(selectedOpponents.map(n => normalizeOcrName(n).toLowerCase()));
                                             const mergedOpp = [...selectedOpponents];
-                                            for (const raw of data.opponentTeams.flatMap(t => t.players.map(p => p.name)).filter(Boolean)) {
-                                                queueRosterCandidate(raw);
-                                                const resolved = resolveRosterName(raw);
-                                                if (!resolved) continue;
+                                            for (const resolved of resolvedOpponentTeams.flatMap((team) => team.players)) {
                                                 const key = normalizeOcrName(resolved).toLowerCase();
-                                                if (existingOpp.has(key)) continue;
+                                                if (!key || existingOpp.has(key)) continue;
                                                 mergedOpp.push(resolved);
                                                 existingOpp.add(key);
                                             }
                                             setSelectedOpponents(mergedOpp);
+
                                             const newTeams = { ...sessionTeams };
                                             const newShipTypes: Record<string, string> = {};
-                                            data.opponentTeams.forEach(team => {
+                                            resolvedOpponentTeams.forEach((team) => {
                                                 const colorKey = team.color || 'unknown';
                                                 if (lockOcrTeams && Object.keys(newTeams).length > 0 && !newTeams[colorKey]) {
                                                     return;
                                                 }
                                                 if (!newTeams[colorKey]) newTeams[colorKey] = [];
-                                                team.players.forEach(p => {
-                                                    const resolved = resolveRosterName(p.name || '');
-                                                    if (resolved && !newTeams[colorKey].includes(resolved)) newTeams[colorKey].push(resolved);
+                                                const existingKeys = new Set(newTeams[colorKey].map((name) => normalizeOcrName(name).toLowerCase()));
+                                                team.players.forEach((player) => {
+                                                    const playerKey = normalizeOcrName(player).toLowerCase();
+                                                    if (!playerKey || existingKeys.has(playerKey)) return;
+                                                    newTeams[colorKey].push(player);
+                                                    existingKeys.add(playerKey);
                                                 });
                                                 if (team.shipType) newShipTypes[colorKey] = team.shipType;
                                             });
@@ -960,18 +1053,14 @@ const SmartCapturesPanel: React.FC = () => {
                                                     .filter(Boolean);
                                                 matchUpdates.teammates = Array.from(new Set(resolvedTeam)).slice(0, maxTeammates);
                                             }
-                                            if (data.opponentTeams?.length > 0) {
-                                                const resolvedOpps = data.opponentTeams
-                                                    .flatMap(t => t.players.map(p => resolveRosterName(p.name || '')))
-                                                    .filter(Boolean);
+                                            if (resolvedOpponentTeams.length > 0) {
+                                                const resolvedOpps = resolvedOpponentTeams.flatMap((team) => team.players).filter(Boolean);
                                                 matchUpdates.opponents = Array.from(new Set(resolvedOpps));
-                                                matchUpdates.opponentTeams = data.opponentTeams.map(t => ({
-                                                    teamName: t.teamName || 'Unknown Team',
-                                                    shipType: t.shipType || '',
-                                                    color: t.color || 'unknown',
-                                                    players: t.players
-                                                        .map(p => resolveRosterName(p.name || ''))
-                                                        .filter(Boolean),
+                                                matchUpdates.opponentTeams = resolvedOpponentTeams.map((team) => ({
+                                                    teamName: team.teamName || 'Unknown Team',
+                                                    shipType: team.shipType || '',
+                                                    color: team.color || 'unknown',
+                                                    players: [...team.players],
                                                 }));
                                             }
                                             const mods = data.reachModifiers ?? [];
@@ -1142,6 +1231,12 @@ const SmartCapturesPanel: React.FC = () => {
         />
     );
 };
+
+type RerunResultWithMeta = RerunOcrResult & {
+    imagePath: string;
+    filename: string;
+};
+
 const SmartMatchDetail: React.FC<{
     match: Match;
     displayNumber: number;
@@ -1157,7 +1252,7 @@ const SmartMatchDetail: React.FC<{
     onQueueRosterCandidate?: (name: string) => void;
     onDeleteMatch?: (match: Match) => void;
 }> = ({ match, displayNumber, onUpdate, activeUser, ocrMode, pilotRegistry, queueOnly = false, onNext, onPrev, onResolve, onApplyToSession, onQueueRosterCandidate, onDeleteMatch }) => {
-    const [artifacts, setArtifacts] = useState<{ images: string[], imageFiles: ArtifactFile[], telemetry: any[] }>({ images: [], imageFiles: [], telemetry: [] });
+    const [artifacts, setArtifacts] = useState<{ images: string[], imageFiles: ArtifactFile[], telemetry: TelemetryArchiveEvent[][] }>({ images: [], imageFiles: [], telemetry: [] });
     const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
     const screenshotsSectionRef = useRef<HTMLDivElement | null>(null);
     const [editingField, setEditingField] = useState<string | null>(null);
@@ -1167,7 +1262,7 @@ const SmartMatchDetail: React.FC<{
     const [addingPlayer, setAddingPlayer] = useState<'teammate' | 'opponent' | null>(null);
     const [newPlayerName, setNewPlayerName] = useState('');
     const [rerunning, setRerunning] = useState(false);
-    const [rerunResults, setRerunResults] = useState<any[] | null>(null);
+    const [rerunResults, setRerunResults] = useState<RerunResultWithMeta[] | null>(null);
     const [reviewData, setReviewData] = useState<OCRExtractedData | null>(null);
     const [rerunProgress, setRerunProgress] = useState<{ current: number; total: number; status: string; cloudStatus: string }>({ current: 0, total: 0, status: '', cloudStatus: '' });
     const [processingComplete, setProcessingComplete] = useState(false);
@@ -1443,7 +1538,7 @@ const SmartMatchDetail: React.FC<{
                 return { ...result, imagePath: path, filename };
             })
         );
-        const results = settled.map((s, i) => {
+        const results: RerunResultWithMeta[] = settled.map((s, i) => {
             if (s.status === 'fulfilled') return s.value;
             const path = imagePaths[i];
             const filename = path?.split(/[\\/]/).pop() || 'image';
@@ -1451,7 +1546,7 @@ const SmartMatchDetail: React.FC<{
         });
         setRerunResults(results);
         setRerunning(false);
-        const successful = results.filter(r => r.success && r.data);
+        const successful = results.filter((r): r is RerunResultWithMeta & { success: true; data: OCRExtractedData } => !!(r.success && r.data));
         const cloudUsed = successful.some(r => r.data?.ocrSource === 'merged' || r.data?.ocrSource === 'cloud');
         setRerunProgress(prev => ({
             ...prev,
@@ -1467,14 +1562,16 @@ const SmartMatchDetail: React.FC<{
                 opponentTeams: [],
             };
             for (const r of successful) {
-                const baseMods = (r.data?.reachModifiers || []).map((m: any) =>
-                    typeof m === 'string' ? { name: m, confidence: 70, rawText: m } : m
+                const baseMods = normalizeModifierEntries(
+                    (r.data?.reachModifiers || []) as Array<string | ExtractedModifier>,
+                    normalizeModifierName
                 );
-                const hazardMods = (r.data?.hazards || []).map((h: string) => ({ name: h, confidence: 80, rawText: h }));
-                const allMods = [...baseMods, ...hazardMods].map((m: any) => ({
-                    ...m,
-                    name: normalizeModifierName(m.name),
+                const hazardMods: ExtractedModifier[] = (r.data?.hazards || []).map((h: string) => ({
+                    name: normalizeModifierName(h),
+                    confidence: 80,
+                    rawText: h,
                 }));
+                const allMods = [...baseMods, ...hazardMods];
                 merged = mergeOCRData(merged, {
                     playerShip: r.data.playerShip,
                     reachModifiers: allMods,
@@ -1540,7 +1637,7 @@ const SmartMatchDetail: React.FC<{
         };
     };
 
-    const [jsonExport, setJsonExport] = useState<{ title: string; content: string; payload: any } | null>(null);
+    const [jsonExport, setJsonExport] = useState<{ title: string; content: string; payload: unknown } | null>(null);
     const jsonRef = useRef<HTMLTextAreaElement | null>(null);
 
     useEffect(() => {
@@ -1555,7 +1652,7 @@ const SmartMatchDetail: React.FC<{
         return `wildgate_ocr_${slug || 'export'}`;
     };
 
-    const openJsonViewer = (payload: any, title: string) => {
+    const openJsonViewer = (payload: unknown, title: string) => {
         setJsonExport({
             title,
             payload,
@@ -1615,15 +1712,36 @@ const SmartMatchDetail: React.FC<{
             data.opponentTeams.forEach((team) => {
                 team.players.forEach((player) => maybeQueueRoster(player.name || ''));
             });
-            const resolvedOpps = data.opponentTeams
-                .flatMap(t => t.players.map(p => resolveRosterName(p.name || '')))
+            const unresolvedOpponentTeams: OpponentTeam[] = data.opponentTeams.map((team) => ({
+                teamName: team.teamName || 'Unknown Team',
+                shipType: team.shipType || '',
+                color: team.color || 'unknown',
+                players: Array.from(
+                    new Map(
+                        team.players
+                            .map((player) => resolveRosterName(player.name || ''))
+                            .filter(Boolean)
+                            .map((name) => [normalizeOcrName(name).toLowerCase(), name])
+                    ).values()
+                ),
+            }));
+            const matchColorHints = buildPlayerColorHintsFromOpponentTeams(match.opponentTeams || []);
+            const assignedOpponentColors = assignDeterministicTeamColors(unresolvedOpponentTeams, {
+                playerColorHints: matchColorHints,
+            });
+            const resolvedOpponentTeams = unresolvedOpponentTeams.map((team, index) => ({
+                ...team,
+                color: assignedOpponentColors[index] || 'unknown',
+            }));
+            const resolvedOpps = resolvedOpponentTeams
+                .flatMap((team) => team.players)
                 .filter(Boolean);
             updates.opponents = Array.from(new Set(resolvedOpps));
-            updates.opponentTeams = data.opponentTeams.map(t => ({
-                teamName: t.teamName || 'Unknown Team',
-                shipType: t.shipType || '',
-                color: t.color || 'unknown',
-                players: t.players.map(p => resolveRosterName(p.name || '')).filter(Boolean),
+            updates.opponentTeams = resolvedOpponentTeams.map((team) => ({
+                teamName: team.teamName || 'Unknown Team',
+                shipType: team.shipType || '',
+                color: team.color || 'unknown',
+                players: [...team.players],
             }));
         }
         const reachModifiers = data.reachModifiers ?? [];
@@ -1989,7 +2107,7 @@ const SmartMatchDetail: React.FC<{
                                                 <div className="flex items-center gap-2">
                                                     <button
                                                         onClick={() => {
-                                                            const idx = COLORS.indexOf(team.color);
+                                                            const idx = COLORS.indexOf(normalizeTeamColor(team.color));
                                                             updateTeam({ color: COLORS[(idx + 1) % COLORS.length] });
                                                         }}
                                                         className={`w-2.5 h-2.5 rounded-full ${TEAM_COLOR_MAP[team.color] || 'bg-gray-500'} hover:ring-2 ring-md-sys-on-surface/20 transition-all cursor-pointer`}
@@ -2234,18 +2352,22 @@ const SmartMatchDetail: React.FC<{
                     {artifacts.telemetry.length > 0 && (
                 <Section title="Bundled Telemetry" icon={<FileText size={14} />} collapsible collapsed={!!collapsedSections.telemetry} onToggle={() => toggleSection('telemetry')}>
                     <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar">
-                        {artifacts.telemetry.map((tFile: any, fi: number) => {
-                            const events = Array.isArray(tFile) ? tFile : (tFile.telemetry || []);
+                        {artifacts.telemetry.map((events, fi: number) => {
                             return (
                                 <details key={fi} className="md3-surface-high rounded-lg">
                                     <summary className="px-3 py-1.5 text-label-sm font-bold cursor-pointer hover:opacity-80">
                                         Telemetry File {fi + 1} ({events.length} events)
                                     </summary>
                                     <div className="px-3 pb-2 space-y-1">
-                                        {events.slice(0, 50).map((evt: any, i: number) => (
+                                        {events.slice(0, 50).map((evt, i: number) => (
                                             <div key={i} className="flex items-center gap-2 text-label-sm">
                                                 <span className="text-label-xs opacity-40 w-16 flex-shrink-0 font-mono">
-                                                    {(evt.ClientTimestamp || evt.timestamp) ? new Date(evt.ClientTimestamp || evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--'}
+                                                    {(() => {
+                                                        const ts = getTelemetryEventTimestamp(evt);
+                                                        if (ts <= 0) return '--';
+                                                        const epochMs = ts < 1_000_000_000_000 ? ts * 1000 : ts;
+                                                        return new Date(epochMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                                                    })()}
                                                 </span>
                                                 <span className="px-1 py-0.5 rounded bg-md-sys-on-surface/5 text-label-xs font-bold uppercase">{evt.EventName || evt.type || 'event'}</span>
                                             </div>
@@ -2438,11 +2560,11 @@ const SmartMatchDetail: React.FC<{
                                             {r.success && r.data && (
                                                 <div className="space-y-1 opacity-60">
                                                     {r.data.playerShip && <div>Ship: {r.data.playerShip.shipType}</div>}
-                                                    {r.data.teammates?.length > 0 && <div>Teammates: {r.data.teammates.map((t: any) => t.name).join(', ')}</div>}
+                                                    {r.data.teammates?.length > 0 && <div>Teammates: {r.data.teammates.map((t) => t.name).join(', ')}</div>}
                                                     {r.data.opponentTeams?.length > 0 && (
-                                                        <div>Opponents: {r.data.opponentTeams.flatMap((t: any) => t.players.map((p: any) => p.name)).join(', ')}</div>
+                                                        <div>Opponents: {r.data.opponentTeams.flatMap((t) => t.players.map((p) => p.name)).join(', ')}</div>
                                                     )}
-                                                    {r.data.reachModifiers?.length > 0 && <div>Modifiers: {r.data.reachModifiers.map((m: any) => m.name).join(', ')}</div>}
+                                                    {r.data.reachModifiers?.length > 0 && <div>Modifiers: {r.data.reachModifiers.map((m) => m.name).join(', ')}</div>}
                                                 </div>
                                             )}
                                         </div>

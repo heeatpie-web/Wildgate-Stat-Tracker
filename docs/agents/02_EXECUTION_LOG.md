@@ -1448,3 +1448,504 @@
   - Review ask: approve closure for OCR-CORRECTION-DELETE-002.
 - `PM Response` | `APPROVED`
   - Reason: requested UX/delete scope completed with passing targeted validation and safety confirmations for destructive actions.
+
+---
+
+## 2026-02-16 - IQR-PLAYERNAME-001
+- Scope: fix Intelligence Review `player_name` actions so confirm/edit/delete behave as expected for roster + session references.
+
+## Work Entries
+- 17:33Z
+  - Claimed active locks for:
+    - `src/components/ReviewQueueModal.tsx`
+    - `src/components/ReviewQueueModal.test.tsx`
+  - Added intake + task plan entries for `IQR-PLAYERNAME-001`.
+  - Locked requested behavior:
+    - `player_name` confirm -> add to roster + clear review item.
+    - `player_name` edit-save -> update references + auto-add edited name to roster.
+
+- 17:35Z
+  - Updated `src/components/ReviewQueueModal.tsx`:
+    - Added centralized name helpers (`normalizeName`, `namesEqual`, `dedupeNames`).
+    - Added `removeNameFromSession(...)` helper for clean deletion across `sessionTeams`, `selectedTeammates`, and `selectedOpponents`.
+    - `handleConfirm(...)` now handles `player_name` by adding to registry and clearing pending item.
+    - `handleSaveEdit(...)` now updates references for `player_name`/`roster_candidate` and adds edited value to roster.
+    - `handleDelete(...)` now removes linked references for `player_name`/`roster_candidate` using centralized helper.
+
+- 17:36Z
+  - Added `src/components/ReviewQueueModal.test.tsx` with targeted regression coverage:
+    - `player_name` confirm adds to roster and removes pending review.
+    - `player_name` edit updates session/team selections with dedupe and adds edited name to roster.
+    - `player_name` delete removes linked references from session + selected arrays.
+    - `roster_candidate` confirm regression remains intact.
+
+- 17:37Z
+  - Ran targeted validation:
+    - `npx vitest run src/components/ReviewQueueModal.test.tsx`
+    - `npx eslint src/components/ReviewQueueModal.tsx src/components/ReviewQueueModal.test.tsx`
+    - `npm run -s typecheck`
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `IQR-PLAYERNAME-001#1/#2/#3/#4` | Owner: `builder`
+  - Delta:
+    - fixed Intelligence Review `player_name` confirm/edit/delete behavior for roster/session consistency,
+    - added targeted regression tests and validation evidence.
+  - Evidence pointers:
+    - `src/components/ReviewQueueModal.tsx`
+    - `src/components/ReviewQueueModal.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure for `IQR-PLAYERNAME-001`.
+- `PM Response` | `APPROVED`
+  - Reason: scoped behavior fix completed with passing targeted tests/lint/typecheck and no schema/API changes.
+
+---
+
+## 2026-02-16 - POSTMATCH-OCR-GATE-002
+- Scope: disable auto OCR on result click and require explicit user confirmation to process queued OCR.
+
+## Work Entries
+- 17:39Z
+  - Added intake + task plan entries for `POSTMATCH-OCR-GATE-002`.
+  - Claimed lock for `src/components/recording/ActionPanel.test.tsx` (runtime `ActionPanel.tsx` lock already owned by builder lane).
+  - Confirmed current root cause in `ActionPanel.initiateSubmission(...)`:
+    - `processAllStored(...)` auto-runs when queued OCR exists and no pending merged data.
+
+- 17:41Z
+  - Updated `src/components/recording/ActionPanel.tsx`:
+    - Removed automatic `processAllStored(...)` call from result-submit path.
+    - Added blocking OCR decision prompt state (`ocrDecisionPrompt`) and modal UI.
+    - Added explicit actions:
+      - `Cancel`
+      - `Continue Without OCR` -> wizard opens immediately.
+      - `Process OCR and Review` -> runs OCR only after click, then opens OCR gate if data exists.
+    - Added fallback toast + wizard continuation if processing yields no review data.
+
+- 17:42Z
+  - Updated `src/components/recording/ActionPanel.test.tsx`:
+    - Added `getPendingData` in smart-capture mock.
+    - Added regression tests for:
+      - blocking prompt appears instead of auto-processing,
+      - continue-without-OCR path opens wizard,
+      - explicit process path runs OCR and dispatches `submission:ocr-gate`.
+
+- 17:43Z
+  - Ran targeted validation:
+    - `npx vitest run src/components/recording/ActionPanel.test.tsx`
+    - `npx eslint src/components/recording/ActionPanel.tsx src/components/recording/ActionPanel.test.tsx`
+    - `npm run -s typecheck`
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `POSTMATCH-OCR-GATE-002#1/#2/#3/#4` | Owner: `builder`
+  - Delta:
+    - result buttons no longer auto-trigger OCR processing,
+    - explicit blocking OCR decision prompt added with process/continue paths,
+    - targeted regression tests added and passing.
+  - Evidence pointers:
+    - `src/components/recording/ActionPanel.tsx`
+    - `src/components/recording/ActionPanel.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure for `POSTMATCH-OCR-GATE-002`.
+- `PM Response` | `APPROVED`
+  - Reason: requested runtime flow change delivered with narrow scope and clean validation.
+
+---
+
+## 2026-02-16 - POSTMATCH-TELEMETRY-PROMPT-003
+- Scope: align telemetry post-match prompt result flow with explicit OCR gating behavior from Recording submission path.
+
+## Work Entries
+- 17:48Z
+  - Added intake/plan entries for `POSTMATCH-TELEMETRY-PROMPT-003`.
+  - Claimed temporary lock for `src/App.tsx`.
+  - Confirmed root inconsistency:
+    - telemetry prompt result handling in `App.tsx` dispatched `submission:open-result` only when already on Recording view.
+    - non-recording views used direct `setShowWizard(result)`, bypassing the explicit OCR decision gate in `ActionPanel`.
+
+- 17:49Z
+  - Updated `src/App.tsx` telemetry result flow:
+    - added `telemetryDraftPendingResult` handoff state.
+    - when telemetry result is chosen from non-recording views, app now:
+      - stores pending result,
+      - switches to `recording`,
+      - dispatches `submission:open-result` after Recording becomes active.
+    - when already on Recording, result still dispatches directly to `submission:open-result`.
+
+- 17:50Z
+  - Updated telemetry post-match prompt copy and toast messaging to explicitly state OCR is manual and requires explicit process action in Recording.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `POSTMATCH-TELEMETRY-PROMPT-003#1/#2/#3/#4` | Owner: `builder`
+  - Delta:
+    - telemetry prompt result actions now always route through Recording event flow,
+    - non-recording path now performs view-switch handoff before dispatch,
+    - copy now explicitly clarifies OCR is manual (no auto-start).
+  - Evidence pointers:
+    - `src/App.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve this scoped routing/copy fix as the next one-at-a-time OCR-flow item.
+- `PM Response` | `APPROVED`
+  - Reason: keeps scope narrow while eliminating the bypass path and preserving existing Recording OCR gate logic.
+
+---
+
+## 2026-02-16 - OCR-TEAM-CAP-GUARD-004
+- Scope: prevent OCR/session teammate over-registration by enforcing central cap + dedupe guard in form slice setter path.
+
+## Work Entries
+- 17:53Z
+  - Added intake/plan entries for `OCR-TEAM-CAP-GUARD-004`.
+  - Claimed locks for:
+    - `src/store/slices/createFormSlice.ts`
+    - `src/store/slices/__tests__/createFormSlice.test.ts`
+  - Confirmed root gap:
+    - `setSelectedTeammates` previously accepted unbounded arrays from OCR/session updaters.
+    - capacity guard existed in `toggleTeammate` only, allowing OCR-style bulk updates to exceed limits.
+
+- 17:54Z
+  - Updated `src/store/slices/createFormSlice.ts`:
+    - added `sanitizeTeammates(...)` helper (trim, case-insensitive dedupe, ship-capacity cap).
+    - wired `setSelectedTeammates` through sanitizer so all callers are normalized.
+    - updated `toggleTeammate` to use case-insensitive duplicate detection and sanitizer path.
+    - updated `setActiveShip` teammate trimming to use the same sanitizer for consistency.
+
+- 17:55Z
+  - Updated `src/store/slices/__tests__/createFormSlice.test.ts`:
+    - added regression test for case-insensitive dedupe + cap via `setSelectedTeammates`.
+    - added regression test proving updater-style OCR append cannot overflow teammate cap.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-TEAM-CAP-GUARD-004#1/#2/#3/#4` | Owner: `builder`
+  - Delta:
+    - centralized teammate normalization now guards all setter paths against OCR over-registration,
+    - added regression coverage for dedupe/cap behavior in direct and updater setter calls.
+  - Evidence pointers:
+    - `src/store/slices/createFormSlice.ts`
+    - `src/store/slices/__tests__/createFormSlice.test.ts`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve this scoped guardrail fix for the "13 teammates from OCR" issue.
+- `PM Response` | `APPROVED`
+  - Reason: centralized guard reduces regression risk across all OCR/session teammate entry points with passing focused validation.
+
+---
+
+## 2026-02-16 - REMAINING-UX-TELEMETRY-005
+- Scope: close remaining user-reported issues around wizard loadout entry, telemetry loadout auto-selection visibility, and OCR opponent color/team dedupe behavior.
+
+## Work Entries
+- 18:01Z
+  - Added intake/plan entries for `REMAINING-UX-TELEMETRY-005`.
+  - Claimed locks for:
+    - `src/hooks/useLogMonitor.ts`
+    - `src/components/Wizard.tsx`
+    - `src/App.tsx`
+    - `src/components/recording/ActionPanel.test.tsx`
+  - Confirmed remaining gap clusters:
+    - wizard had no manual weapon/equipment loadout inputs,
+    - telemetry loadout auto-apply populated weapons only and lacked explicit auto-selection labels for loadout slots,
+    - OCR opponent team colors could collapse into shared/unknown buckets with duplicate player fanout.
+
+- 18:03Z
+  - Updated central form guardrails in `src/store/slices/createFormSlice.ts`:
+    - added opponent dedupe normalization in `setSelectedOpponents` (case-insensitive).
+    - updated `toggleOpponent` to case-insensitive remove/add behavior with sanitize path.
+  - Added regression test in `src/store/slices/__tests__/createFormSlice.test.ts` for case-insensitive opponent dedupe.
+
+- 18:04Z
+  - Updated telemetry loadout path in `src/hooks/useLogMonitor.ts`:
+    - auto-selection now applies to both `weapons` and `equipment` loadout slots.
+    - previous telemetry loadout slots are cleaned safely when replaced.
+    - existing non-loadout counters remain preserved when possible.
+
+- 18:04Z
+  - Updated telemetry indicator copy in `src/components/recording/ActionPanel.tsx`:
+    - added explicit `(auto)` labels for telemetry-detected `Weapons` and `Equipment`.
+  - Added regression assertion in `src/components/recording/ActionPanel.test.tsx` for auto-selection labels.
+
+- 18:05Z
+  - Updated wizard in `src/components/Wizard.tsx`:
+    - added manual `Ship Loadout` inputs (`Weapon 1/2`, `Equipment 1/2`).
+    - inputs persist into `pendingMatchData.loadout` and flow into final submission.
+
+- 18:06Z
+  - Updated OCR apply mapping in `src/App.tsx`:
+    - added team-color normalization with fallback assignment to avoid unknown-color collapsing.
+    - deduped resolved opponent players and suppressed duplicate fanout across structured opponent teams.
+    - updated session-team merge to case-insensitive duplicate protection.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `REMAINING-UX-TELEMETRY-005#1/#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - wizard now supports manual loadout slot entry,
+    - telemetry now auto-applies both weapons and equipment and labels them as auto-selected in recording panel,
+    - OCR opponent-team apply now normalizes team colors and suppresses obvious duplicate player fanout.
+  - Evidence pointers:
+    - `src/hooks/useLogMonitor.ts`
+    - `src/components/recording/ActionPanel.tsx`
+    - `src/components/recording/ActionPanel.test.tsx`
+    - `src/components/Wizard.tsx`
+    - `src/App.tsx`
+    - `src/store/slices/createFormSlice.ts`
+    - `src/store/slices/__tests__/createFormSlice.test.ts`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of the remaining open issues for this pass.
+- `PM Response` | `APPROVED`
+  - Reason: targeted runtime/UI updates address remaining reported gaps with passing focused tests/lint/typecheck.
+
+---
+
+## 2026-02-17 - AUDIT-REMEDIATION-001
+- Scope: implement audited hardening plan for storage/IPC type safety, dashboard layout typing, telemetry archive normalization, and release gate evidence.
+
+## Work Entries
+- 18:20Z
+  - Resumed from partial implementation state and ran `npm run -s typecheck` to identify remaining compile blockers.
+  - Confirmed active failures in:
+    - `src/components/DashboardLayout.tsx`
+    - `src/components/SimulatorPanel.tsx`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/hooks/useSmartCapture.ts`
+    - `src/utils/storage.ts`
+
+- 18:23Z
+  - Updated `src/utils/artifactService.ts`:
+    - introduced typed `RerunOcrResult` return contract for `rerunOCROnArtifact(...)`,
+    - normalized structured/legacy OCR IPC payloads into consistent `success/data/error` shape,
+    - retained canonical telemetry archive collection output shape (`TelemetryArchiveEvent[][]`).
+
+- 18:24Z
+  - Updated `src/components/DashboardLayout.tsx`:
+    - migrated drag/resize props to `react-grid-layout` v2 API (`dragConfig`, `resizeConfig`),
+    - removed stale typing assumptions that required `isDraggable`/`isResizable`,
+    - fixed width-provider typing so outer component no longer requires a `width` prop.
+
+- 18:25Z
+  - Updated `src/components/SimulatorPanel.tsx`:
+    - switched simulation timestamp arithmetic to normalized numeric timestamps via `getTelemetryEventTimestamp(...)`,
+    - removed unsafe arithmetic on optional union timestamp fields.
+
+- 18:27Z
+  - Updated `src/components/SmartCapturesPanel.tsx`:
+    - added typed rerun result envelope (`RerunResultWithMeta`),
+    - narrowed successful OCR rerun results via type guard before merge path access,
+    - normalized telemetry timestamp rendering guard for `Date(...)` conversion safety.
+
+- 18:28Z
+  - Updated `src/utils/storage.ts`:
+    - resolved strict cast blockers with explicit unknown-to-target boundary casts,
+    - tightened `applyUidSeed(...)` merged data typing so `uidMappings/uidSeedState/storageMeta` are guaranteed in local migration flow,
+    - corrected interval handle typing mismatch in renderer environment.
+
+- 18:31Z
+  - Updated `src/utils/__tests__/artifactService.test.ts`:
+    - aligned telemetry assertion to canonical nested telemetry archive shape (`TelemetryArchiveEvent[][]`).
+
+- 18:32Z
+  - Ran release gates and confirmed clean outcomes:
+    - `npm run -s test`
+    - `npm run -s typecheck`
+    - `npm run -s build`
+    - `npx eslint src/components/DashboardLayout.tsx src/components/SimulatorPanel.tsx src/components/SmartCapturesPanel.tsx src/utils/artifactService.ts src/utils/storage.ts src/utils/__tests__/artifactService.test.ts`
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `AUDIT-REMEDIATION-001#2/#3/#4/#5/#6` | Owner: `builder`
+  - Delta:
+    - storage/IPC boundaries hardened and compile-safe,
+    - dashboard layout typing aligned to current `react-grid-layout` API (no suppressions),
+    - telemetry archive consumption unified to canonical shape with typed guards,
+    - release gate commands executed and passing.
+  - Evidence pointers:
+    - `src/utils/artifactService.ts`
+    - `src/utils/storage.ts`
+    - `src/components/DashboardLayout.tsx`
+    - `src/components/SimulatorPanel.tsx`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/utils/__tests__/artifactService.test.ts`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of audited remediation plan `AUDIT-REMEDIATION-001`.
+- `PM Response` | `APPROVED`
+  - Reason: remediation scope delivered with green test/typecheck/build gates and canonical telemetry/storage boundary hardening in place.
+
+---
+
+## 2026-02-17 - AUDIT-REMEDIATION-002
+- Scope: second type-safety pass focused on runtime OCR/session/review flow `any` reduction without behavior changes.
+
+## Work Entries
+- 19:05Z
+  - Added intake/plan lock entries for `AUDIT-REMEDIATION-002`.
+  - Scoped work to runtime OCR/session files only:
+    - `src/hooks/useSmartCapture.ts`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/components/recording/ActionPanel.tsx`
+    - `src/components/ReviewQueueModal.tsx`
+    - `src/providers/GameDataProvider.tsx`
+    - `src/store/slices/createFormSlice.ts`
+
+- 19:10Z
+  - Updated `src/hooks/useSmartCapture.ts`:
+    - replaced smart-scan/result-path `any` with `SmartScanResult`, `LobbyScanResult`, and typed OCR rerun result envelopes,
+    - removed unsafe casts in teammate/opponent inference and history reconciliation,
+    - tightened batch OCR result merge path with explicit data narrowing.
+
+- 19:13Z
+  - Updated `src/components/SmartCapturesPanel.tsx`:
+    - removed explicit `any` from bulk and per-match OCR rerun merges,
+    - added typed modifier normalization helper and safer mergeStats shaping,
+    - replaced raw mode casts with typed `CaptureMode`/`OcrMode` guards,
+    - replaced `jsonExport.payload: any` with `unknown`,
+    - removed typed `any` annotations in telemetry/timeline/review rendering paths.
+
+- 19:15Z
+  - Updated `src/components/recording/ActionPanel.tsx`:
+    - replaced `onSmartCaptureData` callback payload `any` with `OCRExtractedData`,
+    - removed `any`-based submission state access/casts and introduced typed snapshot fallback logic.
+
+- 19:18Z
+  - Updated `src/components/ReviewQueueModal.tsx`:
+    - introduced typed `ReviewItem` union (`PendingReview` + unknown-id + learning-review entries),
+    - replaced `review: any` handlers and suggestion map typing with explicit union guards.
+
+- 19:20Z
+  - Updated shared interfaces:
+    - `src/providers/GameDataProvider.tsx`: replaced `timelineEvents`/`pendingReviews` `any` types with `TimelineEvent[]` and `PendingReview[]`.
+    - `src/store/slices/createFormSlice.ts`: replaced `pendingMatchData: any` with `Partial<Match> | null`.
+
+- 19:23Z
+  - Validation iteration:
+    - `typecheck` initially failed once on narrowed optional OCR data access in `useSmartCapture`; patched with explicit local narrowing.
+    - full `test` initially failed for `ActionPanel` test mocks due direct `useAppStore.getState()` assumption; patched with typed optional `getState` fallback (no behavior/runtime regression).
+    - reran focused + full gates to green.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `AUDIT-REMEDIATION-002#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - removed explicit `any` usage from targeted runtime OCR/session files,
+    - replaced key handler/callback/store-access paths with explicit narrow types and guards,
+    - preserved behavior and restored all tests after mock-compat fallback adjustment.
+  - Evidence pointers:
+    - `src/hooks/useSmartCapture.ts`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/components/recording/ActionPanel.tsx`
+    - `src/components/ReviewQueueModal.tsx`
+    - `src/providers/GameDataProvider.tsx`
+    - `src/store/slices/createFormSlice.ts`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of second-pass runtime typing cleanup `AUDIT-REMEDIATION-002`.
+- `PM Response` | `APPROVED`
+  - Reason: focused runtime typing cleanup completed with all validation gates passing and no scope drift into analytics/dev-only modules.
+
+---
+
+## 2026-02-17 - AUDIT-REMEDIATION-003
+- Scope: follow-up telemetry runtime typing hardening in `App`, `useLogMonitor`, and UI telemetry status contracts.
+
+## Work Entries
+- 18:57Z
+  - Added intake/plan records and claimed locks for:
+    - `src/hooks/useLogMonitor.ts`
+    - `src/App.tsx`
+    - `src/store/slices/createUISlice.ts`
+    - `src/providers/UIStateProvider.tsx`
+  - Confirmed narrow scope: remove high-risk explicit `any` from telemetry runtime status/event paths only.
+
+- 19:00Z
+  - Updated `src/hooks/useLogMonitor.ts`:
+    - added typed telemetry event/status helpers (`TelemetryEventEnvelope`, payload extraction, record guards),
+    - replaced explicit `any` status/event/loadout variables with `unknown` + narrowing,
+    - preserved existing loadout resolution behavior while hardening nested payload/context reads.
+
+- 19:02Z
+  - Updated `src/App.tsx`:
+    - removed explicit `any` in lazy module typing, idle-callback access, telemetry retention normalization, and prune error handling,
+    - introduced typed record/numeric coercion helpers for telemetry prune status/result parsing.
+
+- 19:02Z
+  - Updated telemetry status contracts:
+    - `src/store/slices/createUISlice.ts`: exported `TelemetryStatusState`, changed `setTelemetryStatus` payload to `Partial<TelemetryStatusState>`.
+    - `src/providers/UIStateProvider.tsx`: aligned context telemetry status and setter signatures with `TelemetryStatusState`.
+
+- 19:03Z
+  - Validation pass:
+    - initial `typecheck` failed once on `WindowWithIdleCallbacks` extending `Window` with optional `cancelIdleCallback`; fixed by using standalone optional callback interface.
+    - reran focused and full validation gates to green.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `AUDIT-REMEDIATION-003#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - removed explicit runtime `any` in telemetry event/status handling for `useLogMonitor` and `App`,
+    - introduced typed telemetry status state contract across UI slice/provider,
+    - kept scope constrained to telemetry runtime typing hardening only.
+  - Evidence pointers:
+    - `src/hooks/useLogMonitor.ts`
+    - `src/App.tsx`
+    - `src/store/slices/createUISlice.ts`
+    - `src/providers/UIStateProvider.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of telemetry runtime hardening pass `AUDIT-REMEDIATION-003`.
+- `PM Response` | `APPROVED`
+  - Reason: targeted telemetry runtime typing cleanup delivered with focused and full validation gates passing.
+
+---
+
+## 2026-02-17 - AUDIT-REMEDIATION-004
+- Scope: close remaining partials from audit matrix (deterministic opponent team colors and optional background OCR-after-result mode).
+
+## Work Entries
+- 19:08Z
+  - Added intake, plan, and locks for AUDIT-REMEDIATION-004.
+  - Confirmed implementation targets:
+    - deterministic opponent color assignment in OCR apply paths,
+    - optional background OCR processing after result click.
+
+- 19:15Z
+  - Added shared deterministic color helper and tests:
+    - src/utils/ocr/teamColorAssignment.ts
+    - src/utils/ocr/__tests__/teamColorAssignment.test.ts
+  - Helper behavior includes:
+    - color normalization,
+    - deterministic fallback assignment,
+    - player-based color hint anchoring.
+
+- 19:21Z
+  - Integrated deterministic assignment into OCR apply surfaces:
+    - src/App.tsx now uses shared helper with sessionTeams player color hints.
+    - src/components/SmartCapturesPanel.tsx apply and reprocess paths now assign deterministic colors and dedupe players before writing opponentTeams.
+
+- 19:24Z
+  - Added persisted result-flow setting and UI wiring:
+    - src/store/slices/createSettingsSlice.ts added resultOcrFlowMode (prompt | background).
+    - src/store/useAppStore.ts hydration and persistence mapping updated.
+    - src/components/SettingsModal.tsx added Result Button OCR Flow control.
+
+- 19:25Z
+  - Updated result-submit behavior in src/components/recording/ActionPanel.tsx:
+    - prompt mode keeps existing blocking OCR decision dialog.
+    - background mode opens wizard immediately, runs queued OCR in background, and surfaces review data when ready.
+  - Added regression test in src/components/recording/ActionPanel.test.tsx for background mode.
+
+- 19:26Z
+  - Validation completed:
+    - focused tests, lint, and typecheck,
+    - full test and full build.
+
+## PM Feedback Cycle
+- PM-FEEDBACK-REQ | Step: AUDIT-REMEDIATION-004#1/#2/#3/#4/#5 | Owner: builder
+  - Delta:
+    - deterministic team-color assignment moved to shared helper and integrated in App and Smart Captures apply flows,
+    - optional background OCR-after-result mode added as persisted setting and ActionPanel runtime branch,
+    - targeted regression coverage added for helper and background result flow,
+    - focused and full validation gates are green.
+  - Evidence pointers:
+    - src/utils/ocr/teamColorAssignment.ts
+    - src/utils/ocr/__tests__/teamColorAssignment.test.ts
+    - src/App.tsx
+    - src/components/SmartCapturesPanel.tsx
+    - src/store/slices/createSettingsSlice.ts
+    - src/store/useAppStore.ts
+    - src/components/SettingsModal.tsx
+    - src/components/recording/ActionPanel.tsx
+    - src/components/recording/ActionPanel.test.tsx
+    - docs/agents/03_VALIDATION.md
+  - Review ask: approve closure of AUDIT-REMEDIATION-004.
+- PM Response | APPROVED
+  - Reason: remaining partials are implemented with deterministic behavior and full validation evidence.

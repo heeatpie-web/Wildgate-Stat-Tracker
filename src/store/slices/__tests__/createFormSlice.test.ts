@@ -55,6 +55,19 @@ describe('createFormSlice', () => {
 
   // ── toggleOpponent ──
 
+  describe('setSelectedTeammates', () => {
+    it('dedupes case-insensitively and enforces teammate cap', () => {
+      store.getState().setSelectedTeammates(['Alice', 'alice', 'Bob', 'Charlie', 'Delta']);
+      expect(store.getState().selectedTeammates).toEqual(['Alice', 'Bob', 'Charlie']);
+    });
+
+    it('prevents updater-based OCR inputs from overflowing teammate cap', () => {
+      store.getState().setSelectedTeammates(['A', 'B', 'C']);
+      store.getState().setSelectedTeammates((curr) => [...curr, 'D', 'E', 'F']);
+      expect(store.getState().selectedTeammates).toEqual(['A', 'B', 'C']);
+    });
+  });
+
   describe('toggleOpponent', () => {
     it('adds and removes opponents without capacity limit', () => {
       store.getState().toggleOpponent('E1');
@@ -62,6 +75,13 @@ describe('createFormSlice', () => {
       expect(store.getState().selectedOpponents).toHaveLength(2);
       store.getState().toggleOpponent('E1');
       expect(store.getState().selectedOpponents).toEqual(['E2']);
+    });
+
+    it('dedupes opponents case-insensitively in setter and toggle', () => {
+      store.getState().setSelectedOpponents(['Enemy', 'enemy', 'ENEMY', 'Bandit']);
+      expect(store.getState().selectedOpponents).toEqual(['Enemy', 'Bandit']);
+      store.getState().toggleOpponent('enemy');
+      expect(store.getState().selectedOpponents).toEqual(['Bandit']);
     });
   });
 

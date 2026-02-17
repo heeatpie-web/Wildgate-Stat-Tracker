@@ -653,3 +653,248 @@
 - Command: `npm run -s typecheck`
   - Result: PASS
   - Evidence: TypeScript compile completed with no errors after Smart Captures delete controls and OCR popup enhancements.
+
+---
+
+## Validation - 2026-02-16 - IQR-PLAYERNAME-001
+- Command: `npx vitest run src/components/ReviewQueueModal.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 1 test file passed.
+    - 4 tests passed.
+    - Confirms `player_name` confirm/edit/delete behavior and `roster_candidate` confirm regression safety.
+
+- Command: `npx eslint src/components/ReviewQueueModal.tsx src/components/ReviewQueueModal.test.tsx`
+  - Result: PASS
+  - Evidence: no lint violations in touched modal and new regression test file.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no errors after `ReviewQueueModal` behavior updates and new tests.
+
+---
+
+## Validation - 2026-02-16 - POSTMATCH-OCR-GATE-002
+- Command: `npx vitest run src/components/recording/ActionPanel.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 1 test file passed.
+    - 12 tests passed.
+    - Includes new regression coverage for explicit OCR decision prompt and non-auto OCR result flow.
+
+- Command: `npx eslint src/components/recording/ActionPanel.tsx src/components/recording/ActionPanel.test.tsx`
+  - Result: PASS
+  - Evidence: no lint violations in touched runtime + test files.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no errors after result-flow prompt changes.
+
+---
+
+## Validation - 2026-02-16 - POSTMATCH-TELEMETRY-PROMPT-003
+- Command: `npx eslint src/App.tsx`
+  - Result: PASS
+  - Evidence: no lint violations after telemetry prompt routing + copy updates.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no errors after `App.tsx` flow changes.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - telemetry post-match result selection now always funnels into `submission:open-result`.
+    - non-recording telemetry result selection now switches to Recording first, then dispatches the result event.
+    - post-match prompt copy explicitly states OCR remains manual until explicit process action.
+
+---
+
+## Validation - 2026-02-16 - OCR-TEAM-CAP-GUARD-004
+- Command: `npx vitest run src/store/slices/__tests__/createFormSlice.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 1 test file passed.
+    - 19 tests passed.
+    - Includes new regression coverage for `setSelectedTeammates` dedupe/cap guard behavior.
+
+- Command: `npx eslint src/store/slices/createFormSlice.ts src/store/slices/__tests__/createFormSlice.test.ts`
+  - Result: PASS
+  - Evidence: no lint violations in touched slice + regression test files.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no errors after teammate guard changes.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - any `setSelectedTeammates` call now applies trim + case-insensitive dedupe + ship-capacity capping.
+    - updater-style OCR append patterns can no longer persist teammate lists above cap.
+
+---
+
+## Validation - 2026-02-16 - REMAINING-UX-TELEMETRY-005
+- Command: `npx vitest run src/components/recording/ActionPanel.test.tsx src/store/slices/__tests__/createFormSlice.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 2 test files passed.
+    - 33 tests passed.
+    - Includes new regression assertions for telemetry auto-loadout labels and opponent dedupe behavior.
+
+- Command: `npx eslint src/hooks/useLogMonitor.ts src/components/recording/ActionPanel.tsx src/components/recording/ActionPanel.test.tsx src/components/Wizard.tsx src/App.tsx src/store/slices/createFormSlice.ts src/store/slices/__tests__/createFormSlice.test.ts`
+  - Result: PASS
+  - Evidence: no lint violations in touched telemetry/wizard/OCR/state-guard files.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no errors after this remaining-issues patch set.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - telemetry loadout apply now drives both weapons and equipment auto-selection state.
+    - recording telemetry panel now explicitly marks loadout rows as auto-selected (`(auto)`).
+    - wizard loadout inputs write into `pendingMatchData.loadout`, which submission path prioritizes.
+    - OCR apply path now normalizes/falls back opponent team colors and suppresses duplicate cross-team player fanout.
+
+---
+
+## Validation - 2026-02-17 - AUDIT-REMEDIATION-001
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile completes with zero errors after storage/IPC/layout/telemetry hardening patches.
+
+- Command: `npx eslint src/components/DashboardLayout.tsx src/components/SimulatorPanel.tsx src/components/SmartCapturesPanel.tsx src/utils/artifactService.ts src/utils/storage.ts src/utils/__tests__/artifactService.test.ts`
+  - Result: PASS
+  - Evidence:
+    - No lint violations across all files directly touched in this remediation pass.
+
+- Command: `npm run -s test`
+  - Result: PASS
+  - Evidence:
+    - 32 test files passed.
+    - 392 tests passed.
+    - Includes updated telemetry-shape assertion in `src/utils/__tests__/artifactService.test.ts`.
+
+- Command: `npm run -s build`
+  - Result: PASS
+  - Evidence:
+    - Vite production build completed successfully.
+    - Output bundles generated in `dist/` with no build-time type/runtime errors.
+
+- Regression note:
+  - Initial `npm run -s test` run in this task had one failing assertion in `src/utils/__tests__/artifactService.test.ts` due canonical telemetry nesting change.
+  - After updating expected shape to `TelemetryArchiveEvent[][]`, full test suite passed.
+
+---
+
+## Validation - 2026-02-17 - AUDIT-REMEDIATION-002
+- Command: `npx eslint src/hooks/useSmartCapture.ts src/components/SmartCapturesPanel.tsx src/components/recording/ActionPanel.tsx src/components/ReviewQueueModal.tsx src/providers/GameDataProvider.tsx src/store/slices/createFormSlice.ts`
+  - Result: PASS
+  - Evidence:
+    - No lint violations across all second-pass runtime typing targets.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile passes after replacing runtime-path `any` usage with explicit type guards/unions.
+
+- Command: `npx vitest run src/components/recording/ActionPanel.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 1 file passed.
+    - 13 tests passed.
+    - Confirms submission-path behavior unchanged after typed store snapshot fallback update.
+
+- Command: `npm run -s test`
+  - Result: PASS
+  - Evidence:
+    - 32 test files passed.
+    - 392 tests passed.
+
+- Command: `npm run -s build`
+  - Result: PASS
+  - Evidence:
+    - Vite production build completed successfully with updated runtime typing.
+
+- Regression note:
+  - Intermediate full test run failed in `ActionPanel` tests when `resolveSubmissionMatchId()` switched to direct `useAppStore.getState()` access and test mocks did not provide `getState`.
+  - Resolved by using typed optional `getState` fallback logic in `ActionPanel`; re-ran targeted and full tests to PASS.
+
+---
+
+## Validation - 2026-02-17 - AUDIT-REMEDIATION-003
+- Command: `npx eslint src/hooks/useLogMonitor.ts src/App.tsx src/store/slices/createUISlice.ts src/providers/UIStateProvider.tsx`
+  - Result: PASS
+  - Evidence:
+    - No lint violations across touched telemetry runtime/status typing files.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile passes after telemetry runtime typing hardening updates.
+
+- Command: `npx vitest run src/components/recording/ActionPanel.test.tsx src/components/ReviewQueueModal.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 2 test files passed.
+    - 17 tests passed.
+
+- Command: `npm run -s test`
+  - Result: PASS
+  - Evidence:
+    - 32 test files passed.
+    - 392 tests passed.
+
+- Command: `npm run -s build`
+  - Result: PASS
+  - Evidence:
+    - Vite production build completed successfully after telemetry runtime type changes.
+
+- Command: `rg -n "\\bany\\b|as any" src/hooks/useLogMonitor.ts src/App.tsx`
+  - Result: PASS
+  - Evidence:
+    - no matches; explicit `any` usage removed from targeted runtime files.
+
+- Regression note:
+  - Initial `typecheck` in this pass failed once (`App.tsx`) due optional `cancelIdleCallback` incompatibility when extending `Window`.
+  - Resolved by switching to a standalone optional idle-callback interface and re-running validation to PASS.
+
+---
+
+## Validation - 2026-02-17 - AUDIT-REMEDIATION-004
+- Command: npm run -s test -- src/components/recording/ActionPanel.test.tsx src/utils/ocr/__tests__/teamColorAssignment.test.ts
+  - Result: PASS
+  - Evidence:
+    - 2 files passed.
+    - 18 tests passed.
+    - Includes new deterministic color-assignment helper coverage and background OCR result-flow coverage.
+
+- Command: npm run -s typecheck
+  - Result: PASS
+  - Evidence: TypeScript compile completed with no errors after adding resultOcrFlowMode and color helper integrations.
+
+- Command: npx eslint src/App.tsx src/components/SmartCapturesPanel.tsx src/components/recording/ActionPanel.tsx src/components/recording/ActionPanel.test.tsx src/components/SettingsModal.tsx src/store/slices/createSettingsSlice.ts src/store/useAppStore.ts src/utils/ocr/teamColorAssignment.ts src/utils/ocr/__tests__/teamColorAssignment.test.ts
+  - Result: PASS
+  - Evidence: no lint violations across touched implementation and test files.
+
+- Command: npm run -s test
+  - Result: PASS
+  - Evidence:
+    - 33 files passed.
+    - 397 tests passed.
+
+- Command: npm run -s build
+  - Result: PASS
+  - Evidence:
+    - Vite production build completed successfully.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - App OCR apply path now resolves opponent colors through shared deterministic helper with session-player color hints.
+    - Smart Captures apply/review paths now assign deterministic opponent colors and suppress duplicate player fanout by normalized key.
+    - ActionPanel result flow now supports persisted background OCR mode (prompt remains default).
+    - Settings modal exposes explicit Result Button OCR Flow mode selection and persistence.

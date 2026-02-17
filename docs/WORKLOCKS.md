@@ -19,6 +19,19 @@ Rules:
 
 | File | Owner | Started (UTC) | Purpose |
 |---|---|---|---|
+| `src/utils/storage.ts` | builder | 2026-02-17T01:15:29Z | AUDIT-REMEDIATION-001: harden storage typing and add one-time legacy migration marker handling |
+| `src/store/useAppStore.ts` | builder | 2026-02-17T01:15:29Z | AUDIT-REMEDIATION-001: tighten persisted state hydration typing and preserve storage metadata |
+| `src/utils/artifactService.ts` | builder | 2026-02-17T01:15:29Z | AUDIT-REMEDIATION-001: harden IPC result typing and canonicalize telemetry artifact payload shape |
+| `src/utils/telemetryArchive.ts` | builder | 2026-02-17T01:15:29Z | AUDIT-REMEDIATION-001: add shared telemetry archive normalization utility |
+| `src/components/DashboardLayout.tsx` | builder | 2026-02-17T01:15:29Z | AUDIT-REMEDIATION-001: remove @ts-ignore and replace layout any usage with explicit grid types |
+| `src/components/SimulatorPanel.tsx` | builder | 2026-02-17T01:15:29Z | AUDIT-REMEDIATION-001: normalize archive payload handling via shared utility |
+| `src/components/SmartCapturesPanel.tsx` | builder | 2026-02-17T01:15:29Z | AUDIT-REMEDIATION-001: consume canonical telemetry artifact arrays without per-call shape branching |
+| `docs/agents/00_INTAKE.md` | project-manager | 2026-02-17T01:15:29Z | AUDIT-REMEDIATION-001 intake and scope normalization |
+| `docs/agents/01_PLAN.md` | project-manager | 2026-02-17T01:15:29Z | AUDIT-REMEDIATION-001 step tracking and status updates |
+| `docs/agents/02_EXECUTION_LOG.md` | builder | 2026-02-17T01:15:29Z | AUDIT-REMEDIATION-001 execution lifecycle and PM feedback entries |
+| `docs/agents/03_VALIDATION.md` | verifier | 2026-02-17T01:15:29Z | AUDIT-REMEDIATION-001 validation command/results evidence |
+| `docs/agents/04_HANDOFF.md` | release-manager | 2026-02-17T01:15:29Z | AUDIT-REMEDIATION-001 final handoff summary |
+| `docs/agents/DECISIONS.md` | project-manager | 2026-02-17T01:15:29Z | AUDIT-REMEDIATION-001 technical scope and migration decisions |
 | `docs/agents/00_INTAKE.md` | project-manager | 2026-02-13T16:00:00Z | Lane A PM ownership; scope and intake control per 01_PLAN |
 | `docs/agents/01_PLAN.md` | project-manager | 2026-02-13T16:00:00Z | Lane A PM ownership; plan, steps, approvals, role assignment |
 | `docs/agents/DECISIONS.md` | project-manager | 2026-02-13T16:00:00Z | Lane A PM ownership; governance and arbitration |
@@ -53,6 +66,26 @@ Use this row format when claiming:
 
 | File | Owner | Started (UTC) | Released (UTC) | Purpose |
 |---|---|---|---|---|
+| `src/hooks/useLogMonitor.ts` | builder | 2026-02-17T18:57:00Z | 2026-02-17T19:04:00Z | AUDIT-REMEDIATION-003: remove high-risk telemetry event/loadout `any` usage in runtime monitor path |
+| `src/App.tsx` | builder | 2026-02-17T18:57:00Z | 2026-02-17T19:04:00Z | AUDIT-REMEDIATION-003: tighten telemetry prune/idle-callback typing and remove runtime `any` casts |
+| `src/store/slices/createUISlice.ts` | builder | 2026-02-17T18:57:00Z | 2026-02-17T19:04:00Z | AUDIT-REMEDIATION-003: replace telemetry status setter `any` with explicit typed partial payload |
+| `src/providers/UIStateProvider.tsx` | builder | 2026-02-17T18:57:00Z | 2026-02-17T19:04:00Z | AUDIT-REMEDIATION-003: align UI context telemetry status signatures with explicit status type |
+| `docs/agents/02_EXECUTION_LOG.md` | debugger | 2026-02-17T18:57:00Z | 2026-02-17T19:04:00Z | AUDIT-REMEDIATION-003 execution log and PM feedback cycle entries |
+| `docs/agents/03_VALIDATION.md` | verifier | 2026-02-17T18:57:00Z | 2026-02-17T19:04:00Z | AUDIT-REMEDIATION-003 validation evidence update |
+| `docs/agents/04_HANDOFF.md` | release-manager | 2026-02-17T18:57:00Z | 2026-02-17T19:04:00Z | AUDIT-REMEDIATION-003 handoff summary update |
+| `docs/agents/DECISIONS.md` | project-manager | 2026-02-17T18:57:00Z | 2026-02-17T19:04:00Z | AUDIT-REMEDIATION-003 scope and type-contract decisions |
+| `src/store/slices/createFormSlice.ts` | builder | 2026-02-16T18:01:11Z | 2026-02-16T18:05:48Z | REMAINING-UX-TELEMETRY-005: add opponent dedupe normalization in central setter/toggle paths |
+| `src/store/slices/__tests__/createFormSlice.test.ts` | builder | 2026-02-16T18:01:11Z | 2026-02-16T18:05:48Z | REMAINING-UX-TELEMETRY-005: add regression test for opponent dedupe behavior |
+| `src/hooks/useLogMonitor.ts` | builder | 2026-02-16T18:01:11Z | 2026-02-16T18:05:48Z | REMAINING-UX-TELEMETRY-005: ensure telemetry auto-select applies both weapons and equipment |
+| `src/components/Wizard.tsx` | builder | 2026-02-16T18:01:11Z | 2026-02-16T18:05:48Z | REMAINING-UX-TELEMETRY-005: add manual loadout slot inputs in wizard |
+| `src/App.tsx` | builder | 2026-02-16T18:01:11Z | 2026-02-16T18:05:48Z | REMAINING-UX-TELEMETRY-005: normalize OCR opponent team color mapping and duplicate suppression |
+| `src/components/recording/ActionPanel.test.tsx` | builder | 2026-02-16T18:01:11Z | 2026-02-16T18:05:48Z | REMAINING-UX-TELEMETRY-005: add regression assertion for telemetry loadout auto-indicator copy |
+| `src/store/slices/createFormSlice.ts` | builder | 2026-02-16T17:53:44Z | 2026-02-16T17:55:43Z | OCR-TEAM-CAP-GUARD-004: centralize teammate dedupe + capacity guard for OCR/session apply paths |
+| `src/store/slices/__tests__/createFormSlice.test.ts` | builder | 2026-02-16T17:53:44Z | 2026-02-16T17:55:43Z | OCR-TEAM-CAP-GUARD-004: add regression tests for capped/deduped teammate setter behavior |
+| `src/App.tsx` | builder | 2026-02-16T17:48:10Z | 2026-02-16T17:49:58Z | POSTMATCH-TELEMETRY-PROMPT-003: align telemetry post-match prompt result routing with explicit recording OCR gate flow |
+| `src/components/recording/ActionPanel.test.tsx` | builder | 2026-02-16T17:39:55Z | 2026-02-16T17:43:09Z | POSTMATCH-OCR-GATE-002: add regression coverage for non-auto OCR result flow |
+| `src/components/ReviewQueueModal.tsx` | builder | 2026-02-16T17:33:39Z | 2026-02-16T17:37:44Z | IQR-PLAYERNAME-001: fix player_name confirm/edit/delete behavior in Intelligence Review flow |
+| `src/components/ReviewQueueModal.test.tsx` | builder | 2026-02-16T17:33:39Z | 2026-02-16T17:37:44Z | IQR-PLAYERNAME-001: targeted regression tests for ReviewQueueModal player_name actions |
 | `src/hooks/useLogMonitor.ts` | debugger | 2026-02-15T17:00:00Z | 2026-02-15T17:16:00Z | Telemetry scope: add loadout weapon/equipment extraction + safer unknown registration |
 | `src/components/IdMapper.tsx` | debugger | 2026-02-15T17:00:00Z | 2026-02-15T17:16:00Z | Mapper scope: type-aware unknown-ID save routing to UID domain mappings |
 | `src/components/recording/ActionPanel.tsx` | debugger | 2026-02-15T17:00:00Z | 2026-02-15T17:16:00Z | Recording scope: show telemetry-detected weapons/equipment in status summary |
@@ -327,3 +360,64 @@ Lock Class:
 | docs/agents/03_VALIDATION.md | verifier | hot | 2026-02-16T22:15:36Z | 2026-02-16T22:15:36Z | OCR-CORRECTION-DELETE-002 lock released |
 | docs/agents/04_HANDOFF.md | release-manager | hot | 2026-02-16T22:15:36Z | 2026-02-16T22:15:36Z | OCR-CORRECTION-DELETE-002 lock released |
 | docs/agents/DECISIONS.md | project-manager | hot | 2026-02-16T22:15:36Z | 2026-02-16T22:15:36Z | OCR-CORRECTION-DELETE-002 lock released |
+| src/utils/artifactService.ts | builder | hot | 2026-02-17T18:20:00Z | 2026-02-17T19:00:00Z | AUDIT-REMEDIATION-001 typed OCR rerun contract + telemetry canonical boundary |
+| src/utils/storage.ts | builder | hot | 2026-02-17T18:20:00Z | 2026-02-17T19:00:00Z | AUDIT-REMEDIATION-001 storage type hardening + migration marker guarantees |
+| src/components/DashboardLayout.tsx | builder | hot | 2026-02-17T18:20:00Z | 2026-02-17T19:00:00Z | AUDIT-REMEDIATION-001 layout typing/API migration cleanup |
+| src/components/SimulatorPanel.tsx | builder | hot | 2026-02-17T18:20:00Z | 2026-02-17T19:00:00Z | AUDIT-REMEDIATION-001 telemetry timestamp normalization adoption |
+| src/components/SmartCapturesPanel.tsx | builder | hot | 2026-02-17T18:20:00Z | 2026-02-17T19:00:00Z | AUDIT-REMEDIATION-001 canonical telemetry + OCR rerun type narrowing |
+| src/utils/__tests__/artifactService.test.ts | verifier | hot | 2026-02-17T18:20:00Z | 2026-02-17T19:00:00Z | AUDIT-REMEDIATION-001 update telemetry shape assertion |
+| docs/agents/01_PLAN.md | project-manager | hot | 2026-02-17T18:33:00Z | 2026-02-17T19:00:00Z | AUDIT-REMEDIATION-001 completion status update |
+| docs/agents/02_EXECUTION_LOG.md | debugger | hot | 2026-02-17T18:33:00Z | 2026-02-17T19:00:00Z | AUDIT-REMEDIATION-001 execution log and PM feedback cycle update |
+| docs/agents/03_VALIDATION.md | verifier | hot | 2026-02-17T18:33:00Z | 2026-02-17T19:00:00Z | AUDIT-REMEDIATION-001 validation evidence update |
+| docs/agents/04_HANDOFF.md | release-manager | hot | 2026-02-17T18:33:00Z | 2026-02-17T19:00:00Z | AUDIT-REMEDIATION-001 handoff summary update |
+| docs/agents/DECISIONS.md | project-manager | hot | 2026-02-17T18:33:00Z | 2026-02-17T19:00:00Z | AUDIT-REMEDIATION-001 decision log update |
+| src/utils/artifactService.ts | builder | hot | 2026-02-17T18:36:00Z | 2026-02-17T18:36:00Z | AUDIT-REMEDIATION-001 lock released |
+| src/utils/storage.ts | builder | hot | 2026-02-17T18:36:00Z | 2026-02-17T18:36:00Z | AUDIT-REMEDIATION-001 lock released |
+| src/components/DashboardLayout.tsx | builder | hot | 2026-02-17T18:36:00Z | 2026-02-17T18:36:00Z | AUDIT-REMEDIATION-001 lock released |
+| src/components/SimulatorPanel.tsx | builder | hot | 2026-02-17T18:36:00Z | 2026-02-17T18:36:00Z | AUDIT-REMEDIATION-001 lock released |
+| src/components/SmartCapturesPanel.tsx | builder | hot | 2026-02-17T18:36:00Z | 2026-02-17T18:36:00Z | AUDIT-REMEDIATION-001 lock released |
+| src/utils/__tests__/artifactService.test.ts | verifier | hot | 2026-02-17T18:36:00Z | 2026-02-17T18:36:00Z | AUDIT-REMEDIATION-001 lock released |
+| docs/agents/01_PLAN.md | project-manager | hot | 2026-02-17T18:36:00Z | 2026-02-17T18:36:00Z | AUDIT-REMEDIATION-001 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | hot | 2026-02-17T18:36:00Z | 2026-02-17T18:36:00Z | AUDIT-REMEDIATION-001 lock released |
+| docs/agents/03_VALIDATION.md | verifier | hot | 2026-02-17T18:36:00Z | 2026-02-17T18:36:00Z | AUDIT-REMEDIATION-001 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | hot | 2026-02-17T18:36:00Z | 2026-02-17T18:36:00Z | AUDIT-REMEDIATION-001 lock released |
+| docs/agents/DECISIONS.md | project-manager | hot | 2026-02-17T18:36:00Z | 2026-02-17T18:36:00Z | AUDIT-REMEDIATION-001 lock released |
+| src/hooks/useSmartCapture.ts | builder | hot | 2026-02-17T19:05:00Z | 2026-02-17T20:00:00Z | AUDIT-REMEDIATION-002 typed smart-scan and OCR rerun flow cleanup |
+| src/components/SmartCapturesPanel.tsx | builder | hot | 2026-02-17T19:05:00Z | 2026-02-17T20:00:00Z | AUDIT-REMEDIATION-002 OCR rerun/result typing cleanup |
+| src/components/recording/ActionPanel.tsx | builder | hot | 2026-02-17T19:05:00Z | 2026-02-17T20:00:00Z | AUDIT-REMEDIATION-002 submission path any-removal cleanup |
+| src/components/ReviewQueueModal.tsx | builder | hot | 2026-02-17T19:05:00Z | 2026-02-17T20:00:00Z | AUDIT-REMEDIATION-002 pending-review type narrowing |
+| src/providers/GameDataProvider.tsx | builder | hot | 2026-02-17T19:05:00Z | 2026-02-17T20:00:00Z | AUDIT-REMEDIATION-002 context interface type tightening |
+| src/store/slices/createFormSlice.ts | builder | hot | 2026-02-17T19:05:00Z | 2026-02-17T20:00:00Z | AUDIT-REMEDIATION-002 pending match data typing cleanup |
+| docs/agents/00_INTAKE.md | project-manager | hot | 2026-02-17T19:05:00Z | 2026-02-17T20:00:00Z | AUDIT-REMEDIATION-002 intake record |
+| docs/agents/01_PLAN.md | project-manager | hot | 2026-02-17T19:05:00Z | 2026-02-17T20:00:00Z | AUDIT-REMEDIATION-002 plan record |
+| docs/agents/02_EXECUTION_LOG.md | debugger | hot | 2026-02-17T19:30:00Z | 2026-02-17T20:00:00Z | AUDIT-REMEDIATION-002 execution log update |
+| docs/agents/03_VALIDATION.md | verifier | hot | 2026-02-17T19:30:00Z | 2026-02-17T20:00:00Z | AUDIT-REMEDIATION-002 validation update |
+| docs/agents/04_HANDOFF.md | release-manager | hot | 2026-02-17T19:30:00Z | 2026-02-17T20:00:00Z | AUDIT-REMEDIATION-002 handoff update |
+| docs/agents/DECISIONS.md | project-manager | hot | 2026-02-17T19:30:00Z | 2026-02-17T20:00:00Z | AUDIT-REMEDIATION-002 decision entries |
+| src/hooks/useSmartCapture.ts | builder | hot | 2026-02-17T19:36:00Z | 2026-02-17T19:36:00Z | AUDIT-REMEDIATION-002 lock released |
+| src/components/SmartCapturesPanel.tsx | builder | hot | 2026-02-17T19:36:00Z | 2026-02-17T19:36:00Z | AUDIT-REMEDIATION-002 lock released |
+| src/components/recording/ActionPanel.tsx | builder | hot | 2026-02-17T19:36:00Z | 2026-02-17T19:36:00Z | AUDIT-REMEDIATION-002 lock released |
+| src/components/ReviewQueueModal.tsx | builder | hot | 2026-02-17T19:36:00Z | 2026-02-17T19:36:00Z | AUDIT-REMEDIATION-002 lock released |
+| src/providers/GameDataProvider.tsx | builder | hot | 2026-02-17T19:36:00Z | 2026-02-17T19:36:00Z | AUDIT-REMEDIATION-002 lock released |
+| src/store/slices/createFormSlice.ts | builder | hot | 2026-02-17T19:36:00Z | 2026-02-17T19:36:00Z | AUDIT-REMEDIATION-002 lock released |
+| docs/agents/00_INTAKE.md | project-manager | hot | 2026-02-17T19:36:00Z | 2026-02-17T19:36:00Z | AUDIT-REMEDIATION-002 lock released |
+| docs/agents/01_PLAN.md | project-manager | hot | 2026-02-17T19:36:00Z | 2026-02-17T19:36:00Z | AUDIT-REMEDIATION-002 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | hot | 2026-02-17T19:36:00Z | 2026-02-17T19:36:00Z | AUDIT-REMEDIATION-002 lock released |
+| docs/agents/03_VALIDATION.md | verifier | hot | 2026-02-17T19:36:00Z | 2026-02-17T19:36:00Z | AUDIT-REMEDIATION-002 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | hot | 2026-02-17T19:36:00Z | 2026-02-17T19:36:00Z | AUDIT-REMEDIATION-002 lock released |
+| docs/agents/DECISIONS.md | project-manager | hot | 2026-02-17T19:36:00Z | 2026-02-17T19:36:00Z | AUDIT-REMEDIATION-002 lock released |
+
+
+| src/App.tsx | builder | 2026-02-17T19:08:00Z | 2026-02-17T20:27:35Z | AUDIT-REMEDIATION-004 lock released |
+| src/components/SmartCapturesPanel.tsx | builder | 2026-02-17T19:08:00Z | 2026-02-17T20:27:35Z | AUDIT-REMEDIATION-004 lock released |
+| src/utils/ocr/teamColorAssignment.ts | builder | 2026-02-17T19:08:00Z | 2026-02-17T20:27:35Z | AUDIT-REMEDIATION-004 lock released |
+| src/utils/ocr/__tests__/teamColorAssignment.test.ts | verifier | 2026-02-17T19:08:00Z | 2026-02-17T20:27:35Z | AUDIT-REMEDIATION-004 lock released |
+| src/store/slices/createSettingsSlice.ts | builder | 2026-02-17T19:08:00Z | 2026-02-17T20:27:35Z | AUDIT-REMEDIATION-004 lock released |
+| src/store/useAppStore.ts | builder | 2026-02-17T19:08:00Z | 2026-02-17T20:27:35Z | AUDIT-REMEDIATION-004 lock released |
+| src/components/SettingsModal.tsx | ui-designer | 2026-02-17T19:08:00Z | 2026-02-17T20:27:35Z | AUDIT-REMEDIATION-004 lock released |
+| src/components/recording/ActionPanel.tsx | builder | 2026-02-17T19:08:00Z | 2026-02-17T20:27:35Z | AUDIT-REMEDIATION-004 lock released |
+| src/components/recording/ActionPanel.test.tsx | verifier | 2026-02-17T19:08:00Z | 2026-02-17T20:27:35Z | AUDIT-REMEDIATION-004 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-17T19:08:00Z | 2026-02-17T20:27:35Z | AUDIT-REMEDIATION-004 lock released |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-17T19:08:00Z | 2026-02-17T20:27:35Z | AUDIT-REMEDIATION-004 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-17T19:08:00Z | 2026-02-17T20:27:35Z | AUDIT-REMEDIATION-004 lock released |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-17T19:08:00Z | 2026-02-17T20:27:35Z | AUDIT-REMEDIATION-004 lock released |

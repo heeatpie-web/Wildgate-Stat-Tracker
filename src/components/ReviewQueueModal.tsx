@@ -3,10 +3,41 @@ import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { Check, X, Edit2, AlertTriangle, Trash2 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
+import type { PendingReview } from '../store/slices/createDataSlice';
 
 interface ReviewQueueModalProps {
     onClose: () => void;
 }
+
+interface UnknownReviewItem {
+    id: string;
+    value: string;
+    context: string;
+    type: 'unknown_id';
+    originalConfidence: number;
+    isUnknown: true;
+}
+
+interface LearningReviewItem {
+    id: string;
+    value: string;
+    rawValue: string;
+    suggestedName: string;
+    context: string;
+    type: 'ocr_learning_review';
+    originalConfidence: number;
+    isLearning: true;
+    learningEventId: string;
+    explanation: string[];
+}
+
+type ReviewItem = PendingReview | UnknownReviewItem | LearningReviewItem;
+
+const isUnknownReview = (review: ReviewItem): review is UnknownReviewItem =>
+    review.type === 'unknown_id';
+
+const isLearningReview = (review: ReviewItem): review is LearningReviewItem =>
+    review.type === 'ocr_learning_review';
 
 export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) => {
     const {
@@ -30,7 +61,23 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState("");
 
-    const unknownItems = Object.entries(detectedUnknowns).map(([id, data]) => ({
+    const normalizeName = (value: string) => value.trim();
+    const namesEqual = (a: string, b: string) => normalizeName(a).toLowerCase() === normalizeName(b).toLowerCase();
+    const dedupeNames = (names: string[]) => {
+        const seen = new Set<string>();
+        const out: string[] = [];
+        names.forEach((name) => {
+            const normalized = normalizeName(name);
+            if (!normalized) return;
+            const key = normalized.toLowerCase();
+            if (seen.has(key)) return;
+            seen.add(key);
+            out.push(normalized);
+        });
+        return out;
+    };
+
+    const unknownItems: UnknownReviewItem[] = Object.entries(detectedUnknowns).map(([id, data]) => ({
         id,
         value: `Unknown ${data.type} (${id.substring(0, 5)})`,
         context: `New ${data.type} Discovered`,
@@ -39,7 +86,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         isUnknown: true
     }));
 
-    const learningItems = (ocrLearningQueue || []).map((item) => ({
+    const learningItems: LearningReviewItem[] = (ocrLearningQueue || []).map((item) => ({
         id: item.id,
         value: `${item.rawText} -> ${item.suggestedName}`,
         rawValue: item.rawText,
@@ -52,35 +99,63 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         explanation: item.explanation || [],
     }));
 
-    const allItems = [...learningItems, ...pendingReviews, ...unknownItems];
+    const allItems: ReviewItem[] = [...learningItems, ...pendingReviews, ...unknownItems];
 
     const replaceNameInSession = (oldName: string, newName: string) => {
-        if (oldName === newName) return;
+        const normalizedOld = normalizeName(oldName);
+        const normalizedNew = normalizeName(newName);
+        if (!normalizedOld || !normalizedNew) return;
+        if (namesEqual(normalizedOld, normalizedNew)) return;
+
         const newTeams = { ...sessionTeams };
         Object.keys(newTeams).forEach(color => {
-            newTeams[color] = newTeams[color].map(n => n === oldName ? newName : n);
+            const names = Array.isArray(newTeams[color]) ? newTeams[color] : [];
+            newTeams[color] = dedupeNames(names.map(n => namesEqual(n, normalizedOld) ? normalizedNew : n));
         });
         setSessionTeams(newTeams);
-        setSelectedTeammates(selectedTeammates.map(n => n === oldName ? newName : n));
-        setSelectedOpponents(selectedOpponents.map(n => n === oldName ? newName : n));
+        setSelectedTeammates(dedupeNames(selectedTeammates.map(n => namesEqual(n, normalizedOld) ? normalizedNew : n)));
+        setSelectedOpponents(dedupeNames(selectedOpponents.map(n => namesEqual(n, normalizedOld) ? normalizedNew : n)));
     };
 
-    const handleConfirm = (review: any) => {
-        if (review.isUnknown) {
+    const removeNameFromSession = (targetName: string) => {
+        const normalizedTarget = normalizeName(targetName);
+        if (!normalizedTarget) return;
+
+        const newTeams = { ...sessionTeams };
+        Object.keys(newTeams).forEach(color => {
+            const names = Array.isArray(newTeams[color]) ? newTeams[color] : [];
+            newTeams[color] = dedupeNames(names.filter(n => !namesEqual(n, normalizedTarget)));
+        });
+        setSessionTeams(newTeams);
+        setSelectedTeammates(dedupeNames(selectedTeammates.filter(n => !namesEqual(n, normalizedTarget))));
+        setSelectedOpponents(dedupeNames(selectedOpponents.filter(n => !namesEqual(n, normalizedTarget))));
+    };
+
+    const handleConfirm = (review: ReviewItem) => {
+        if (isUnknownReview(review)) {
             setToast({ message: "Please rename to identify this item", type: 'info' });
             startEdit(review);
             return;
         }
-        if (review.isLearning) {
+        if (isLearningReview(review)) {
             approveOcrLearningEvent(review.learningEventId);
             setToast({ message: `Approved OCR learning: "${review.rawValue}" -> "${review.suggestedName}"`, type: 'success' });
             return;
         }
 
-        if (review.type === 'roster_candidate') {
-            addToRegistry(review.value);
+        if (review.type === 'player_name') {
+            const normalized = normalizeName(review.value);
+            if (normalized) addToRegistry(normalized);
             removePendingReview(review.id);
-            setToast({ message: `Added "${review.value}" to roster`, type: 'success' });
+            setToast({ message: `Added "${normalized || review.value}" to roster`, type: 'success' });
+            return;
+        }
+
+        if (review.type === 'roster_candidate') {
+            const normalized = normalizeName(review.value);
+            if (normalized) addToRegistry(normalized);
+            removePendingReview(review.id);
+            setToast({ message: `Added "${normalized || review.value}" to roster`, type: 'success' });
             return;
         }
 
@@ -88,71 +163,53 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         setToast({ message: "Item confirmed", type: 'success' });
     };
 
-    const handleDelete = (review: any) => {
-        if (review.isUnknown) {
+    const handleDelete = (review: ReviewItem) => {
+        if (isUnknownReview(review)) {
             setToast({ message: "Cannot delete unknown ID yet", type: 'error' });
             return;
         }
-        if (review.isLearning) {
+        if (isLearningReview(review)) {
             rejectOcrLearningEvent(review.learningEventId, 'Rejected from review queue');
             setToast({ message: "Learning suggestion rejected", type: 'success' });
             return;
         }
 
         if (review.type === 'player_name' || review.type === 'roster_candidate') {
-            const newTeams = { ...sessionTeams };
-            let found = false;
-            Object.keys(newTeams).forEach(color => {
-                const idx = newTeams[color].indexOf(review.value);
-                if (idx !== -1) {
-                    newTeams[color] = newTeams[color].filter(n => n !== review.value);
-                    found = true;
-                }
-            });
-            if (found) setSessionTeams(newTeams);
-            setSelectedTeammates(selectedTeammates.filter(n => n !== review.value));
-            setSelectedOpponents(selectedOpponents.filter(n => n !== review.value));
+            removeNameFromSession(review.value);
         }
         removePendingReview(review.id);
         setToast({ message: "Item deleted", type: 'success' });
     };
 
-    const handleSaveEdit = (review: any) => {
-        if (!editValue.trim()) return;
+    const handleSaveEdit = (review: ReviewItem) => {
+        const normalizedEditValue = normalizeName(editValue);
+        if (!normalizedEditValue) return;
 
-        if (review.isUnknown) {
-            addMapping(review.id, editValue);
-            setToast({ message: `Mapped ID to "${editValue}"`, type: 'success' });
+        if (isUnknownReview(review)) {
+            addMapping(review.id, normalizedEditValue);
+            setToast({ message: `Mapped ID to "${normalizedEditValue}"`, type: 'success' });
             setEditingId(null);
             return;
         }
-        if (review.isLearning) {
-            const corrected = editValue.trim();
-            rejectOcrLearningEvent(review.learningEventId, `Edited to "${corrected}"`);
-            recordOcrAliasCorrection(review.rawValue || review.value, corrected, {
+        if (isLearningReview(review)) {
+            rejectOcrLearningEvent(review.learningEventId, `Edited to "${normalizedEditValue}"`);
+            recordOcrAliasCorrection(review.rawValue || review.value, normalizedEditValue, {
                 source: 'review_modal',
                 context: 'unknown',
                 confidenceWeight: 1,
                 decisionId: review.learningEventId,
             });
-            setToast({ message: `Applied correction "${review.rawValue}" -> "${corrected}"`, type: 'success' });
+            setToast({ message: `Applied correction "${review.rawValue}" -> "${normalizedEditValue}"`, type: 'success' });
             setEditingId(null);
             return;
         }
 
         if (review.type === 'player_name' || review.type === 'roster_candidate') {
-            const newTeams = { ...sessionTeams };
-            Object.keys(newTeams).forEach(color => {
-                const idx = newTeams[color].indexOf(review.value);
-                if (idx !== -1) {
-                    newTeams[color][idx] = editValue;
-                }
-            });
-            setSessionTeams(newTeams);
+            replaceNameInSession(review.value, normalizedEditValue);
         }
 
-        if (review.type === 'roster_candidate') {
-            addToRegistry(editValue);
+        if (review.type === 'player_name' || review.type === 'roster_candidate') {
+            addToRegistry(normalizedEditValue);
         }
 
         removePendingReview(review.id);
@@ -160,9 +217,9 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         setEditingId(null);
     };
 
-    const startEdit = (review: any) => {
+    const startEdit = (review: ReviewItem) => {
         setEditingId(review.id);
-        setEditValue(review.isUnknown ? "" : review.value);
+        setEditValue(isUnknownReview(review) ? "" : review.value);
     };
 
     if (allItems.length === 0) {
@@ -205,7 +262,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                     <div className="text-label-sm font-black uppercase text-md-sys-on-surface/40 tracking-wider mb-1">
                                         {review.context || 'Unknown Context'}
                                     </div>
-                                    {!review.isUnknown && (
+                                    {!isUnknownReview(review) && (
                                         <div className="text-label-sm text-md-sys-on-surface/60 font-mono mb-2">
                                             Confidence: {Math.round(review.originalConfidence)}%
                                         </div>
@@ -220,9 +277,9 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                     ) : (
                                         <>
                                             {/* For Unknowns, Check button enters edit mode essentially */}
-                                            <button onClick={() => review.isUnknown ? startEdit(review) : handleConfirm(review)} className="md3-icon-btn text-success" title="Confirm/Identify"><Check size={16} /></button>
+                                            <button onClick={() => isUnknownReview(review) ? startEdit(review) : handleConfirm(review)} className="md3-icon-btn text-success" title="Confirm/Identify"><Check size={16} /></button>
                                             <button onClick={() => startEdit(review)} className="md3-icon-btn text-info" title="Edit"><Edit2 size={16} /></button>
-                                            {!review.isUnknown && (
+                                            {!isUnknownReview(review) && (
                                                 <button onClick={() => handleDelete(review)} className="md3-icon-btn text-danger" title="Delete (Junk)"><Trash2 size={16} /></button>
                                             )}
                                         </>
@@ -234,7 +291,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                 <input
                                     autoFocus
                                     type="text"
-                                    placeholder={review.isUnknown ? "Enter Name..." : ""}
+                                    placeholder={isUnknownReview(review) ? "Enter Name..." : ""}
                                     value={editValue}
                                     onChange={e => setEditValue(e.target.value)}
                                     className="md3-textfield md3-textfield--outlined w-full font-semibold text-base"
@@ -257,7 +314,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                     )}
                                     {Array.isArray(review.suggestions) && review.suggestions.length > 0 && (
                                         <div className="flex flex-wrap gap-1.5">
-                                            {review.suggestions.map((s: any) => (
+                                            {review.suggestions.map((s) => (
                                                 <button
                                                     key={s.name}
                                                     onClick={() => {
@@ -274,7 +331,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                     )}
                                 </div>
                             )}
-                            {!editingId && review.isLearning && Array.isArray(review.explanation) && review.explanation.length > 0 && (
+                            {!editingId && isLearningReview(review) && Array.isArray(review.explanation) && review.explanation.length > 0 && (
                                 <div className="mt-2 text-label-sm opacity-60 space-y-1">
                                     {review.explanation.slice(0, 3).map((line: string, idx: number) => (
                                         <div key={`${review.id}_exp_${idx}`}>- {line}</div>

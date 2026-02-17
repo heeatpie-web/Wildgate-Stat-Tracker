@@ -7,6 +7,15 @@
 import { StateCreator } from 'zustand';
 import { DrillDownTarget } from '../../types';
 
+export interface TelemetryStatusState {
+    exists: boolean;
+    size?: number;
+    lastCheck?: number;
+    error?: string;
+    path?: string;
+    lastEventAt?: number;
+}
+
 export interface UISlice {
     isLoading: boolean;
     showWelcome: boolean;
@@ -31,7 +40,7 @@ export interface UISlice {
     sidebarCollapsed: boolean;
     activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr';
     visionStatus: 'idle' | 'capturing' | 'scanning' | 'processing';
-    telemetryStatus: { exists: boolean, size?: number, lastCheck?: number, error?: string, path?: string, lastEventAt?: number };
+    telemetryStatus: TelemetryStatusState;
 
     setIsLoading: (isLoading: boolean) => void;
     setShowWelcome: (show: boolean) => void;
@@ -57,7 +66,7 @@ export interface UISlice {
     showIdMapper: boolean;
     setShowIdMapper: (show: boolean) => void;
     setVisionStatus: (status: 'idle' | 'capturing' | 'scanning' | 'processing') => void;
-    setTelemetryStatus: (status: any) => void;
+    setTelemetryStatus: (status: Partial<TelemetryStatusState>) => void;
     smartCapturesFocusMatchId: number | null;
     setSmartCapturesFocusMatchId: (id: number | null) => void;
 }

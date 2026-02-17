@@ -10,6 +10,8 @@ export type OcrMode = 'local' | 'cloud' | 'both' | 'hybrid-plus';
 
 /** Capture behavior: auto runs OCR immediately, deferred saves screenshot first. */
 export type CaptureMode = 'auto' | 'deferred';
+/** Result-click OCR behavior when queued captures exist. */
+export type ResultOcrFlowMode = 'prompt' | 'background';
 
 /** Telemetry monitoring profile: favors lower heat, balanced behavior, or faster updates. */
 export type TelemetryPerformanceProfile = 'low-power' | 'balanced' | 'high-accuracy';
@@ -59,6 +61,7 @@ export interface SettingsSlice {
   visualMode: VisualMode;
   ocrMode: OcrMode;
   captureMode: CaptureMode;
+  resultOcrFlowMode: ResultOcrFlowMode;
   lockOcrTeams: boolean;
   ocrLearningEnabled: boolean;
   ocrAutoApplyMinScore: number;
@@ -98,6 +101,7 @@ export interface SettingsSlice {
   setVisualMode: (mode: VisualMode) => void;
   setOcrMode: (mode: OcrMode) => void;
   setCaptureMode: (mode: CaptureMode) => void;
+  setResultOcrFlowMode: (mode: ResultOcrFlowMode) => void;
   setLockOcrTeams: (enabled: boolean) => void;
   setOcrLearningEnabled: (enabled: boolean) => void;
   setOcrAutoApplyMinScore: (score: number) => void;
@@ -150,6 +154,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   visualMode: 'dense',
   ocrMode: 'both',
   captureMode: 'auto',
+  resultOcrFlowMode: 'prompt',
   lockOcrTeams: false,
   ocrLearningEnabled: true,
   ocrAutoApplyMinScore: 0.82,
@@ -201,6 +206,9 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   setVisualMode: (mode) => set({ visualMode: mode }),
   setOcrMode: (mode) => set({ ocrMode: mode }),
   setCaptureMode: (mode) => set({ captureMode: mode }),
+  setResultOcrFlowMode: (mode) => set({
+    resultOcrFlowMode: mode === 'background' ? 'background' : 'prompt'
+  }),
   setLockOcrTeams: (enabled) => set({ lockOcrTeams: enabled }),
   setOcrLearningEnabled: (enabled) => set({ ocrLearningEnabled: enabled }),
   setOcrAutoApplyMinScore: (score) => set({ ocrAutoApplyMinScore: Math.max(0.5, Math.min(0.99, Number(score) || 0.82)) }),

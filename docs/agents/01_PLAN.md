@@ -184,3 +184,63 @@
 2. `COMPLETED` - Improve legacy wizard correction modal copy/action labels to clarify learning behavior.
 3. `COMPLETED` - Add explicit match-delete actions in Smart Captures (single-item and selected bulk) with confirmation prompts.
 4. `COMPLETED` - Run targeted validation (`eslint` touched files + `typecheck`) and record execution/handoff evidence.
+
+## Current Task Plan (IQR-PLAYERNAME-001)
+1. `COMPLETED` - Patch `ReviewQueueModal` `player_name` confirm/edit/delete behaviors to maintain roster + session reference consistency.
+2. `COMPLETED` - Add targeted component regression tests for player-name confirm/edit/delete and roster-candidate safety.
+3. `COMPLETED` - Run focused validation (`vitest` target, touched-file `eslint`, `typecheck`) and record evidence.
+4. `COMPLETED` - Complete PM feedback cycle entries and handoff docs, then release locks.
+
+## Current Task Plan (POSTMATCH-OCR-GATE-002)
+1. `COMPLETED` - Patch `ActionPanel` result-submit flow to replace auto OCR processing with an explicit blocking OCR decision prompt.
+2. `COMPLETED` - Add targeted `ActionPanel` regression tests for non-auto OCR and explicit process/continue choices.
+3. `COMPLETED` - Run focused validation (`vitest` target, touched-file `eslint`, `typecheck`) and record evidence.
+4. `COMPLETED` - Complete PM feedback cycle entries, update handoff docs, and release temporary lock.
+
+## Current Task Plan (POSTMATCH-TELEMETRY-PROMPT-003)
+1. `COMPLETED` - Patch telemetry draft post-match result handling in `src/App.tsx` so it always routes through recording submission event flow.
+2. `COMPLETED` - Update telemetry post-match prompt copy to explicitly state OCR requires manual action.
+3. `COMPLETED` - Run focused validation (`npx eslint src/App.tsx`, `npm run -s typecheck`) and record evidence.
+4. `COMPLETED` - Complete execution/validation/handoff entries and release temporary lock.
+
+## Current Task Plan (OCR-TEAM-CAP-GUARD-004)
+1. `COMPLETED` - Add centralized teammate sanitization in `createFormSlice` so `setSelectedTeammates` enforces dedupe + capacity limits.
+2. `COMPLETED` - Extend `createFormSlice` tests with regression coverage for OCR-like over-registration inputs.
+3. `COMPLETED` - Run focused validation (`npx vitest run src/store/slices/__tests__/createFormSlice.test.ts`, touched-file `eslint`, `npm run -s typecheck`).
+4. `COMPLETED` - Record execution/validation/handoff and release temporary locks.
+
+## Current Task Plan (REMAINING-UX-TELEMETRY-005)
+1. `COMPLETED` - Patch telemetry loadout auto-apply path to set both weapons and equipment in active selection state.
+2. `COMPLETED` - Add/adjust recording telemetry indicator copy so auto-selected weapons/equipment are explicitly labeled.
+3. `COMPLETED` - Add manual wizard inputs for loadout weapons/equipment persisted via pending match data.
+4. `COMPLETED` - Harden OCR opponent-team apply mapping (color normalization/fallback + duplicate suppression).
+5. `COMPLETED` - Run focused validation (`vitest` targeted, touched-file `eslint`, `npm run -s typecheck`) and record evidence/handoff.
+
+## Current Task Plan (AUDIT-REMEDIATION-001)
+1. `COMPLETED` - Update agent intake/plan/locks for audited remediation scope and confirm file boundaries in dirty worktree.
+2. `COMPLETED` - Harden storage and IPC boundary typing (`src/utils/storage.ts`, `src/store/useAppStore.ts`, `src/utils/artifactService.ts`).
+3. `COMPLETED` - Remove `@ts-ignore` and replace layout `any` usage in `src/components/DashboardLayout.tsx`.
+4. `COMPLETED` - Add shared telemetry archive payload normalizer and migrate renderer consumers (`SimulatorPanel`, `SmartCapturesPanel`) to canonical arrays.
+5. `COMPLETED` - Add one-time migration markers for legacy compatibility debt reduction and ensure marker persistence.
+6. `COMPLETED` - Run release gate commands (`test`, `build`, `typecheck`) and record validation + handoff + decision entries.
+
+## Current Task Plan (AUDIT-REMEDIATION-002)
+1. `COMPLETED` - Record second-pass intake/plan scope focused on runtime OCR/session `any` reduction only.
+2. `COMPLETED` - Replace high-risk `any` usage in `useSmartCapture` and `SmartCapturesPanel` OCR processing paths.
+3. `COMPLETED` - Replace remaining runtime `any` in `ActionPanel`, `ReviewQueueModal`, `GameDataProvider`, and `createFormSlice` interfaces.
+4. `COMPLETED` - Run focused lint + `typecheck`; fix any regressions introduced by tighter typing.
+5. `COMPLETED` - Run full release gates (`test`, `build`, `typecheck`) and document execution/validation/handoff/decisions.
+
+## Current Task Plan (AUDIT-REMEDIATION-003)
+1. `COMPLETED` - Record follow-up intake scope and claim locks for telemetry runtime typing hardening pass.
+2. `COMPLETED` - Remove high-risk `any` usage in `src/hooks/useLogMonitor.ts` telemetry event/status/loadout handling paths.
+3. `COMPLETED` - Remove high-risk `any` usage in `src/App.tsx` telemetry retention/prune and idle-callback handling paths.
+4. `COMPLETED` - Tighten telemetry status typing in `src/store/slices/createUISlice.ts` and `src/providers/UIStateProvider.tsx`.
+5. `COMPLETED` - Run focused validation (`eslint` touched files, `typecheck`, targeted `vitest`) and full gates (`test`, `build`); update execution/validation/handoff/decision logs and release locks.
+
+## Current Task Plan (AUDIT-REMEDIATION-004)
+1. COMPLETED - Add intake/locks and implement deterministic opponent color-assignment helper and integrate it in App and Smart Captures OCR apply paths.
+2. COMPLETED - Add persisted setting for optional background OCR-after-result mode and wire it into ActionPanel submission flow.
+3. COMPLETED - Add and update targeted tests for color assignment and background OCR mode behavior.
+4. COMPLETED - Run focused validation (eslint, typecheck, targeted vitest) and full gates (test, build).
+5. COMPLETED - Update execution/validation/handoff/decision docs and release locks.

@@ -649,3 +649,252 @@ Rule:
   - `docs/agents/03_VALIDATION.md`
 - Revisit trigger/expiry:
   - Revisit if users still struggle; next step would be guided stepper with telemetry-based completion tracking.
+
+- Type: `scope-control`
+- Decision: treat the multi-item bug list as sequential one-at-a-time work and execute only `Intelligence Review` `player_name` action fixes in this pass.
+- Date: 2026-02-16
+- Options considered:
+  - Implement all listed issues in one patch.
+  - Implement one isolated issue with tests, then move to the next.
+- Rationale:
+  - User explicitly requested one-at-a-time execution.
+  - Keeps regression blast radius low in high-touch OCR/telemetry flows.
+  - Allows targeted validation and clearer acceptance per issue.
+- Impacted files/artifacts:
+  - `docs/agents/00_INTAKE.md`
+  - `docs/agents/01_PLAN.md`
+  - `src/components/ReviewQueueModal.tsx`
+  - `src/components/ReviewQueueModal.test.tsx`
+- Revisit trigger/expiry:
+  - Revisit immediately in next task for post-match OCR prompt/flow changes.
+
+- Type: `runtime-flow`
+- Decision: replace auto OCR processing on result click with an explicit blocking decision prompt in `ActionPanel`.
+- Date: 2026-02-16
+- Options considered:
+  - Keep automatic OCR processing on Win/Loss/Draw.
+  - Fully redesign telemetry post-match prompt in `App.tsx` first.
+  - Add a local blocking prompt in `ActionPanel` and require explicit process/continue choice.
+- Rationale:
+  - User explicitly requested that result clicks should not auto-start OCR.
+  - Local `ActionPanel` gate is the narrowest safe fix for the direct complaint.
+  - Preserves existing OCR gate behavior when pending OCR data is already available.
+- Impacted files/artifacts:
+  - `src/components/recording/ActionPanel.tsx`
+  - `src/components/recording/ActionPanel.test.tsx`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if a unified telemetry post-match prompt flow is requested in `App.tsx`.
+
+- Type: `runtime-flow`
+- Decision: telemetry post-match prompt result actions in `App.tsx` must route through Recording's `submission:open-result` event path, including a view-switch handoff when the user is on a non-recording tab.
+- Date: 2026-02-16
+- Options considered:
+  - Keep direct `setShowWizard(result)` from telemetry prompt when not on Recording.
+  - Implement a second OCR decision modal directly in `App.tsx`.
+  - Route through existing Recording submission flow so one OCR-gate behavior is reused everywhere.
+- Rationale:
+  - The previous non-recording branch bypassed the explicit OCR decision flow added in `ActionPanel`.
+  - Reusing one event path avoids duplicate gate logic and keeps behavior consistent.
+  - This is the smallest safe change for the next one-at-a-time issue without redesigning telemetry prompt architecture.
+- Impacted files/artifacts:
+  - `src/App.tsx`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if telemetry prompt requires a full-screen guided "match-end capture" UX redesign with additional intermediate states.
+
+- Type: `state-guard`
+- Decision: enforce teammate dedupe and ship-capacity capping inside the central `setSelectedTeammates` slice setter (not only in UI toggles/call-sites).
+- Date: 2026-02-16
+- Options considered:
+  - Patch only `App.tsx` OCR apply path.
+  - Patch individual OCR call-sites (`useSmartScan`, `ActionPanel`, Smart Captures) one by one.
+  - Add centralized normalization in form slice setter and reuse it across toggle/ship-trim paths.
+- Rationale:
+  - User-reported overflow (`13` teammates) indicates broad setter-path vulnerability, not a single call-site bug.
+  - Centralized guard prevents future regressions from any OCR/session path that writes teammate arrays.
+  - Maintains existing ship-capacity semantics while adding case-insensitive dedupe protection.
+- Impacted files/artifacts:
+  - `src/store/slices/createFormSlice.ts`
+  - `src/store/slices/__tests__/createFormSlice.test.ts`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if future gameplay modes require >4 crew semantics; capacity mapping and teammate cap helper would need update.
+
+- Type: `runtime-ux`
+- Decision: resolve the remaining telemetry/wizard/OCR issues with targeted guardrails rather than broad workflow redesign.
+- Date: 2026-02-16
+- Options considered:
+  - Full post-match/wizard architecture redesign for loadout + OCR review orchestration.
+  - Keep current behavior and defer all remaining issues.
+  - Apply narrow fixes in existing flow:
+    - telemetry loadout applies both weapons/equipment,
+    - recording panel explicitly labels auto-selected loadout rows,
+    - wizard adds manual loadout slots,
+    - OCR opponent-team apply normalizes color/fallback and suppresses duplicate fanout.
+- Rationale:
+  - User requested continuation across remaining bug list items.
+  - This path addresses the concrete gaps with minimal regression surface.
+  - It keeps current persistence/contracts intact while improving data integrity and UX clarity.
+- Impacted files/artifacts:
+  - `src/hooks/useLogMonitor.ts`
+  - `src/components/recording/ActionPanel.tsx`
+  - `src/components/Wizard.tsx`
+  - `src/App.tsx`
+  - `src/store/slices/createFormSlice.ts`
+  - `src/store/slices/__tests__/createFormSlice.test.ts`
+  - `src/components/recording/ActionPanel.test.tsx`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if users request strict loadout picklists or if OCR color ambiguity remains high enough to justify model-side extraction changes.
+
+- Type: `architecture-hardening`
+- Decision: enforce a canonical telemetry archive shape of `TelemetryArchiveEvent[][]` at service boundary and normalize OCR rerun IPC responses to a stable `success/data/error` contract.
+- Date: 2026-02-17
+- Options considered:
+  - Keep mixed telemetry payload handling per consumer and retain loosely-typed rerun OCR responses.
+  - Normalize only in UI layers and keep service return types broad (`Record<string, unknown>`).
+  - Normalize once at utility/service boundaries and return typed contracts to all consumers.
+- Rationale:
+  - Mixed archive shapes were causing repeated defensive parsing and type/behavior drift.
+  - Broad OCR rerun response typing broke downstream compile safety in `useSmartCapture` and Smart Captures merge flows.
+  - Boundary normalization reduces error surface and keeps renderer code paths deterministic.
+- Impacted files/artifacts:
+  - `src/utils/telemetryArchive.ts`
+  - `src/utils/artifactService.ts`
+  - `src/components/SimulatorPanel.tsx`
+  - `src/components/SmartCapturesPanel.tsx`
+  - `src/utils/__tests__/artifactService.test.ts`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if IPC contracts change to include explicit telemetry file metadata or if OCR rerun handler introduces a versioned response schema.
+
+- Type: `compatibility-debt`
+- Decision: retain legacy storage compatibility but gate migration side effects behind one-time persisted markers in `storageMeta`.
+- Date: 2026-02-17
+- Options considered:
+  - Remove legacy migration paths entirely.
+  - Continue running migration transforms on every load.
+  - Preserve compatibility paths but write markers to ensure one-time migration behavior.
+- Rationale:
+  - Full legacy removal is high-risk for existing users with old persisted keys.
+  - Re-running migration logic each startup adds maintenance and potential data churn.
+  - Marker-gated migration gives safer compatibility with lower recurring overhead.
+- Impacted files/artifacts:
+  - `src/utils/storage.ts`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit after one stable release cycle to consider retiring unused legacy key paths with migration telemetry evidence.
+
+- Type: `scope-control`
+- Decision: constrain second type-safety pass to runtime OCR/session/review flows and explicitly defer analytics/dev/test-harness typing cleanup.
+- Date: 2026-02-17
+- Options considered:
+  - Continue into repo-wide `any` elimination across analytics and utilities.
+  - Restrict to runtime OCR/session high-risk files only.
+- Rationale:
+  - User asked for a second pass, but broad repo-wide typing work would create high churn and longer validation cycles.
+  - Runtime OCR/session paths have the highest behavioral risk and immediate user impact.
+  - Narrow scope preserved momentum and kept regression surface manageable.
+- Impacted files/artifacts:
+  - `src/hooks/useSmartCapture.ts`
+  - `src/components/SmartCapturesPanel.tsx`
+  - `src/components/recording/ActionPanel.tsx`
+  - `src/components/ReviewQueueModal.tsx`
+  - `src/providers/GameDataProvider.tsx`
+  - `src/store/slices/createFormSlice.ts`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit when user requests broader analytics/dev typing hardening or before a major refactor touching those modules.
+
+- Type: `test-compatibility`
+- Decision: keep typed optional `useAppStore.getState` fallback in `ActionPanel` to support both production store instances and hook-only test doubles.
+- Date: 2026-02-17
+- Options considered:
+  - Require `getState` always and update all tests/mocks globally.
+  - Keep optional typed fallback when `getState` is absent.
+- Rationale:
+  - Direct `getState` calls broke existing component tests that mock `useAppStore` as selector-only function.
+  - Optional fallback preserves runtime behavior while avoiding broad mock rewrites.
+- Impacted files/artifacts:
+  - `src/components/recording/ActionPanel.tsx`
+  - `src/components/recording/ActionPanel.test.tsx` (validated compatibility)
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if store mocking strategy is standardized to always expose `getState` across test harnesses.
+
+- Type: `scope-control`
+- Decision: run a telemetry-focused follow-up hardening pass (`AUDIT-REMEDIATION-003`) and defer non-telemetry layout typing cleanup.
+- Date: 2026-02-17
+- Options considered:
+  - Expand pass to remove all remaining `any` in touched UI slice/provider files.
+  - Constrain pass to telemetry runtime/status contracts and leave layout typing debt unchanged.
+- Rationale:
+  - User requested a second follow-up pass while preserving momentum and low regression risk.
+  - Telemetry runtime status/event paths are higher impact than legacy layout typing debt.
+  - Limiting scope allowed fast validation with full gate coverage in the same turn.
+- Impacted files/artifacts:
+  - `src/hooks/useLogMonitor.ts`
+  - `src/App.tsx`
+  - `src/store/slices/createUISlice.ts`
+  - `src/providers/UIStateProvider.tsx`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if a dedicated layout typing cleanup pass is scheduled or if slice/provider contracts are refactored.
+
+- Type: `runtime-hardening`
+- Decision: parse telemetry retention/prune IPC payloads using `unknown` + record guards/coercion helpers instead of loose shape assumptions.
+- Date: 2026-02-17
+- Options considered:
+  - Keep direct property access on untyped IPC responses.
+  - Introduce narrowly-scoped guards/coercion for telemetry status/prune payloads.
+- Rationale:
+  - Direct optional chaining on untyped payloads (`raw?.data?...`) obscures malformed payload handling.
+  - Guarded coercion preserves behavior while tightening compile-time/runtime safety at IPC boundaries.
+- Impacted files/artifacts:
+  - `src/App.tsx`
+  - `src/hooks/useLogMonitor.ts`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if Electron IPC responses move to fully versioned typed channels.
+
+- Type: runtime-flow
+- Decision: add a persisted result-click OCR flow mode (prompt | background) and keep prompt as default.
+- Date: 2026-02-17
+- Options considered:
+  - Keep only blocking prompt behavior.
+  - Replace prompt entirely with always-background processing.
+  - Add selectable mode with backward-compatible default.
+- Rationale:
+  - User requested optional background OCR while entering wizard.
+  - Existing users rely on explicit OCR confirmation; default should remain non-surprising.
+  - A persisted mode allows per-user workflow preference without forking submission paths elsewhere.
+- Impacted files/artifacts:
+  - src/store/slices/createSettingsSlice.ts
+  - src/store/useAppStore.ts
+  - src/components/SettingsModal.tsx
+  - src/components/recording/ActionPanel.tsx
+  - src/components/recording/ActionPanel.test.tsx
+- Revisit trigger/expiry:
+  - Revisit if telemetry/post-match UX is redesigned into a unified guided capture flow.
+
+- Type: data-integrity
+- Decision: replace ad-hoc opponent color fallback with shared deterministic assignment utility and integrate in both App and Smart Captures OCR apply paths.
+- Date: 2026-02-17
+- Options considered:
+  - Keep local per-file heuristic assignment.
+  - Patch App-only color fallback.
+  - Introduce shared utility with deterministic ordering and player-hint anchoring.
+- Rationale:
+  - App and Smart Captures were assigning colors differently, causing drift and mismatches.
+  - Deterministic assignment with normalized player hints provides stable color mapping across repeated OCR applies.
+  - Shared utility reduces regression risk and duplicated logic.
+- Impacted files/artifacts:
+  - src/utils/ocr/teamColorAssignment.ts
+  - src/utils/ocr/__tests__/teamColorAssignment.test.ts
+  - src/App.tsx
+  - src/components/SmartCapturesPanel.tsx
+- Revisit trigger/expiry:
+  - Revisit if OCR engine begins emitting reliable, unique team IDs/colors directly and fallback assignment becomes unnecessary.
+
+

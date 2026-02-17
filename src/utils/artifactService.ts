@@ -5,6 +5,11 @@
  * screenshots captured during a match's time window.
  */
 import { getElectronAPI } from './electronAPI';
+import {
+    normalizeTelemetryArchiveCollection,
+    type TelemetryArchiveEvent,
+} from './telemetryArchive';
+import type { OCRExtractedData, OCRProcessResult } from './ocr/ocrTypes';
 
 export type IpcErrorCode =
     | 'PATH_NOT_ALLOWED'
@@ -19,15 +24,41 @@ export type IpcResult<T> =
     | { success: true; data: T }
     | { success: false; code: IpcErrorCode; message: string };
 
-const unwrapIpcResult = <T>(value: any): { ok: true; data: T } | { ok: false; code?: IpcErrorCode; message: string } => {
-    if (value && typeof value === 'object' && typeof value.success === 'boolean') {
+type UnwrappedIpcResult<T> =
+    | { ok: true; data: T }
+    | { ok: false; code?: IpcErrorCode; message: string };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null;
+
+const unwrapIpcResult = <T>(value: unknown): UnwrappedIpcResult<T> => {
+    if (isRecord(value) && typeof value.success === 'boolean') {
         if (value.success) {
             return { ok: true, data: value.data as T };
         }
-        return { ok: false, code: value.code, message: value.message || value.error || 'IPC request failed' };
+        const code = typeof value.code === 'string' ? value.code as IpcErrorCode : undefined;
+        const message = typeof value.message === 'string'
+            ? value.message
+            : (typeof value.error === 'string' ? value.error : 'IPC request failed');
+        return { ok: false, code, message };
     }
     return { ok: true, data: value as T };
 };
+
+const isArtifactFile = (value: unknown): value is ArtifactFile =>
+    isRecord(value) &&
+    typeof value.artifactId === 'string' &&
+    typeof value.filename === 'string' &&
+    typeof value.path === 'string';
+
+const isLikelyOcrExtractedData = (value: unknown): value is OCRExtractedData =>
+    isRecord(value) &&
+    (
+        typeof value.screenshotType === 'string' ||
+        Array.isArray(value.reachModifiers) ||
+        Array.isArray(value.teammates) ||
+        Array.isArray(value.opponentTeams)
+    );
 
 export const bundleMatchArtifacts = async (matchId: number, startTime: number, endTime: number): Promise<string[]> => {
     const api = getElectronAPI();
@@ -73,22 +104,41 @@ export interface ArtifactRepairResult {
     applied?: Array<{ matchId: number; addedPaths: string[] }>;
 }
 
-export const getMatchArtifactsStructured = async (matchId: number): Promise<{ images: string[], imageFiles: ArtifactFile[], telemetry: any[] }> => {
+interface MatchArtifactsPayload {
+    images?: string[];
+    imageFiles?: ArtifactFile[];
+    telemetry?: unknown;
+}
+
+export interface MatchArtifactsStructured {
+    images: string[];
+    imageFiles: ArtifactFile[];
+    telemetry: TelemetryArchiveEvent[][];
+}
+
+export type RerunOcrResult = OCRProcessResult & {
+    code?: IpcErrorCode;
+    message?: string;
+    [key: string]: unknown;
+};
+
+export const getMatchArtifactsStructured = async (matchId: number): Promise<MatchArtifactsStructured> => {
     const api = getElectronAPI();
     if (!api) return { images: [], imageFiles: [], telemetry: [] };
     try {
         const raw = await api.invoke('get-match-artifacts', matchId);
-        const result = unwrapIpcResult<{ images?: string[]; imageFiles?: ArtifactFile[]; telemetry?: any[] } | string[]>(raw);
+        const result = unwrapIpcResult<MatchArtifactsPayload | string[]>(raw);
         if (!result.ok) {
             console.warn('[artifactService] get-match-artifacts failed:', result.code, result.message);
             return { images: [], imageFiles: [], telemetry: [] };
         }
         // Handle both old (string[]) and new ({images, imageFiles, telemetry}) formats
         if (Array.isArray(result.data)) return { images: result.data, imageFiles: [], telemetry: [] };
+        const payload = isRecord(result.data) ? result.data : {};
         return {
-            images: result.data?.images || [],
-            imageFiles: result.data?.imageFiles || [],
-            telemetry: result.data?.telemetry || [],
+            images: Array.isArray(payload.images) ? payload.images.filter((img): img is string => typeof img === 'string') : [],
+            imageFiles: Array.isArray(payload.imageFiles) ? payload.imageFiles.filter(isArtifactFile) : [],
+            telemetry: normalizeTelemetryArchiveCollection(payload.telemetry),
         };
     } catch (e) {
         return { images: [], imageFiles: [], telemetry: [] };
@@ -100,14 +150,47 @@ export const getArtifactsForMatch = async (matchId: number): Promise<string[]> =
     return result.images;
 };
 
-export const rerunOCROnArtifact = async (imagePath: string, activeUser: string, ocrMode: string): Promise<any> => {
+export const rerunOCROnArtifact = async (
+    imagePath: string,
+    activeUser: string,
+    ocrMode: string
+): Promise<RerunOcrResult> => {
     const api = getElectronAPI();
     if (!api) throw new Error('Electron API not available');
     const raw = await api.invoke('rerun-ocr-on-artifact', { imagePath, activeUser, ocrMode });
-    if (raw && typeof raw === 'object' && raw.success === false && raw.message && !raw.error) {
-        return { ...raw, error: raw.message };
+    if (!isRecord(raw)) {
+        return { success: false, error: 'Invalid OCR response' };
     }
-    return raw;
+
+    const coerceData = (value: unknown): OCRExtractedData | undefined =>
+        isLikelyOcrExtractedData(value) ? value : undefined;
+
+    if (raw.success === true) {
+        return {
+            ...raw,
+            success: true,
+            data: coerceData(raw.data),
+            error: typeof raw.error === 'string' ? raw.error : undefined,
+        };
+    }
+
+    if (raw.success === false) {
+        const message = typeof raw.message === 'string' ? raw.message : undefined;
+        const error = typeof raw.error === 'string' ? raw.error : message || 'OCR processing failed';
+        const code = typeof raw.code === 'string' ? raw.code as IpcErrorCode : undefined;
+        return { ...raw, success: false, code, message, error };
+    }
+
+    // Legacy fallback: some older handlers returned OCR data directly.
+    const legacyData = coerceData(raw.data) || coerceData(raw);
+    if (legacyData) {
+        return { ...raw, success: true, data: legacyData };
+    }
+
+    return {
+        success: false,
+        error: typeof raw.error === 'string' ? raw.error : 'OCR processing failed',
+    };
 };
 
 export const removeMatchArtifact = async (matchId: number, artifactId: string): Promise<{ success: boolean; error?: string; code?: IpcErrorCode }> => {

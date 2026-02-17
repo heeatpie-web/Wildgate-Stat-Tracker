@@ -20,11 +20,12 @@ import { useSmartScan } from '../../hooks/useSmartScan';
 import { useSmartCapture } from '../../hooks/useSmartCapture';
 import { useMatchSubmission } from '../../hooks/useMatchSubmission';
 import { useAppStore } from '../../store/useAppStore';
+import type { OCRExtractedData } from '../../utils/ocr/ocrTypes';
 
 interface ActionPanelProps {
     variant?: 'default' | 'transparent';
     density?: 'standard' | 'compact';
-    onSmartCaptureData?: (data: any) => void;
+    onSmartCaptureData?: (data: OCRExtractedData) => void;
 }
 
 type MatchResult = 'Win' | 'Loss' | 'Draw';
@@ -57,6 +58,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
 
     const { handleSmartScan, isScanning, scanProgress, scanLogs } = useSmartScan();
     const ocrMode = useAppStore(s => s.ocrMode);
+    const resultOcrFlowMode = useAppStore(s => s.resultOcrFlowMode);
     const ocrModeLabel = ocrMode === 'hybrid-plus'
         ? 'Hybrid+'
         : ocrMode === 'both'
@@ -88,7 +90,13 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const { initiateSubmission: openResultWizard } = useMatchSubmission();
 
     const resolveSubmissionMatchId = React.useCallback((): string | number | null => {
-        const stateGetter = (useAppStore as any)?.getState;
+        type SubmissionSnapshot = {
+            pendingMatchData?: { id?: number | string | null } | null;
+            matches?: typeof matches;
+            sessionStartTime?: number;
+            activeUser?: string | null;
+        };
+        const stateGetter = (useAppStore as unknown as { getState?: () => SubmissionSnapshot }).getState;
         const state = typeof stateGetter === 'function' ? stateGetter() : null;
         const pendingId = Number(state?.pendingMatchData?.id || 0);
         if (Number.isInteger(pendingId) && pendingId > 0) return pendingId;
@@ -99,7 +107,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         const recentCutoff = (typeof sourceSessionStart === 'number' && sourceSessionStart > 0)
             ? (sourceSessionStart - 60_000)
             : (Date.now() - (6 * 60 * 60 * 1000));
-        const unresolvedDraft = (sourceMatches || []).find((m: any) => {
+        const unresolvedDraft = (sourceMatches || []).find((m) => {
             if (!m || m.subType !== 'Telemetry Draft') return false;
             if (Number(m.timestamp || 0) < recentCutoff) return false;
             if (sourceUser && m.player && m.player !== sourceUser) return false;
@@ -112,7 +120,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const pendingOcrCountGlobal = savedCaptures.filter(c => !c.ocrProcessed).length;
     const pendingOcrCountForSubmission = submissionMatchId == null
         ? pendingOcrCountGlobal
-        : savedCaptures.filter(c => !c.ocrProcessed && String((c as any).matchId ?? '') === String(submissionMatchId)).length;
+        : savedCaptures.filter(c => !c.ocrProcessed && String(c.matchId ?? '') === String(submissionMatchId)).length;
 
     const handleReviewBucket = () => {
         const scopedPending = submissionMatchId != null ? getPendingData(submissionMatchId) : pendingData;
@@ -169,7 +177,9 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         Loss: null,
         Draw: null,
     });
+    const [ocrDecisionPrompt, setOcrDecisionPrompt] = React.useState<{ result: MatchResult; processing: boolean } | null>(null);
     const processingToastShownRef = React.useRef(false);
+    const backgroundOcrInFlightRef = React.useRef(false);
     React.useEffect(() => {
         if (logsEndRef.current) logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }, [scanLogs]);
@@ -257,17 +267,67 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
 
         const scopedPendingData = submissionMatchId != null ? getPendingData(submissionMatchId) : pendingData;
         if (onSmartCaptureData && (scopedPendingData || pendingOcrCountForSubmission > 0)) {
-            let reviewData = scopedPendingData;
-            if (!reviewData && pendingOcrCountForSubmission > 0) {
-                await processAllStored(activeUser || null, submissionMatchId ?? null);
-                reviewData = submissionMatchId != null ? getPendingData(submissionMatchId) : getPendingData();
-            }
-            if (reviewData) {
-                window.dispatchEvent(new CustomEvent('submission:ocr-gate', { detail: { result, data: reviewData } }));
+            if (scopedPendingData) {
+                window.dispatchEvent(new CustomEvent('submission:ocr-gate', { detail: { result, data: scopedPendingData } }));
                 return;
             }
+            if (resultOcrFlowMode === 'background') {
+                openResultWizard(result);
+                const scopeForSubmission = submissionMatchId ?? null;
+                if (!backgroundOcrInFlightRef.current) {
+                    backgroundOcrInFlightRef.current = true;
+                    setToast({ message: 'Processing queued OCR in background...', type: 'info' });
+                    void (async () => {
+                        try {
+                            await processAllStored(activeUser || null, scopeForSubmission);
+                            const reviewData = scopeForSubmission != null ? getPendingData(scopeForSubmission) : getPendingData();
+                            if (reviewData) {
+                                onSmartCaptureData(reviewData);
+                                setToast({ message: 'Background OCR ready for review.', type: 'success' });
+                            } else {
+                                setToast({ message: 'Background OCR finished without review data.', type: 'warning' });
+                            }
+                        } catch (error) {
+                            Logger.warn('ActionPanel', 'Background OCR processing failed', { error });
+                            setToast({ message: 'Background OCR failed. Review queued captures manually.', type: 'error' });
+                        } finally {
+                            backgroundOcrInFlightRef.current = false;
+                        }
+                    })();
+                }
+                return;
+            }
+            setOcrDecisionPrompt({ result, processing: false });
+            return;
         }
 
+        openResultWizard(result);
+    };
+
+    const handleOcrPromptCancel = () => {
+        setOcrDecisionPrompt(null);
+    };
+
+    const handleOcrPromptContinueWithoutOcr = () => {
+        if (!ocrDecisionPrompt) return;
+        const { result } = ocrDecisionPrompt;
+        setOcrDecisionPrompt(null);
+        openResultWizard(result);
+    };
+
+    const handleOcrPromptProcess = async () => {
+        if (!ocrDecisionPrompt || ocrDecisionPrompt.processing) return;
+        const { result } = ocrDecisionPrompt;
+        setOcrDecisionPrompt({ result, processing: true });
+        await processAllStored(activeUser || null, submissionMatchId ?? null);
+        const reviewData = submissionMatchId != null ? getPendingData(submissionMatchId) : getPendingData();
+        if (reviewData) {
+            setOcrDecisionPrompt(null);
+            window.dispatchEvent(new CustomEvent('submission:ocr-gate', { detail: { result, data: reviewData } }));
+            return;
+        }
+        setOcrDecisionPrompt(null);
+        setToast({ message: 'No OCR review data was produced. Continuing to wizard.', type: 'warning' });
         openResultWizard(result);
     };
 
@@ -358,6 +418,45 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                         <div ref={logsEndRef} />
                     </div>
                 )}
+            </div>
+        ) : null
+    );
+
+    const OcrDecisionPrompt = () => (
+        ocrDecisionPrompt ? (
+            <div className="fixed inset-0 z-modal-top md3-dialog-scrim flex items-center justify-center p-4">
+                <div className="md3-dialog rounded-modal w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+                    <div className="md3-dialog-title">Queued Smart Captures Detected</div>
+                    <div className="md3-dialog-content text-md-sys-on-surface/70">
+                        Result selection no longer auto-runs OCR. Choose whether to process queued captures before entering the wizard.
+                    </div>
+                    <div className="md3-dialog-actions flex-col gap-2 sm:flex-row sm:justify-end">
+                        <button
+                            type="button"
+                            onClick={handleOcrPromptCancel}
+                            disabled={ocrDecisionPrompt.processing}
+                            className="md3-btn-text"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleOcrPromptContinueWithoutOcr}
+                            disabled={ocrDecisionPrompt.processing}
+                            className="md3-btn-outlined"
+                        >
+                            Continue Without OCR
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { void handleOcrPromptProcess(); }}
+                            disabled={ocrDecisionPrompt.processing}
+                            className="md3-btn-filled"
+                        >
+                            {ocrDecisionPrompt.processing ? 'Processing OCR...' : 'Process OCR and Review'}
+                        </button>
+                    </div>
+                </div>
             </div>
         ) : null
     );
@@ -492,6 +591,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                         {Array.isArray(currentLoadout?.weapons) && currentLoadout.weapons.length > 0 && (
                             <div className="flex items-start gap-2 text-label-sm">
                                 <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
+                                <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
                                 <span className="text-md-sys-on-surface/80 break-words">
                                     {currentLoadout.weapons.join(', ')}
                                 </span>
@@ -500,6 +600,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                         {Array.isArray(currentLoadout?.equipment) && currentLoadout.equipment.length > 0 && (
                             <div className="flex items-start gap-2 text-label-sm">
                                 <span className="font-bold uppercase tracking-wide text-info">Equipment</span>
+                                <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
                                 <span className="text-md-sys-on-surface/80 break-words">
                                     {currentLoadout.equipment.join(', ')}
                                 </span>
@@ -509,6 +610,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                 )}
 
                 <StatusOverlay />
+                <OcrDecisionPrompt />
             </div>
         );
     }
@@ -651,6 +753,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                         {Array.isArray(currentLoadout?.weapons) && currentLoadout.weapons.length > 0 && (
                             <div className="flex items-start gap-2 text-label-sm">
                                 <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
+                                <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
                                 <span className="text-md-sys-on-surface/80 break-words">
                                     {currentLoadout.weapons.join(', ')}
                                 </span>
@@ -659,6 +762,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                         {Array.isArray(currentLoadout?.equipment) && currentLoadout.equipment.length > 0 && (
                             <div className="flex items-start gap-2 text-label-sm">
                                 <span className="font-bold uppercase tracking-wide text-info">Equipment</span>
+                                <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
                                 <span className="text-md-sys-on-surface/80 break-words">
                                     {currentLoadout.equipment.join(', ')}
                                 </span>
@@ -685,6 +789,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     </button>
                 )}
             </div>
+            <OcrDecisionPrompt />
         </div>
     );
 };

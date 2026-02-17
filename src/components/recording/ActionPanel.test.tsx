@@ -19,6 +19,7 @@ const gameData = {
   activeHero: 'Adrian',
   heroSource: 'manual',
   telemetryDetectedHero: undefined as string | undefined,
+  currentLoadout: null as { hero?: string | null; ship?: string | null; weapons?: string[]; equipment?: string[] } | null,
   pendingReviews: [],
   detectedUnknowns: {},
 };
@@ -57,6 +58,7 @@ const smartCaptureActions = {
   processAllStored: vi.fn().mockResolvedValue(undefined),
   clearError: vi.fn(),
   dismissPendingData: vi.fn(),
+  getPendingData: vi.fn(() => smartCaptureState.pendingData),
   reanalyzeCaptures: vi.fn(),
 };
 
@@ -64,6 +66,7 @@ const initiateSubmission = vi.fn();
 
 const appStoreState = {
   ocrMode: 'both',
+  resultOcrFlowMode: 'prompt',
 };
 
 vi.mock('../../providers/GameDataProvider', () => ({
@@ -124,6 +127,9 @@ describe('ActionPanel', () => {
       processingProgress: null,
       qualityHint: null,
     });
+    gameData.currentLoadout = null;
+    appStoreState.resultOcrFlowMode = 'prompt';
+    smartCaptureActions.getPendingData.mockImplementation(() => smartCaptureState.pendingData);
     uiState.smartCaptureRequest = null;
 
     vi.clearAllMocks();
@@ -245,6 +251,118 @@ describe('ActionPanel', () => {
     dispatchSpy.mockRestore();
   });
 
+  it('shows blocking OCR decision prompt instead of auto-processing when queued captures exist', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    smartCaptureState.savedCaptures = [{
+      filePath: 'queued.png',
+      filename: 'queued.png',
+      timestamp: Date.now(),
+      matchId: null,
+      ocrProcessed: false,
+    }];
+
+    render(<ActionPanel onSmartCaptureData={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /win/i }));
+
+    expect(smartCaptureActions.processAllStored).not.toHaveBeenCalled();
+    expect(initiateSubmission).not.toHaveBeenCalled();
+    expect(screen.getByText(/queued smart captures detected/i)).toBeInTheDocument();
+  });
+
+  it('allows continuing to wizard without OCR from blocking prompt', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    smartCaptureState.savedCaptures = [{
+      filePath: 'queued.png',
+      filename: 'queued.png',
+      timestamp: Date.now(),
+      matchId: null,
+      ocrProcessed: false,
+    }];
+
+    render(<ActionPanel onSmartCaptureData={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /loss/i }));
+    fireEvent.click(screen.getByRole('button', { name: /continue without ocr/i }));
+
+    expect(initiateSubmission).toHaveBeenCalledWith('Loss');
+    expect(smartCaptureActions.processAllStored).not.toHaveBeenCalled();
+  });
+
+  it('processes OCR only after explicit prompt confirmation and then opens OCR gate', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    const reviewData = {
+      screenshotType: 'crew_hub',
+      playerShip: undefined,
+      playerTeamName: undefined,
+      reachModifiers: [],
+      enemyShips: [],
+      teammates: [],
+      opponentTeams: [],
+      overallConfidence: 78,
+      captureTimestamp: Date.now(),
+    };
+    smartCaptureState.savedCaptures = [{
+      filePath: 'queued.png',
+      filename: 'queued.png',
+      timestamp: Date.now(),
+      matchId: null,
+      ocrProcessed: false,
+    }];
+    smartCaptureActions.getPendingData.mockReturnValue(reviewData);
+
+    render(<ActionPanel onSmartCaptureData={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /draw/i }));
+    fireEvent.click(screen.getByRole('button', { name: /process ocr and review/i }));
+
+    await waitFor(() => {
+      expect(smartCaptureActions.processAllStored).toHaveBeenCalledWith('Alec', null);
+    });
+    expect(initiateSubmission).not.toHaveBeenCalled();
+
+    const gateEvent = dispatchSpy.mock.calls
+      .map(([evt]) => evt as Event)
+      .find((evt) => evt.type === 'submission:ocr-gate') as CustomEvent | undefined;
+    expect(gateEvent).toBeDefined();
+    expect(gateEvent?.detail?.result).toBe('Draw');
+    dispatchSpy.mockRestore();
+  });
+
+  it('opens wizard immediately and processes queued OCR in background when configured', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    const onSmartCaptureData = vi.fn();
+    const reviewData = {
+      screenshotType: 'crew_hub',
+      playerShip: undefined,
+      playerTeamName: undefined,
+      reachModifiers: [],
+      enemyShips: [],
+      teammates: [],
+      opponentTeams: [],
+      overallConfidence: 82,
+      captureTimestamp: Date.now(),
+    };
+
+    appStoreState.resultOcrFlowMode = 'background';
+    smartCaptureState.savedCaptures = [{
+      filePath: 'queued.png',
+      filename: 'queued.png',
+      timestamp: Date.now(),
+      matchId: null,
+      ocrProcessed: false,
+    }];
+    smartCaptureActions.getPendingData.mockReturnValue(reviewData);
+
+    render(<ActionPanel onSmartCaptureData={onSmartCaptureData} />);
+    fireEvent.click(screen.getByRole('button', { name: /win/i }));
+
+    expect(initiateSubmission).toHaveBeenCalledWith('Win');
+    expect(screen.queryByText(/queued smart captures detected/i)).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(smartCaptureActions.processAllStored).toHaveBeenCalledWith('Alec', null);
+    });
+    expect(onSmartCaptureData).toHaveBeenCalledWith(reviewData);
+  });
+
   it('emits processing OCR toast when smart capture enters processing', async () => {
     const { ActionPanel } = await import('./ActionPanel');
     smartCaptureState.isProcessing = true;
@@ -252,6 +370,22 @@ describe('ActionPanel', () => {
     render(<ActionPanel />);
 
     expect(uiState.setToast).toHaveBeenCalledWith({ message: 'Processing OCR...', type: 'info' });
+  });
+
+  it('labels telemetry-detected weapons and equipment as auto-selected', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    gameData.currentLoadout = {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: ['Bolt Rifle'],
+      equipment: ['Shield Matrix'],
+    };
+
+    render(<ActionPanel />);
+
+    expect(screen.getByText('Weapons')).toBeInTheDocument();
+    expect(screen.getByText('Equipment')).toBeInTheDocument();
+    expect(screen.getAllByText('(auto)')).toHaveLength(2);
   });
 
 });

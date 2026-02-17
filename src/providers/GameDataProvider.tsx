@@ -9,6 +9,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useShallow } from 'zustand/react/shallow';
 import { Match, DrillDownTarget, KillMap, Loadout, GameMode } from '../types';
 import { PlayerProfile } from '../store/slices/createMappingSlice';
+import type { PendingReview, TimelineEvent } from '../store/slices/createDataSlice';
 
 interface GameDataContextType {
     matches: Match[];
@@ -118,12 +119,12 @@ interface GameDataContextType {
     recordPlayerSighting: (playerId: string, teamColor: string, allTeamPlayers: string[], allOpponentPlayers: string[], shipType?: string, source?: 'ocr' | 'manual') => void;
     currentLoadout: Loadout | null; // Added
     setCurrentLoadout: (l: Loadout | null) => void; // Added
-    timelineEvents: any[];
-    setTimelineEvents: (events: any[]) => void;
-    addTimelineEvent: (event: any) => void;
+    timelineEvents: TimelineEvent[];
+    setTimelineEvents: (events: TimelineEvent[]) => void;
+    addTimelineEvent: (event: TimelineEvent) => void;
     activeMode: GameMode; // Exposed for convenience
-    pendingReviews: any[];
-    addPendingReview: (review: any) => void;
+    pendingReviews: PendingReview[];
+    addPendingReview: (review: PendingReview) => void;
     removePendingReview: (id: string) => void;
     clearPendingReviews: () => void;
     detectedUnknowns: Record<string, { type: 'Hero' | 'Ship' | 'Weapon' | 'Equipment' | 'Unknown'; lastSeen: number }>;

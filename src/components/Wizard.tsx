@@ -23,12 +23,14 @@ import { getElectronAPI } from '../utils/electronAPI';
 export const Wizard: React.FC = () => {
     const {
         pendingMatchData,
+        setPendingMatchData,
         pendingPlacement, setPendingPlacement,
         pendingArtifactType, setPendingArtifactType,
         pendingKilledBy, setPendingKilledBy,
         pendingKilledByShip, setPendingKilledByShip,
         selectedOpponents, setSelectedOpponents,
         sessionTeams, sessionShipTypes,
+        currentLoadout,
         timeMin, setTimeMin,
         timeSec, setTimeSec,
         damageTaken, setDamageTaken,
@@ -66,6 +68,37 @@ export const Wizard: React.FC = () => {
     const inputBaseClass = 'mg-surface-primary bg-md-sys-primary/5 font-bold outline-none text-center rounded-xl border border-md-sys-primary/10 transition-all focus:border-md-sys-primary/40 focus:bg-md-sys-primary/10';
 
     const showPlacement = isDefeat && activeMode === 'Artifact Brawl' && selectedWinType === 'Combat';
+    const loadoutDraft = React.useMemo(() => {
+        const base = pendingMatchData.loadout || currentLoadout || null;
+        return {
+            hero: base?.hero || null,
+            ship: base?.ship || null,
+            weapons: [base?.weapons?.[0] || '', base?.weapons?.[1] || ''],
+            equipment: [base?.equipment?.[0] || '', base?.equipment?.[1] || ''],
+        };
+    }, [currentLoadout, pendingMatchData.loadout]);
+    const updateLoadoutSlot = (kind: 'weapons' | 'equipment', slotIndex: number, value: string) => {
+        const nextWeapons = [...loadoutDraft.weapons];
+        const nextEquipment = [...loadoutDraft.equipment];
+        if (kind === 'weapons') {
+            nextWeapons[slotIndex] = value;
+        } else {
+            nextEquipment[slotIndex] = value;
+        }
+        const compact = (slots: string[]) => slots
+            .map((slot) => String(slot || '').trim())
+            .filter(Boolean)
+            .slice(0, 2);
+        setPendingMatchData({
+            ...pendingMatchData,
+            loadout: {
+                hero: loadoutDraft.hero,
+                ship: loadoutDraft.ship,
+                weapons: compact(nextWeapons),
+                equipment: compact(nextEquipment),
+            },
+        });
+    };
     const handleWizardSmartCapture = () => {
         const pendingMatchId = Number((pendingMatchData as Match | null)?.id || 0);
         const requestId = requestSmartCapture({
@@ -189,6 +222,54 @@ export const Wizard: React.FC = () => {
                                     </div>
                                 );
                             })}
+                        </div>
+                    </div>
+
+                    <div className={cardClass}>
+                        <div className="flex items-center justify-between mb-3">
+                            <span className={labelClass + ' mb-0'}>Ship Loadout</span>
+                            <ShieldAlert size={14} className="opacity-50" />
+                        </div>
+                        <p className="text-label-xs opacity-60 mb-3">
+                            Manual entries here are saved into the final match loadout.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-2">
+                                <label className="text-label-xs font-bold uppercase tracking-widest opacity-60">Weapon 1</label>
+                                <input
+                                    type="text"
+                                    value={loadoutDraft.weapons[0]}
+                                    onChange={(e) => updateLoadoutSlot('weapons', 0, e.target.value)}
+                                    placeholder="Primary weapon"
+                                    className="w-full text-left px-3 py-2 rounded-xl mg-surface-high border border-md-sys-outline/10 text-label-sm font-semibold outline-none focus:border-md-sys-primary/40"
+                                />
+                                <label className="text-label-xs font-bold uppercase tracking-widest opacity-60">Weapon 2</label>
+                                <input
+                                    type="text"
+                                    value={loadoutDraft.weapons[1]}
+                                    onChange={(e) => updateLoadoutSlot('weapons', 1, e.target.value)}
+                                    placeholder="Secondary weapon"
+                                    className="w-full text-left px-3 py-2 rounded-xl mg-surface-high border border-md-sys-outline/10 text-label-sm font-semibold outline-none focus:border-md-sys-primary/40"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-label-xs font-bold uppercase tracking-widest opacity-60">Equipment 1</label>
+                                <input
+                                    type="text"
+                                    value={loadoutDraft.equipment[0]}
+                                    onChange={(e) => updateLoadoutSlot('equipment', 0, e.target.value)}
+                                    placeholder="Primary equipment"
+                                    className="w-full text-left px-3 py-2 rounded-xl mg-surface-high border border-md-sys-outline/10 text-label-sm font-semibold outline-none focus:border-md-sys-primary/40"
+                                />
+                                <label className="text-label-xs font-bold uppercase tracking-widest opacity-60">Equipment 2</label>
+                                <input
+                                    type="text"
+                                    value={loadoutDraft.equipment[1]}
+                                    onChange={(e) => updateLoadoutSlot('equipment', 1, e.target.value)}
+                                    placeholder="Secondary equipment"
+                                    className="w-full text-left px-3 py-2 rounded-xl mg-surface-high border border-md-sys-outline/10 text-label-sm font-semibold outline-none focus:border-md-sys-primary/40"
+                                />
+                            </div>
                         </div>
                     </div>
 

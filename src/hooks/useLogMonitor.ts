@@ -10,6 +10,65 @@ import Logger from '../utils/logger';
 import { getElectronAPI } from '../utils/electronAPI';
 
 const ipcRenderer = getElectronAPI();
+type TelemetryStatusPatch = {
+    exists?: boolean;
+    size?: number;
+    lastCheck?: number;
+    error?: string;
+    path?: string;
+    lastEventAt?: number;
+};
+
+type TelemetryRecord = Record<string, unknown>;
+
+interface TelemetryEventEnvelope extends TelemetryRecord {
+    EventName?: string;
+    Payload?: unknown;
+    payload?: unknown;
+    event?: unknown;
+    context?: unknown;
+    ClientTimestamp?: number;
+}
+
+const isRecord = (value: unknown): value is TelemetryRecord =>
+    typeof value === 'object' && value !== null;
+
+const asRecord = (value: unknown): TelemetryRecord =>
+    isRecord(value) ? value : {};
+
+const toTelemetryEvents = (value: unknown): TelemetryEventEnvelope[] => {
+    if (isRecord(value) && Array.isArray(value.telemetry)) {
+        return value.telemetry.filter(isRecord) as TelemetryEventEnvelope[];
+    }
+    if (Array.isArray(value)) {
+        return value.filter(isRecord) as TelemetryEventEnvelope[];
+    }
+    if (isRecord(value) && 'EventName' in value) {
+        return [value as TelemetryEventEnvelope];
+    }
+    return [];
+};
+
+const extractEventPayload = (event: TelemetryEventEnvelope): TelemetryRecord => {
+    const payloadCandidates: unknown[] = [];
+    if (isRecord(event.Payload)) {
+        payloadCandidates.push(event.Payload.event, event.Payload.Event, event.Payload);
+    }
+    if (isRecord(event.payload)) {
+        payloadCandidates.push(event.payload.event, event.payload);
+    }
+    payloadCandidates.push(event.event);
+    for (const candidate of payloadCandidates) {
+        if (isRecord(candidate)) return candidate;
+    }
+    return {};
+};
+
+const toStringOrEmpty = (value: unknown): string => {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return String(value);
+    return '';
+};
 
 /**
  * useLogMonitor - Monitors external game log files for telemetry events.
@@ -46,7 +105,7 @@ export const useLogMonitor = (activeUser?: string) => {
     const { playStart, playEnd } = useSoundEffects();
     const wasMatchInProgressRef = useRef(false);
 
-    const [logFeed, setLogFeed] = useState<any[]>([]);
+    const [logFeed, setLogFeed] = useState<TelemetryEventEnvelope[]>([]);
 
     const prevKillCount = useRef(0);
     const currentSquadIds = useRef<string[]>([]);
@@ -248,29 +307,35 @@ export const useLogMonitor = (activeUser?: string) => {
     useEffect(() => {
         if (!ipcRenderer) return;
 
-        const onStatus = (status: any) => setTelemetryStatus(status);
-        const onLogData = (data: any) => {
+        const onStatus = (status: unknown) => {
+            if (!isRecord(status)) return;
+            setTelemetryStatus(status as TelemetryStatusPatch);
+        };
+        const onLogData = (data: unknown) => {
             if (data) {
                 const now = Date.now();
                 if (now - lastActivityRef.current > 5000) {
                     lastActivityRef.current = now;
                     setLastActivity(now);
                 }
-                let events: any[] = [];
-                if (data.telemetry && Array.isArray(data.telemetry)) events = data.telemetry;
-                else if (Array.isArray(data)) events = data;
-                else if (data.EventName) events = [data]; // Single event wrapper
+                const events = toTelemetryEvents(data);
 
                 if (events.length === 0) return;
                 setLogFeed(prev => [...events.slice(0, 10), ...prev].slice(0, 50));
                 setTelemetryStatus({ lastEventAt: now });
 
                 events.forEach(e => {
-                    const name = e.EventName;
-                    const payload = e.Payload?.event || e.Payload?.Event || e.Payload || e.payload?.event || e.payload || e.event || {};
-                    const gameTime = e.ClientTimestamp ? e.ClientTimestamp * 1000 : Date.now();
+                    const name = typeof e.EventName === 'string' ? e.EventName : '';
+                    const payload = extractEventPayload(e);
+                    const clientTimestamp = Number(e.ClientTimestamp);
+                    const gameTime = Number.isFinite(clientTimestamp) ? clientTimestamp * 1000 : Date.now();
                     const wasMatchInProgress = isMatchInProgressRef.current;
-                    const currentMatchSessionId = e.context?.matchSessionId || e.Payload?.context?.matchSessionId || '';
+                    const eventContext = asRecord(e.context);
+                    const payloadContext = asRecord(asRecord(e.Payload).context);
+                    const payloadContextAlt = asRecord(asRecord(e.payload).context);
+                    const currentMatchSessionId = toStringOrEmpty(
+                        eventContext.matchSessionId || payloadContext.matchSessionId || payloadContextAlt.matchSessionId
+                    );
                     const previousMatchSessionId = lastMatchSessionIdRef.current || '';
                     const loadingMapName = typeof payload.loadedMap === 'string'
                         ? payload.loadedMap
@@ -286,7 +351,7 @@ export const useLogMonitor = (activeUser?: string) => {
                     const ageSeconds = Math.floor((Date.now() - gameTime) / 1000);
                     const payloadKeys = Object.keys(payload).join(',');
                     Logger.debug('LogMonitor', `EVENT: ${name} | Age: ${ageSeconds}s | Keys: ${payloadKeys}`);
-                    const potentialId = payload.accountId || payload.userId || payload.playerId || payload.player_id;
+                    const potentialId = toStringOrEmpty(payload.accountId || payload.userId || payload.playerId || payload.player_id);
                     const potentialName = payload.displayName || payload.playerName || payload.name || payload.playerNameString || payload.callsign;
 
                     if (potentialId) {
@@ -302,7 +367,11 @@ export const useLogMonitor = (activeUser?: string) => {
                             Logger.debug('LogMonitor', `Unknown ID detected: ${potentialId}`);
                         }
                     }
-                    const localId = e.context?.client?.accountId;
+                    const localId = toStringOrEmpty(
+                        asRecord(eventContext.client).accountId ||
+                        asRecord(payloadContext.client).accountId ||
+                        asRecord(payloadContextAlt.client).accountId
+                    );
                     if (localId && activeUserRef.current && !playerIdMapRef.current[localId]) {
                         updatePlayerIdMapping(localId, activeUserRef.current);
                     }
@@ -341,8 +410,8 @@ export const useLogMonitor = (activeUser?: string) => {
                     );
                     const localIds = collectIds(
                         localId,
-                        e.Payload?.context?.client?.accountId,
-                        e.payload?.context?.client?.accountId,
+                        asRecord(payloadContext.client).accountId,
+                        asRecord(payloadContextAlt.client).accountId,
                     );
                     const localNames = collectNames(
                         activeUserRef.current,
@@ -359,13 +428,13 @@ export const useLogMonitor = (activeUser?: string) => {
                             return !!mapped && localNames.includes(mapped);
                         });
                     }
-                    let loadout: any = payload.loadout || payload.Loadout || payload.loadOut || payload.LoadOut ||
+                    let loadout: unknown = payload.loadout || payload.Loadout || payload.loadOut || payload.LoadOut ||
                         payload.characterLoadout || payload.character_loadout || payload.playerLoadout || payload.player_loadout ||
                         payload.currentLoadout || payload.current_loadout || payload.loadoutData;
                     if (Array.isArray(loadout)) loadout = loadout[0];
-                    if (loadout?.loadout) loadout = loadout.loadout;
-                    if (loadout?.Loadout) loadout = loadout.Loadout;
-                    if (!loadout || typeof loadout !== 'object') {
+                    if (isRecord(loadout) && loadout.loadout) loadout = loadout.loadout;
+                    if (isRecord(loadout) && loadout.Loadout) loadout = loadout.Loadout;
+                    if (!isRecord(loadout)) {
                         const loadoutSignals = new Set([
                             'guidhero', 'heroguid', 'hero', 'heroname',
                             'guidship', 'shipguid', 'ship', 'shipname',
@@ -378,7 +447,8 @@ export const useLogMonitor = (activeUser?: string) => {
                             loadout = payload;
                         }
                     }
-                    if (loadout && shouldApplyLoadout) {
+                    if (isRecord(loadout) && shouldApplyLoadout) {
+                        const loadoutData = loadout;
                         const { knownMappings, uidMappings, registerUnknownId } = useAppStore.getState();
 
                         let heroName = '';
@@ -407,7 +477,7 @@ export const useLogMonitor = (activeUser?: string) => {
                             return afterColon.replace(/[{}-]/g, '').trim();
                         };
                         const isStableGuid = (value: string): boolean => /^[A-F0-9]{32}$/i.test(value);
-                        const getLoadoutField = (obj: Record<string, any>, keys: string[]) => {
+                        const getLoadoutField = (obj: Record<string, unknown>, keys: string[]) => {
                             for (const key of keys) {
                                 if (obj[key] != null) return obj[key];
                             }
@@ -417,8 +487,8 @@ export const useLogMonitor = (activeUser?: string) => {
                             return undefined;
                         };
 
-                        const rawHeroGuid = getLoadoutField(loadout, ['guidhero', 'heroguid', 'guid_hero', 'heroid', 'hero_id']);
-                        const rawHero = getLoadoutField(loadout, ['hero', 'heroname', 'hero_name']);
+                        const rawHeroGuid = getLoadoutField(loadoutData, ['guidhero', 'heroguid', 'guid_hero', 'heroid', 'hero_id']);
+                        const rawHero = getLoadoutField(loadoutData, ['hero', 'heroname', 'hero_name']);
                         const normalizedHeroGuid = normalizeGuid(rawHeroGuid);
                         const heroGuid = isStableGuid(normalizedHeroGuid) ? normalizedHeroGuid : undefined;
                         const heroRawValue = String(rawHero || '');
@@ -455,9 +525,9 @@ export const useLogMonitor = (activeUser?: string) => {
                             }
                         }
 
-                        const rawShipGuid = getLoadoutField(loadout, ['guidship', 'shipguid', 'guid_ship']);
-                        const rawShipId = getLoadoutField(loadout, ['shipid', 'ship_id']);
-                        const rawShip = getLoadoutField(loadout, ['ship', 'shipname', 'ship_name']);
+                        const rawShipGuid = getLoadoutField(loadoutData, ['guidship', 'shipguid', 'guid_ship']);
+                        const rawShipId = getLoadoutField(loadoutData, ['shipid', 'ship_id']);
+                        const rawShip = getLoadoutField(loadoutData, ['ship', 'shipname', 'ship_name']);
                         const shipRawValue = String(rawShip || '');
                         const shipNameHint = shipRawValue.includes(':')
                             ? (shipRawValue.split(':').pop() || shipRawValue)
@@ -493,7 +563,7 @@ export const useLogMonitor = (activeUser?: string) => {
                                 Logger.info('LogMonitor', `Auto-selected ship from raw telemetry: ${shipName}`);
                             }
                         }
-                        const extractByKeys = (obj: Record<string, any>, keys: string[]): string[] => {
+                        const extractByKeys = (obj: Record<string, unknown>, keys: string[]): string[] => {
                             const out: string[] = [];
                             for (const key of keys) {
                                 const val = getLoadoutField(obj, [key]);
@@ -522,7 +592,7 @@ export const useLogMonitor = (activeUser?: string) => {
                             }
                             return name;
                         };
-                        const weaponGuidCandidates = extractByKeys(loadout, [
+                        const weaponGuidCandidates = extractByKeys(loadoutData, [
                             'guidWeaponPrimary', 'guidWeaponSecondary', 'guidWeaponTertiary',
                             'weaponGuidPrimary', 'weaponGuidSecondary', 'weaponGuidTertiary',
                             'primaryWeaponGuid', 'secondaryWeaponGuid', 'tertiaryWeaponGuid',
@@ -530,7 +600,7 @@ export const useLogMonitor = (activeUser?: string) => {
                             'guid_weapon_primary', 'guid_weapon_secondary', 'guid_weapon_tertiary',
                             'weapons', 'weaponGuids', 'weaponIds', 'weaponSlots',
                         ]);
-                        const equipmentGuidCandidates = extractByKeys(loadout, [
+                        const equipmentGuidCandidates = extractByKeys(loadoutData, [
                             'guidEquipmentPrimary', 'guidEquipmentSecondary', 'guidEquipmentTertiary',
                             'equipmentGuidPrimary', 'equipmentGuidSecondary', 'equipmentGuidTertiary',
                             'primaryEquipmentGuid', 'secondaryEquipmentGuid', 'tertiaryEquipmentGuid',
@@ -538,14 +608,14 @@ export const useLogMonitor = (activeUser?: string) => {
                             'guid_equipment_primary', 'guid_equipment_secondary', 'guid_equipment_tertiary',
                             'equipment', 'equipmentGuids', 'equipmentIds', 'equipmentSlots',
                         ]);
-                        const weaponNameCandidates = extractByKeys(loadout, [
+                        const weaponNameCandidates = extractByKeys(loadoutData, [
                             'weaponPrimary', 'weaponSecondary', 'weaponTertiary',
                             'primaryWeapon', 'secondaryWeapon', 'tertiaryWeapon',
                             'weaponNamePrimary', 'weaponNameSecondary', 'weaponNameTertiary',
                             'weapon_name_primary', 'weapon_name_secondary', 'weapon_name_tertiary',
                             'weaponNames', 'weaponDisplayNames', 'loadoutWeapons',
                         ]);
-                        const equipmentNameCandidates = extractByKeys(loadout, [
+                        const equipmentNameCandidates = extractByKeys(loadoutData, [
                             'equipmentPrimary', 'equipmentSecondary', 'equipmentTertiary',
                             'primaryEquipment', 'secondaryEquipment', 'tertiaryEquipment',
                             'equipmentNamePrimary', 'equipmentNameSecondary', 'equipmentNameTertiary',
@@ -573,17 +643,35 @@ export const useLogMonitor = (activeUser?: string) => {
                                 ? resolvedEquipment
                                 : (currentLoadoutRef.current?.equipment || [])
                         };
+                        const previousLoadoutNames = new Set([
+                            ...(currentLoadoutRef.current?.weapons || []),
+                            ...(currentLoadoutRef.current?.equipment || [])
+                        ].filter(Boolean));
+                        const nextLoadoutNames = new Set([
+                            ...(nextLoadout.weapons || []),
+                            ...(nextLoadout.equipment || [])
+                        ].filter(Boolean));
                         setCurrentLoadout(nextLoadout);
-                        if (nextLoadout.weapons.length > 0) {
-                            const weaponSet: Record<string, number> = {};
-                            nextLoadout.weapons.forEach((w) => { weaponSet[w] = 1; });
-                            setActiveWeapons(weaponSet);
+                        if (nextLoadoutNames.size > 0) {
+                            const existingWeapons = useAppStore.getState().activeWeapons || {};
+                            const nextActiveWeapons: Record<string, number> = { ...existingWeapons };
+                            previousLoadoutNames.forEach((name) => {
+                                if (nextLoadoutNames.has(name)) return;
+                                if ((nextActiveWeapons[name] || 0) <= 1) {
+                                    delete nextActiveWeapons[name];
+                                }
+                            });
+                            nextLoadoutNames.forEach((name) => {
+                                const existingCount = Number(nextActiveWeapons[name] || 0);
+                                nextActiveWeapons[name] = Math.max(1, existingCount);
+                            });
+                            setActiveWeapons(nextActiveWeapons);
                         }
                         if (!telemetryDraftMatchIdRef.current && isMatchInProgressRef.current) {
                             createTelemetryDraftIfNeeded(gameTime, nextLoadout);
                         }
                         updateTelemetryDraftFromLoadout(nextLoadout, gameTime);
-                    } else if (loadout && !shouldApplyLoadout) {
+                    } else if (isRecord(loadout) && !shouldApplyLoadout) {
                         Logger.debug('LogMonitor', `Skipped non-local loadout event: ${name}`);
                     }
                     const actions: TelemetryActions = {

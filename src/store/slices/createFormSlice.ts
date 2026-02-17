@@ -1,11 +1,44 @@
 import { StateCreator } from 'zustand';
 import { CHARACTERS, SHIPS, KillMap, getShipCapacity } from '../../types';
 import { DataSource, getPriority } from './createDataSlice';
+import type { Match } from '../../types';
 
 const getMaxTeammatesForShip = (ship: string): number => {
     const capacity = getShipCapacity(ship || '');
     const normalizedCapacity = capacity > 1 ? capacity : 4;
     return Math.max(0, normalizedCapacity - 1);
+};
+
+const sanitizeTeammates = (teammates: string[] | null | undefined, ship: string): string[] => {
+    const maxTeammates = getMaxTeammatesForShip(ship);
+    if (!Array.isArray(teammates) || maxTeammates <= 0) return [];
+    const unique: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of teammates) {
+        const cleaned = String(raw || '').trim();
+        if (!cleaned) continue;
+        const key = cleaned.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(cleaned);
+        if (unique.length >= maxTeammates) break;
+    }
+    return unique;
+};
+
+const sanitizeNames = (values: string[] | null | undefined): string[] => {
+    if (!Array.isArray(values)) return [];
+    const unique: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of values) {
+        const cleaned = String(raw || '').trim();
+        if (!cleaned) continue;
+        const key = cleaned.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(cleaned);
+    }
+    return unique;
 };
 
 export interface FormSlice {
@@ -28,7 +61,7 @@ export interface FormSlice {
     poiEpic: number;
     elims: string;
     currentNote: string;
-    pendingMatchData: any;
+    pendingMatchData: Partial<Match> | null;
     pendingSubType: string;
     pendingPlacement: number | null;
     pendingArtifactType: string;
@@ -53,7 +86,7 @@ export interface FormSlice {
     setPoiEpic: (val: number) => void;
     setElims: (val: string) => void;
     setCurrentNote: (val: string) => void;
-    setPendingMatchData: (data: any) => void;
+    setPendingMatchData: (data: Partial<Match> | null) => void;
     setPendingSubType: (type: string) => void;
     setPendingPlacement: (placement: number | null) => void;
     setPendingArtifactType: (type: string) => void;
@@ -90,21 +123,37 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
     showWizard: null,
 
     setSelectedTeammates: (teammates) => set((state) => ({
-        selectedTeammates: typeof teammates === 'function' ? teammates(state.selectedTeammates) : teammates
+        selectedTeammates: sanitizeTeammates(
+            typeof teammates === 'function' ? teammates(state.selectedTeammates) : teammates,
+            state.activeShip
+        )
     })),
     toggleTeammate: (name) => set((state) => {
-        const maxTeammates = getMaxTeammatesForShip(state.activeShip);
-        if (state.selectedTeammates.includes(name)) return { selectedTeammates: state.selectedTeammates.filter(t => t !== name) };
-        if (state.selectedTeammates.length < maxTeammates) return { selectedTeammates: [...state.selectedTeammates, name] };
+        const cleaned = String(name || '').trim();
+        if (!cleaned) return {};
+        const key = cleaned.toLowerCase();
+        if (state.selectedTeammates.some((t) => t.toLowerCase() === key)) {
+            return { selectedTeammates: state.selectedTeammates.filter((t) => t.toLowerCase() !== key) };
+        }
+        const next = sanitizeTeammates([...state.selectedTeammates, cleaned], state.activeShip);
+        if (next.length > state.selectedTeammates.length) return { selectedTeammates: next };
         return {};
     }),
     setSelectedOpponents: (opponents) => set((state) => ({
-        selectedOpponents: typeof opponents === 'function' ? opponents(state.selectedOpponents) : opponents
+        selectedOpponents: sanitizeNames(
+            typeof opponents === 'function' ? opponents(state.selectedOpponents) : opponents
+        )
     })),
     toggleOpponent: (name) => set((state) => ({
-        selectedOpponents: state.selectedOpponents.includes(name)
-            ? state.selectedOpponents.filter(o => o !== name)
-            : [...state.selectedOpponents, name]
+        selectedOpponents: (() => {
+            const cleaned = String(name || '').trim();
+            if (!cleaned) return state.selectedOpponents;
+            const key = cleaned.toLowerCase();
+            if (state.selectedOpponents.some((o) => o.toLowerCase() === key)) {
+                return state.selectedOpponents.filter((o) => o.toLowerCase() !== key);
+            }
+            return sanitizeNames([...state.selectedOpponents, cleaned]);
+        })()
     })),
     setActiveHero: (hero, source = 'manual') => set((state) => {
         const telemetryUpdate = source === 'telemetry' ? { telemetryDetectedHero: hero } : {};
@@ -125,8 +174,7 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
         const currentP = getPriority(state.shipSource);
         const newP = getPriority(source);
         if (newP >= currentP || !state.shipSource) {
-            const maxTeammates = getMaxTeammatesForShip(ship);
-            const newTeammates = state.selectedTeammates.filter((_, i) => i < maxTeammates);
+            const newTeammates = sanitizeTeammates(state.selectedTeammates, ship);
             return { activeShip: ship, shipSource: source, selectedTeammates: newTeammates, ...telemetryUpdate };
         }
         return telemetryUpdate;

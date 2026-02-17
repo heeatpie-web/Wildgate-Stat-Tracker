@@ -72,7 +72,7 @@ describe('artifactService', () => {
       expect(result).toEqual({
         images: ['/a.png'],
         imageFiles: [{ artifactId: 'tok_1', filename: 'a.png', path: '/a.png' }],
-        telemetry: [{ event: 'test' }],
+        telemetry: [[{ event: 'test' }]],
       });
     });
 

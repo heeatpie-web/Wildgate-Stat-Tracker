@@ -638,3 +638,247 @@
   - Risk Tier: `T2`
   - Execution Path: `FULL_PATH`
   - Reason: user-facing behavior updates across OCR review UI and destructive match action controls.
+
+---
+
+## Intake - 2026-02-16 - IQR-PLAYERNAME-001
+- Goal: fix `Intelligence Review Required` so detected `player_name` entries can be confirmed into roster, edited reliably, and removed cleanly from OCR-applied session references.
+- Constraints:
+  - Keep scope narrow to `ReviewQueueModal` behavior for `player_name` and adjacent `roster_candidate` regression safety.
+  - No OCR parser/model changes and no post-match OCR flow redesign in this pass.
+  - Preserve existing data schema and IPC contracts.
+- Out-of-scope:
+  - Telemetry post-match blocking OCR prompt flow.
+  - OCR dedupe/color-assignment algorithm changes.
+  - New review modal UI architecture.
+- Done condition:
+  - Confirming a `player_name` adds it to roster and clears the pending review item.
+  - Editing a `player_name` updates session references and adds the edited name to roster.
+  - Deleting relevant review items removes linked names from session teams and selected teammate/opponent lists.
+  - Targeted tests + lint + typecheck evidence recorded.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: runtime behavior updates in primary review workflow with user-facing data integrity impact.
+
+---
+
+## Intake - 2026-02-16 - POSTMATCH-OCR-GATE-002
+- Goal: stop result buttons from auto-running OCR and require explicit user confirmation before OCR processing starts after result selection.
+- Constraints:
+  - Keep scope focused to recording result submission flow in `ActionPanel`.
+  - Preserve existing OCR review gate behavior when pending OCR data already exists.
+  - No OCR parser/model changes and no telemetry draft architecture rewrite in this pass.
+- Out-of-scope:
+  - Full telemetry post-match prompt redesign in `App.tsx`.
+  - OCR dedupe/team-color quality improvements.
+  - New persistence or IPC contracts.
+- Done condition:
+  - Clicking Win/Loss/Draw no longer auto-calls `processAllStored(...)`.
+  - When queued OCR exists, a blocking prompt appears and OCR starts only on explicit user action.
+  - User can continue to wizard without OCR from that prompt.
+  - Targeted tests + lint + typecheck evidence recorded.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: runtime behavior change on primary result-submission path with user-visible OCR flow impact.
+
+---
+
+## Intake - 2026-02-16 - POSTMATCH-TELEMETRY-PROMPT-003
+- Goal: align telemetry post-match prompt flow with the new explicit OCR gate so result selection never bypasses recording submission logic.
+- Constraints:
+  - Keep scope narrow to telemetry draft prompt handling in `src/App.tsx`.
+  - Preserve existing telemetry draft hydration and pending-match data wiring.
+  - No OCR parser/model changes and no new IPC contract changes.
+- Out-of-scope:
+  - Broad telemetry prompt redesign/layout rewrite.
+  - OCR dedupe/team-color quality changes.
+  - New persistence schema changes.
+- Done condition:
+  - Post-match telemetry result actions route through the same `submission:open-result` path used by recording results.
+  - If user is not on Recording view, flow switches to Recording first and then opens the explicit result/OCR gate behavior.
+  - Prompt copy makes it explicit that OCR does not auto-start and requires explicit user action.
+  - Targeted lint/typecheck validation evidence is recorded.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: user-visible runtime behavior update in post-match result flow with OCR gating impact.
+
+---
+
+## Intake - 2026-02-16 - OCR-TEAM-CAP-GUARD-004
+- Goal: stop OCR/session flows from over-registering teammates by enforcing dedupe + ship-capacity limits wherever teammates are set.
+- Constraints:
+  - Keep scope narrow to teammate state normalization in `src/store/slices/createFormSlice.ts`.
+  - Preserve existing ship-capacity semantics (`max teammates = crew capacity - 1`, with unknown-ship safe fallback).
+  - No OCR parser/model changes.
+- Out-of-scope:
+  - Team-color assignment algorithm changes.
+  - Enemy team dedupe/mapping redesign.
+  - Broad OCR review modal UX redesign.
+- Done condition:
+  - `setSelectedTeammates` cannot persist duplicates or exceed capacity even when called with large OCR-generated arrays/updaters.
+  - Teammate normalization is case-insensitive for duplicate protection.
+  - Targeted regression tests + lint + typecheck evidence recorded.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: runtime state-guard behavior change in core recording/OCR paths.
+
+---
+
+## Intake - 2026-02-16 - REMAINING-UX-TELEMETRY-005
+- Goal: close remaining reported issues in one pass:
+  - wizard must allow manual ship weapons/equipment entry,
+  - telemetry must auto-select and visibly indicate prospector weapons/equipment,
+  - OCR opponent team color assignment should avoid collapsing teams into a single color bucket and reduce duplicate player registration.
+- Constraints:
+  - Keep changes targeted to existing recording/OCR flows (`Wizard`, telemetry monitor, recording indicators, OCR apply mapping).
+  - Preserve existing persistence schema and IPC contracts.
+  - No OCR model/parser architecture changes.
+- Out-of-scope:
+  - Full match-end UX redesign beyond current prompt/dialog patterns.
+  - New backend/cloud processing behavior.
+  - Broad Smart Captures IA redesign.
+- Done condition:
+  - Wizard includes editable weapon/equipment slots that persist into final submission loadout.
+  - Telemetry loadout apply sets both weapons and equipment selections in session state.
+  - Recording telemetry indicator panel explicitly labels weapons/equipment as telemetry auto-selection.
+  - OCR apply path normalizes/opportunistically disambiguates team colors and avoids obvious duplicate-player fanout across opponent teams.
+  - Targeted validation evidence (`vitest` touched tests, touched-file `eslint`, `typecheck`) is recorded.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file runtime/UI behavior updates in core recording and OCR workflows.
+
+---
+
+## Intake - 2026-02-17 - AUDIT-REMEDIATION-001
+- Goal: implement the audited remediation plan for type-boundary safety, dashboard type suppressions, telemetry archive shape normalization, legacy migration debt reduction, and friend-beta gate evidence.
+- Constraints:
+  - Keep scope narrow to audited items only.
+  - Do not revert or modify unrelated dirty worktree changes.
+  - Preserve data backward compatibility for existing users.
+  - Prefer incremental hardening at storage/IPC boundaries over repo-wide `any` cleanup.
+- In scope:
+  - Harden `StorageData` and persisted/IPC boundary types in:
+    - `src/utils/storage.ts`
+    - `src/store/useAppStore.ts`
+    - `src/utils/artifactService.ts`
+  - Remove `@ts-ignore` and explicit layout `any` usage in:
+    - `src/components/DashboardLayout.tsx`
+  - Canonicalize telemetry archive payload handling through shared normalization utility:
+    - `src/utils/telemetryArchive.ts`
+    - `src/components/SimulatorPanel.tsx`
+    - `src/components/SmartCapturesPanel.tsx`
+  - Introduce one-time legacy migration markers for storage compatibility debt containment.
+  - Execute and log friend-beta gate evidence:
+    - `npm run -s test`
+    - `npm run -s build`
+    - `npm run -s typecheck`
+- Out-of-scope:
+  - Repo-wide removal of all `any` usage.
+  - Broad telemetry pipeline redesign beyond payload normalization.
+  - New product features unrelated to audit findings.
+- Done condition:
+  - High-risk storage/IPC boundaries no longer rely on `any`.
+  - `DashboardLayout` has zero `@ts-ignore`.
+  - Renderer telemetry archive consumers rely on one shared normalizer.
+  - Legacy migration markers prevent repeated migration work.
+  - Validation evidence for gate commands is recorded in `03_VALIDATION`.
+- AOM_V2:
+  - Risk Tier: `T3`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file runtime and persistence behavior updates touching core storage, IPC payloads, and release-readiness gate evidence.
+
+---
+
+## Intake - 2026-02-17 - AUDIT-REMEDIATION-002
+- Goal: complete a second type-safety pass by reducing `any` usage in core OCR/session runtime flows while preserving behavior.
+- Constraints:
+  - Keep scope narrow to runtime OCR/session and review-panel paths only.
+  - Do not refactor analytics/dev-only modules in this pass.
+  - Preserve existing UI behavior and persisted data contracts.
+- In scope:
+  - Replace high-risk `any` usage in:
+    - `src/hooks/useSmartCapture.ts`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/components/recording/ActionPanel.tsx`
+    - `src/components/ReviewQueueModal.tsx`
+    - `src/providers/GameDataProvider.tsx`
+    - `src/store/slices/createFormSlice.ts`
+  - Add/adjust minimal supporting types where needed.
+  - Run focused lint + typecheck + full test/build gates and record evidence.
+- Out-of-scope:
+  - Repo-wide elimination of all `any`.
+  - Analytics dashboard type model redesign.
+  - IPC/electron contract redesign.
+- Done condition:
+  - Targeted runtime files above no longer use broad `any` for primary data/control paths.
+  - `typecheck`, `test`, and `build` pass.
+  - AGENTS execution/validation/handoff/decision docs updated with evidence.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file runtime typing hardening with behavior-preservation constraints.
+
+---
+
+## Intake - 2026-02-17 - AUDIT-REMEDIATION-003
+- Goal: perform a follow-up runtime typing hardening pass to reduce remaining high-risk `any` usage in telemetry event/status flows without changing behavior.
+- Constraints:
+  - Keep scope narrow to telemetry runtime plumbing and status typing.
+  - Preserve existing telemetry/OCR/session behavior and prompt flow semantics.
+  - Avoid analytics/dev-panel refactors in this pass.
+- In scope:
+  - Replace explicit high-risk `any` usage in:
+    - `src/hooks/useLogMonitor.ts`
+    - `src/App.tsx`
+  - Tighten telemetry status typing contracts in:
+    - `src/store/slices/createUISlice.ts`
+    - `src/providers/UIStateProvider.tsx`
+  - Run focused validation (`eslint` touched files, `typecheck`, targeted `vitest`) and full gates (`test`, `build`).
+- Out-of-scope:
+  - Repo-wide `any` elimination.
+  - Analytics/dashboard and dev-only panel type-model cleanup.
+  - Broad Electron IPC contract redesign.
+- Done condition:
+  - Targeted telemetry runtime files no longer use broad `any` in primary event/status paths.
+  - UI telemetry status setter/context signatures use explicit typed status payloads.
+  - `typecheck`, `test`, and `build` pass with evidence in `03_VALIDATION`.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file runtime telemetry type hardening in active behavior paths.
+
+---
+
+## Intake - 2026-02-17 - AUDIT-REMEDIATION-004
+- Goal: implement the two previously deferred partial fixes:
+  - improve deterministic opponent team color assignment,
+  - add optional background OCR processing after result click.
+- Constraints:
+  - Preserve default explicit OCR gate behavior unless the new option is enabled.
+  - Keep existing OCR/wizard/session persistence contracts backward-compatible.
+  - Keep scope limited to these two deferred items and targeted validation.
+- In scope:
+  - Add deterministic opponent color assignment helper with preference for stable prior mapping/overlap and deterministic fallback.
+  - Apply color assignment helper in runtime OCR apply paths (`App`, Smart Captures apply path).
+  - Add a persisted setting to allow background OCR processing after result click.
+  - Wire setting into `ActionPanel` result flow.
+  - Add targeted tests for:
+    - color assignment deterministic behavior,
+    - background OCR option behavior.
+- Out-of-scope:
+  - Broad OCR pipeline/model changes.
+  - Repo-wide typing or architecture refactors.
+  - Non-related UI redesign.
+- Done condition:
+  - Opponent team colors are assigned deterministically and avoid unstable duplicate fallbacks in the same apply batch.
+  - Result-click flow supports optional background OCR mode; default manual gate remains intact.
+  - Targeted tests + `eslint` + `typecheck` + full `test` + `build` pass with evidence recorded.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file behavior changes in OCR/session apply and submission flow with persisted settings impact.

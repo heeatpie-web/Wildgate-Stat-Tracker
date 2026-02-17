@@ -21,7 +21,7 @@ import { ReviewQueueModal } from './components/ReviewQueueModal';
 import Tutorial from './components/Tutorial';
 import { WindowResizer } from './components/WindowResizer';
 type LazyDashboardView = 'analytics' | 'history' | 'smart-captures' | 'players' | 'dev-ocr';
-type LazyDashboardModule = { default: React.ComponentType<any> };
+type LazyDashboardModule = { default: React.ComponentType<object> };
 const lazyDashboardStatus: Record<LazyDashboardView, 'idle' | 'loading' | 'ready' | 'error'> = {
     analytics: 'idle',
     history: 'idle',
@@ -82,6 +82,7 @@ import { StorageService } from './utils/storage';
 import { playSoundCue } from './utils/soundCues';
 import { shouldQueueLearningReview } from './utils/ocrAliasEngine';
 import { buildAliasVariantMap, resolveOcrName } from './utils/ocrNameResolver';
+import { assignDeterministicTeamColors, buildPlayerColorHints } from './utils/ocr/teamColorAssignment';
 
 interface TelemetryRetentionStatus {
     exceedsLimits: boolean;
@@ -101,6 +102,24 @@ interface TelemetryDraftPromptState {
     duration: string;
     phase: 'midmatch' | 'postmatch';
 }
+
+interface WindowWithIdleCallbacks {
+    requestIdleCallback?: (callback: IdleRequestCallback, opts?: { timeout: number }) => number;
+    cancelIdleCallback?: (id: number) => void;
+}
+
+type UnknownRecord = Record<string, unknown>;
+
+const isRecord = (value: unknown): value is UnknownRecord =>
+    typeof value === 'object' && value !== null;
+
+const asRecord = (value: unknown): UnknownRecord =>
+    isRecord(value) ? value : {};
+
+const toFiniteNumber = (value: unknown, fallback = 0): number => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+};
 
 type FinalMatchResult = Exclude<MatchResult, 'Ongoing'>;
 
@@ -122,6 +141,7 @@ const App: React.FC = () => {
     const [telemetryPruneStatus, setTelemetryPruneStatus] = useState<TelemetryRetentionStatus | null>(null);
     const [telemetryPruneBusy, setTelemetryPruneBusy] = useState(false);
     const [telemetryDraftPrompt, setTelemetryDraftPrompt] = useState<TelemetryDraftPromptState | null>(null);
+    const [telemetryDraftPendingResult, setTelemetryDraftPendingResult] = useState<FinalMatchResult | null>(null);
     const [isCompactNav, setIsCompactNav] = useState(() => window.innerWidth < 1024);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const navToggleRef = React.useRef<HTMLButtonElement | null>(null);
@@ -155,6 +175,7 @@ const App: React.FC = () => {
         activeUser,
         activeMode,
         activeView,
+        setActiveView,
         toast, setToast,
         updateStatus, setUpdateStatus,
         hiddenForScan,
@@ -360,8 +381,9 @@ const App: React.FC = () => {
 
         const scheduleNext = () => {
             if (cancelled || queue.length === 0) return;
-            const requestIdle = (window as any).requestIdleCallback as ((callback: IdleRequestCallback, opts?: { timeout: number }) => number) | undefined;
-            const cancelIdle = (window as any).cancelIdleCallback as ((id: number) => void) | undefined;
+            const idleWindow = window as WindowWithIdleCallbacks;
+            const requestIdle = idleWindow.requestIdleCallback;
+            const cancelIdle = idleWindow.cancelIdleCallback;
             if (requestIdle) {
                 const id = requestIdle(() => runNext(), { timeout: Math.max(350, Math.min(1600, adaptivePreloadBudgetMs)) });
                 idleIds.push(id);
@@ -378,7 +400,7 @@ const App: React.FC = () => {
         scheduleNext();
         return () => {
             cancelled = true;
-            const cancelIdle = (window as any).cancelIdleCallback as ((id: number) => void) | undefined;
+            const cancelIdle = (window as WindowWithIdleCallbacks).cancelIdleCallback;
             idleIds.forEach((id) => cancelIdle?.(id));
             timeoutIds.forEach((id) => window.clearTimeout(id));
         };
@@ -459,15 +481,33 @@ const App: React.FC = () => {
         const api = getElectronAPI();
         if (!api) return;
 
-        const normalizeStatus = (raw: any): TelemetryRetentionStatus | null => {
-            if (!raw) return null;
-            if (raw.success === true && raw.data) return raw.data;
-            if (raw.exceedsLimits != null) return raw;
-            return null;
+        const normalizeStatus = (raw: unknown): TelemetryRetentionStatus | null => {
+            if (!isRecord(raw)) return null;
+            const normalized = (raw.success === true && isRecord(raw.data))
+                ? raw.data
+                : raw;
+            if (!isRecord(normalized) || typeof normalized.exceedsLimits !== 'boolean') return null;
+            const previewRecord = asRecord(normalized.prunePreview);
+            const hasPreview =
+                'wouldRemoveEntries' in previewRecord ||
+                'wouldFreeBytes' in previewRecord ||
+                'remainingBytes' in previewRecord;
+            return {
+                exceedsLimits: normalized.exceedsLimits,
+                totalEntries: toFiniteNumber(normalized.totalEntries),
+                sizeBytes: toFiniteNumber(normalized.sizeBytes),
+                maxBytes: toFiniteNumber(normalized.maxBytes),
+                maxAgeMs: toFiniteNumber(normalized.maxAgeMs),
+                prunePreview: hasPreview ? {
+                    wouldRemoveEntries: toFiniteNumber(previewRecord.wouldRemoveEntries),
+                    wouldFreeBytes: toFiniteNumber(previewRecord.wouldFreeBytes),
+                    remainingBytes: toFiniteNumber(previewRecord.remainingBytes),
+                } : undefined,
+            };
         };
 
         api.invoke('telemetry-retention-status')
-            .then((raw: any) => {
+            .then((raw: unknown) => {
                 const status = normalizeStatus(raw);
                 if (status?.exceedsLimits && !telemetryPruneSnoozedRef.current) {
                     setTelemetryPruneStatus(status);
@@ -475,7 +515,7 @@ const App: React.FC = () => {
             })
             .catch(() => {});
 
-        const unsubPruneNeeded = api.on('telemetry-prune-needed', (status: any) => {
+        const unsubPruneNeeded = api.on('telemetry-prune-needed', (status: unknown) => {
             const normalized = normalizeStatus(status);
             if (!normalized?.exceedsLimits) return;
             if (telemetryPruneSnoozedRef.current) return;
@@ -499,9 +539,10 @@ const App: React.FC = () => {
         setTelemetryPruneBusy(true);
         try {
             const raw = await api.invoke('telemetry-prune-apply');
-            if (raw?.success) {
-                const removed = raw.data?.removedEntries ?? 0;
-                const freedBytes = raw.data?.freedBytes ?? 0;
+            if (isRecord(raw) && raw.success === true) {
+                const data = asRecord(raw.data);
+                const removed = toFiniteNumber(data.removedEntries);
+                const freedBytes = toFiniteNumber(data.freedBytes);
                 setTelemetryPruneStatus(null);
                 setToast({
                     message: `Telemetry prune complete: removed ${removed} entries, freed ${formatBytes(freedBytes)}.`,
@@ -509,9 +550,15 @@ const App: React.FC = () => {
                 });
                 return;
             }
-            setToast({ message: raw?.message || 'Telemetry prune failed.', type: 'error' });
-        } catch (e: any) {
-            setToast({ message: `Telemetry prune failed: ${e?.message || 'Unknown error'}`, type: 'error' });
+            const message = isRecord(raw) && typeof raw.message === 'string'
+                ? raw.message
+                : 'Telemetry prune failed.';
+            setToast({ message, type: 'error' });
+        } catch (e: unknown) {
+            const message = isRecord(e) && typeof e.message === 'string'
+                ? e.message
+                : 'Unknown error';
+            setToast({ message: `Telemetry prune failed: ${message}`, type: 'error' });
         } finally {
             setTelemetryPruneBusy(false);
         }
@@ -601,15 +648,24 @@ const App: React.FC = () => {
         handledTelemetryDraftPostmatchPromptIdsRef.current.add(draft.id);
         setPendingMatchData(pendingData);
         setTelemetryDraftPrompt(null);
-        if (activeView === 'recording') {
+        if (activeView !== 'recording') {
+            setTelemetryDraftPendingResult(result);
+            setActiveView('recording');
+        } else {
             window.dispatchEvent(new CustomEvent('submission:open-result', {
                 detail: { result, source: 'telemetry-draft-prompt' }
             }));
-        } else {
-            setShowWizard(result);
         }
-        setToast({ message: `Telemetry draft loaded. Confirm ${result} details in the wizard.`, type: 'success' });
-    }, [activeView, matches, setPendingMatchData, setShowWizard, setToast, telemetryDraftPrompt]);
+        setToast({ message: `Telemetry draft loaded. Confirm ${result} and OCR choice in Recording.`, type: 'success' });
+    }, [activeView, matches, setActiveView, setPendingMatchData, setToast, telemetryDraftPrompt]);
+
+    useEffect(() => {
+        if (!telemetryDraftPendingResult || activeView !== 'recording') return;
+        window.dispatchEvent(new CustomEvent('submission:open-result', {
+            detail: { result: telemetryDraftPendingResult, source: 'telemetry-draft-prompt' }
+        }));
+        setTelemetryDraftPendingResult(null);
+    }, [activeView, telemetryDraftPendingResult]);
 
     useEffect(() => {
         const onTelemetryDraftReady = (evt: Event) => {
@@ -803,7 +859,19 @@ const App: React.FC = () => {
                 suggestions: top
             };
         };
-
+        const dedupeNames = (values: string[]) => {
+            const seen = new Set<string>();
+            const unique: string[] = [];
+            values.forEach((raw) => {
+                const cleaned = String(raw || '').trim();
+                if (!cleaned) return;
+                const key = normalizeOcrName(cleaned).toLowerCase();
+                if (seen.has(key)) return;
+                seen.add(key);
+                unique.push(cleaned);
+            });
+            return unique;
+        };
         if (data.playerShip?.shipType) {
             setActiveShip(data.playerShip.shipType, 'ocr');
         }
@@ -854,34 +922,51 @@ const App: React.FC = () => {
             }
         });
 
-        data.opponentTeams.forEach(team => {
-            team.players.forEach(player => {
-                const resolved = resolvePlayerName(player.name, selectedOpponents);
-                if (resolved && !selectedOpponents.some(o => o.toLowerCase() === resolved.toLowerCase())) {
-                    setSelectedOpponents((prev: string[]) => prev.some(o => o.toLowerCase() === resolved.toLowerCase()) ? prev : [...prev, resolved]);
-                }
+        const seenOpponentPlayers = new Set<string>();
+        const unresolvedTeams = data.opponentTeams.map((team) => {
+            const resolvedPlayers = dedupeNames(team.players.map((player) => resolvePlayerName(player.name, selectedOpponents)));
+            const uniquePlayers = resolvedPlayers.filter((name) => {
+                const key = normalizeOcrName(name).toLowerCase();
+                if (seenOpponentPlayers.has(key)) return false;
+                seenOpponentPlayers.add(key);
+                return true;
             });
+            return {
+                teamName: team.teamName || 'Unknown Team',
+                shipType: team.shipType || '',
+                color: team.color || 'unknown',
+                players: uniquePlayers,
+            };
         });
+        const playerColorHints = buildPlayerColorHints(sessionTeams);
+        const assignedColors = assignDeterministicTeamColors(unresolvedTeams, { playerColorHints });
+        const structuredTeams = unresolvedTeams
+            .map((team, index) => ({
+                ...team,
+                color: assignedColors[index] || 'unknown',
+            }))
+            .filter((team) => team.players.length > 0 || team.teamName || team.shipType);
+
+        const mergedOpponents = structuredTeams.flatMap((team) => team.players);
+        if (mergedOpponents.length > 0) {
+            setSelectedOpponents((prev: string[]) => dedupeNames([...prev, ...mergedOpponents]));
+        }
 
         if (data.artifactType) {
             useAppStore.getState().setPendingArtifactType(data.artifactType);
         }
-
-        const structuredTeams = data.opponentTeams.map(team => ({
-            teamName: team.teamName || 'Unknown Team',
-            shipType: team.shipType || '',
-            color: team.color || 'unknown',
-            players: team.players.map(p => resolvePlayerName(p.name, selectedOpponents)),
-        }));
 
         const newSessionTeams = { ...sessionTeams };
         const newShipTypes: Record<string, string> = {};
         structuredTeams.forEach(team => {
             const colorKey = team.color || 'unknown';
             if (!newSessionTeams[colorKey]) newSessionTeams[colorKey] = [];
+            const existingKeys = new Set(newSessionTeams[colorKey].map((name) => normalizeOcrName(name).toLowerCase()));
             team.players.forEach(p => {
-                if (p && !newSessionTeams[colorKey].includes(p)) {
+                const key = normalizeOcrName(p || '').toLowerCase();
+                if (p && key && !existingKeys.has(key)) {
                     newSessionTeams[colorKey].push(p);
+                    existingKeys.add(key);
                 }
             });
             if (team.shipType) {
@@ -1178,7 +1263,7 @@ const App: React.FC = () => {
                         ) : (
                             <>
                                 <div className="mt-1 text-label-sm opacity-70">
-                                    Duration: {telemetryDraftPrompt.duration}. Choose a result now, or start Smart Capture first.
+                                    Duration: {telemetryDraftPrompt.duration}. Choose a result to continue in Recording. OCR stays manual until you choose Process OCR.
                                 </div>
                                 <div className="mt-3 grid grid-cols-3 gap-2">
                                     <button

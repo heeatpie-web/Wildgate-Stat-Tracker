@@ -1,32 +1,56 @@
 import { getElectronAPI } from './electronAPI';
+import type { Match } from '../types';
+import type { TimelineEvent } from '../store/slices/createDataSlice';
+import type { OcrCorrection, PlayerProfile } from '../store/slices/createMappingSlice';
 import type { OcrAliasModel, OcrLearningEvent, OcrLearningQueueItem } from './ocrAliasEngine';
+
+type StringMap = Record<string, string>;
+
+interface StorageSettings extends Record<string, unknown> {
+  autoBackup?: boolean;
+}
+
+type StorageLayoutItem = Record<string, unknown>;
+type StorageLayouts = Record<string, StorageLayoutItem[]>;
+
+interface StorageMeta {
+  mappingsToUidMigratedAt?: number;
+  legacyV13MigratedAt?: number;
+}
+
+interface UidMappings {
+  players: StringMap;
+  ships: StringMap;
+  weapons: StringMap;
+  equipment: StringMap;
+}
+
+interface UidSeedState {
+  seedVersionApplied: number | null;
+}
+
 export interface StorageData {
-  matches: any[];
+  matches: Match[];
   players: string[];
   pilotRegistry: string[];
   favorites: string[];
   pilotNotes: Record<string, string>;
-  playerIdMap?: Record<string, string>;
-  ocrCorrections?: Record<string, any>;
+  playerIdMap?: StringMap;
+  ocrCorrections?: Record<string, OcrCorrection>;
   ocrAliasModel?: OcrAliasModel;
   ocrLearningEvents?: OcrLearningEvent[];
   ocrLearningQueue?: OcrLearningQueueItem[];
-  settings: Record<string, any>;
-  layouts: any;
+  settings: StorageSettings;
+  layouts: StorageLayouts;
   lastActivity: number;
-  mappings?: Record<string, string>;
-  playerProfiles?: Record<string, any>;
-  timelineEvents?: any[];
-  uidMappings?: {
-    players: Record<string, string>;
-    ships: Record<string, string>;
-    weapons: Record<string, string>;
-    equipment: Record<string, string>;
-  };
-  uidSeedState?: {
-    seedVersionApplied: number | null;
-  };
+  mappings?: StringMap;
+  playerProfiles?: Record<string, PlayerProfile>;
+  timelineEvents?: TimelineEvent[];
+  uidMappings?: UidMappings;
+  uidSeedState?: UidSeedState;
+  storageMeta?: StorageMeta;
 }
+
 const LEGACY_KEYS = [
   'wg_v13_matches', 'wg_v13_players', 'wg_v13_pilot_registry',
   'wg_v13_favorites', 'wg_v13_pilot_notes', 'wg_mode', 'wg_theme_accent',
@@ -35,44 +59,203 @@ const LEGACY_KEYS = [
   'wg_layouts_v11', 'wg_last_activity'
 ];
 
-let saveTimeout: any = null;
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 let pendingResolvers: Array<(ok: boolean) => void> = [];
 let lastData: StorageData | null = null;
 let lastPersistedVersion = 0;
 let pendingVersion = 0;
 let lastAutoBackupCount: number | null = null;
 let lifecycleGuardsBound = false;
-let intervalFlushHandle: any = null;
+let intervalFlushHandle: ReturnType<typeof setInterval> | number | null = null;
 
 const hasUnsavedChanges = () => pendingVersion > lastPersistedVersion;
 
-const emptyUidMappings = () => ({
-  players: {} as Record<string, string>,
-  ships: {} as Record<string, string>,
-  weapons: {} as Record<string, string>,
-  equipment: {} as Record<string, string>,
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const parseJsonSafely = (value: string): unknown => {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+};
+
+const toStringArray = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : [];
+
+const toStringMap = (value: unknown): StringMap => {
+  if (!isRecord(value)) return {};
+  const map: StringMap = {};
+  Object.entries(value).forEach(([key, raw]) => {
+    if (typeof raw === 'string') map[key] = raw;
+  });
+  return map;
+};
+
+const toLayouts = (value: unknown): StorageLayouts => {
+  if (!isRecord(value)) return {};
+  const layouts: StorageLayouts = {};
+  Object.entries(value).forEach(([key, raw]) => {
+    if (!Array.isArray(raw)) return;
+    layouts[key] = raw.filter((item): item is StorageLayoutItem => isRecord(item));
+  });
+  return layouts;
+};
+
+const toTimelineEvents = (value: unknown): TimelineEvent[] =>
+  Array.isArray(value) ? value.filter((item): item is TimelineEvent => isRecord(item)) : [];
+
+const toPlayerProfiles = (value: unknown): Record<string, PlayerProfile> => {
+  if (!isRecord(value)) return {};
+  const profiles: Record<string, PlayerProfile> = {};
+  Object.entries(value).forEach(([key, raw]) => {
+    if (!isRecord(raw)) return;
+    profiles[key] = raw as unknown as PlayerProfile;
+  });
+  return profiles;
+};
+
+const toOcrCorrections = (value: unknown): Record<string, OcrCorrection> => {
+  if (!isRecord(value)) return {};
+  const corrections: Record<string, OcrCorrection> = {};
+  Object.entries(value).forEach(([key, raw]) => {
+    if (!isRecord(raw)) return;
+    corrections[key] = raw as unknown as OcrCorrection;
+  });
+  return corrections;
+};
+
+const toNumberOr = (value: unknown, fallback: number) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+};
+
+const emptyUidMappings = (): UidMappings => ({
+  players: {},
+  ships: {},
+  weapons: {},
+  equipment: {},
 });
 
-const normalizeUidMappings = (input?: Partial<StorageData['uidMappings']>) => ({
+const normalizeUidMappings = (input?: Partial<UidMappings>): UidMappings => ({
   players: { ...(input?.players || {}) },
   ships: { ...(input?.ships || {}) },
   weapons: { ...(input?.weapons || {}) },
   equipment: { ...(input?.equipment || {}) },
 });
 
+const toUidMappings = (value: unknown): UidMappings => {
+  if (!isRecord(value)) return emptyUidMappings();
+  return normalizeUidMappings({
+    players: toStringMap(value.players),
+    ships: toStringMap(value.ships),
+    weapons: toStringMap(value.weapons),
+    equipment: toStringMap(value.equipment),
+  });
+};
+
+const toUidSeedState = (value: unknown): UidSeedState => {
+  if (!isRecord(value)) return { seedVersionApplied: null };
+  const seedVersionApplied = value.seedVersionApplied;
+  if (seedVersionApplied == null) return { seedVersionApplied: null };
+  const parsed = Number(seedVersionApplied);
+  return {
+    seedVersionApplied: Number.isFinite(parsed) ? parsed : null,
+  };
+};
+
+const toStorageMeta = (value: unknown): StorageMeta => {
+  if (!isRecord(value)) return {};
+  const mappingsToUidMigratedAt = toNumberOr(value.mappingsToUidMigratedAt, 0);
+  const legacyV13MigratedAt = toNumberOr(value.legacyV13MigratedAt, 0);
+  return {
+    ...(mappingsToUidMigratedAt > 0 ? { mappingsToUidMigratedAt } : {}),
+    ...(legacyV13MigratedAt > 0 ? { legacyV13MigratedAt } : {}),
+  };
+};
+
+const createDefaultStorageData = (): StorageData => ({
+  matches: [],
+  players: [],
+  pilotRegistry: [],
+  favorites: [],
+  pilotNotes: {},
+  settings: {},
+  layouts: {},
+  lastActivity: Date.now(),
+  uidMappings: emptyUidMappings(),
+  uidSeedState: { seedVersionApplied: null },
+  storageMeta: {},
+});
+
+const coerceStorageData = (value: unknown): StorageData | null => {
+  if (!isRecord(value)) return null;
+  const defaults = createDefaultStorageData();
+  const matches = Array.isArray(value.matches)
+    ? value.matches.filter((item): item is Match => isRecord(item))
+    : defaults.matches;
+  return {
+    ...defaults,
+    matches,
+    players: toStringArray(value.players),
+    pilotRegistry: toStringArray(value.pilotRegistry),
+    favorites: toStringArray(value.favorites),
+    pilotNotes: toStringMap(value.pilotNotes),
+    playerIdMap: toStringMap(value.playerIdMap),
+    ocrCorrections: toOcrCorrections(value.ocrCorrections),
+    ocrAliasModel: isRecord(value.ocrAliasModel) ? value.ocrAliasModel as unknown as OcrAliasModel : undefined,
+    ocrLearningEvents: Array.isArray(value.ocrLearningEvents)
+      ? value.ocrLearningEvents.filter((item): item is OcrLearningEvent => isRecord(item))
+      : [],
+    ocrLearningQueue: Array.isArray(value.ocrLearningQueue)
+      ? value.ocrLearningQueue.filter((item): item is OcrLearningQueueItem => isRecord(item))
+      : [],
+    settings: isRecord(value.settings) ? { ...value.settings } : {},
+    layouts: toLayouts(value.layouts),
+    lastActivity: toNumberOr(value.lastActivity, Date.now()),
+    mappings: toStringMap(value.mappings),
+    playerProfiles: toPlayerProfiles(value.playerProfiles),
+    timelineEvents: toTimelineEvents(value.timelineEvents),
+    uidMappings: toUidMappings(value.uidMappings),
+    uidSeedState: toUidSeedState(value.uidSeedState),
+    storageMeta: toStorageMeta(value.storageMeta),
+  };
+};
+
+const rememberLoadedData = (data: StorageData): StorageData => {
+  lastData = data;
+  lastPersistedVersion = pendingVersion;
+  return data;
+};
+
 const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
   const ipc = getElectronAPI();
-  const merged: StorageData = {
+  const merged: StorageData & {
+    uidMappings: UidMappings;
+    uidSeedState: UidSeedState;
+    storageMeta: StorageMeta;
+  } = {
     ...data,
     uidMappings: normalizeUidMappings(data.uidMappings || emptyUidMappings()),
-    uidSeedState: data.uidSeedState || { seedVersionApplied: null }
+    uidSeedState: data.uidSeedState || { seedVersionApplied: null },
+    storageMeta: data.storageMeta || {},
   };
 
-  // Legacy migration: old mappings -> player UID domain
-  if (merged.mappings && Object.keys(merged.mappings).length > 0) {
-    merged.uidMappings!.players = {
+  const hasLegacyMappings = !!(merged.mappings && Object.keys(merged.mappings).length > 0);
+  const mappingsMigrated = !!merged.storageMeta?.mappingsToUidMigratedAt;
+
+  // One-time migration: old knownMappings -> player UID domain.
+  if (hasLegacyMappings && !mappingsMigrated) {
+    merged.uidMappings.players = {
       ...merged.mappings,
-      ...merged.uidMappings!.players
+      ...merged.uidMappings.players,
+    };
+    merged.storageMeta = {
+      ...merged.storageMeta,
+      mappingsToUidMigratedAt: Date.now(),
     };
   }
 
@@ -80,22 +263,27 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
 
   try {
     const seed = await ipc.invoke('read-uid-seed');
-    if (!seed || typeof seed !== 'object') return merged;
-    const seedVersion = Number(seed.version ?? 0) || 0;
+    if (!isRecord(seed)) return merged;
+    const seedVersion = toNumberOr(seed.version, 0);
     const applied = merged.uidSeedState?.seedVersionApplied ?? null;
     if (applied !== null && seedVersion <= applied) return merged;
 
-    const seedMappings = normalizeUidMappings(seed);
+    const seedMappings = normalizeUidMappings({
+      players: toStringMap(seed.players),
+      ships: toStringMap(seed.ships),
+      weapons: toStringMap(seed.weapons),
+      equipment: toStringMap(seed.equipment),
+    });
     merged.uidMappings = {
-      players: { ...seedMappings.players, ...merged.uidMappings!.players },
-      ships: { ...seedMappings.ships, ...merged.uidMappings!.ships },
-      weapons: { ...seedMappings.weapons, ...merged.uidMappings!.weapons },
-      equipment: { ...seedMappings.equipment, ...merged.uidMappings!.equipment },
+      players: { ...seedMappings.players, ...merged.uidMappings.players },
+      ships: { ...seedMappings.ships, ...merged.uidMappings.ships },
+      weapons: { ...seedMappings.weapons, ...merged.uidMappings.weapons },
+      equipment: { ...seedMappings.equipment, ...merged.uidMappings.equipment },
     };
     merged.uidSeedState = { seedVersionApplied: seedVersion };
     return merged;
-  } catch (e) {
-    console.warn('[UIDSeed] Failed to load seed mappings', e);
+  } catch (error) {
+    console.warn('[UIDSeed] Failed to load seed mappings', error);
     return merged;
   }
 };
@@ -113,8 +301,8 @@ const maybeAutoBackup = async (data: StorageData) => {
   lastAutoBackupCount = matchCount;
   try {
     await ipc.invoke('db-backup');
-  } catch (e) {
-    console.warn('[AutoBackup] Failed to create backup:', e);
+  } catch (error) {
+    console.warn('[AutoBackup] Failed to create backup:', error);
   }
 };
 
@@ -128,16 +316,24 @@ const writeNow = async (data: StorageData): Promise<boolean> => {
     if (typeof localStorage !== 'undefined') {
       try {
         localStorage.setItem('wg_db', JSON.stringify(data));
-      } catch (e) {
-        console.warn('LocalStorage write failed', e);
+      } catch (error) {
+        console.warn('LocalStorage write failed', error);
       }
     }
     return true;
-  } catch (e) {
-    console.error("Failed to write DB", e);
+  } catch (error) {
+    console.error('Failed to write DB', error);
     return false;
   }
 };
+
+const withPreservedMeta = (data: StorageData): StorageData => ({
+  ...data,
+  storageMeta: {
+    ...(lastData?.storageMeta || {}),
+    ...(data.storageMeta || {}),
+  },
+});
 
 export const StorageService = {
   ensureLifecycleGuards() {
@@ -146,16 +342,17 @@ export const StorageService = {
 
     lifecycleGuardsBound = true;
     const flushSoon = () => { void this.flush(); };
+    const flushSoonEvent: EventListener = () => { void this.flush(); };
 
     window.addEventListener('beforeunload', flushSoon);
-    window.addEventListener('pagehide', flushSoon as any);
+    window.addEventListener('pagehide', flushSoonEvent);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') flushSoon();
     });
     // Best-effort: if the renderer is about to die due to an exception,
     // attempt to flush whatever is currently staged.
-    window.addEventListener('error', flushSoon as any);
-    window.addEventListener('unhandledrejection', flushSoon as any);
+    window.addEventListener('error', flushSoonEvent);
+    window.addEventListener('unhandledrejection', flushSoonEvent);
 
     // Failsafe in case lifecycle hooks are skipped/crash occurs.
     intervalFlushHandle = window.setInterval(() => {
@@ -167,58 +364,67 @@ export const StorageService = {
     this.ensureLifecycleGuards();
     const ipc = getElectronAPI();
     if (!ipc) {
-      console.log("Running in Web Mode (localStorage fallback)");
+      console.log('Running in Web Mode (localStorage fallback)');
       if (typeof localStorage !== 'undefined') {
         const webDB = localStorage.getItem('wg_db');
         if (webDB) {
-          return JSON.parse(webDB);
+          const parsed = coerceStorageData(parseJsonSafely(webDB));
+          if (parsed) return rememberLoadedData(parsed);
         }
       }
     } else {
       try {
         const dbData = await ipc.invoke('db-read');
-        if (dbData) {
-          console.log("Database loaded from disk.");
-          return await applyUidSeed(dbData);
+        const normalized = coerceStorageData(dbData);
+        if (normalized) {
+          console.log('Database loaded from disk.');
+          const seeded = await applyUidSeed(normalized);
+          return rememberLoadedData(seeded);
         }
-      } catch (e) {
-        console.error("Failed to read DB", e);
+      } catch (error) {
+        console.error('Failed to read DB', error);
       }
       if (typeof localStorage !== 'undefined') {
         const webDB = localStorage.getItem('wg_db');
         if (webDB) {
-          const parsed = JSON.parse(webDB);
-          const seeded = await applyUidSeed(parsed);
-          await this.save(seeded);
-          return seeded;
+          const parsed = coerceStorageData(parseJsonSafely(webDB));
+          if (parsed) {
+            const seeded = await applyUidSeed(parsed);
+            await this.save(seeded);
+            return rememberLoadedData(seeded);
+          }
         }
       }
     }
     const hasLegacyData = typeof localStorage !== 'undefined' && localStorage.getItem('wg_v13_matches');
     if (hasLegacyData) {
-      console.log("Migrating from Legacy LocalStorage...");
+      console.log('Migrating from Legacy LocalStorage...');
       const migrationData: StorageData = {
-        matches: JSON.parse(localStorage.getItem('wg_v13_matches') || '[]'),
-        players: JSON.parse(localStorage.getItem('wg_v13_players') || '[]'),
-        pilotRegistry: JSON.parse(localStorage.getItem('wg_v13_pilot_registry') || '[]'),
-        favorites: JSON.parse(localStorage.getItem('wg_v13_favorites') || '[]'),
-        pilotNotes: JSON.parse(localStorage.getItem('wg_v13_pilot_notes') || '{}'),
+        ...createDefaultStorageData(),
+        matches: coerceStorageData({ matches: parseJsonSafely(localStorage.getItem('wg_v13_matches') || '[]') })?.matches || [],
+        players: toStringArray(parseJsonSafely(localStorage.getItem('wg_v13_players') || '[]')),
+        pilotRegistry: toStringArray(parseJsonSafely(localStorage.getItem('wg_v13_pilot_registry') || '[]')),
+        favorites: toStringArray(parseJsonSafely(localStorage.getItem('wg_v13_favorites') || '[]')),
+        pilotNotes: toStringMap(parseJsonSafely(localStorage.getItem('wg_v13_pilot_notes') || '{}')),
         settings: {
-          mode: JSON.parse(localStorage.getItem('wg_mode') || '"twilight"'),
-          theme: JSON.parse(localStorage.getItem('wg_theme_accent') || '"ocean"'),
-          hue: JSON.parse(localStorage.getItem('wg_custom_hue') || '"0"'),
-          colorblind: JSON.parse(localStorage.getItem('wg_colorblind') || '"none"'),
-          disableAnimations: JSON.parse(localStorage.getItem('wg_disable_animations') || 'false'),
-          language: JSON.parse(localStorage.getItem('wg_language') || '"en"'),
-          showTimer: JSON.parse(localStorage.getItem('wg_show_session_timer') || 'true'),
-          bgUrl: JSON.parse(localStorage.getItem('wg_custom_bg_url') || '""')
+          mode: parseJsonSafely(localStorage.getItem('wg_mode') || '"twilight"'),
+          theme: parseJsonSafely(localStorage.getItem('wg_theme_accent') || '"ocean"'),
+          hue: parseJsonSafely(localStorage.getItem('wg_custom_hue') || '"0"'),
+          colorblind: parseJsonSafely(localStorage.getItem('wg_colorblind') || '"none"'),
+          disableAnimations: parseJsonSafely(localStorage.getItem('wg_disable_animations') || 'false'),
+          language: parseJsonSafely(localStorage.getItem('wg_language') || '"en"'),
+          showTimer: parseJsonSafely(localStorage.getItem('wg_show_session_timer') || 'true'),
+          bgUrl: parseJsonSafely(localStorage.getItem('wg_custom_bg_url') || '""'),
         },
-        layouts: JSON.parse(localStorage.getItem('wg_layouts_v11') || '{}'),
-        lastActivity: parseInt(localStorage.getItem('wg_last_activity') || '0')
+        layouts: toLayouts(parseJsonSafely(localStorage.getItem('wg_layouts_v11') || '{}')),
+        lastActivity: toNumberOr(localStorage.getItem('wg_last_activity'), Date.now()),
+        storageMeta: {
+          legacyV13MigratedAt: Date.now(),
+        },
       };
       await this.save(migrationData);
       if (ipc) {
-        LEGACY_KEYS.forEach(key => {
+        LEGACY_KEYS.forEach((key) => {
           const val = localStorage.getItem(key);
           if (val) {
             localStorage.setItem(`backup_${key}`, val);
@@ -227,23 +433,16 @@ export const StorageService = {
         });
       }
 
-      return await applyUidSeed(migrationData);
+      const seeded = await applyUidSeed(migrationData);
+      return rememberLoadedData(seeded);
     }
-    return await applyUidSeed({
-      matches: [],
-      players: [],
-      pilotRegistry: [],
-      favorites: [],
-      pilotNotes: {},
-      settings: {},
-      layouts: {},
-      lastActivity: Date.now()
-    });
+    const seeded = await applyUidSeed(createDefaultStorageData());
+    return rememberLoadedData(seeded);
   },
 
   async save(data: StorageData) {
     this.ensureLifecycleGuards();
-    lastData = data;
+    lastData = withPreservedMeta(data);
     pendingVersion += 1;
     if (saveTimeout) clearTimeout(saveTimeout);
 
@@ -259,7 +458,7 @@ export const StorageService = {
         saveTimeout = null;
         const resolvers = pendingResolvers;
         pendingResolvers = [];
-        resolvers.forEach(r => r(ok));
+        resolvers.forEach((resolver) => resolver(ok));
       }, 300); // tighter debounce to reduce loss window
     });
   },
@@ -273,7 +472,7 @@ export const StorageService = {
     if (!hasUnsavedChanges()) {
       const resolvers = pendingResolvers;
       pendingResolvers = [];
-      resolvers.forEach(r => r(true));
+      resolvers.forEach((resolver) => resolver(true));
       return true;
     }
 
@@ -285,7 +484,7 @@ export const StorageService = {
     }
     const resolvers = pendingResolvers;
     pendingResolvers = [];
-    resolvers.forEach(r => r(ok));
+    resolvers.forEach((resolver) => resolver(ok));
     return ok;
   },
 
@@ -297,5 +496,3 @@ export const StorageService = {
     return { success: false, error: 'Not in Electron' };
   }
 };
-
-

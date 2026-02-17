@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { captureGameWindow, ocrProcessCapture, saveScreenshot, isElectron } from '../utils/electronBridge';
-import { rerunOCROnArtifact } from '../utils/artifactService';
+import { rerunOCROnArtifact, type RerunOcrResult } from '../utils/artifactService';
 import type { OCRExtractedData, ScreenshotType } from '../utils/ocr/ocrTypes';
 import { mergeOCRData, calculateOverallConfidence } from '../utils/ocr/ocrParser';
 import { useAppStore } from '../store/useAppStore';
@@ -15,6 +15,7 @@ import {
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
 import { smartAnalyzeScreen } from '../utils/scanService';
+import type { LobbyScanResult, SmartScanResult } from '../utils/scanService';
 
 export interface SavedCapture {
   filePath: string;
@@ -120,7 +121,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const AUTO_OCR_BUNDLE_DELAY_MS = 3750;
   const autoOcrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const applySmartScanResult = useCallback((res: any, activeUser?: string | null) => {
+  const applySmartScanResult = useCallback((res: SmartScanResult | null | undefined, activeUser?: string | null) => {
     if (!res) return;
 
     if (res.mode === 'MatchStats' && res.matchData) {
@@ -143,7 +144,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     }
 
     if ((res.mode === 'Lobby' || res.mode === 'Tactical' || res.mode === 'Social') && res.lobbyData) {
-      const players = Array.isArray(res.lobbyData.players) ? res.lobbyData.players : [];
+      const players: LobbyScanResult[] = Array.isArray(res.lobbyData.players) ? res.lobbyData.players : [];
       const modifiers = Array.isArray(res.lobbyData.modifiers) ? res.lobbyData.modifiers : [];
 
       const mergedTeams: Record<string, string[]> = { ...(sessionTeams || {}) };
@@ -169,12 +170,12 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       };
 
       const inferFriendlyColor = (): string | null => {
-        const colored = players.filter((p: any) => p?.teamColor && p.teamColor !== 'Unknown' && !p?.isTag);
+        const colored = players.filter((p) => p?.teamColor && p.teamColor !== 'Unknown' && !p?.isTag);
         if (colored.length === 0) return null;
 
         const active = activeUser ? normalizeOcrName(activeUser).toLowerCase() : '';
         if (active) {
-          for (const p of colored as any[]) {
+          for (const p of colored) {
             const n = canonicalName((p?.name || '').trim());
             if (!n) continue;
             if (normalizeOcrName(n).toLowerCase() === active) return p.teamColor;
@@ -182,7 +183,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
           const nameToColor = new Map<string, string>();
           const candidateNames: string[] = [];
-          for (const p of colored as any[]) {
+          for (const p of colored) {
             const n = canonicalName((p?.name || '').trim());
             if (!n) continue;
             const key = normalizeOcrName(n).toLowerCase();
@@ -194,10 +195,10 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         }
 
         // Fallback: Cyan (common "friendly" in the UI), else the largest color bucket.
-        if (colored.some((p: any) => p.teamColor === 'Cyan')) return 'Cyan';
+        if (colored.some((p) => p.teamColor === 'Cyan')) return 'Cyan';
 
         const counts = new Map<string, number>();
-        for (const p of colored as any[]) {
+        for (const p of colored) {
           counts.set(p.teamColor, (counts.get(p.teamColor) || 0) + 1);
         }
         let best: string | null = null;
@@ -216,7 +217,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       for (const p of players) {
         const rawName = (p?.name || '').trim();
         if (!rawName || rawName.length < 2) continue;
-        if ((p as any)?.isTag) continue; // skip non-player tags
+        if (p?.isTag) continue; // skip non-player tags
 
         const name = canonicalName(rawName);
         if (!name) continue;
@@ -241,7 +242,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         else if (!friendlyColor && color === 'Cyan') nextTeammates.add(name);
         else if (color !== 'Unknown') nextOpponents.add(name);
 
-        const shipType = (p as any)?.shipType;
+        const shipType = p?.shipType;
         if (shipType && typeof shipType === 'string' && shipType.trim()) {
           if (!shipTypesByColor[effectiveTeamKey]) shipTypesByColor[effectiveTeamKey] = shipType.trim();
         }
@@ -452,7 +453,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
           color: lockOcrTeams
             ? bestHistory.color
             : (team.color === 'unknown' ? bestHistory.color : team.color),
-          shipType: team.shipType || (bestHistory as any).shipType,
+          shipType: team.shipType || bestHistory.shipType,
         };
       }
       return team;
@@ -739,7 +740,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
     try {
       const concurrency = 2;
-      const results: Array<{ filePath: string; result: any }> = [];
+      const results: Array<{ filePath: string; result: RerunOcrResult }> = [];
       const queue = [...unprocessed];
       let completed = 0;
 
@@ -759,12 +760,14 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       for (const outcome of results) {
         if (outcome.result?.success && outcome.result.data) {
           const { filePath, result } = outcome;
+          const processedData = result.data;
+          if (!processedData) continue;
           const outcomeMatchId = savedCapturesRef.current.find(c => c.filePath === filePath)?.matchId ?? null;
           setSavedCaptures(prev => prev.map(c =>
-            c.filePath === filePath ? { ...c, ocrProcessed: true, ocrData: result.data } : c
+            c.filePath === filePath ? { ...c, ocrProcessed: true, ocrData: processedData } : c
           ));
-          mergeIntoPending(result.data, scope || outcomeMatchId);
-          setQualityHint(refineQualityFromOcr(null, result.data));
+          mergeIntoPending(processedData, scope || outcomeMatchId);
+          setQualityHint(refineQualityFromOcr(null, processedData));
         }
       }
 
