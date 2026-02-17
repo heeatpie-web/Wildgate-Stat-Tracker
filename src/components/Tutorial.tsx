@@ -1,6 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ChevronRight, X } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
+import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
 interface TutorialProps {
     onComplete: () => void;
@@ -89,6 +91,9 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
     const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
     const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties | null>(null);
     const tooltipRef = useRef<HTMLDivElement | null>(null);
+    const dialogTitleId = useId();
+    const dialogDescriptionId = useId();
+    const focusTrapRef = useFocusTrap<HTMLDivElement>(true);
     const initialViewRef = useRef(activeView);
     const initialSettingsRef = useRef(showSettings);
     const openedSettingsRef = useRef(false);
@@ -154,6 +159,17 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
         setStepIndex(current => Math.max(0, current - 1));
     }, []);
 
+    const setOverlayRefs = useCallback((node: HTMLDivElement | null) => {
+        tooltipRef.current = node;
+        focusTrapRef.current = node;
+    }, [focusTrapRef]);
+
+    useKeyboardShortcuts([
+        { key: 'Escape', handler: () => onSkip() },
+        { key: 'ArrowRight', handler: () => handleNext() },
+        { key: 'ArrowLeft', handler: () => handlePrev() },
+    ], true);
+
     useEffect(() => {
         if (step.view && step.view !== activeView) {
             setActiveView(step.view);
@@ -214,16 +230,6 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
     }, [updateTarget]);
 
     useEffect(() => {
-        const handleKey = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') onSkip();
-            if (event.key === 'ArrowRight') handleNext();
-            if (event.key === 'ArrowLeft') handlePrev();
-        };
-        window.addEventListener('keydown', handleKey);
-        return () => window.removeEventListener('keydown', handleKey);
-    }, [handleNext, handlePrev, onSkip]);
-
-    useEffect(() => {
         return () => {
             setActiveView(initialViewRef.current);
             if (initialSettingsRef.current !== showSettings) {
@@ -252,7 +258,11 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
             )}
 
             <div
-                ref={tooltipRef}
+                ref={setOverlayRefs}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={dialogTitleId}
+                aria-describedby={dialogDescriptionId}
                 className="absolute w-320px max-w-screen-minus-32 md3-card text-md-sys-on-surface rounded-2xl border border-md-sys-outline/20 shadow-2xl p-4 pointer-events-auto"
                 style={tooltipInlineStyle}
             >
@@ -261,9 +271,10 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
                         <div className="text-label-sm uppercase tracking-wide-20 text-md-sys-primary font-bold">
                             Step {stepIndex + 1} of {steps.length}
                         </div>
-                        <h2 className="text-lg font-black mt-1">{step.title}</h2>
+                        <h2 id={dialogTitleId} className="text-lg font-black mt-1">{step.title}</h2>
                     </div>
                     <button
+                        type="button"
                         onClick={onSkip}
                         className="md3-icon-btn"
                         aria-label="Exit tutorial"
@@ -272,16 +283,18 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
                     </button>
                 </div>
 
-                <p className="text-body opacity-60 leading-relaxed mt-2">{step.description}</p>
+                <p id={dialogDescriptionId} className="text-body opacity-60 leading-relaxed mt-2">{step.description}</p>
 
                 <div className="flex gap-2 mt-4">
                     <button
+                        type="button"
                         onClick={stepIndex === 0 ? onSkip : handlePrev}
                         className="md3-btn-text"
                     >
                         {stepIndex === 0 ? 'Skip' : 'Back'}
                     </button>
                     <button
+                        type="button"
                         onClick={handleNext}
                         className="md3-btn-filled flex-1 font-black uppercase tracking-widest flex items-center justify-center gap-2"
                     >

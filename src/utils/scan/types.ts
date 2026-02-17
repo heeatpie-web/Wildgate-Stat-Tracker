@@ -28,6 +28,7 @@ export interface ScanOptions {
     mergeWith?: LobbyScanResult[];
     ocrMode?: 'local' | 'cloud' | 'both' | 'hybrid-plus';
     ocrCalibration?: OcrCalibration;
+    ocrRegions?: OcrRegionSettings;
 }
 
 export interface OcrCalibration {
@@ -37,6 +38,27 @@ export interface OcrCalibration {
     sampleHeightAdjust: number;
     saturationMin: number;
     luminanceMin: number;
+}
+
+export interface OcrRegionBounds {
+    xMin: number;
+    xMax: number;
+    yMin: number;
+    yMax: number;
+}
+
+export interface OcrRegionSettings {
+    crewHub: {
+        leftPanel: OcrRegionBounds;
+        rightPanel: OcrRegionBounds;
+        teamHeader: OcrRegionBounds;
+    };
+    mapScreen: {
+        yourShip: OcrRegionBounds;
+        enemyShips: OcrRegionBounds;
+        hazards: OcrRegionBounds;
+        players: OcrRegionBounds;
+    };
 }
 
 export interface SmartScanResult {

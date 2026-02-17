@@ -5,6 +5,7 @@ import { useUserPreferences } from './providers/UserPreferencesProvider';
 import { useLogMonitor } from './hooks/useLogMonitor';
 import { useDiscordRPC } from './hooks/useDiscordRPC';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useFocusTrap } from './hooks/useFocusTrap';
 import { Sidebar } from './components/Sidebar';
 import { RecordingView } from './components/RecordingView';
 import { Header } from './components/Header';
@@ -85,6 +86,7 @@ import { buildAliasVariantMap, resolveOcrName } from './utils/ocrNameResolver';
 import { assignDeterministicTeamColors, buildPlayerColorHints } from './utils/ocr/teamColorAssignment';
 import { capTeammatePlayers, getMaxTeammatesForShip } from './utils/teamLimits';
 import Logger from './utils/logger';
+import { runtimeConfig } from './config/runtimeConfig';
 
 interface TelemetryRetentionStatus {
     exceedsLimits: boolean;
@@ -186,6 +188,13 @@ const App: React.FC = () => {
         showIdMapper, setShowIdMapper,
         sidebarCollapsed, setSidebarCollapsed
     } = useUIState();
+
+    const changelogDialogTitleId = React.useId();
+    const changelogDialogDescriptionId = React.useId();
+    const changelogFocusTrapRef = useFocusTrap<HTMLDivElement>(showChangelog);
+    const idMapperDialogTitleId = React.useId();
+    const idMapperDialogDescriptionId = React.useId();
+    const idMapperFocusTrapRef = useFocusTrap<HTMLDivElement>(showIdMapper);
 
     const {
         matches,
@@ -375,7 +384,9 @@ const App: React.FC = () => {
                 .then(() => {
                     if (!cancelled) markReady(nextView);
                 })
-                .catch(() => { })
+                .catch((error: unknown) => {
+                    Logger.warn('App', `Dashboard preload failed for "${nextView}"`, error);
+                })
                 .finally(() => {
                     if (!cancelled) scheduleNext();
                 });
@@ -387,13 +398,15 @@ const App: React.FC = () => {
             const requestIdle = idleWindow.requestIdleCallback;
             const cancelIdle = idleWindow.cancelIdleCallback;
             if (requestIdle) {
-                const id = requestIdle(() => runNext(), { timeout: Math.max(350, Math.min(1600, adaptivePreloadBudgetMs)) });
+                const timeoutFloor = runtimeConfig.app.preloadIdleTimeoutMinMs;
+                const timeoutCeiling = runtimeConfig.app.preloadIdleTimeoutMaxMs;
+                const id = requestIdle(() => runNext(), { timeout: Math.max(timeoutFloor, Math.min(timeoutCeiling, adaptivePreloadBudgetMs)) });
                 idleIds.push(id);
                 return;
             }
             const delay = queue.length >= 4
                 ? 0
-                : Math.max(40, Math.floor(adaptivePreloadBudgetMs / Math.max(2, queue.length * 2)));
+                : Math.max(runtimeConfig.app.preloadFallbackDelayMinMs, Math.floor(adaptivePreloadBudgetMs / Math.max(2, queue.length * 2)));
             const timeout = window.setTimeout(runNext, delay);
             timeoutIds.push(timeout);
             if (!cancelIdle) return;
@@ -446,7 +459,7 @@ const App: React.FC = () => {
                 recordDashboardPreloadVisit(view, duration);
                 delete viewOpenStartRef.current[view];
             });
-        }, 160);
+        }, runtimeConfig.app.preloadProgressPollMs);
         return () => window.clearInterval(interval);
     }, [recordDashboardPreloadVisit]);
 
@@ -515,7 +528,9 @@ const App: React.FC = () => {
                     setTelemetryPruneStatus(status);
                 }
             })
-            .catch(() => {});
+            .catch((error: unknown) => {
+                Logger.warn('TelemetryRetention', 'Failed to read telemetry retention status', error);
+            });
 
         const unsubPruneNeeded = api.on('telemetry-prune-needed', (status: unknown) => {
             const normalized = normalizeStatus(status);
@@ -877,6 +892,72 @@ const App: React.FC = () => {
             });
             return unique;
         };
+        const dedupeNamesWithCap = (values: string[], maxCount: number) => {
+            if (!Number.isFinite(maxCount) || maxCount <= 0) return [];
+            return dedupeNames(values).slice(0, maxCount);
+        };
+        const OCR_REJECT_CONFIDENCE = 55;
+        const OCR_REVIEW_CONFIDENCE = 75;
+        const OCR_MIN_RESOLVE_SIMILARITY = 70;
+        const MAX_OPPONENT_PLAYERS_PER_TEAM = 4;
+        const toNameKey = (value: string) => normalizeOcrName(value || '').toLowerCase();
+        const pendingPlayerNameKeys = new Set(
+            (pendingReviews || [])
+                .filter((review) => review.type === 'player_name')
+                .map((review) => toNameKey(review.value))
+                .filter(Boolean)
+        );
+        const pendingRosterCandidateKeys = new Set(
+            (pendingReviews || [])
+                .filter((review) => review.type === 'roster_candidate')
+                .map((review) => toNameKey(review.value))
+                .filter(Boolean)
+        );
+        const queuePlayerNameReview = (rawName: string, confidence: number, context: string) => {
+            const normalized = normalizeOcrName(rawName || '');
+            const key = toNameKey(normalized);
+            if (!normalized || normalized.length < 2 || pendingPlayerNameKeys.has(key)) return;
+            const suggestions = buildRosterSuggestions(normalized);
+            addPendingReview({
+                id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                type: 'player_name',
+                value: normalized,
+                originalConfidence: Math.round(confidence || 0),
+                context,
+                bestMatch: suggestions.bestMatch,
+                bestScore: suggestions.bestScore,
+                suggestions: suggestions.suggestions,
+                source: 'ocr',
+            });
+            pendingPlayerNameKeys.add(key);
+        };
+        const shouldAutoApplyResolvedName = (
+            rawName: string,
+            resolvedName: string,
+            confidence: number,
+            context: string
+        ): boolean => {
+            const normalizedResolved = normalizeOcrName(resolvedName || '');
+            if (!normalizedResolved || normalizedResolved.length < 3) return false;
+            if (confidence < OCR_REJECT_CONFIDENCE) {
+                queuePlayerNameReview(rawName || normalizedResolved, confidence, `${context}: rejected (low confidence)`);
+                return false;
+            }
+            if (confidence < OCR_REVIEW_CONFIDENCE) {
+                queuePlayerNameReview(rawName || normalizedResolved, confidence, `${context}: review (low confidence)`);
+                return false;
+            }
+            const normalizedRaw = normalizeOcrName(rawName || '');
+            const score = similarityScore(normalizedRaw, normalizedResolved);
+            const normalizedRawKey = toNameKey(normalizedRaw);
+            const normalizedResolvedKey = toNameKey(normalizedResolved);
+            const changed = normalizedRawKey && normalizedResolvedKey && normalizedRawKey !== normalizedResolvedKey;
+            if (changed && score < OCR_MIN_RESOLVE_SIMILARITY) {
+                queuePlayerNameReview(rawName || normalizedResolved, confidence, `${context}: review (ambiguous resolution)`);
+                return false;
+            }
+            return true;
+        };
         if (data.playerShip?.shipType) {
             setActiveShip(data.playerShip.shipType, 'ocr');
         }
@@ -887,56 +968,45 @@ const App: React.FC = () => {
             setSelectedReachModifiers(combined, 'ocr');
         }
 
-        const allPlayers = [
-            ...data.teammates.map(t => t.name),
-            ...data.opponentTeams.flatMap(team => team.players.map(p => p.name))
-        ];
-        const pendingValues = new Set((pendingReviews || []).map(r => normalizeOcrName(r.value)));
-        allPlayers.forEach(player => {
-            const resolved = resolvePlayerName(player, []);
-            if (resolved && resolved.length > 2 && !pilotRegistry.includes(resolved)) {
-                const normalizedResolved = normalizeOcrName(resolved);
-                if (!pendingValues.has(normalizedResolved)) {
-                    const suggestions = buildRosterSuggestions(resolved);
-                    addPendingReview({
-                        id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
-                        type: 'roster_candidate',
-                        value: resolved,
-                        originalConfidence: 100,
-                        context: 'OCR Review',
-                        bestMatch: suggestions.bestMatch,
-                        bestScore: suggestions.bestScore,
-                        suggestions: suggestions.suggestions,
-                        source: 'ocr'
-                    });
-                    pendingValues.add(normalizedResolved);
-                }
-            }
-        });
-
         const shipForCapacity = data.playerShip?.shipType || useAppStore.getState().activeShip || activeShip;
         const maxTeammates = getMaxTeammatesForShip(shipForCapacity);
         const cappedTeammates = capTeammatePlayers(data.teammates, shipForCapacity);
+        const autoAppliedTeammates: string[] = [];
+        const teammateBaseline = [...(useAppStore.getState().selectedTeammates || [])];
         if (cappedTeammates.length > 0) {
-            setSelectedTeammates((prev: string[]) => {
-                const merged = [...prev];
-                const existing = new Set(merged.map((name) => normalizeOcrName(name).toLowerCase()));
-                for (const teammate of cappedTeammates) {
-                    const resolved = resolvePlayerName(teammate.name, merged);
-                    if (!resolved) continue;
-                    const key = normalizeOcrName(resolved).toLowerCase();
-                    if (!key || existing.has(key)) continue;
-                    if (merged.length >= maxTeammates) break;
-                    merged.push(resolved);
-                    existing.add(key);
-                }
-                return merged;
-            });
+            const merged = [...teammateBaseline];
+            const existing = new Set(merged.map((name) => normalizeOcrName(name).toLowerCase()));
+            for (const teammate of cappedTeammates) {
+                const resolved = resolvePlayerName(teammate.name, merged);
+                if (!resolved) continue;
+                const confidence = Number(teammate?.confidence || 0);
+                if (!shouldAutoApplyResolvedName(teammate.name, resolved, confidence, 'OCR Teammate')) continue;
+                const key = normalizeOcrName(resolved).toLowerCase();
+                if (!key || existing.has(key)) continue;
+                if (merged.length >= maxTeammates) break;
+                merged.push(resolved);
+                existing.add(key);
+                autoAppliedTeammates.push(resolved);
+            }
+            setSelectedTeammates(merged);
         }
 
         const seenOpponentPlayers = new Set<string>();
         const unresolvedTeams = data.opponentTeams.map((team) => {
-            const resolvedPlayers = dedupeNames(team.players.map((player) => resolvePlayerName(player.name, selectedOpponents)));
+            const resolvedPlayers = dedupeNamesWithCap(
+                team.players
+                    .map((player) => {
+                        const resolved = resolvePlayerName(player.name, selectedOpponents);
+                        if (!resolved) return '';
+                        const confidence = Number(player?.confidence || team?.confidence || 0);
+                        if (!shouldAutoApplyResolvedName(player.name, resolved, confidence, `OCR Opponent (${team.teamName || 'Unknown Team'})`)) {
+                            return '';
+                        }
+                        return resolved;
+                    })
+                    .filter(Boolean) as string[],
+                MAX_OPPONENT_PLAYERS_PER_TEAM
+            );
             const uniquePlayers = resolvedPlayers.filter((name) => {
                 const key = normalizeOcrName(name).toLowerCase();
                 if (seenOpponentPlayers.has(key)) return false;
@@ -963,6 +1033,28 @@ const App: React.FC = () => {
         if (mergedOpponents.length > 0) {
             setSelectedOpponents((prev: string[]) => dedupeNames([...prev, ...mergedOpponents]));
         }
+
+        const autoAppliedPlayers = [...autoAppliedTeammates, ...mergedOpponents];
+        autoAppliedPlayers.forEach((player) => {
+            const normalized = normalizeOcrName(player || '');
+            const key = toNameKey(normalized);
+            if (!normalized || normalized.length <= 2 || pendingRosterCandidateKeys.has(key)) return;
+            const hasExact = pilotRegistry.some((pilot) => toNameKey(pilot) === key);
+            if (hasExact) return;
+            const suggestions = buildRosterSuggestions(normalized);
+            addPendingReview({
+                id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                type: 'roster_candidate',
+                value: normalized,
+                originalConfidence: 100,
+                context: 'OCR Review',
+                bestMatch: suggestions.bestMatch,
+                bestScore: suggestions.bestScore,
+                suggestions: suggestions.suggestions,
+                source: 'ocr'
+            });
+            pendingRosterCandidateKeys.add(key);
+        });
 
         if (data.artifactType) {
             useAppStore.getState().setPendingArtifactType(data.artifactType);
@@ -1003,9 +1095,9 @@ const App: React.FC = () => {
 
         setOcrReviewData(null);
         const rawTeammateCount = Array.isArray(data.teammates) ? data.teammates.length : 0;
-        const teammateCountLabel = rawTeammateCount > cappedTeammates.length
-            ? `${cappedTeammates.length}/${rawTeammateCount}`
-            : String(cappedTeammates.length);
+        const teammateCountLabel = rawTeammateCount > autoAppliedTeammates.length
+            ? `${autoAppliedTeammates.length}/${rawTeammateCount}`
+            : String(autoAppliedTeammates.length);
         setToast({ message: `Applied OCR data: ${teammateCountLabel} teammates, ${data.reachModifiers.length} modifiers`, type: 'success' });
         if (ocrGateOutcome) {
             setShowWizard(ocrGateOutcome);
@@ -1020,10 +1112,26 @@ const App: React.FC = () => {
         }
     }, [showTutorial, setShowChangelog]);
 
-    const closeChangelog = () => {
+    const closeChangelog = useCallback(() => {
         localStorage.setItem('wg_last_seen_version', APP_VERSION);
         setShowChangelog(false);
-    };
+    }, [setShowChangelog]);
+
+    useEffect(() => {
+        if (!showChangelog && !showIdMapper) return;
+        const onOverlayEscape = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            if (showIdMapper) {
+                setShowIdMapper(false);
+                return;
+            }
+            if (showChangelog) {
+                closeChangelog();
+            }
+        };
+        window.addEventListener('keydown', onOverlayEscape);
+        return () => window.removeEventListener('keydown', onOverlayEscape);
+    }, [closeChangelog, showChangelog, showIdMapper, setShowIdMapper]);
 
     useEffect(() => {
         const onBeforeUnload = () => {
@@ -1070,7 +1178,7 @@ const App: React.FC = () => {
                 );
             case 'players':
                 return (
-                    <div className="h-full overflow-hidden p-3">
+                    <div className="h-full min-h-0 overflow-hidden p-3">
                         <PlayerHub />
                     </div>
                 );
@@ -1201,11 +1309,19 @@ const App: React.FC = () => {
 
             {showChangelog && (
                 <div className="fixed inset-0 z-modal flex items-center justify-center p-4 bg-scrim-60 backdrop-blur-sm" onClick={closeChangelog}>
-                    <div className="bg-md-sys-surface1 p-8 rounded-28px max-w-lg w-full shadow-2xl border border-md-sys-outline/20 animate-scale-in" onClick={e => e.stopPropagation()}>
+                    <div
+                        ref={changelogFocusTrapRef}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby={changelogDialogTitleId}
+                        aria-describedby={changelogDialogDescriptionId}
+                        className="bg-md-sys-surface1 p-8 rounded-28px max-w-lg w-full shadow-2xl border border-md-sys-outline/20 animate-scale-in"
+                        onClick={e => e.stopPropagation()}
+                    >
                         <div className="flex justify-between items-center mb-6">
                             <div>
-                                <h2 className="text-3xl font-black uppercase tracking-tighter bg-gradient-to-r from-md-sys-primary to-md-sys-secondary bg-clip-text text-transparent">Update {APP_VERSION}</h2>
-                                <p className="text-label-sm font-bold opacity-60 uppercase tracking-widest mt-1">What's New</p>
+                                <h2 id={changelogDialogTitleId} className="text-3xl font-black uppercase tracking-tighter bg-gradient-to-r from-md-sys-primary to-md-sys-secondary bg-clip-text text-transparent">Update {APP_VERSION}</h2>
+                                <p id={changelogDialogDescriptionId} className="text-label-sm font-bold opacity-60 uppercase tracking-widest mt-1">What's New</p>
                             </div>
                             <div className="w-12 h-12 rounded-full bg-md-sys-surface2 flex items-center justify-center text-2xl">Update</div>
                         </div>
@@ -1217,7 +1333,7 @@ const App: React.FC = () => {
                                 </div>
                             ))}
                         </div>
-                        <button onClick={closeChangelog} className="w-full mt-8 py-4 bg-md-sys-primary text-md-sys-onPrimary rounded-2xl font-black uppercase tracking-widest hover:brightness-110 shadow-lg transition-all">Awesome!</button>
+                        <button type="button" onClick={closeChangelog} className="w-full mt-8 py-4 bg-md-sys-primary text-md-sys-onPrimary rounded-2xl font-black uppercase tracking-widest hover:brightness-110 shadow-lg transition-all">Awesome!</button>
                     </div>
                 </div>
             )}
@@ -1226,9 +1342,19 @@ const App: React.FC = () => {
 
             {showIdMapper && (
                 <div className="fixed inset-0 z-popover bg-scrim-60 backdrop-blur-sm flex items-center justify-center p-8" onClick={() => setShowIdMapper(false)}>
-                    <div className="max-w-xl w-full" onClick={e => e.stopPropagation()}>
+                    <div
+                        ref={idMapperFocusTrapRef}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby={idMapperDialogTitleId}
+                        aria-describedby={idMapperDialogDescriptionId}
+                        className="max-w-xl w-full"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <h2 id={idMapperDialogTitleId} className="a11y-sr-only">ID Mapper</h2>
+                        <p id={idMapperDialogDescriptionId} className="a11y-sr-only">Review and edit detected ID mappings.</p>
                         <IdMapper />
-                        <button onClick={() => setShowIdMapper(false)} className="mt-4 w-full py-2 bg-md-sys-surface1 rounded-lg text-label-sm hover:bg-md-sys-surface2">Close</button>
+                        <button type="button" onClick={() => setShowIdMapper(false)} className="mt-4 w-full py-2 bg-md-sys-surface1 rounded-lg text-label-sm hover:bg-md-sys-surface2">Close</button>
                     </div>
                 </div>
             )}

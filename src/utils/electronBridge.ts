@@ -4,6 +4,7 @@
  */
 
 import type { CaptureResult, OCRExtractedData, OCRProcessResult } from './ocr/ocrTypes';
+import type { OcrRegionSettings } from './scan/types';
 import { getElectronAPI, isElectron as _isElectron } from './electronAPI';
 import Logger from './logger';
 
@@ -17,6 +18,14 @@ const toErrorMessage = (error: unknown, fallback: string): string => {
   if (typeof error === 'string' && error.trim().length > 0) return error;
   return fallback;
 };
+
+export interface OCRProcessRuntimeOptions {
+  includeBboxes?: boolean;
+  forceUncached?: boolean;
+  sourceImagePath?: string | null;
+  archiveOcrSample?: boolean;
+  archiveMetadata?: Record<string, unknown>;
+}
 
 /**
  * Check if running in Electron
@@ -51,7 +60,9 @@ export async function ocrProcessCapture(
   imageBase64: string,
   activeUser?: string | null,
   existingData?: OCRExtractedData | null,
-  ocrMode: 'local' | 'cloud' | 'both' | 'hybrid-plus' = 'both'
+  ocrMode: 'local' | 'cloud' | 'both' | 'hybrid-plus' = 'both',
+  ocrRegions?: OcrRegionSettings | null,
+  runtimeOptions: OCRProcessRuntimeOptions = {}
 ): Promise<OCRProcessResult> {
   const ipc = getIpcRenderer();
   if (!ipc) {
@@ -59,7 +70,15 @@ export async function ocrProcessCapture(
   }
 
   try {
-    const result = await ipc.invoke('ocr-process-capture', imageBase64, activeUser || null, existingData || null, ocrMode);
+    const safeRuntimeOptions = (runtimeOptions && typeof runtimeOptions === 'object') ? runtimeOptions : {};
+    const result = await ipc.invoke(
+      'ocr-process-capture',
+      imageBase64,
+      activeUser || null,
+      existingData || null,
+      ocrMode,
+      { ...safeRuntimeOptions, ocrRegions: ocrRegions || null }
+    );
     return result;
   } catch (error: unknown) {
     return { success: false, error: toErrorMessage(error, 'OCR processing failed') };

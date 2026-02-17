@@ -148,5 +148,29 @@ describe('artifactService', () => {
         ocrMode: 'local',
       });
     });
+
+    it('passes optional ocrRegions when provided', async () => {
+      mockInvoke.mockResolvedValue({ teammates: [], opponents: [] });
+      const ocrRegions = {
+        crewHub: {
+          leftPanel: { xMin: 0, xMax: 0.36, yMin: 0.1, yMax: 0.8 },
+          rightPanel: { xMin: 0.45, xMax: 1, yMin: 0.1, yMax: 0.9 },
+          teamHeader: { xMin: 0, xMax: 0.45, yMin: 0.05, yMax: 0.2 },
+        },
+        mapScreen: {
+          yourShip: { xMin: 0, xMax: 0.3, yMin: 0, yMax: 0.25 },
+          enemyShips: { xMin: 0.6, xMax: 1, yMin: 0, yMax: 0.35 },
+          hazards: { xMin: 0.6, xMax: 1, yMin: 0.3, yMax: 0.7 },
+          players: { xMin: 0, xMax: 0.4, yMin: 0.7, yMax: 1 },
+        },
+      };
+      await rerunOCROnArtifact('/path/img.png', 'Alec', 'cloud', ocrRegions);
+      expect(mockInvoke).toHaveBeenCalledWith('rerun-ocr-on-artifact', {
+        imagePath: '/path/img.png',
+        activeUser: 'Alec',
+        ocrMode: 'cloud',
+        ocrRegions,
+      });
+    });
   });
 });

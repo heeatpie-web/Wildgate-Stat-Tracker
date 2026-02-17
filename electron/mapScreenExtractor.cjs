@@ -44,6 +44,41 @@ const LAYOUT = {
   },
 };
 
+function clamp01(value, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(1, n));
+}
+
+function sanitizeBounds(input, fallback) {
+  const source = (input && typeof input === 'object') ? input : {};
+  let xMin = clamp01(source.xMin, fallback.xMin);
+  let xMax = clamp01(source.xMax, fallback.xMax);
+  let yMin = clamp01(source.yMin, fallback.yMin);
+  let yMax = clamp01(source.yMax, fallback.yMax);
+
+  if (xMin >= xMax) {
+    if (xMin >= 1) xMin = Math.max(0, xMax - 0.01);
+    else xMax = Math.min(1, xMin + 0.01);
+  }
+  if (yMin >= yMax) {
+    if (yMin >= 1) yMin = Math.max(0, yMax - 0.01);
+    else yMax = Math.min(1, yMin + 0.01);
+  }
+
+  return { xMin, xMax, yMin, yMax };
+}
+
+function resolveMapLayout(layoutOverrides) {
+  const source = (layoutOverrides && typeof layoutOverrides === 'object') ? layoutOverrides : {};
+  return {
+    YOUR_SHIP: sanitizeBounds(source.yourShip, LAYOUT.YOUR_SHIP),
+    ENEMY_SHIPS: sanitizeBounds(source.enemyShips, LAYOUT.ENEMY_SHIPS),
+    HAZARDS: sanitizeBounds(source.hazards, LAYOUT.HAZARDS),
+    PLAYERS: sanitizeBounds(source.players, LAYOUT.PLAYERS),
+  };
+}
+
 /**
  * Known ship types
  */
@@ -95,10 +130,12 @@ const PLAYER_NOISE_WORDS = new Set([
  * @param {Object} ocrResult - Tesseract OCR result { words, lines, text }
  * @param {number} imageWidth - Image width
  * @param {number} imageHeight - Image height
+ * @param {Object} layoutOverrides - Optional percentage-based layout overrides
  * @returns {Promise<Object>} Extracted data
  */
-async function extractMapScreen(imageBuffer, ocrResult, imageWidth, imageHeight) {
+async function extractMapScreen(imageBuffer, ocrResult, imageWidth, imageHeight, layoutOverrides = null) {
   console.log('[MapScreen] Starting extraction');
+  const layout = resolveMapLayout(layoutOverrides);
 
   const result = {
     screenType: 'mapScreen',
@@ -127,7 +164,8 @@ async function extractMapScreen(imageBuffer, ocrResult, imageWidth, imageHeight)
       lines,
       text,
       imageWidth,
-      imageHeight
+      imageHeight,
+      layout
     );
 
     // Step 2: Extract ENEMY SHIPS info
@@ -137,14 +175,15 @@ async function extractMapScreen(imageBuffer, ocrResult, imageWidth, imageHeight)
       lines,
       text,
       imageWidth,
-      imageHeight
+      imageHeight,
+      layout
     );
 
     // Step 3: Extract HAZARDS
-    result.hazards = extractHazards(text);
+    result.hazards = extractHazards(text, words, imageWidth, imageHeight, layout);
 
     // Step 4: Extract player list (bottom-left)
-    result.players = extractPlayerList(words, imageWidth, imageHeight);
+    result.players = extractPlayerList(words, imageWidth, imageHeight, layout);
 
     // Calculate confidence
     let confPoints = 0;
@@ -171,15 +210,15 @@ async function extractMapScreen(imageBuffer, ocrResult, imageWidth, imageHeight)
 /**
  * Extract YOUR SHIP info from top-left region
  */
-async function extractYourShip(imageBuffer, words, lines, text, imageWidth, imageHeight) {
+async function extractYourShip(imageBuffer, words, lines, text, imageWidth, imageHeight, layout = LAYOUT) {
   console.log('[MapScreen] Extracting YOUR SHIP');
 
   // Define region bounds
   const bounds = {
-    xMin: imageWidth * LAYOUT.YOUR_SHIP.xMin,
-    xMax: imageWidth * LAYOUT.YOUR_SHIP.xMax,
-    yMin: imageHeight * LAYOUT.YOUR_SHIP.yMin,
-    yMax: imageHeight * LAYOUT.YOUR_SHIP.yMax,
+    xMin: imageWidth * layout.YOUR_SHIP.xMin,
+    xMax: imageWidth * layout.YOUR_SHIP.xMax,
+    yMin: imageHeight * layout.YOUR_SHIP.yMin,
+    yMax: imageHeight * layout.YOUR_SHIP.yMax,
   };
 
   // Filter words in YOUR SHIP region
@@ -248,17 +287,17 @@ async function extractYourShip(imageBuffer, words, lines, text, imageWidth, imag
 /**
  * Extract ENEMY SHIPS info from top-right region
  */
-async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, imageHeight) {
+async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, imageHeight, layout = LAYOUT) {
   console.log('[MapScreen] Extracting ENEMY SHIPS');
 
   const enemyShips = [];
 
   // Define region bounds
   const bounds = {
-    xMin: imageWidth * LAYOUT.ENEMY_SHIPS.xMin,
-    xMax: imageWidth * LAYOUT.ENEMY_SHIPS.xMax,
-    yMin: imageHeight * LAYOUT.ENEMY_SHIPS.yMin,
-    yMax: imageHeight * LAYOUT.ENEMY_SHIPS.yMax,
+    xMin: imageWidth * layout.ENEMY_SHIPS.xMin,
+    xMax: imageWidth * layout.ENEMY_SHIPS.xMax,
+    yMin: imageHeight * layout.ENEMY_SHIPS.yMin,
+    yMax: imageHeight * layout.ENEMY_SHIPS.yMax,
   };
 
   // Filter words in ENEMY SHIPS region
@@ -385,37 +424,60 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
 /**
  * Extract hazards from text
  */
-function extractHazards(text) {
-  const hazards = [];
-  const upperText = text.toUpperCase();
+function extractHazards(text, words = [], imageWidth = 0, imageHeight = 0, layout = LAYOUT) {
+  const hazards = new Set();
+  const upperText = String(text || '').toUpperCase();
 
   for (const [pattern, displayName] of Object.entries(KNOWN_HAZARDS)) {
     if (upperText.includes(pattern)) {
-      hazards.push(displayName);
+      hazards.add(displayName);
     }
   }
 
-  // Remove duplicates
-  return [...new Set(hazards)];
+  if (Array.isArray(words) && words.length > 0 && imageWidth > 0 && imageHeight > 0) {
+    const bounds = {
+      xMin: imageWidth * layout.HAZARDS.xMin,
+      xMax: imageWidth * layout.HAZARDS.xMax,
+      yMin: imageHeight * layout.HAZARDS.yMin,
+      yMax: imageHeight * layout.HAZARDS.yMax,
+    };
+    const regionWords = filterWordsInBounds(words, bounds);
+    if (regionWords.length > 0) {
+      const regionText = groupWordsIntoLines(regionWords, imageHeight)
+        .map(line => line.words.map(w => w.text).join(' ').trim())
+        .join('\n')
+        .toUpperCase();
+      for (const [pattern, displayName] of Object.entries(KNOWN_HAZARDS)) {
+        if (regionText.includes(pattern)) {
+          hazards.add(displayName);
+        }
+      }
+    }
+  }
+
+  return Array.from(hazards);
 }
 
 /**
  * Extract player list from bottom-left region
  */
-function extractPlayerList(words, imageWidth, imageHeight) {
+function extractPlayerList(words, imageWidth, imageHeight, layout = LAYOUT) {
+  const playersLayout = layout.PLAYERS || layout.players || LAYOUT.PLAYERS;
   const broadBounds = {
-    xMin: imageWidth * LAYOUT.PLAYERS.xMin,
-    xMax: imageWidth * LAYOUT.PLAYERS.xMax,
-    yMin: imageHeight * LAYOUT.PLAYERS.yMin,
-    yMax: imageHeight * LAYOUT.PLAYERS.yMax,
+    xMin: imageWidth * playersLayout.xMin,
+    xMax: imageWidth * playersLayout.xMax,
+    yMin: imageHeight * playersLayout.yMin,
+    yMax: imageHeight * playersLayout.yMax,
   };
 
   // Region-specific mitigation: tighter teammate strip for small map-name text.
+  const playerRegionWidth = Math.max(1, broadBounds.xMax - broadBounds.xMin);
+  const playerRegionHeight = Math.max(1, broadBounds.yMax - broadBounds.yMin);
   const focusedBounds = {
-    xMin: 0,
-    xMax: imageWidth * 0.34,
-    yMin: imageHeight * 0.62,
-    yMax: imageHeight * 0.98,
+    xMin: broadBounds.xMin,
+    xMax: broadBounds.xMin + (playerRegionWidth * 0.85),
+    yMin: Math.max(0, broadBounds.yMin - (playerRegionHeight * 0.25)),
+    yMax: Math.min(imageHeight, broadBounds.yMax),
   };
 
   const broadWords = filterWordsInBounds(words, broadBounds);

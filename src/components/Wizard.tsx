@@ -120,16 +120,16 @@ export const Wizard: React.FC = () => {
     };
 
     return (
-        <div className="fixed inset-0 md3-dialog-scrim z-top flex items-center justify-center p-4 mg-blur animate-fade-in" onClick={() => setShowWizard(null)}>
+        <div className="fixed inset-0 md3-dialog-scrim z-top flex items-start justify-center p-4 overflow-y-auto mg-blur animate-fade-in" onClick={() => setShowWizard(null)}>
             <div
-                className={`mg-surface overflow-hidden rounded-2_5rem w-full shadow-2xl flex flex-col animate-scale-in border border-md-sys-outline/20 ${isOverlayMode ? 'max-w-360px max-h-90vh' : 'max-w-3xl max-h-95vh'}`}
+                className={`mg-surface overflow-hidden rounded-2_5rem w-full my-2 shadow-2xl flex flex-col animate-scale-in border border-md-sys-outline/20 ${isOverlayMode ? 'max-w-360px max-h-90vh' : 'max-w-3xl max-h-95vh'}`}
                 onClick={e => e.stopPropagation()}
             >
                 {/* Unified Glass Header */}
                 <div className={`${isOverlayMode ? 'py-3 px-5 text-label-sm' : 'py-5 px-8 text-xl'} font-bold uppercase tracking-wide-20 mg-surface-high border-b border-md-sys-outline/10 text-md-sys-on-surface flex items-center justify-center gap-3 relative`}>
                     <div className={`w-2 h-2 rounded-full ${isDefeat ? 'bg-md-sys-error' : 'bg-success'} animate-pulse`} />
                     {title}
-                    <button onClick={() => setShowWizard(null)} className="absolute right-4 md3-icon-btn opacity-40 hover:opacity-100 hover:bg-md-sys-error/10 hover:text-md-sys-error transition-all">
+                    <button onClick={() => setShowWizard(null)} className="absolute right-4 md3-icon-btn opacity-40 hover:opacity-100 hover:bg-md-sys-error/10 hover:text-md-sys-error transition-all" aria-label="Close match wizard">
                         <X size={isOverlayMode ? 18 : 24} />
                     </button>
                 </div>

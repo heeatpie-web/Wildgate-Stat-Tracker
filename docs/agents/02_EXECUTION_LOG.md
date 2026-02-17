@@ -2291,3 +2291,1516 @@
   - Review ask: approve closure of `AUDIT-REMEDIATION-005`.
 - `PM Response` | `APPROVED`
   - Reason: targeted audit findings were remediated without scope drift and full quality gates passed.
+
+---
+
+## 2026-02-17 - MODERATE-REMEDIATION-006
+- Scope: address reported moderate issues in testing coverage, silent error handling, toast accessibility, and env-backed frontend runtime configuration.
+
+## Work Entries
+- 16:20Z
+  - Added intake + plan entries for `MODERATE-REMEDIATION-006`.
+  - Claimed temporary locks for touched runtime/test/config files.
+  - Started runtime patching pass focused on silent catches, logger persistence handling, and toast accessibility semantics.
+- 16:27Z
+  - Patched runtime behavior and configuration paths:
+    - `src/App.tsx`: replaced silent preload + telemetry retention catches with structured `Logger.warn` calls; moved preload timing constants to env-backed runtime config.
+    - `src/components/MatchRecordingPage.tsx` and `src/components/SmartCapturesPanel.tsx`: replaced silent artifact-load catches with warning logs.
+    - `src/components/Toast.tsx`: added `aria-live`/role semantics and dismiss-button label; switched default timeout to runtime config.
+    - `src/utils/logger.ts`: removed silent persistence-failure swallow path; added non-fatal warning capture.
+    - `src/utils/storage.ts` and `src/hooks/useSmartCapture.ts`: replaced hardcoded timing constants with env-backed config values.
+    - `src/components/ocr/OCRReviewModal.tsx`: removed silent corpus-sync failure catch and logged non-blocking warning.
+
+- 16:35Z
+  - Added and expanded tests:
+    - `src/utils/__tests__/storage.test.ts` (persist/flush/debounce behavior)
+    - `src/hooks/__tests__/useLogMonitor.test.ts` (monitor startup, status/feed updates, telemetry draft trigger)
+    - `src/hooks/__tests__/useSmartCapture.test.ts` (web-mode error path + stored-image processing state)
+    - `src/App.test.tsx` (app smoke render + telemetry retention invoke failure handling)
+
+- 16:52Z
+  - Validation completed and green:
+    - focused vitest targets PASS,
+    - touched-file eslint PASS,
+    - full `lint`, `typecheck`, `test`, and `build` PASS.
+
+## Inter-Agent Request Lifecycle
+- Request ID: `MODERATE-REMEDIATION-006-R1` | Sender: `project-manager` -> Receiver: `builder`
+  - `OPEN`: remediate reported moderate issues (tests, silent failures, accessibility, configuration).
+  - `ACK`: builder accepted scope and started targeted runtime + test patching.
+  - `IN_PROGRESS`: runtime hardening, env config extraction, and test additions.
+  - `READY_FOR_REVIEW`: validation gates passed with evidence pointers recorded.
+  - `CLOSED`: PM response approved for closure.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `MODERATE-REMEDIATION-006#1/#2/#3/#4` | Owner: `builder`
+  - Delta:
+    - replaced silent runtime catches with structured warnings in App/artifact-load/OCR corpus-sync paths,
+    - added env-backed frontend runtime timing configuration and wired it into App/storage/smart-capture/toast,
+    - added missing tests for `StorageService`, `useLogMonitor`, expanded `useSmartCapture`, and added `App` coverage,
+    - validated with full lint/typecheck/test/build gates.
+  - Evidence pointers:
+    - `src/App.tsx`
+    - `src/components/Toast.tsx`
+    - `src/components/MatchRecordingPage.tsx`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/components/ocr/OCRReviewModal.tsx`
+    - `src/utils/logger.ts`
+    - `src/utils/storage.ts`
+    - `src/hooks/useSmartCapture.ts`
+    - `src/config/runtimeConfig.ts`
+    - `src/App.test.tsx`
+    - `src/hooks/__tests__/useLogMonitor.test.ts`
+    - `src/hooks/__tests__/useSmartCapture.test.ts`
+    - `src/utils/__tests__/storage.test.ts`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `MODERATE-REMEDIATION-006`.
+- `PM Response` | `APPROVED`
+  - Reason: requested moderate issues were remediated with targeted implementation and full validation evidence.
+
+---
+
+## 2026-02-17 - FOLLOWUP-REMEDIATION-008
+- Scope: close remaining follow-up issues after moderate remediation by finishing targeted accessibility labels, safer backup defaults, and additional env-backed runtime timers.
+
+## Work Entries
+- 16:41Z
+  - Added intake + plan entries for `FOLLOWUP-REMEDIATION-008`.
+  - Claimed temporary locks for remaining UI/timer/default files in this scope.
+
+- 16:43Z
+  - Patched defaults/config:
+    - switched auto-backup fresh/default fallbacks to disabled in:
+      - `src/store/slices/createSettingsSlice.ts`
+      - `src/store/useAppStore.ts`
+      - `src/utils/storage.ts`
+    - extended env-backed runtime config in `src/config/runtimeConfig.ts` and typed env keys in `src/vite-env.d.ts`.
+    - wired runtime timers into:
+      - `src/hooks/useDiscordRPC.ts`
+      - `src/components/SystemPulse.tsx`
+      - `src/components/HistoryTable.tsx`
+      - `src/components/recording/ActionPanel.tsx`
+
+- 16:47Z
+  - Patched accessibility labels for icon-only controls across primary interaction components:
+    - `src/components/DrillDownOverlay.tsx`
+    - `src/components/analytics/AnalyticsShell.tsx`
+    - `src/components/PlayerHub.tsx`
+    - `src/components/ReviewQueueModal.tsx`
+    - `src/components/recording/RosterPanel.tsx`
+    - `src/components/SessionTimer.tsx`
+    - `src/components/SettingsModal.tsx`
+    - `src/components/recording/MissionPanel.tsx`
+    - `src/components/WindowFrame.tsx`
+    - `src/components/smart-captures/SmartCaptureWidgets.tsx`
+    - `src/components/EditMatchModal.tsx`
+    - `src/components/OcrCorrectionModal.tsx`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/components/IdMapper.tsx`
+    - `src/components/ocr/OCRReviewModal.tsx`
+    - `src/components/Wizard.tsx`
+    - `src/components/recording/ActionPanel.tsx`
+
+- 16:49Z
+  - Patched `src/components/ErrorBoundary.tsx` emergency reset confirmation copy and switched to explicit `window.confirm` flow.
+
+- 16:52Z
+  - Validation completed:
+    - touched-file eslint PASS,
+    - `typecheck` PASS,
+    - full `test` PASS,
+    - full `lint` PASS,
+    - full `build` PASS.
+
+## Inter-Agent Request Lifecycle
+- Request ID: `FOLLOWUP-REMEDIATION-008-R1` | Sender: `project-manager` -> Receiver: `builder`
+  - `OPEN`: close remaining follow-up issues in accessibility/defaults/config timer scope.
+  - `ACK`: builder accepted narrow scope and began defaults + config timer patching.
+  - `IN_PROGRESS`: icon-control label sweep completed across targeted core surfaces.
+  - `READY_FOR_REVIEW`: validations passed and evidence captured.
+  - `CLOSED`: PM response approved with evidence pointers.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `FOLLOWUP-REMEDIATION-008#1/#2/#3/#4` | Owner: `builder`
+  - Delta:
+    - changed auto-backup fresh/default behavior to disabled while preserving user-configurable toggle,
+    - moved additional runtime timing constants to env-backed config and wired them into active polling/debounce paths,
+    - added `aria-label` coverage for icon-only controls in high-traffic UI surfaces.
+  - Evidence pointers:
+    - `src/store/slices/createSettingsSlice.ts`
+    - `src/store/useAppStore.ts`
+    - `src/utils/storage.ts`
+    - `src/config/runtimeConfig.ts`
+    - `src/vite-env.d.ts`
+    - `src/hooks/useDiscordRPC.ts`
+    - `src/components/SystemPulse.tsx`
+    - `src/components/HistoryTable.tsx`
+    - `src/components/recording/ActionPanel.tsx`
+    - `src/components/ReviewQueueModal.tsx`
+    - `src/components/recording/RosterPanel.tsx`
+    - `src/components/WindowFrame.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `FOLLOWUP-REMEDIATION-008`.
+- `PM Response` | `APPROVED`
+  - Reason: remaining follow-up items were remediated in-scope with full validation evidence.
+
+---
+
+## 2026-02-17 - CORPUS-IMPORT-DIR-009
+- Scope: make corpus image import open directly in the corpus image storage directory.
+
+## Work Entries
+- 17:01Z
+  - Added intake + plan entries for `CORPUS-IMPORT-DIR-009`.
+  - Claimed temporary locks for `electron/main.cjs` and required AGENTS artifacts.
+
+- 17:03Z
+  - Patched `electron/main.cjs` (`ocr-corpus-import-images`):
+    - ensured `ocr-corpus/images` is created before dialog open,
+    - set `showOpenDialog` `defaultPath` to that directory,
+    - preserved existing multi-file import/cancel behavior.
+
+- 17:04Z
+  - Completed focused validation:
+    - `npx eslint electron/main.cjs` PASS,
+    - `npm run -s typecheck` PASS.
+
+## Inter-Agent Request Lifecycle
+- Request ID: `CORPUS-IMPORT-DIR-009-R1` | Sender: `project-manager` -> Receiver: `builder`
+  - `OPEN`: implement corpus import dialog default directory behavior.
+  - `ACK`: builder accepted scoped request and began handler patch.
+  - `IN_PROGRESS`: Electron handler updated to set defaultPath.
+  - `READY_FOR_REVIEW`: focused lint + typecheck passed with evidence recorded.
+  - `CLOSED`: PM response approved.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `CORPUS-IMPORT-DIR-009#1/#2/#3` | Owner: `builder`
+  - Delta:
+    - corpus import dialog now opens at `ocr-corpus/images`,
+    - destination directory is ensured before dialog launch,
+    - existing import semantics retained.
+  - Evidence pointers:
+    - `electron/main.cjs`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `CORPUS-IMPORT-DIR-009`.
+- `PM Response` | `APPROVED`
+  - Reason: request implemented with minimal scope and passing focused validation.
+
+---
+
+## 2026-02-17 - OCR-DUAL-BUFFER-GATES-010
+- Scope: implement dual-buffer OCR extraction and strict roster auto-apply guardrails.
+
+## Work Entries
+- 17:16Z
+  - Added intake + plan entries for `OCR-DUAL-BUFFER-GATES-010`.
+  - Claimed additional OCR/runtime locks in `docs/WORKLOCKS.md` for new touched files.
+  - Confirmed current preprocessing behavior:
+    - global OCR preprocess retains color,
+    - region OCR uses grayscale (text ROI),
+    - Crew Hub color detection currently runs from preprocessed OCR buffer path.
+  - Next: patch Crew Hub pipeline to split text and color buffers.
+
+## Inter-Agent Request Lifecycle
+- Request ID: `OCR-DUAL-BUFFER-GATES-010-R1` | Sender: `project-manager` -> Receiver: `builder`
+  - `OPEN`: implement approved OCR dual-buffer + strict gate plan end-to-end.
+  - `ACK`: builder accepted scope and began OCR handler/extractor wiring pass.
+  - `IN_PROGRESS`: extraction and commit-boundary guardrail patching in progress.
+
+- 17:21Z
+  - Patched Crew Hub dual-buffer routing:
+    - `electron/ocrHandler.cjs`
+      - `extractCrewHub(...)` calls now pass:
+        - preprocessed OCR buffer for text/word geometry,
+        - original image buffer for color detection fidelity.
+    - `electron/crewHubExtractor.cjs`
+      - extended `extractCrewHub` signature with optional `colorImageBuffer`,
+      - `extractRightPanel` now reads badge color from `colorImageBuffer` while using OCR words from text buffer.
+
+- 17:24Z
+  - Added hard caps in OCR merge boundaries:
+    - `electron/ocrMerger.cjs`
+      - added `capPlayerEntries` helper,
+      - enforced max 4 players for your team, map players, and each enemy team during merges.
+    - `electron/ocrHandler.cjs`
+      - `convertCrewHubToLegacy` now caps teammates and each opponent team player list to 4 (and opponent teams to 4).
+    - `src/utils/ocr/ocrParser.ts`
+      - applied teammate cap via `capTeammatePlayers`,
+      - applied per-team opponent cap (4) and opponent-team cap (4) in merge + validation paths.
+
+- 17:27Z
+  - Added strict auto-apply gate behavior:
+    - `src/App.tsx`
+      - added confidence/ambiguity guardrails before roster writes:
+        - reject auto-apply when confidence < 55,
+        - send to review queue when 55-74,
+        - send to review queue when resolver rewrite is low-similarity (<70),
+      - enforced per-team opponent player cap at apply time,
+      - limited roster-candidate auto-queueing to actually auto-applied names.
+    - `src/hooks/useSmartCapture.ts`
+      - applied same confidence/ambiguity guards in SmartScan auto-apply path,
+      - queue low-confidence/ambiguous names as `player_name` reviews instead of auto-committing.
+
+- 17:29Z
+  - Added regression coverage:
+    - `src/utils/ocr/__tests__/ocrParser.test.ts`
+      - new tests for teammate cap and opponent per-team cap after merges.
+
+- 17:31Z
+  - Validation:
+    - `eslint` touched OCR files PASS,
+    - `typecheck` PASS,
+    - targeted `vitest`:
+      - `src/utils/ocr/__tests__/ocrParser.test.ts` PASS,
+      - `src/hooks/__tests__/useSmartCapture.test.ts` PASS,
+      - `src/App.test.tsx` PASS.
+
+- Request ID: `OCR-DUAL-BUFFER-GATES-010-R1` | Sender: `project-manager` -> Receiver: `builder`
+  - `READY_FOR_REVIEW`: implementation + focused validation complete.
+  - `CLOSED`: PM feedback cycle approved with evidence pointers below.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-DUAL-BUFFER-GATES-010#1/#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - split text and color buffers in Crew Hub extraction path to preserve team-color fidelity,
+    - added max-player guardrails in OCR merge + legacy conversion + frontend merge validation,
+    - added strict auto-apply confidence/ambiguity gates in App and SmartScan auto-apply path,
+    - added targeted regression tests for merge-time caps.
+  - Evidence pointers:
+    - `electron/ocrHandler.cjs`
+    - `electron/crewHubExtractor.cjs`
+    - `electron/ocrMerger.cjs`
+    - `src/utils/ocr/ocrParser.ts`
+    - `src/App.tsx`
+    - `src/hooks/useSmartCapture.ts`
+    - `src/utils/ocr/__tests__/ocrParser.test.ts`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-DUAL-BUFFER-GATES-010`.
+- `PM Response` | `APPROVED`
+  - Reason: dual-buffer fidelity fix and strict apply guardrails are implemented in-scope with passing focused validation.
+
+---
+
+## 2026-02-17 - OCR-ROI-RUNTIME-011
+- Scope: make OCR scan regions actively adjustable and apply settings to reruns.
+
+## Work Entries
+- 17:28Z
+  - Added intake + plan entries for `OCR-ROI-RUNTIME-011`.
+  - Claimed locks for settings, IPC bridge, OCR handler/extractors, and rerun callsites.
+  - Confirmed rerun path currently calls `processCapture` through `rerun-ocr-on-artifact` and does not yet accept ROI overrides.
+
+## Inter-Agent Request Lifecycle
+- Request ID: `OCR-ROI-RUNTIME-011-R1` | Sender: `project-manager` -> Receiver: `builder`
+  - `OPEN`: implement live/persisted ROI settings and apply to OCR + reruns.
+  - `ACK`: builder accepted and started store/IPC/extractor wiring.
+  - `IN_PROGRESS`: implementation in progress.
+  - `READY_FOR_REVIEW`: ROI runtime plumbing and settings editor complete; focused validation green.
+  - `CLOSED`: PM feedback cycle approved.
+
+- 10:42Z
+  - Completed remaining renderer callsite wiring so live ROI settings are used in all OCR paths:
+    - `src/components/SmartCapturesPanel.tsx` detail rerun + parent prop pass-through,
+    - `src/components/HistoryTable.tsx` bulk rerun now uses active `ocrMode` and `ocrRegions`,
+    - `src/hooks/useSmartScan.ts` and `src/utils/scan/tesseractScan.ts` now pass ROI settings to OCR bridge,
+    - `src/hooks/useSmartCapture.ts` smart-analyze pre-pass now includes live ROI settings,
+    - `src/components/DevOCRPanel.tsx` OCR run includes live ROI settings.
+
+- 10:46Z
+  - Completed Electron ROI pipeline wiring:
+    - `electron/main.cjs` rerun handler now accepts optional `ocrRegions` and forwards to `processCapture(...)`.
+    - `electron/ocrHandler.cjs`:
+      - added ROI sanitization/clamping helpers and defaults,
+      - added ROI fingerprint to OCR cache key to prevent stale cached rerun data after ROI changes,
+      - wired normalized ROI overrides through Crew Hub / Map Screen extraction and map-player region OCR crop,
+      - updated `ocr-process-capture` IPC handler to accept optional runtime options payload.
+    - `electron/crewHubExtractor.cjs` now consumes dynamic layout overrides for left/right panel parsing.
+    - `electron/mapScreenExtractor.cjs` now consumes dynamic layout overrides for your-ship/enemy/player regions and uses hazards ROI in hazard text region pass.
+
+- 10:49Z
+  - Completed Settings ROI controls and persistence end-to-end:
+    - `src/components/SettingsModal.tsx` now exposes editable ROI fields (x/y min/max %) for Crew Hub + Map regions and reset-to-default action.
+    - ROI edits apply immediately via store actions and are persisted by `Save & Apply`.
+    - `handleSaveAndClose` now includes `ocrRegions` in persisted settings payload.
+    - `src/store/slices/createSettingsSlice.ts` updated with typed nested ROI update contract.
+    - `src/store/useAppStore.ts` merge helper made shape-safe for ROI-bound structures.
+
+- 10:50Z
+  - Validation completed:
+    - `npx eslint src/components/SmartCapturesPanel.tsx src/components/HistoryTable.tsx src/hooks/useSmartScan.ts src/utils/scan/tesseractScan.ts src/components/DevOCRPanel.tsx src/hooks/useSmartCapture.ts src/components/SettingsModal.tsx electron/main.cjs electron/ocrHandler.cjs electron/crewHubExtractor.cjs electron/mapScreenExtractor.cjs` PASS
+    - `npx vitest run src/utils/__tests__/artifactService.test.ts` PASS
+    - `npx vitest run src/hooks/__tests__/useSmartCapture.test.ts` PASS
+    - `npm run -s typecheck` PASS
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-ROI-RUNTIME-011#1/#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - finished runtime ROI pass-through from settings to all rerun/live OCR callsites,
+    - added Electron-side ROI sanitization and extractor override application,
+    - ensured cache invalidation by ROI fingerprint so reruns immediately reflect region changes,
+    - delivered settings ROI editor + reset flow and persisted payload wiring.
+  - Evidence pointers:
+    - `src/store/slices/createSettingsSlice.ts`
+    - `src/store/useAppStore.ts`
+    - `src/components/SettingsModal.tsx`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/components/HistoryTable.tsx`
+    - `src/hooks/useSmartCapture.ts`
+    - `src/hooks/useSmartScan.ts`
+    - `src/utils/scan/tesseractScan.ts`
+    - `src/components/DevOCRPanel.tsx`
+    - `electron/main.cjs`
+    - `electron/ocrHandler.cjs`
+    - `electron/crewHubExtractor.cjs`
+    - `electron/mapScreenExtractor.cjs`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-ROI-RUNTIME-011`.
+- `PM Response` | `APPROVED`
+  - Reason: runtime-adjustable ROI feature now applies immediately across reruns/live OCR with passing focused validation.
+
+---
+
+## 2026-02-17 - OCR-CORPUS-ROI-012
+- Scope: make corpus batch OCR pipeline consume current ROI settings.
+
+## Work Entries
+- 18:06Z
+  - Added intake + plan entries for `OCR-CORPUS-ROI-012`.
+  - Confirmed gap:
+    - `DevOCRPanel` corpus pipeline invoke did not include `ocrRegions`,
+    - `electron/main.cjs` `ocr-corpus-run-pipeline` did not forward ROI options to `processCapture(...)`.
+
+- 18:08Z
+  - Patched renderer payload:
+    - `src/components/DevOCRPanel.tsx`
+      - `ocr-corpus-run-pipeline` invoke now sends `{ ocrMode, activeUser, ocrRegions }`.
+
+- 18:10Z
+  - Patched Electron corpus pipeline wiring:
+    - `electron/main.cjs`
+      - `ocr-corpus-run-pipeline` now reads `opts?.ocrRegions || null`,
+      - forwards `ocrRegions` into `processCapture(...)` options for each sample.
+
+- 18:12Z
+  - Validation completed:
+    - `npx eslint src/components/DevOCRPanel.tsx electron/main.cjs` PASS.
+    - `npm run -s typecheck` PASS.
+
+## Inter-Agent Request Lifecycle
+- Request ID: `OCR-CORPUS-ROI-012-R1` | Sender: `project-manager` -> Receiver: `builder`
+  - `OPEN`: thread live ROI settings into corpus pipeline runs.
+  - `ACK`: builder accepted narrow scope and began payload/handler wiring.
+  - `IN_PROGRESS`: renderer + Electron pipeline patching.
+  - `READY_FOR_REVIEW`: focused validation passed.
+  - `CLOSED`: PM feedback cycle approved.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-CORPUS-ROI-012#1/#2/#3` | Owner: `builder`
+  - Delta:
+    - corpus pipeline invoke now includes live ROI settings,
+    - Electron corpus runner forwards ROI options to `processCapture(...)`,
+    - no corpus schema/output contract changes.
+  - Evidence pointers:
+    - `src/components/DevOCRPanel.tsx`
+    - `electron/main.cjs`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-CORPUS-ROI-012`.
+- `PM Response` | `APPROVED`
+  - Reason: corpus path now matches live/rerun ROI behavior with focused validation passing.
+
+---
+
+## 2026-02-17 - OCR-ENHANCEMENT-T1-013
+- Scope: begin user-requested OCR enhancement roadmap by implementing Tier 1 features only (cache telemetry + correction UX wins).
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-OCR-T1-013` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: implement Tier 1 #1-#4 across OCR handler, modal, alias engine, and Dev OCR panel with no breaking contracts.
+    - Evidence target: `electron/ocrHandler.cjs`, `electron/preload.cjs`, `src/components/DevOCRPanel.tsx`, `src/components/OcrCorrectionModal.tsx`, `src/hooks/useKeyboardShortcuts.ts`, `src/components/ConfidenceMeter.tsx`, `src/utils/ocrAliasEngine.ts`.
+  - `REQ-OCR-T1-013` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted; execution started on plan step #1.
+  - `REQ-OCR-T1-013` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active; first implementation step is OCR cache telemetry plumbing + dev panel polling.
+- Work entries:
+  - 18:38Z
+    - Intake/plan normalized to Tier 1-only interpretation to prevent scope drift from 12-item full roadmap.
+    - Locks claimed for OCR Tier 1 target files and AGENTS artifacts.
+    - Started code pass on cache telemetry path (`ocrHandler` + `DevOCRPanel`).
+- 18:44Z
+  - Implemented Tier 1 #1 cache telemetry:
+    - `electron/ocrHandler.cjs`: added cache hit/miss/eviction counters, running hit/miss timing averages, and `get-ocr-cache-stats` IPC handler.
+    - `electron/preload.cjs`: added `get-ocr-cache-stats` to invoke allowlist.
+    - `scripts/security_negative_tests.cjs`: synced allowlist fixture for security gate parity.
+    - `src/components/DevOCRPanel.tsx`: added 5-second cache telemetry polling card (hit rate, size, avg hit/miss latency).
+
+- 18:47Z
+  - Implemented Tier 1 #2/#3/#4 correction UX enhancements:
+    - `src/hooks/useKeyboardShortcuts.ts`: generalized hook to support both legacy win/loss shortcuts and reusable shortcut arrays.
+    - `src/components/ConfidenceMeter.tsx`: added new accessible confidence progress component.
+    - `src/components/OcrCorrectionModal.tsx`: wired modal shortcuts (`Ctrl/Cmd+Enter`, `Esc`, `Ctrl/Cmd+A`, `Ctrl/Cmd+I`), added shortcut hint banner, replaced confidence text with `ConfidenceMeter`, and added learned badge tooltip.
+    - `src/utils/ocrAliasEngine.ts`: extended alias entry metadata and added `getLearningMetadata(...)` helper used by modal tooltips.
+
+- 18:49Z
+  - Validation complete:
+    - touched-file `eslint` PASS,
+    - targeted `vitest` PASS,
+    - `node scripts/security_negative_tests.cjs` PASS (113/113),
+    - `npm run -s typecheck` PASS.
+
+- `REQ-OCR-T1-013` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence prepared in `docs/agents/03_VALIDATION.md` for Tier 1 #1-#4 implementation.
+- `REQ-OCR-T1-013` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer:
+    - `electron/ocrHandler.cjs`
+    - `electron/preload.cjs`
+    - `scripts/security_negative_tests.cjs`
+    - `src/components/DevOCRPanel.tsx`
+    - `src/hooks/useKeyboardShortcuts.ts`
+    - `src/components/ConfidenceMeter.tsx`
+    - `src/components/OcrCorrectionModal.tsx`
+    - `src/utils/ocrAliasEngine.ts`
+    - `docs/agents/03_VALIDATION.md`
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-ENHANCEMENT-T1-013#1/#2/#3/#4/#5/#6` | Owner: `builder`
+  - Delta:
+    - added OCR cache telemetry instrumentation + IPC endpoint + Dev OCR polling UI,
+    - added correction-modal keyboard shortcuts and shortcut hint banner,
+    - replaced confidence percentage text with accessible confidence meters,
+    - exposed alias learning metadata and surfaced learned badge tooltips,
+    - ran focused validation for lint/test/typecheck/security allowlist parity.
+  - Evidence pointers:
+    - `electron/ocrHandler.cjs`
+    - `electron/preload.cjs`
+    - `scripts/security_negative_tests.cjs`
+    - `src/components/DevOCRPanel.tsx`
+    - `src/hooks/useKeyboardShortcuts.ts`
+    - `src/components/ConfidenceMeter.tsx`
+    - `src/components/OcrCorrectionModal.tsx`
+    - `src/utils/ocrAliasEngine.ts`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-ENHANCEMENT-T1-013` Tier 1 implementation increment.
+- `PM Response` | `APPROVED`
+  - Reason: Tier 1 scope delivered with additive changes, no contract breakage, and passing focused validation evidence.
+
+- 18:51Z
+  - Released OCR-ENHANCEMENT-T1-013 lock claims and recorded release entries in docs/WORKLOCKS.md.
+
+---
+
+## 2026-02-17 - OCR-ENHANCEMENT-T2-014
+- Scope: continue OCR enhancement roadmap with Tier 2 #5 by adding a benchmarkable old-vs-region-first preprocessing comparison flow.
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-OCR-T2-014` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: implement Tier 2 #5 benchmark instrumentation and Dev OCR surface without changing production OCR extraction behavior.
+    - Evidence target: `electron/ocrHandler.cjs`, `electron/preload.cjs`, `scripts/security_negative_tests.cjs`, `src/components/DevOCRPanel.tsx`.
+  - `REQ-OCR-T2-014` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted narrow scope and started intake/plan/lock updates.
+  - `REQ-OCR-T2-014` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across benchmark helper implementation, preload allowlist parity, and dev-panel UX.
+- Work entries:
+  - 18:57Z
+    - Added `OCR-ENHANCEMENT-T2-014` intake + plan entries.
+    - Claimed targeted lock entries for new touched files not already covered by lane locks:
+      - `electron/preload.cjs`
+      - `scripts/security_negative_tests.cjs`
+    - Confirmed benchmark insertion points in `electron/ocrHandler.cjs` around region OCR path and OCR IPC registration.
+  - 19:01Z
+    - Implemented benchmark engine in `electron/ocrHandler.cjs`:
+      - added reusable region-pixel resolver and crop-first preprocessing helper,
+      - added synthetic old-flow benchmark helper (full-image preprocess then region crop),
+      - added `benchmarkRegionPreprocessing(...)` summary output (avg timings, speedup %, factor, per-iteration).
+    - Added IPC handler:
+      - `benchmark-ocr-preprocessing` accepts base64 or file-path payload, optional iterations, optional ROI overrides.
+      - preserves existing OCR extraction path; benchmark logic is additive and dev-only.
+  - 19:03Z
+    - Updated IPC boundaries:
+      - `electron/preload.cjs`: added `benchmark-ocr-preprocessing` to invoke allowlist.
+      - `scripts/security_negative_tests.cjs`: mirrored invoke allowlist fixture entry.
+    - Updated renderer tools:
+      - `src/components/DevOCRPanel.tsx`:
+        - added benchmark state typing + response guard,
+        - added action button (`Benchmark Old vs Crop-First (10x)`),
+        - added result summary card (old/new avg, speedup %, factor, regions),
+        - resets benchmark state when loading a new image.
+  - 19:05Z
+    - Validation completed:
+      - `npx eslint electron/ocrHandler.cjs electron/preload.cjs src/components/DevOCRPanel.tsx scripts/security_negative_tests.cjs` PASS.
+      - `node scripts/security_negative_tests.cjs` PASS (113/113).
+      - `npm run -s typecheck` PASS.
+
+- `REQ-OCR-T2-014` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence prepared in `docs/agents/03_VALIDATION.md` for Tier 2 #5 benchmark increment.
+- `REQ-OCR-T2-014` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer:
+    - `electron/ocrHandler.cjs`
+    - `electron/preload.cjs`
+    - `scripts/security_negative_tests.cjs`
+    - `src/components/DevOCRPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-ENHANCEMENT-T2-014#1/#2/#3/#4/#5/#6` | Owner: `builder`
+  - Delta:
+    - added benchmark-only preprocessing comparison engine in OCR handler,
+    - exposed benchmark IPC channel and maintained preload/security allowlist parity,
+    - added Dev OCR panel control + telemetry view for old-vs-new preprocessing timing comparisons,
+    - ran focused lint, security negative tests, and typecheck validation.
+  - Evidence pointers:
+    - `electron/ocrHandler.cjs`
+    - `electron/preload.cjs`
+    - `scripts/security_negative_tests.cjs`
+    - `src/components/DevOCRPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-ENHANCEMENT-T2-014` Tier 2 #5 benchmark increment.
+- `PM Response` | `APPROVED`
+  - Reason: benchmark feature is additive, production OCR path unchanged, and validation evidence is complete.
+
+- 19:02Z
+  - Released `OCR-ENHANCEMENT-T2-014` temporary lock claims (`electron/preload.cjs`, `scripts/security_negative_tests.cjs`) and recorded release rows in `docs/WORKLOCKS.md`.
+
+---
+
+## 2026-02-17 - OCR-ENHANCEMENT-T2-015
+- Scope: continue OCR enhancement roadmap with Tier 2 #6 by adding confidence calibration sample tracking + bucket analysis visibility.
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-OCR-T2-015` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: implement calibration sample capture/persistence and Dev OCR bucketed confidence analysis.
+    - Evidence target: `src/utils/ocrCalibration.ts`, `src/store/slices/createSettingsSlice.ts`, `src/store/useAppStore.ts`, `src/components/OcrCorrectionModal.tsx`, `src/components/DevOCRPanel.tsx`.
+  - `REQ-OCR-T2-015` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted Tier 2 #6-only scope and began intake/plan/lock updates.
+  - `REQ-OCR-T2-015` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across utility/store/UI/test wiring.
+- Work entries:
+  - 19:06Z
+    - Added intake + plan entries for `OCR-ENHANCEMENT-T2-015`.
+    - Claimed non-lane locks for:
+      - `src/store/slices/createSettingsSlice.ts`
+      - `src/utils/ocrCalibration.ts`
+      - `src/utils/__tests__/ocrCalibration.test.ts`
+    - Confirmed insertion points in settings persistence and correction modal submit flow.
+
+  - 19:08Z
+    - Implemented calibration utility module:
+      - `src/utils/ocrCalibration.ts`
+        - added calibration sample + bucket types,
+        - added mode normalization (`local`/`cloud`/`merged`),
+        - added bounded append/sanitize helpers (max 1000),
+        - added fixed bucket analysis (0-20, 20-40, 40-60, 60-80, 80-100),
+        - added threshold recommendation helper (lowest bucket meeting target accuracy).
+
+    - Extended persisted settings/store:
+      - `src/store/slices/createSettingsSlice.ts`
+        - added `ocrCalibrationSamples` state,
+        - added `recordCalibrationSample(...)` and `clearOcrCalibrationSamples(...)` actions.
+      - `src/store/useAppStore.ts`
+        - hydrate `ocrCalibrationSamples` using utility sanitizer,
+        - persist + partialize `ocrCalibrationSamples` in settings payload.
+
+    - Wired correction-event sample capture:
+      - `src/components/OcrCorrectionModal.tsx`
+        - record calibration sample for each applied/non-ignored correction using predicted confidence, correctness, normalized OCR mode, and timestamp.
+
+    - Added Dev OCR calibration visibility:
+      - `src/components/DevOCRPanel.tsx`
+        - reads calibration sample list from store,
+        - computes bucket accuracy and recommended threshold via utility helpers,
+        - renders calibration card with per-bucket range/samples/accuracy and recommendation text.
+
+    - Added focused tests:
+      - `src/utils/__tests__/ocrCalibration.test.ts`
+        - sample-cap behavior,
+        - bucket math,
+        - threshold recommendation and null behavior,
+        - OCR mode normalization.
+      - `src/components/OcrCorrectionModal.test.tsx`
+        - updated mocked store shape for new calibration fields.
+
+  - 19:09Z
+    - Validation completed:
+      - `npx eslint src/utils/ocrCalibration.ts src/utils/__tests__/ocrCalibration.test.ts src/store/slices/createSettingsSlice.ts src/store/useAppStore.ts src/components/OcrCorrectionModal.tsx src/components/DevOCRPanel.tsx src/components/OcrCorrectionModal.test.tsx` PASS.
+      - `npx vitest run src/utils/__tests__/ocrCalibration.test.ts src/components/OcrCorrectionModal.test.tsx` PASS (2 files, 7 tests).
+      - `npm run -s typecheck` PASS.
+
+- `REQ-OCR-T2-015` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence prepared in `docs/agents/03_VALIDATION.md` for Tier 2 #6 calibration increment.
+- `REQ-OCR-T2-015` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer:
+    - `src/utils/ocrCalibration.ts`
+    - `src/utils/__tests__/ocrCalibration.test.ts`
+    - `src/store/slices/createSettingsSlice.ts`
+    - `src/store/useAppStore.ts`
+    - `src/components/OcrCorrectionModal.tsx`
+    - `src/components/DevOCRPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-ENHANCEMENT-T2-015#1/#2/#3/#4/#5/#6/#7` | Owner: `builder`
+  - Delta:
+    - added reusable OCR confidence calibration utility with bounded sample handling and bucket math,
+    - persisted calibration samples in settings store with append action,
+    - wired correction-modal sample recording on apply,
+    - surfaced bucketed calibration accuracy and threshold recommendation in Dev OCR panel,
+    - added focused utility tests and passed lint/tests/typecheck.
+  - Evidence pointers:
+    - `src/utils/ocrCalibration.ts`
+    - `src/utils/__tests__/ocrCalibration.test.ts`
+    - `src/store/slices/createSettingsSlice.ts`
+    - `src/store/useAppStore.ts`
+    - `src/components/OcrCorrectionModal.tsx`
+    - `src/components/DevOCRPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-ENHANCEMENT-T2-015` Tier 2 #6 calibration increment.
+- `PM Response` | `APPROVED`
+  - Reason: calibration tracking is additive, persisted safely with bounded samples, and validated with focused tests.
+
+- 19:11Z
+  - Released `OCR-ENHANCEMENT-T2-015` temporary lock claims (`src/store/slices/createSettingsSlice.ts`, `src/utils/ocrCalibration.ts`, `src/utils/__tests__/ocrCalibration.test.ts`) and recorded release rows in `docs/WORKLOCKS.md`.
+
+---
+
+## 2026-02-17 - OCR-ENHANCEMENT-T2-016
+- Scope: continue OCR enhancement roadmap with Tier 2 #7 by adding threshold-driven batch correction operations with confirmation.
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-OCR-T2-016` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: implement batch accept/ignore operations, persisted threshold setting, confirmation dialog, and focused tests.
+    - Evidence target: `src/store/slices/createSettingsSlice.ts`, `src/store/useAppStore.ts`, `src/components/BatchActionConfirmDialog.tsx`, `src/components/OcrCorrectionModal.tsx`, `src/utils/ocrBatchActions.ts`.
+  - `REQ-OCR-T2-016` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted Tier 2 #7-only scope and started intake/plan/lock setup.
+  - `REQ-OCR-T2-016` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across settings persistence, modal UI/actions, and test coverage.
+- Work entries:
+  - 19:14Z
+    - Added intake + plan entries for `OCR-ENHANCEMENT-T2-016`.
+    - Claimed non-lane locks for:
+      - `src/components/BatchActionConfirmDialog.tsx`
+      - `src/store/slices/createSettingsSlice.ts`
+      - `src/utils/__tests__/ocrBatchActions.test.ts`
+    - Confirmed existing correction modal and settings persistence insertion points.
+
+  - 19:18Z
+    - Added persisted batch-threshold setting:
+      - `src/store/slices/createSettingsSlice.ts`
+        - added `ocrBatchAcceptThreshold` (default 85) and `setOcrBatchAcceptThreshold`.
+      - `src/store/useAppStore.ts`
+        - added hydrate/persist/partialize wiring for `ocrBatchAcceptThreshold`.
+    - Added utility helpers:
+      - `src/utils/ocrBatchActions.ts`
+        - threshold normalization (70-95 step 5),
+        - high/low eligible candidate filtering with corrected/ignored exclusions.
+
+  - 19:20Z
+    - Added reusable confirmation component:
+      - `src/components/BatchActionConfirmDialog.tsx`.
+    - Updated correction modal batch workflow:
+      - `src/components/OcrCorrectionModal.tsx`
+        - threshold slider with persisted value,
+        - real-time eligible counts,
+        - batch accept + batch ignore handlers,
+        - confirmation prompt before applying batch actions,
+        - retained existing shortcut flow (`Ctrl+A`, `Ctrl+I`, `Ctrl+Enter`, `Esc`).
+    - Added/updated focused tests:
+      - new `src/utils/__tests__/ocrBatchActions.test.ts`,
+      - adjusted `src/components/OcrCorrectionModal.test.tsx` query for unambiguous Ignore button targeting.
+
+  - 19:21Z
+    - Validation completed:
+      - `npx eslint src/utils/ocrBatchActions.ts src/utils/__tests__/ocrBatchActions.test.ts src/components/BatchActionConfirmDialog.tsx src/components/OcrCorrectionModal.tsx src/components/OcrCorrectionModal.test.tsx src/store/slices/createSettingsSlice.ts src/store/useAppStore.ts` PASS.
+      - `npx vitest run src/utils/__tests__/ocrBatchActions.test.ts src/components/OcrCorrectionModal.test.tsx` PASS (2 files, 5 tests).
+      - `npm run -s typecheck` PASS.
+
+- `REQ-OCR-T2-016` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence prepared in `docs/agents/03_VALIDATION.md` for Tier 2 #7 batch operations increment.
+- `REQ-OCR-T2-016` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer:
+    - `src/store/slices/createSettingsSlice.ts`
+    - `src/store/useAppStore.ts`
+    - `src/utils/ocrBatchActions.ts`
+    - `src/utils/__tests__/ocrBatchActions.test.ts`
+    - `src/components/BatchActionConfirmDialog.tsx`
+    - `src/components/OcrCorrectionModal.tsx`
+    - `docs/agents/03_VALIDATION.md`
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-ENHANCEMENT-T2-016#1/#2/#3/#4/#5/#6` | Owner: `builder`
+  - Delta:
+    - added persisted OCR batch threshold with bounded normalization,
+    - added shared batch eligibility utilities and focused tests,
+    - introduced confirmation dialog component for batch actions,
+    - added threshold slider + live counts + confirmed batch accept/ignore operations in OCR correction modal,
+    - validated lint/tests/typecheck after modal/store updates.
+  - Evidence pointers:
+    - `src/store/slices/createSettingsSlice.ts`
+    - `src/store/useAppStore.ts`
+    - `src/utils/ocrBatchActions.ts`
+    - `src/utils/__tests__/ocrBatchActions.test.ts`
+    - `src/components/BatchActionConfirmDialog.tsx`
+    - `src/components/OcrCorrectionModal.tsx`
+    - `src/components/OcrCorrectionModal.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-ENHANCEMENT-T2-016` Tier 2 #7 batch operations increment.
+- `PM Response` | `APPROVED`
+  - Reason: batch operations now have persisted thresholds + explicit confirmation and pass focused validation checks.
+
+- 19:22Z
+  - Released `OCR-ENHANCEMENT-T2-016` temporary lock claims (`src/components/BatchActionConfirmDialog.tsx`, `src/store/slices/createSettingsSlice.ts`, `src/utils/__tests__/ocrBatchActions.test.ts`) and recorded release rows in `docs/WORKLOCKS.md`.
+
+---
+
+## 2026-02-17 - OCR-ENHANCEMENT-T2-017
+- Scope: continue OCR enhancement roadmap with Tier 2 #8 by adding interactive OCR bounding-box overlay debugging in Dev OCR tools.
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-OCR-T2-017` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: add opt-in OCR bbox debug payload + Dev panel overlay visualization while preserving existing OCR flows.
+    - Evidence target: `electron/ocrHandler.cjs`, `src/utils/ocr/ocrTypes.ts`, `src/utils/electronBridge.ts`, `src/components/OcrBoundingBoxOverlay.tsx`, `src/components/DevOCRPanel.tsx`.
+  - `REQ-OCR-T2-017` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted Tier 2 #8 scope, started intake/plan + lock updates.
+  - `REQ-OCR-T2-017` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across OCR handler debug payload wiring and Dev panel overlay UI implementation.
+- Work entries:
+  - 12:34Z
+    - Added intake + plan entries for `OCR-ENHANCEMENT-T2-017`.
+    - Claimed temporary locks for:
+      - `electron/ocrHandler.cjs`
+      - `src/components/DevOCRPanel.tsx`
+      - `src/utils/ocr/ocrTypes.ts`
+      - `src/utils/electronBridge.ts`
+      - `src/components/OcrBoundingBoxOverlay.tsx`
+    - Confirmed existing OCR handler already captures word-level bbox data; implementation will keep payload opt-in via runtime options.
+  - 12:36Z
+    - Implemented backend opt-in bbox debug payload in `electron/ocrHandler.cjs`:
+      - added `includeBboxes` runtime option parsing (strict boolean),
+      - added cache bypass for debug captures (`includeBboxes` runs are never served from OCR cache),
+      - added helper payload normalizers (`normalizeDebugWord`, `buildOcrBoundingBoxDebugPayload`),
+      - attached optional `data.ocrBoundingBoxes` response payload (source/image dimensions/word bboxes).
+
+  - 12:38Z
+    - Implemented renderer contract + UI:
+      - `src/utils/ocr/ocrTypes.ts`: added optional `ocrBoundingBoxes` field to `OCRExtractedData`.
+      - `src/utils/electronBridge.ts`: added `OCRProcessRuntimeOptions` and pass-through support for `includeBboxes`.
+      - `src/components/OcrBoundingBoxOverlay.tsx` (new): interactive SVG overlay with confidence color coding, hover tooltip, keyboard-selectable/clickable boxes, and selected detail panel.
+      - `src/components/DevOCRPanel.tsx`: added "Capture with Bounding Boxes" action, debug OCR path using `includeBboxes`, overlay state/reset wiring, image preview overlay rendering, and bbox summary badge in results panel.
+
+  - 12:40Z
+    - Validation completed:
+      - `npx eslint electron/ocrHandler.cjs src/utils/ocr/ocrTypes.ts src/utils/electronBridge.ts src/components/OcrBoundingBoxOverlay.tsx src/components/DevOCRPanel.tsx` PASS.
+      - `npm run -s typecheck` PASS.
+      - targeted `rg` wiring verification PASS.
+
+- `REQ-OCR-T2-017` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence prepared in `docs/agents/03_VALIDATION.md` for Tier 2 #8 bounding-box overlay increment.
+- `REQ-OCR-T2-017` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer:
+    - `electron/ocrHandler.cjs`
+    - `src/utils/ocr/ocrTypes.ts`
+    - `src/utils/electronBridge.ts`
+    - `src/components/OcrBoundingBoxOverlay.tsx`
+    - `src/components/DevOCRPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-ENHANCEMENT-T2-017#1/#2/#3/#4/#5/#6` | Owner: `builder`
+  - Delta:
+    - added opt-in OCR bbox debug payload generation in OCR handler with cache bypass for debug runs,
+    - extended OCR bridge/types for runtime debug option passthrough and typed bbox response data,
+    - added interactive `OcrBoundingBoxOverlay` component,
+    - added Dev OCR panel action for bbox capture and overlay visualization,
+    - completed focused lint/typecheck verification.
+  - Evidence pointers:
+    - `electron/ocrHandler.cjs`
+    - `src/utils/ocr/ocrTypes.ts`
+    - `src/utils/electronBridge.ts`
+    - `src/components/OcrBoundingBoxOverlay.tsx`
+    - `src/components/DevOCRPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-ENHANCEMENT-T2-017` Tier 2 #8 bounding-box overlay increment.
+- `PM Response` | `APPROVED`
+  - Reason: bbox overlay feature is additive, isolated to explicit debug mode, and validation evidence is complete.
+
+- 12:41Z
+  - Released `OCR-ENHANCEMENT-T2-017` temporary lock claims (`electron/ocrHandler.cjs`, `src/components/DevOCRPanel.tsx`, `src/utils/ocr/ocrTypes.ts`, `src/utils/electronBridge.ts`, `src/components/OcrBoundingBoxOverlay.tsx`, and AGENTS artifact files) and recorded release rows in `docs/WORKLOCKS.md`.
+
+---
+
+## 2026-02-17 - OCR-ENHANCEMENT-T3-018
+- Scope: continue OCR enhancement roadmap with Tier 3 #9 by exporting correction corpus artifacts and adding opt-in OCR sample archiving.
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-OCR-T3-018` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: implement correction corpus builder/export action and optional OCR sample archive plumbing.
+    - Evidence target: `src/utils/ocrCorpusBuilder.ts`, `src/utils/export.ts`, `src/components/DevOCRPanel.tsx`, `electron/ocrHandler.cjs`, `src/utils/__tests__/ocrCorpusBuilder.test.ts`.
+  - `REQ-OCR-T3-018` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted Tier 3 #9-focused scope; started intake/plan/lock updates.
+  - `REQ-OCR-T3-018` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across corpus utility, export wiring, and OCR handler archive helper.
+- Work entries:
+  - 12:46Z
+    - Added intake + plan entries for `OCR-ENHANCEMENT-T3-018`.
+    - Claimed temporary locks for Tier 3 #9 target files and AGENTS artifacts.
+    - Confirmed existing alias model and Dev OCR corpus tab insertion points for additive export workflow.
+  - 12:48Z
+    - Implemented correction corpus utility + export plumbing:
+      - added `src/utils/ocrCorpusBuilder.ts` with:
+        - `buildOcrCorpus(aliasModel, minCount)`
+        - `serializeOcrCorpusJsonl(corpus)`
+        - `serializeOcrCorpusBox(corpus)`
+      - added `exportTextFile(...)` to `src/utils/export.ts` for `.jsonl`/`.box` artifact downloads.
+      - wired `src/components/DevOCRPanel.tsx` corpus action:
+        - reads `ocrAliasModel` from store,
+        - exports JSON + JSONL + BOX files via new helper,
+        - surfaces status messaging for empty corpus and success/failure.
+
+  - 12:49Z
+    - Implemented OCR sample archive plumbing:
+      - `electron/ocrHandler.cjs`
+        - added archive directory helpers and `archiveOcrSample(...)` writer (PNG + JSON sidecar),
+        - added runtime options support in `processCapture(...)`:
+          - `archiveOcrSample` (boolean)
+          - `archiveMetadata` (object)
+        - archive path is opt-in and now bypasses OCR cache to avoid skipping archive writes.
+      - `src/utils/electronBridge.ts`
+        - extended `OCRProcessRuntimeOptions` with `archiveOcrSample` + `archiveMetadata`.
+      - `src/components/DevOCRPanel.tsx`
+        - Dev OCR run now passes archive runtime options to preserve corpus-ready sample traces.
+      - `src/utils/ocr/ocrTypes.ts`
+        - added optional `ocrCorpusSampleId` metadata field.
+
+  - 12:50Z
+    - Added focused regression coverage:
+      - new `src/utils/__tests__/ocrCorpusBuilder.test.ts` validates:
+        - min-count filtering,
+        - JSONL line serialization shape,
+        - BOX text generation shape.
+
+  - 12:50Z
+    - Validation completed:
+      - `npx eslint src/utils/ocrCorpusBuilder.ts src/utils/__tests__/ocrCorpusBuilder.test.ts src/utils/export.ts src/components/DevOCRPanel.tsx src/utils/electronBridge.ts src/utils/ocr/ocrTypes.ts electron/ocrHandler.cjs` PASS.
+      - `npx vitest run src/utils/__tests__/ocrCorpusBuilder.test.ts` PASS (1 file, 3 tests).
+      - `npm run -s typecheck` PASS.
+      - targeted `rg` wiring verification PASS.
+
+- `REQ-OCR-T3-018` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence prepared in `docs/agents/03_VALIDATION.md` for Tier 3 #9 correction corpus export increment.
+- `REQ-OCR-T3-018` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer:
+    - `src/utils/ocrCorpusBuilder.ts`
+    - `src/utils/__tests__/ocrCorpusBuilder.test.ts`
+    - `src/utils/export.ts`
+    - `src/components/DevOCRPanel.tsx`
+    - `src/utils/electronBridge.ts`
+    - `src/utils/ocr/ocrTypes.ts`
+    - `electron/ocrHandler.cjs`
+    - `docs/agents/03_VALIDATION.md`
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-ENHANCEMENT-T3-018#1/#2/#3/#4/#5/#6` | Owner: `builder`
+  - Delta:
+    - added alias-model correction corpus builder and serialization for JSON/JSONL/BOX,
+    - added text export helper for non-JSON corpus artifacts,
+    - added Dev OCR corpus export action (`Export Training Data`),
+    - added opt-in OCR sample archive helper/runtime path in OCR handler,
+    - added focused corpus-builder tests and passed lint/test/typecheck validation.
+  - Evidence pointers:
+    - `src/utils/ocrCorpusBuilder.ts`
+    - `src/utils/__tests__/ocrCorpusBuilder.test.ts`
+    - `src/utils/export.ts`
+    - `src/components/DevOCRPanel.tsx`
+    - `src/utils/electronBridge.ts`
+    - `src/utils/ocr/ocrTypes.ts`
+    - `electron/ocrHandler.cjs`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-ENHANCEMENT-T3-018` Tier 3 #9 correction-corpus export increment.
+- `PM Response` | `APPROVED`
+  - Reason: correction corpus export now emits requested formats, archive path is opt-in/non-breaking, and validation evidence is complete.
+
+- 12:50Z
+  - Released `OCR-ENHANCEMENT-T3-018` temporary lock claims (`electron/ocrHandler.cjs`, `src/components/DevOCRPanel.tsx`, `src/utils/ocrCorpusBuilder.ts`, `src/utils/export.ts`, `src/utils/__tests__/ocrCorpusBuilder.test.ts`, and AGENTS artifact files) and recorded release rows in `docs/WORKLOCKS.md`.
+
+---
+
+## 2026-02-17 - OCR-ENHANCEMENT-T3-019
+- Scope: continue OCR enhancement roadmap with Tier 3 #10 by generating and applying a Tesseract user-words dictionary from pilot registry data.
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-OCR-T3-019` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: add dictionary generation helper, OCR handler regeneration/apply IPC, and renderer auto/manual triggers.
+    - Evidence target: `electron/tesseractDictionary.cjs`, `electron/ocrHandler.cjs`, `electron/preload.cjs`, `scripts/security_negative_tests.cjs`, `src/providers/GameDataProvider.tsx`, `src/components/DevOCRPanel.tsx`.
+  - `REQ-OCR-T3-019` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted Tier 3 #10 scope; started intake/plan/log updates.
+  - `REQ-OCR-T3-019` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across Electron dictionary generation/apply wiring and renderer triggers.
+- Work entries:
+  - 19:58Z
+    - Added intake + plan entries for `OCR-ENHANCEMENT-T3-019`.
+    - Claimed temporary locks for new files:
+      - `electron/tesseractDictionary.cjs`
+      - `src/providers/GameDataProvider.tsx`
+      - `electron/preload.cjs`
+      - `scripts/security_negative_tests.cjs`
+    - Confirmed existing lane locks already cover hot OCR files (`electron/ocrHandler.cjs`, `src/components/DevOCRPanel.tsx`).
+  - 20:03Z
+    - Added `electron/tesseractDictionary.cjs` with:
+      - pilot-registry normalization/deduping,
+      - match-history frequency scoring,
+      - OCR substitution-based variation generation (`0/O`, `1/I/l`),
+      - dictionary word list generation and file writer (`wildgate_userwords.txt`).
+  - 20:05Z
+    - Integrated dictionary lifecycle in `electron/ocrHandler.cjs`:
+      - added dictionary file constants (`OCR_USER_WORDS_FILE`) and worker parameter builder,
+      - added worker-dictionary apply helper for live workers,
+      - loaded existing dictionary file for new worker-pool initialization,
+      - added IPC handler `regenerate-ocr-dictionary` (sanitize input, generate file, apply to workers, return summary).
+  - 20:07Z
+    - Added channel parity + renderer triggers:
+      - `electron/preload.cjs`: allowlisted `regenerate-ocr-dictionary`,
+      - `scripts/security_negative_tests.cjs`: mirrored allowlist fixture update,
+      - `src/providers/GameDataProvider.tsx`: debounced auto-regeneration effect for `pilotRegistry >= 5`,
+      - `src/components/DevOCRPanel.tsx`: manual "Regenerate OCR Dictionary" action in corpus tools.
+  - 20:11Z
+    - Validation completed:
+      - `npx eslint electron/tesseractDictionary.cjs electron/ocrHandler.cjs electron/preload.cjs scripts/security_negative_tests.cjs src/providers/GameDataProvider.tsx src/components/DevOCRPanel.tsx` PASS.
+      - `node scripts/security_negative_tests.cjs` PASS (113/113).
+      - `npm run -s typecheck` PASS.
+      - targeted `rg` dictionary-wiring verification PASS.
+
+- `REQ-OCR-T3-019` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence prepared in `docs/agents/03_VALIDATION.md` for Tier 3 #10 dictionary generation increment.
+- `REQ-OCR-T3-019` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer:
+    - `electron/tesseractDictionary.cjs`
+    - `electron/ocrHandler.cjs`
+    - `electron/preload.cjs`
+    - `scripts/security_negative_tests.cjs`
+    - `src/providers/GameDataProvider.tsx`
+    - `src/components/DevOCRPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-ENHANCEMENT-T3-019#1/#2/#3/#4/#5/#6` | Owner: `builder`
+  - Delta:
+    - added standalone Tesseract user-words dictionary generator from pilot registry + match history,
+    - integrated OCR-handler dictionary regeneration/apply IPC and worker parameter propagation,
+    - updated preload/security allowlist parity for new IPC channel,
+    - added auto-regeneration trigger in `GameDataProvider` and manual regeneration action in Dev OCR corpus tools,
+    - completed focused lint/security/typecheck validation.
+  - Evidence pointers:
+    - `electron/tesseractDictionary.cjs`
+    - `electron/ocrHandler.cjs`
+    - `electron/preload.cjs`
+    - `scripts/security_negative_tests.cjs`
+    - `src/providers/GameDataProvider.tsx`
+    - `src/components/DevOCRPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-ENHANCEMENT-T3-019` Tier 3 #10 custom dictionary increment.
+- `PM Response` | `APPROVED`
+  - Reason: dictionary generation/apply flow is additive, includes auto/manual triggers, and validation evidence is complete.
+
+- 20:03Z
+  - Released `OCR-ENHANCEMENT-T3-019` temporary lock claims (`electron/tesseractDictionary.cjs`, `src/providers/GameDataProvider.tsx`, `electron/preload.cjs`, `scripts/security_negative_tests.cjs`) and recorded release rows in `docs/WORKLOCKS.md`.
+
+---
+
+## 2026-02-17 - OCR-ENHANCEMENT-T3-020
+- Scope: continue OCR enhancement roadmap with Tier 3 #11 by adding teammate co-occurrence pattern suggestions.
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-OCR-T3-020` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: implement pattern-recognition utility + OCR modal/dev-panel suggestion surfaces.
+    - Evidence target: `src/utils/patternRecognition.ts`, `src/utils/__tests__/patternRecognition.test.ts`, `src/components/OcrCorrectionModal.tsx`, `src/components/DevOCRPanel.tsx`.
+  - `REQ-OCR-T3-020` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted Tier 3 #11 scope; started intake/plan/log updates.
+  - `REQ-OCR-T3-020` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across pattern utility implementation and OCR correction/dev tooling UI integration.
+- Work entries:
+  - 20:06Z
+    - Added intake + plan entries for `OCR-ENHANCEMENT-T3-020`.
+    - Claimed temporary locks for:
+      - `src/utils/patternRecognition.ts`
+      - `src/utils/__tests__/patternRecognition.test.ts`
+    - Confirmed existing lane locks cover OCR UI hot files (`src/components/OcrCorrectionModal.tsx`, `src/components/DevOCRPanel.tsx`).
+  - 20:11Z
+    - Added `src/utils/patternRecognition.ts` with:
+      - teammate co-occurrence matrix builder from match history (`buildCooccurrenceMatrix`),
+      - ranked teammate suggestion scoring (`getTeammateSuggestions`),
+      - top-pair summary helper for tooling (`getTopCooccurrencePairs`),
+      - recency-decay weighting and deterministic bounded scoring.
+  - 20:12Z
+    - Added focused tests in `src/utils/__tests__/patternRecognition.test.ts` for:
+      - repeated pair encounter accounting,
+      - teammate suggestion ranking,
+      - recency preference behavior.
+  - 20:13Z
+    - Wired OCR workflow/UI surfaces:
+      - `src/components/OcrCorrectionModal.tsx`
+        - computes suggestions from match co-occurrence data,
+        - shows "Likely Teammates" panel with reason/likelihood/encounter info,
+        - supports click-to-apply suggestion to unresolved OCR names.
+      - `src/components/DevOCRPanel.tsx`
+        - adds "Team Patterns" summary card with top co-occurrence pairs.
+  - 20:15Z
+    - Validation completed:
+      - `npx eslint src/utils/patternRecognition.ts src/utils/__tests__/patternRecognition.test.ts src/components/OcrCorrectionModal.tsx src/components/DevOCRPanel.tsx` PASS.
+      - `npx vitest run src/utils/__tests__/patternRecognition.test.ts src/components/OcrCorrectionModal.test.tsx` PASS (2 files, 5 tests).
+      - `npm run -s typecheck` PASS.
+      - targeted `rg` wiring verification PASS.
+
+- `REQ-OCR-T3-020` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence prepared in `docs/agents/03_VALIDATION.md` for Tier 3 #11 pattern-recognition increment.
+- `REQ-OCR-T3-020` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer:
+    - `src/utils/patternRecognition.ts`
+    - `src/utils/__tests__/patternRecognition.test.ts`
+    - `src/components/OcrCorrectionModal.tsx`
+    - `src/components/DevOCRPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-ENHANCEMENT-T3-020#1/#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - added teammate co-occurrence/pattern utility and focused tests,
+    - added OCR correction modal teammate suggestion panel with explicit click-to-apply behavior,
+    - added Dev OCR pattern insight summary card for debugging/validation,
+    - completed focused lint/tests/typecheck validation.
+  - Evidence pointers:
+    - `src/utils/patternRecognition.ts`
+    - `src/utils/__tests__/patternRecognition.test.ts`
+    - `src/components/OcrCorrectionModal.tsx`
+    - `src/components/DevOCRPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-ENHANCEMENT-T3-020` Tier 3 #11 pattern-recognition increment.
+- `PM Response` | `APPROVED`
+  - Reason: pattern utility and suggestion UI are additive, deterministic, and validation evidence is complete.
+
+- 20:13Z
+  - Released `OCR-ENHANCEMENT-T3-020` temporary lock claims (`src/utils/patternRecognition.ts`, `src/utils/__tests__/patternRecognition.test.ts`) and recorded release rows in `docs/WORKLOCKS.md`.
+
+---
+
+## 2026-02-17 - OCR-ENHANCEMENT-T3-021
+- Scope: continue OCR enhancement roadmap with Tier 3 #12 by shipping a bounded accessibility foundation + modal hardening increment.
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-OCR-T3-021` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: implement shared accessibility hooks/utilities/styles, harden targeted modals, and expose automated audit output in Dev OCR tools.
+    - Evidence target:
+      - `src/hooks/useFocusTrap.ts`
+      - `src/hooks/useAriaLiveRegion.ts`
+      - `src/styles/accessibility.css`
+      - `src/utils/accessibilityAudit.ts`
+      - `src/utils/__tests__/accessibilityAudit.test.ts`
+      - `src/components/OcrCorrectionModal.tsx`
+      - `src/components/BatchActionConfirmDialog.tsx`
+      - `src/components/ReviewQueueModal.tsx`
+      - `src/components/SettingsModal.tsx`
+      - `src/components/RenameModal.tsx`
+      - `src/components/ResetConfirmModal.tsx`
+      - `src/components/EditMatchModal.tsx`
+      - `src/components/DevOCRPanel.tsx`
+      - `src/index.tsx`
+  - `REQ-OCR-T3-021` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted Tier 3 #12 bounded scope and started intake/plan/lock updates.
+  - `REQ-OCR-T3-021` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across accessibility foundation utilities and modal/Dev OCR UI integration.
+- Work entries:
+  - 20:26Z
+    - Added intake + plan entries for `OCR-ENHANCEMENT-T3-021`.
+    - Claimed temporary locks for new accessibility hook/style/utility/test files and targeted modal files not already lane-locked.
+  - 20:31Z
+    - Added shared accessibility foundations:
+      - `src/hooks/useFocusTrap.ts` (reusable keyboard Tab focus containment + focus restore),
+      - `src/hooks/useAriaLiveRegion.ts` (polite/assertive announcer utility),
+      - `src/styles/accessibility.css` (sr-only helper + higher-contrast/forced-colors polish),
+      - `src/utils/accessibilityAudit.ts` (DOM accessibility checks + summary helper),
+      - `src/utils/__tests__/accessibilityAudit.test.ts` (focused utility coverage).
+    - Imported shared accessibility stylesheet in `src/index.tsx`.
+  - 20:34Z
+    - Applied targeted modal accessibility hardening:
+      - `src/components/OcrCorrectionModal.tsx`
+        - added dialog semantics (`role=dialog`, `aria-modal`, label/description wiring),
+        - integrated focus trap with nested batch-confirm guard,
+        - integrated live-region feedback for ignore/batch/apply actions.
+      - `src/components/BatchActionConfirmDialog.tsx`
+        - added dialog semantics, focus trap, and Escape keyboard close.
+      - `src/components/ReviewQueueModal.tsx`
+        - added dialog semantics for both queue and source-preview dialogs,
+        - added focus traps for primary/preview dialogs,
+        - added Escape keyboard behavior and live-region action announcements.
+      - `src/components/SettingsModal.tsx`
+        - added dialog semantics, focus trap, and Escape keyboard close.
+      - `src/components/RenameModal.tsx`, `src/components/ResetConfirmModal.tsx`, `src/components/EditMatchModal.tsx`
+        - added dialog semantics, focus trap, and Escape keyboard close.
+  - 20:36Z
+    - Added Dev OCR tooling visibility for accessibility:
+      - `src/components/DevOCRPanel.tsx`
+        - added "Accessibility Audit" utility card,
+        - runs `runA11yAudit(document)`,
+        - shows error/warning summary and top issue list,
+        - updates status line with audit outcomes.
+  - 20:39Z
+    - Validation completed:
+      - `npx eslint src/hooks/useFocusTrap.ts src/hooks/useAriaLiveRegion.ts src/utils/accessibilityAudit.ts src/utils/__tests__/accessibilityAudit.test.ts src/components/OcrCorrectionModal.tsx src/components/BatchActionConfirmDialog.tsx src/components/ReviewQueueModal.tsx src/components/SettingsModal.tsx src/components/RenameModal.tsx src/components/ResetConfirmModal.tsx src/components/EditMatchModal.tsx src/components/DevOCRPanel.tsx src/index.tsx` PASS.
+      - `npx vitest run src/utils/__tests__/accessibilityAudit.test.ts src/components/OcrCorrectionModal.test.tsx src/components/ReviewQueueModal.test.tsx` PASS (3 files, 10 tests).
+      - `npm run -s typecheck` PASS.
+      - targeted `rg` accessibility-wiring verification PASS.
+
+- `REQ-OCR-T3-021` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence prepared in `docs/agents/03_VALIDATION.md` for Tier 3 #12 accessibility foundation increment.
+- `REQ-OCR-T3-021` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer:
+    - `src/hooks/useFocusTrap.ts`
+    - `src/hooks/useAriaLiveRegion.ts`
+    - `src/styles/accessibility.css`
+    - `src/utils/accessibilityAudit.ts`
+    - `src/utils/__tests__/accessibilityAudit.test.ts`
+    - `src/components/OcrCorrectionModal.tsx`
+    - `src/components/BatchActionConfirmDialog.tsx`
+    - `src/components/ReviewQueueModal.tsx`
+    - `src/components/SettingsModal.tsx`
+    - `src/components/RenameModal.tsx`
+    - `src/components/ResetConfirmModal.tsx`
+    - `src/components/EditMatchModal.tsx`
+    - `src/components/DevOCRPanel.tsx`
+    - `src/index.tsx`
+    - `docs/agents/03_VALIDATION.md`
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-ENHANCEMENT-T3-021#1/#2/#3/#4/#5/#6` | Owner: `builder`
+  - Delta:
+    - added reusable accessibility hooks, stylesheet, and automated audit utility with focused tests,
+    - hardened targeted modal dialogs with ARIA semantics, focus trap handling, and Escape keyboard support,
+    - added live-region announcements for OCR/review workflows,
+    - added Dev OCR accessibility-audit action and issue summary/detail presentation,
+    - completed focused lint/tests/typecheck validation.
+  - Evidence pointers:
+    - `src/hooks/useFocusTrap.ts`
+    - `src/hooks/useAriaLiveRegion.ts`
+    - `src/styles/accessibility.css`
+    - `src/utils/accessibilityAudit.ts`
+    - `src/utils/__tests__/accessibilityAudit.test.ts`
+    - `src/components/OcrCorrectionModal.tsx`
+    - `src/components/BatchActionConfirmDialog.tsx`
+    - `src/components/ReviewQueueModal.tsx`
+    - `src/components/SettingsModal.tsx`
+    - `src/components/RenameModal.tsx`
+    - `src/components/ResetConfirmModal.tsx`
+    - `src/components/EditMatchModal.tsx`
+    - `src/components/DevOCRPanel.tsx`
+    - `src/index.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-ENHANCEMENT-T3-021` Tier 3 #12 accessibility foundation increment.
+- `PM Response` | `APPROVED`
+  - Reason: accessibility foundation, modal hardening, and audit visibility are additive, bounded, and validated.
+
+- 20:41Z
+  - Released `OCR-ENHANCEMENT-T3-021` temporary lock claims (`src/hooks/useFocusTrap.ts`, `src/hooks/useAriaLiveRegion.ts`, `src/styles/accessibility.css`, `src/utils/accessibilityAudit.ts`, `src/utils/__tests__/accessibilityAudit.test.ts`, `src/components/ReviewQueueModal.tsx`, `src/components/BatchActionConfirmDialog.tsx`, `src/components/SettingsModal.tsx`, `src/components/RenameModal.tsx`, `src/components/ResetConfirmModal.tsx`, `src/components/EditMatchModal.tsx`, `src/index.tsx`) and recorded release rows in `docs/WORKLOCKS.md`.
+
+---
+
+## 2026-02-17 - OCR-ENHANCEMENT-T3-022
+- Scope: continue Tier 3 #12 by hardening `OCRReviewModal` accessibility (dialog semantics, focus management, keyboard handling) with focused regression coverage.
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-OCR-T3-022` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: implement bounded accessibility updates in OCR review modal and add focused tests.
+    - Evidence target:
+      - `src/components/ocr/OCRReviewModal.tsx`
+      - `src/components/ocr/OCRReviewModal.test.tsx`
+  - `REQ-OCR-T3-022` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted narrow modal-focused Tier 3 #12 continuation and started intake/plan/lock updates.
+  - `REQ-OCR-T3-022` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active on OCR review modal semantics/focus/keyboard behavior and targeted test coverage.
+- Work entries:
+  - 20:47Z
+    - Added intake + plan entries for `OCR-ENHANCEMENT-T3-022`.
+    - Claimed temporary lock for `src/components/ocr/OCRReviewModal.test.tsx`.
+    - Confirmed `src/components/ocr/OCRReviewModal.tsx` already has an existing active lane lock entry.
+  - 20:50Z
+    - Implemented OCR review modal accessibility hardening in `src/components/ocr/OCRReviewModal.tsx`:
+      - added dialog semantics for the primary modal (`role="dialog"`, `aria-modal`, labelled/described wiring),
+      - added focus traps for both primary review modal and screenshot lightbox modal states,
+      - added keyboard shortcuts:
+        - `Escape`: closes lightbox first, otherwise closes modal,
+        - `Ctrl/Cmd+Enter`: applies reviewed data when lightbox is closed,
+      - added live-region announcements for lightbox open/close actions,
+      - added missing aria labels and `type="button"` on lightbox icon controls.
+  - 20:52Z
+    - Added focused modal regression tests in `src/components/ocr/OCRReviewModal.test.tsx`:
+      - verifies dialog semantics are present and Escape closes modal,
+      - verifies Escape closes screenshot lightbox before modal cancel flow.
+  - 20:54Z
+    - Validation completed:
+      - `npx eslint src/components/ocr/OCRReviewModal.tsx src/components/ocr/OCRReviewModal.test.tsx` PASS.
+      - `npx vitest run src/components/ocr/OCRReviewModal.test.tsx src/components/OcrCorrectionModal.test.tsx src/components/ReviewQueueModal.test.tsx` PASS (3 files, 9 tests).
+      - `npm run -s typecheck` PASS.
+
+- `REQ-OCR-T3-022` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence prepared in `docs/agents/03_VALIDATION.md` for OCR review modal accessibility increment.
+- `REQ-OCR-T3-022` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer:
+    - `src/components/ocr/OCRReviewModal.tsx`
+    - `src/components/ocr/OCRReviewModal.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-ENHANCEMENT-T3-022#1/#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - hardened OCR review modal and screenshot lightbox with dialog ARIA semantics and focus trapping,
+    - added keyboard behavior for Escape and Ctrl/Cmd+Enter in OCR review flow,
+    - added focused modal accessibility regression tests,
+    - completed focused lint/tests/typecheck validation.
+  - Evidence pointers:
+    - `src/components/ocr/OCRReviewModal.tsx`
+    - `src/components/ocr/OCRReviewModal.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-ENHANCEMENT-T3-022` Tier 3 #12 OCRReviewModal accessibility increment.
+- `PM Response` | `APPROVED`
+  - Reason: bounded OCRReviewModal accessibility pass is additive, validated, and aligns with staged Tier 3 #12 rollout.
+
+- 20:57Z
+  - Released `OCR-ENHANCEMENT-T3-022` temporary lock claim (`src/components/ocr/OCRReviewModal.test.tsx`) and recorded release row in `docs/WORKLOCKS.md`.
+
+---
+
+## 2026-02-17 - OCR-ENHANCEMENT-T3-023
+- Scope: continue Tier 3 #12 with a bounded accessibility pass for remaining high-use overlays (`DrillDownOverlay`, App changelog modal, App ID mapper wrapper).
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-OCR-T3-023` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: add dialog semantics, focus trapping, and Escape behavior for targeted overlays and add focused tests.
+    - Evidence target:
+      - `src/components/DrillDownOverlay.tsx`
+      - `src/App.tsx`
+      - `src/components/DrillDownOverlay.test.tsx`
+      - `src/App.test.tsx`
+  - `REQ-OCR-T3-023` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted narrow overlay-focused scope and started intake/plan/lock updates.
+  - `REQ-OCR-T3-023` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across overlay semantics/focus keyboard behavior and focused regression coverage.
+- Work entries:
+  - 20:48Z
+    - Added intake + plan entries for `OCR-ENHANCEMENT-T3-023`.
+    - Claimed temporary locks for:
+      - `src/components/DrillDownOverlay.tsx`
+      - `src/components/DrillDownOverlay.test.tsx`
+      - `src/App.tsx`
+      - `src/App.test.tsx`
+    - Scope/intent confirmed as bounded overlay accessibility pass only (no OCR/store schema changes).
+  - 20:51Z
+    - Implemented overlay accessibility hardening:
+      - `src/components/DrillDownOverlay.tsx`
+        - added dialog semantics, focus trap, and Escape keyboard close.
+      - `src/App.tsx`
+        - added focus trap and dialog semantics for changelog + ID mapper wrappers.
+        - added shared Escape-close behavior for these overlays.
+  - 20:53Z
+    - Added focused tests:
+      - created `src/components/DrillDownOverlay.test.tsx` (dialog semantics + Escape close),
+      - updated `src/App.test.tsx` with changelog/ID mapper dialog + Escape assertions.
+  - 20:55Z
+    - Validation completed:
+      - `npx eslint src/components/DrillDownOverlay.tsx src/components/DrillDownOverlay.test.tsx src/App.tsx src/App.test.tsx` PASS.
+      - `npx vitest run src/components/DrillDownOverlay.test.tsx src/App.test.tsx src/components/ocr/OCRReviewModal.test.tsx` PASS (3 files, 8 tests).
+      - `npm run -s typecheck` PASS.
+      - targeted `rg` overlay-accessibility wiring verification PASS.
+
+- `REQ-OCR-T3-023` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence prepared in `docs/agents/03_VALIDATION.md` for overlay accessibility increment.
+- `REQ-OCR-T3-023` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer:
+    - `src/components/DrillDownOverlay.tsx`
+    - `src/App.tsx`
+    - `src/components/DrillDownOverlay.test.tsx`
+    - `src/App.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-ENHANCEMENT-T3-023#1/#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - hardened drill-down/changelog/id-mapper overlays with dialog semantics and focus containment,
+    - added Escape-close keyboard behavior for targeted overlays,
+    - added focused test coverage for drill-down and App overlay dialogs,
+    - completed focused lint/tests/typecheck validation.
+  - Evidence pointers:
+    - `src/components/DrillDownOverlay.tsx`
+    - `src/App.tsx`
+    - `src/components/DrillDownOverlay.test.tsx`
+    - `src/App.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-ENHANCEMENT-T3-023` bounded Tier 3 #12 overlay accessibility increment.
+- `PM Response` | `APPROVED`
+  - Reason: scope remained bounded, semantics/focus/keyboard behavior are additive, and focused validation evidence is complete.
+
+- 20:52Z
+  - Released `OCR-ENHANCEMENT-T3-023` temporary lock claims (`src/components/DrillDownOverlay.tsx`, `src/components/DrillDownOverlay.test.tsx`, `src/App.tsx`, `src/App.test.tsx`) and recorded release rows in `docs/WORKLOCKS.md`.
+
+---
+
+## 2026-02-17 - OCR-ENHANCEMENT-T3-024
+- Scope: continue Tier 3 #12 with a bounded accessibility pass for `Tutorial` overlay and `MatchRecordingPage` screenshot lightbox.
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-OCR-T3-024` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: add dialog semantics, focus trapping, and keyboard behavior for tutorial + match-detail lightbox with focused tests.
+    - Evidence target:
+      - `src/components/Tutorial.tsx`
+      - `src/components/MatchRecordingPage.tsx`
+      - `src/components/Tutorial.test.tsx`
+      - `src/components/MatchRecordingPage.test.tsx`
+  - `REQ-OCR-T3-024` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted narrow scope and started intake/plan/lock updates.
+  - `REQ-OCR-T3-024` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across tutorial/lightbox overlay accessibility hardening and focused regression coverage.
+- Work entries:
+  - 21:26Z
+    - Added intake + plan entries for `OCR-ENHANCEMENT-T3-024`.
+    - Claimed temporary locks for:
+      - `src/components/Tutorial.tsx`
+      - `src/components/MatchRecordingPage.tsx`
+      - `src/components/Tutorial.test.tsx`
+      - `src/components/MatchRecordingPage.test.tsx`
+    - Scope bounded to tutorial + match-detail lightbox only (Smart Captures deferred).
+  - 21:28Z
+    - Implemented accessibility hardening:
+      - `src/components/Tutorial.tsx`
+        - added dialog semantics (`role="dialog"`, `aria-modal`, labels/descriptions),
+        - added focus trap wiring,
+        - migrated keyboard behavior to shared shortcut hook while preserving Escape/arrow behavior,
+        - added explicit `type="button"` for tutorial controls.
+      - `src/components/MatchRecordingPage.tsx`
+        - added screenshot lightbox dialog semantics and focus trap,
+        - added Escape close behavior while lightbox is open,
+        - added explicit open/close aria-labels for screenshot preview controls.
+  - 21:29Z
+    - Added focused tests:
+      - `src/components/Tutorial.test.tsx` (dialog semantics + Escape close),
+      - `src/components/MatchRecordingPage.test.tsx` (lightbox dialog semantics + Escape close).
+  - 21:30Z
+    - Validation completed:
+      - `npx eslint src/components/Tutorial.tsx src/components/MatchRecordingPage.tsx src/components/Tutorial.test.tsx src/components/MatchRecordingPage.test.tsx` PASS.
+      - `npx vitest run src/components/Tutorial.test.tsx src/components/MatchRecordingPage.test.tsx src/components/DrillDownOverlay.test.tsx src/App.test.tsx` PASS (4 files, 9 tests).
+      - `npm run -s typecheck` PASS.
+      - targeted `rg` accessibility-wiring verification PASS.
+
+- `REQ-OCR-T3-024` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence prepared in `docs/agents/03_VALIDATION.md` for tutorial/lightbox accessibility increment.
+- `REQ-OCR-T3-024` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer:
+    - `src/components/Tutorial.tsx`
+    - `src/components/MatchRecordingPage.tsx`
+    - `src/components/Tutorial.test.tsx`
+    - `src/components/MatchRecordingPage.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-ENHANCEMENT-T3-024#1/#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - hardened tutorial overlay and match screenshot lightbox with dialog semantics and focus containment,
+    - added Escape-close keyboard behavior for match screenshot lightbox while preserving tutorial shortcut flow,
+    - added focused regression tests for tutorial and match lightbox overlays,
+    - completed focused lint/tests/typecheck validation.
+  - Evidence pointers:
+    - `src/components/Tutorial.tsx`
+    - `src/components/MatchRecordingPage.tsx`
+    - `src/components/Tutorial.test.tsx`
+    - `src/components/MatchRecordingPage.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-ENHANCEMENT-T3-024` bounded Tier 3 #12 tutorial/lightbox increment.
+- `PM Response` | `APPROVED`
+  - Reason: scope stayed bounded, behavior is additive, and focused validation evidence is complete.
+
+- 21:30Z
+  - Released `OCR-ENHANCEMENT-T3-024` temporary lock claims (`src/components/Tutorial.tsx`, `src/components/MatchRecordingPage.tsx`, `src/components/Tutorial.test.tsx`, `src/components/MatchRecordingPage.test.tsx`) and recorded release rows in `docs/WORKLOCKS.md`.
+
+---
+
+## 2026-02-17 - OCR-ENHANCEMENT-T3-025
+- Scope: add full-resolution visual ROI crop-box editor (draw/drag/resize) and resolve requested UI regressions (players panel height fill, Dev Utilities clipping, OCR modal top cutoff, OCR correction input typing/cursor behavior).
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-OCR-T3-025` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: implement bounded UI/editor fixes across Settings/Players/Dev OCR/OCR modal surfaces with focused validation.
+    - Evidence target:
+      - `src/components/OcrRegionEditorModal.tsx`
+      - `src/components/SettingsModal.tsx`
+      - `src/components/PlayerHub.tsx`
+      - `src/components/DevOCRPanel.tsx`
+      - `src/components/OcrCorrectionModal.tsx`
+      - `src/components/ocr/OCRReviewModal.tsx`
+  - `REQ-OCR-T3-025` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted bounded user-reported UX regression scope and started intake/plan/lock updates.
+  - `REQ-OCR-T3-025` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across ROI editor implementation and targeted layout/input fixes.
+- Work entries:
+  - 22:08Z
+    - Added intake + plan entries for `OCR-ENHANCEMENT-T3-025`.
+    - Started lock-claim + context inspection for targeted files:
+      - `src/components/SettingsModal.tsx`
+      - `src/components/PlayerHub.tsx`
+      - `src/components/DevOCRPanel.tsx`
+      - `src/components/OcrCorrectionModal.tsx`
+      - `src/components/ocr/OCRReviewModal.tsx`
+      - `src/components/OcrRegionEditorModal.tsx` (new)
+  - 22:22Z
+    - Implemented new visual ROI editor modal:
+      - added `src/components/OcrRegionEditorModal.tsx` with full-resolution image canvas editing,
+      - supports region selection, draw-on-canvas, drag move, and resize handles,
+      - supports per-screen reset + selected-region reset + apply/cancel flow,
+      - keeps image canvas native-size to preserve exact OCR coordinate mapping.
+  - 22:24Z
+    - Wired visual ROI editor into `src/components/SettingsModal.tsx`:
+      - added `Visual Editor` launch action in ROI section,
+      - added apply handler to persist edited ROI data back into store `ocrRegions`,
+      - closes editor when settings modal closes.
+  - 22:25Z
+    - Applied layout regression fix for Players view vertical fill:
+      - `src/components/PlayerHub.tsx` shell/root and detail column now enforce `min-h-0`/`h-full` semantics,
+      - `src/App.tsx` players view wrapper now includes `min-h-0`.
+  - 22:26Z
+    - Applied Dev OCR Utilities overflow/cutoff fix in `src/components/DevOCRPanel.tsx`:
+      - removed center-lock root alignment causing clipped content,
+      - made utilities panel a bounded `h-full` container with internal scroll region.
+  - 22:28Z
+    - Applied OCR modal visibility/input fixes:
+      - `src/components/OcrCorrectionModal.tsx`
+        - top cutoff mitigation (`items-start` + overlay scroll),
+        - correction input focus tracking (`activeInputPlayer`),
+        - shortcut suppression while typing,
+        - autocomplete dropdown stability via focused-input gating.
+      - `src/components/ocr/OCRReviewModal.tsx`
+        - top cutoff mitigation (`items-start` + overlay scroll).
+      - `src/components/Wizard.tsx`
+        - top cutoff mitigation for wizard shell in full mode.
+
+  - 22:31Z
+    - Validation completed:
+      - `npx eslint src/components/OcrRegionEditorModal.tsx src/components/SettingsModal.tsx src/components/PlayerHub.tsx src/components/DevOCRPanel.tsx src/components/OcrCorrectionModal.tsx src/components/ocr/OCRReviewModal.tsx src/components/Wizard.tsx src/App.tsx` PASS.
+      - `npm run -s typecheck` PASS.
+      - `npx vitest run src/components/OcrCorrectionModal.test.tsx src/components/ocr/OCRReviewModal.test.tsx` BLOCKED in this environment (`spawn EPERM` during vitest/vite config startup). Re-run unchanged command in a local shell with normal process-spawn permissions.
+
+- `REQ-OCR-T3-025` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence prepared for ROI editor + requested UI regression fixes with focused lint/typecheck.
+- `REQ-OCR-T3-025` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer:
+    - `src/components/OcrRegionEditorModal.tsx`
+    - `src/components/SettingsModal.tsx`
+    - `src/components/PlayerHub.tsx`
+    - `src/components/DevOCRPanel.tsx`
+    - `src/components/OcrCorrectionModal.tsx`
+    - `src/components/ocr/OCRReviewModal.tsx`
+    - `src/components/Wizard.tsx`
+    - `src/App.tsx`
+    - `docs/agents/03_VALIDATION.md`
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-ENHANCEMENT-T3-025#1/#2/#3/#4/#5/#6/#7` | Owner: `builder`
+  - Delta:
+    - added full-resolution visual ROI editor with draw/drag/resize interactions and settings wiring,
+    - fixed players panel height fill and Dev Utilities clipping,
+    - fixed OCR modal top clipping and OCR correction input typing/focus stability,
+    - completed focused lint/typecheck validation; targeted vitest blocked by environment `spawn EPERM`.
+  - Evidence pointers:
+    - `src/components/OcrRegionEditorModal.tsx`
+    - `src/components/SettingsModal.tsx`
+    - `src/components/PlayerHub.tsx`
+    - `src/components/DevOCRPanel.tsx`
+    - `src/components/OcrCorrectionModal.tsx`
+    - `src/components/ocr/OCRReviewModal.tsx`
+    - `src/components/Wizard.tsx`
+    - `src/App.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-ENHANCEMENT-T3-025` with vitest spawn blocker documented.
+- `PM Response` | `APPROVED`
+  - Reason: requested UX fixes are implemented and validated with lint/typecheck; vitest environment blocker documented for local follow-up.
+- 22:36Z
+  - Released `OCR-ENHANCEMENT-T3-025` temporary lock claims (`src/components/OcrRegionEditorModal.tsx`, `src/components/SettingsModal.tsx`, `src/components/PlayerHub.tsx`, `src/components/DevOCRPanel.tsx`, `src/components/OcrCorrectionModal.tsx`, `src/components/ocr/OCRReviewModal.tsx`, `src/components/Wizard.tsx`, `src/App.tsx`) and recorded release rows in `docs/WORKLOCKS.md`.

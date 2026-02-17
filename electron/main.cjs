@@ -1103,7 +1103,7 @@ const LOG_FILE_PATH = path.join(app.getPath('userData'), 'app_logs.txt');
 // Artifact handlers (Phase 2: electron/handlers/*)
 registerArtifactHandlers(ipcMain, { app, getWin: () => win, artifactHelpers, gcloudSyncService });
 
-ipcMain.handle('rerun-ocr-on-artifact', async (event, { imagePath, activeUser, ocrMode }) => {
+ipcMain.handle('rerun-ocr-on-artifact', async (event, { imagePath, activeUser, ocrMode, ocrRegions }) => {
   try {
     const pathCheck = resolveAllowedRendererPath(imagePath);
     if (!pathCheck.success) {
@@ -1120,7 +1120,10 @@ ipcMain.handle('rerun-ocr-on-artifact', async (event, { imagePath, activeUser, o
     const imageBuffer = await fsPromises.readFile(fullPath);
     const base64 = imageBuffer.toString('base64');
     // Pass sourceImagePath to skip duplicate debug save and cloud upload
-    const result = await processCapture(base64, activeUser, null, ocrMode || 'both', { sourceImagePath: fullPath });
+    const result = await processCapture(base64, activeUser, null, ocrMode || 'both', {
+      sourceImagePath: fullPath,
+      ocrRegions: ocrRegions || null,
+    });
     return result;
   } catch (e) {
     console.error('[rerun-ocr] Error:', e.message);
@@ -2569,17 +2572,18 @@ ipcMain.handle('ocr-corpus-import-images', async () => {
   try {
     await ensureCorpusDefaults();
     const { dialog } = require('electron');
+    const corpusImagesDir = path.join(OCR_CORPUS_DIR, 'images');
+    await fsPromises.mkdir(corpusImagesDir, { recursive: true });
     const picked = await dialog.showOpenDialog(win, {
       title: 'Import OCR Corpus Images',
       filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'bmp', 'webp'] }],
+      defaultPath: corpusImagesDir,
       properties: ['openFile', 'multiSelections']
     });
     if (picked.canceled || picked.filePaths.length === 0) {
       return { success: true, imported: 0, skipped: 0, canceled: true };
     }
 
-    const corpusImagesDir = path.join(OCR_CORPUS_DIR, 'images');
-    await fsPromises.mkdir(corpusImagesDir, { recursive: true });
     const truthPath = path.join(OCR_CORPUS_DIR, 'ground-truth.json');
     let truth;
     try {
@@ -2737,6 +2741,7 @@ ipcMain.handle('ocr-corpus-run-pipeline', async (event, opts = {}) => {
 
     const ocrMode = opts?.ocrMode || 'both';
     const activeUser = opts?.activeUser || null;
+    const ocrRegions = opts?.ocrRegions || null;
 
     const predictions = [];
     const failures = [];
@@ -2753,7 +2758,8 @@ ipcMain.handle('ocr-corpus-run-pipeline', async (event, opts = {}) => {
         const base64 = imageBuffer.toString('base64');
         const result = await processCapture(base64, activeUser, null, ocrMode, {
           sourceImagePath: resolvedPath,
-          skipDebugSave: true
+          skipDebugSave: true,
+          ocrRegions,
         });
 
         if (!result?.success || !result?.data) {

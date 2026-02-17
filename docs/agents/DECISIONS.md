@@ -1020,3 +1020,676 @@ Rule:
   - `TODO.md`
 - Revisit trigger/expiry:
   - Revisit when scheduling a dedicated repo-wide typing cleanup lane (analytics/util/UI leftovers) after current runtime hardening priorities.
+
+- Type: `scope-control`
+- Decision: implement a focused moderate-issue remediation pass (tests + silent-failure fixes + toast a11y + env-backed timing config) instead of expanding into broad architectural refactors.
+- Date: 2026-02-17
+- Options considered:
+  - Address only one category (tests or error handling) and defer the rest.
+  - Perform repo-wide refactors (full a11y sweep, deep hook decomposition, telemetry format redesign).
+  - Apply targeted multi-file fixes limited to user-reported moderate issues and validate with full quality gates.
+- Rationale:
+  - User explicitly asked to fix the listed issue set.
+  - Targeted remediation closes reliability and coverage gaps quickly without introducing large-scope regression risk.
+  - Full lint/typecheck/test/build validation gives integrated confidence despite focused implementation scope.
+- Impacted files/artifacts:
+  - `src/App.tsx`
+  - `src/components/Toast.tsx`
+  - `src/components/MatchRecordingPage.tsx`
+  - `src/components/SmartCapturesPanel.tsx`
+  - `src/components/ocr/OCRReviewModal.tsx`
+  - `src/hooks/useSmartCapture.ts`
+  - `src/utils/logger.ts`
+  - `src/utils/storage.ts`
+  - `src/config/runtimeConfig.ts`
+  - `src/vite-env.d.ts`
+  - `src/App.test.tsx`
+  - `src/hooks/__tests__/useLogMonitor.test.ts`
+  - `src/hooks/__tests__/useSmartCapture.test.ts`
+  - `src/utils/__tests__/storage.test.ts`
+- Revisit trigger/expiry:
+  - Revisit when scheduling low-priority follow-up work for full accessibility audit and larger hook/performance refactors.
+
+- Type: `defaults-safety`
+- Decision: change auto-backup fallback defaults to disabled while preserving explicit user toggle behavior.
+- Date: 2026-02-17
+- Options considered:
+  - Keep auto-backup enabled by default.
+  - Disable default fallback and rely on explicit opt-in.
+- Rationale:
+  - Follow-up audit flagged always-on default as a disk-growth UX risk.
+  - Users can still enable backups in Settings; this only changes fresh/default behavior.
+  - Existing persisted user preferences remain authoritative.
+- Impacted files/artifacts:
+  - `src/store/slices/createSettingsSlice.ts`
+  - `src/store/useAppStore.ts`
+  - `src/utils/storage.ts`
+- Revisit trigger/expiry:
+  - Revisit if product policy requires auto-backup enabled by default with quota/retention telemetry surfaced in UI.
+
+- Type: `accessibility`
+- Decision: prioritize icon-only control labeling across high-traffic surfaces via explicit `aria-label` additions rather than broad structural component refactor.
+- Date: 2026-02-17
+- Options considered:
+  - Full repo-wide accessibility overhaul.
+  - Targeted patch for icon-only controls in core interaction surfaces.
+- Rationale:
+  - User requested remaining issue closure without broad scope expansion.
+  - Icon-only unlabeled controls were the highest-impact, fastest-remediable accessibility gap.
+  - Explicit labels are low-risk and preserve existing UI behavior.
+- Impacted files/artifacts:
+  - `src/components/DrillDownOverlay.tsx`
+  - `src/components/analytics/AnalyticsShell.tsx`
+  - `src/components/PlayerHub.tsx`
+  - `src/components/ReviewQueueModal.tsx`
+  - `src/components/recording/RosterPanel.tsx`
+  - `src/components/SessionTimer.tsx`
+  - `src/components/SettingsModal.tsx`
+  - `src/components/recording/MissionPanel.tsx`
+  - `src/components/WindowFrame.tsx`
+  - `src/components/smart-captures/SmartCaptureWidgets.tsx`
+  - `src/components/EditMatchModal.tsx`
+  - `src/components/OcrCorrectionModal.tsx`
+  - `src/components/SmartCapturesPanel.tsx`
+  - `src/components/IdMapper.tsx`
+  - `src/components/ocr/OCRReviewModal.tsx`
+  - `src/components/Wizard.tsx`
+  - `src/components/recording/ActionPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit if an exhaustive accessibility audit is scheduled (keyboard flows, focus order, announcements, and semantics beyond icon-button labels).
+
+- Type: `configuration`
+- Decision: extend env-backed runtime configuration to additional polling/debounce timers in Discord presence, SystemPulse, History table, and ActionPanel feedback effects.
+- Date: 2026-02-17
+- Options considered:
+  - Keep remaining timer values hardcoded.
+  - Externalize selected high-traffic runtime timers behind env-backed config.
+- Rationale:
+  - Follow-up audit called out lingering hardcoded timing values.
+  - Targeted extraction improves operator tunability without overhauling architecture.
+  - Scope remained narrow to active user-facing polling/debounce/feedback timers.
+- Impacted files/artifacts:
+  - `src/config/runtimeConfig.ts`
+  - `src/vite-env.d.ts`
+  - `src/hooks/useDiscordRPC.ts`
+  - `src/components/SystemPulse.tsx`
+  - `src/components/HistoryTable.tsx`
+  - `src/components/recording/ActionPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit if frontend config is centralized into a single runtime-loaded config service.
+
+- Type: `ux-consistency`
+- Decision: set corpus import dialog `defaultPath` to the app corpus images directory (`ocr-corpus/images`) and ensure directory creation before dialog open.
+- Date: 2026-02-17
+- Options considered:
+  - Keep dialog without default path (OS/last-used location).
+  - Add explicit default path to corpus images directory.
+- Rationale:
+  - User asked corpus image add flow to open where corpus images are stored.
+  - Explicit default path removes navigation friction and aligns with corpus workflow.
+  - Directory ensure call prevents invalid-path edge cases on first use.
+- Impacted files/artifacts:
+  - `electron/main.cjs`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if corpus import supports multiple source presets or last-directory preferences.
+
+- Type: `ocr-pipeline-fidelity`
+- Decision: use a dual-buffer Crew Hub extraction path: preprocessed/scaled buffer for OCR text geometry and original-color buffer for badge/team color detection.
+- Date: 2026-02-17
+- Options considered:
+  - Keep a single preprocessed buffer for both OCR text and color detection.
+  - Use separate buffers so color detection samples unmodified color data.
+- Rationale:
+  - Color detection accuracy depends on original pixel chroma; preprocessing intended for text readability can distort hue/saturation sampling.
+  - OCR word bounding boxes remain aligned using preprocessed dimensions + scale metadata while color sampling maps back to original coordinates.
+- Impacted files/artifacts:
+  - `electron/ocrHandler.cjs`
+  - `electron/crewHubExtractor.cjs`
+- Revisit trigger/expiry:
+  - Revisit if OCR pipeline moves to full ROI-native extraction where text and color are extracted from independently normalized crops by design.
+
+- Type: `ocr-safety-gates`
+- Decision: enforce strict auto-apply safety gates for roster writes with thresholds `reject <55`, `review 55-74`, and resolver-ambiguity block when normalized similarity `<70`.
+- Date: 2026-02-17
+- Options considered:
+  - Keep permissive auto-apply and rely on post-hoc manual cleanup.
+  - Strictly gate low-confidence/ambiguous entries to review queue before write.
+- Rationale:
+  - User-reported overflow/noise indicates upstream OCR can still produce high-volume false positives.
+  - Commit-point guardrails prevent corrupt roster/session writes even when extraction is noisy.
+  - Routing uncertain names to review queue preserves recoverability without blocking high-confidence auto-apply.
+- Impacted files/artifacts:
+  - `src/App.tsx`
+  - `src/hooks/useSmartCapture.ts`
+  - `src/store/slices/createDataSlice.ts` (existing review type contract reused)
+- Revisit trigger/expiry:
+  - Revisit after collecting confidence distribution metrics from corpus evaluation and live captures for threshold recalibration.
+
+- Type: `ocr-team-size-invariant`
+- Decision: enforce max-4 player caps per team at OCR merge/validation boundaries (Electron + frontend).
+- Date: 2026-02-17
+- Options considered:
+  - Cap only in one downstream UI apply path.
+  - Enforce invariant at multiple merge boundaries and validation layers.
+- Rationale:
+  - Single-point caps can be bypassed by alternate apply paths; layered caps ensure invariant regardless of pipeline entrypoint.
+  - Team-size invariant aligns with game model and prevents oversized lists from propagating.
+- Impacted files/artifacts:
+  - `electron/ocrMerger.cjs`
+  - `electron/ocrHandler.cjs`
+  - `src/utils/ocr/ocrParser.ts`
+  - `src/utils/ocr/__tests__/ocrParser.test.ts`
+- Revisit trigger/expiry:
+  - Revisit only if game mode/rules change to allow >4 players per team.
+
+- Type: `ocr-runtime-config`
+- Decision: treat renderer-provided ROI settings as optional runtime overrides, sanitize/clamp them in Electron, and include an ROI fingerprint in OCR cache keys.
+- Date: 2026-02-17
+- Options considered:
+  - Trust renderer ROI payload directly and keep existing image/user/mode cache keying.
+  - Sanitize ROI payload in main OCR process and expand cache key to include ROI config identity.
+- Rationale:
+  - OCR ROI values are user-editable and can be malformed/out-of-range; backend-side validation is required for safety.
+  - Without ROI-aware cache keys, reruns could return stale OCR results after region edits.
+  - Optional override contract preserves backward compatibility for callers that do not pass ROI settings.
+- Impacted files/artifacts:
+  - `electron/ocrHandler.cjs`
+  - `electron/main.cjs`
+  - `electron/crewHubExtractor.cjs`
+  - `electron/mapScreenExtractor.cjs`
+  - `src/components/SettingsModal.tsx`
+  - `src/components/SmartCapturesPanel.tsx`
+  - `src/components/HistoryTable.tsx`
+  - `src/hooks/useSmartCapture.ts`
+  - `src/hooks/useSmartScan.ts`
+  - `src/utils/scan/tesseractScan.ts`
+- Revisit trigger/expiry:
+  - Revisit if a visual drag-based ROI editor is introduced with separate draft/apply states and preview-only OCR runs.
+
+- Type: `ocr-corpus-consistency`
+- Decision: align corpus batch pipeline ROI behavior with live/rerun OCR by forwarding optional `ocrRegions` from Dev OCR panel into corpus `processCapture(...)` calls.
+- Date: 2026-02-17
+- Options considered:
+  - Keep corpus pipeline pinned to default ROI while live/rerun paths use runtime ROI.
+  - Forward runtime ROI through corpus pipeline path for parity.
+- Rationale:
+  - User explicitly requested corpus support for ROI changes.
+  - Behavior parity reduces confusion and makes corpus evaluations reflect current operational settings.
+  - Change is low-risk and does not alter corpus output schema.
+- Impacted files/artifacts:
+  - `src/components/DevOCRPanel.tsx`
+  - `electron/main.cjs`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if corpus runs are moved to independent scheduled/headless workers with no renderer-provided runtime settings.
+
+- Type: `scope-sequencing`
+- Decision: interpret "begin implementation" as shipping Tier 1 recommendations first in one verified increment, deferring Tier 2/3 to subsequent tasks.
+- Date: 2026-02-17
+- Options considered:
+  - Attempt full 12-item roadmap in one pass.
+  - Ship Tier 1 now as a bounded start.
+- Rationale:
+  - User explicitly asked to begin implementation and provided a tiered sequence.
+  - Tier 1 delivers immediate value with lower regression risk and fits AGENTS small-verified-increment rule.
+  - Prevents drift into multi-week strategic work without staged validation.
+- Impacted files/artifacts:
+  - `docs/agents/00_INTAKE.md`
+  - `docs/agents/01_PLAN.md`
+  - `docs/agents/02_EXECUTION_LOG.md`
+- Revisit trigger/expiry:
+  - Revisit once Tier 1 is merged/validated and user requests continuation into Tier 2.
+
+- Type: `backward-compatibility`
+- Decision: upgrade `useKeyboardShortcuts` to support both legacy result-entry API and new reusable shortcut arrays instead of replacing the API.
+- Date: 2026-02-17
+- Options considered:
+  - Replace hook signature and refactor all callers immediately.
+  - Add overload-compatible generalized hook.
+- Rationale:
+  - Prevents regressions in existing `App.tsx` shortcut flow.
+  - Enables modal-level shortcut additions without widening scope to unrelated refactors.
+- Impacted files/artifacts:
+  - `src/hooks/useKeyboardShortcuts.ts`
+  - `src/App.tsx` (no caller changes required)
+  - `src/components/OcrCorrectionModal.tsx`
+- Revisit trigger/expiry:
+  - Revisit if shortcut handling is centralized into a dedicated input manager.
+
+- Type: `ocr-observability`
+- Decision: treat cache misses as request misses at lookup time and compute `avgMissTimeMs` from end-to-end miss processing duration captured on cache store.
+- Date: 2026-02-17
+- Options considered:
+  - Track miss timing as lookup-only latency.
+  - Track miss timing as full processing latency until cache fill.
+- Rationale:
+  - Full miss duration better reflects user-perceived cost difference versus cache hits.
+  - Keeps hit/miss counters accurate while preserving actionable telemetry for optimization.
+- Impacted files/artifacts:
+  - `electron/ocrHandler.cjs`
+  - `src/components/DevOCRPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit if per-stage OCR timing telemetry is added (preprocess/OCR/extract breakdown).
+
+- Type: `ocr-benchmark-isolation`
+- Decision: implement Tier 2 #5 benchmark as preprocessing-only old-vs-crop-first timing comparison, without running OCR recognition inside the benchmark loop.
+- Date: 2026-02-17
+- Options considered:
+  - Benchmark full OCR pipeline latency including Tesseract/cloud execution.
+  - Benchmark preprocessing stage only to isolate region-first optimization impact.
+- Rationale:
+  - OCR engine timings vary by worker queue/load and cloud availability, which would obscure preprocessing gains.
+  - Tier 2 #5 objective is validating preprocessing strategy efficiency.
+  - Keeping benchmark isolated avoids accidental production behavior coupling.
+- Impacted files/artifacts:
+  - `electron/ocrHandler.cjs`
+  - `src/components/DevOCRPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit when adding full pipeline benchmarking dashboards (preprocess + OCR + extract stage timing breakdown).
+
+- Type: `ocr-benchmark-ipc-contract`
+- Decision: accept benchmark input as either `imageBase64` or `imagePath`, with optional `iterations` and optional `ocrRegions`, while preserving backward compatibility with simple string payloads.
+- Date: 2026-02-17
+- Options considered:
+  - Require only a strict object payload with image path.
+  - Allow both path and in-memory image payloads to support dev panel loaded images without filesystem assumptions.
+- Rationale:
+  - Dev panel can run on uploaded images that may not have a stable file path.
+  - Dual-input contract improves usability while staying additive and bounded to dev tooling.
+  - Backward-compatible parsing lowers risk if a string-only caller is introduced later.
+- Impacted files/artifacts:
+  - `electron/ocrHandler.cjs`
+  - `src/components/DevOCRPanel.tsx`
+  - `electron/preload.cjs`
+  - `scripts/security_negative_tests.cjs`
+- Revisit trigger/expiry:
+  - Revisit if benchmark API is moved to a typed shared contract with strict schema validation.
+
+- Type: `ocr-calibration-model-separation`
+- Decision: introduce `ocrCalibrationSamples` as a separate persisted settings field for confidence-vs-accuracy analytics, leaving existing `ocrCalibration` (color sampling parameters) untouched.
+- Date: 2026-02-17
+- Options considered:
+  - Reuse existing `ocrCalibration` object for both color and confidence analytics.
+  - Split confidence calibration into a dedicated sample model.
+- Rationale:
+  - Existing `ocrCalibration` already has a different purpose and shape (image color sampling offsets/thresholds).
+  - Separate model avoids migration ambiguity and keeps responsibilities explicit.
+  - Enables independent lifecycle for confidence analytics without impacting scan color tuning features.
+- Impacted files/artifacts:
+  - `src/store/slices/createSettingsSlice.ts`
+  - `src/store/useAppStore.ts`
+  - `src/utils/ocrCalibration.ts`
+- Revisit trigger/expiry:
+  - Revisit if settings schema is consolidated into namespaced OCR configuration sections.
+
+- Type: `ocr-calibration-capacity`
+- Decision: cap persisted confidence calibration history to 1000 samples, dropping oldest samples on append overflow.
+- Date: 2026-02-17
+- Options considered:
+  - Keep an unbounded calibration history.
+  - Enforce bounded sample retention for predictable storage and render costs.
+- Rationale:
+  - Calibration analytics require representative history, not full infinite logs.
+  - Bounded retention avoids store growth and keeps dev-panel calculations lightweight.
+  - Aligns with user plan target (max 1000 persisted samples).
+- Impacted files/artifacts:
+  - `src/utils/ocrCalibration.ts`
+  - `src/store/slices/createSettingsSlice.ts`
+  - `src/store/useAppStore.ts`
+- Revisit trigger/expiry:
+  - Revisit if long-horizon calibration trend analysis or external export pipeline is added.
+
+- Type: `ocr-calibration-threshold-rule`
+- Decision: recommend threshold as the lowest confidence bucket whose observed accuracy meets the target (default 90%).
+- Date: 2026-02-17
+- Options considered:
+  - Recommend highest-confidence passing bucket only.
+  - Recommend lowest passing bucket to maximize auto-apply coverage while meeting target accuracy.
+- Rationale:
+  - Matches the Tier 2 #6 requirement for a "lowest bucket with >=90% accuracy" recommendation.
+  - Produces actionable threshold guidance from small bucket tables without complex curve fitting.
+  - Keeps recommendation deterministic and easy to audit in Dev OCR panel.
+- Impacted files/artifacts:
+  - `src/utils/ocrCalibration.ts`
+  - `src/components/DevOCRPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit when adding larger-sample calibration curves or isotonic/Platt scaling methods.
+
+- Type: `ocr-batch-threshold-policy`
+- Decision: enforce OCR batch-action threshold normalization to `70-95` range with `5`-point step increments and default `85`.
+- Date: 2026-02-17
+- Options considered:
+  - Allow arbitrary threshold values.
+  - Normalize to bounded stepped values aligned with UI slider and Tier 2 #7 requirement.
+- Rationale:
+  - Keeps user controls predictable and aligned across store persistence and modal interactions.
+  - Prevents malformed persisted values from causing inconsistent eligibility behavior.
+  - Matches roadmap-defined threshold constraints.
+- Impacted files/artifacts:
+  - `src/utils/ocrBatchActions.ts`
+  - `src/store/slices/createSettingsSlice.ts`
+  - `src/store/useAppStore.ts`
+- Revisit trigger/expiry:
+  - Revisit if threshold granularity requirements change (e.g., 1-point increments or adaptive thresholds).
+
+- Type: `ocr-batch-confirmation-guard`
+- Decision: require explicit confirmation for batch accept/ignore button actions while keeping keyboard shortcut (`Ctrl+A`) auto-fill behavior unchanged.
+- Date: 2026-02-17
+- Options considered:
+  - Apply batch actions immediately from all triggers.
+  - Add confirmation to explicit batch buttons only, preserving existing keyboard quick path.
+- Rationale:
+  - Prevents accidental large-scale edits from click actions.
+  - Preserves established keyboard workflow expectations from Tier 1 shortcuts.
+  - Balances safety and speed for power users.
+- Impacted files/artifacts:
+  - `src/components/OcrCorrectionModal.tsx`
+  - `src/components/BatchActionConfirmDialog.tsx`
+- Revisit trigger/expiry:
+  - Revisit if product direction requires uniform confirmation rules for keyboard-triggered batch actions.
+
+- Type: `ocr-bbox-debug-opt-in`
+- Decision: expose bounding-box debug data only via explicit `includeBboxes: true` runtime option on `ocr-process-capture`, and bypass OCR cache for those runs.
+- Date: 2026-02-17
+- Options considered:
+  - Always include bbox payload in all OCR responses and cache normally.
+  - Keep bbox payload opt-in and treat debug captures as uncached diagnostics.
+- Rationale:
+  - Prevents unnecessary payload growth in standard OCR flows.
+  - Avoids stale/missing bbox data from cache collisions with non-debug runs.
+  - Keeps feature strictly additive and scoped to Dev OCR tooling.
+- Impacted files/artifacts:
+  - `electron/ocrHandler.cjs`
+  - `src/utils/electronBridge.ts`
+  - `src/components/DevOCRPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit if bbox overlays become part of default OCR review workflow or are needed in persisted match payloads.
+
+- Type: `ocr-bbox-merged-coordinate-policy`
+- Decision: for local/merged debug overlays, render local OCR words mapped back to original image coordinates rather than mixed merged-word geometry.
+- Date: 2026-02-17
+- Options considered:
+  - Use final merged word list directly (can mix coordinate spaces across engines).
+  - Use local OCR word geometry for stable overlay alignment in debug UI.
+- Rationale:
+  - Merged word geometry may combine local/cloud boxes with inconsistent coordinate spaces.
+  - Local mapped coordinates provide predictable image alignment for debugging.
+  - Keeps scope narrow without refactoring merge coordinate normalization.
+- Impacted files/artifacts:
+  - `electron/ocrHandler.cjs`
+  - `src/components/OcrBoundingBoxOverlay.tsx`
+  - `src/components/DevOCRPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit when merge pipeline gains explicit unified-coordinate normalization for cloud/local words.
+
+- Type: `ocr-corpus-export-format-set`
+- Decision: export correction corpus in three parallel artifacts (`JSON`, `JSONL`, `BOX`) from the alias-learning model using a single Dev OCR action.
+- Date: 2026-02-17
+- Options considered:
+  - Export only JSON and defer alternate formats.
+  - Emit JSON + JSONL + BOX together for immediate retraining/interchange coverage.
+- Rationale:
+  - Tier 3 #9 explicitly requires all three formats.
+  - Single action reduces workflow friction and keeps outputs aligned to the same generation timestamp/content.
+- Impacted files/artifacts:
+  - `src/utils/ocrCorpusBuilder.ts`
+  - `src/utils/export.ts`
+  - `src/components/DevOCRPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit if corpus export needs configurable format selection or remote upload workflows.
+
+- Type: `ocr-corpus-archive-runtime-gate`
+- Decision: implement OCR sample archiving as opt-in runtime options on existing `ocr-process-capture` path (`archiveOcrSample`, `archiveMetadata`) and bypass cache when enabled.
+- Date: 2026-02-17
+- Options considered:
+  - Always archive all OCR captures.
+  - Add dedicated new IPC handler for archive operations.
+  - Keep archive under existing OCR IPC as explicit opt-in runtime behavior.
+- Rationale:
+  - Avoids noisy disk growth and behavior changes in normal OCR flows.
+  - Avoids expanding preload/IPC allowlist footprint for this increment.
+  - Cache bypass guarantees archive side effects occur when requested.
+- Impacted files/artifacts:
+  - `electron/ocrHandler.cjs`
+  - `src/utils/electronBridge.ts`
+  - `src/components/DevOCRPanel.tsx`
+  - `src/utils/ocr/ocrTypes.ts`
+- Revisit trigger/expiry:
+  - Revisit if product requires persistent always-on OCR sample archiving or centralized archive management UI.
+
+- Type: `ocr-dictionary-regeneration-channel`
+- Decision: expose dictionary rebuild via new OCR IPC invoke channel (`regenerate-ocr-dictionary`) inside `ocrHandler`, with preload/security allowlist updates.
+- Date: 2026-02-17
+- Options considered:
+  - Reuse unrelated corpus IPC channels for dictionary lifecycle.
+  - Add a dedicated OCR dictionary IPC channel with explicit payload contract.
+- Rationale:
+  - Keeps dictionary lifecycle isolated from corpus file workflow and easier to reason about.
+  - Allows both auto and manual renderer triggers without coupling to corpus eval flows.
+  - Maintains additive architecture with minimal risk to existing OCR scan contracts.
+- Impacted files/artifacts:
+  - `electron/ocrHandler.cjs`
+  - `electron/preload.cjs`
+  - `scripts/security_negative_tests.cjs`
+  - `src/providers/GameDataProvider.tsx`
+  - `src/components/DevOCRPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit if dictionary lifecycle is promoted into a broader OCR configuration service.
+
+- Type: `ocr-dictionary-auto-refresh-guard`
+- Decision: auto-regenerate dictionary only when registry has at least five pilots, with a debounced signature gate based on normalized pilot list and recent match recency.
+- Date: 2026-02-17
+- Options considered:
+  - Regenerate on every registry/match change without guardrails.
+  - Gate regeneration with minimum roster size + debounce + signature dedupe.
+- Rationale:
+  - Reduces noisy IPC/disk churn while still keeping dictionary fresh for meaningful roster changes.
+  - Avoids expensive regeneration loops during frequent match-state updates.
+  - Aligns with planned behavior that dictionary becomes valuable once registry is non-trivial.
+- Impacted files/artifacts:
+  - `src/providers/GameDataProvider.tsx`
+  - `electron/ocrHandler.cjs`
+- Revisit trigger/expiry:
+  - Revisit if telemetry shows stale dictionary windows or if user-facing dictionary scheduling controls are added.
+
+- Type: `ocr-pattern-recency-model`
+- Decision: use lightweight recency-decayed teammate co-occurrence scoring (exponential decay by age in days, default half-life 45) for suggestion ranking.
+- Date: 2026-02-17
+- Options considered:
+  - raw encounter counts only.
+  - recency-aware weighted counts with deterministic local scoring.
+- Rationale:
+  - Recent team pairings are typically more predictive than old match history.
+  - Keeps runtime cheap and deterministic without introducing heavy model dependencies.
+  - Satisfies Tier 3 #11 requirement for recency-influenced pattern confidence.
+- Impacted files/artifacts:
+  - `src/utils/patternRecognition.ts`
+  - `src/utils/__tests__/patternRecognition.test.ts`
+- Revisit trigger/expiry:
+  - Revisit if a larger recommendation engine adds contextual features beyond pair co-occurrence.
+
+- Type: `ocr-pattern-application-safety`
+- Decision: suggestions remain explicit click-to-apply and target unresolved OCR names only; no automatic teammate insertion or silent roster writes.
+- Date: 2026-02-17
+- Options considered:
+  - auto-append likely teammates directly into correction/session data.
+  - require explicit operator click and keep suggestion path advisory-first.
+- Rationale:
+  - avoids accidental roster corruption from false-positive pattern matches.
+  - aligns with current OCR correction workflow where user remains final authority.
+  - keeps increment additive and low-risk.
+- Impacted files/artifacts:
+  - `src/components/OcrCorrectionModal.tsx`
+  - `src/utils/patternRecognition.ts`
+- Revisit trigger/expiry:
+  - Revisit when confidence calibration and pattern precision indicate safe thresholds for optional auto-apply.
+
+- Type: `ocr-a11y-tier3-bounded-modal-scope`
+- Decision: implement Tier 3 #12 as a bounded first pass focused on shared accessibility primitives plus high-traffic modal hardening, deferring full app-wide closure.
+- Date: 2026-02-17
+- Options considered:
+  - Attempt full WCAG 2.1 AA sweep in one increment.
+  - Ship accessibility foundation + targeted modal coverage first, then iterate.
+- Rationale:
+  - Keeps risk manageable in a large dirty worktree.
+  - Delivers immediate keyboard/screen-reader wins in OCR-critical workflows.
+  - Aligns with AGENTS "small, verified increments" principle.
+- Impacted files/artifacts:
+  - `src/hooks/useFocusTrap.ts`
+  - `src/hooks/useAriaLiveRegion.ts`
+  - `src/styles/accessibility.css`
+  - `src/utils/accessibilityAudit.ts`
+  - `src/components/OcrCorrectionModal.tsx`
+  - `src/components/ReviewQueueModal.tsx`
+  - `src/components/BatchActionConfirmDialog.tsx`
+  - `src/components/SettingsModal.tsx`
+  - `src/components/RenameModal.tsx`
+  - `src/components/ResetConfirmModal.tsx`
+  - `src/components/EditMatchModal.tsx`
+  - `src/components/DevOCRPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit when scheduling the next Tier 3 #12 increment for remaining modals/components (including `src/components/ocr/OCRReviewModal.tsx`).
+
+- Type: `ocr-a11y-live-region-strategy`
+- Decision: use local reusable live-region hook (`useAriaLiveRegion`) for OCR/review modal announcements rather than introducing a new global notification subsystem.
+- Date: 2026-02-17
+- Options considered:
+  - Route accessibility announcements through existing toast system only.
+  - Add dedicated live-region hook with polite/assertive control per modal flow.
+- Rationale:
+  - Toasts are visible feedback but not always sufficient for context-specific screen-reader guidance.
+  - Local hook keeps announcements close to modal decision points with minimal architecture churn.
+  - Maintains additive scope and avoids cross-cutting global state changes.
+- Impacted files/artifacts:
+  - `src/hooks/useAriaLiveRegion.ts`
+  - `src/components/OcrCorrectionModal.tsx`
+  - `src/components/ReviewQueueModal.tsx`
+- Revisit trigger/expiry:
+  - Revisit if app-wide announcement orchestration is introduced to unify all accessibility narration paths.
+
+- Type: `ocrreviewmodal-escape-priority`
+- Decision: prioritize closing OCR screenshot lightbox on `Escape` before allowing modal-level cancel.
+- Date: 2026-02-17
+- Options considered:
+  - Always route `Escape` directly to modal `onCancel`.
+  - Close nested lightbox first, then close modal on subsequent `Escape`.
+- Rationale:
+  - Matches expected modal layering behavior and prevents accidental dismissal of the entire review workflow while inspecting screenshots.
+  - Aligns with staged accessibility improvements using explicit focus/context boundaries.
+- Impacted files/artifacts:
+  - `src/components/ocr/OCRReviewModal.tsx`
+  - `src/components/ocr/OCRReviewModal.test.tsx`
+- Revisit trigger/expiry:
+  - Revisit if OCR review flow adopts a centralized modal manager that enforces stack-based Escape handling globally.
+
+- Type: `ocrreviewmodal-shortcut-apply`
+- Decision: add `Ctrl/Cmd+Enter` shortcut for `Apply and Learn` in OCRReviewModal when no nested lightbox is open.
+- Date: 2026-02-17
+- Options considered:
+  - Keep OCRReviewModal pointer-driven only.
+  - Add keyboard accelerator aligned with existing OCR correction modal patterns.
+- Rationale:
+  - Improves keyboard efficiency and consistency across OCR correction/review dialogs.
+  - Keeps behavior scoped and non-disruptive by disabling apply shortcut while lightbox is active.
+- Impacted files/artifacts:
+  - `src/components/ocr/OCRReviewModal.tsx`
+  - `src/components/ocr/OCRReviewModal.test.tsx`
+- Revisit trigger/expiry:
+  - Revisit if shortcut map becomes centralized and conflicts need resolution across modal surfaces.
+
+- Type: `overlay-a11y-bounded-scope-t3-023`
+- Decision: limit this accessibility increment to `DrillDownOverlay` and App-level changelog/ID mapper wrappers, explicitly deferring tutorial/lightbox follow-ups.
+- Date: 2026-02-17
+- Options considered:
+  - Expand scope to include tutorial and all remaining lightbox overlays in the same increment.
+  - Keep a bounded overlay slice with focused tests and close it before the next pass.
+- Rationale:
+  - Keeps change risk low in a large dirty worktree while continuing Tier 3 #12 progress.
+  - Delivers immediate keyboard/screen-reader gains for frequently used overlays.
+  - Aligns with AGENTS requirement to ship small, verified increments.
+- Impacted files/artifacts:
+  - `src/components/DrillDownOverlay.tsx`
+  - `src/App.tsx`
+  - `src/components/DrillDownOverlay.test.tsx`
+  - `src/App.test.tsx`
+- Revisit trigger/expiry:
+  - Revisit in next Tier 3 #12 increment to cover tutorial and remaining screenshot lightboxes.
+
+- Type: `overlay-a11y-bounded-scope-t3-024`
+- Decision: scope this increment to `Tutorial` and `MatchRecordingPage` screenshot lightbox only, deferring Smart Captures lightbox/JSON-export dialog for the next pass.
+- Date: 2026-02-17
+- Options considered:
+  - Include Smart Captures overlay dialogs in the same increment.
+  - Keep this pass focused on tutorial + match-detail lightbox with dedicated tests.
+- Rationale:
+  - Maintains small, verifiable increments while reducing risk in a heavily modified worktree.
+  - Prioritizes high-frequency overlays with minimal implementation complexity.
+  - Preserves momentum without widening test surface excessively in one step.
+- Impacted files/artifacts:
+  - `src/components/Tutorial.tsx`
+  - `src/components/MatchRecordingPage.tsx`
+  - `src/components/Tutorial.test.tsx`
+  - `src/components/MatchRecordingPage.test.tsx`
+- Revisit trigger/expiry:
+  - Revisit in the next accessibility slice to harden Smart Captures overlay dialogs.
+
+- Type: `tutorial-shortcut-standardization`
+- Decision: migrate tutorial Escape/arrow keyboard handlers to shared `useKeyboardShortcuts` hook while preserving existing shortcut behavior.
+- Date: 2026-02-17
+- Options considered:
+  - Keep bespoke `window.addEventListener('keydown', ...)` logic.
+  - Use shared keyboard hook already adopted across other modal flows.
+- Rationale:
+  - Aligns tutorial behavior with established shortcut infrastructure.
+  - Reduces duplicated listener logic and keeps keyboard handling consistent across accessibility hardening increments.
+- Impacted files/artifacts:
+  - `src/components/Tutorial.tsx`
+- Revisit trigger/expiry:
+  - Revisit if centralized app-level shortcut manager supersedes per-component shortcut bindings.
+
+- Type: `roi-editor-native-canvas-mapping`
+- Decision: render visual ROI editor on native-resolution image dimensions (no auto downscale transform in editing plane), with controls outside the image canvas.
+- Date: 2026-02-17
+- Options considered:
+  - Scale image to fit viewport and remap pointer coordinates.
+  - Keep image at natural resolution inside scrollable viewport and edit directly in native pixel space.
+- Rationale:
+  - Eliminates coordinate ambiguity and user confusion about x/y mapping.
+  - Aligns with user requirement to draw boxes on full-resolution image without extra HUD overlay.
+  - Reduces off-by-scale drift risk between visual ROI and OCR runtime extraction.
+- Impacted files/artifacts:
+  - `src/components/OcrRegionEditorModal.tsx`
+  - `src/components/SettingsModal.tsx`
+- Revisit trigger/expiry:
+  - Revisit if future UX requires optional zoom/pan with transformed coordinate systems.
+
+- Type: `ocr-correction-input-shortcut-gating`
+- Decision: disable OCR modal global shortcuts while a correction text input is focused, and scope autocomplete rendering to the active input.
+- Date: 2026-02-17
+- Options considered:
+  - Keep global shortcuts always active in modal.
+  - Gate shortcuts during text input focus and stabilize dropdown interaction.
+- Rationale:
+  - Prevents typing interactions from being interrupted by modal-level key handlers.
+  - Resolves cursor/focus churn and improves reliability when entering names.
+  - Preserves power-user shortcuts outside active text-entry context.
+- Impacted files/artifacts:
+  - `src/components/OcrCorrectionModal.tsx`
+- Revisit trigger/expiry:
+  - Revisit if a centralized keyboard-shortcut manager introduces input-aware suppression globally.
+
+- Type: `dev-utilities-scroll-bounded-layout`
+- Decision: make Dev Utilities tab use a bounded full-height container with internal vertical scrolling instead of centered static card layout.
+- Date: 2026-02-17
+- Options considered:
+  - Keep centered fixed content block and rely on outer view height.
+  - Switch to `h-full` + internal overflow region for long utility lists.
+- Rationale:
+  - Prevents utility cards from being clipped on shorter window heights.
+  - Keeps tab header stable while allowing long maintenance workflows.
+  - Matches app shell expectations for panel-contained scroll behavior.
+- Impacted files/artifacts:
+  - `src/components/DevOCRPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit if Dev OCR utilities are split into dedicated sub-views.

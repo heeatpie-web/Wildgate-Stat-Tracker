@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { Check, X, Edit2, AlertTriangle, Trash2, Image as ImageIcon } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import type { PendingReview } from '../store/slices/createDataSlice';
 import { LocalImage } from './LocalImage';
+import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useAriaLiveRegion } from '../hooks/useAriaLiveRegion';
 
 interface ReviewQueueModalProps {
     onClose: () => void;
@@ -65,6 +68,12 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState("");
     const [sourcePreview, setSourcePreview] = useState<{ src: string; label: string } | null>(null);
+    const dialogTitleId = useId();
+    const dialogDescriptionId = useId();
+    const sourcePreviewTitleId = useId();
+    const focusTrapRef = useFocusTrap<HTMLDivElement>(!sourcePreview);
+    const sourcePreviewFocusTrapRef = useFocusTrap<HTMLDivElement>(sourcePreview != null);
+    const { announce } = useAriaLiveRegion(true);
 
     const normalizeName = (value: string) => value.trim();
     const namesEqual = (a: string, b: string) => normalizeName(a).toLowerCase() === normalizeName(b).toLowerCase();
@@ -120,6 +129,25 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
 
     const allItems: ReviewItem[] = [...learningItems, ...pendingReviews, ...unknownItems];
 
+    useKeyboardShortcuts([
+        {
+            key: 'Escape',
+            handler: () => {
+                if (sourcePreview) {
+                    setSourcePreview(null);
+                    announce('Closed source preview.', 'polite');
+                    return;
+                }
+                if (editingId) {
+                    setEditingId(null);
+                    announce('Cancelled edit.', 'polite');
+                    return;
+                }
+                onClose();
+            },
+        },
+    ], true);
+
     const replaceNameInSession = (oldName: string, newName: string) => {
         const normalizedOld = normalizeName(oldName);
         const normalizedNew = normalizeName(newName);
@@ -154,11 +182,13 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         if (isUnknownReview(review)) {
             setToast({ message: "Please rename to identify this item", type: 'info' });
             startEdit(review);
+            announce('Unknown item requires a name before confirming.', 'assertive');
             return;
         }
         if (isLearningReview(review)) {
             approveOcrLearningEvent(review.learningEventId);
             setToast({ message: `Approved OCR learning: "${review.rawValue}" -> "${review.suggestedName}"`, type: 'success' });
+            announce(`Approved learning correction from ${review.rawValue} to ${review.suggestedName}.`, 'polite');
             return;
         }
 
@@ -167,6 +197,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             if (normalized) addToRegistry(normalized);
             removePendingReview(review.id);
             setToast({ message: `Added "${normalized || review.value}" to roster`, type: 'success' });
+            announce(`Added ${normalized || review.value} to roster.`, 'polite');
             return;
         }
 
@@ -175,21 +206,25 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             if (normalized) addToRegistry(normalized);
             removePendingReview(review.id);
             setToast({ message: `Added "${normalized || review.value}" to roster`, type: 'success' });
+            announce(`Added ${normalized || review.value} to roster.`, 'polite');
             return;
         }
 
         removePendingReview(review.id);
         setToast({ message: "Item confirmed", type: 'success' });
+        announce('Review item confirmed.', 'polite');
     };
 
     const handleDelete = (review: ReviewItem) => {
         if (isUnknownReview(review)) {
             setToast({ message: "Cannot delete unknown ID yet", type: 'error' });
+            announce('Unknown IDs must be mapped before removal.', 'assertive');
             return;
         }
         if (isLearningReview(review)) {
             rejectOcrLearningEvent(review.learningEventId, 'Rejected from review queue');
             setToast({ message: "Learning suggestion rejected", type: 'success' });
+            announce('Learning suggestion rejected.', 'polite');
             return;
         }
 
@@ -198,16 +233,21 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         }
         removePendingReview(review.id);
         setToast({ message: "Item deleted", type: 'success' });
+        announce('Review item deleted.', 'polite');
     };
 
     const handleSaveEdit = (review: ReviewItem) => {
         const normalizedEditValue = normalizeName(editValue);
-        if (!normalizedEditValue) return;
+        if (!normalizedEditValue) {
+            announce('Edited value cannot be empty.', 'assertive');
+            return;
+        }
 
         if (isUnknownReview(review)) {
             addMapping(review.id, normalizedEditValue);
             setToast({ message: `Mapped ID to "${normalizedEditValue}"`, type: 'success' });
             setEditingId(null);
+            announce(`Mapped unknown identifier to ${normalizedEditValue}.`, 'polite');
             return;
         }
         if (isLearningReview(review)) {
@@ -220,6 +260,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             });
             setToast({ message: `Applied correction "${review.rawValue}" -> "${normalizedEditValue}"`, type: 'success' });
             setEditingId(null);
+            announce(`Applied correction from ${review.rawValue} to ${normalizedEditValue}.`, 'polite');
             return;
         }
 
@@ -234,6 +275,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         removePendingReview(review.id);
         setToast({ message: "Item updated", type: 'success' });
         setEditingId(null);
+        announce(`Updated item to ${normalizedEditValue}.`, 'polite');
     };
 
     const startEdit = (review: ReviewItem) => {
@@ -244,13 +286,20 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
     if (allItems.length === 0) {
         return (
             <div className="md3-dialog-scrim fixed inset-0 z-modal-top flex items-center justify-center p-4">
-                <div className="md3-dialog rounded-modal w-full max-w-sm text-center">
-                    <div className="md3-dialog-title">All Caught Up!</div>
-                    <div className="md3-dialog-content text-md-sys-on-surface/60">
+                <div
+                    ref={focusTrapRef}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby={dialogTitleId}
+                    aria-describedby={dialogDescriptionId}
+                    className="md3-dialog rounded-modal w-full max-w-sm text-center"
+                >
+                    <div id={dialogTitleId} className="md3-dialog-title">All Caught Up!</div>
+                    <div id={dialogDescriptionId} className="md3-dialog-content text-md-sys-on-surface/60">
                         No uncertain data pending review.
                     </div>
                     <div className="md3-dialog-actions">
-                        <button onClick={onClose} className="md3-btn-filled w-full">Close</button>
+                        <button type="button" onClick={onClose} className="md3-btn-filled w-full">Close</button>
                     </div>
                 </div>
             </div>
@@ -259,19 +308,30 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
 
     return (
         <div className="md3-dialog-scrim fixed inset-0 z-modal-top flex items-center justify-center p-4" onClick={onClose}>
-            <div className="md3-dialog rounded-modal w-full max-w-lg overflow-hidden max-h-80vh" onClick={e => e.stopPropagation()}>
+            <div
+                ref={focusTrapRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={dialogTitleId}
+                aria-describedby={dialogDescriptionId}
+                className="md3-dialog rounded-modal w-full max-w-lg overflow-hidden max-h-80vh"
+                onClick={e => e.stopPropagation()}
+            >
                 <div className="md3-banner md3-banner--warn">
                     <div className="flex items-center gap-2">
                         <AlertTriangle size={20} />
-                        <h2 className="text-title font-bold">Review Queue</h2>
+                        <h2 id={dialogTitleId} className="text-title font-bold">Review Queue</h2>
                     </div>
                     <div className="flex items-center gap-2">
                         <span className="md3-chip text-label-sm font-mono">{allItems.length} Remaining</span>
-                        <button onClick={onClose} className="md3-icon-btn" title="Close">
+                        <button type="button" onClick={onClose} className="md3-icon-btn" title="Close" aria-label="Close review queue">
                             <X size={18} />
                         </button>
                     </div>
                 </div>
+                <p id={dialogDescriptionId} className="a11y-sr-only">
+                    Review uncertain OCR and mapping items. Use Tab to move through actions and Escape to close.
+                </p>
 
                 <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar md3-dialog-content">
                     {allItems.map(review => {
@@ -292,16 +352,16 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                 <div className="flex gap-1">
                                     {editingId === review.id ? (
                                         <>
-                                            <button onClick={() => handleSaveEdit(review)} className="md3-icon-btn text-success" title="Save"><Check size={16} /></button>
-                                            <button onClick={() => setEditingId(null)} className="md3-icon-btn" title="Cancel"><X size={16} /></button>
+                                            <button onClick={() => handleSaveEdit(review)} className="md3-icon-btn text-success" title="Save" aria-label="Save review edit"><Check size={16} /></button>
+                                            <button onClick={() => setEditingId(null)} className="md3-icon-btn" title="Cancel" aria-label="Cancel review edit"><X size={16} /></button>
                                         </>
                                     ) : (
                                         <>
                                             {/* For Unknowns, Check button enters edit mode essentially */}
-                                            <button onClick={() => isUnknownReview(review) ? startEdit(review) : handleConfirm(review)} className="md3-icon-btn text-success" title="Confirm/Identify"><Check size={16} /></button>
-                                            <button onClick={() => startEdit(review)} className="md3-icon-btn text-info" title="Edit"><Edit2 size={16} /></button>
+                                            <button onClick={() => isUnknownReview(review) ? startEdit(review) : handleConfirm(review)} className="md3-icon-btn text-success" title="Confirm/Identify" aria-label="Confirm review item"><Check size={16} /></button>
+                                            <button onClick={() => startEdit(review)} className="md3-icon-btn text-info" title="Edit" aria-label="Edit review item"><Edit2 size={16} /></button>
                                             {!isUnknownReview(review) && (
-                                                <button onClick={() => handleDelete(review)} className="md3-icon-btn text-danger" title="Delete (Junk)"><Trash2 size={16} /></button>
+                                                <button onClick={() => handleDelete(review)} className="md3-icon-btn text-danger" title="Delete (Junk)" aria-label="Delete review item"><Trash2 size={16} /></button>
                                             )}
                                         </>
                                     )}
@@ -405,20 +465,34 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                     onClick={(event) => {
                         event.stopPropagation();
                         setSourcePreview(null);
+                        announce('Closed source preview.', 'polite');
                     }}
                 >
                     <div
+                        ref={sourcePreviewFocusTrapRef}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby={sourcePreviewTitleId}
                         className="md3-dialog rounded-modal w-full max-w-5xl max-h-80vh overflow-hidden"
                         onClick={(event) => event.stopPropagation()}
                     >
                         <div className="md3-banner md3-banner--info">
                             <div className="flex items-center gap-2 min-w-0">
                                 <ImageIcon size={18} />
-                                <div className="text-title font-bold truncate">
+                                <div id={sourcePreviewTitleId} className="text-title font-bold truncate">
                                     {sourcePreview.label}
                                 </div>
                             </div>
-                            <button onClick={() => setSourcePreview(null)} className="md3-icon-btn" title="Close Source Preview">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setSourcePreview(null);
+                                    announce('Closed source preview.', 'polite');
+                                }}
+                                className="md3-icon-btn"
+                                title="Close Source Preview"
+                                aria-label="Close source preview"
+                            >
                                 <X size={18} />
                             </button>
                         </div>

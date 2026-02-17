@@ -23,6 +23,7 @@ const { mergeCaptures, isSameMatch } = require('./ocrMerger.cjs');
 const gcloudService = require('./gcloudService.cjs');
 const gcloudSyncService = require('./gcloudSyncService.cjs');
 const geminiService = require('./geminiService.cjs');
+const { generateUserWordsFile } = require('./tesseractDictionary.cjs');
 
 // Dynamic imports (loaded when needed)
 let Tesseract = null;
@@ -31,6 +32,9 @@ let sharp = null;
 
 // Debug directory for saving OCR images
 const DEBUG_DIR = path.join(app.getPath('userData'), 'ocr-debug');
+const OCR_CORPUS_ARCHIVE_DIR = path.join(app.getPath('userData'), 'ocr-corpus-archive');
+const OCR_TESSERACT_DIR = path.join(app.getPath('userData'), 'ocr-tesseract');
+const OCR_USER_WORDS_FILE = path.join(OCR_TESSERACT_DIR, 'wildgate_userwords.txt');
 
 // Ensure debug directory exists
 function ensureDebugDir() {
@@ -39,36 +43,163 @@ function ensureDebugDir() {
   }
 }
 
+function ensureCorpusArchiveDir() {
+  if (!fs.existsSync(OCR_CORPUS_ARCHIVE_DIR)) {
+    fs.mkdirSync(OCR_CORPUS_ARCHIVE_DIR, { recursive: true });
+  }
+}
+
 // ─── OCR Result Cache (LRU, max 50 entries) ───
 const OCR_CACHE_MAX = 50;
 const ocrResultCache = new Map(); // hash → { result, timestamp }
+const cacheStats = {
+  hits: 0,
+  misses: 0,
+  evictions: 0,
+  totalRequests: 0,
+  avgHitTimeMs: 0,
+  avgMissTimeMs: 0,
+  hitTimingSamples: 0,
+  missTimingSamples: 0,
+};
+
+function updateRunningAverage(current, sampleCount, value) {
+  if (!Number.isFinite(value) || value < 0) return current;
+  return ((current * sampleCount) + value) / (sampleCount + 1);
+}
+
+function recordCacheHit(durationMs) {
+  cacheStats.hits += 1;
+  cacheStats.totalRequests += 1;
+  if (Number.isFinite(durationMs) && durationMs >= 0) {
+    cacheStats.avgHitTimeMs = updateRunningAverage(
+      cacheStats.avgHitTimeMs,
+      cacheStats.hitTimingSamples,
+      durationMs
+    );
+    cacheStats.hitTimingSamples += 1;
+  }
+}
+
+function recordCacheMiss() {
+  cacheStats.misses += 1;
+  cacheStats.totalRequests += 1;
+}
+
+function recordCacheMissDuration(durationMs) {
+  if (!Number.isFinite(durationMs) || durationMs < 0) return;
+  cacheStats.avgMissTimeMs = updateRunningAverage(
+    cacheStats.avgMissTimeMs,
+    cacheStats.missTimingSamples,
+    durationMs
+  );
+  cacheStats.missTimingSamples += 1;
+}
+
+function createDefaultOcrRegions() {
+  return {
+    crewHub: {
+      leftPanel: { xMin: 0.0, xMax: 0.36, yMin: 0.10, yMax: 0.80 },
+      rightPanel: { xMin: 0.45, xMax: 1.0, yMin: 0.10, yMax: 0.90 },
+      teamHeader: { xMin: 0.0, xMax: 0.45, yMin: 0.05, yMax: 0.20 },
+    },
+    mapScreen: {
+      yourShip: { xMin: 0.0, xMax: 0.30, yMin: 0.0, yMax: 0.25 },
+      enemyShips: { xMin: 0.60, xMax: 1.0, yMin: 0.0, yMax: 0.35 },
+      hazards: { xMin: 0.60, xMax: 1.0, yMin: 0.30, yMax: 0.70 },
+      players: { xMin: 0.0, xMax: 0.40, yMin: 0.70, yMax: 1.0 },
+    },
+  };
+}
+
+function clamp01(value, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(1, n));
+}
+
+function sanitizeRegionBounds(input, fallback) {
+  const source = (input && typeof input === 'object') ? input : {};
+  const base = fallback || { xMin: 0, xMax: 1, yMin: 0, yMax: 1 };
+  let xMin = clamp01(source.xMin, base.xMin);
+  let xMax = clamp01(source.xMax, base.xMax);
+  let yMin = clamp01(source.yMin, base.yMin);
+  let yMax = clamp01(source.yMax, base.yMax);
+
+  if (xMin >= xMax) {
+    if (xMin >= 1) xMin = Math.max(0, xMax - 0.01);
+    else xMax = Math.min(1, xMin + 0.01);
+  }
+  if (yMin >= yMax) {
+    if (yMin >= 1) yMin = Math.max(0, yMax - 0.01);
+    else yMax = Math.min(1, yMin + 0.01);
+  }
+
+  return { xMin, xMax, yMin, yMax };
+}
+
+function sanitizeOcrRegions(input) {
+  const defaults = createDefaultOcrRegions();
+  const source = (input && typeof input === 'object') ? input : {};
+  const crewHub = (source.crewHub && typeof source.crewHub === 'object') ? source.crewHub : {};
+  const mapScreen = (source.mapScreen && typeof source.mapScreen === 'object') ? source.mapScreen : {};
+
+  return {
+    crewHub: {
+      leftPanel: sanitizeRegionBounds(crewHub.leftPanel, defaults.crewHub.leftPanel),
+      rightPanel: sanitizeRegionBounds(crewHub.rightPanel, defaults.crewHub.rightPanel),
+      teamHeader: sanitizeRegionBounds(crewHub.teamHeader, defaults.crewHub.teamHeader),
+    },
+    mapScreen: {
+      yourShip: sanitizeRegionBounds(mapScreen.yourShip, defaults.mapScreen.yourShip),
+      enemyShips: sanitizeRegionBounds(mapScreen.enemyShips, defaults.mapScreen.enemyShips),
+      hazards: sanitizeRegionBounds(mapScreen.hazards, defaults.mapScreen.hazards),
+      players: sanitizeRegionBounds(mapScreen.players, defaults.mapScreen.players),
+    },
+  };
+}
+
+function getOcrRegionsCacheFingerprint(ocrRegions) {
+  try {
+    const payload = JSON.stringify(ocrRegions || createDefaultOcrRegions());
+    return crypto.createHash('md5').update(payload).digest('hex').slice(0, 12);
+  } catch {
+    return 'default';
+  }
+}
 
 function getImageHash(buffer) {
   return crypto.createHash('md5').update(buffer).digest('hex');
 }
 
-function buildCacheKey(imageHash, activeUser = null, ocrMode = 'both') {
+function buildCacheKey(imageHash, activeUser = null, ocrMode = 'both', regionFingerprint = 'default') {
   const normalizedUser = String(activeUser || '').trim().toLowerCase();
   const normalizedMode = String(ocrMode || 'both').trim().toLowerCase();
-  return `${imageHash}|u:${normalizedUser}|m:${normalizedMode}`;
+  return `${imageHash}|u:${normalizedUser}|m:${normalizedMode}|r:${regionFingerprint}`;
 }
 
 function getCachedResult(cacheKey) {
+  const lookupStartedAt = Date.now();
   const entry = ocrResultCache.get(cacheKey);
+  const lookupDurationMs = Date.now() - lookupStartedAt;
   if (entry) {
+    recordCacheHit(lookupDurationMs);
     console.log(`[OCR Cache] HIT for ${cacheKey.split('|')[0].slice(0, 8)}...`);
     return entry.result;
   }
+  recordCacheMiss();
   return null;
 }
 
-function setCachedResult(cacheKey, result) {
+function setCachedResult(cacheKey, result, missDurationMs = null) {
   // Evict oldest if at capacity
   if (ocrResultCache.size >= OCR_CACHE_MAX) {
     const oldestKey = ocrResultCache.keys().next().value;
     ocrResultCache.delete(oldestKey);
+    cacheStats.evictions += 1;
   }
   ocrResultCache.set(cacheKey, { result, timestamp: Date.now() });
+  recordCacheMissDuration(missDurationMs);
   console.log(`[OCR Cache] STORE ${cacheKey.split('|')[0].slice(0, 8)}... (${ocrResultCache.size}/${OCR_CACHE_MAX})`);
 }
 
@@ -100,6 +231,124 @@ async function saveDebugImage(buffer, prefix = 'capture') {
   return filepath;
 }
 
+/**
+ * Archive OCR input samples for offline corpus curation and retraining workflows.
+ * Writes a PNG + JSON sidecar into userData/ocr-corpus-archive.
+ */
+async function archiveOcrSample(buffer, ocrText, metadata = {}) {
+  try {
+    if (!buffer || !Buffer.isBuffer(buffer) || buffer.length < 64) return null;
+    ensureCorpusArchiveDir();
+
+    const sampleId = crypto.randomBytes(8).toString('hex');
+    const imagePath = path.join(OCR_CORPUS_ARCHIVE_DIR, `${sampleId}.png`);
+    const metadataPath = path.join(OCR_CORPUS_ARCHIVE_DIR, `${sampleId}.json`);
+
+    if (sharp) {
+      await sharp(buffer).png().toFile(imagePath);
+    } else {
+      await fsPromises.writeFile(imagePath, buffer);
+    }
+
+    const safeMetadata = (metadata && typeof metadata === 'object') ? metadata : {};
+    await fsPromises.writeFile(metadataPath, JSON.stringify({
+      sampleId,
+      timestamp: Date.now(),
+      ocrText: String(ocrText || '').slice(0, 100000),
+      ...safeMetadata,
+    }, null, 2), 'utf8');
+
+    return { sampleId, imagePath, metadataPath };
+  } catch (error) {
+    console.warn('[OCR-Corpus] Failed to archive OCR sample:', error?.message || error);
+    return null;
+  }
+}
+
+const DICTIONARY_MATCH_LIMIT = 1000;
+let activeUserWordsFile = null;
+let latestDictionaryStats = null;
+
+function resolveExistingDictionaryFile() {
+  try {
+    if (fs.existsSync(OCR_USER_WORDS_FILE)) {
+      return OCR_USER_WORDS_FILE;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function buildTesseractWorkerParameters(userWordsFile = null) {
+  const params = { preserve_interword_spaces: '1' };
+  if (userWordsFile && typeof userWordsFile === 'string' && userWordsFile.trim()) {
+    params.user_words_file = userWordsFile;
+  }
+  return params;
+}
+
+function sanitizePilotRegistryForDictionary(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const item of value) {
+    if (typeof item !== 'string') continue;
+    const trimmed = item.replace(/\s+/g, ' ').trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(trimmed);
+  }
+  return out;
+}
+
+function sanitizeDictionaryMatchHistory(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .slice(-DICTIONARY_MATCH_LIMIT)
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const teammates = Array.isArray(entry.teammates) ? entry.teammates.filter(v => typeof v === 'string') : [];
+      const opponents = Array.isArray(entry.opponents) ? entry.opponents.filter(v => typeof v === 'string') : [];
+      const opponentTeams = Array.isArray(entry.opponentTeams)
+        ? entry.opponentTeams.map((team) => {
+          const players = Array.isArray(team?.players) ? team.players.filter(v => typeof v === 'string') : [];
+          return players.length > 0 ? { players } : null;
+        }).filter(Boolean)
+        : [];
+      return {
+        player: typeof entry.player === 'string' ? entry.player : '',
+        teammates,
+        opponents,
+        opponentTeams,
+      };
+    })
+    .filter(Boolean);
+}
+
+async function applyDictionaryToWorkers(userWordsFile) {
+  activeUserWordsFile = userWordsFile || null;
+  if (!Array.isArray(tesseractWorkers) || tesseractWorkers.length === 0) {
+    return { appliedWorkers: 0 };
+  }
+
+  const params = buildTesseractWorkerParameters(activeUserWordsFile);
+  let appliedWorkers = 0;
+
+  await Promise.all(tesseractWorkers.map(async (worker, index) => {
+    try {
+      await worker.setParameters(params);
+      appliedWorkers += 1;
+    } catch (error) {
+      console.warn(`[OCR-Dict] Failed applying dictionary to worker ${index}:`, error?.message || error);
+    }
+  }));
+
+  return { appliedWorkers };
+}
+
 // Tesseract worker pool (scheduler + multiple workers)
 const WORKER_POOL_SIZE = 3;
 let tesseractScheduler = null;
@@ -119,7 +368,14 @@ async function getTesseractScheduler() {
     console.log('[OCR] Tesseract.js module loaded');
   }
 
+  if (!activeUserWordsFile) {
+    activeUserWordsFile = resolveExistingDictionaryFile();
+  }
+
   console.log(`[OCR] Initializing Tesseract worker pool (${WORKER_POOL_SIZE} workers, eng+chi_sim)...`);
+  if (activeUserWordsFile) {
+    console.log(`[OCR-Dict] Applying user words file: ${activeUserWordsFile}`);
+  }
   tesseractScheduler = Tesseract.createScheduler();
 
   const workerPromises = [];
@@ -133,7 +389,7 @@ async function getTesseractScheduler() {
         },
         cacheMethod: 'readOnly',
       });
-      await worker.setParameters({ preserve_interword_spaces: '1' });
+      await worker.setParameters(buildTesseractWorkerParameters(activeUserWordsFile));
       tesseractScheduler.addWorker(worker);
       tesseractWorkers.push(worker);
       console.log(`[OCR] Worker ${i} ready`);
@@ -261,6 +517,169 @@ async function preprocessImage(imageBuffer) {
   }
 }
 
+const REGION_OCR_SCALE = 3;
+const REGION_MIN_DIMENSION = 20;
+
+function resolveRegionPixels(region, fullWidth, fullHeight, minDimension = REGION_MIN_DIMENSION) {
+  if (!region || !Number.isFinite(fullWidth) || !Number.isFinite(fullHeight) || fullWidth <= 0 || fullHeight <= 0) {
+    return null;
+  }
+
+  const left = Math.max(0, Math.min(fullWidth - 1, Math.round(fullWidth * region.xMin)));
+  const top = Math.max(0, Math.min(fullHeight - 1, Math.round(fullHeight * region.yMin)));
+  const rawWidth = Math.round(fullWidth * (region.xMax - region.xMin));
+  const rawHeight = Math.round(fullHeight * (region.yMax - region.yMin));
+  const cropWidth = Math.max(1, Math.min(fullWidth - left, rawWidth));
+  const cropHeight = Math.max(1, Math.min(fullHeight - top, rawHeight));
+
+  if (cropWidth < minDimension || cropHeight < minDimension) {
+    return null;
+  }
+
+  return { left, top, cropWidth, cropHeight };
+}
+
+async function preprocessRegionCropFirst(imageBuffer, regionPixels, scale = REGION_OCR_SCALE) {
+  return await sharp(imageBuffer)
+    .extract({
+      left: regionPixels.left,
+      top: regionPixels.top,
+      width: regionPixels.cropWidth,
+      height: regionPixels.cropHeight,
+    })
+    .resize(regionPixels.cropWidth * scale, regionPixels.cropHeight * scale, {
+      kernel: sharp.kernel.lanczos3,
+    })
+    .grayscale()
+    .modulate({ brightness: 1.2 })
+    .linear(1.5, -(0.5 * 128))
+    .sharpen({ sigma: 1.5, m1: 1.5, m2: 0.7 })
+    .png()
+    .toBuffer();
+}
+
+async function preprocessFullImageForRegionBenchmark(imageBuffer, fullWidth, fullHeight, scale = REGION_OCR_SCALE) {
+  return await sharp(imageBuffer)
+    .resize(fullWidth * scale, fullHeight * scale, {
+      kernel: sharp.kernel.lanczos3,
+    })
+    .grayscale()
+    .modulate({ brightness: 1.2 })
+    .linear(1.5, -(0.5 * 128))
+    .sharpen({ sigma: 1.5, m1: 1.5, m2: 0.7 })
+    .png()
+    .toBuffer();
+}
+
+async function preprocessRegionFromPreprocessedFull(preprocessedFullBuffer, regionPixels, scale = REGION_OCR_SCALE) {
+  return await sharp(preprocessedFullBuffer)
+    .extract({
+      left: regionPixels.left * scale,
+      top: regionPixels.top * scale,
+      width: regionPixels.cropWidth * scale,
+      height: regionPixels.cropHeight * scale,
+    })
+    .png()
+    .toBuffer();
+}
+
+function resolveBenchmarkRegions(ocrRegions, fullWidth, fullHeight) {
+  const candidates = [
+    { key: 'mapScreen.players', region: ocrRegions.mapScreen.players },
+    { key: 'mapScreen.yourShip', region: ocrRegions.mapScreen.yourShip },
+    { key: 'mapScreen.enemyShips', region: ocrRegions.mapScreen.enemyShips },
+    { key: 'mapScreen.hazards', region: ocrRegions.mapScreen.hazards },
+  ];
+
+  return candidates
+    .map((candidate) => {
+      const pixels = resolveRegionPixels(candidate.region, fullWidth, fullHeight);
+      if (!pixels) return null;
+      return { key: candidate.key, pixels };
+    })
+    .filter(Boolean);
+}
+
+function sanitizeBenchmarkIterations(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 10;
+  return Math.max(1, Math.min(20, Math.round(parsed)));
+}
+
+function speedupPercent(oldMs, newMs) {
+  if (!Number.isFinite(oldMs) || oldMs <= 0 || !Number.isFinite(newMs)) return 0;
+  return ((oldMs - newMs) / oldMs) * 100;
+}
+
+async function benchmarkRegionPreprocessing(imageBuffer, ocrRegions, iterations = 10) {
+  if (!sharp) {
+    throw new Error('sharp not available');
+  }
+
+  const metadata = await sharp(imageBuffer).metadata();
+  const fullWidth = Number(metadata.width || 0);
+  const fullHeight = Number(metadata.height || 0);
+
+  if (fullWidth < 1 || fullHeight < 1) {
+    throw new Error('Unable to read benchmark image dimensions');
+  }
+
+  const benchmarkRegions = resolveBenchmarkRegions(ocrRegions, fullWidth, fullHeight);
+  if (benchmarkRegions.length === 0) {
+    throw new Error('No benchmark regions available after sanitization');
+  }
+
+  const normalizedIterations = sanitizeBenchmarkIterations(iterations);
+  const perIteration = [];
+  let oldTotalMs = 0;
+  let newTotalMs = 0;
+
+  for (let index = 0; index < normalizedIterations; index += 1) {
+    const oldStart = Date.now();
+    const preprocessedFull = await preprocessFullImageForRegionBenchmark(
+      imageBuffer,
+      fullWidth,
+      fullHeight
+    );
+    for (const region of benchmarkRegions) {
+      await preprocessRegionFromPreprocessedFull(preprocessedFull, region.pixels);
+    }
+    const oldMs = Date.now() - oldStart;
+
+    const newStart = Date.now();
+    for (const region of benchmarkRegions) {
+      await preprocessRegionCropFirst(imageBuffer, region.pixels);
+    }
+    const newMs = Date.now() - newStart;
+
+    oldTotalMs += oldMs;
+    newTotalMs += newMs;
+    perIteration.push({
+      iteration: index + 1,
+      oldMs,
+      newMs,
+      speedupPercent: Number(speedupPercent(oldMs, newMs).toFixed(2)),
+    });
+  }
+
+  const oldAvgMs = oldTotalMs / normalizedIterations;
+  const newAvgMs = newTotalMs / normalizedIterations;
+  const speedup = speedupPercent(oldAvgMs, newAvgMs);
+  const speedupFactor = newAvgMs > 0 ? oldAvgMs / newAvgMs : 0;
+
+  return {
+    iterations: normalizedIterations,
+    regionCount: benchmarkRegions.length,
+    regions: benchmarkRegions.map(region => region.key),
+    image: { width: fullWidth, height: fullHeight },
+    oldAvgMs: Number(oldAvgMs.toFixed(2)),
+    newAvgMs: Number(newAvgMs.toFixed(2)),
+    speedupPercent: Number(speedup.toFixed(2)),
+    speedupFactor: Number(speedupFactor.toFixed(2)),
+    perIteration,
+  };
+}
+
 /**
  * Crop a region from an image, upscale aggressively, and run a dedicated OCR pass.
  * Returns OCR words with bounding boxes mapped back to the full-image coordinate space.
@@ -278,31 +697,17 @@ async function cropRegionAndOCR(imageBuffer, region, fullWidth, fullHeight) {
   }
 
   try {
-    const left = Math.round(fullWidth * region.xMin);
-    const top = Math.round(fullHeight * region.yMin);
-    const cropWidth = Math.round(fullWidth * (region.xMax - region.xMin));
-    const cropHeight = Math.round(fullHeight * (region.yMax - region.yMin));
-
-    if (cropWidth < 20 || cropHeight < 20) {
+    const regionPixels = resolveRegionPixels(region, fullWidth, fullHeight);
+    if (!regionPixels) {
       console.warn('[OCR-Region] Crop region too small, skipping');
       return null;
     }
 
+    const { left, top, cropWidth, cropHeight } = regionPixels;
+
     console.log(`[OCR-Region] Cropping region: ${left},${top} ${cropWidth}x${cropHeight} from ${fullWidth}x${fullHeight}`);
 
-    // Crop, upscale 3x, convert to grayscale, boost contrast, sharpen
-    const REGION_SCALE = 3;
-    const cropped = await sharp(imageBuffer)
-      .extract({ left, top, width: cropWidth, height: cropHeight })
-      .resize(cropWidth * REGION_SCALE, cropHeight * REGION_SCALE, {
-        kernel: sharp.kernel.lanczos3,
-      })
-      .grayscale()
-      .modulate({ brightness: 1.2 })
-      .linear(1.5, -(0.5 * 128)) // aggressive contrast
-      .sharpen({ sigma: 1.5, m1: 1.5, m2: 0.7 })
-      .png()
-      .toBuffer();
+    const cropped = await preprocessRegionCropFirst(imageBuffer, regionPixels);
 
     console.log(`[OCR-Region] Cropped+upscaled buffer: ${cropped.length} bytes`);
 
@@ -316,8 +721,8 @@ async function cropRegionAndOCR(imageBuffer, region, fullWidth, fullHeight) {
     console.log(`[OCR-Region] Detected ${regionOCR.words.length} words in cropped region`);
 
     // Map bounding boxes back to full-image coordinate space
-    const scaledCropWidth = cropWidth * REGION_SCALE;
-    const scaledCropHeight = cropHeight * REGION_SCALE;
+    const scaledCropWidth = cropWidth * REGION_OCR_SCALE;
+    const scaledCropHeight = cropHeight * REGION_OCR_SCALE;
 
     const mappedWords = regionOCR.words.map(w => ({
       ...w,
@@ -403,6 +808,70 @@ async function runOCR(imageBuffer) {
         y1: l.bbox.y1 || 0,
       } : { x0: 0, y0: 0, x1: 0, y1: 0 },
     })),
+  };
+}
+
+function toFiniteNumber(value, fallback = 0) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+function normalizeDebugWord(word, scaleDivisor = 1, maxWidth = Infinity, maxHeight = Infinity) {
+  const safeScale = Number.isFinite(scaleDivisor) && scaleDivisor > 0 ? scaleDivisor : 1;
+  const text = typeof word?.text === 'string' ? word.text : '';
+  const confidence = Math.max(0, Math.min(100, toFiniteNumber(word?.confidence, 0)));
+
+  const rawX0 = toFiniteNumber(word?.bbox?.x0, 0) / safeScale;
+  const rawY0 = toFiniteNumber(word?.bbox?.y0, 0) / safeScale;
+  const rawX1 = toFiniteNumber(word?.bbox?.x1, 0) / safeScale;
+  const rawY1 = toFiniteNumber(word?.bbox?.y1, 0) / safeScale;
+
+  const boundedX0 = Math.max(0, Math.min(maxWidth, rawX0));
+  const boundedY0 = Math.max(0, Math.min(maxHeight, rawY0));
+  const boundedX1 = Math.max(0, Math.min(maxWidth, rawX1));
+  const boundedY1 = Math.max(0, Math.min(maxHeight, rawY1));
+
+  const x0 = Math.min(boundedX0, boundedX1);
+  const y0 = Math.min(boundedY0, boundedY1);
+  const x1 = Math.max(boundedX0, boundedX1);
+  const y1 = Math.max(boundedY0, boundedY1);
+
+  return {
+    text,
+    confidence,
+    bbox: { x0, y0, x1, y1 },
+  };
+}
+
+/**
+ * Build optional OCR debug payload with word-level bounding boxes.
+ * Local/merged mode uses local OCR words mapped back to original image coordinates.
+ * Cloud mode uses cloud coordinates as-is (already in original image space).
+ */
+function buildOcrBoundingBoxDebugPayload(ocrSource, ocrResult, localOCRForFallback, processed) {
+  const imageWidth = Math.max(1, toFiniteNumber(processed?.originalWidth, processed?.width || 0));
+  const imageHeight = Math.max(1, toFiniteNumber(processed?.originalHeight, processed?.height || 0));
+  const scale = Number.isFinite(processed?.scale) && processed.scale > 0 ? processed.scale : 1;
+
+  if (ocrSource === 'cloud') {
+    const cloudWords = Array.isArray(ocrResult?.words) ? ocrResult.words : [];
+    return {
+      source: 'cloud',
+      imageWidth,
+      imageHeight,
+      words: cloudWords.map(word => normalizeDebugWord(word, 1, imageWidth, imageHeight)),
+    };
+  }
+
+  const localWords = Array.isArray(localOCRForFallback?.words) && localOCRForFallback.words.length > 0
+    ? localOCRForFallback.words
+    : (Array.isArray(ocrResult?.words) ? ocrResult.words : []);
+
+  return {
+    source: 'local',
+    imageWidth,
+    imageHeight,
+    words: localWords.map(word => normalizeDebugWord(word, scale, imageWidth, imageHeight)),
   };
 }
 
@@ -885,13 +1354,31 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
   const captureStart = Date.now();
   let tempOcrPath = null;
   try {
-    const { sourceImagePath = null, skipDebugSave = false, forceUncached = false } = options;
+    const {
+      sourceImagePath = null,
+      skipDebugSave = false,
+      forceUncached = false,
+      ocrRegions: rawOcrRegions = null,
+      includeBboxes: rawIncludeBboxes = false,
+      archiveOcrSample: rawArchiveOcrSample = false,
+      archiveMetadata: rawArchiveMetadata = null,
+    } = options;
+    const includeBboxes = rawIncludeBboxes === true;
+    const shouldArchiveOcrSample = rawArchiveOcrSample === true;
+    const archiveMetadata = (rawArchiveMetadata && typeof rawArchiveMetadata === 'object')
+      ? rawArchiveMetadata
+      : {};
+    const ocrRegions = sanitizeOcrRegions(rawOcrRegions);
+    const ocrRegionFingerprint = getOcrRegionsCacheFingerprint(ocrRegions);
     console.log('[OCR] Starting processCapture');
     console.log('[OCR] activeUser:', activeUser);
     console.log('[OCR] hasExistingData:', !!existingData);
     console.log('[OCR] ocrMode:', ocrMode);
+    console.log('[OCR] regionFingerprint:', ocrRegionFingerprint);
     if (sourceImagePath) console.log('[OCR] Re-analysis from:', sourceImagePath);
     if (skipDebugSave) console.log('[OCR] Skipping debug save (screenshot already saved by caller)');
+    if (includeBboxes) console.log('[OCR] includeBboxes enabled for debug payload');
+    if (shouldArchiveOcrSample) console.log('[OCR] archiveOcrSample enabled');
 
     if (!imageBase64 || imageBase64.length < 100) {
       throw new Error('Invalid or empty image data');
@@ -902,9 +1389,11 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
 
     // Check OCR cache only for non-cloud, non-reanalysis, non-forced runs.
     const imageHash = getImageHash(imageBuffer);
-    const cacheKey = buildCacheKey(imageHash, activeUser, ocrMode);
-    const shouldBypassCache = !!sourceImagePath || forceUncached || ocrMode === 'cloud' || !!existingData;
+    const cacheKey = buildCacheKey(imageHash, activeUser, ocrMode, ocrRegionFingerprint);
+    const shouldBypassCache = !!sourceImagePath || forceUncached || ocrMode === 'cloud' || !!existingData || includeBboxes || shouldArchiveOcrSample;
+    let cacheLookupStartedAt = null;
     if (!shouldBypassCache) {
+      cacheLookupStartedAt = Date.now();
       const cached = getCachedResult(cacheKey);
       if (cached) {
         console.log(`[OCR] Cache hit — returning in ${Date.now() - captureStart}ms`);
@@ -1086,7 +1575,9 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         ocrResult,
         processed.width,
         processed.height,
-        processed.scale // Pass scale for accurate color detection
+        processed.scale, // OCR words are on preprocessed/scaled image coordinates
+        imageBuffer, // keep color detection on original-color pixels
+        ocrRegions.crewHub
       );
 
       // Convert to legacy format for backwards compatibility
@@ -1099,7 +1590,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         processed.buffer,
         ocrResult,
         processed.width,
-        processed.height
+        processed.height,
+        ocrRegions.mapScreen
       );
 
       // Convert to legacy format
@@ -1124,7 +1616,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       // (bottom-left), upscale 3x, and run a dedicated OCR pass for much better accuracy.
       if (imageBuffer) {
         console.log('[OCR-Region] Running region-specific OCR for map teammate list');
-        const PLAYER_REGION = { xMin: 0, xMax: 0.40, yMin: 0.70, yMax: 1.0 };
+        const PLAYER_REGION = ocrRegions.mapScreen.players;
         const regionResult = await cropRegionAndOCR(
           imageBuffer,
           PLAYER_REGION,
@@ -1133,7 +1625,12 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         );
         if (regionResult && regionResult.words.length > 0) {
           // extractPlayerList expects words in full-image coordinates (already mapped by cropRegionAndOCR)
-          const regionPlayers = extractPlayerList(regionResult.words, processed.originalWidth, processed.originalHeight);
+          const regionPlayers = extractPlayerList(
+            regionResult.words,
+            processed.originalWidth,
+            processed.originalHeight,
+            ocrRegions.mapScreen
+          );
           const existingCount = (extractedData.teammates || []).length;
           if (regionPlayers.length > 0) {
             console.log(`[OCR-Region] Region OCR extracted ${regionPlayers.length} teammate(s) (full-image had ${existingCount}): ${regionPlayers.join(', ')}`);
@@ -1161,14 +1658,17 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         ocrResult,
         processed.width,
         processed.height,
-        processed.scale // Pass scale for accurate color detection
+        processed.scale, // OCR words are on preprocessed/scaled image coordinates
+        imageBuffer, // keep color detection on original-color pixels
+        ocrRegions.crewHub
       );
 
       const mapScreenData = await extractMapScreen(
         processed.buffer,
         ocrResult,
         processed.width,
-        processed.height
+        processed.height,
+        ocrRegions.mapScreen
       );
 
       // Use whichever has more data
@@ -1227,6 +1727,33 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     extractedData.cloudContributed = cloudContributed;
     extractedData.ocrSource = ocrSource;
     if (mergeStats) extractedData.mergeStats = mergeStats;
+    if (includeBboxes) {
+      extractedData.ocrBoundingBoxes = buildOcrBoundingBoxDebugPayload(
+        ocrSource,
+        ocrResult,
+        localOCRForFallback,
+        processed
+      );
+    }
+    if (shouldArchiveOcrSample) {
+      const archivedSample = await archiveOcrSample(
+        imageBuffer,
+        ocrResult?.text || extractedData.rawText || '',
+        {
+          trigger: 'ocr-process-capture',
+          activeUser: activeUser || null,
+          ocrMode,
+          ocrSource,
+          screenshotType: extractedData.screenshotType || 'unknown',
+          overallConfidence: Number(extractedData.overallConfidence || 0),
+          regionFingerprint: ocrRegionFingerprint,
+          ...archiveMetadata,
+        }
+      );
+      if (archivedSample?.sampleId) {
+        extractedData.ocrCorpusSampleId = archivedSample.sampleId;
+      }
+    }
 
     const finalResult = {
       success: true,
@@ -1235,7 +1762,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
 
     // Store only cache-safe runs.
     if (!shouldBypassCache) {
-      setCachedResult(cacheKey, finalResult);
+      const missDurationMs = cacheLookupStartedAt == null ? null : (Date.now() - cacheLookupStartedAt);
+      setCachedResult(cacheKey, finalResult, missDurationMs);
     }
 
     console.log(`[OCR] Total processCapture time: ${Date.now() - captureStart}ms`);
@@ -1264,21 +1792,27 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
  * Convert new Crew Hub format to legacy format for backwards compatibility
  */
 function convertCrewHubToLegacy(crewHubData, rawText) {
-  const teammates = (crewHubData.yourTeam?.players || []).map(name => ({
+  const capPlayers = (players, maxCount = 4) => {
+    if (!Array.isArray(players)) return [];
+    const ranked = [...players].sort((a, b) => (Number(b?.confidence || 0) - Number(a?.confidence || 0)));
+    return ranked.slice(0, maxCount);
+  };
+
+  const teammates = capPlayers((crewHubData.yourTeam?.players || []).map(name => ({
     name: typeof name === 'string' ? name : name.name,
     confidence: typeof name === 'string' ? 80 : (name.confidence || 80),
     isTeammate: true,
-  }));
+  })), 4);
 
-  const opponentTeams = (crewHubData.enemyTeams || []).map(team => ({
+  const opponentTeams = (crewHubData.enemyTeams || []).slice(0, 4).map(team => ({
     teamName: team.name || 'Unknown Team',
     shipType: team.shipType || '',
     color: team.color || 'unknown',
-    players: (team.players || []).map(p => ({
+    players: capPlayers((team.players || []).map(p => ({
       name: typeof p === 'string' ? p : p.name,
       confidence: typeof p === 'string' ? 75 : (p.confidence || 75),
       isTeammate: false,
-    })),
+    })), 4),
     confidence: team.confidence || 70,
   }));
 
@@ -1410,8 +1944,9 @@ function registerOCRHandlers(mainWindow) {
 
   // Process capture with OCR (accepts activeUser, existingData, and ocrMode)
   // skipDebugSave: true because the caller (useSmartCapture) already saved via save-screenshot
-  ipcMain.handle('ocr-process-capture', async (event, imageBase64, activeUser = null, existingData = null, ocrMode = 'both') => {
-    return await processCapture(imageBase64, activeUser, existingData, ocrMode, { skipDebugSave: true });
+  ipcMain.handle('ocr-process-capture', async (event, imageBase64, activeUser = null, existingData = null, ocrMode = 'both', runtimeOptions = {}) => {
+    const safeOptions = (runtimeOptions && typeof runtimeOptions === 'object') ? runtimeOptions : {};
+    return await processCapture(imageBase64, activeUser, existingData, ocrMode, { ...safeOptions, skipDebugSave: true });
   });
 
   // Save OCR debug image
@@ -1482,6 +2017,96 @@ function registerOCRHandlers(mainWindow) {
       return { success: false, error: error.message };
     }
   });
+
+  ipcMain.handle('benchmark-ocr-preprocessing', async (event, payload = {}) => {
+    try {
+      const safePayload = (payload && typeof payload === 'object' && !Array.isArray(payload))
+        ? payload
+        : { imagePath: payload };
+      const imagePath = typeof safePayload.imagePath === 'string' ? safePayload.imagePath : null;
+      const imageBase64 = typeof safePayload.imageBase64 === 'string' ? safePayload.imageBase64 : null;
+
+      let imageBuffer = null;
+      if (imageBase64 && imageBase64.length > 100) {
+        const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+        imageBuffer = Buffer.from(base64Data, 'base64');
+      } else if (imagePath) {
+        imageBuffer = await fsPromises.readFile(path.resolve(imagePath));
+      } else {
+        throw new Error('No benchmark image provided');
+      }
+
+      const ocrRegions = sanitizeOcrRegions(safePayload.ocrRegions);
+      const iterations = sanitizeBenchmarkIterations(safePayload.iterations);
+      const results = await benchmarkRegionPreprocessing(imageBuffer, ocrRegions, iterations);
+
+      return {
+        success: true,
+        ...results,
+      };
+    } catch (error) {
+      console.error('[OCR] benchmark-ocr-preprocessing failed:', error);
+      return {
+        success: false,
+        error: error?.message || 'Benchmark failed',
+      };
+    }
+  });
+
+  ipcMain.handle('regenerate-ocr-dictionary', async (event, payload = {}) => {
+    try {
+      const safePayload = (payload && typeof payload === 'object' && !Array.isArray(payload))
+        ? payload
+        : {};
+      const pilotRegistry = sanitizePilotRegistryForDictionary(safePayload.pilotRegistry);
+      if (pilotRegistry.length === 0) {
+        return {
+          success: false,
+          error: 'No pilot names available to build OCR dictionary',
+        };
+      }
+
+      const matchHistory = sanitizeDictionaryMatchHistory(safePayload.matches);
+      const generated = await generateUserWordsFile({
+        pilotRegistry,
+        matchHistory,
+        outputPath: OCR_USER_WORDS_FILE,
+      });
+
+      const applyResult = await applyDictionaryToWorkers(generated.filePath);
+      const { content, ...summary } = generated;
+
+      latestDictionaryStats = {
+        ...summary,
+        appliedWorkers: applyResult.appliedWorkers,
+      };
+
+      console.log(`[OCR-Dict] Regenerated dictionary (${summary.totalWords} words, ${summary.pilotCount} pilots, workers=${applyResult.appliedWorkers})`);
+      return {
+        success: true,
+        ...latestDictionaryStats,
+      };
+    } catch (error) {
+      console.error('[OCR-Dict] regenerate-ocr-dictionary failed:', error);
+      return {
+        success: false,
+        error: error?.message || 'Dictionary regeneration failed',
+      };
+    }
+  });
+
+  // Get OCR debug directory path
+  ipcMain.handle('get-ocr-cache-stats', () => ({
+    hits: cacheStats.hits,
+    misses: cacheStats.misses,
+    evictions: cacheStats.evictions,
+    totalRequests: cacheStats.totalRequests,
+    avgHitTimeMs: Number(cacheStats.avgHitTimeMs.toFixed(2)),
+    avgMissTimeMs: Number(cacheStats.avgMissTimeMs.toFixed(2)),
+    hitRate: cacheStats.totalRequests > 0 ? (cacheStats.hits / cacheStats.totalRequests) : 0,
+    currentSize: ocrResultCache.size,
+    maxSize: OCR_CACHE_MAX,
+  }));
 
   // Get OCR debug directory path
   ipcMain.handle('get-ocr-debug-dir', async () => {

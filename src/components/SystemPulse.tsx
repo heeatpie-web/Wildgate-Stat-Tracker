@@ -3,6 +3,7 @@ import { RefreshCw, ScanEye, Terminal, Timer, ShieldCheck } from 'lucide-react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { getElectronAPI } from '../utils/electronAPI';
+import { runtimeConfig } from '../config/runtimeConfig';
 
 /**
  * SystemPulse
@@ -18,7 +19,7 @@ import { getElectronAPI } from '../utils/electronAPI';
  *   - Updates: Electron auto-updater status.
  *   - Telemetry: solid = connected (log exists), blinking = receiving (recent events within ~45s).
  */
-const TELEMETRY_RECEIVING_MS = 45000;
+const TELEMETRY_RECEIVING_MS = runtimeConfig.systemPulse.telemetryReceivingWindowMs;
 
 const SystemPulse: React.FC = () => {
     const { updateStatus, enableAutoLogRecording, telemetryStatus } = useUIState();
@@ -60,7 +61,7 @@ const SystemPulse: React.FC = () => {
             }
         };
         void load();
-        const id = window.setInterval(() => { void load(); }, 20000);
+        const id = window.setInterval(() => { void load(); }, runtimeConfig.systemPulse.statusPollIntervalMs);
         return () => {
             mounted = false;
             window.clearInterval(id);

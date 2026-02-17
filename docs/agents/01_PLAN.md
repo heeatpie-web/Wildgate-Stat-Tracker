@@ -285,3 +285,142 @@
 3. `COMPLETED` - Add one-time legacy localStorage migration-check marker and preserve startup compatibility behavior.
 4. `COMPLETED` - Run focused validation (`eslint` touched files, targeted `vitest`, `typecheck`) and then `npm run -s ci:quality`.
 5. `COMPLETED` - Update execution/validation/handoff/decision logs and release temporary locks.
+
+## Current Task Plan (MODERATE-REMEDIATION-006)
+1. `COMPLETED` - Record intake/locks and patch runtime issues: silent catches, logger persistence handling, toast accessibility, and env-backed config constants.
+2. `COMPLETED` - Add/expand tests for `StorageService`, `useLogMonitor`, `useSmartCapture`, and `App.tsx`.
+3. `COMPLETED` - Run focused validation (`vitest` targets + touched-file `eslint`) and full compile/test checks (`typecheck`, `test` as needed).
+4. `COMPLETED` - Update execution/validation/handoff/decisions entries and release temporary locks.
+
+## Current Task Plan (FOLLOWUP-REMEDIATION-008)
+1. `COMPLETED` - Record intake/locks and patch remaining defaults/config issues (auto-backup default + additional env-backed runtime timers).
+2. `COMPLETED` - Add accessibility labels to remaining icon-only controls in primary interaction components.
+3. `COMPLETED` - Run focused validation (`eslint` touched files + targeted tests) and then full quality checks (`typecheck`, `test`, `build`).
+4. `COMPLETED` - Update execution/validation/handoff/decisions artifacts and release temporary locks.
+
+## Current Task Plan (CORPUS-IMPORT-DIR-009)
+1. `COMPLETED` - Record intake/locks and patch corpus import dialog default path to corpus images directory.
+2. `COMPLETED` - Run focused validation (`eslint` touched file + `typecheck`) and confirm import flow semantics are unchanged.
+3. `COMPLETED` - Update execution/validation/handoff/decision artifacts and release temporary locks.
+
+## Current Task Plan (OCR-DUAL-BUFFER-GATES-010)
+1. `COMPLETED` - Wire dual-buffer Crew Hub extraction so OCR text uses preprocessed buffer while team-color detection uses color-fidelity source.
+2. `COMPLETED` - Enforce strict OCR merge/apply guardrails (confidence gating, dedupe, teammate/per-team caps) in app-side commit boundaries.
+3. `COMPLETED` - Add targeted regression tests for OCR merge/player cap behavior and keep hazard flow untouched.
+4. `COMPLETED` - Run focused validation (`vitest` target, touched-file `eslint`, `typecheck`) and record evidence.
+5. `COMPLETED` - Update execution, decisions, handoff, and release temporary locks.
+
+## Current Task Plan (OCR-ROI-RUNTIME-011)
+1. `COMPLETED` - Add persisted OCR ROI settings model (defaults + setters + reset) and hydrate/persist in store.
+2. `COMPLETED` - Add OCR ROI adjustment controls in Settings modal with immediate state updates.
+3. `COMPLETED` - Thread ROI overrides through OCR IPC (`ocr-process-capture`, rerun handler) and apply in extractors.
+4. `COMPLETED` - Update OCR call sites/rerun call sites to pass live ROI settings.
+5. `COMPLETED` - Add focused regression tests for rerun payload and run validation (`eslint`, `typecheck`, targeted `vitest`), then update docs and release locks.
+
+## Current Task Plan (OCR-CORPUS-ROI-012)
+1. `COMPLETED` - Wire Dev OCR corpus pipeline invoke payload to include live `ocrRegions`.
+2. `COMPLETED` - Thread optional `ocrRegions` in Electron `ocr-corpus-run-pipeline` and pass to `processCapture(...)`.
+3. `COMPLETED` - Run focused validation (`eslint` touched files, `typecheck`) and update execution/validation/handoff docs.
+
+## Current Task Plan (OCR-ENHANCEMENT-T1-013)
+1. `COMPLETED` - Implement Tier 1 #1 cache telemetry in `electron/ocrHandler.cjs`, expose IPC handler, and wire polling display in `src/components/DevOCRPanel.tsx`.
+2. `COMPLETED` - Implement Tier 1 #2 keyboard shortcuts in `src/hooks/useKeyboardShortcuts.ts` and `src/components/OcrCorrectionModal.tsx`.
+3. `COMPLETED` - Implement Tier 1 #3 confidence meter component and replace modal confidence text badge usage.
+4. `COMPLETED` - Implement Tier 1 #4 alias learning metadata helper and modal learning badge tooltip.
+5. `COMPLETED` - Run focused validation (`eslint` touched files, targeted `vitest`, `typecheck`) and capture evidence.
+6. `COMPLETED` - Update execution/validation/handoff docs, complete PM feedback cycle, and release locks.
+
+## Current Task Plan (OCR-ENHANCEMENT-T2-014)
+1. `COMPLETED` - Record intake/plan and lock updates for Tier 2 #5 benchmark increment, then confirm benchmark design points in existing OCR pipeline.
+2. `COMPLETED` - Implement benchmark helpers + `benchmark-ocr-preprocessing` IPC handler in `electron/ocrHandler.cjs` without changing production extraction flow.
+3. `COMPLETED` - Expose new benchmark IPC in `electron/preload.cjs` and sync allowlist fixture in `scripts/security_negative_tests.cjs`.
+4. `COMPLETED` - Add Dev OCR panel benchmark action + result display for loaded image runs.
+5. `COMPLETED` - Run focused validation (`eslint` touched files, `node scripts/security_negative_tests.cjs`, `npm run -s typecheck`) and record evidence.
+6. `COMPLETED` - Complete execution log/PM feedback/handoff/decision updates and release temporary lock entries.
+
+## Current Task Plan (OCR-ENHANCEMENT-T2-015)
+1. `COMPLETED` - Record intake/plan and claim any additional non-lane locks; confirm current OCR correction/store wiring points for calibration sample insertion.
+2. `COMPLETED` - Add calibration utility module (`src/utils/ocrCalibration.ts`) with sample normalization, bucketing, recommendation, and bounded append helpers.
+3. `COMPLETED` - Extend settings/store persistence (`createSettingsSlice.ts`, `useAppStore.ts`) for `ocrCalibrationSamples` and sample-record action.
+4. `COMPLETED` - Record calibration samples in `OcrCorrectionModal.tsx` when corrections are applied.
+5. `COMPLETED` - Add Dev OCR panel calibration visualization (bucket accuracy + recommended threshold).
+6. `COMPLETED` - Add focused tests for calibration utility behavior and run validation (`eslint` touched files, targeted `vitest`, `typecheck`).
+7. `COMPLETED` - Complete execution/validation/handoff/decision updates, PM feedback cycle, and release temporary lock entries.
+
+## Current Task Plan (OCR-ENHANCEMENT-T2-016)
+1. `COMPLETED` - Record intake/plan and claim non-lane locks; confirm batch-action insertion points in settings persistence and correction modal flow.
+2. `COMPLETED` - Add persisted setting `ocrBatchAcceptThreshold` and setter in `createSettingsSlice.ts` + `useAppStore.ts`.
+3. `COMPLETED` - Create `src/components/BatchActionConfirmDialog.tsx` using existing modal/dialog visual patterns.
+4. `COMPLETED` - Implement threshold slider, eligible counts, batch accept/ignore handlers, and confirmation wiring in `src/components/OcrCorrectionModal.tsx`.
+5. `COMPLETED` - Add/adjust focused tests for batch action behavior and run validation (`eslint` touched files, targeted `vitest`, `typecheck`).
+6. `COMPLETED` - Complete execution/validation/handoff/decision updates, PM feedback cycle, and release temporary lock entries.
+
+
+## Current Task Plan (OCR-ENHANCEMENT-T2-017)
+1. `COMPLETED` - Record intake/plan updates and claim temporary locks for Tier 2 #8 bounding-box overlay increment.
+2. `COMPLETED` - Add optional `includeBboxes` handling in `electron/ocrHandler.cjs` and emit typed bbox debug payload only for debug runs.
+3. `COMPLETED` - Extend OCR bridge/types for optional runtime debug options and bbox debug response shape.
+4. `COMPLETED` - Create `src/components/OcrBoundingBoxOverlay.tsx` interactive overlay with confidence color coding + selection details.
+5. `COMPLETED` - Wire `src/components/DevOCRPanel.tsx` with "Capture with Bounding Boxes" action and overlay rendering.
+6. `COMPLETED` - Run focused validation (`eslint`, `typecheck`, targeted checks/tests), then update AGENTS execution/validation/handoff/decision artifacts and release locks.
+
+## Current Task Plan (OCR-ENHANCEMENT-T3-018)
+1. `COMPLETED` - Record intake/plan updates and claim temporary locks for Tier 3 #9 corpus export increment.
+2. `COMPLETED` - Add `src/utils/ocrCorpusBuilder.ts` with alias-model corpus builder and JSONL/BOX serialization helpers.
+3. `COMPLETED` - Extend `src/utils/export.ts` with text export helper for `.jsonl`/`.box` artifacts.
+4. `COMPLETED` - Wire `src/components/DevOCRPanel.tsx` corpus action to export correction corpus files from `ocrAliasModel`.
+5. `COMPLETED` - Add opt-in OCR sample archive helper/path in `electron/ocrHandler.cjs` runtime options flow.
+6. `COMPLETED` - Add focused corpus builder tests and run validation (`eslint`, targeted `vitest`, `typecheck`), then update AGENTS docs and release locks.
+
+## Current Task Plan (OCR-ENHANCEMENT-T3-019)
+1. `COMPLETED` - Record intake/plan/log updates and claim temporary locks for Tier 3 #10 dictionary generation increment.
+2. `COMPLETED` - Add `electron/tesseractDictionary.cjs` helper to build user-words file from pilot registry and match-history frequency weighting.
+3. `COMPLETED` - Integrate dictionary generation/application IPC in `electron/ocrHandler.cjs` and apply dictionary parameters to existing/new Tesseract workers.
+4. `COMPLETED` - Add preload/security allowlist parity for `regenerate-ocr-dictionary`.
+5. `COMPLETED` - Wire renderer usage: auto-regeneration effect in `src/providers/GameDataProvider.tsx` and manual action button in `src/components/DevOCRPanel.tsx`.
+6. `COMPLETED` - Run focused validation (`eslint` touched files, security negative tests, `typecheck`) and update AGENTS execution/validation/handoff/decision artifacts, then release locks.
+
+## Current Task Plan (OCR-ENHANCEMENT-T3-020)
+1. `COMPLETED` - Record intake/plan/log updates and claim temporary locks for Tier 3 #11 pattern-recognition increment.
+2. `COMPLETED` - Add `src/utils/patternRecognition.ts` co-occurrence/suggestion utility and focused tests.
+3. `COMPLETED` - Wire teammate suggestion panel and click-to-apply behavior in `src/components/OcrCorrectionModal.tsx`.
+4. `COMPLETED` - Add Dev OCR pattern insight summary in `src/components/DevOCRPanel.tsx`.
+5. `COMPLETED` - Run focused validation (`eslint` touched files, targeted `vitest`, `typecheck`) and update AGENTS execution/validation/handoff/decision artifacts, then release temporary locks.
+
+## Current Task Plan (OCR-ENHANCEMENT-T3-021)
+1. `COMPLETED` - Record intake/plan/execution updates and claim temporary locks for Tier 3 #12 accessibility foundation increment.
+2. `COMPLETED` - Add shared accessibility foundations (`useFocusTrap`, `useAriaLiveRegion`, `accessibility.css`, `accessibilityAudit` utility + focused tests).
+3. `COMPLETED` - Apply dialog semantics, focus trapping, and keyboard close behavior to targeted modal components.
+4. `COMPLETED` - Add Dev OCR panel accessibility-audit action with issue summary/detail rendering.
+5. `COMPLETED` - Run focused validation (`eslint` touched files, targeted `vitest`, `typecheck`) and capture evidence.
+6. `COMPLETED` - Complete AGENTS execution/validation/handoff/decision updates, PM feedback cycle, and release temporary lock entries.
+
+## Current Task Plan (OCR-ENHANCEMENT-T3-022)
+1. `COMPLETED` - Record intake/plan/execution updates and claim temporary lock for OCRReviewModal accessibility hardening increment.
+2. `COMPLETED` - Add focus trap + keyboard Escape handling and dialog ARIA semantics to `src/components/ocr/OCRReviewModal.tsx` (including screenshot lightbox dialog state).
+3. `COMPLETED` - Add/adjust focused tests in `src/components/ocr/OCRReviewModal.test.tsx` for dialog semantics and Escape behavior.
+4. `COMPLETED` - Run focused validation (`eslint` touched files, targeted `vitest`, `typecheck`) and capture evidence.
+5. `COMPLETED` - Complete AGENTS execution/validation/handoff/decision updates, PM feedback cycle, and release temporary lock entries.
+
+## Current Task Plan (OCR-ENHANCEMENT-T3-023)
+1. `COMPLETED` - Record intake/plan updates and claim temporary locks for targeted overlay accessibility hardening increment.
+2. `COMPLETED` - Add dialog semantics, focus-trap wiring, and Escape-close behavior in `src/components/DrillDownOverlay.tsx` and App-level changelog/ID mapper wrappers in `src/App.tsx`.
+3. `COMPLETED` - Add focused regression tests in `src/components/DrillDownOverlay.test.tsx` and `src/App.test.tsx`.
+4. `COMPLETED` - Run focused validation (`eslint` touched files, targeted `vitest`, `typecheck`) and capture evidence.
+5. `COMPLETED` - Complete AGENTS execution/validation/handoff/decision updates, PM feedback cycle, and release temporary lock entries.
+
+## Current Task Plan (OCR-ENHANCEMENT-T3-024)
+1. `COMPLETED` - Record intake/plan updates and claim temporary locks for tutorial + match-lightbox accessibility increment.
+2. `COMPLETED` - Add dialog semantics, focus-trap wiring, and Escape behavior in `src/components/Tutorial.tsx` and `src/components/MatchRecordingPage.tsx`.
+3. `COMPLETED` - Add focused regression tests in `src/components/Tutorial.test.tsx` and `src/components/MatchRecordingPage.test.tsx`.
+4. `COMPLETED` - Run focused validation (`eslint` touched files, targeted `vitest`, `typecheck`) and capture evidence.
+5. `COMPLETED` - Complete AGENTS execution/validation/handoff/decision updates, PM feedback cycle, and release temporary lock entries.
+
+## Current Task Plan (OCR-ENHANCEMENT-T3-025)
+1. `COMPLETED` - Add intake/plan/execution records and claim temporary locks for ROI editor + targeted UI regression files.
+2. `COMPLETED` - Implement full-resolution visual ROI editor (draw/drag/resize) and wire it into `SettingsModal` ROI controls.
+3. `COMPLETED` - Fix players view vertical fill behavior in `PlayerHub` (and wrapping layout classes if required).
+4. `COMPLETED` - Fix Dev OCR Utilities overflow/cutoff behavior in `DevOCRPanel`.
+5. `COMPLETED` - Fix OCR modal top cutoff and OCR correction input focus/typing regression in correction/review modal flows.
+6. `COMPLETED` - Run focused validation (`eslint` touched files, targeted `vitest`, `typecheck`) and collect evidence.
+7. `COMPLETED` - Complete AGENTS execution/validation/handoff/decision updates, PM feedback cycle, and release temporary locks.

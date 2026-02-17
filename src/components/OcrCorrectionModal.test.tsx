@@ -14,6 +14,11 @@ const appStoreState = {
     setPlayerName: vi.fn(),
     recordOcrCorrection: vi.fn(),
     ocrCorrections: {} as Record<string, { correctedTo: string }>,
+    ocrAliasModel: { version: 1, entries: {}, recentlyUsed: [], lastUpdated: Date.now() },
+    recordCalibrationSample: vi.fn(),
+    ocrMode: 'both',
+    ocrBatchAcceptThreshold: 85,
+    setOcrBatchAcceptThreshold: vi.fn(),
 };
 
 vi.mock('../providers/GameDataProvider', () => ({
@@ -66,10 +71,10 @@ describe('OcrCorrectionModal', () => {
 
         render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
 
-        fireEvent.click(screen.getByRole('button', { name: /ignore/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^ignore$/i }));
         expect(screen.getByRole('button', { name: /undo ignore/i })).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: /undo ignore/i }));
-        expect(screen.getByRole('button', { name: /ignore/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^ignore$/i })).toBeInTheDocument();
     });
 });

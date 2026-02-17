@@ -63,6 +63,7 @@ export const useSmartScan = () => {
     const { soundEnabled } = useUserPreferences();
     const ocrMode = useAppStore(state => state.ocrMode);
     const ocrCalibration = useAppStore(state => state.ocrCalibration);
+    const ocrRegions = useAppStore(state => state.ocrRegions);
     const ocrCorrections = useAppStore(state => state.ocrCorrections);
     const ocrAliasModel = useAppStore(state => state.ocrAliasModel);
     const resolveOcrAlias = useAppStore(state => state.resolveOcrAlias);
@@ -143,7 +144,11 @@ export const useSmartScan = () => {
                     }
                 };
 
-                const res = await smartAnalyzeScreen(img.dataUrl, { ...options, ocrMode, ocrCalibration }, activeUser || null);
+                const res = await smartAnalyzeScreen(
+                    img.dataUrl,
+                    { ...options, ocrMode, ocrCalibration, ocrRegions },
+                    activeUser || null
+                );
                 const sourceCapture = {
                     screenshotPath: img.debugPath,
                     screenshotLabel: img.filename,

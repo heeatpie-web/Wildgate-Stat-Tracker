@@ -21,6 +21,7 @@ import { useSmartCapture } from '../../hooks/useSmartCapture';
 import { useMatchSubmission } from '../../hooks/useMatchSubmission';
 import { useAppStore } from '../../store/useAppStore';
 import type { OCRExtractedData } from '../../utils/ocr/ocrTypes';
+import { runtimeConfig } from '../../config/runtimeConfig';
 
 interface ActionPanelProps {
     variant?: 'default' | 'transparent';
@@ -239,7 +240,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             const result = customEvt?.detail?.result;
             if (!result) return;
             setPulseResult(result);
-            setTimeout(() => setPulseResult(null), 700);
+            setTimeout(() => setPulseResult(null), runtimeConfig.actionPanel.resultPulseDurationMs);
         };
         window.addEventListener('recording:match-complete', onMatchComplete as EventListener);
         return () => window.removeEventListener('recording:match-complete', onMatchComplete as EventListener);
@@ -253,7 +254,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         setRipples((prev) => ({ ...prev, [result]: { id, x, y } }));
         setTimeout(() => {
             setRipples((prev) => (prev[result]?.id === id ? { ...prev, [result]: null } : prev));
-        }, 320);
+        }, runtimeConfig.actionPanel.resultRippleDurationMs);
     };
 
     const initiateSubmission = async (result: MatchResult) => {
@@ -477,7 +478,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                 {captureError && (
                     <div className="bg-md-sys-errorContainer/20 border border-md-sys-error/20 rounded-control px-3 py-2 text-label-sm text-md-sys-error flex justify-between items-center mg-blur">
                         <span>{captureError}</span>
-                        <button onClick={clearCaptureError} className="hover:text-md-sys-error/80">&times;</button>
+                        <button onClick={clearCaptureError} className="hover:text-md-sys-error/80" aria-label="Dismiss capture error">&times;</button>
                     </div>
                 )}
                 {qualityHint && (
@@ -512,7 +513,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                             </span>
                             {pendingData ? 'Review & Apply' : 'Process Queue'}
                         </button>
-                        <button onClick={reanalyzeCaptures} disabled={isBusy} className="md3-icon-btn mg-surface" title="Re-merge"><RefreshCw size={14} /></button>
+                        <button onClick={reanalyzeCaptures} disabled={isBusy} className="md3-icon-btn mg-surface" title="Re-merge" aria-label="Re-merge queued captures"><RefreshCw size={14} /></button>
                     </div>
                 )}
 
@@ -528,6 +529,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                                 onClick={() => { setIsMatchInProgress(false); setMatchStartTime(null); }}
                                 className="text-label-xs px-1.5 py-0.5 bg-md-sys-errorContainer/40 text-md-sys-error rounded hover:bg-md-sys-error/20 font-bold uppercase"
                                 title="Stop timer"
+                                aria-label="Stop match timer"
                             >x</button>
                         </div>
                     </div>
@@ -679,6 +681,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                                 onClick={() => { setIsMatchInProgress(false); setMatchStartTime(null); }}
                                 className="text-label-xs px-1.5 py-0.5 bg-md-sys-errorContainer/40 text-md-sys-error rounded hover:bg-md-sys-error/20 font-bold uppercase"
                                 title="Stop timer"
+                                aria-label="Stop match timer"
                             >x</button>
                         </div>
                     </div>
@@ -695,7 +698,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                 {captureError && (
                     <div className="bg-md-sys-errorContainer/10 border border-md-sys-error/20 rounded-control px-4 py-2.5 text-label-sm text-md-sys-error font-medium flex justify-between items-center mg-blur">
                         <span className="flex items-center gap-2 font-bold"><X size={14} /> {captureError}</span>
-                        <button onClick={clearCaptureError} className="opacity-60 hover:opacity-100">&times;</button>
+                        <button onClick={clearCaptureError} className="opacity-60 hover:opacity-100" aria-label="Dismiss capture error">&times;</button>
                     </div>
                 )}
                 {qualityHint && (

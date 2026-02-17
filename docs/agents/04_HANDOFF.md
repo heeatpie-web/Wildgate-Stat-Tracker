@@ -1322,3 +1322,891 @@
 ## Remaining / Risks
 - This pass intentionally targets the listed audit issues only; broader repo-wide `any` removal remains available as future work.
 - Electron helper error logs still emit on failure paths by design.
+
+---
+
+## Handoff - 2026-02-17 - MODERATE-REMEDIATION-006
+## Status
+- Completed.
+
+## What Changed
+- Added env-backed frontend runtime config:
+  - `src/config/runtimeConfig.ts`
+  - `src/vite-env.d.ts`
+  - Wired values into:
+    - `src/App.tsx` (preload idle/fallback/progress timing)
+    - `src/utils/storage.ts` (save debounce + flush interval)
+    - `src/hooks/useSmartCapture.ts` (auto OCR bundle delay + capture throttle)
+    - `src/components/Toast.tsx` (default toast duration)
+
+- Improved error handling (removed silent failures in targeted paths):
+  - `src/App.tsx`: preload and telemetry retention invoke failures now log warnings.
+  - `src/components/MatchRecordingPage.tsx`: artifact-load failures now log warnings.
+  - `src/components/SmartCapturesPanel.tsx`: artifact-load failures now log warnings.
+  - `src/components/ocr/OCRReviewModal.tsx`: corpus auto-ingest invoke failures now log warnings (non-blocking).
+  - `src/utils/logger.ts`: logger persistence failures are no longer silently swallowed.
+
+- Accessibility update:
+  - `src/components/Toast.tsx`:
+    - added `role` + `aria-live` + `aria-atomic` for screen-reader announcement.
+    - added `aria-label` for icon-only dismiss button.
+
+- Test coverage added/expanded:
+  - `src/utils/__tests__/storage.test.ts`
+  - `src/hooks/__tests__/useLogMonitor.test.ts`
+  - `src/hooks/__tests__/useSmartCapture.test.ts` (expanded)
+  - `src/App.test.tsx`
+
+## What Was Verified
+- Focused vitest targets passed (`14/14`).
+- Full `npm run -s test` passed (`415/415`).
+- `npm run -s typecheck` passed.
+- `npm run -s lint` passed.
+- `npm run -s build` passed.
+
+## Remaining / Risks
+- This pass addressed the reported moderate issues directly; it does not attempt a full repo-wide accessibility label sweep across all components.
+- Low-priority architectural/performance items (hook splitting, preload algorithm optimization) remain intentionally out of scope.
+
+---
+
+## Handoff - 2026-02-17 - FOLLOWUP-REMEDIATION-008
+## Status
+- Completed.
+
+## What Changed
+- Safer default for auto-backup:
+  - `src/store/slices/createSettingsSlice.ts`: `enableAutoBackup` default is now `false`.
+  - `src/store/useAppStore.ts`: hydration fallback now uses `settings.autoBackup ?? false`.
+  - `src/utils/storage.ts`: runtime backup fallback now uses `data.settings?.autoBackup ?? false`.
+
+- Additional env-backed frontend configuration:
+  - `src/config/runtimeConfig.ts`: added runtime keys for Discord presence poll, SystemPulse polling/receiving window, History search debounce/refresh timer, and ActionPanel pulse/ripple timers.
+  - `src/vite-env.d.ts`: added typed env key declarations for all runtime-config keys.
+  - Wired into:
+    - `src/hooks/useDiscordRPC.ts`
+    - `src/components/SystemPulse.tsx`
+    - `src/components/HistoryTable.tsx`
+    - `src/components/recording/ActionPanel.tsx`
+
+- Accessibility labels for icon-only controls in primary flows:
+  - Added `aria-label` coverage in:
+    - `src/components/DrillDownOverlay.tsx`
+    - `src/components/analytics/AnalyticsShell.tsx`
+    - `src/components/PlayerHub.tsx`
+    - `src/components/ReviewQueueModal.tsx`
+    - `src/components/recording/RosterPanel.tsx`
+    - `src/components/SessionTimer.tsx`
+    - `src/components/SettingsModal.tsx`
+    - `src/components/recording/MissionPanel.tsx`
+    - `src/components/WindowFrame.tsx`
+    - `src/components/smart-captures/SmartCaptureWidgets.tsx`
+    - `src/components/EditMatchModal.tsx`
+    - `src/components/OcrCorrectionModal.tsx`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/components/IdMapper.tsx`
+    - `src/components/ocr/OCRReviewModal.tsx`
+    - `src/components/Wizard.tsx`
+    - `src/components/recording/ActionPanel.tsx`
+
+- Emergency reset confirmation hardening:
+  - `src/components/ErrorBoundary.tsx`: now uses explicit `window.confirm` flow with clearer warning copy before cache clear/reload.
+
+## What Was Verified
+- Touched-file eslint command passed.
+- `npm run -s typecheck` passed.
+- `npm run -s test` passed (`415/415`).
+- `npm run -s lint` passed.
+- `npm run -s build` passed.
+- Targeted grep verification confirmed no remaining default-`true` auto-backup fallbacks in patched paths.
+- Regex scan verified no unlabeled `md3-icon-btn` controls remain in `src/components`.
+
+## Remaining / Risks
+- This pass addresses core icon-only control labeling and key default/config gaps, not a full exhaustive accessibility audit of all non-icon interactive semantics.
+- Existing persisted user settings are respected; only fresh/default fallback behavior changed for auto-backup.
+
+---
+
+## Handoff - 2026-02-17 - CORPUS-IMPORT-DIR-009
+## Status
+- Completed.
+
+## What Changed
+- `electron/main.cjs`
+  - Updated `ocr-corpus-import-images` so the file picker opens in the corpus image storage directory:
+    - ensures `ocr-corpus/images` exists before opening dialog,
+    - sets `showOpenDialog(...).defaultPath` to that directory.
+  - Preserved existing behavior for cancel/import, file filtering, and copy/dedupe flow.
+
+## What Was Verified
+- `npx eslint electron/main.cjs` passed.
+- `npm run -s typecheck` passed.
+- Targeted grep verification confirmed:
+  - `defaultPath: corpusImagesDir` is set in `ocr-corpus-import-images`,
+  - corpus images directory is ensured before dialog open.
+
+## Remaining / Risks
+- Behavior is specific to the import dialog entry point in corpus mode; no additional corpus UI actions were changed.
+
+---
+
+## Handoff - 2026-02-17 - OCR-DUAL-BUFFER-GATES-010
+## Status
+- Completed.
+
+## What Changed
+- Dual-buffer Crew Hub extraction (text vs color fidelity):
+  - `electron/ocrHandler.cjs`
+    - Crew Hub extraction calls now pass:
+      - preprocessed/scaled OCR buffer for text recognition geometry,
+      - original image buffer for color sampling.
+  - `electron/crewHubExtractor.cjs`
+    - `extractCrewHub` accepts optional `colorImageBuffer`,
+    - right-panel badge color detection uses `colorImageBuffer` while text parsing stays on OCR words.
+
+- Team/player caps at merge boundaries:
+  - `electron/ocrMerger.cjs`
+    - added cap helper and enforced max 4 players/team during merges.
+  - `electron/ocrHandler.cjs`
+    - `convertCrewHubToLegacy` now caps teammates and each opponent-team player list at 4 and limits opponent teams to 4.
+  - `src/utils/ocr/ocrParser.ts`
+    - frontend merge/validation now applies:
+      - teammate cap via ship-aware utility,
+      - max 4 players per opponent team,
+      - max 4 opponent teams.
+
+- Strict OCR auto-apply gates:
+  - `src/App.tsx`
+    - before roster writes:
+      - rejects auto-apply for confidence < 55,
+      - routes 55-74 confidence names to review queue (`player_name`),
+      - routes low-similarity resolver rewrites (<70) to review queue,
+      - enforces per-team opponent player cap at apply time.
+    - roster-candidate queueing now derives from actually auto-applied names only.
+  - `src/hooks/useSmartCapture.ts`
+    - SmartScan auto-apply path now enforces the same low-confidence/ambiguous gating and queues review items.
+
+- Regression tests:
+  - `src/utils/ocr/__tests__/ocrParser.test.ts`
+    - added tests for teammate cap and opponent per-team cap in merge flow.
+
+## What Was Verified
+- `eslint` on all touched OCR/apply files passed.
+- `typecheck` passed.
+- `vitest` targeted suites passed:
+  - `src/utils/ocr/__tests__/ocrParser.test.ts` (56 tests),
+  - `src/hooks/__tests__/useSmartCapture.test.ts` + `src/App.test.tsx` (8 tests).
+- Targeted grep checks confirmed:
+  - dual-buffer Crew Hub wiring is active,
+  - strict gate/cap constants are present at intended boundaries.
+
+## Remaining / Risks
+- Thresholds (`55/75`, similarity `70`) are intentionally conservative defaults; they may need calibration using corpus-driven distributions.
+- This pass preserves map/hazard extraction behavior; no dedicated hazard benchmark run was added beyond non-touch and compile/test safety checks.
+
+---
+
+## Handoff - 2026-02-17 - OCR-ROI-RUNTIME-011
+## Status
+- Completed.
+
+## What Changed
+- Persisted ROI model + store merge safety:
+  - `src/store/slices/createSettingsSlice.ts`
+    - added typed OCR region update model and retained reset/default support.
+  - `src/store/useAppStore.ts`
+    - hardened numeric ROI merge helper for shape-safe hydration.
+
+- Settings ROI editor and persistence:
+  - `src/components/SettingsModal.tsx`
+    - added live-edit ROI controls (xMin/xMax/yMin/yMax %) for:
+      - Crew Hub: left panel, right panel, team header,
+      - Map Screen: your ship, enemy ships, hazards, players.
+    - added `Reset ROI` action.
+    - save payload now persists `ocrRegions` explicitly.
+
+- Renderer callsite propagation (live OCR + reruns):
+  - `src/components/SmartCapturesPanel.tsx`
+    - detail rerun path now passes active `ocrRegions`,
+    - detail component prop wiring now includes `ocrRegions`.
+  - `src/components/HistoryTable.tsx`
+    - bulk rerun uses active `ocrMode` + `ocrRegions`.
+  - `src/hooks/useSmartCapture.ts`
+    - smart analyze pre-pass now includes `ocrMode` + `ocrRegions`,
+    - OCR and rerun calls continue using live `ocrRegions`.
+  - `src/hooks/useSmartScan.ts`, `src/utils/scan/tesseractScan.ts`, `src/components/DevOCRPanel.tsx`
+    - all now forward `ocrRegions` into OCR processing.
+
+- Electron and extractor ROI runtime wiring:
+  - `electron/main.cjs`
+    - rerun IPC handler now accepts `ocrRegions` and forwards to `processCapture`.
+  - `electron/ocrHandler.cjs`
+    - accepts runtime ROI options,
+    - sanitizes/clamps ROI values with safe defaults,
+    - includes ROI fingerprint in OCR cache key so region changes invalidate cached results,
+    - applies ROI overrides to Crew Hub and Map extractors and map-player region crop.
+  - `electron/crewHubExtractor.cjs`
+    - supports dynamic layout overrides for left/right panel parsing.
+  - `electron/mapScreenExtractor.cjs`
+    - supports dynamic layout overrides for ship/enemy/player regions,
+    - hazards extraction now also scans configured hazards region text.
+
+## What Was Verified
+- `npx eslint` on all touched ROI files passed.
+- `npx vitest run src/utils/__tests__/artifactService.test.ts` passed (`17/17`).
+- `npx vitest run src/hooks/__tests__/useSmartCapture.test.ts` passed (`6/6`).
+- `npm run -s typecheck` passed.
+- Targeted `rg` verification confirmed ROI plumbing across settings, callsites, IPC handlers, cache keying, and extractor layout resolvers.
+
+## Remaining / Risks
+- ROI editor currently uses numeric percent fields (no drag-overlay visual editor); this is intentional per scope.
+- Existing cached entries from prior app versions (without ROI fingerprint) are naturally bypassed on new runs because cache key format changed.
+
+---
+
+## Handoff - 2026-02-17 - OCR-CORPUS-ROI-012
+## Status
+- Completed.
+
+## What Changed
+- `src/components/DevOCRPanel.tsx`
+  - Corpus pipeline invoke now sends live ROI settings:
+    - `api.invoke('ocr-corpus-run-pipeline', { ocrMode, activeUser, ocrRegions })`.
+
+- `electron/main.cjs`
+  - `ocr-corpus-run-pipeline` now accepts optional ROI settings from `opts`:
+    - reads `const ocrRegions = opts?.ocrRegions || null;`
+    - forwards `ocrRegions` to `processCapture(...)` options for each sample run.
+
+## What Was Verified
+- `npx eslint src/components/DevOCRPanel.tsx electron/main.cjs` passed.
+- `npm run -s typecheck` passed.
+- Targeted grep verification confirms corpus invoke + Electron corpus handler both carry `ocrRegions`.
+
+## Remaining / Risks
+- Corpus pipeline uses ROI values provided by the current renderer session; headless/background corpus runs without renderer payload continue using defaults unless ROI is provided.
+
+---
+
+## Handoff - 2026-02-17 - OCR-ENHANCEMENT-T1-013
+## Status
+- Completed.
+
+## What Changed
+- Tier 1 #1: OCR cache telemetry
+  - `electron/ocrHandler.cjs`
+    - Added cache stats counters (`hits`, `misses`, `evictions`, `totalRequests`) and running timing averages (`avgHitTimeMs`, `avgMissTimeMs`).
+    - Cache lookups now record hits/misses; cache inserts record miss processing duration and eviction count.
+    - Added IPC handler `get-ocr-cache-stats` returning hit-rate and size metrics.
+  - `electron/preload.cjs`
+    - Added `get-ocr-cache-stats` to renderer invoke allowlist.
+  - `scripts/security_negative_tests.cjs`
+    - Synced invoke allowlist fixture to include `get-ocr-cache-stats`.
+  - `src/components/DevOCRPanel.tsx`
+    - Added typed polling for cache telemetry every 5 seconds.
+    - Added cache card showing hit rate (green above 40%), cache size, and avg hit/miss timings.
+
+- Tier 1 #2: keyboard shortcuts for corrections
+  - `src/hooks/useKeyboardShortcuts.ts`
+    - Generalized hook to support reusable shortcut arrays while preserving existing legacy win/loss shortcut API used by `App.tsx`.
+  - `src/components/OcrCorrectionModal.tsx`
+    - Added modal shortcuts:
+      - `Ctrl/Cmd+Enter` apply corrections,
+      - `Esc` close modal,
+      - `Ctrl/Cmd+A` auto-fill confident entries,
+      - `Ctrl/Cmd+I` ignore next unresolved entry.
+    - Added visible shortcut hint banner in modal footer area.
+
+- Tier 1 #3: visual confidence bars
+  - `src/components/ConfidenceMeter.tsx` (new)
+    - Added accessible progress-style confidence meter with semantic color thresholds.
+  - `src/components/OcrCorrectionModal.tsx`
+    - Replaced per-player confidence percentage text badge with `ConfidenceMeter`.
+
+- Tier 1 #4: learning feedback tooltips
+  - `src/utils/ocrAliasEngine.ts`
+    - Extended `OcrAliasEntry` with `learningMetadata` and kept correction-count metadata in sync on add/remove.
+    - Added `getLearningMetadata(...)` helper.
+  - `src/components/OcrCorrectionModal.tsx`
+    - Replaced "Previously linked" badge with learned badge (`Learned (Nx)`) and metadata tooltip.
+
+## What Was Verified
+- `npx eslint ...` on touched files passed.
+- `npx vitest run src/components/OcrCorrectionModal.test.tsx src/store/slices/__tests__/createMappingSlice.test.ts` passed (`35/35` tests).
+- `node scripts/security_negative_tests.cjs` passed (`113/113`).
+- `npm run -s typecheck` passed.
+
+## Remaining / Risks
+- Tier 2 and Tier 3 roadmap items are intentionally not part of this increment.
+- `autoAppliedCount` is now modeled in alias metadata but current UI uses correction-count metadata only; auto-apply counter exposure can be layered in a follow-up increment when broader calibration/learning analytics work starts.
+
+---
+
+## Handoff - 2026-02-17 - OCR-ENHANCEMENT-T2-014
+## Status
+- Completed.
+
+## What Changed
+- Tier 2 #5 benchmark instrumentation (additive only):
+  - `electron/ocrHandler.cjs`
+    - added reusable region-pixel resolver and crop-first preprocessing helper used by region OCR.
+    - added benchmark helpers that simulate:
+      - old path: preprocess full image then crop regions,
+      - new path: crop each region first then preprocess each crop.
+    - added `benchmarkRegionPreprocessing(...)` reporting:
+      - `oldAvgMs`, `newAvgMs`,
+      - `speedupPercent`, `speedupFactor`,
+      - `regionCount`, `regions`, `iterations`, per-iteration timings.
+    - added IPC handler `benchmark-ocr-preprocessing` (accepts `imageBase64` or `imagePath`, optional `iterations`, optional `ocrRegions`).
+
+- IPC boundary + security parity:
+  - `electron/preload.cjs`
+    - added `benchmark-ocr-preprocessing` to invoke allowlist.
+  - `scripts/security_negative_tests.cjs`
+    - mirrored allowlist fixture update for security gate parity.
+
+- Dev OCR tooling UI:
+  - `src/components/DevOCRPanel.tsx`
+    - added benchmark run action (`Benchmark Old vs Crop-First (10x)`) on OCR tab.
+    - added benchmark summary panel with old/new avg timings, speedup %, factor, region count.
+    - added benchmark response shape guard and state reset when loading a new image.
+
+## What Was Verified
+- `npx eslint electron/ocrHandler.cjs electron/preload.cjs src/components/DevOCRPanel.tsx scripts/security_negative_tests.cjs` passed.
+- `node scripts/security_negative_tests.cjs` passed (`113/113`).
+- `npm run -s typecheck` passed.
+- Targeted grep confirmed benchmark handler/wiring in backend, preload allowlist, security fixture, and dev panel trigger/display.
+
+## Remaining / Risks
+- Benchmark currently measures preprocessing pipeline cost only (not OCR recognition time), which is intentional for isolating Tier 2 #5 preprocessing impact.
+- Benchmark runs on-demand in Dev OCR tools and is not persisted as long-term telemetry yet.
+
+---
+
+## Handoff - 2026-02-17 - OCR-ENHANCEMENT-T2-015
+## Status
+- Completed.
+
+## What Changed
+- Tier 2 #6 confidence calibration utility:
+  - `src/utils/ocrCalibration.ts` (new)
+    - defines `CalibrationSample` and `CalibrationBucket`.
+    - normalizes OCR mode to `local | cloud | merged`.
+    - provides sample sanitization and bounded append (max 1000).
+    - computes bucket analysis for ranges: `0-20`, `20-40`, `40-60`, `60-80`, `80-100`.
+    - recommends lowest threshold bucket meeting target accuracy (default 90%).
+
+- Settings/store persistence wiring:
+  - `src/store/slices/createSettingsSlice.ts`
+    - adds `ocrCalibrationSamples` state.
+    - adds `recordCalibrationSample(...)` and `clearOcrCalibrationSamples(...)`.
+  - `src/store/useAppStore.ts`
+    - hydrates calibration samples through sanitizer.
+    - persists calibration samples in `settings`.
+    - includes calibration samples in `partialize`.
+
+- Correction workflow sample capture:
+  - `src/components/OcrCorrectionModal.tsx`
+    - records calibration sample entries for each applied/non-ignored correction with:
+      - predicted confidence,
+      - correctness outcome (`ocrName === correctedName` normalized),
+      - normalized OCR mode,
+      - field type (`player`),
+      - timestamp.
+
+- Dev OCR calibration visibility:
+  - `src/components/DevOCRPanel.tsx`
+    - reads `ocrCalibrationSamples` from store.
+    - renders calibration card with bucket sample/accuracy table.
+    - shows recommended threshold for 90% target.
+
+- Focused tests:
+  - `src/utils/__tests__/ocrCalibration.test.ts` (new)
+    - verifies sample cap, bucket accuracy, threshold recommendation, and mode normalization.
+  - `src/components/OcrCorrectionModal.test.tsx`
+    - updated mock store shape to include new calibration fields.
+
+## What Was Verified
+- `npx eslint src/utils/ocrCalibration.ts src/utils/__tests__/ocrCalibration.test.ts src/store/slices/createSettingsSlice.ts src/store/useAppStore.ts src/components/OcrCorrectionModal.tsx src/components/DevOCRPanel.tsx src/components/OcrCorrectionModal.test.tsx` passed.
+- `npx vitest run src/utils/__tests__/ocrCalibration.test.ts src/components/OcrCorrectionModal.test.tsx` passed (`7/7` tests).
+- `npm run -s typecheck` passed.
+- Targeted grep verification confirms utility/store/modal/dev-panel calibration wiring.
+
+## Remaining / Risks
+- `OcrCorrectionModal` currently uses existing confidence values available in that UI path (including fallback/simulated values), so calibration quality is only as strong as upstream confidence fidelity in this workflow.
+- No reset/export UI for calibration samples was added in this increment; data is persisted and visible only via Dev OCR panel analytics for now.
+
+---
+
+## Handoff - 2026-02-17 - OCR-ENHANCEMENT-T2-016
+## Status
+- Completed.
+
+## What Changed
+- Tier 2 #7 batch threshold state + persistence:
+  - `src/store/slices/createSettingsSlice.ts`
+    - added `ocrBatchAcceptThreshold` (default `85`),
+    - added `setOcrBatchAcceptThreshold(...)` bounded/stepped setter.
+  - `src/store/useAppStore.ts`
+    - hydrates `ocrBatchAcceptThreshold`,
+    - persists it to settings payload,
+    - includes it in `partialize`.
+
+- Shared batch-action utility:
+  - `src/utils/ocrBatchActions.ts` (new)
+    - threshold normalization (`70-95`, step `5`),
+    - high-confidence eligible filtering,
+    - low-confidence eligible filtering,
+    - candidate eligibility excludes already-corrected and ignored players.
+
+- Confirmation dialog component:
+  - `src/components/BatchActionConfirmDialog.tsx` (new)
+    - reusable modal prompt with title/message/affected count and confirm/cancel controls.
+
+- OCR correction modal batch workflow:
+  - `src/components/OcrCorrectionModal.tsx`
+    - added Batch Operations card:
+      - threshold slider (`70-95`, step `5`),
+      - live counts for high-confidence accept and low-confidence ignore actions.
+    - added batch handlers:
+      - accept all eligible players at or above threshold,
+      - ignore all eligible players below threshold.
+    - added confirmation step before applying both batch actions.
+    - preserved existing shortcut behavior and correction flow.
+
+- Focused tests:
+  - `src/utils/__tests__/ocrBatchActions.test.ts` (new)
+    - validates threshold normalization and high/low eligibility filtering.
+  - `src/components/OcrCorrectionModal.test.tsx`
+    - updated ignore button query to stay deterministic with new batch-ignore button text.
+
+## What Was Verified
+- `npx eslint src/utils/ocrBatchActions.ts src/utils/__tests__/ocrBatchActions.test.ts src/components/BatchActionConfirmDialog.tsx src/components/OcrCorrectionModal.tsx src/components/OcrCorrectionModal.test.tsx src/store/slices/createSettingsSlice.ts src/store/useAppStore.ts` passed.
+- `npx vitest run src/utils/__tests__/ocrBatchActions.test.ts src/components/OcrCorrectionModal.test.tsx` passed (`5/5` tests).
+- `npm run -s typecheck` passed.
+- Targeted grep confirmed threshold/store/modal/dialog/utility wiring across all intended files.
+
+## Remaining / Risks
+- Current modal confidence values are still partly simulated (`95` prior-corrected, `70` otherwise), so batch thresholds are operational but calibration quality depends on upstream confidence fidelity improvements.
+- No dedicated Settings UI control for batch threshold was added in this increment; threshold is configured directly in the OCR correction modal as designed.
+
+---
+
+## Handoff - 2026-02-17 - OCR-ENHANCEMENT-T2-017
+## Status
+- Completed.
+
+## What Changed
+- Tier 2 #8 bounding-box debug payload (backend):
+  - `electron/ocrHandler.cjs`
+    - added strict opt-in runtime option parsing for `includeBboxes` in `processCapture(...)`.
+    - added cache bypass for debug runs so bbox captures are not served stale cached payloads.
+    - added bbox debug helpers:
+      - `toFiniteNumber(...)`
+      - `normalizeDebugWord(...)`
+      - `buildOcrBoundingBoxDebugPayload(...)`
+    - when enabled, attaches `data.ocrBoundingBoxes` with:
+      - `source` (`local` or `cloud`),
+      - `imageWidth`/`imageHeight` (original image dimensions),
+      - normalized word-level `bbox` coordinates.
+
+- OCR renderer contract updates:
+  - `src/utils/ocr/ocrTypes.ts`
+    - extended `OCRExtractedData` with optional `ocrBoundingBoxes` debug payload.
+  - `src/utils/electronBridge.ts`
+    - added `OCRProcessRuntimeOptions` and optional runtime options parameter to `ocrProcessCapture(...)`.
+    - forwards `includeBboxes` through existing `ocr-process-capture` IPC payload.
+
+- New interactive overlay component:
+  - `src/components/OcrBoundingBoxOverlay.tsx` (new)
+    - renders OCR word rectangles over image via SVG,
+    - confidence color coding:
+      - green (`>=80`),
+      - amber (`40-79`),
+      - red (`<40`),
+    - hover tooltip with text/confidence,
+    - click/keyboard selection with details panel.
+
+- Dev OCR panel integration:
+  - `src/components/DevOCRPanel.tsx`
+    - added "Capture with Bounding Boxes" action.
+    - runs OCR with `includeBboxes: true` when requested.
+    - renders `OcrBoundingBoxOverlay` in preview area when bbox debug data is present.
+    - clears overlay state on image changes and normal OCR runs.
+    - shows bbox summary metadata in scan results panel.
+
+## What Was Verified
+- `npx eslint electron/ocrHandler.cjs src/utils/ocr/ocrTypes.ts src/utils/electronBridge.ts src/components/OcrBoundingBoxOverlay.tsx src/components/DevOCRPanel.tsx` passed.
+- `npm run -s typecheck` passed.
+- Targeted grep verification confirmed includeBboxes/runtime/type/component wiring across backend and renderer files.
+
+## Remaining / Risks
+- In merged OCR mode, overlay intentionally uses local OCR words mapped to original image space for coordinate consistency; this debug view does not represent cloud-selected merge boxes when merge decisions choose cloud geometry.
+- No persisted/debug export for bbox payloads was added in this increment (display-only in Dev OCR tools).
+
+---
+
+## Handoff - 2026-02-17 - OCR-ENHANCEMENT-T3-018
+## Status
+- Completed.
+
+## What Changed
+- Tier 3 #9 correction corpus builder:
+  - `src/utils/ocrCorpusBuilder.ts` (new)
+    - added corpus model + sample model:
+      - `OcrCorpus`
+      - `OcrCorpusSample`
+    - added `buildOcrCorpus(aliasModel, minCount)` using learned alias entries.
+    - added `serializeOcrCorpusJsonl(corpus)` for ML-friendly line-delimited JSON.
+    - added `serializeOcrCorpusBox(corpus)` for placeholder Tesseract `.box` character rows.
+
+- Export helper extension:
+  - `src/utils/export.ts`
+    - added `exportTextFile(content, prefix, extension)` for non-JSON downloads (`.jsonl`, `.box`).
+
+- Dev OCR export UI integration:
+  - `src/components/DevOCRPanel.tsx`
+    - now reads `ocrAliasModel` from store.
+    - added `exportCorrectionCorpus()` action.
+    - added `Export Training Data` button in Corpus pipeline actions.
+    - export action emits three files:
+      - JSON corpus (`exportJSONFile`)
+      - JSONL corpus (`exportTextFile`)
+      - BOX corpus (`exportTextFile`)
+    - empty corpus path handled with status messaging.
+
+- OCR sample archiving plumbing:
+  - `electron/ocrHandler.cjs`
+    - added archive directory and helper:
+      - `ensureCorpusArchiveDir()`
+      - `archiveOcrSample(buffer, ocrText, metadata)`
+    - extended `processCapture(...)` runtime options:
+      - `archiveOcrSample`
+      - `archiveMetadata`
+    - archive runs are opt-in and bypass cache to ensure archive write execution.
+    - successful archive writes attach optional `ocrCorpusSampleId` on response payload.
+  - `src/utils/electronBridge.ts`
+    - extended `OCRProcessRuntimeOptions` with archive fields.
+  - `src/utils/ocr/ocrTypes.ts`
+    - added optional `ocrCorpusSampleId` field.
+
+- Focused tests:
+  - `src/utils/__tests__/ocrCorpusBuilder.test.ts` (new)
+    - coverage for min-count filtering,
+    - JSONL serialization,
+    - BOX serialization.
+
+## What Was Verified
+- `npx eslint src/utils/ocrCorpusBuilder.ts src/utils/__tests__/ocrCorpusBuilder.test.ts src/utils/export.ts src/components/DevOCRPanel.tsx src/utils/electronBridge.ts src/utils/ocr/ocrTypes.ts electron/ocrHandler.cjs` passed.
+- `npx vitest run src/utils/__tests__/ocrCorpusBuilder.test.ts` passed (`3/3` tests).
+- `npm run -s typecheck` passed.
+- Targeted grep verification confirmed utility/export/UI/runtime archive wiring.
+
+## Remaining / Risks
+- `.box` output is a placeholder coordinate format derived from text-only corrections (no true glyph box coordinates); useful for corpus packaging, not direct high-fidelity Tesseract box training without later coordinate alignment.
+- Archive writes are enabled via runtime options; non-Dev OCR flows remain unchanged unless callers opt in.
+
+---
+
+## Handoff - 2026-02-17 - OCR-ENHANCEMENT-T3-019
+## Status
+- Completed.
+
+## What Changed
+- Tier 3 #10 dictionary helper:
+  - `electron/tesseractDictionary.cjs` (new)
+    - builds OCR dictionary source words from `pilotRegistry`,
+    - ranks pilots by match-history co-occurrence/frequency weighting,
+    - generates bounded OCR substitution variants (`0/O`, `1/I/l`),
+    - writes `wildgate_userwords.txt` content and returns generation summary metadata.
+
+- OCR handler integration:
+  - `electron/ocrHandler.cjs`
+    - imports dictionary helper and defines dictionary storage path (`userData/ocr-tesseract/wildgate_userwords.txt`),
+    - loads existing dictionary file for new worker initialization when present,
+    - applies `user_words_file` parameter to Tesseract workers,
+    - adds IPC handler `regenerate-ocr-dictionary` to regenerate file from pilot registry + matches and apply to active workers.
+
+- IPC/security parity:
+  - `electron/preload.cjs`
+    - allowlists `regenerate-ocr-dictionary`.
+  - `scripts/security_negative_tests.cjs`
+    - updates invoke-channel fixture to keep parity with preload allowlist.
+
+- Renderer integration:
+  - `src/providers/GameDataProvider.tsx`
+    - adds debounced auto-regeneration effect (requires `pilotRegistry.length >= 5`) and logs outcome.
+  - `src/components/DevOCRPanel.tsx`
+    - adds manual `Regenerate OCR Dictionary` action in Corpus pipeline controls with status feedback.
+
+## What Was Verified
+- `npx eslint electron/tesseractDictionary.cjs electron/ocrHandler.cjs electron/preload.cjs scripts/security_negative_tests.cjs src/providers/GameDataProvider.tsx src/components/DevOCRPanel.tsx` passed.
+- `node scripts/security_negative_tests.cjs` passed (`113/113`).
+- `npm run -s typecheck` passed.
+- Targeted grep verification confirms dictionary helper, OCR worker parameter wiring, IPC allowlist parity, and renderer auto/manual triggers.
+
+## Remaining / Risks
+- Dictionary quality depends on pilot naming hygiene and match history quality; OCR variations are intentionally bounded to avoid dictionary bloat.
+- Auto-regeneration is signature-gated and debounced; if dictionary updates are needed without data changes, the manual Dev OCR action should be used.
+
+---
+
+## Handoff - 2026-02-17 - OCR-ENHANCEMENT-T3-020
+## Status
+- Completed.
+
+## What Changed
+- Tier 3 #11 pattern utility:
+  - `src/utils/patternRecognition.ts` (new)
+    - `buildCooccurrenceMatrix(matches, options)`:
+      - builds teammate pair co-occurrence matrix,
+      - applies recency weighting and derives confidence/win-rate metrics.
+    - `getTeammateSuggestions(detectedPlayers, matrix, options)`:
+      - computes ranked likely-teammate suggestions with reason strings.
+    - `getTopCooccurrencePairs(matrix, maxPairs)`:
+      - provides deduped top pair summary for Dev OCR insights.
+
+- OCR correction workflow integration:
+  - `src/components/OcrCorrectionModal.tsx`
+    - now reads `matches` from game-data context.
+    - computes teammate suggestions from current detected roster and co-occurrence matrix.
+    - adds "Likely Teammates" suggestion panel with likelihood, reason, encounter count, and win-rate details.
+    - supports explicit click-to-apply suggestion to unresolved OCR names.
+
+- Dev OCR pattern visibility:
+  - `src/components/DevOCRPanel.tsx`
+    - adds "Team Patterns" card showing top co-occurrence pairs and confidence summary.
+
+- Focused tests:
+  - `src/utils/__tests__/patternRecognition.test.ts` (new)
+    - verifies repeated encounter accounting,
+    - verifies ranked teammate suggestion output,
+    - verifies recency weighting preference.
+
+## What Was Verified
+- `npx eslint src/utils/patternRecognition.ts src/utils/__tests__/patternRecognition.test.ts src/components/OcrCorrectionModal.tsx src/components/DevOCRPanel.tsx` passed.
+- `npx vitest run src/utils/__tests__/patternRecognition.test.ts src/components/OcrCorrectionModal.test.tsx` passed (`5/5` tests).
+- `npm run -s typecheck` passed.
+- Targeted grep verification confirms utility exports and UI wiring in modal + Dev OCR panel.
+
+## Remaining / Risks
+- Suggestion application currently targets unresolved OCR names and remains manual (no silent auto-apply), so operator review is still required.
+- Confidence/likelihood quality depends on available match-history volume and naming consistency in roster data.
+
+---
+
+## Handoff - 2026-02-17 - OCR-ENHANCEMENT-T3-021
+## Status
+- Completed.
+
+## What Changed
+- Tier 3 #12 accessibility foundations:
+  - `src/hooks/useFocusTrap.ts` (new)
+    - reusable focus containment for modal dialogs (`Tab`/`Shift+Tab` loop + focus restore on close).
+  - `src/hooks/useAriaLiveRegion.ts` (new)
+    - reusable polite/assertive screen-reader announcements without visible UI noise.
+  - `src/styles/accessibility.css` (new)
+    - `a11y-sr-only` helper class,
+    - high-contrast preference polish,
+    - forced-colors support adjustments.
+  - `src/utils/accessibilityAudit.ts` (new)
+    - static DOM checks for alt text, control labels, button names, dialog ARIA semantics, and anchor href presence.
+    - includes summary helper for error/warning totals.
+  - `src/utils/__tests__/accessibilityAudit.test.ts` (new)
+    - focused utility behavior coverage.
+  - `src/index.tsx`
+    - imports shared accessibility stylesheet.
+
+- Modal accessibility hardening (targeted pass):
+  - `src/components/OcrCorrectionModal.tsx`
+    - added dialog ARIA semantics and focus trap.
+    - added live-region announcements for ignore/batch/apply actions.
+    - shortcuts now pause while nested batch-confirm dialog is open.
+  - `src/components/BatchActionConfirmDialog.tsx`
+    - added dialog ARIA semantics, focus trap, and Escape key close.
+  - `src/components/ReviewQueueModal.tsx`
+    - added dialog ARIA semantics for queue and source-preview dialogs.
+    - added focus traps and Escape key behavior.
+    - added live-region announcements for key review actions.
+  - `src/components/SettingsModal.tsx`
+    - added dialog ARIA semantics, focus trap, and Escape key close.
+  - `src/components/RenameModal.tsx`
+    - added dialog ARIA semantics, focus trap, and Escape key close.
+  - `src/components/ResetConfirmModal.tsx`
+    - added dialog ARIA semantics, focus trap, and Escape key close.
+  - `src/components/EditMatchModal.tsx`
+    - added dialog ARIA semantics, focus trap, and Escape key close.
+
+- Dev OCR accessibility tooling:
+  - `src/components/DevOCRPanel.tsx`
+    - added "Accessibility Audit" card under Utilities.
+    - audit runs against current document, surfaces error/warning counts, and shows issue details.
+
+## What Was Verified
+- `npx eslint src/hooks/useFocusTrap.ts src/hooks/useAriaLiveRegion.ts src/utils/accessibilityAudit.ts src/utils/__tests__/accessibilityAudit.test.ts src/components/OcrCorrectionModal.tsx src/components/BatchActionConfirmDialog.tsx src/components/ReviewQueueModal.tsx src/components/SettingsModal.tsx src/components/RenameModal.tsx src/components/ResetConfirmModal.tsx src/components/EditMatchModal.tsx src/components/DevOCRPanel.tsx src/index.tsx` passed.
+- `npx vitest run src/utils/__tests__/accessibilityAudit.test.ts src/components/OcrCorrectionModal.test.tsx src/components/ReviewQueueModal.test.tsx` passed (`10/10` tests).
+- `npm run -s typecheck` passed.
+- Targeted grep verification confirms accessibility hook/audit wiring and modal dialog semantics.
+
+## Remaining / Risks
+- This increment is the first Tier 3 #12 slice; full WCAG 2.1 AA closure across every component remains pending.
+- `src/components/ocr/OCRReviewModal.tsx` was intentionally deferred to keep this increment bounded and low-risk.
+
+---
+
+## Handoff - 2026-02-17 - OCR-ENHANCEMENT-T3-022
+## Status
+- Completed.
+
+## What Changed
+- OCR review modal accessibility hardening:
+  - `src/components/ocr/OCRReviewModal.tsx`
+    - added primary dialog semantics (`role="dialog"`, `aria-modal`, `aria-labelledby`, `aria-describedby`),
+    - added focus trapping for:
+      - the primary OCR review dialog,
+      - the screenshot lightbox preview dialog,
+    - added keyboard shortcuts:
+      - `Escape` closes lightbox first, otherwise triggers modal cancel,
+      - `Ctrl/Cmd+Enter` triggers `Apply and Learn` when lightbox is closed,
+    - added live-region announcements for screenshot preview open/close,
+    - added missing accessible labels and explicit button types for lightbox icon controls.
+
+- Focused regression coverage:
+  - `src/components/ocr/OCRReviewModal.test.tsx` (new)
+    - verifies dialog semantics + Escape close on main modal,
+    - verifies Escape closes lightbox before modal cancellation.
+
+## What Was Verified
+- `npx eslint src/components/ocr/OCRReviewModal.tsx src/components/ocr/OCRReviewModal.test.tsx` passed.
+- `npx vitest run src/components/ocr/OCRReviewModal.test.tsx src/components/OcrCorrectionModal.test.tsx src/components/ReviewQueueModal.test.tsx` passed (`9/9` tests).
+- `npm run -s typecheck` passed.
+- Targeted grep verification confirmed hook wiring and dialog semantics.
+
+## Remaining / Risks
+- Tier 3 #12 still requires broader cross-app manual screen-reader + keyboard QA (NVDA/JAWS/VoiceOver) and color-contrast audits beyond modal-level hardening.
+
+---
+
+## Handoff - 2026-02-17 - OCR-ENHANCEMENT-T3-023
+## Status
+- Completed.
+
+## What Changed
+- Overlay accessibility hardening:
+  - `src/components/DrillDownOverlay.tsx`
+    - added dialog semantics (`role="dialog"`, `aria-modal`, `aria-labelledby`, `aria-describedby`),
+    - added focus trapping while overlay is open (`useFocusTrap`),
+    - added Escape keyboard close via `useKeyboardShortcuts`,
+    - added explicit close-button `aria-label` and `type="button"`.
+  - `src/App.tsx`
+    - added focus trapping for:
+      - changelog modal wrapper,
+      - ID mapper wrapper,
+    - added dialog semantics + label/description wiring for both wrappers,
+    - added hidden accessible title/description for ID mapper wrapper,
+    - added overlay Escape handler that prioritizes closing ID mapper when open, otherwise closes changelog,
+    - added explicit `type="button"` on overlay close controls.
+
+- Focused regression coverage:
+  - `src/components/DrillDownOverlay.test.tsx` (new)
+    - verifies drill-down dialog semantics and Escape close behavior.
+  - `src/App.test.tsx`
+    - adds coverage for changelog and ID mapper dialog semantics + Escape close behavior.
+
+## What Was Verified
+- `npx eslint src/components/DrillDownOverlay.tsx src/components/DrillDownOverlay.test.tsx src/App.tsx src/App.test.tsx` passed.
+- `npx vitest run src/components/DrillDownOverlay.test.tsx src/App.test.tsx src/components/ocr/OCRReviewModal.test.tsx` passed (`8/8` tests).
+- `npm run -s typecheck` passed.
+- Targeted `rg` verification confirmed focus-trap wiring, dialog semantics, and overlay Escape handling in touched components.
+
+## Remaining / Risks
+- Tutorial overlay and remaining screenshot lightboxes (Smart Captures / Match Recording) are intentionally deferred to the next accessibility increment.
+- Full app-wide manual screen-reader audit remains pending.
+
+---
+
+## Handoff - 2026-02-17 - OCR-ENHANCEMENT-T3-024
+## Status
+- Completed.
+
+## What Changed
+- Tutorial overlay accessibility hardening:
+  - `src/components/Tutorial.tsx`
+    - added dialog semantics (`role="dialog"`, `aria-modal`, `aria-labelledby`, `aria-describedby`),
+    - added focus-trap wiring for tutorial overlay container,
+    - migrated Escape/arrow keyboard handling to shared `useKeyboardShortcuts` hook,
+    - added explicit `type="button"` for tutorial controls.
+
+- Match detail screenshot lightbox accessibility hardening:
+  - `src/components/MatchRecordingPage.tsx`
+    - added dialog semantics and focus trap for screenshot lightbox,
+    - added Escape keyboard close while lightbox is open,
+    - added accessible open/close labels for screenshot preview controls,
+    - added explicit `type="button"` for screenshot action controls.
+
+- Focused regression coverage:
+  - `src/components/Tutorial.test.tsx` (new)
+    - verifies tutorial dialog semantics and Escape-close behavior.
+  - `src/components/MatchRecordingPage.test.tsx` (new)
+    - verifies screenshot lightbox dialog semantics and Escape-close behavior.
+
+## What Was Verified
+- `npx eslint src/components/Tutorial.tsx src/components/MatchRecordingPage.tsx src/components/Tutorial.test.tsx src/components/MatchRecordingPage.test.tsx` passed.
+- `npx vitest run src/components/Tutorial.test.tsx src/components/MatchRecordingPage.test.tsx src/components/DrillDownOverlay.test.tsx src/App.test.tsx` passed (`9/9` tests).
+- `npm run -s typecheck` passed.
+- Targeted `rg` verification confirmed focus-trap/shortcut wiring and dialog semantics in both updated components.
+
+## Remaining / Risks
+- Smart Captures overlay dialogs (`jsonExport` and screenshot lightbox in `src/components/SmartCapturesPanel.tsx`) remain pending for the next accessibility increment.
+- Full app-wide manual screen-reader and contrast audit remains pending.
+
+---
+
+## Handoff - 2026-02-17 - OCR-ENHANCEMENT-T3-025
+## Status
+- Completed with one environment validation blocker documented (targeted vitest startup `spawn EPERM`).
+
+## What Changed
+- Visual ROI editor (new):
+  - `src/components/OcrRegionEditorModal.tsx`
+    - added full-resolution ROI editor modal with native-pixel canvas interaction,
+    - supports region selection per screen (Crew Hub / Tactical Map),
+    - supports draw, drag move, and resize handles,
+    - includes reset-selected/reset-screen and apply workflow.
+
+- Settings ROI integration:
+  - `src/components/SettingsModal.tsx`
+    - added `Visual Editor` entrypoint in OCR ROI section,
+    - wired apply callback to persist edited regions into `ocrRegions`,
+    - ensured editor closes when settings closes.
+
+- Players panel vertical fill fix:
+  - `src/components/PlayerHub.tsx`
+    - enforced `min-h-0`/`h-full` shell semantics to prevent bottom dead-zone.
+  - `src/App.tsx`
+    - players view wrapper now includes `min-h-0`.
+
+- Dev Utilities clipping fix:
+  - `src/components/DevOCRPanel.tsx`
+    - switched from center-locked layout to full-height bounded container,
+    - added internal scroll region for Utilities content.
+
+- OCR wizard/modal cutoff + OCR entry typing fix:
+  - `src/components/OcrCorrectionModal.tsx`
+    - modal overlay now top-anchored with overlay scroll fallback,
+    - correction input focus tracking added,
+    - global shortcuts disabled while typing in name fields,
+    - autocomplete dropdown tied to focused input for stable cursor behavior.
+  - `src/components/ocr/OCRReviewModal.tsx`
+    - top-anchored overlay with overflow scroll fallback.
+  - `src/components/Wizard.tsx`
+    - top-anchored overlay with overflow scroll fallback.
+
+## What Was Verified
+- `npx eslint src/components/OcrRegionEditorModal.tsx src/components/SettingsModal.tsx src/components/PlayerHub.tsx src/components/DevOCRPanel.tsx src/components/OcrCorrectionModal.tsx src/components/ocr/OCRReviewModal.tsx src/components/Wizard.tsx src/App.tsx` passed.
+- `npm run -s typecheck` passed.
+- `npx vitest run src/components/OcrCorrectionModal.test.tsx src/components/ocr/OCRReviewModal.test.tsx` blocked in this environment (`spawn EPERM` before test execution).
+
+## Remaining / Risks
+- Local/CI rerun needed for targeted vitest command because of environment process-spawn restriction.
+- ROI editor currently requires manual image load each session and does not persist a preview image path (intentional for bounded scope).

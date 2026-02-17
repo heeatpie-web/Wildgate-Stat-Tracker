@@ -1,13 +1,20 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ocrProcessCapture } from '../utils/electronBridge';
 import type { OCRExtractedData } from '../utils/ocr/ocrTypes';
+import OcrBoundingBoxOverlay from './OcrBoundingBoxOverlay';
 
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { bundleMatchArtifacts } from '../utils/artifactService';
 import { getElectronAPI } from '../utils/electronAPI';
 import { useAppStore } from '../store/useAppStore';
+import type { OcrCacheStats } from '../store/slices/createSettingsSlice';
+import { buildCalibrationBuckets, recommendCalibrationThreshold } from '../utils/ocrCalibration';
+import { exportJSONFile, exportTextFile } from '../utils/export';
+import { buildOcrCorpus, serializeOcrCorpusBox, serializeOcrCorpusJsonl } from '../utils/ocrCorpusBuilder';
+import { buildCooccurrenceMatrix, getTopCooccurrencePairs } from '../utils/patternRecognition';
+import { runA11yAudit, summarizeAccessibilityIssues, type AccessibilityIssue } from '../utils/accessibilityAudit';
 import Logger from '../utils/logger';
 
 /**
@@ -51,6 +58,25 @@ interface OcrDebugFile {
     size?: number;
 }
 
+interface OcrPreprocessingBenchmark {
+    iterations: number;
+    regionCount: number;
+    regions: string[];
+    image: { width: number; height: number };
+    oldAvgMs: number;
+    newAvgMs: number;
+    speedupPercent: number;
+    speedupFactor: number;
+    perIteration: Array<{
+        iteration: number;
+        oldMs: number;
+        newMs: number;
+        speedupPercent: number;
+    }>;
+}
+
+type OcrBoundingOverlayData = NonNullable<OCRExtractedData['ocrBoundingBoxes']>;
+
 const toErrorMessage = (error: unknown, fallback: string): string => {
     if (error instanceof Error && error.message) return error.message;
     if (typeof error === 'string' && error.trim().length > 0) return error;
@@ -63,6 +89,31 @@ const hasSamplesArray = (value: unknown): value is { samples: unknown[] } => (
     Array.isArray((value as { samples?: unknown[] }).samples)
 );
 
+const isOcrCacheStats = (value: unknown): value is OcrCacheStats => {
+    if (typeof value !== 'object' || value === null) return false;
+    const candidate = value as Record<string, unknown>;
+    const keys: Array<keyof OcrCacheStats> = [
+        'hits', 'misses', 'evictions', 'totalRequests',
+        'avgHitTimeMs', 'avgMissTimeMs', 'hitRate', 'currentSize', 'maxSize',
+    ];
+    return keys.every((key) => Number.isFinite(Number(candidate[key])));
+};
+
+const isOcrPreprocessingBenchmark = (value: unknown): value is OcrPreprocessingBenchmark => {
+    if (typeof value !== 'object' || value === null) return false;
+    const candidate = value as Record<string, unknown>;
+    if (!Number.isFinite(Number(candidate.iterations))) return false;
+    if (!Number.isFinite(Number(candidate.regionCount))) return false;
+    if (!Array.isArray(candidate.regions)) return false;
+    if (typeof candidate.image !== 'object' || candidate.image === null) return false;
+    const image = candidate.image as Record<string, unknown>;
+    if (!Number.isFinite(Number(image.width)) || !Number.isFinite(Number(image.height))) return false;
+    return Number.isFinite(Number(candidate.oldAvgMs))
+        && Number.isFinite(Number(candidate.newAvgMs))
+        && Number.isFinite(Number(candidate.speedupPercent))
+        && Number.isFinite(Number(candidate.speedupFactor));
+};
+
 const buildDefaultOpponentTeamDraft = (index: number): PlainOpponentTeamDraft => ({
     teamName: `Enemy Team ${index + 1}`,
     color: 'unknown',
@@ -71,9 +122,12 @@ const buildDefaultOpponentTeamDraft = (index: number): PlainOpponentTeamDraft =>
 });
 
 const DevOCRPanel: React.FC = () => {
-    const { matches, updateMatch } = useGameData();
+    const { matches, updateMatch, pilotRegistry } = useGameData();
     const { activeUser } = useUIState();
     const ocrMode = useAppStore(s => s.ocrMode);
+    const ocrRegions = useAppStore(s => s.ocrRegions);
+    const ocrCalibrationSamples = useAppStore(s => s.ocrCalibrationSamples);
+    const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
     const [tab, setTab] = useState<'OCR' | 'Utils' | 'Corpus'>('OCR');
     const [imageSrc, setImageSrc] = useState<string | null>(null);
     const [ocrResult, setOcrResult] = useState<OCRExtractedData | null>(null);
@@ -97,6 +151,12 @@ const DevOCRPanel: React.FC = () => {
     );
     const [corpusImageList, setCorpusImageList] = useState<{ name: string; relativePath: string }[]>([]);
     const [corpusImageThumbs, setCorpusImageThumbs] = useState<Record<string, string>>({});
+    const [ocrCacheStats, setOcrCacheStats] = useState<OcrCacheStats | null>(null);
+    const [ocrPreprocessingBenchmark, setOcrPreprocessingBenchmark] = useState<OcrPreprocessingBenchmark | null>(null);
+    const [benchmarkBusy, setBenchmarkBusy] = useState(false);
+    const [ocrBoundingOverlay, setOcrBoundingOverlay] = useState<OcrBoundingOverlayData | null>(null);
+    const [a11yIssues, setA11yIssues] = useState<AccessibilityIssue[]>([]);
+    const [a11yLastRunAt, setA11yLastRunAt] = useState<number | null>(null);
 
     useEffect(() => {
         loadRecentFiles();
@@ -108,6 +168,34 @@ const DevOCRPanel: React.FC = () => {
             void refreshCorpusImages();
         }
     }, [tab]);
+
+    useEffect(() => {
+        let mounted = true;
+        const api = getElectronAPI();
+        if (!api) {
+            setOcrCacheStats(null);
+            return;
+        }
+
+        const loadCacheStats = async () => {
+            try {
+                const raw = await api.invoke('get-ocr-cache-stats');
+                if (!mounted) return;
+                if (isOcrCacheStats(raw)) {
+                    setOcrCacheStats(raw);
+                }
+            } catch (error: unknown) {
+                Logger.debug('DevOCRPanel', 'Cache telemetry polling failed', { error: toErrorMessage(error, 'poll failed') });
+            }
+        };
+
+        void loadCacheStats();
+        const id = window.setInterval(() => { void loadCacheStats(); }, 5000);
+        return () => {
+            mounted = false;
+            window.clearInterval(id);
+        };
+    }, []);
 
     const loadRecentFiles = async () => {
         try {
@@ -134,6 +222,8 @@ const DevOCRPanel: React.FC = () => {
                 if (!base64) throw new Error('File read returned null');
                 setImageSrc(`data:image/png;base64,${base64}`);
                 setOcrResult(null);
+                setOcrPreprocessingBenchmark(null);
+                setOcrBoundingOverlay(null);
 
                 const found = recentFiles.find(f => f.path === filePath) || {
                     name: filePath.split(/[\\/]/).pop() || filePath,
@@ -225,35 +315,110 @@ const DevOCRPanel: React.FC = () => {
             reader.onload = (evt) => setImageSrc(evt.target?.result as string);
             reader.readAsDataURL(file);
             setOcrResult(null);
+            setOcrPreprocessingBenchmark(null);
+            setOcrBoundingOverlay(null);
             setStatus("Ready to scan");
         }
     };
 
-    const runOCR = async () => {
+    const runOCR = async (includeBboxes = false) => {
         if (!imageSrc) return;
         setLoading(true);
         const modeLabel = ocrMode === 'both' ? 'Local+Cloud' : ocrMode === 'cloud' ? 'Cloud Vision' : 'Tesseract (Local)';
-        setStatus(`Running OCR (${modeLabel})${activeUser ? ` with anchor: ${activeUser}` : ''}...`);
+        const debugLabel = includeBboxes ? ' + Bounding Boxes' : '';
+        setStatus(`Running OCR (${modeLabel}${debugLabel})${activeUser ? ` with anchor: ${activeUser}` : ''}...`);
         setOcrResult(null);
+        if (!includeBboxes) {
+            setOcrBoundingOverlay(null);
+        }
         try {
             // Extract base64 from data URL
             const base64Data = imageSrc.replace(/^data:image\/\w+;base64,/, '');
 
             // Pass activeUser for anchor-based detection
-            const ocrResponse = await ocrProcessCapture(base64Data, activeUser || null, null, ocrMode);
+            const ocrResponse = await ocrProcessCapture(
+                base64Data,
+                activeUser || null,
+                null,
+                ocrMode,
+                ocrRegions,
+                {
+                    includeBboxes,
+                    archiveOcrSample: true,
+                    archiveMetadata: {
+                        trigger: includeBboxes ? 'dev-ocr-panel-bboxes' : 'dev-ocr-panel-run',
+                    },
+                }
+            );
 
             if (ocrResponse.success && ocrResponse.data) {
                 const ocrData = ocrResponse.data;
                 setOcrResult(ocrData);
-                setStatus(`OCR Complete - ${ocrData.screenshotType} detected (${Math.round(ocrData.overallConfidence)}% confidence)`);
+                if (includeBboxes) {
+                    const bboxDebug = ocrData.ocrBoundingBoxes || null;
+                    setOcrBoundingOverlay(bboxDebug);
+                    const boxCount = bboxDebug?.words.length || 0;
+                    const sourceLabel = bboxDebug?.source ? bboxDebug.source.toUpperCase() : 'N/A';
+                    setStatus(`OCR Complete - ${ocrData.screenshotType} (${Math.round(ocrData.overallConfidence)}%). ${boxCount} bbox word(s) [${sourceLabel}]`);
+                } else {
+                    setStatus(`OCR Complete - ${ocrData.screenshotType} detected (${Math.round(ocrData.overallConfidence)}% confidence)`);
+                }
             } else {
                 setStatus("OCR could not extract data. Try a clearer screenshot or switch OCR mode.");
+                if (includeBboxes) {
+                    setOcrBoundingOverlay(null);
+                }
             }
         } catch (error: unknown) {
             setStatus(`OCR failed: ${friendlyError(toErrorMessage(error, 'OCR failed'))}`);
             Logger.error('DevOCRPanel', 'OCR run failed', error);
+            if (includeBboxes) {
+                setOcrBoundingOverlay(null);
+            }
         }
         setLoading(false);
+    };
+
+    const runOCRWithBoundingBoxes = async () => {
+        await runOCR(true);
+    };
+
+    const runPreprocessingBenchmark = async () => {
+        if (!imageSrc) {
+            setStatus('Load an image first to benchmark preprocessing.');
+            return;
+        }
+
+        try {
+            const api = getElectronAPI();
+            if (!api) throw new Error('IPC not available');
+
+            setBenchmarkBusy(true);
+            setStatus('Running preprocessing benchmark (10 iterations)...');
+            const base64Data = imageSrc.replace(/^data:image\/\w+;base64,/, '');
+            const result = await api.invoke('benchmark-ocr-preprocessing', {
+                imageBase64: base64Data,
+                iterations: 10,
+                ocrRegions,
+            });
+
+            if (!result?.success) {
+                throw new Error(result?.error || 'Benchmark failed');
+            }
+            if (!isOcrPreprocessingBenchmark(result)) {
+                throw new Error('Unexpected benchmark response shape');
+            }
+
+            setOcrPreprocessingBenchmark(result);
+            const speedupLabel = result.speedupPercent >= 0
+                ? `${result.speedupPercent.toFixed(1)}% faster`
+                : `${Math.abs(result.speedupPercent).toFixed(1)}% slower`;
+            setStatus(`Benchmark complete: crop-first is ${speedupLabel} (${result.regionCount} regions).`);
+        } catch (error: unknown) {
+            setStatus(`Benchmark failed: ${friendlyError(toErrorMessage(error, 'Benchmark failed'))}`);
+        } finally {
+            setBenchmarkBusy(false);
+        }
     };
 
     const loadCorpusFiles = async () => {
@@ -363,7 +528,11 @@ const DevOCRPanel: React.FC = () => {
             if (!api) throw new Error('IPC not available');
             setCorpusBusy(true);
             setCorpusStatus(`Running corpus OCR pipeline (${ocrMode})...`);
-            const res = await api.invoke('ocr-corpus-run-pipeline', { ocrMode, activeUser: activeUser || null });
+            const res = await api.invoke('ocr-corpus-run-pipeline', {
+                ocrMode,
+                activeUser: activeUser || null,
+                ocrRegions,
+            });
             if (!res?.success) throw new Error(res?.error || 'Pipeline OCR failed');
             setCorpusStatus(`Pipeline done: processed ${res.processed}/${res.total}, failed ${res.failed}`);
             await loadCorpusFiles();
@@ -403,6 +572,64 @@ const DevOCRPanel: React.FC = () => {
             else setCorpusStatus(`Sync skipped (${res.reason || 'disabled'})`);
         } catch (error: unknown) {
             setCorpusStatus(`Sync failed: ${friendlyError(toErrorMessage(error, 'Sync failed'))}`);
+        } finally {
+            setCorpusBusy(false);
+        }
+    };
+
+    const exportCorrectionCorpus = () => {
+        try {
+            const corpus = buildOcrCorpus(ocrAliasModel, 3);
+            if (corpus.totalSamples === 0) {
+                setCorpusStatus('No learned OCR corrections with count >=3 to export yet.');
+                return;
+            }
+
+            exportJSONFile(corpus, 'ocr_correction_corpus');
+            exportTextFile(serializeOcrCorpusJsonl(corpus), 'ocr_correction_corpus', 'jsonl');
+            exportTextFile(serializeOcrCorpusBox(corpus), 'ocr_correction_corpus', 'box');
+
+            setCorpusStatus(`Exported correction corpus (${corpus.totalSamples} sample${corpus.totalSamples === 1 ? '' : 's'}) as JSON/JSONL/BOX.`);
+            Logger.info('OCR-Corpus', `Exported correction corpus with ${corpus.totalSamples} sample(s)`);
+        } catch (error: unknown) {
+            setCorpusStatus(`Corpus export failed: ${friendlyError(toErrorMessage(error, 'Export failed'))}`);
+            Logger.error('OCR-Corpus', 'Failed to export correction corpus', error);
+        }
+    };
+
+    const regenerateOcrDictionary = async () => {
+        try {
+            const api = getElectronAPI();
+            if (!api) throw new Error('IPC not available');
+
+            const pilots = Array.from(new Set(
+                (pilotRegistry || [])
+                    .filter((name): name is string => typeof name === 'string')
+                    .map(name => name.replace(/\s+/g, ' ').trim())
+                    .filter(Boolean)
+            ));
+
+            if (pilots.length === 0) {
+                setCorpusStatus('Add at least one pilot before regenerating OCR dictionary.');
+                return;
+            }
+
+            setCorpusBusy(true);
+            setCorpusStatus('Regenerating OCR dictionary...');
+            const result = await api.invoke('regenerate-ocr-dictionary', {
+                pilotRegistry: pilots,
+                matches: (matches || []).slice(-500),
+            });
+            if (!result?.success) throw new Error(result?.error || 'Dictionary regeneration failed');
+
+            const appliedWorkers = Number(result?.appliedWorkers || 0);
+            const totalWords = Number(result?.totalWords || 0);
+            const pilotCount = Number(result?.pilotCount || pilots.length);
+            setCorpusStatus(`OCR dictionary updated (${totalWords} words from ${pilotCount} pilots, ${appliedWorkers} worker${appliedWorkers === 1 ? '' : 's'} applied).`);
+            Logger.info('OCR-Dict', `Manual dictionary regeneration complete (${totalWords} words, ${pilotCount} pilots, workers=${appliedWorkers})`);
+        } catch (error: unknown) {
+            setCorpusStatus(`Dictionary regeneration failed: ${friendlyError(toErrorMessage(error, 'Dictionary regeneration failed'))}`);
+            Logger.error('OCR-Dict', 'Manual dictionary regeneration failed', error);
         } finally {
             setCorpusBusy(false);
         }
@@ -505,10 +732,63 @@ const DevOCRPanel: React.FC = () => {
                 ? 'bg-info-soft border-info-soft-strong text-info'
                 : 'bg-md-sys-surface3 border-md-sys-outline/20 text-md-sys-on-surface';
 
+    const runAccessibilityAudit = () => {
+        try {
+            const issues = runA11yAudit(document);
+            setA11yIssues(issues);
+            setA11yLastRunAt(Date.now());
+
+            if (issues.length === 0) {
+                setStatus('Accessibility audit passed with no issues.');
+                return;
+            }
+
+            const summary = summarizeAccessibilityIssues(issues);
+            setStatus(
+                `Accessibility audit found ${summary.total} issue(s): `
+                + `${summary.errors} error(s), ${summary.warnings} warning(s).`
+            );
+        } catch (error: unknown) {
+            Logger.error('DevOCRPanel', 'Accessibility audit failed', error);
+            setStatus(`Accessibility audit failed: ${friendlyError(toErrorMessage(error, 'Audit failed'))}`);
+        }
+    };
+
+    const cacheHitRatePercent = ocrCacheStats ? (ocrCacheStats.hitRate * 100) : 0;
+    const cacheHitRateClass = cacheHitRatePercent >= 40
+        ? 'text-success'
+        : cacheHitRatePercent > 0
+            ? 'text-warning'
+            : 'text-md-sys-on-surface/60';
+    const benchmarkSpeedupClass = ocrPreprocessingBenchmark && ocrPreprocessingBenchmark.speedupPercent >= 0
+        ? 'text-success'
+        : 'text-warning';
+    const calibrationBuckets = useMemo(
+        () => buildCalibrationBuckets(ocrCalibrationSamples || []),
+        [ocrCalibrationSamples]
+    );
+    const recommendedCalibrationThreshold = useMemo(
+        () => recommendCalibrationThreshold(calibrationBuckets, 90),
+        [calibrationBuckets]
+    );
+    const cooccurrenceMatrix = useMemo(
+        () => buildCooccurrenceMatrix(matches || [], { maxMatches: 1000 }),
+        [matches]
+    );
+    const topPatternPairs = useMemo(
+        () => getTopCooccurrencePairs(cooccurrenceMatrix, 5),
+        [cooccurrenceMatrix]
+    );
+    const patternPlayerCount = cooccurrenceMatrix.size;
+    const a11ySummary = useMemo(
+        () => summarizeAccessibilityIssues(a11yIssues),
+        [a11yIssues]
+    );
+
     return (
-        <div className="flex flex-col h-full bg-md-sys-surface1 p-6 gap-6 overflow-hidden items-center justify-center">
+        <div className="flex flex-col h-full min-h-0 bg-md-sys-surface1 p-4 gap-4 overflow-hidden">
             {/* Header / Tabs */}
-            <div className="flex gap-4 mb-4">
+            <div className="flex gap-2 mb-1 shrink-0">
                 <button onClick={() => setTab('OCR')} className={`px-4 py-2 rounded-full font-bold ${tab === 'OCR' ? 'bg-md-sys-primary text-md-sys-on-primary' : 'bg-md-sys-surface3'}`}>OCR Lab</button>
                 <button onClick={() => setTab('Utils')} className={`px-4 py-2 rounded-full font-bold ${tab === 'Utils' ? 'bg-md-sys-primary text-md-sys-on-primary' : 'bg-md-sys-surface3'}`}>Utilities</button>
                 <button onClick={() => setTab('Corpus')} className={`px-4 py-2 rounded-full font-bold ${tab === 'Corpus' ? 'bg-md-sys-primary text-md-sys-on-primary' : 'bg-md-sys-surface3'}`}>Corpus</button>
@@ -516,8 +796,51 @@ const DevOCRPanel: React.FC = () => {
 
             {/* Content Area */}
             {tab === 'Utils' ? (
-                <div className="w-full max-w-2xl bg-md-sys-surface2 rounded-xl p-8 flex flex-col gap-6">
-                    <h2 className="text-xl font-black uppercase text-md-sys-primary">Data Utilities</h2>
+                <div className="w-full max-w-2xl mx-auto h-full min-h-0 bg-md-sys-surface2 rounded-xl p-6 flex flex-col">
+                    <h2 className="text-xl font-black uppercase text-md-sys-primary shrink-0">Data Utilities</h2>
+
+                    <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4 mt-4">
+                    <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
+                        <div className="flex items-center justify-between gap-2">
+                            <h3 className="font-bold">Accessibility Audit</h3>
+                            <span className="text-label-sm font-mono opacity-60">
+                                {a11ySummary.errors}E / {a11ySummary.warnings}W
+                            </span>
+                        </div>
+                        <p className="text-label-sm opacity-60 mt-1 mb-4">
+                            Run static WCAG checks for dialogs, labels, controls, and image alt text.
+                        </p>
+                        <button
+                            onClick={runAccessibilityAudit}
+                            className="px-6 py-3 bg-info-soft text-info border border-info-soft-strong rounded-lg font-bold hover:bg-info hover:text-on-scrim transition-all flex items-center justify-center w-full"
+                        >
+                            Run A11y Audit
+                        </button>
+                        {a11yLastRunAt && (
+                            <div className="mt-3 text-label-sm opacity-60">
+                                Last run: {new Date(a11yLastRunAt).toLocaleTimeString()}
+                            </div>
+                        )}
+                        {a11yIssues.length > 0 && (
+                            <div className="mt-3 max-h-32 overflow-auto space-y-1 rounded-control border border-md-sys-outline/10 p-2 bg-md-sys-surface2">
+                                {a11yIssues.slice(0, 8).map((issue, index) => (
+                                    <div key={`${issue.rule}-${issue.selector}-${index}`} className="text-label-sm">
+                                        <span className={`font-bold ${issue.severity === 'error' ? 'text-danger' : 'text-warning'}`}>
+                                            {issue.severity.toUpperCase()}
+                                        </span>
+                                        <span className="opacity-60"> [{issue.rule}] </span>
+                                        <span>{issue.message}</span>
+                                        <span className="opacity-60"> ({issue.selector})</span>
+                                    </div>
+                                ))}
+                                {a11yIssues.length > 8 && (
+                                    <div className="text-label-sm opacity-60">
+                                        ...and {a11yIssues.length - 8} more issue(s).
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
 
                     <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
                         <h3 className="font-bold mb-2">Retroactive Artifact Bundling</h3>
@@ -627,6 +950,7 @@ const DevOCRPanel: React.FC = () => {
                             {loading ? 'Processing...' : 'Open OCR Captures Folder'}
                         </button>
                     </div>
+                    </div>
                 </div>
             ) : tab === 'Corpus' ? (
                 <div className="w-full max-w-7xl h-full overflow-auto md3-surface rounded-card p-5 border border-md-sys-outline/10">
@@ -669,6 +993,8 @@ const DevOCRPanel: React.FC = () => {
                             <button onClick={runCorpusPipeline} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-info-soft text-info border border-info-soft-strong font-bold text-label-sm disabled:opacity-disabled">Run Corpus OCR</button>
                             <button onClick={runCorpusEval} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-md-sys-primary text-md-sys-on-primary font-bold text-label-sm disabled:opacity-disabled">Run Eval</button>
                             <button onClick={promoteCorpusBaseline} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-success-soft text-success border border-success-soft-strong font-bold text-label-sm disabled:opacity-disabled">Promote Baseline</button>
+                            <button onClick={exportCorrectionCorpus} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-accent-soft text-accent border border-accent-soft-strong font-bold text-label-sm disabled:opacity-disabled">Export Training Data</button>
+                            <button onClick={regenerateOcrDictionary} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-info-soft text-info border border-info-soft-strong font-bold text-label-sm disabled:opacity-disabled">Regenerate OCR Dictionary</button>
                         </div>
                         <p className="text-label-sm opacity-secondary mt-3">
                             Workflow: 1) Import images 2) curate ground truth 3) run corpus OCR 4) run eval 5) promote baseline.
@@ -830,13 +1156,25 @@ const DevOCRPanel: React.FC = () => {
                                     </div>
                                 )}
                                 {imageSrc ? (
-                                    <img
-                                        src={imageSrc}
-                                        className="object-contain max-w-full max-h-full select-none cursor-zoom-in"
-                                        alt="Preview"
-                                        draggable={false}
-                                        onClick={() => setLightboxSrc(imageSrc)}
-                                    />
+                                    ocrBoundingOverlay ? (
+                                        <div className="w-full h-full p-2 overflow-auto">
+                                            <OcrBoundingBoxOverlay
+                                                imageUrl={imageSrc}
+                                                boundingBoxes={ocrBoundingOverlay.words}
+                                                imageWidth={ocrBoundingOverlay.imageWidth}
+                                                imageHeight={ocrBoundingOverlay.imageHeight}
+                                                onImageClick={() => setLightboxSrc(imageSrc)}
+                                            />
+                                        </div>
+                                    ) : (
+                                        <img
+                                            src={imageSrc}
+                                            className="object-contain max-w-full max-h-full select-none cursor-zoom-in"
+                                            alt="Preview"
+                                            draggable={false}
+                                            onClick={() => setLightboxSrc(imageSrc)}
+                                        />
+                                    )
                                 ) : (
                                     <div className="text-md-sys-on-surface opacity-20 font-black uppercase text-4xl">Drop Target</div>
                                 )}
@@ -845,12 +1183,149 @@ const DevOCRPanel: React.FC = () => {
                             {/* Controls & Results */}
                             <div className="w-80 flex flex-col gap-4 h-full overflow-hidden">
                                 <button
-                                    onClick={runOCR}
+                                    onClick={() => { void runOCR(false); }}
                                     disabled={loading || !imageSrc}
                                     className="p-4 bg-md-sys-primary text-md-sys-on-primary font-bold rounded-lg hover:brightness-110 disabled:opacity-disabled shadow-lg shadow-md-sys-primary/20 text-lg"
                                 >
                                     {loading ? 'Processing...' : `Run OCR (${ocrMode === 'both' ? 'Local+Cloud' : ocrMode === 'cloud' ? 'Cloud' : 'Local'})`}
                                 </button>
+                                <button
+                                    onClick={runOCRWithBoundingBoxes}
+                                    disabled={loading || !imageSrc}
+                                    className="px-3 py-2 rounded-control bg-info-soft text-info border border-info-soft font-bold text-label-sm disabled:opacity-disabled hover:bg-info hover:text-on-scrim transition-all"
+                                >
+                                    {loading ? 'Processing...' : 'Capture with Bounding Boxes'}
+                                </button>
+
+                                <div className="md3-card md3-surface-high rounded-xl border border-md-sys-outline/10 p-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-label-sm font-bold uppercase opacity-60">Cache Telemetry</span>
+                                        <span className={`text-label-sm font-mono font-bold ${cacheHitRateClass}`}>
+                                            {cacheHitRatePercent.toFixed(1)}%
+                                        </span>
+                                    </div>
+                                    {ocrCacheStats ? (
+                                        <div className="mt-2 text-label-sm grid grid-cols-2 gap-y-1 gap-x-2">
+                                            <span className="opacity-60">Hit Rate</span>
+                                            <span className={cacheHitRateClass}>{cacheHitRatePercent.toFixed(1)}%</span>
+                                            <span className="opacity-60">Size</span>
+                                            <span>{ocrCacheStats.currentSize}/{ocrCacheStats.maxSize}</span>
+                                            <span className="opacity-60">Avg Hit</span>
+                                            <span>{ocrCacheStats.avgHitTimeMs.toFixed(2)}ms</span>
+                                            <span className="opacity-60">Avg Miss</span>
+                                            <span>{ocrCacheStats.avgMissTimeMs.toFixed(2)}ms</span>
+                                        </div>
+                                    ) : (
+                                        <div className="mt-2 text-label-sm opacity-60">Waiting for cache telemetry...</div>
+                                    )}
+                                </div>
+
+                                <div className="md3-card md3-surface-high rounded-xl border border-md-sys-outline/10 p-3">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-label-sm font-bold uppercase opacity-60">Preprocess Benchmark</span>
+                                        {ocrPreprocessingBenchmark && (
+                                            <span className={`text-label-sm font-mono font-bold ${benchmarkSpeedupClass}`}>
+                                                {ocrPreprocessingBenchmark.speedupPercent.toFixed(1)}%
+                                            </span>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={runPreprocessingBenchmark}
+                                        disabled={benchmarkBusy || loading || !imageSrc}
+                                        className="mt-2 w-full px-3 py-2 rounded-control bg-info-soft text-info border border-info-soft font-bold text-label-sm disabled:opacity-disabled hover:bg-info hover:text-on-scrim transition-all"
+                                    >
+                                        {benchmarkBusy ? 'Benchmarking...' : 'Benchmark Old vs Crop-First (10x)'}
+                                    </button>
+                                    {ocrPreprocessingBenchmark ? (
+                                        <div className="mt-2 text-label-sm grid grid-cols-2 gap-y-1 gap-x-2">
+                                            <span className="opacity-60">Old Avg</span>
+                                            <span>{ocrPreprocessingBenchmark.oldAvgMs.toFixed(2)}ms</span>
+                                            <span className="opacity-60">New Avg</span>
+                                            <span>{ocrPreprocessingBenchmark.newAvgMs.toFixed(2)}ms</span>
+                                            <span className="opacity-60">Speedup</span>
+                                            <span className={benchmarkSpeedupClass}>
+                                                {ocrPreprocessingBenchmark.speedupPercent.toFixed(2)}%
+                                            </span>
+                                            <span className="opacity-60">Factor</span>
+                                            <span>{ocrPreprocessingBenchmark.speedupFactor.toFixed(2)}x</span>
+                                            <span className="opacity-60">Regions</span>
+                                            <span>{ocrPreprocessingBenchmark.regionCount}</span>
+                                        </div>
+                                    ) : (
+                                        <div className="mt-2 text-label-sm opacity-60">Load an image and run benchmark to compare preprocessing paths.</div>
+                                    )}
+                                </div>
+
+                                <div className="md3-card md3-surface-high rounded-xl border border-md-sys-outline/10 p-3">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-label-sm font-bold uppercase opacity-60">Confidence Calibration</span>
+                                        <span className="text-label-sm font-mono opacity-60">{ocrCalibrationSamples.length} samples</span>
+                                    </div>
+                                    {ocrCalibrationSamples.length > 0 ? (
+                                        <div className="mt-2 space-y-1.5">
+                                            <div className="text-label-xs uppercase opacity-60 grid grid-cols-3 gap-2">
+                                                <span>Range</span>
+                                                <span>Samples</span>
+                                                <span>Accuracy</span>
+                                            </div>
+                                            {calibrationBuckets.map((bucket) => {
+                                                const rangeLabel = `${bucket.range[0]}-${bucket.range[1]}`;
+                                                const accuracyClass = bucket.samples === 0
+                                                    ? 'text-md-sys-on-surface/40'
+                                                    : bucket.accuracy >= 90
+                                                        ? 'text-success'
+                                                        : 'text-warning';
+                                                return (
+                                                    <div key={rangeLabel} className="grid grid-cols-3 gap-2 text-label-sm">
+                                                        <span className="font-mono">{rangeLabel}</span>
+                                                        <span>{bucket.samples}</span>
+                                                        <span className={accuracyClass}>
+                                                            {bucket.samples > 0 ? `${bucket.accuracy.toFixed(1)}%` : '--'}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                            <div className="pt-1 text-label-sm">
+                                                <span className="opacity-60">Recommended threshold:</span>{' '}
+                                                <span className={recommendedCalibrationThreshold == null ? 'text-warning' : 'text-success'}>
+                                                    {recommendedCalibrationThreshold == null
+                                                        ? 'Need more accurate samples'
+                                                        : `${recommendedCalibrationThreshold}% (>=90% accuracy target)`}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="mt-2 text-label-sm opacity-60">
+                                            Apply OCR corrections to collect confidence calibration samples.
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="md3-card md3-surface-high rounded-xl border border-md-sys-outline/10 p-3">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-label-sm font-bold uppercase opacity-60">Team Patterns</span>
+                                        <span className="text-label-sm font-mono opacity-60">{patternPlayerCount} pilots</span>
+                                    </div>
+                                    {topPatternPairs.length > 0 ? (
+                                        <div className="mt-2 space-y-1.5">
+                                            {topPatternPairs.map((pair) => (
+                                                <div key={`${pair.playerA}-${pair.playerB}`} className="rounded-control border border-md-sys-outline/10 px-2 py-1.5 bg-md-sys-surface2">
+                                                    <div className="flex items-center justify-between gap-2 text-label-sm">
+                                                        <span className="font-semibold truncate">{pair.playerA} + {pair.playerB}</span>
+                                                        <span className="font-mono text-info">{pair.confidence}%</span>
+                                                    </div>
+                                                    <div className="text-label-xs opacity-60 mt-0.5">
+                                                        {pair.encounters} encounters · {pair.winRate}% win rate
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="mt-2 text-label-sm opacity-60">
+                                            Not enough match history to derive teammate patterns yet.
+                                        </div>
+                                    )}
+                                </div>
 
                                 {/* Results Visualization */}
                                 <div className="flex-1 bg-md-sys-surface2 rounded-xl border border-md-sys-outline/10 flex flex-col min-h-0 overflow-hidden">
@@ -875,6 +1350,15 @@ const DevOCRPanel: React.FC = () => {
                                                         <span className="text-label-sm opacity-40 font-mono">{ocrResult.ocrSource}</span>
                                                     )}
                                                 </div>
+
+                                                {ocrBoundingOverlay && (
+                                                    <div className="bg-info-soft border border-info-soft rounded px-2 py-1 text-label-sm flex items-center justify-between gap-2">
+                                                        <span className="font-bold text-info uppercase">Bounding Boxes</span>
+                                                        <span className="font-mono text-info">
+                                                            {ocrBoundingOverlay.words.length} words ({ocrBoundingOverlay.source})
+                                                        </span>
+                                                    </div>
+                                                )}
 
                                                 {/* Merge Stats (dev info) */}
                                                 {ocrResult.mergeStats && (

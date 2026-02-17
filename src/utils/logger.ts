@@ -46,6 +46,11 @@ const getLoggerWindow = (): LoggerWindow | null => (
 const shouldEmitConsoleLogs = (): boolean =>
     !isProdBuild || getLoggerWindow()?.__WG_FORCE_CONSOLE_LOGS__ === true;
 
+const toErrorPayload = (error: unknown): unknown =>
+    error instanceof Error
+        ? { message: error.message, stack: error.stack }
+        : error;
+
 const formatEntry = (entry: LogEntry): string => {
     const base = `[${entry.timestamp}] [${entry.level.toUpperCase()}] [${entry.category}] ${entry.message}`;
     if (entry.duration !== undefined) {
@@ -79,6 +84,23 @@ const addEntry = (entry: LogEntry) => {
     }
 };
 
+const recordPersistenceFailure = (error: unknown) => {
+    const entry: LogEntry = {
+        timestamp: new Date().toISOString(),
+        level: 'warn',
+        category: 'Logger',
+        message: 'Failed to persist buffered logs',
+        data: toErrorPayload(error),
+    };
+    LOG_BUFFER.push(entry);
+    if (LOG_BUFFER.length > MAX_BUFFER_SIZE) {
+        LOG_BUFFER.shift();
+    }
+    if (shouldEmitConsoleLogs()) {
+        console.warn(formatEntry(entry), entry.data || '');
+    }
+};
+
 const persistLogs = async () => {
     const ipc = getIPC();
     if (!ipc) return;
@@ -88,8 +110,8 @@ const persistLogs = async () => {
         if (newEntries.length === 0) return;
         await ipc.invoke('persist-logs', newEntries.map(formatEntry).join('\n'));
         lastPersistedIndex = LOG_BUFFER.length;
-    } catch (e) {
-        // Silent fail - logging shouldn't break the app
+    } catch (error: unknown) {
+        recordPersistenceFailure(error);
     }
 };
 

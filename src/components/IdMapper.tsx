@@ -220,6 +220,7 @@ export const IdMapper: React.FC = () => {
                                                 onClick={() => handleSave(id)}
                                                 disabled={!nameInputs[id]}
                                                 className="md3-icon-btn text-success disabled:opacity-disabled"
+                                                aria-label={`Save mapping for ${id}`}
                                             >
                                                 <Save size={14} />
                                             </button>

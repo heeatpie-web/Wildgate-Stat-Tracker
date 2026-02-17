@@ -41,6 +41,40 @@ const LAYOUT = {
   },
 };
 
+function clamp01(value, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(1, n));
+}
+
+function sanitizeBounds(input, fallback) {
+  const source = (input && typeof input === 'object') ? input : {};
+  let xMin = clamp01(source.xMin, fallback.xMin);
+  let xMax = clamp01(source.xMax, fallback.xMax);
+  let yMin = clamp01(source.yMin, fallback.yMin);
+  let yMax = clamp01(source.yMax, fallback.yMax);
+
+  if (xMin >= xMax) {
+    if (xMin >= 1) xMin = Math.max(0, xMax - 0.01);
+    else xMax = Math.min(1, xMin + 0.01);
+  }
+  if (yMin >= yMax) {
+    if (yMin >= 1) yMin = Math.max(0, yMax - 0.01);
+    else yMax = Math.min(1, yMin + 0.01);
+  }
+
+  return { xMin, xMax, yMin, yMax };
+}
+
+function resolveCrewHubLayout(layoutOverrides) {
+  const source = (layoutOverrides && typeof layoutOverrides === 'object') ? layoutOverrides : {};
+  return {
+    LEFT_PANEL: sanitizeBounds(source.leftPanel, LAYOUT.LEFT_PANEL),
+    RIGHT_PANEL: sanitizeBounds(source.rightPanel, LAYOUT.RIGHT_PANEL),
+    TEAM_HEADER: sanitizeBounds(source.teamHeader, LAYOUT.TEAM_HEADER),
+  };
+}
+
 /**
  * Noise words to filter out (UI elements)
  */
@@ -54,16 +88,29 @@ const NOISE_WORDS = new Set([
 
 /**
  * Main entry point: Extract all data from Crew Hub screenshot
- * @param {Buffer} imageBuffer - Preprocessed image buffer
+ * @param {Buffer} imageBuffer - OCR text buffer (typically preprocessed/scaled)
  * @param {string} activeUser - Current user's display name (for anchor)
  * @param {Object} ocrResult - Tesseract OCR result { words, lines, text }
  * @param {number} imageWidth - Image width
  * @param {number} imageHeight - Image height
  * @param {number} scale - Image scale factor from preprocessing (default 1)
+ * @param {Buffer} [colorImageBuffer] - Color-fidelity buffer for team-color detection
+ * @param {Object} [layoutOverrides] - Optional percentage-based layout overrides
  * @returns {Promise<Object>} Extracted data
  */
-async function extractCrewHub(imageBuffer, activeUser, ocrResult, imageWidth, imageHeight, scale = 1) {
+async function extractCrewHub(
+  imageBuffer,
+  activeUser,
+  ocrResult,
+  imageWidth,
+  imageHeight,
+  scale = 1,
+  colorImageBuffer = null,
+  layoutOverrides = null
+) {
   console.log('[CrewHub] Starting extraction, activeUser:', activeUser);
+  const colorBuffer = colorImageBuffer || imageBuffer;
+  const layout = resolveCrewHubLayout(layoutOverrides);
 
   const result = {
     screenType: 'crewHub',
@@ -100,19 +147,21 @@ async function extractCrewHub(imageBuffer, activeUser, ocrResult, imageWidth, im
       lines,
       text,
       imageWidth,
-      imageHeight
+      imageHeight,
+      layout
     );
     result.yourTeam = yourTeamData;
 
     // Step 2: Extract enemy teams from right panel (pass scale for color detection)
     const enemyTeamsData = await extractRightPanel(
-      imageBuffer,
+      colorBuffer,
       words,
       lines,
       text,
       imageWidth,
       imageHeight,
-      scale
+      scale,
+      layout
     );
     result.enemyTeams = enemyTeamsData;
 
@@ -146,7 +195,7 @@ async function extractCrewHub(imageBuffer, activeUser, ocrResult, imageWidth, im
 /**
  * Extract your team data from left panel
  */
-async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, imageWidth, imageHeight) {
+async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, imageWidth, imageHeight, layout = LAYOUT) {
   console.log('[CrewHub] Extracting left panel (your team)');
 
   const teamData = {
@@ -156,10 +205,10 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
 
   // Define left panel bounds
   const leftBounds = {
-    xMin: imageWidth * LAYOUT.LEFT_PANEL.xMin,
-    xMax: imageWidth * LAYOUT.LEFT_PANEL.xMax,
-    yMin: imageHeight * LAYOUT.LEFT_PANEL.yMin,
-    yMax: imageHeight * LAYOUT.LEFT_PANEL.yMax,
+    xMin: imageWidth * layout.LEFT_PANEL.xMin,
+    xMax: imageWidth * layout.LEFT_PANEL.xMax,
+    yMin: imageHeight * layout.LEFT_PANEL.yMin,
+    yMax: imageHeight * layout.LEFT_PANEL.yMax,
   };
 
   // Step 1: Find team name (look for "'s Crew" pattern)
@@ -269,17 +318,17 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
  * Extract enemy teams from right panel
  * @param {number} scale - Image scale factor from preprocessing (default 1)
  */
-async function extractRightPanel(imageBuffer, words, lines, text, imageWidth, imageHeight, scale = 1) {
+async function extractRightPanel(colorImageBuffer, words, lines, text, imageWidth, imageHeight, scale = 1, layout = LAYOUT) {
   console.log('[CrewHub] Extracting right panel (enemy teams)');
 
   const enemyTeams = [];
 
   // Define right panel bounds
   const rightBounds = {
-    xMin: imageWidth * LAYOUT.RIGHT_PANEL.xMin,
-    xMax: imageWidth * LAYOUT.RIGHT_PANEL.xMax,
-    yMin: imageHeight * LAYOUT.RIGHT_PANEL.yMin,
-    yMax: imageHeight * LAYOUT.RIGHT_PANEL.yMax,
+    xMin: imageWidth * layout.RIGHT_PANEL.xMin,
+    xMax: imageWidth * layout.RIGHT_PANEL.xMax,
+    yMin: imageHeight * layout.RIGHT_PANEL.yMin,
+    yMax: imageHeight * layout.RIGHT_PANEL.yMax,
   };
 
   // Filter words in right panel
@@ -320,9 +369,9 @@ async function extractRightPanel(imageBuffer, words, lines, text, imageWidth, im
     if (!lineText) continue;
 
     let detectedColor = 'unknown';
-    if (firstWord && firstWord.bbox && imageBuffer) {
+    if (firstWord && firstWord.bbox && colorImageBuffer) {
       try {
-        const colorResult = await detectBadgeColorNearText(imageBuffer, firstWord.bbox, scale);
+        const colorResult = await detectBadgeColorNearText(colorImageBuffer, firstWord.bbox, scale);
         if (colorResult.color !== 'unknown' && colorResult.confidence > 40) {
           detectedColor = colorResult.color;
         }

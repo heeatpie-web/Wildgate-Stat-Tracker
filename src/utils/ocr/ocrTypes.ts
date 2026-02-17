@@ -84,6 +84,13 @@ export interface OCRExtractedData {
     cloudOnly: number;
     conflicts: number;
   };
+  ocrBoundingBoxes?: {
+    source: 'local' | 'cloud';
+    imageWidth: number;
+    imageHeight: number;
+    words: OCRWord[];
+  };
+  ocrCorpusSampleId?: string;
 }
 
 /**

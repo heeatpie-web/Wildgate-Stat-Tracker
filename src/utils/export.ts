@@ -56,6 +56,16 @@ export const exportJSONFile = (data: any, filenamePrefix = 'wildgate_export') =>
   downloadBlob(blob, `${filenamePrefix}_${getFormattedDate()}.json`);
 };
 
+export const exportTextFile = (
+  content: string,
+  filenamePrefix = 'wildgate_export',
+  extension = 'txt'
+) => {
+  const normalizedExtension = String(extension || 'txt').replace(/^\.+/, '').trim().toLowerCase() || 'txt';
+  const blob = new Blob([String(content || '')], { type: 'text/plain;charset=utf-8;' });
+  downloadBlob(blob, `${filenamePrefix}_${getFormattedDate()}.${normalizedExtension}`);
+};
+
 export const exportToJSON = (data: any) => {
   exportJSONFile(data, 'wildgate_backup');
 };

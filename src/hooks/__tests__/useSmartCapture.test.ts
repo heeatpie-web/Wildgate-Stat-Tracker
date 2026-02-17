@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useSmartCapture } from '../useSmartCapture';
+import { captureGameWindow, saveScreenshot, isElectron } from '../../utils/electronBridge';
+import { rerunOCROnArtifact } from '../../utils/artifactService';
 
 vi.mock('../../utils/electronBridge', () => ({
   captureGameWindow: vi.fn().mockResolvedValue(undefined),
@@ -19,13 +21,15 @@ vi.mock('../../utils/ocr/ocrParser', () => ({
 }));
 
 vi.mock('../../store/useAppStore', () => ({
-  useAppStore: (selector: (s: any) => any) =>
+  useAppStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
       ocrMode: 'both',
       captureMode: 'manual',
       lockOcrTeams: false,
-      pilotRegistry: {},
+      pilotRegistry: [],
       ocrCorrections: {},
+      ocrAliasModel: null,
+      playerProfiles: {},
     }),
 }));
 
@@ -35,6 +39,7 @@ vi.mock('../../hooks/useSoundEffects', () => ({
 
 vi.mock('../../utils/stringUtils', () => ({
   findClosestMatch: vi.fn().mockReturnValue(null),
+  findBestVariantMatch: vi.fn().mockReturnValue(null),
   normalizeOcrName: vi.fn((s: string) => s),
 }));
 
@@ -69,6 +74,10 @@ vi.mock('../../utils/scanService', () => ({
 describe('useSmartCapture', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(isElectron).mockReturnValue(false);
+    vi.mocked(captureGameWindow).mockResolvedValue({ success: false, error: 'not-mocked' });
+    vi.mocked(saveScreenshot).mockResolvedValue({ success: true, filePath: '', filename: '' });
+    vi.mocked(rerunOCROnArtifact).mockResolvedValue({ success: false, error: 'not-mocked' });
   });
 
   it('returns a tuple [state, actions] with expected state shape', () => {
@@ -127,5 +136,57 @@ describe('useSmartCapture', () => {
     });
     expect(result.current[0].capturedScreenshots).toEqual([]);
     expect(result.current[0].error).toBeNull();
+  });
+
+  it('capture reports a clear error outside Electron runtime', async () => {
+    const { result } = renderHook(() => useSmartCapture());
+    const [, actions] = result.current;
+
+    await act(async () => {
+      await actions.capture('Pilot');
+    });
+
+    expect(result.current[0].error).toBe('Smart Capture is only available in the desktop app');
+  });
+
+  it('processStoredImage marks capture processed and stages pending data', async () => {
+    vi.mocked(isElectron).mockReturnValue(true);
+    vi.mocked(captureGameWindow).mockResolvedValue({
+      success: true,
+      imageBase64: 'ZmFrZQ==',
+    });
+    vi.mocked(saveScreenshot).mockResolvedValue({
+      success: true,
+      filePath: 'C:\\captures\\cap-1.png',
+      filename: 'cap-1.png',
+    });
+    vi.mocked(rerunOCROnArtifact).mockResolvedValue({
+      success: true,
+      data: {
+        screenshotType: 'crew_hub',
+        playerShip: { shipType: 'Hunter (4 Player)', confidence: 90, rawText: 'Hunter' },
+        playerTeamName: '',
+        reachModifiers: [],
+        enemyShips: [],
+        teammates: [{ name: 'Wingman', confidence: 88, isTeammate: true, rawText: 'Wingman' }],
+        opponentTeams: [],
+        overallConfidence: 88,
+        captureTimestamp: Date.now(),
+      },
+    });
+
+    const { result } = renderHook(() => useSmartCapture());
+    const [, actions] = result.current;
+
+    await act(async () => {
+      await actions.captureOnly('match-42');
+    });
+
+    await act(async () => {
+      await actions.processStoredImage('C:\\captures\\cap-1.png', 'Pilot');
+    });
+
+    expect(result.current[0].savedCaptures[0]?.ocrProcessed).toBe(true);
+    expect(actions.getPendingData('match-42')).not.toBeNull();
   });
 });

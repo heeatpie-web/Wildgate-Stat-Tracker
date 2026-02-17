@@ -172,6 +172,7 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
                             onClick={onStartMatch}
                             className="w-6 h-6 rounded flex items-center justify-center bg-md-sys-primary text-md-sys-onPrimary hover:brightness-110 transition-all"
                             title="Start Mission"
+                            aria-label="Start mission timer"
                         >
                             <Swords size={10} />
                         </button>
@@ -180,6 +181,7 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
                             onClick={onResetMatch}
                             className="w-6 h-6 rounded flex items-center justify-center bg-md-sys-errorContainer/40 text-md-sys-error hover:bg-md-sys-error/20 transition-all"
                             title="Reset Mission Timer"
+                            aria-label="Reset mission timer"
                         >
                             <RotateCcw size={10} />
                         </button>
@@ -206,6 +208,7 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
                     onClick={togglePause}
                     className={`p-2 rounded-full transition-all ${isPaused ? 'bg-warning text-ink-strong hover:brightness-110' : 'md3-btn-tonal text-md-sys-on-surface hover:bg-md-sys-primary hover:text-md-sys-onPrimary'}`}
                     title={isPaused ? "Resume Session" : "Pause Session"}
+                    aria-label={isPaused ? "Resume session timer" : "Pause session timer"}
                 >
                     {isPaused ? <Play size={20} /> : <Pause size={20} />}
                 </button>
@@ -231,6 +234,7 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
                             onClick={onResetMatch}
                             className="p-1 text-md-sys-on-surface/40 hover:text-danger transition-colors"
                             title="Reset Mission Timer"
+                            aria-label="Reset mission timer"
                         >
                             <RotateCcw size={14} />
                         </button>

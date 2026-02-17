@@ -1079,3 +1079,585 @@
 
 - PM response evidence:
   - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `AUDIT-REMEDIATION-005`.
+
+---
+
+## Validation - 2026-02-17 - MODERATE-REMEDIATION-006
+- Command: `npx vitest run src/utils/__tests__/storage.test.ts src/hooks/__tests__/useLogMonitor.test.ts src/hooks/__tests__/useSmartCapture.test.ts src/App.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 4 files passed.
+    - 14 tests passed.
+    - Confirms new storage/log-monitor/app coverage and expanded smart-capture behavior tests.
+
+- Command: `npx eslint src/App.tsx src/components/Toast.tsx src/components/MatchRecordingPage.tsx src/components/SmartCapturesPanel.tsx src/components/ocr/OCRReviewModal.tsx src/hooks/useSmartCapture.ts src/utils/logger.ts src/utils/storage.ts src/config/runtimeConfig.ts src/App.test.tsx src/hooks/__tests__/useLogMonitor.test.ts src/hooks/__tests__/useSmartCapture.test.ts src/utils/__tests__/storage.test.ts`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in touched implementation + test files.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after runtime config extraction and new tests.
+
+- Command: `npm run -s test`
+  - Result: PASS
+  - Evidence:
+    - 39 files passed.
+    - 415 tests passed.
+
+- Command: `npm run -s lint`
+  - Result: PASS
+  - Evidence:
+    - repository lint check passed after remediation edits.
+
+- Command: `npm run -s build`
+  - Result: PASS
+  - Evidence:
+    - production client build completed successfully.
+
+- Command: `rg -n "\\.catch\\(\\s*\\(\\)\\s*=>" src`
+  - Result: PASS (targeted silent-catch verification)
+  - Evidence:
+    - only `src/components/LocalImage.tsx` remains, and it sets an explicit failure state for UI fallback (not silent swallow).
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `MODERATE-REMEDIATION-006`.
+
+---
+
+## Validation - 2026-02-17 - FOLLOWUP-REMEDIATION-008
+- Command: `npx eslint src/components/ErrorBoundary.tsx src/store/slices/createSettingsSlice.ts src/store/useAppStore.ts src/utils/storage.ts src/config/runtimeConfig.ts src/vite-env.d.ts src/hooks/useDiscordRPC.ts src/components/SystemPulse.tsx src/components/HistoryTable.tsx src/components/recording/ActionPanel.tsx src/components/DrillDownOverlay.tsx src/components/analytics/AnalyticsShell.tsx src/components/PlayerHub.tsx src/components/ReviewQueueModal.tsx src/components/recording/RosterPanel.tsx src/components/SessionTimer.tsx src/components/SettingsModal.tsx src/components/recording/MissionPanel.tsx src/components/WindowFrame.tsx src/components/smart-captures/SmartCaptureWidgets.tsx src/components/EditMatchModal.tsx src/components/OcrCorrectionModal.tsx src/components/SmartCapturesPanel.tsx src/components/IdMapper.tsx src/components/ocr/OCRReviewModal.tsx src/components/Wizard.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in all touched follow-up files.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile completed with no errors after follow-up defaults/config/a11y patches.
+
+- Command: `npm run -s test`
+  - Result: PASS
+  - Evidence:
+    - 39 files passed.
+    - 415 tests passed.
+
+- Command: `npm run -s lint`
+  - Result: PASS
+  - Evidence:
+    - repository lint check passed after follow-up changes.
+
+- Command: `npm run -s build`
+  - Result: PASS
+  - Evidence:
+    - production client build completed successfully.
+
+- Command: `rg -n "enableAutoBackup:\\s*true|autoBackup\\s*\\?\\?\\s*true|settings\\.autoBackup \\?\\? true" src/store/slices/createSettingsSlice.ts src/store/useAppStore.ts src/utils/storage.ts`
+  - Result: PASS (targeted default verification)
+  - Evidence:
+    - no remaining default-`true` auto-backup fallback in targeted setting/storage paths.
+
+- Command: PowerShell regex scan for icon-button labeling (`md3-icon-btn` button blocks missing `aria-label`)
+  - Result: PASS
+  - Evidence:
+    - no remaining unlabeled `md3-icon-btn` button blocks found in `src/components`.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `FOLLOWUP-REMEDIATION-008`.
+
+---
+
+## Validation - 2026-02-17 - CORPUS-IMPORT-DIR-009
+- Command: `npx eslint electron/main.cjs`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in touched Electron handler file.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after Electron handler patch.
+
+- Command: `rg -n "ocr-corpus-import-images|defaultPath: corpusImagesDir|corpusImagesDir" electron/main.cjs`
+  - Result: PASS (targeted behavior verification)
+  - Evidence:
+    - handler shows `defaultPath: corpusImagesDir` and pre-dialog directory ensure call.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `CORPUS-IMPORT-DIR-009`.
+
+---
+
+## Validation - 2026-02-17 - OCR-DUAL-BUFFER-GATES-010
+- Command: `npx eslint electron/crewHubExtractor.cjs electron/ocrHandler.cjs electron/ocrMerger.cjs src/utils/ocr/ocrParser.ts src/hooks/useSmartCapture.ts src/App.tsx src/utils/ocr/__tests__/ocrParser.test.ts`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in touched OCR pipeline + apply gate + test files.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after strict apply guard and parser cap updates.
+
+- Command: `npx vitest run src/utils/ocr/__tests__/ocrParser.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 1 file passed, 56 tests passed.
+    - includes new regression cases for teammate cap and opponent per-team cap in merge path.
+
+- Command: `npx vitest run src/hooks/__tests__/useSmartCapture.test.ts src/App.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 2 files passed, 8 tests passed.
+    - confirms no regression in Smart Capture hook baseline and App render smoke after apply-gate changes.
+
+- Command: `rg -n "extractCrewHub\\(|colorImageBuffer|imageBuffer // keep color detection on original-color pixels" electron/ocrHandler.cjs electron/crewHubExtractor.cjs`
+  - Result: PASS (targeted dual-buffer verification)
+  - Evidence:
+    - `extractCrewHub` call sites now pass original `imageBuffer` for color detection,
+    - extractor signature includes `colorImageBuffer` and right-panel color detection uses it.
+
+- Command: `rg -n "OCR_REJECT_CONFIDENCE|OCR_REVIEW_CONFIDENCE|SMARTSCAN_REJECT_CONFIDENCE|SMARTSCAN_REVIEW_CONFIDENCE|MAX_OPPONENT_PLAYERS_PER_TEAM" src/App.tsx src/hooks/useSmartCapture.ts src/utils/ocr/ocrParser.ts electron/ocrMerger.cjs`
+  - Result: PASS (targeted guardrail verification)
+  - Evidence:
+    - strict confidence gates and team/player cap constants are present in all intended commit/merge boundaries.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-DUAL-BUFFER-GATES-010`.
+
+---
+
+## Validation - 2026-02-17 - OCR-ROI-RUNTIME-011
+- Command: `npx eslint src/components/SmartCapturesPanel.tsx src/components/HistoryTable.tsx src/hooks/useSmartScan.ts src/utils/scan/tesseractScan.ts src/components/DevOCRPanel.tsx src/hooks/useSmartCapture.ts src/components/SettingsModal.tsx electron/main.cjs electron/ocrHandler.cjs electron/crewHubExtractor.cjs electron/mapScreenExtractor.cjs`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in all ROI wiring + extractor/runtime files.
+
+- Command: `npx vitest run src/utils/__tests__/artifactService.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 1 file passed, 17 tests passed.
+    - includes rerun payload coverage validating optional `ocrRegions` passthrough.
+
+- Command: `npx vitest run src/hooks/__tests__/useSmartCapture.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 1 file passed, 6 tests passed.
+    - confirms no baseline Smart Capture regressions after ROI option threading.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after settings ROI editor + nested update typing changes.
+
+- Command: `rg -n "ocrRegions|rerun-ocr-on-artifact|ocr-process-capture|regionFingerprint|resolveMapLayout|resolveCrewHubLayout" src/components/SettingsModal.tsx src/components/HistoryTable.tsx src/components/SmartCapturesPanel.tsx src/hooks/useSmartCapture.ts src/hooks/useSmartScan.ts src/utils/scan/tesseractScan.ts electron/main.cjs electron/ocrHandler.cjs electron/crewHubExtractor.cjs electron/mapScreenExtractor.cjs`
+  - Result: PASS (targeted ROI plumbing verification)
+  - Evidence:
+    - ROI settings now appear in all intended renderer callsites, rerun IPC path, OCR IPC handler, cache-key fingerprinting, and extractor layout override resolvers.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-ROI-RUNTIME-011`.
+
+---
+
+## Validation - 2026-02-17 - OCR-CORPUS-ROI-012
+- Command: `npx eslint src/components/DevOCRPanel.tsx electron/main.cjs`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in touched corpus ROI wiring files.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after corpus payload/handler updates.
+
+- Command: `rg -n "ocr-corpus-run-pipeline|ocrRegions" src/components/DevOCRPanel.tsx electron/main.cjs`
+  - Result: PASS (targeted corpus ROI verification)
+  - Evidence:
+    - Dev OCR panel invoke includes `ocrRegions`,
+    - Electron corpus handler reads `opts?.ocrRegions` and forwards into `processCapture(...)`.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-CORPUS-ROI-012`.
+
+---
+
+## Validation - 2026-02-17 - OCR-ENHANCEMENT-T1-013
+- Command: `npx eslint electron/ocrHandler.cjs electron/preload.cjs src/components/DevOCRPanel.tsx src/components/OcrCorrectionModal.tsx src/hooks/useKeyboardShortcuts.ts src/store/slices/createSettingsSlice.ts src/utils/ocrAliasEngine.ts src/components/ConfidenceMeter.tsx scripts/security_negative_tests.cjs`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in all touched implementation files.
+
+- Command: `npx vitest run src/components/OcrCorrectionModal.test.tsx src/store/slices/__tests__/createMappingSlice.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 2 files passed.
+    - 35 tests passed.
+    - confirms no regression in correction modal transition behavior and alias learning slice lifecycle tests.
+
+- Command: `node scripts/security_negative_tests.cjs`
+  - Result: PASS
+  - Evidence:
+    - 113/113 checks passed.
+    - allowlist parity remains valid after adding `get-ocr-cache-stats`.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile completed successfully after Tier 1 additions.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-ENHANCEMENT-T1-013`.
+
+---
+
+## Validation - 2026-02-17 - OCR-ENHANCEMENT-T2-014
+- Command: `npx eslint electron/ocrHandler.cjs electron/preload.cjs src/components/DevOCRPanel.tsx scripts/security_negative_tests.cjs`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in benchmark IPC/backend/UI/allowlist parity files.
+
+- Command: `node scripts/security_negative_tests.cjs`
+  - Result: PASS
+  - Evidence:
+    - 113/113 checks passed.
+    - IPC allowlist fixture remains consistent after adding `benchmark-ocr-preprocessing`.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded with new Dev OCR benchmark state/UI additions.
+
+- Command: `rg -n "benchmark-ocr-preprocessing|benchmarkRegionPreprocessing|Benchmark Old vs Crop-First" electron/ocrHandler.cjs electron/preload.cjs scripts/security_negative_tests.cjs src/components/DevOCRPanel.tsx`
+  - Result: PASS (targeted benchmark wiring verification)
+  - Evidence:
+    - benchmark helper + IPC handler exist in OCR handler,
+    - preload allowlist + security fixture include channel,
+    - Dev OCR panel exposes benchmark control and result display.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-ENHANCEMENT-T2-014`.
+
+---
+
+## Validation - 2026-02-17 - OCR-ENHANCEMENT-T2-015
+- Command: `npx eslint src/utils/ocrCalibration.ts src/utils/__tests__/ocrCalibration.test.ts src/store/slices/createSettingsSlice.ts src/store/useAppStore.ts src/components/OcrCorrectionModal.tsx src/components/DevOCRPanel.tsx src/components/OcrCorrectionModal.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in calibration utility, store wiring, correction modal, dev panel, or focused test file changes.
+
+- Command: `npx vitest run src/utils/__tests__/ocrCalibration.test.ts src/components/OcrCorrectionModal.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 2 files passed.
+    - 7 tests passed.
+    - confirms calibration bucket/threshold helper behavior and correction modal regression safety.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after adding persisted calibration sample state and dev-panel analytics view.
+
+- Command: `rg -n "ocrCalibrationSamples|recordCalibrationSample|buildCalibrationBuckets|recommendCalibrationThreshold" src/store/slices/createSettingsSlice.ts src/store/useAppStore.ts src/components/OcrCorrectionModal.tsx src/components/DevOCRPanel.tsx src/utils/ocrCalibration.ts`
+  - Result: PASS (targeted calibration wiring verification)
+  - Evidence:
+    - settings slice exposes bounded calibration sample recording,
+    - store hydration/persistence includes calibration samples,
+    - correction modal records samples on apply,
+    - dev panel renders bucket analysis + threshold recommendation from shared utility.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-ENHANCEMENT-T2-015`.
+
+---
+
+## Validation - 2026-02-17 - OCR-ENHANCEMENT-T2-016
+- Command: `npx eslint src/utils/ocrBatchActions.ts src/utils/__tests__/ocrBatchActions.test.ts src/components/BatchActionConfirmDialog.tsx src/components/OcrCorrectionModal.tsx src/components/OcrCorrectionModal.test.tsx src/store/slices/createSettingsSlice.ts src/store/useAppStore.ts`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in batch threshold/store utility, modal, confirm dialog, or focused tests.
+
+- Command: `npx vitest run src/utils/__tests__/ocrBatchActions.test.ts src/components/OcrCorrectionModal.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 2 files passed.
+    - 5 tests passed.
+    - verifies threshold normalization + batch eligibility filters and confirms modal baseline ignore/undo flow remains stable.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after adding persisted batch threshold setting and new confirmation dialog component.
+
+- Command: `rg -n "ocrBatchAcceptThreshold|setOcrBatchAcceptThreshold|BatchActionConfirmDialog|normalizeOcrBatchThreshold|getHighConfidenceEligible|getLowConfidenceEligible" src/store/slices/createSettingsSlice.ts src/store/useAppStore.ts src/components/BatchActionConfirmDialog.tsx src/components/OcrCorrectionModal.tsx src/utils/ocrBatchActions.ts src/utils/__tests__/ocrBatchActions.test.ts`
+  - Result: PASS (targeted batch operation wiring verification)
+  - Evidence:
+    - settings/store persistence includes batch threshold field,
+    - modal uses threshold slider + live count labels and confirmation dialog,
+    - shared utility provides threshold normalization and eligibility filtering with focused tests.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-ENHANCEMENT-T2-016`.
+
+---
+
+## Validation - 2026-02-17 - OCR-ENHANCEMENT-T2-017
+- Command: `npx eslint electron/ocrHandler.cjs src/utils/ocr/ocrTypes.ts src/utils/electronBridge.ts src/components/OcrBoundingBoxOverlay.tsx src/components/DevOCRPanel.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in OCR handler debug payload path, bridge/types updates, new overlay component, or Dev OCR panel wiring.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after adding optional OCR bbox debug response fields and new Dev panel overlay state/component usage.
+
+- Command: `rg -n "includeBboxes|ocrBoundingBoxes|OcrBoundingBoxOverlay|Capture with Bounding Boxes|buildOcrBoundingBoxDebugPayload" electron/ocrHandler.cjs src/utils/ocr/ocrTypes.ts src/utils/electronBridge.ts src/components/DevOCRPanel.tsx src/components/OcrBoundingBoxOverlay.tsx`
+  - Result: PASS (targeted bounding-box overlay wiring verification)
+  - Evidence:
+    - `electron/ocrHandler.cjs` includes opt-in includeBboxes runtime option, debug payload builder, and cache bypass for debug captures.
+    - `src/utils/ocr/ocrTypes.ts` includes optional `ocrBoundingBoxes` response model.
+    - `src/utils/electronBridge.ts` passes runtime options (`includeBboxes`) through existing OCR IPC.
+    - `src/components/DevOCRPanel.tsx` exposes "Capture with Bounding Boxes" and overlay rendering.
+    - `src/components/OcrBoundingBoxOverlay.tsx` provides interactive bbox visualization.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-ENHANCEMENT-T2-017`.
+
+---
+
+## Validation - 2026-02-17 - OCR-ENHANCEMENT-T3-018
+- Command: `npx eslint src/utils/ocrCorpusBuilder.ts src/utils/__tests__/ocrCorpusBuilder.test.ts src/utils/export.ts src/components/DevOCRPanel.tsx src/utils/electronBridge.ts src/utils/ocr/ocrTypes.ts electron/ocrHandler.cjs`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in new corpus builder/tests, export helper, dev-panel wiring, runtime options bridge/types, or OCR handler archive path.
+
+- Command: `npx vitest run src/utils/__tests__/ocrCorpusBuilder.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 1 file passed.
+    - 3 tests passed.
+    - validates min-count alias filtering and JSONL/BOX serialization output shape.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after adding corpus utility, export helper, and runtime option/type updates.
+
+- Command: `rg -n "buildOcrCorpus|serializeOcrCorpusJsonl|serializeOcrCorpusBox|exportTextFile|Export Training Data|archiveOcrSample|archiveMetadata" src/utils/ocrCorpusBuilder.ts src/utils/export.ts src/components/DevOCRPanel.tsx src/utils/electronBridge.ts src/utils/ocr/ocrTypes.ts electron/ocrHandler.cjs`
+  - Result: PASS (targeted correction-corpus wiring verification)
+  - Evidence:
+    - corpus builder + serializers exist,
+    - text export helper exists,
+    - Dev OCR corpus action wired,
+    - OCR runtime archive options wired in bridge and OCR handler.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-ENHANCEMENT-T3-018`.
+
+---
+
+## Validation - 2026-02-17 - OCR-ENHANCEMENT-T3-019
+- Command: `npx eslint electron/tesseractDictionary.cjs electron/ocrHandler.cjs electron/preload.cjs scripts/security_negative_tests.cjs src/providers/GameDataProvider.tsx src/components/DevOCRPanel.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in dictionary helper, OCR handler wiring, IPC allowlist files, or renderer trigger points.
+
+- Command: `node scripts/security_negative_tests.cjs`
+  - Result: PASS
+  - Evidence:
+    - 113/113 checks passed.
+    - invoke allowlist fixture remains consistent after adding `regenerate-ocr-dictionary`.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after auto-regeneration effect and Dev OCR manual action wiring.
+
+- Command: `rg -n "regenerate-ocr-dictionary|generateUserWordsFile|user_words_file|OCR_USER_WORDS_FILE|Regenerate OCR Dictionary|Auto dictionary regenerated" electron/tesseractDictionary.cjs electron/ocrHandler.cjs electron/preload.cjs scripts/security_negative_tests.cjs src/providers/GameDataProvider.tsx src/components/DevOCRPanel.tsx`
+  - Result: PASS (targeted dictionary wiring verification)
+  - Evidence:
+    - dictionary generator exists and is imported by OCR handler.
+    - OCR handler exposes regeneration IPC and applies `user_words_file` worker parameter.
+    - preload + security allowlist include new channel.
+    - renderer has both auto (`GameDataProvider`) and manual (`DevOCRPanel`) regeneration triggers.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-ENHANCEMENT-T3-019`.
+
+---
+
+## Validation - 2026-02-17 - OCR-ENHANCEMENT-T3-020
+- Command: `npx eslint src/utils/patternRecognition.ts src/utils/__tests__/patternRecognition.test.ts src/components/OcrCorrectionModal.tsx src/components/DevOCRPanel.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in new pattern utility/tests or OCR modal/dev panel integrations.
+
+- Command: `npx vitest run src/utils/__tests__/patternRecognition.test.ts src/components/OcrCorrectionModal.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 2 files passed.
+    - 5 tests passed.
+    - verifies pattern utility core behavior and confirms OCR correction modal baseline behavior remains stable.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after pattern utility and UI wiring updates.
+
+- Command: `rg -n "buildCooccurrenceMatrix|getTeammateSuggestions|getTopCooccurrencePairs|Likely Teammates|Team Patterns" src/utils/patternRecognition.ts src/utils/__tests__/patternRecognition.test.ts src/components/OcrCorrectionModal.tsx src/components/DevOCRPanel.tsx`
+  - Result: PASS (targeted pattern-recognition wiring verification)
+  - Evidence:
+    - utility exports co-occurrence build/suggestion/pair-summary helpers.
+    - tests cover encounter/suggestion/recency behavior.
+    - OCR correction modal renders likely-teammate suggestions.
+    - Dev OCR panel renders team-pattern summary card.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-ENHANCEMENT-T3-020`.
+
+---
+
+## Validation - 2026-02-17 - OCR-ENHANCEMENT-T3-021
+- Command: `npx eslint src/hooks/useFocusTrap.ts src/hooks/useAriaLiveRegion.ts src/utils/accessibilityAudit.ts src/utils/__tests__/accessibilityAudit.test.ts src/components/OcrCorrectionModal.tsx src/components/BatchActionConfirmDialog.tsx src/components/ReviewQueueModal.tsx src/components/SettingsModal.tsx src/components/RenameModal.tsx src/components/ResetConfirmModal.tsx src/components/EditMatchModal.tsx src/components/DevOCRPanel.tsx src/index.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations across new accessibility hook/style/audit files and targeted modal + Dev OCR integrations.
+
+- Command: `npx vitest run src/utils/__tests__/accessibilityAudit.test.ts src/components/OcrCorrectionModal.test.tsx src/components/ReviewQueueModal.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 3 files passed.
+    - 10 tests passed.
+    - validates accessibility-audit utility behavior and confirms OCR/review modal baseline tests remain green after accessibility hardening.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after adding shared accessibility hooks, audit utility, stylesheet import, and modal updates.
+
+- Command: `rg -n "useFocusTrap|useAriaLiveRegion|runA11yAudit|Accessibility Audit|aria-modal=\\\"true\\\"|role=\\\"dialog\\\"" src/components src/hooks src/utils src/index.tsx -S`
+  - Result: PASS (targeted accessibility wiring verification)
+  - Evidence:
+    - focus-trap and live-region hooks are wired in targeted modal flows.
+    - automated accessibility audit utility and Dev OCR trigger are wired.
+    - dialog semantics (`role="dialog"`, `aria-modal`) are present in updated modal components.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-ENHANCEMENT-T3-021`.
+
+---
+
+## Validation - 2026-02-17 - OCR-ENHANCEMENT-T3-022
+- Command: `npx eslint src/components/ocr/OCRReviewModal.tsx src/components/ocr/OCRReviewModal.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in OCRReviewModal accessibility hardening changes or new focused tests.
+
+- Command: `npx vitest run src/components/ocr/OCRReviewModal.test.tsx src/components/OcrCorrectionModal.test.tsx src/components/ReviewQueueModal.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 3 files passed.
+    - 9 tests passed.
+    - validates OCRReviewModal dialog semantics + Escape behavior, while confirming adjacent OCR modal test suites remain stable.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after OCRReviewModal accessibility additions and new test coverage.
+
+- Command: `rg -n "useFocusTrap|useKeyboardShortcuts|useAriaLiveRegion|aria-modal|lightboxTitleId|Ctrl\\+Enter" src/components/ocr/OCRReviewModal.tsx src/components/ocr/OCRReviewModal.test.tsx -S`
+  - Result: PASS (targeted OCRReviewModal accessibility wiring verification)
+  - Evidence:
+    - focus trap + keyboard shortcut + live-region hooks are wired,
+    - both modal and lightbox include dialog semantics,
+    - tests cover main dialog and lightbox Escape behavior.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-ENHANCEMENT-T3-022`.
+
+---
+
+## Validation - 2026-02-17 - OCR-ENHANCEMENT-T3-023
+- Command: `npx eslint src/components/DrillDownOverlay.tsx src/components/DrillDownOverlay.test.tsx src/App.tsx src/App.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in overlay accessibility hardening changes or focused tests.
+
+- Command: `npx vitest run src/components/DrillDownOverlay.test.tsx src/App.test.tsx src/components/ocr/OCRReviewModal.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 3 files passed.
+    - 8 tests passed.
+    - validates drill-down dialog semantics + Escape close and App changelog/ID mapper dialog semantics + Escape close while keeping OCR review modal tests green.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after App + drill-down overlay accessibility updates and new tests.
+
+- Command: `rg --line-number --no-heading 'role="dialog"|aria-modal|useFocusTrap|onOverlayEscape|a11y-sr-only' src/components/DrillDownOverlay.tsx src/App.tsx`
+  - Result: PASS (targeted overlay accessibility wiring verification)
+  - Evidence:
+    - focus trap wiring exists for drill-down, changelog, and ID mapper overlays.
+    - dialog semantics (`role="dialog"`, `aria-modal`) are present in all targeted wrappers.
+    - Escape handler (`onOverlayEscape`) is wired in App overlay path.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-ENHANCEMENT-T3-023`.
+
+---
+
+## Validation - 2026-02-17 - OCR-ENHANCEMENT-T3-024
+- Command: `npx eslint src/components/Tutorial.tsx src/components/MatchRecordingPage.tsx src/components/Tutorial.test.tsx src/components/MatchRecordingPage.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in tutorial/lightbox accessibility updates or new focused tests.
+
+- Command: `npx vitest run src/components/Tutorial.test.tsx src/components/MatchRecordingPage.test.tsx src/components/DrillDownOverlay.test.tsx src/App.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 4 files passed.
+    - 9 tests passed.
+    - validates tutorial dialog semantics + Escape behavior and match screenshot lightbox dialog semantics + Escape close while keeping prior overlay tests green.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after tutorial and match lightbox accessibility additions.
+
+- Command: `rg --line-number --no-heading 'useFocusTrap|useKeyboardShortcuts|role="dialog"|aria-modal|dialogDescriptionId' src/components/Tutorial.tsx`
+  - Result: PASS (targeted tutorial accessibility wiring verification)
+  - Evidence:
+    - tutorial overlay uses focus trap + keyboard shortcuts with dialog semantics.
+
+- Command: `rg --line-number --no-heading 'useFocusTrap|useKeyboardShortcuts|role="dialog"|aria-modal|Open screenshot|Close screenshot preview' src/components/MatchRecordingPage.tsx`
+  - Result: PASS (targeted match lightbox accessibility wiring verification)
+  - Evidence:
+    - match screenshot preview uses focus trap + Escape shortcut with dialog semantics and labeled controls.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-ENHANCEMENT-T3-024`.
+
+---
+
+## Validation - 2026-02-17 - OCR-ENHANCEMENT-T3-025
+- Command: `npx eslint src/components/OcrRegionEditorModal.tsx src/components/SettingsModal.tsx src/components/PlayerHub.tsx src/components/DevOCRPanel.tsx src/components/OcrCorrectionModal.tsx src/components/ocr/OCRReviewModal.tsx src/components/Wizard.tsx src/App.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations across new ROI editor implementation and targeted layout/modal/input fixes.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after ROI editor addition and all requested UI regression patches.
+
+- Command: `npx vitest run src/components/OcrCorrectionModal.test.tsx src/components/ocr/OCRReviewModal.test.tsx`
+  - Result: BLOCKED (`spawn EPERM` at vitest/vite config startup in current environment)
+  - Evidence:
+    - failure occurs before test execution while launching esbuild service from vitest config pipeline.
+    - command should be re-run unchanged in local shell with normal child-process spawn permissions.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-ENHANCEMENT-T3-025`.

@@ -36,7 +36,13 @@ export const processWithTesseractOCR = async (
         const base64Data = imageDataUrl.replace(/^data:image\/\w+;base64,/, '');
 
         const effectiveOcrMode = options.ocrMode === 'hybrid-plus' ? 'both' : (options.ocrMode || 'both');
-        const ocrResponse = await ocrProcessCapture(base64Data, activeUser, null, effectiveOcrMode);
+        const ocrResponse = await ocrProcessCapture(
+            base64Data,
+            activeUser,
+            null,
+            effectiveOcrMode,
+            options.ocrRegions || null
+        );
 
         if (!ocrResponse.success || !ocrResponse.data) {
             Logger.warn('OCR', 'Tesseract OCR failed, falling back to native');

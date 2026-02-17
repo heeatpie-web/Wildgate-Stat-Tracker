@@ -24,6 +24,11 @@ export interface OcrAliasEntry {
   contexts: Record<OcrAliasContext, number>;
   lastDecisionId?: string;
   decisionCount?: number;
+  learningMetadata?: {
+    totalCorrections: number;
+    autoAppliedCount: number;
+    firstCorrectionAt: number;
+  };
 }
 
 export interface OcrAliasModel {
@@ -307,6 +312,11 @@ export const recordAliasCorrection = (
     const prev = existingGroup[existingIndex];
     const nextContexts = { ...emptyContexts(), ...(prev.contexts || {}) };
     nextContexts[context] = (nextContexts[context] || 0) + 1;
+    const prevMetadata = prev.learningMetadata || {
+      totalCorrections: Math.max(1, Number(prev.count || 1)),
+      autoAppliedCount: 0,
+      firstCorrectionAt: Number.isFinite(prev.lastUpdatedAt) ? prev.lastUpdatedAt : timestamp,
+    };
     nextGroup[existingIndex] = {
       ...prev,
       rawKey,
@@ -318,6 +328,13 @@ export const recordAliasCorrection = (
       contexts: nextContexts,
       lastDecisionId: input.decisionId || prev.lastDecisionId,
       decisionCount: (prev.decisionCount || 0) + 1,
+      learningMetadata: {
+        totalCorrections: Math.max(1, Number(prevMetadata.totalCorrections || prev.count || 1)) + 1,
+        autoAppliedCount: Math.max(0, Number(prevMetadata.autoAppliedCount || 0)),
+        firstCorrectionAt: Number.isFinite(prevMetadata.firstCorrectionAt)
+          ? Number(prevMetadata.firstCorrectionAt)
+          : timestamp,
+      },
     };
   } else {
     const contexts = emptyContexts();
@@ -333,6 +350,11 @@ export const recordAliasCorrection = (
       contexts,
       lastDecisionId: input.decisionId,
       decisionCount: 1,
+      learningMetadata: {
+        totalCorrections: 1,
+        autoAppliedCount: 0,
+        firstCorrectionAt: timestamp,
+      },
     });
   }
 
@@ -344,6 +366,21 @@ export const recordAliasCorrection = (
     },
   };
   return withStats(nextModel);
+};
+
+export const getLearningMetadata = (
+  model: OcrAliasModel | undefined,
+  ocrText: string
+): string | null => {
+  const normalizedKey = normalizeAliasKey(ocrText);
+  if (!normalizedKey) return null;
+  const entry = model?.entries?.[normalizedKey]?.[0];
+  if (!entry) return null;
+  const correctionCount = Math.max(
+    1,
+    Number(entry.learningMetadata?.totalCorrections || entry.count || 1)
+  );
+  return `Learned from ${correctionCount} correction${correctionCount === 1 ? '' : 's'}`;
 };
 
 export const removeAliasCorrection = (
@@ -360,11 +397,18 @@ export const removeAliasCorrection = (
   const nextGroup = existingGroup
     .map((entry) => {
       if (entry.targetName.toLowerCase() !== targetName.toLowerCase()) return entry;
+      const nextLearningCount = Math.max(
+        0,
+        Number(entry.learningMetadata?.totalCorrections || entry.count || 1) - 1
+      );
       return {
         ...entry,
         count: Math.max(0, entry.count - 1),
         decisionCount: Math.max(0, (entry.decisionCount || 0) - 1),
         lastUpdatedAt: Date.now(),
+        learningMetadata: entry.learningMetadata
+          ? { ...entry.learningMetadata, totalCorrections: nextLearningCount }
+          : undefined,
       };
     })
     .filter((entry) => entry.count > 0);
@@ -611,4 +655,3 @@ export const migrateLegacyOcrCorrections = (
   });
   return withStats(next);
 };
-

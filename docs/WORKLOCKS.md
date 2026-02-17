@@ -65,6 +65,129 @@ Use this row format when claiming:
 
 | File | Owner | Started (UTC) | Released (UTC) | Purpose |
 |---|---|---|---|---|
+| `src/components/ocr/OCRReviewModal.test.tsx` | verifier | 2026-02-17T20:47:00Z | 2026-02-17T20:57:00Z | OCR-ENHANCEMENT-T3-022: focused modal accessibility regression coverage |
+| `src/index.tsx` | builder | 2026-02-17T20:26:00Z | 2026-02-17T20:41:00Z | OCR-ENHANCEMENT-T3-021: import shared accessibility stylesheet |
+| `src/components/EditMatchModal.tsx` | ui-designer | 2026-02-17T20:26:00Z | 2026-02-17T20:41:00Z | OCR-ENHANCEMENT-T3-021: add modal dialog ARIA + focus trap wiring |
+| `src/components/ResetConfirmModal.tsx` | ui-designer | 2026-02-17T20:26:00Z | 2026-02-17T20:41:00Z | OCR-ENHANCEMENT-T3-021: add modal dialog ARIA + focus trap wiring |
+| `src/components/RenameModal.tsx` | ui-designer | 2026-02-17T20:26:00Z | 2026-02-17T20:41:00Z | OCR-ENHANCEMENT-T3-021: add modal dialog ARIA + focus trap wiring |
+| `src/components/SettingsModal.tsx` | ui-designer | 2026-02-17T20:26:00Z | 2026-02-17T20:41:00Z | OCR-ENHANCEMENT-T3-021: add modal dialog ARIA + focus trap wiring |
+| `src/components/BatchActionConfirmDialog.tsx` | ui-designer | 2026-02-17T20:26:00Z | 2026-02-17T20:41:00Z | OCR-ENHANCEMENT-T3-021: add dialog semantics and keyboard/focus accessibility |
+| `src/components/ReviewQueueModal.tsx` | ui-designer | 2026-02-17T20:26:00Z | 2026-02-17T20:41:00Z | OCR-ENHANCEMENT-T3-021: add dialog semantics, focus management, and keyboard accessibility |
+| `src/utils/__tests__/accessibilityAudit.test.ts` | verifier | 2026-02-17T20:26:00Z | 2026-02-17T20:41:00Z | OCR-ENHANCEMENT-T3-021: focused regression tests for accessibility audit utility |
+| `src/utils/accessibilityAudit.ts` | builder | 2026-02-17T20:26:00Z | 2026-02-17T20:41:00Z | OCR-ENHANCEMENT-T3-021: add DOM accessibility audit utility for Dev OCR tooling |
+| `src/styles/accessibility.css` | ui-designer | 2026-02-17T20:26:00Z | 2026-02-17T20:41:00Z | OCR-ENHANCEMENT-T3-021: add shared accessibility helper styles and contrast/reduced-motion support |
+| `src/hooks/useAriaLiveRegion.ts` | builder | 2026-02-17T20:26:00Z | 2026-02-17T20:41:00Z | OCR-ENHANCEMENT-T3-021: add reusable screen-reader live-region announcer hook |
+| `src/hooks/useFocusTrap.ts` | builder | 2026-02-17T20:26:00Z | 2026-02-17T20:41:00Z | OCR-ENHANCEMENT-T3-021: add reusable focus trap hook for modal keyboard containment |
+| `src/utils/__tests__/patternRecognition.test.ts` | verifier | 2026-02-17T20:06:36Z | 2026-02-17T20:13:24Z | OCR-ENHANCEMENT-T3-020: focused regression tests for teammate pattern scoring |
+| `src/utils/patternRecognition.ts` | builder | 2026-02-17T20:06:36Z | 2026-02-17T20:13:24Z | OCR-ENHANCEMENT-T3-020: teammate co-occurrence utility and suggestion scoring |
+| `scripts/security_negative_tests.cjs` | builder | 2026-02-17T19:58:00Z | 2026-02-17T20:03:13Z | OCR-ENHANCEMENT-T3-019: keep security fixture invoke-channel parity |
+| `electron/preload.cjs` | builder | 2026-02-17T19:58:00Z | 2026-02-17T20:03:13Z | OCR-ENHANCEMENT-T3-019: allowlist new dictionary regeneration IPC channel |
+| `src/providers/GameDataProvider.tsx` | builder | 2026-02-17T19:58:00Z | 2026-02-17T20:03:13Z | OCR-ENHANCEMENT-T3-019: auto-regenerate OCR dictionary from pilot registry/match updates |
+| `electron/tesseractDictionary.cjs` | builder | 2026-02-17T19:58:00Z | 2026-02-17T20:03:13Z | OCR-ENHANCEMENT-T3-019: Tier 3 #10 dictionary generation helper for pilot-registry-based user words |
+| `docs/agents/DECISIONS.md` | project-manager | 2026-02-17T12:46:42Z | 2026-02-17T12:50:42Z | OCR-ENHANCEMENT-T3-018 decisions for corpus export format and archiving scope |
+| `docs/agents/04_HANDOFF.md` | release-manager | 2026-02-17T12:46:42Z | 2026-02-17T12:50:42Z | OCR-ENHANCEMENT-T3-018 handoff summary capture |
+| `docs/agents/03_VALIDATION.md` | verifier | 2026-02-17T12:46:42Z | 2026-02-17T12:50:42Z | OCR-ENHANCEMENT-T3-018 validation evidence logging |
+| `docs/agents/02_EXECUTION_LOG.md` | debugger | 2026-02-17T12:46:42Z | 2026-02-17T12:50:42Z | OCR-ENHANCEMENT-T3-018 execution lifecycle and PM feedback cycle logging |
+| `docs/agents/01_PLAN.md` | project-manager | 2026-02-17T12:46:42Z | 2026-02-17T12:50:42Z | OCR-ENHANCEMENT-T3-018 step tracking with single active IN_PROGRESS step |
+| `docs/agents/00_INTAKE.md` | project-manager | 2026-02-17T12:46:42Z | 2026-02-17T12:50:42Z | OCR-ENHANCEMENT-T3-018 intake normalization and scope declaration |
+| `src/utils/__tests__/ocrCorpusBuilder.test.ts` | verifier | 2026-02-17T12:46:42Z | 2026-02-17T12:50:42Z | OCR-ENHANCEMENT-T3-018: focused regression tests for corpus builder formatting and filtering |
+| `src/utils/export.ts` | builder | 2026-02-17T12:46:42Z | 2026-02-17T12:50:42Z | OCR-ENHANCEMENT-T3-018: add text-file export helper for JSONL and BOX outputs |
+| `src/utils/ocrCorpusBuilder.ts` | builder | 2026-02-17T12:46:42Z | 2026-02-17T12:50:42Z | OCR-ENHANCEMENT-T3-018: build alias-model correction corpus and emit JSON/JSONL/BOX formats |
+| `src/components/DevOCRPanel.tsx` | ui-designer | 2026-02-17T12:46:42Z | 2026-02-17T12:50:42Z | OCR-ENHANCEMENT-T3-018: add correction corpus export action in Dev OCR corpus lab |
+| `electron/ocrHandler.cjs` | builder | 2026-02-17T12:46:42Z | 2026-02-17T12:50:42Z | OCR-ENHANCEMENT-T3-018: add opt-in OCR sample archiving helpers for correction corpus curation |
+| `docs/agents/DECISIONS.md` | project-manager | 2026-02-17T12:34:23Z | 2026-02-17T12:41:32Z | OCR-ENHANCEMENT-T2-017 implementation decisions/rationale for debug overlay scope |
+| `docs/agents/04_HANDOFF.md` | release-manager | 2026-02-17T12:34:23Z | 2026-02-17T12:41:32Z | OCR-ENHANCEMENT-T2-017 handoff summary capture |
+| `docs/agents/03_VALIDATION.md` | verifier | 2026-02-17T12:34:23Z | 2026-02-17T12:41:32Z | OCR-ENHANCEMENT-T2-017 focused validation evidence logging |
+| `docs/agents/02_EXECUTION_LOG.md` | debugger | 2026-02-17T12:34:23Z | 2026-02-17T12:41:32Z | OCR-ENHANCEMENT-T2-017 execution lifecycle + PM feedback cycle logging |
+| `docs/agents/01_PLAN.md` | project-manager | 2026-02-17T12:34:23Z | 2026-02-17T12:41:32Z | OCR-ENHANCEMENT-T2-017 step tracking with single active IN_PROGRESS item |
+| `docs/agents/00_INTAKE.md` | project-manager | 2026-02-17T12:34:23Z | 2026-02-17T12:41:32Z | OCR-ENHANCEMENT-T2-017 intake normalization and risk/execution-path declaration |
+| `src/components/OcrBoundingBoxOverlay.tsx` | ui-designer | 2026-02-17T12:34:23Z | 2026-02-17T12:41:32Z | OCR-ENHANCEMENT-T2-017: new interactive bounding-box overlay component for OCR debug visualization |
+| `src/utils/electronBridge.ts` | builder | 2026-02-17T12:34:23Z | 2026-02-17T12:41:32Z | OCR-ENHANCEMENT-T2-017: allow OCR runtime debug options passthrough (includeBboxes) |
+| `src/utils/ocr/ocrTypes.ts` | builder | 2026-02-17T12:34:23Z | 2026-02-17T12:41:32Z | OCR-ENHANCEMENT-T2-017: extend OCR result type with optional bounding-box debug payload |
+| `src/components/DevOCRPanel.tsx` | ui-designer | 2026-02-17T12:34:23Z | 2026-02-17T12:41:32Z | OCR-ENHANCEMENT-T2-017: add bounding-box debug capture action and overlay rendering in Dev OCR Lab |
+| `electron/ocrHandler.cjs` | builder | 2026-02-17T12:34:23Z | 2026-02-17T12:41:32Z | OCR-ENHANCEMENT-T2-017: add optional includeBboxes debug payload generation for OCR dev overlays |
+| `src/components/BatchActionConfirmDialog.tsx` | ui-designer | 2026-02-17T19:14:13Z | 2026-02-17T19:22:43Z | OCR-ENHANCEMENT-T2-016: add reusable batch-action confirmation dialog for OCR correction modal |
+| `src/store/slices/createSettingsSlice.ts` | builder | 2026-02-17T19:14:13Z | 2026-02-17T19:22:43Z | OCR-ENHANCEMENT-T2-016: persist OCR batch threshold setting and bounded setter logic |
+| `src/utils/__tests__/ocrBatchActions.test.ts` | verifier | 2026-02-17T19:14:13Z | 2026-02-17T19:22:43Z | OCR-ENHANCEMENT-T2-016: focused tests for batch eligibility/threshold helper behavior |
+| `src/store/slices/createSettingsSlice.ts` | builder | 2026-02-17T19:06:36Z | 2026-02-17T19:11:10Z | OCR-ENHANCEMENT-T2-015: persist bounded OCR confidence calibration samples and append/reset actions |
+| `src/utils/ocrCalibration.ts` | builder | 2026-02-17T19:06:36Z | 2026-02-17T19:11:10Z | OCR-ENHANCEMENT-T2-015: add confidence calibration bucketing/recommendation utility helpers |
+| `src/utils/__tests__/ocrCalibration.test.ts` | verifier | 2026-02-17T19:06:36Z | 2026-02-17T19:11:10Z | OCR-ENHANCEMENT-T2-015: focused regression tests for calibration sample bucketing + threshold recommendation |
+| `electron/preload.cjs` | builder | 2026-02-17T18:57:31Z | 2026-02-17T19:02:28Z | OCR-ENHANCEMENT-T2-014: expose benchmark IPC allowlist channel for Dev OCR tooling |
+| `scripts/security_negative_tests.cjs` | builder | 2026-02-17T18:57:31Z | 2026-02-17T19:02:28Z | OCR-ENHANCEMENT-T2-014: keep IPC allowlist security fixture parity with preload changes |
+| `electron/ocrHandler.cjs` | builder | 2026-02-17T18:37:28Z | 2026-02-17T18:51:03Z | OCR-ENHANCEMENT-T1-013: Tier 1 cache telemetry and OCR pipeline instrumentation |
+| `electron/preload.cjs` | builder | 2026-02-17T18:37:28Z | 2026-02-17T18:51:03Z | OCR-ENHANCEMENT-T1-013: expose new OCR cache telemetry IPC channel to renderer |
+| `src/store/slices/createSettingsSlice.ts` | builder | 2026-02-17T18:37:28Z | 2026-02-17T18:51:03Z | OCR-ENHANCEMENT-T1-013: add typed OCR cache telemetry shape for dev-panel polling state |
+| `src/components/DevOCRPanel.tsx` | ui-designer | 2026-02-17T18:37:28Z | 2026-02-17T18:51:03Z | OCR-ENHANCEMENT-T1-013: surface cache metrics card with timed polling in OCR tools UI |
+| `src/components/OcrCorrectionModal.tsx` | ui-designer | 2026-02-17T18:37:28Z | 2026-02-17T18:51:03Z | OCR-ENHANCEMENT-T1-013: add correction shortcuts, confidence meter, and learning feedback badge |
+| `src/hooks/useKeyboardShortcuts.ts` | builder | 2026-02-17T18:37:28Z | 2026-02-17T18:51:03Z | OCR-ENHANCEMENT-T1-013: generalize shortcut hook for reusable modal shortcut mappings |
+| `src/components/ConfidenceMeter.tsx` | ui-designer | 2026-02-17T18:37:28Z | 2026-02-17T18:51:03Z | OCR-ENHANCEMENT-T1-013: introduce accessible confidence progress component for OCR review |
+| `src/utils/ocrAliasEngine.ts` | builder | 2026-02-17T18:37:28Z | 2026-02-17T18:51:03Z | OCR-ENHANCEMENT-T1-013: add learning metadata helpers for OCR correction UX transparency |
+| `docs/agents/00_INTAKE.md` | project-manager | 2026-02-17T18:37:28Z | 2026-02-17T18:51:03Z | OCR-ENHANCEMENT-T1-013 intake normalization and risk/execution path declaration |
+| `docs/agents/01_PLAN.md` | project-manager | 2026-02-17T18:37:28Z | 2026-02-17T18:51:03Z | OCR-ENHANCEMENT-T1-013 plan steps and single-step in-progress tracking |
+| `docs/agents/02_EXECUTION_LOG.md` | debugger | 2026-02-17T18:37:28Z | 2026-02-17T18:51:03Z | OCR-ENHANCEMENT-T1-013 execution lifecycle, dependency status, and PM feedback cycle |
+| `docs/agents/03_VALIDATION.md` | verifier | 2026-02-17T18:37:28Z | 2026-02-17T18:51:03Z | OCR-ENHANCEMENT-T1-013 targeted validation commands and evidence logging |
+| `docs/agents/04_HANDOFF.md` | release-manager | 2026-02-17T18:37:28Z | 2026-02-17T18:51:03Z | OCR-ENHANCEMENT-T1-013 implementation handoff summary |
+| `docs/agents/DECISIONS.md` | project-manager | 2026-02-17T18:37:28Z | 2026-02-17T18:51:03Z | OCR-ENHANCEMENT-T1-013 scope and sequencing decisions for incremental rollout |
+| `src/components/DevOCRPanel.tsx` | builder | 2026-02-17T18:06:00Z | 2026-02-17T18:12:00Z | OCR-CORPUS-ROI-012: forward live ROI settings in corpus pipeline invoke payload |
+| `electron/main.cjs` | builder | 2026-02-17T18:06:00Z | 2026-02-17T18:12:00Z | OCR-CORPUS-ROI-012: accept/forward optional ocrRegions in corpus pipeline processCapture runs |
+| `docs/agents/00_INTAKE.md` | project-manager | 2026-02-17T18:06:00Z | 2026-02-17T18:12:00Z | OCR-CORPUS-ROI-012 intake capture |
+| `docs/agents/01_PLAN.md` | project-manager | 2026-02-17T18:06:00Z | 2026-02-17T18:12:00Z | OCR-CORPUS-ROI-012 step tracking |
+| `docs/agents/02_EXECUTION_LOG.md` | debugger | 2026-02-17T18:06:00Z | 2026-02-17T18:12:00Z | OCR-CORPUS-ROI-012 execution + PM feedback cycle |
+| `docs/agents/03_VALIDATION.md` | verifier | 2026-02-17T18:06:00Z | 2026-02-17T18:12:00Z | OCR-CORPUS-ROI-012 validation evidence |
+| `docs/agents/04_HANDOFF.md` | release-manager | 2026-02-17T18:06:00Z | 2026-02-17T18:12:00Z | OCR-CORPUS-ROI-012 final handoff summary |
+| `docs/agents/DECISIONS.md` | project-manager | 2026-02-17T18:06:00Z | 2026-02-17T18:12:00Z | OCR-CORPUS-ROI-012 implementation rationale |
+| `src/store/slices/createSettingsSlice.ts` | builder | 2026-02-17T17:28:30Z | 2026-02-17T17:52:30Z | OCR-ROI-RUNTIME-011: add typed ROI update contract + persisted defaults/reset support |
+| `src/store/useAppStore.ts` | builder | 2026-02-17T17:28:30Z | 2026-02-17T17:52:30Z | OCR-ROI-RUNTIME-011: ROI hydration merge hardening and persisted settings round-trip |
+| `src/components/SettingsModal.tsx` | ui-designer | 2026-02-17T17:28:30Z | 2026-02-17T17:52:30Z | OCR-ROI-RUNTIME-011: add live ROI editor controls and reset action |
+| `src/utils/electronBridge.ts` | builder | 2026-02-17T17:28:30Z | 2026-02-17T17:52:30Z | OCR-ROI-RUNTIME-011: pass optional ROI payload through OCR IPC bridge |
+| `src/utils/artifactService.ts` | builder | 2026-02-17T17:28:30Z | 2026-02-17T17:52:30Z | OCR-ROI-RUNTIME-011: include optional ROI payload in rerun IPC request |
+| `src/hooks/useSmartCapture.ts` | builder | 2026-02-17T17:28:30Z | 2026-02-17T17:52:30Z | OCR-ROI-RUNTIME-011: ensure smart capture/rerun flows use live ROI settings |
+| `src/components/SmartCapturesPanel.tsx` | builder | 2026-02-17T17:28:30Z | 2026-02-17T17:52:30Z | OCR-ROI-RUNTIME-011: detail rerun path now threads live ROI settings |
+| `src/components/HistoryTable.tsx` | builder | 2026-02-17T17:28:30Z | 2026-02-17T17:52:30Z | OCR-ROI-RUNTIME-011: bulk rerun path now threads live ROI settings |
+| `electron/ocrHandler.cjs` | builder | 2026-02-17T17:28:30Z | 2026-02-17T17:52:30Z | OCR-ROI-RUNTIME-011: sanitize/apply ROI overrides and ROI-aware cache fingerprint |
+| `electron/crewHubExtractor.cjs` | builder | 2026-02-17T17:28:30Z | 2026-02-17T17:52:30Z | OCR-ROI-RUNTIME-011: consume dynamic Crew Hub layout overrides |
+| `electron/mapScreenExtractor.cjs` | builder | 2026-02-17T17:28:30Z | 2026-02-17T17:52:30Z | OCR-ROI-RUNTIME-011: consume dynamic Map Screen layout overrides |
+| `electron/main.cjs` | builder | 2026-02-17T17:28:30Z | 2026-02-17T17:52:30Z | OCR-ROI-RUNTIME-011: rerun IPC accepts/forwards optional ROI payload |
+| `src/utils/__tests__/artifactService.test.ts` | verifier | 2026-02-17T17:28:30Z | 2026-02-17T17:52:30Z | OCR-ROI-RUNTIME-011: verify rerun payload includes optional ROI settings |
+| `electron/main.cjs` | builder | 2026-02-17T17:01:41Z | 2026-02-17T17:03:40Z | CORPUS-IMPORT-DIR-009: set corpus import file-dialog defaultPath to corpus images directory |
+| `electron/crewHubExtractor.cjs` | builder | 2026-02-17T17:15:40Z | 2026-02-17T17:23:42Z | OCR-DUAL-BUFFER-GATES-010: split text/color buffer flow for color-safe crew extraction |
+| `electron/ocrMerger.cjs` | builder | 2026-02-17T17:15:40Z | 2026-02-17T17:23:42Z | OCR-DUAL-BUFFER-GATES-010: enforce per-team player cap at OCR merge boundary |
+| `src/utils/ocr/ocrParser.ts` | builder | 2026-02-17T17:15:40Z | 2026-02-17T17:23:42Z | OCR-DUAL-BUFFER-GATES-010: enforce teammate/opponent guardrails in frontend OCR merges |
+| `src/App.tsx` | builder | 2026-02-17T17:15:40Z | 2026-02-17T17:23:42Z | OCR-DUAL-BUFFER-GATES-010: strict OCR auto-apply gating and review queue routing |
+| `src/utils/ocr/__tests__/ocrParser.test.ts` | verifier | 2026-02-17T17:15:40Z | 2026-02-17T17:23:42Z | OCR-DUAL-BUFFER-GATES-010: regression tests for OCR merge/player-cap guardrails |
+| `docs/agents/00_INTAKE.md` | project-manager | 2026-02-17T17:01:41Z | 2026-02-17T17:03:40Z | CORPUS-IMPORT-DIR-009 intake and scope normalization |
+| `docs/agents/01_PLAN.md` | project-manager | 2026-02-17T17:01:41Z | 2026-02-17T17:03:40Z | CORPUS-IMPORT-DIR-009 plan and status tracking |
+| `docs/agents/02_EXECUTION_LOG.md` | debugger | 2026-02-17T17:01:41Z | 2026-02-17T17:03:40Z | CORPUS-IMPORT-DIR-009 execution log + PM feedback lifecycle |
+| `docs/agents/03_VALIDATION.md` | verifier | 2026-02-17T17:01:41Z | 2026-02-17T17:03:40Z | CORPUS-IMPORT-DIR-009 validation evidence logging |
+| `docs/agents/04_HANDOFF.md` | release-manager | 2026-02-17T17:01:41Z | 2026-02-17T17:03:40Z | CORPUS-IMPORT-DIR-009 handoff summary |
+| `docs/agents/DECISIONS.md` | project-manager | 2026-02-17T17:01:41Z | 2026-02-17T17:03:40Z | CORPUS-IMPORT-DIR-009 implementation decision log |
+| `src/components/ErrorBoundary.tsx` | builder | 2026-02-17T16:41:00Z | 2026-02-17T16:52:27Z | FOLLOWUP-REMEDIATION-008: emergency-reset confirmation safety and accessibility copy hardening |
+| `src/config/runtimeConfig.ts` | builder | 2026-02-17T16:41:00Z | 2026-02-17T16:52:27Z | FOLLOWUP-REMEDIATION-008: extend env-backed runtime timing configuration coverage |
+| `src/hooks/useDiscordRPC.ts` | builder | 2026-02-17T16:41:00Z | 2026-02-17T16:52:27Z | FOLLOWUP-REMEDIATION-008: replace hardcoded presence refresh interval with runtime config |
+| `src/components/SystemPulse.tsx` | builder | 2026-02-17T16:41:00Z | 2026-02-17T16:52:27Z | FOLLOWUP-REMEDIATION-008: replace hardcoded status poll interval with runtime config |
+| `src/components/HistoryTable.tsx` | builder | 2026-02-17T16:41:00Z | 2026-02-17T16:52:27Z | FOLLOWUP-REMEDIATION-008: replace hardcoded debounce/refresh timers with runtime config |
+| `src/components/DrillDownOverlay.tsx` | ui-designer | 2026-02-17T16:41:00Z | 2026-02-17T16:52:27Z | FOLLOWUP-REMEDIATION-008: add missing aria-label to icon-only close controls |
+| `src/components/analytics/AnalyticsShell.tsx` | ui-designer | 2026-02-17T16:41:00Z | 2026-02-17T16:52:27Z | FOLLOWUP-REMEDIATION-008: add missing aria-label to icon-only analytics nav controls |
+| `src/components/PlayerHub.tsx` | ui-designer | 2026-02-17T16:41:00Z | 2026-02-17T16:52:27Z | FOLLOWUP-REMEDIATION-008: add missing aria-label to icon-only player action controls |
+| `src/components/ReviewQueueModal.tsx` | ui-designer | 2026-02-17T16:41:00Z | 2026-02-17T16:52:27Z | FOLLOWUP-REMEDIATION-008: add missing aria-label to icon-only review action controls |
+| `src/components/recording/RosterPanel.tsx` | ui-designer | 2026-02-17T16:41:00Z | 2026-02-17T16:52:27Z | FOLLOWUP-REMEDIATION-008: add missing aria-label to icon-only roster controls |
+| `src/components/SessionTimer.tsx` | ui-designer | 2026-02-17T16:41:00Z | 2026-02-17T16:52:27Z | FOLLOWUP-REMEDIATION-008: add missing aria-label to icon-only session timer controls |
+| `src/components/SettingsModal.tsx` | ui-designer | 2026-02-17T16:41:00Z | 2026-02-17T16:52:27Z | FOLLOWUP-REMEDIATION-008: add missing aria-label to settings modal icon controls |
+| `src/components/recording/MissionPanel.tsx` | ui-designer | 2026-02-17T16:41:00Z | 2026-02-17T16:52:27Z | FOLLOWUP-REMEDIATION-008: add missing aria-label to icon-only mission controls |
+| `src/components/Tutorial.tsx` | ui-designer | 2026-02-17T16:41:00Z | 2026-02-17T16:52:27Z | FOLLOWUP-REMEDIATION-008: add missing aria-label to tutorial icon controls |
+| `src/components/WindowFrame.tsx` | ui-designer | 2026-02-17T16:41:00Z | 2026-02-17T16:52:27Z | FOLLOWUP-REMEDIATION-008: add missing aria-label to window frame controls |
+| `src/components/smart-captures/SmartCaptureWidgets.tsx` | ui-designer | 2026-02-17T16:41:00Z | 2026-02-17T16:52:27Z | FOLLOWUP-REMEDIATION-008: add missing aria-label to icon-only smart-capture widget controls |
+| `src/components/EditMatchModal.tsx` | ui-designer | 2026-02-17T16:41:00Z | 2026-02-17T16:52:27Z | FOLLOWUP-REMEDIATION-008: add missing aria-label to icon-only modal controls |
+| `src/App.tsx` | builder | 2026-02-17T16:19:51Z | 2026-02-17T16:32:43Z | MODERATE-REMEDIATION-006: eliminate silent catches and wire env-backed runtime preload timing constants |
+| `src/components/Toast.tsx` | ui-designer | 2026-02-17T16:19:51Z | 2026-02-17T16:32:43Z | MODERATE-REMEDIATION-006: add screen-reader live-region semantics and icon-button labeling |
+| `src/components/MatchRecordingPage.tsx` | builder | 2026-02-17T16:19:51Z | 2026-02-17T16:32:43Z | MODERATE-REMEDIATION-006: replace silent artifact-load failures with structured warning logs |
+| `src/utils/logger.ts` | builder | 2026-02-17T16:19:51Z | 2026-02-17T16:32:43Z | MODERATE-REMEDIATION-006: remove silent persistence failure path and improve non-fatal error reporting |
+| `src/config/runtimeConfig.ts` | builder | 2026-02-17T16:19:51Z | 2026-02-17T16:32:43Z | MODERATE-REMEDIATION-006: centralize env-backed frontend runtime constants |
+| `src/vite-env.d.ts` | builder | 2026-02-17T16:19:51Z | 2026-02-17T16:32:43Z | MODERATE-REMEDIATION-006: enable typed Vite env access for runtime config |
+| `src/utils/__tests__/storage.test.ts` | verifier | 2026-02-17T16:19:51Z | 2026-02-17T16:32:43Z | MODERATE-REMEDIATION-006: add storage persist/flush regression coverage |
+| `src/hooks/__tests__/useLogMonitor.test.ts` | verifier | 2026-02-17T16:19:51Z | 2026-02-17T16:32:43Z | MODERATE-REMEDIATION-006: add telemetry monitor behavior coverage |
+| `src/hooks/__tests__/useSmartCapture.test.ts` | verifier | 2026-02-17T16:19:51Z | 2026-02-17T16:32:43Z | MODERATE-REMEDIATION-006: expand smart capture OCR state-management coverage |
+| `src/App.test.tsx` | verifier | 2026-02-17T16:19:51Z | 2026-02-17T16:32:43Z | MODERATE-REMEDIATION-006: add top-level app smoke/error-handling coverage |
 | `docs/agents/00_INTAKE.md` | project-manager | 2026-02-17T15:02:06Z | 2026-02-17T15:03:41Z | REFACTOR-CLOSEOUT-007 intake record for end-to-end closure of unfinished giant refactor |
 | `docs/agents/01_PLAN.md` | project-manager | 2026-02-17T15:02:06Z | 2026-02-17T15:03:41Z | REFACTOR-CLOSEOUT-007 closeout step tracking |
 | `docs/agents/02_EXECUTION_LOG.md` | debugger | 2026-02-17T15:02:06Z | 2026-02-17T15:03:41Z | REFACTOR-CLOSEOUT-007 execution + PM feedback cycle entries |
@@ -485,3 +608,33 @@ Lock Class:
 | docs/agents/04_HANDOFF.md | release-manager | 2026-02-17T06:17:01Z | 2026-02-17T06:17:01Z | WIZARD-HOOK-AUDIT-002 lock released |
 | docs/agents/DECISIONS.md | project-manager | 2026-02-17T06:17:01Z | 2026-02-17T06:17:01Z | WIZARD-HOOK-AUDIT-002 lock released |
 | docs/WORKLOCKS.md | debugger | 2026-02-17T06:17:01Z | 2026-02-17T06:17:01Z | WIZARD-HOOK-AUDIT-002 lock released |
+| src/components/DrillDownOverlay.tsx | builder | 2026-02-17T20:48:00Z | 2026-02-17T21:45:00Z | OCR-ENHANCEMENT-T3-023 overlay dialog semantics + focus/escape behavior |
+| src/components/DrillDownOverlay.test.tsx | verifier | 2026-02-17T20:48:00Z | 2026-02-17T21:45:00Z | OCR-ENHANCEMENT-T3-023 focused regression coverage for drill-down overlay accessibility |
+| src/App.tsx | builder | 2026-02-17T20:48:00Z | 2026-02-17T21:45:00Z | OCR-ENHANCEMENT-T3-023 changelog/id-mapper wrapper accessibility hardening |
+| src/App.test.tsx | verifier | 2026-02-17T20:48:00Z | 2026-02-17T21:45:00Z | OCR-ENHANCEMENT-T3-023 focused App overlay accessibility assertions |
+| src/components/DrillDownOverlay.tsx | builder | 2026-02-17T20:52:26Z | 2026-02-17T20:52:26Z | OCR-ENHANCEMENT-T3-023 lock released |
+| src/components/DrillDownOverlay.test.tsx | verifier | 2026-02-17T20:52:26Z | 2026-02-17T20:52:26Z | OCR-ENHANCEMENT-T3-023 lock released |
+| src/App.tsx | builder | 2026-02-17T20:52:26Z | 2026-02-17T20:52:26Z | OCR-ENHANCEMENT-T3-023 lock released |
+| src/App.test.tsx | verifier | 2026-02-17T20:52:26Z | 2026-02-17T20:52:26Z | OCR-ENHANCEMENT-T3-023 lock released |
+| src/components/Tutorial.tsx | builder | 2026-02-17T21:25:44Z | 2026-02-17T22:20:00Z | OCR-ENHANCEMENT-T3-024 tutorial overlay accessibility hardening |
+| src/components/MatchRecordingPage.tsx | builder | 2026-02-17T21:25:44Z | 2026-02-17T22:20:00Z | OCR-ENHANCEMENT-T3-024 match-detail lightbox accessibility hardening |
+| src/components/Tutorial.test.tsx | verifier | 2026-02-17T21:25:44Z | 2026-02-17T22:20:00Z | OCR-ENHANCEMENT-T3-024 focused tutorial accessibility tests |
+| src/components/MatchRecordingPage.test.tsx | verifier | 2026-02-17T21:25:44Z | 2026-02-17T22:20:00Z | OCR-ENHANCEMENT-T3-024 focused match lightbox accessibility tests |
+| src/components/Tutorial.tsx | builder | 2026-02-17T21:30:52Z | 2026-02-17T21:30:52Z | OCR-ENHANCEMENT-T3-024 lock released |
+| src/components/MatchRecordingPage.tsx | builder | 2026-02-17T21:30:52Z | 2026-02-17T21:30:52Z | OCR-ENHANCEMENT-T3-024 lock released |
+| src/components/Tutorial.test.tsx | verifier | 2026-02-17T21:30:52Z | 2026-02-17T21:30:52Z | OCR-ENHANCEMENT-T3-024 lock released |
+| src/components/MatchRecordingPage.test.tsx | verifier | 2026-02-17T21:30:52Z | 2026-02-17T21:30:52Z | OCR-ENHANCEMENT-T3-024 lock released |
+| src/components/OcrRegionEditorModal.tsx | builder | 2026-02-17T22:09:00Z | 2026-02-17T23:30:00Z | OCR-ENHANCEMENT-T3-025 new visual ROI editor (full-resolution draw/drag/resize) |
+| src/components/SettingsModal.tsx | builder | 2026-02-17T22:09:00Z | 2026-02-17T23:30:00Z | OCR-ENHANCEMENT-T3-025 wire ROI editor launch/apply into settings ROI section |
+| src/components/PlayerHub.tsx | builder | 2026-02-17T22:09:00Z | 2026-02-17T23:30:00Z | OCR-ENHANCEMENT-T3-025 players panel vertical fill regression fix |
+| src/components/DevOCRPanel.tsx | builder | 2026-02-17T22:09:00Z | 2026-02-17T23:30:00Z | OCR-ENHANCEMENT-T3-025 utilities overflow/cutoff layout fix |
+| src/components/OcrCorrectionModal.tsx | builder | 2026-02-17T22:09:00Z | 2026-02-17T23:30:00Z | OCR-ENHANCEMENT-T3-025 OCR entry focus/cursor + modal top cutoff fixes |
+| src/components/ocr/OCRReviewModal.tsx | builder | 2026-02-17T22:09:00Z | 2026-02-17T23:30:00Z | OCR-ENHANCEMENT-T3-025 OCR review modal top cutoff guard |
+| src/components/OcrRegionEditorModal.tsx | builder | 2026-02-17T22:36:00Z | 2026-02-17T22:36:00Z | OCR-ENHANCEMENT-T3-025 lock released |
+| src/components/SettingsModal.tsx | builder | 2026-02-17T22:36:00Z | 2026-02-17T22:36:00Z | OCR-ENHANCEMENT-T3-025 lock released |
+| src/components/PlayerHub.tsx | builder | 2026-02-17T22:36:00Z | 2026-02-17T22:36:00Z | OCR-ENHANCEMENT-T3-025 lock released |
+| src/components/DevOCRPanel.tsx | builder | 2026-02-17T22:36:00Z | 2026-02-17T22:36:00Z | OCR-ENHANCEMENT-T3-025 lock released |
+| src/components/OcrCorrectionModal.tsx | builder | 2026-02-17T22:36:00Z | 2026-02-17T22:36:00Z | OCR-ENHANCEMENT-T3-025 lock released |
+| src/components/ocr/OCRReviewModal.tsx | builder | 2026-02-17T22:36:00Z | 2026-02-17T22:36:00Z | OCR-ENHANCEMENT-T3-025 lock released |
+| src/App.tsx | builder | 2026-02-17T22:36:00Z | 2026-02-17T22:36:00Z | OCR-ENHANCEMENT-T3-025 lock released |
+| src/components/Wizard.tsx | builder | 2026-02-17T22:36:00Z | 2026-02-17T22:36:00Z | OCR-ENHANCEMENT-T3-025 lock released |

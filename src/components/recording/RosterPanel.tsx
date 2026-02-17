@@ -261,6 +261,7 @@ export const RosterPanel: React.FC = () => {
                             onClick={() => setSortMode('pinned')}
                             className={`md3-icon-btn md3-icon-btn--small ${sortMode === 'pinned' ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'md3-surface text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'}`}
                             title="Pinned First"
+                            aria-label="Sort player list by pinned first"
                         >
                             <Star size={12} />
                         </button>
@@ -268,6 +269,7 @@ export const RosterPanel: React.FC = () => {
                             onClick={() => setSortMode('alpha')}
                             className={`md3-icon-btn md3-icon-btn--small ${sortMode === 'alpha' ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'md3-surface text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'}`}
                             title="Alphabetical"
+                            aria-label="Sort player list alphabetically"
                         >
                             <Filter size={12} />
                         </button>
@@ -330,7 +332,7 @@ export const RosterPanel: React.FC = () => {
                                     </button>
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => openEditModal(p)} className="md3-icon-btn md3-icon-btn--small w-7 h-7 min-w-7 hover:bg-md-sys-primary hover:text-md-sys-onPrimary" title="Edit">
+                                    <button onClick={() => openEditModal(p)} className="md3-icon-btn md3-icon-btn--small w-7 h-7 min-w-7 hover:bg-md-sys-primary hover:text-md-sys-onPrimary" title="Edit" aria-label={`Edit ${p}`}>
                                         <Edit2 size={12} />
                                     </button>
                                     <button onClick={() => toggleTeammate(p)} className="h-7 w-8 rounded-control text-label-xs font-bold bg-success-soft text-success hover:bg-success hover:text-on-scrim transition-colors flex items-center justify-center shrink-0" title="Add as Teammate">
@@ -399,7 +401,7 @@ export const RosterPanel: React.FC = () => {
                     <div className="md3-surface-low p-5 rounded-modal max-w-sm w-full shadow-2xl flex flex-col gap-4" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center">
                             <h3 className="text-base font-bold">Edit Pilot</h3>
-                            <button onClick={() => setEditingPilot(null)} className="md3-icon-btn">
+                            <button onClick={() => setEditingPilot(null)} className="md3-icon-btn" aria-label="Close edit pilot dialog">
                                 <X size={18} />
                             </button>
                         </div>

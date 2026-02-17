@@ -41,6 +41,19 @@ import {
   SCREENSHOT_TYPE_INDICATORS,
   TEAM_COLOR_RANGES,
 } from './ocrMappings';
+import { capTeammatePlayers } from '../teamLimits';
+
+const MAX_OPPONENT_TEAMS = 4;
+const MAX_OPPONENT_PLAYERS_PER_TEAM = 4;
+
+const capOpponentPlayers = (players: ExtractedPlayer[] = []): ExtractedPlayer[] => {
+  if (!Array.isArray(players) || players.length <= MAX_OPPONENT_PLAYERS_PER_TEAM) return players || [];
+  const ranked = [...players].sort((a, b) => {
+    if ((b.confidence || 0) !== (a.confidence || 0)) return (b.confidence || 0) - (a.confidence || 0);
+    return (a.name || '').localeCompare(b.name || '');
+  });
+  return ranked.slice(0, MAX_OPPONENT_PLAYERS_PER_TEAM);
+};
 
 function normalizeKey(input: string): string {
   return input.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -353,7 +366,8 @@ export function mergeOCRData(
         existingPlayers.set(key, player);
       }
     }
-    merged.teammates = Array.from(existingPlayers.values());
+    const shipForTeammateCap = newData.playerShip?.shipType || merged.playerShip?.shipType;
+    merged.teammates = capTeammatePlayers(Array.from(existingPlayers.values()), shipForTeammateCap);
   }
   if (newData.opponentTeams) {
     const existingArr = [...(merged.opponentTeams || [])];
@@ -391,13 +405,23 @@ export function mergeOCRData(
             existingPlayers.set(key, p);
           }
         }
-        existing.players = Array.from(existingPlayers.values());
+        existing.players = capOpponentPlayers(Array.from(existingPlayers.values()));
         existing.confidence = Math.max(existing.confidence, newTeam.confidence);
       } else {
-        existingArr.push({ ...newTeam, players: [...newTeam.players] });
+        existingArr.push({ ...newTeam, players: capOpponentPlayers([...(newTeam.players || [])]) });
       }
     }
-    merged.opponentTeams = existingArr;
+    merged.opponentTeams = existingArr
+      .map((team) => ({
+        ...team,
+        players: capOpponentPlayers(team.players || []),
+      }))
+      .sort((a, b) => {
+        const bySize = (b.players?.length || 0) - (a.players?.length || 0);
+        if (bySize !== 0) return bySize;
+        return (b.confidence || 0) - (a.confidence || 0);
+      })
+      .slice(0, MAX_OPPONENT_TEAMS);
   }
   if (newData.hazards) {
     const existing = new Set((merged.hazards || []).map(h => h.toLowerCase()));
@@ -447,15 +471,24 @@ export function calculateOverallConfidence(data: Partial<OCRExtractedData>): num
  * Validate and clean extracted data
  */
 export function validateExtractedData(data: OCRExtractedData): OCRExtractedData {
-  const validTeammates = data.teammates.filter(t => t.confidence >= 50);
+  const validTeammates = capTeammatePlayers(
+    data.teammates.filter(t => t.confidence >= 50),
+    data.playerShip?.shipType
+  );
   const validModifiers = data.reachModifiers.filter(m => m.confidence >= 60);
   const validOpponentTeams = data.opponentTeams
     .filter(team => team.confidence >= 40)
     .map(team => ({
       ...team,
-      players: team.players.filter(p => p.confidence >= 50),
+      players: capOpponentPlayers(team.players.filter(p => p.confidence >= 50)),
     }))
-    .filter(team => team.players.length > 0 || team.teamName);
+    .filter(team => team.players.length > 0 || team.teamName)
+    .sort((a, b) => {
+      const bySize = b.players.length - a.players.length;
+      if (bySize !== 0) return bySize;
+      return (b.confidence || 0) - (a.confidence || 0);
+    })
+    .slice(0, MAX_OPPONENT_TEAMS);
 
   return {
     ...data,

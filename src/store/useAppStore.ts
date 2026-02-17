@@ -9,13 +9,15 @@
 import { create } from 'zustand';
 import { persist, PersistStorage } from 'zustand/middleware';
 import { DataSlice, createDataSlice } from './slices/createDataSlice';
-import { SettingsSlice, createSettingsSlice } from './slices/createSettingsSlice';
+import { SettingsSlice, createDefaultOcrRegions, createSettingsSlice } from './slices/createSettingsSlice';
 import { UISlice, createUISlice } from './slices/createUISlice';
 import { FormSlice, createFormSlice } from './slices/createFormSlice';
 import { MappingSlice, createMappingSlice } from './slices/createMappingSlice';
 import { SmartCapturesUIState, createSmartCapturesSlice } from './slices/createSmartCapturesSlice';
 import { StorageService } from '../utils/storage';
 import { createEmptyOcrAliasModel, migrateLegacyOcrCorrections } from '../utils/ocrAliasEngine';
+import { normalizeOcrBatchThreshold } from '../utils/ocrBatchActions';
+import { sanitizeCalibrationSamples } from '../utils/ocrCalibration';
 import type { Match } from '../types';
 
 export type AppState = DataSlice & SettingsSlice & UISlice & SmartCapturesUIState & FormSlice & MappingSlice;
@@ -26,6 +28,36 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
 const isMatchRecord = (value: unknown): value is Match => isRecord(value);
+
+const mergeNumberRecord = <T extends object>(base: T, incoming: unknown): T => {
+  const next = { ...base } as T;
+  if (!isRecord(incoming)) return next;
+  (Object.keys(base) as Array<keyof T>).forEach((key) => {
+    const value = incoming[String(key)];
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return;
+    (next as Record<string, unknown>)[String(key)] = numeric;
+  });
+  return next;
+};
+
+const mergeOcrRegions = (value: unknown) => {
+  const defaults = createDefaultOcrRegions();
+  if (!isRecord(value)) return defaults;
+  return {
+    crewHub: {
+      leftPanel: mergeNumberRecord(defaults.crewHub.leftPanel, value.crewHub && isRecord(value.crewHub) ? value.crewHub.leftPanel : undefined),
+      rightPanel: mergeNumberRecord(defaults.crewHub.rightPanel, value.crewHub && isRecord(value.crewHub) ? value.crewHub.rightPanel : undefined),
+      teamHeader: mergeNumberRecord(defaults.crewHub.teamHeader, value.crewHub && isRecord(value.crewHub) ? value.crewHub.teamHeader : undefined),
+    },
+    mapScreen: {
+      yourShip: mergeNumberRecord(defaults.mapScreen.yourShip, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.yourShip : undefined),
+      enemyShips: mergeNumberRecord(defaults.mapScreen.enemyShips, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.enemyShips : undefined),
+      hazards: mergeNumberRecord(defaults.mapScreen.hazards, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.hazards : undefined),
+      players: mergeNumberRecord(defaults.mapScreen.players, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.players : undefined),
+    },
+  };
+};
 
 const customStorage: PersistStorage<AppState> = {
   getItem: async (name) => {
@@ -96,7 +128,7 @@ const customStorage: PersistStorage<AppState> = {
           customBgUrl: settings.bgUrl || '',
           enableAutoLogRecording: settings.autoLog ?? true,
           telemetryPerformanceProfile: settings.telemetryPerformanceProfile || 'balanced',
-          enableAutoBackup: settings.autoBackup ?? true,
+          enableAutoBackup: settings.autoBackup ?? false,
           startupSmartPreloadEnabled: settings.startupSmartPreloadEnabled ?? true,
           isAlwaysOnTop: settings.alwaysOnTop ?? false,
           overlayStyle: settings.overlayStyle || 'compact',
@@ -137,6 +169,9 @@ const customStorage: PersistStorage<AppState> = {
             saturationMin: 35,
             luminanceMin: 30,
           },
+          ocrCalibrationSamples: sanitizeCalibrationSamples(settings.ocrCalibrationSamples),
+          ocrBatchAcceptThreshold: normalizeOcrBatchThreshold(settings.ocrBatchAcceptThreshold),
+          ocrRegions: mergeOcrRegions(settings.ocrRegions),
           tutorialCompleted: settings.tutorialCompleted ?? false,
           activeSection: settings.smartCapturesActiveSection || 'capture',
           queueCollapsed: settings.smartCapturesQueueCollapsed ?? false,
@@ -232,6 +267,9 @@ const customStorage: PersistStorage<AppState> = {
                 ocrThresholdHistory: state.ocrThresholdHistory,
                 ocrBestGuessThresholds: state.ocrBestGuessThresholds,
                 ocrCalibration: state.ocrCalibration,
+                ocrCalibrationSamples: state.ocrCalibrationSamples,
+                ocrBatchAcceptThreshold: state.ocrBatchAcceptThreshold,
+                ocrRegions: state.ocrRegions,
                 tutorialCompleted: state.tutorialCompleted,
                 smartCapturesActiveSection: state.activeSection,
                 smartCapturesQueueCollapsed: state.queueCollapsed,
@@ -313,6 +351,9 @@ export const useAppStore = create<AppState>()(
         ocrThresholdHistory: state.ocrThresholdHistory,
         ocrBestGuessThresholds: state.ocrBestGuessThresholds,
         ocrCalibration: state.ocrCalibration,
+        ocrCalibrationSamples: state.ocrCalibrationSamples,
+        ocrBatchAcceptThreshold: state.ocrBatchAcceptThreshold,
+        ocrRegions: state.ocrRegions,
         tutorialCompleted: state.tutorialCompleted,
         activeSection: state.activeSection,
         queueCollapsed: state.queueCollapsed,

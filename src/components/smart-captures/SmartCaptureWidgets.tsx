@@ -85,7 +85,7 @@ export const ModifierAdder: React.FC<{ existing: string[]; onAdd: (mod: string) 
 
     if (!open) {
         return (
-            <button onClick={() => setOpen(true)} className="md3-icon-btn bg-warning-soft text-warning hover:bg-warning-soft-strong">
+            <button onClick={() => setOpen(true)} className="md3-icon-btn bg-warning-soft text-warning hover:bg-warning-soft-strong" aria-label="Add modifier">
                 <Plus size={10} />
             </button>
         );
@@ -100,7 +100,7 @@ export const ModifierAdder: React.FC<{ existing: string[]; onAdd: (mod: string) 
                     className="flex-1 bg-transparent text-label-sm outline-none"
                     autoFocus
                 />
-                <button onClick={() => { setOpen(false); setSearch(''); }} className="md3-icon-btn w-5 h-5 text-danger"><X size={10} /></button>
+                <button onClick={() => { setOpen(false); setSearch(''); }} className="md3-icon-btn w-5 h-5 text-danger" aria-label="Close modifier picker"><X size={10} /></button>
             </div>
             <div className="max-h-32 overflow-y-auto flex flex-col gap-0.5">
                 {available.slice(0, 10).map(m => (
@@ -120,7 +120,7 @@ export const KillAdder: React.FC<{ existingShips: string[]; onAdd: (ship: string
 
     if (!open) {
         return (
-            <button onClick={() => setOpen(true)} className="md3-icon-btn bg-success-soft text-success hover:bg-success-soft-strong">
+            <button onClick={() => setOpen(true)} className="md3-icon-btn bg-success-soft text-success hover:bg-success-soft-strong" aria-label="Add kill entry">
                 <Plus size={10} />
             </button>
         );
@@ -147,7 +147,7 @@ export const InlinePlayerAdd: React.FC<{ onAdd: (name: string) => void }> = ({ o
 
     if (!adding) {
         return (
-            <button onClick={() => setAdding(true)} className="md3-icon-btn bg-danger-soft text-danger hover:bg-danger-soft-strong">
+            <button onClick={() => setAdding(true)} className="md3-icon-btn bg-danger-soft text-danger hover:bg-danger-soft-strong" aria-label="Add player">
                 <Plus size={10} />
             </button>
         );
@@ -162,8 +162,8 @@ export const InlinePlayerAdd: React.FC<{ onAdd: (name: string) => void }> = ({ o
                 className="md3-textfield--outlined px-2 py-0.5 text-label-sm outline-none w-24"
                 autoFocus
             />
-            <button onClick={() => { if (name.trim()) { onAdd(name.trim()); setName(''); setAdding(false); } }} className="md3-icon-btn w-5 h-5 text-success"><Check size={10} /></button>
-            <button onClick={() => { setAdding(false); setName(''); }} className="md3-icon-btn w-5 h-5 text-danger"><X size={10} /></button>
+            <button onClick={() => { if (name.trim()) { onAdd(name.trim()); setName(''); setAdding(false); } }} className="md3-icon-btn w-5 h-5 text-success" aria-label="Confirm player add"><Check size={10} /></button>
+            <button onClick={() => { setAdding(false); setName(''); }} className="md3-icon-btn w-5 h-5 text-danger" aria-label="Cancel player add"><X size={10} /></button>
         </div>
     );
 };

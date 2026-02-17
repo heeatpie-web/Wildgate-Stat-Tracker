@@ -12,6 +12,8 @@ import { LocalImage } from './LocalImage';
 import { useUIState } from '../providers/UIStateProvider';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { getMatchArtifactsStructured, rerunOCROnArtifact } from '../utils/artifactService';
+import { runtimeConfig } from '../config/runtimeConfig';
+import { useAppStore } from '../store/useAppStore';
 import { Button } from './ui';
 
 interface HistoryTableProps {
@@ -22,6 +24,8 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
     const { matches, deleteMatch: onDelete, updateMatch: onEdit, toggleMatchPin: onPin, setDrillDownTarget } = useGameData();
     const { language } = useUserPreferences();
     const { setActiveView, setSmartCapturesFocusMatchId, activeUser, setToast } = useUIState();
+    const ocrMode = useAppStore((state) => state.ocrMode);
+    const ocrRegions = useAppStore((state) => state.ocrRegions);
 
     const onDrillDown = (name: string, type: DrillDownTarget['type']) => {
         setDrillDownTarget({ name, type });
@@ -84,7 +88,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
     };
 
     useEffect(() => {
-        const t = setTimeout(() => setSearchTerm(searchInput.trim()), 200);
+        const t = setTimeout(() => setSearchTerm(searchInput.trim()), runtimeConfig.history.searchDebounceMs);
         return () => clearTimeout(t);
     }, [searchInput]);
 
@@ -95,7 +99,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
     }, [searchTerm, itemsPerPage, sortField, sortDesc]);
 
     useEffect(() => {
-        const interval = setInterval(() => setNowTick(Date.now()), 60000);
+        const interval = setInterval(() => setNowTick(Date.now()), runtimeConfig.history.relativeTimeRefreshMs);
         return () => clearInterval(interval);
     }, []);
 
@@ -230,7 +234,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                 if (imagePaths.length === 0) continue;
 
                 const results = await Promise.allSettled(
-                    imagePaths.map(p => rerunOCROnArtifact(p, activeUser || '', 'cloud'))
+                    imagePaths.map(p => rerunOCROnArtifact(p, activeUser || '', ocrMode, ocrRegions))
                 );
                 if (results.some(r => r.status === 'fulfilled')) successCount++;
             } catch {
@@ -240,7 +244,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
 
         setBulkOcrBusy(false);
         setToast?.({ message: `OCR rerun complete: ${successCount}/${selectedMatches.length} succeeded`, type: successCount > 0 ? 'success' : 'error' });
-    }, [selectedMatches, bulkOcrBusy, activeUser, setToast]);
+    }, [selectedMatches, bulkOcrBusy, activeUser, ocrMode, ocrRegions, setToast]);
 
     const handleOpenNote = (match: Match) => {
         setEditingNoteMatch(match);

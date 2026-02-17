@@ -1057,3 +1057,625 @@
   - Risk Tier: `T2`
   - Execution Path: `FULL_PATH`
   - Reason: multi-file runtime hardening touching IPC, persistence, and telemetry artifact boundaries.
+
+---
+
+## Intake - 2026-02-17 - MODERATE-REMEDIATION-006
+- Goal: address the reported moderate audit issues covering test gaps, silent error handling, accessibility announcements/labels, and frontend configuration hardcoding.
+- Intent confirmation block:
+  - Goal: implement concrete fixes for the listed moderate issues in the current app codebase.
+  - Constraints: keep scope limited to listed issues and low-risk related cleanup in touched paths.
+  - Done: requested issue set is remediated with tests and validation evidence.
+- Constraints:
+  - No broad redesign/refactor outside listed issue categories.
+  - Preserve current runtime behavior and user workflows.
+  - Prefer targeted tests and guarded error handling over invasive architecture changes.
+- In scope:
+  - Add tests for `StorageService` persist/flush logic.
+  - Add focused tests for `useLogMonitor`, expand functional tests for `useSmartCapture`, and add baseline `App.tsx` coverage.
+  - Replace silent catch handlers in key runtime paths with structured logging/warnings.
+  - Add `aria-live` support to Toast and ensure icon-only dismissal control has an accessible label.
+  - Externalize key frontend timing/config constants behind env-backed runtime config values.
+- Out-of-scope:
+  - Large hook splitting/performance refactors beyond safe targeted constants.
+  - Repo-wide accessibility sweep of every component.
+  - Breaking telemetry/archive format migrations.
+- Done condition:
+  - New/updated tests for storage, log monitor, smart capture, and app component are present and passing.
+  - Silent failure paths in targeted files are removed or logged.
+  - Toast announces messages for assistive tech and close control is labeled.
+  - New env-backed runtime configuration constants are wired into touched frontend paths.
+  - Validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file runtime + test changes with user-visible behavior and reliability impact.
+
+---
+
+## Intake - 2026-02-17 - FOLLOWUP-REMEDIATION-008
+- Goal: fix the remaining follow-up issues after `MODERATE-REMEDIATION-006` in a single scoped pass.
+- Intent confirmation block:
+  - Goal: close remaining practical accessibility/configuration/UX defaults flagged as unresolved.
+  - Constraints: keep scope narrow to concrete unresolved items; avoid broad refactors.
+  - Done: icon-only controls in core flows have labels, auto-backup defaults are safer, and additional hardcoded timers are env-backed.
+- Constraints:
+  - Preserve existing runtime behavior and data contracts.
+  - Keep changes focused to remaining follow-up issues only.
+  - Do not expand into full repo-wide accessibility or architecture rewrites.
+- In scope:
+  - Add `aria-label` coverage for icon-only buttons in primary interaction surfaces.
+  - Change auto-backup default behavior from enabled to disabled for fresh/default paths.
+  - Extend env-backed runtime configuration usage to additional high-traffic frontend timers/polling intervals.
+  - Add/adjust focused validation where behavior/defaults changed.
+- Out-of-scope:
+  - Full component-by-component accessibility redesign.
+  - Broad telemetry/archive schema work.
+  - Large hook decomposition/performance refactors.
+- Done condition:
+  - Targeted icon-only controls are screen-reader labeled.
+  - Fresh/default settings paths do not auto-enable backup.
+  - Selected hardcoded frontend timing values are sourced through `runtimeConfig`.
+  - Validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file runtime/UI behavior updates in core user-facing flows.
+
+---
+
+## Intake - 2026-02-17 - CORPUS-IMPORT-DIR-009
+- Goal: make corpus image import open directly to the corpus images storage directory.
+- Intent confirmation block:
+  - Goal: when user clicks corpus image import, file picker starts in the app corpus images folder.
+  - Constraints: keep scope narrow to corpus import dialog path; no OCR pipeline behavior changes.
+  - Done: import dialog opens at `ocr-corpus/images` by default.
+- Constraints:
+  - Keep changes limited to corpus import entry path behavior.
+  - Preserve existing import semantics (multi-file image selection + dedupe copy flow).
+  - No UI redesign or persistence/schema changes.
+- In scope:
+  - Update Electron `ocr-corpus-import-images` handler to ensure/use corpus images directory as dialog default path.
+  - Run focused validation on touched Electron file and typecheck.
+- Out-of-scope:
+  - New corpus UI controls.
+  - OCR processing/evaluation behavior changes.
+  - Repository-wide refactors.
+- Done condition:
+  - Import dialog opens in corpus images directory by default.
+  - Existing import flow still succeeds/cancels as before.
+  - Validation evidence recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: `T1`
+  - Execution Path: `FULL_PATH`
+  - Reason: single runtime behavior tweak in Electron dialog flow with low regression surface.
+
+---
+
+## Intake - 2026-02-17 - OCR-DUAL-BUFFER-GATES-010
+- Goal: implement the approved OCR plan to preserve team-color detection while improving crew-name reliability and strict auto-apply safety gates.
+- Intent confirmation block:
+  - Goal: keep color fidelity for team detection, keep grayscale/upscale text preprocessing where useful, and prevent unsafe OCR auto-writes.
+  - Constraints: keep hazard extraction behavior stable; avoid schema/IPC contract breaks; keep scope centered on OCR pipeline + apply boundaries.
+  - Done: dual-buffer OCR path is wired, strict roster guardrails are enforced, and targeted regressions validate caps/non-regression.
+- Constraints:
+  - Preserve current map/hazard extraction behavior.
+  - Do not remove existing OCR review workflows.
+  - Keep changes narrow to OCR extraction/merge/apply guardrails.
+- In scope:
+  - Pass separate text-preprocessed and color-fidelity buffers through Crew Hub extraction path.
+  - Keep grayscale/upscale limited to text ROI OCR and out of color-detection regions.
+  - Enforce strict OCR auto-apply gates in app-side roster writes:
+    - reject low-confidence/ambiguous names from auto-commit,
+    - dedupe normalized names,
+    - enforce teammate and per-team caps at commit boundaries.
+  - Add/adjust targeted tests for OCR merge/player-cap guardrails.
+- Out-of-scope:
+  - Full OCR model replacement.
+  - Broad Smart Capture UI redesign.
+  - Telemetry pipeline redesign.
+- Done condition:
+  - Crew color detection uses color-safe source buffer while OCR text path retains preprocessing.
+  - OCR auto-apply cannot commit oversized or low-confidence/ambiguous roster entries.
+  - Targeted validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file runtime OCR behavior change affecting extraction and match-state auto-apply safety.
+
+---
+
+## Intake - 2026-02-17 - OCR-ROI-RUNTIME-011
+- Goal: make OCR scan regions actively adjustable at runtime and ensure adjustments apply to OCR reruns.
+- Intent confirmation block:
+  - Goal: user can tune OCR ROIs in settings and have those regions immediately affect OCR processing, including rerun-on-artifact.
+  - Constraints: keep scope to OCR settings + IPC wiring + extractor region usage; preserve existing default behavior.
+  - Done: adjustable ROI settings are persisted, applied in live OCR and reruns, and can be reset to defaults.
+- Constraints:
+  - Preserve existing default ROI values unless user changes them.
+  - Keep OCR pipeline contracts backward compatible (optional overrides).
+  - Avoid changing unrelated telemetry or analytics behavior.
+- In scope:
+  - Add persisted OCR region settings model with defaults and reset action.
+  - Add settings UI controls for ROI percentage tuning.
+  - Wire ROI payload through renderer -> Electron OCR IPC and rerun IPC.
+  - Update Crew Hub / Map Screen extractors and map player region OCR to consume overrides.
+  - Add focused regression for rerun IPC payload shape.
+- Out-of-scope:
+  - Full visual ROI drag overlay editor.
+  - OCR model/engine replacement.
+  - Corpus labeling workflow redesign.
+- Done condition:
+  - OCR regions can be edited in settings and persist.
+  - New settings are used for normal OCR and `rerun-ocr-on-artifact`.
+  - Reset-to-default action restores baseline regions.
+  - Validation evidence recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file runtime settings + IPC + extraction behavior changes in core OCR path.
+
+---
+
+## Intake - 2026-02-17 - OCR-CORPUS-ROI-012
+- Goal: make corpus pipeline OCR runs use current ROI settings.
+- Intent confirmation block:
+  - Goal: when running corpus OCR pipeline from Dev OCR panel, use live ROI settings the same way rerun/live OCR paths do.
+  - Constraints: keep scope narrow to corpus pipeline payload + Electron handler wiring; preserve existing corpus behavior otherwise.
+  - Done: corpus pipeline forwards `ocrRegions` to `processCapture(...)` and results reflect updated ROI settings.
+- Constraints:
+  - Do not change corpus sample schema/ground-truth format.
+  - Keep pipeline output shape unchanged.
+  - Avoid unrelated OCR engine logic changes.
+- In scope:
+  - Add `ocrRegions` to Dev OCR corpus pipeline invoke payload.
+  - Thread optional `ocrRegions` through `ocr-corpus-run-pipeline` in `electron/main.cjs`.
+  - Pass `ocrRegions` into `processCapture(...)` options for each corpus sample run.
+  - Run focused validation for touched files.
+- Out-of-scope:
+  - Corpus UI redesign.
+  - Model/training changes.
+  - Non-corpus OCR behavior changes.
+- Done condition:
+  - Corpus pipeline uses live ROI settings from store.
+  - Existing corpus pipeline outputs and controls still work.
+  - Validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: `T1`
+  - Execution Path: `FULL_PATH`
+  - Reason: small but behavior-affecting runtime wiring in Electron OCR pipeline path.
+
+---
+
+## Intake - 2026-02-17 - OCR-ENHANCEMENT-T1-013
+- Goal: begin the OCR enhancement roadmap by implementing Tier 1 recommendations with immediate UX and observability impact.
+- Intent confirmation block:
+  - Goal: ship Tier 1 OCR improvements (cache telemetry, correction shortcuts, confidence meter UI, and learning-feedback badges).
+  - Constraints: keep scope additive and backward compatible; preserve existing OCR workflow behavior when new controls are unused.
+  - Done: Tier 1 code changes are implemented, targeted checks run, and evidence recorded in validation/handoff docs.
+- Constraints:
+  - Limit this increment to Tier 1 items from the user plan.
+  - Reuse existing architecture patterns (IPC handlers, Zustand slices, MD3 components, existing OCR alias model).
+  - Avoid schema/API breaking changes for existing OCR paths.
+- In scope:
+  - Tier 1 #1: OCR cache hit/miss/eviction telemetry surfaced to Dev OCR panel via IPC polling.
+  - Tier 1 #2: keyboard shortcuts in OCR correction modal (`Ctrl/Cmd+Enter`, `Esc`, `Ctrl/Cmd+A`, `Ctrl/Cmd+I`).
+  - Tier 1 #3: replace confidence percentage badge text with an accessible confidence meter component.
+  - Tier 1 #4: learning feedback badges/tooltips sourced from alias learning metadata.
+- Out-of-scope (this increment):
+  - Tier 2 and Tier 3 roadmap items (region-first benchmark handler, calibration buckets, batch dialogs, bbox overlays, corpus export, dictionary generation, pattern engine, full a11y audit).
+  - Broad OCR model replacement/refactor or non-OCR feature changes.
+- Done condition:
+  - Dev OCR panel shows live cache telemetry (hit rate, size, timing averages).
+  - OCR correction modal supports the specified keyboard shortcuts and displays shortcut hints.
+  - OCR correction confidence is rendered via progress-style confidence meter.
+  - Learning badge/tooltip shows correction-derived metadata for prior aliases.
+  - Validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file runtime UI + IPC changes in core OCR surfaces with user-visible behavior updates.
+
+---
+
+## Intake - 2026-02-17 - OCR-ENHANCEMENT-T2-014
+- Goal: continue OCR enhancement roadmap with Tier 2 #5 by adding measurable preprocessing benchmark visibility while preserving current OCR behavior.
+- Intent confirmation block:
+  - Goal: implement benchmark instrumentation for old full-image preprocessing vs region-first preprocessing and surface it in Dev OCR tools.
+  - Constraints: keep production OCR extraction flow unchanged; keep IPC additions allowlisted and security-test aligned; keep scope to Tier 2 #5 only for this increment.
+  - Done: benchmark IPC is available, Dev OCR panel can run it on a loaded image, and validation evidence is recorded.
+- Constraints:
+  - Do not regress existing `processCapture(...)` flow or OCR extraction accuracy paths.
+  - Keep benchmark as an additive/debug capability only.
+  - Maintain preload allowlist + security negative test parity for any new IPC channel.
+- In scope:
+  - Add benchmark helpers + IPC handler `benchmark-ocr-preprocessing` in `electron/ocrHandler.cjs`.
+  - Add invoke allowlist entry in `electron/preload.cjs`.
+  - Add security fixture parity update in `scripts/security_negative_tests.cjs`.
+  - Add Dev OCR panel control/result card to execute and display benchmark output.
+  - Update AGENTS execution/validation/handoff/decision docs for this increment.
+- Out-of-scope (this increment):
+  - Tier 2 #6-#8 (calibration, batch ops, bbox overlays).
+  - Tier 3 roadmap items (corpus export, custom dictionary, patterns, full accessibility audit).
+  - OCR model replacement or broad extractor algorithm refactor.
+- Done condition:
+  - Renderer can invoke benchmark via safe IPC allowlist.
+  - Benchmark returns old vs new avg timings and speedup metrics for OCR regions.
+  - Dev OCR panel displays benchmark summary for a loaded image.
+  - Focused validation (`eslint`, security negative tests, `typecheck`) passes and evidence is logged.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file runtime IPC + Electron image-processing + UI changes in OCR tooling path.
+
+---
+
+## Intake - 2026-02-17 - OCR-ENHANCEMENT-T2-015
+- Goal: continue OCR enhancement roadmap with Tier 2 #6 by adding confidence calibration sample tracking and bucketed accuracy visibility.
+- Intent confirmation block:
+  - Goal: record correction outcomes as calibration samples and surface confidence-vs-accuracy analysis in Dev OCR panel.
+  - Constraints: keep scope to Tier 2 #6 only; preserve existing OCR correction workflow behavior and color-calibration settings.
+  - Done: calibration samples persist, correction modal records samples, and Dev OCR panel shows bucket stats + threshold recommendation.
+- Constraints:
+  - Do not alter existing OCR extraction, alias learning, or correction application semantics.
+  - Keep new calibration model additive alongside existing `ocrCalibration` (color sampling) settings.
+  - Cap persisted sample volume to bounded size (max 1000) for storage safety.
+- In scope:
+  - Add new calibration utility module (`src/utils/ocrCalibration.ts`) with sample/bucket/recommendation helpers.
+  - Extend settings slice + persisted store wiring for `ocrCalibrationSamples` and append action.
+  - Record calibration sample events in `OcrCorrectionModal` on correction apply.
+  - Show bucket analysis and recommended threshold in `DevOCRPanel`.
+  - Add focused utility tests for calibration bucketing/recommendation behavior.
+- Out-of-scope (this increment):
+  - Tier 2 #7-#8 (batch operations, bounding boxes).
+  - Tier 3 roadmap items.
+  - OCR confidence source refactor (existing confidence feed remains as-is in modal).
+- Done condition:
+  - `ocrCalibrationSamples` persists and is bounded to 1000 samples.
+  - Applying corrections records samples with predicted confidence + correctness + OCR mode.
+  - Dev OCR panel shows bucketed accuracy for 0-20, 20-40, 40-60, 60-80, 80-100 and threshold recommendation.
+  - Focused validation passes and evidence is captured in AGENTS artifacts.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file persisted state + UI behavior update in OCR correction and dev tooling surfaces.
+
+---
+
+## Intake - 2026-02-17 - OCR-ENHANCEMENT-T2-016
+- Goal: continue OCR enhancement roadmap with Tier 2 #7 by adding batch approval operations in the OCR correction workflow.
+- Intent confirmation block:
+  - Goal: add threshold-driven batch actions for accepting high-confidence players and ignoring low-confidence players, with confirmation.
+  - Constraints: keep scope to Tier 2 #7 only; preserve existing correction flow and keyboard shortcuts.
+  - Done: batch threshold persists, batch actions show preview counts + confirmations, and modal applies correct subset behavior.
+- Constraints:
+  - Keep changes additive to current modal workflow.
+  - Reuse existing MD3 dialog patterns and logger usage.
+  - Persist batch threshold with bounded range 70-95.
+- In scope:
+  - Add `ocrBatchAcceptThreshold` + setter to settings slice/store persistence.
+  - Add `BatchActionConfirmDialog.tsx` reusable confirmation component.
+  - Add threshold slider + real-time eligible counts in `OcrCorrectionModal`.
+  - Add batch handlers:
+    - accept unreviewed players with confidence >= threshold,
+    - ignore unreviewed players with confidence < threshold.
+  - Add focused test coverage for the new dialog/helper behavior path and run targeted validation.
+- Out-of-scope (this increment):
+  - Tier 2 #8 bounding box overlay.
+  - Tier 3 roadmap items.
+  - OCR confidence-source refactor.
+- Done condition:
+  - Threshold is persisted and clamped within 70-95.
+  - Batch action buttons display accurate affected counts and disable when none eligible.
+  - Confirmation dialog guards both batch operations.
+  - Batch actions update correction/ignored states as expected and log summary events.
+  - Focused validation evidence is recorded.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file persisted settings + OCR modal behavior/UI changes.
+
+---
+
+## Intake - 2026-02-17 - OCR-ENHANCEMENT-T2-017
+- Goal: continue OCR enhancement roadmap with Tier 2 #8 by adding bounding-box debug overlays in the Dev OCR workflow.
+- Intent confirmation block:
+  - Goal: add optional OCR bounding-box payload capture and render a clickable visual overlay for OCR debugging.
+  - Constraints: keep changes additive; preserve existing OCR extraction behavior when bbox debug mode is not requested; avoid contract-breaking changes.
+  - Done: Dev OCR panel supports a dedicated "Capture with Bounding Boxes" action and renders an interactive color-coded overlay from OCR debug data.
+- Constraints:
+  - Keep bbox payload opt-in (`includeBboxes`) and debug-oriented only.
+  - Do not alter standard OCR extraction paths or persisted match payload behavior.
+  - Reuse existing IPC channel (`ocr-process-capture`) and Dev OCR panel patterns.
+- In scope:
+  - `electron/ocrHandler.cjs`: add optional bbox debug payload emission for OCR capture runs.
+  - `src/utils/ocr/ocrTypes.ts`: add typed optional debug payload on OCR results.
+  - `src/utils/electronBridge.ts`: allow optional runtime options passthrough (`includeBboxes`).
+  - `src/components/OcrBoundingBoxOverlay.tsx`: new interactive overlay component.
+  - `src/components/DevOCRPanel.tsx`: add debug capture action + overlay rendering.
+- Out-of-scope (this increment):
+  - Tier 3 roadmap items.
+  - OCR merge algorithm refactors or non-debug OCR extraction changes.
+  - Persistent storage/export of bounding-box datasets.
+- Done condition:
+  - Debug capture request returns optional bbox payload only when requested.
+  - Dev OCR panel can display color-coded bbox overlays with hover/click details.
+  - Existing OCR run button and workflows remain functional.
+  - Focused validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file Electron + renderer runtime contract and UI behavior additions in OCR tooling path.
+
+---
+
+## Intake - 2026-02-17 - OCR-ENHANCEMENT-T3-018
+- Goal: continue OCR enhancement roadmap with Tier 3 #9 by exporting OCR correction corpus data for retraining.
+- Intent confirmation block:
+  - Goal: generate correction corpus artifacts (JSON, JSONL, BOX) from learned OCR aliases and expose export action in Dev OCR tools.
+  - Constraints: keep this increment additive; avoid breaking existing OCR/corpus flows; keep archive behavior opt-in.
+  - Done: user can export correction corpus formats from Dev OCR panel and OCR handler supports optional archiving of OCR samples with metadata.
+- Constraints:
+  - Scope limited to Tier 3 #9 correction-corpus export and archive plumbing.
+  - Reuse existing OCR alias model and existing download/export patterns.
+  - No schema-breaking changes to OCR process result contracts.
+- In scope:
+  - Create `src/utils/ocrCorpusBuilder.ts` for corpus construction and format serialization (JSON/JSONL/BOX).
+  - Extend `src/utils/export.ts` with text-file export helper for non-JSON artifacts.
+  - Add Dev OCR panel corpus action button to export correction corpus files.
+  - Add opt-in OCR sample archive helper path in `electron/ocrHandler.cjs`.
+  - Add focused unit tests for corpus builder behavior.
+- Out-of-scope (this increment):
+  - Full Tesseract training pipeline integration.
+  - Dictionary generation, pattern engine, and accessibility-audit roadmap items.
+  - New standalone IPC channels for corpus export.
+- Done condition:
+  - Export action emits three files (JSON, JSONL, BOX) from alias-model corrections.
+  - Empty/low-signal models are handled gracefully with status feedback.
+  - OCR handler can archive sample image + metadata when explicitly requested via runtime options.
+  - Focused validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file runtime + tooling changes touching Electron OCR pipeline and Dev OCR UI/export behavior.
+
+---
+
+## Intake - 2026-02-17 - OCR-ENHANCEMENT-T3-019
+- Goal: continue OCR enhancement roadmap with Tier 3 #10 by generating and applying a custom Tesseract user-words dictionary from pilot registry data.
+- Intent confirmation block:
+  - Goal: create and wire a regenerable OCR dictionary so Tesseract can bias toward known pilot names.
+  - Constraints: keep this increment additive and bounded to dictionary generation + wiring; preserve existing OCR behavior when dictionary is absent.
+  - Done: Electron can regenerate/apply dictionary from pilot registry/match history, auto-refresh can trigger from data changes, and Dev OCR panel has a manual regenerate action.
+- Constraints:
+  - Scope limited to Tier 3 #10 dictionary generation and integration paths.
+  - Keep IPC additions allowlisted and security fixture parity aligned.
+  - Avoid breaking existing OCR processing contracts and cache behavior.
+- In scope:
+  - Add `electron/tesseractDictionary.cjs` helper for user-words generation (+ OCR-safe name variations).
+  - Integrate dictionary load/apply path into `electron/ocrHandler.cjs` worker lifecycle.
+  - Add IPC handler `regenerate-ocr-dictionary` in OCR handler.
+  - Add preload allowlist + security negative test parity for new IPC channel.
+  - Add `GameDataProvider` auto-regeneration effect when pilot registry is sufficiently populated.
+  - Add manual dictionary regeneration action in `DevOCRPanel`.
+- Out-of-scope (this increment):
+  - Pattern recognition engine and accessibility-audit roadmap items.
+  - OCR model replacement or major OCR merge algorithm changes.
+  - Dictionary quality analytics dashboards.
+- Done condition:
+  - Regeneration channel writes dictionary file and reports summary counts.
+  - Active Tesseract workers receive updated dictionary parameters when regenerated.
+  - Auto-regeneration triggers from pilot-registry/match changes (with guardrails against spam).
+  - Dev OCR panel exposes manual regeneration with user feedback.
+  - Focused validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file runtime OCR + IPC + renderer behavior changes across Electron and React surfaces.
+
+---
+
+## Intake - 2026-02-17 - OCR-ENHANCEMENT-T3-020
+- Goal: continue OCR enhancement roadmap with Tier 3 #11 by adding teammate pattern recognition suggestions into OCR correction flow and Dev OCR insights.
+- Intent confirmation block:
+  - Goal: derive teammate co-occurrence patterns from match history and surface likely teammate suggestions during OCR correction.
+  - Constraints: keep scope additive and bounded to Tier 3 #11 utility + UI wiring; preserve current correction workflow behavior.
+  - Done: new pattern utility exists, OCR correction modal shows likely teammate suggestions, and Dev OCR panel exposes basic pattern insight visibility.
+- Constraints:
+  - Limit this increment to pattern-recognition suggestion logic and UI presentation.
+  - Reuse existing `Match` data model and keep no schema changes.
+  - Keep suggestion scoring deterministic and lightweight for in-app runtime.
+- In scope:
+  - Add `src/utils/patternRecognition.ts` with co-occurrence matrix build + teammate suggestion scoring.
+  - Add focused tests for pattern utility behavior.
+  - Wire suggestion panel into `src/components/OcrCorrectionModal.tsx` with click-to-apply support for unresolved OCR names.
+  - Add Dev OCR pattern summary block in `src/components/DevOCRPanel.tsx`.
+- Out-of-scope (this increment):
+  - Accessibility audit workstream.
+  - Pattern persistence/export pipelines or backend services.
+  - Full auto-apply of suggestions without explicit user interaction.
+- Done condition:
+  - Teammate pattern utility returns ranked suggestions for detected names.
+  - OcrCorrectionModal displays likely teammates with reasons and allows explicit user-initiated suggestion application.
+  - Dev OCR panel surfaces pattern insight summary for validation/debugging.
+  - Focused validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file runtime utility + OCR modal/dev-panel behavior updates in user-facing OCR workflow.
+
+---
+
+## Intake - 2026-02-17 - OCR-ENHANCEMENT-T3-021
+- Goal: continue OCR enhancement roadmap with Tier 3 #12 by shipping the first accessibility-audit increment (shared hooks/utilities + modal accessibility hardening + Dev OCR audit visibility).
+- Intent confirmation block:
+  - Goal: improve keyboard/screen-reader support in high-traffic modal workflows and expose actionable automated audit output in Dev OCR tools.
+  - Constraints: keep this increment additive and bounded to accessibility foundations plus targeted modal updates; preserve existing OCR and settings behavior.
+  - Done: new accessibility hooks/utilities/styles exist, targeted modals include dialog/focus semantics + Escape support, and Dev OCR panel can run/show automated audit findings.
+- Constraints:
+  - Scope limited to Tier 3 #12 foundational implementation (not full app-wide WCAG closure in one pass).
+  - Reuse existing modal patterns and avoid contract-breaking state/schema changes.
+  - Keep reduced-motion behavior aligned with current CSS strategy and add only minimal accessibility-specific style helpers.
+- In scope:
+  - Add `src/hooks/useFocusTrap.ts`.
+  - Add `src/hooks/useAriaLiveRegion.ts`.
+  - Add `src/styles/accessibility.css` and import it in app entry.
+  - Add `src/utils/accessibilityAudit.ts` (+ focused tests).
+  - Add modal accessibility hardening in:
+    - `src/components/OcrCorrectionModal.tsx`
+    - `src/components/BatchActionConfirmDialog.tsx`
+    - `src/components/ReviewQueueModal.tsx`
+    - `src/components/SettingsModal.tsx`
+    - `src/components/RenameModal.tsx`
+    - `src/components/ResetConfirmModal.tsx`
+    - `src/components/EditMatchModal.tsx`
+  - Add Dev OCR panel audit action/summary in `src/components/DevOCRPanel.tsx`.
+- Out-of-scope (this increment):
+  - Full-screen-reader QA pass across every view and control in the entire app.
+  - Lighthouse/axe CI automation integration.
+  - Remaining non-targeted modals/components (including `src/components/ocr/OCRReviewModal.tsx`) beyond this bounded pass.
+- Done condition:
+  - Accessibility hooks/utilities/styles are implemented and wired.
+  - Targeted modals expose `role="dialog"`, `aria-modal`, label associations, focus trap behavior, and keyboard escape handling.
+  - Dev OCR panel can run an automated audit and display issue summaries.
+  - Focused validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file user-facing runtime behavior updates across modal interaction patterns and Dev OCR tooling.
+
+---
+
+## Intake - 2026-02-17 - OCR-ENHANCEMENT-T3-022
+- Goal: continue Tier 3 #12 accessibility rollout by hardening `OCRReviewModal` (the remaining high-traffic OCR review dialog) with modal semantics, focus trapping, and keyboard behavior.
+- Intent confirmation block:
+  - Goal: make `OCRReviewModal` keyboard/screen-reader compatible at parity with other updated dialogs.
+  - Constraints: keep this increment tightly scoped to `OCRReviewModal` + focused tests and avoid workflow behavior changes outside accessibility.
+  - Done: `OCRReviewModal` has proper dialog ARIA attributes, focus trap behavior for both main dialog and screenshot lightbox, Escape handling, and focused test evidence.
+- Constraints:
+  - Scope is limited to `src/components/ocr/OCRReviewModal.tsx` and focused tests.
+  - Preserve existing OCR review functionality and button actions.
+  - Keep changes additive without store/schema/IPC contract changes.
+- In scope:
+  - Add focus trap and keyboard shortcut handling to `OCRReviewModal`.
+  - Add dialog ARIA semantics (`role="dialog"`, `aria-modal`, labels/descriptions).
+  - Harden screenshot lightbox accessibility (dialog semantics + labeled controls).
+  - Add focused test coverage in `src/components/ocr/OCRReviewModal.test.tsx`.
+- Out-of-scope (this increment):
+  - Further Dev OCR panel changes.
+  - App-wide accessibility sweep beyond `OCRReviewModal`.
+  - New persistence, OCR parsing, or capture pipeline behavior.
+- Done condition:
+  - `OCRReviewModal` and its lightbox are keyboard reachable/trapped and Escape-close compliant.
+  - Icon-only controls in modal/lightbox have clear accessible names.
+  - Focused lint/test/typecheck evidence is captured in validation docs.
+- AOM_V2:
+  - Risk Tier: `T1`
+  - Execution Path: `FULL_PATH`
+  - Reason: user-visible modal interaction/accessibility updates in a core OCR workflow component.
+
+---
+
+## Intake - 2026-02-17 - OCR-ENHANCEMENT-T3-023
+- Goal: continue Tier 3 #12 accessibility rollout by hardening remaining high-use overlays (`DrillDownOverlay` and App-level changelog/ID mapper wrappers) with proper dialog semantics, focus management, and Escape-close behavior.
+- Intent confirmation block:
+  - Goal: make these overlays keyboard/screen-reader accessible at parity with recently updated modals.
+  - Constraints: keep this increment narrowly scoped to targeted overlays plus focused tests; preserve existing analytics and settings workflows.
+  - Done: overlays expose dialog ARIA semantics, trap focus while open, support Escape close, and have focused test evidence.
+- Constraints:
+  - Scope limited to:
+    - `src/components/DrillDownOverlay.tsx`
+    - `src/App.tsx` (changelog + ID mapper wrappers only)
+    - focused test files for the above behavior.
+  - Preserve existing UI layout/content and close-on-scrim behavior.
+  - Keep changes additive; no store/schema/IPC contract changes.
+- In scope:
+  - Add `role="dialog"`, `aria-modal`, and label/description wiring for targeted overlays.
+  - Add focus trapping while overlays are open using existing `useFocusTrap`.
+  - Add Escape keyboard close handling for these overlays.
+  - Add focused test coverage:
+    - `src/components/DrillDownOverlay.test.tsx`
+    - `src/App.test.tsx` overlay semantics/keyboard checks.
+- Out-of-scope (this increment):
+  - Smart Captures and Match Recording screenshot lightbox accessibility hardening.
+  - Tutorial overlay accessibility updates.
+  - Broad app-wide accessibility audit expansion.
+- Done condition:
+  - Drill-down overlay, changelog modal, and ID mapper wrapper are announced as dialogs with labels.
+  - Focus remains within open overlay until dismissal.
+  - Escape closes targeted overlays without regressions.
+  - Focused lint/test/typecheck evidence is captured in validation docs.
+- AOM_V2:
+  - Risk Tier: `T1`
+  - Execution Path: `FULL_PATH`
+  - Reason: bounded user-facing accessibility behavior updates across modal-like overlays.
+
+---
+
+## Intake - 2026-02-17 - OCR-ENHANCEMENT-T3-024
+- Goal: continue Tier 3 #12 accessibility rollout by hardening tutorial overlay and match-detail screenshot lightbox behavior.
+- Intent confirmation block:
+  - Goal: ensure tutorial and Match Recording lightbox overlays provide keyboard/screen-reader compatible dialog behavior.
+  - Constraints: keep this increment narrowly scoped to `Tutorial` and `MatchRecordingPage` (+ focused tests only).
+  - Done: both overlays expose dialog semantics, trap focus while open, and close on Escape with focused validation evidence.
+- Constraints:
+  - Scope limited to:
+    - `src/components/Tutorial.tsx`
+    - `src/components/MatchRecordingPage.tsx`
+    - focused tests for these components.
+  - Preserve current tutorial flow order, step navigation, and match-detail workflow behavior.
+  - Keep changes additive; no store/schema/IPC contract changes.
+- In scope:
+  - Add dialog semantics (`role="dialog"`, `aria-modal`, label/description wiring) to tutorial tooltip and match screenshot lightbox.
+  - Add focus trapping for tutorial overlay and match screenshot lightbox.
+  - Add Escape keyboard close behavior for match screenshot lightbox (tutorial already uses Escape and will keep parity).
+  - Add focused tests:
+    - `src/components/Tutorial.test.tsx`
+    - `src/components/MatchRecordingPage.test.tsx`
+- Out-of-scope (this increment):
+  - Smart Captures panel JSON export/lightbox accessibility hardening.
+  - Additional App-level overlay changes already completed in `OCR-ENHANCEMENT-T3-023`.
+  - Full app-wide accessibility closure.
+- Done condition:
+  - Tutorial overlay and Match Recording lightbox are announced as dialogs with labels.
+  - Focus remains contained while each overlay is open.
+  - Escape closes the match screenshot lightbox and tutorial Escape behavior remains functional.
+  - Focused lint/test/typecheck evidence is captured in validation docs.
+- AOM_V2:
+  - Risk Tier: `T1`
+  - Execution Path: `FULL_PATH`
+  - Reason: bounded accessibility behavior updates to two UI overlays with focused regression tests.
+
+---
+
+## Intake - 2026-02-17 - OCR-ENHANCEMENT-T3-025
+- Goal: implement a visual drag/resize OCR ROI crop-box editor on full-resolution images and fix reported OCR/player/dev-panel layout/input regressions.
+- Intent confirmation block:
+  - Goal: add a practical visual ROI editor and resolve the active UX regressions blocking OCR correction and dev workflows.
+  - Constraints: keep scope strictly bounded to requested UI behavior fixes; preserve existing OCR extraction contracts and settings schema.
+  - Done: users can draw/drag/resize ROI boxes visually on full-resolution image input, players panel fills available height, Dev Utilities tab is fully scrollable without clipping, OCR wizard/modal top cutoff is resolved, and OCR entry text inputs keep focus/cursor and accept typing reliably.
+- Constraints:
+  - Scope limited to renderer/UI components and existing settings/ROI state wiring.
+  - No OCR IPC/schema changes and no extractor algorithm changes in this increment.
+  - Keep changes additive and consistent with `docs/agents/UI_MASTERPLAN.md` surface/layout rules.
+- In scope:
+  - Add visual ROI editor modal component and wire from Settings ROI section.
+  - Keep existing numeric ROI fields; visual editor is additive.
+  - Fix panel height/fill behavior in `PlayerHub` under full dashboard shell.
+  - Fix Dev OCR Utilities overflow/cutoff behavior.
+  - Fix OCR modal vertical placement (top cutoff) and OCR correction input focus/typing behavior.
+- Out-of-scope (this increment):
+  - OCR extraction algorithm changes, benchmark methodology changes, or new OCR IPC channels.
+  - Major redesign of Dev OCR/Players information architecture.
+  - App-wide modal layout refactor beyond targeted OCR-related dialogs.
+- Done condition:
+  - Visual ROI editor can load an image, select a region, draw a rectangle, drag it, and resize it; applying persists to `ocrRegions`.
+  - Players view uses full available panel height without visible bottom dead-zone regression.
+  - Dev Utilities content is scrollable and no longer clipped.
+  - OCR correction/review modal no longer appears cut off at top in normal full-mode usage.
+  - OCR correction text entry keeps cursor and accepts typing consistently.
+  - Focused validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: `T2`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file user-facing interaction/layout changes across settings/editor/modal/dashboard surfaces.

@@ -11,6 +11,23 @@
  * - Update confidence scores
  */
 
+const MAX_TEAM_PLAYERS = 4;
+
+function capPlayerEntries(players = [], maxPlayers = MAX_TEAM_PLAYERS) {
+  if (!Array.isArray(players) || players.length <= maxPlayers) return players || [];
+
+  const scored = [...players].sort((a, b) => {
+    const aConf = typeof a === 'string' ? 60 : Number(a?.confidence || 0);
+    const bConf = typeof b === 'string' ? 60 : Number(b?.confidence || 0);
+    if (bConf !== aConf) return bConf - aConf;
+    const aName = (typeof a === 'string' ? a : a?.name || '').toLowerCase();
+    const bName = (typeof b === 'string' ? b : b?.name || '').toLowerCase();
+    return aName.localeCompare(bName);
+  });
+
+  return scored.slice(0, maxPlayers);
+}
+
 /**
  * Merge new capture data with existing data
  * @param {Object} existing - Existing accumulated data
@@ -76,7 +93,7 @@ function mergeMapScreenData(existing, newData) {
     yourShip: newData.yourShip || existing.yourShip,
     enemyShips: mergeEnemyShips(existing.enemyShips, newData.enemyShips),
     hazards: mergeHazards(existing.hazards, newData.hazards),
-    players: mergePlayers(existing.players, newData.players),
+    players: capPlayerEntries(mergePlayers(existing.players, newData.players)),
     confidence: 0,
   };
 
@@ -97,7 +114,7 @@ function mergeYourTeam(existing, newData) {
 
   return {
     name: newData.name || existing.name,
-    players: mergePlayers(existing.players || [], newData.players || []),
+    players: capPlayerEntries(mergePlayers(existing.players || [], newData.players || [])),
   };
 }
 
@@ -106,8 +123,18 @@ function mergeYourTeam(existing, newData) {
  * Matches teams by name similarity or color
  */
 function mergeEnemyTeams(existingTeams = [], newTeams = []) {
-  if (!existingTeams.length) return newTeams;
-  if (!newTeams.length) return existingTeams;
+  if (!existingTeams.length) {
+    return (newTeams || []).map((team) => ({
+      ...team,
+      players: capPlayerEntries(team.players || []),
+    }));
+  }
+  if (!newTeams.length) {
+    return (existingTeams || []).map((team) => ({
+      ...team,
+      players: capPlayerEntries(team.players || []),
+    }));
+  }
 
   const mergedTeams = [...existingTeams];
 
@@ -135,7 +162,7 @@ function mergeEnemyTeams(existingTeams = [], newTeams = []) {
       }
 
       // Merge players
-      existingTeam.players = mergePlayers(existingTeam.players, newTeam.players);
+      existingTeam.players = capPlayerEntries(mergePlayers(existingTeam.players, newTeam.players));
 
       // Update confidence (average)
       existingTeam.confidence = Math.round(
@@ -144,14 +171,20 @@ function mergeEnemyTeams(existingTeams = [], newTeams = []) {
     } else {
       // Add as new team (if under limit)
       if (mergedTeams.length < 4) {
-        mergedTeams.push({ ...newTeam });
+        mergedTeams.push({
+          ...newTeam,
+          players: capPlayerEntries(newTeam.players || []),
+        });
       } else {
         console.warn('[Merger] Max 4 teams reached, ignoring additional team:', newTeam.name);
       }
     }
   }
 
-  return mergedTeams;
+  return mergedTeams.map((team) => ({
+    ...team,
+    players: capPlayerEntries(team.players || []),
+  }));
 }
 
 /**

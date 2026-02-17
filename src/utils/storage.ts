@@ -4,6 +4,7 @@ import type { TimelineEvent } from '../store/slices/createDataSlice';
 import type { OcrCorrection, PlayerProfile } from '../store/slices/createMappingSlice';
 import type { OcrAliasModel, OcrLearningEvent, OcrLearningQueueItem } from './ocrAliasEngine';
 import Logger from './logger';
+import { runtimeConfig } from '../config/runtimeConfig';
 
 type StringMap = Record<string, string>;
 
@@ -308,7 +309,7 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
 const maybeAutoBackup = async (data: StorageData) => {
   const ipc = getElectronAPI();
   if (!ipc) return;
-  const autoBackupEnabled = data.settings?.autoBackup ?? true;
+  const autoBackupEnabled = data.settings?.autoBackup ?? false;
   if (!autoBackupEnabled) return;
 
   const matchCount = data.matches?.length || 0;
@@ -374,7 +375,7 @@ export const StorageService = {
     // Failsafe in case lifecycle hooks are skipped/crash occurs.
     intervalFlushHandle = window.setInterval(() => {
       if (lastData && hasUnsavedChanges()) void this.flush();
-    }, 3000);
+    }, runtimeConfig.storage.flushIntervalMs);
   },
 
   async init(): Promise<StorageData | null> {
@@ -484,7 +485,7 @@ export const StorageService = {
         const resolvers = pendingResolvers;
         pendingResolvers = [];
         resolvers.forEach((resolver) => resolver(ok));
-      }, 300); // tighter debounce to reduce loss window
+      }, runtimeConfig.storage.saveDebounceMs); // tighter debounce to reduce loss window
     });
   },
 

@@ -188,7 +188,7 @@ export const AnalyticsShell: React.FC = () => {
                         <div className="flex items-center gap-3 min-w-0">
                             {/* In standard mode, show Back button if not in overview */}
                             {!isProMode && currentView !== 'overview' && (
-                                <button onClick={goBack} className="md3-icon-btn">
+                                <button onClick={goBack} className="md3-icon-btn" aria-label="Back to analytics overview">
                                     <ArrowLeft size={16} />
                                 </button>
                             )}
@@ -231,6 +231,7 @@ export const AnalyticsShell: React.FC = () => {
                                 disabled={exporting || data.filteredMatches.length === 0}
                                 className="md3-icon-btn text-md-sys-on-surface/60 hover:text-md-sys-primary disabled:opacity-disabled transition-colors"
                                 title="Export analytics as PNG"
+                                aria-label="Export analytics as PNG"
                             >
                                 <Download size={16} className={exporting ? 'animate-pulse' : ''} />
                             </button>

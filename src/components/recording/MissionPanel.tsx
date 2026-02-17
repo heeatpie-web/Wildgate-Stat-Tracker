@@ -398,6 +398,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                         <button
                                             onClick={() => setShowArtifactSelect(false)}
                                             className="md3-icon-btn"
+                                            aria-label="Cancel artifact modifier selection"
                                         >
                                             <X size={14} />
                                         </button>

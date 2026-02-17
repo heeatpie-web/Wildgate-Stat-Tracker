@@ -241,7 +241,7 @@ const PlayerHub: React.FC = () => {
     };
 
     return (
-        <div data-tour="view-players" className="h-full flex flex-col lg:grid lg:grid-cols-playerhub-lg xl:grid-cols-playerhub-xl gap-4 overflow-hidden players-shell-gradient rounded-2xl">
+        <div data-tour="view-players" className="h-full min-h-0 flex flex-col lg:grid lg:grid-cols-playerhub-lg xl:grid-cols-playerhub-xl gap-4 overflow-hidden players-shell-gradient rounded-2xl">
             {/* Column 1: Roster List */}
             <div className="w-full lg:w-340px shrink-0 flex flex-col gap-3 h-full min-h-0">
                 <div className="md3-card mg-surface shadow-lg p-4 flex flex-col gap-3 shrink-0">
@@ -267,7 +267,7 @@ const PlayerHub: React.FC = () => {
                             className="w-full md3-textfield--outlined rounded-xl pl-9 pr-3 py-2 text-label-sm outline-none"
                         />
                         {searchTerm && (
-                            <button onClick={() => setSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-md-sys-on-surface/40 hover:text-md-sys-on-surface">
+                            <button onClick={() => setSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-md-sys-on-surface/40 hover:text-md-sys-on-surface" aria-label="Clear player search">
                                 <X size={14} />
                             </button>
                         )}
@@ -411,7 +411,7 @@ const PlayerHub: React.FC = () => {
             </div>
 
             {/* Column 2: Player Detail */}
-            <div className="flex-1 min-w-0 overflow-y-auto custom-scrollbar min-h-0">
+            <div className="flex-1 min-w-0 h-full overflow-y-auto custom-scrollbar min-h-0">
                 {!selected ? (
                     <div className="h-full flex flex-col items-center justify-center text-md-sys-on-surface/40">
                         <Users size={48} className="mb-3 opacity-40" />
@@ -437,8 +437,8 @@ const PlayerHub: React.FC = () => {
                                                     className="md3-textfield--outlined rounded-lg px-2 py-1 text-body font-bold w-40"
                                                     autoFocus
                                                 />
-                                                <button onClick={handleSaveRename} className="text-success"><Check size={16} /></button>
-                                                <button onClick={() => setRenaming(null)} className="text-md-sys-on-surface/40"><X size={16} /></button>
+                                                <button onClick={handleSaveRename} className="text-success" aria-label="Save player name"><Check size={16} /></button>
+                                                <button onClick={() => setRenaming(null)} className="text-md-sys-on-surface/40" aria-label="Cancel rename"><X size={16} /></button>
                                             </div>
                                         ) : (
                                             <h2 className="text-body font-bold text-md-sys-on-surface truncate">{selected.name}</h2>
@@ -462,6 +462,7 @@ const PlayerHub: React.FC = () => {
                                         onClick={() => toggleFavorite(selected.name)}
                                         className={`md3-icon-btn w-8 h-8 ${selected.isFavorite ? 'text-warning' : 'text-md-sys-on-surface/40'}`}
                                         title={selected.isFavorite ? 'Unpin' : 'Pin'}
+                                        aria-label={selected.isFavorite ? 'Unpin player' : 'Pin player'}
                                     >
                                         <Star size={14} className={selected.isFavorite ? 'fill-amber-400' : ''} />
                                     </button>
@@ -469,6 +470,7 @@ const PlayerHub: React.FC = () => {
                                         onClick={() => handleStartRename(selected.name)}
                                         className="md3-icon-btn w-8 h-8 text-md-sys-on-surface/40"
                                         title="Rename"
+                                        aria-label="Rename player"
                                     >
                                         <Edit2 size={14} />
                                     </button>
@@ -476,6 +478,7 @@ const PlayerHub: React.FC = () => {
                                         onClick={() => setMergeTarget(selected.name)}
                                         className="md3-icon-btn w-8 h-8 text-md-sys-on-surface/40"
                                         title="Merge with another player"
+                                        aria-label="Merge player"
                                     >
                                         <Merge size={14} />
                                     </button>
@@ -483,6 +486,7 @@ const PlayerHub: React.FC = () => {
                                         onClick={() => setConfirmDelete(selected.name)}
                                         className="md3-icon-btn w-8 h-8 text-md-sys-error/60 hover:text-md-sys-error"
                                         title="Remove from roster"
+                                        aria-label="Remove player from roster"
                                     >
                                         <Trash2 size={14} />
                                     </button>

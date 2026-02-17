@@ -22,7 +22,7 @@ import {
 } from '../utils/artifactService';
 import { getElectronAPI } from '../utils/electronAPI';
 import { useAppStore } from '../store/useAppStore';
-import type { CaptureMode, OcrMode } from '../store/slices/createSettingsSlice';
+import type { CaptureMode, OcrMode, OcrRegionSettings } from '../store/slices/createSettingsSlice';
 import { OCRReviewModal } from './ocr/OCRReviewModal';
 import { mergeOCRData, calculateOverallConfidence } from '../utils/ocr/ocrParser';
 import type { ExtractedModifier, OCRExtractedData } from '../utils/ocr/ocrTypes';
@@ -58,6 +58,7 @@ import { findClosestMatch, normalizeOcrName, similarityScore } from '../utils/st
 import { getTelemetryEventTimestamp, type TelemetryArchiveEvent } from '../utils/telemetryArchive';
 import type { TimelineEvent } from '../store/slices/createDataSlice';
 import { capTeammateNames, getMaxTeammatesForShip as getMaxTeammatesForShipLimit } from '../utils/teamLimits';
+import Logger from '../utils/logger';
 
 let autoArtifactRepairAttempted = false;
 
@@ -90,6 +91,7 @@ const SmartCapturesPanel: React.FC = () => {
     const { matches, updateMatch, deleteMatch, pilotRegistry, setSelectedTeammates, setSelectedOpponents, setActiveShip, setSessionTeams, setSessionShipTypes, setSelectedReachModifiers, selectedTeammates, selectedOpponents, sessionTeams, activeShip } = useGameData();
     const { activeUser, setToast, smartCapturesFocusMatchId, setSmartCapturesFocusMatchId } = useUIState();
     const ocrMode = useAppStore(s => s.ocrMode);
+    const ocrRegions = useAppStore(s => s.ocrRegions);
     const setOcrMode = useAppStore(s => s.setOcrMode);
     const captureMode = useAppStore(s => s.captureMode);
     const setCaptureMode = useAppStore(s => s.setCaptureMode);
@@ -580,7 +582,7 @@ const SmartCapturesPanel: React.FC = () => {
                 if (imagePaths.length === 0) continue;
 
                 updateMatch({ ...match, ocrState: 'processing' });
-                const settled = await Promise.allSettled(imagePaths.map(p => rerunOCROnArtifact(p, activeUser, ocrMode)));
+                const settled = await Promise.allSettled(imagePaths.map(p => rerunOCROnArtifact(p, activeUser, ocrMode, ocrRegions)));
                 type BulkRerunResult = RerunOcrResult & { imagePath: string };
                 const results: BulkRerunResult[] = settled.map((s, i) => {
                     if (s.status === 'fulfilled') return { ...s.value, imagePath: imagePaths[i] };
@@ -687,7 +689,7 @@ const SmartCapturesPanel: React.FC = () => {
         } finally {
             setBulkBusy(false);
         }
-    }, [activeUser, matches, normalizeModifierName, ocrMode, selectedIds, sessionTeams, setToast, updateMatch]);
+    }, [activeUser, matches, normalizeModifierName, ocrMode, ocrRegions, selectedIds, sessionTeams, setToast, updateMatch]);
 
     const handlePreviewArtifactRepair = useCallback(async () => {
         setRepairBusy(true);
@@ -943,6 +945,7 @@ const SmartCapturesPanel: React.FC = () => {
                                     onUpdate={updateMatch}
                                     activeUser={activeUser}
                                     ocrMode={ocrMode}
+                                    ocrRegions={ocrRegions}
                                     pilotRegistry={pilotRegistry}
                                     queueOnly={queueOnly}
                                     onNext={goNextQueue}
@@ -1244,6 +1247,7 @@ const SmartMatchDetail: React.FC<{
     onUpdate: (m: Match) => void;
     activeUser: string;
     ocrMode: string;
+    ocrRegions: OcrRegionSettings;
     pilotRegistry: string[];
     queueOnly?: boolean;
     onNext?: () => void;
@@ -1252,7 +1256,7 @@ const SmartMatchDetail: React.FC<{
     onApplyToSession?: (data: OCRExtractedData) => void;
     onQueueRosterCandidate?: (name: string) => void;
     onDeleteMatch?: (match: Match) => void;
-}> = ({ match, displayNumber, onUpdate, activeUser, ocrMode, pilotRegistry, queueOnly = false, onNext, onPrev, onResolve, onApplyToSession, onQueueRosterCandidate, onDeleteMatch }) => {
+}> = ({ match, displayNumber, onUpdate, activeUser, ocrMode, ocrRegions, pilotRegistry, queueOnly = false, onNext, onPrev, onResolve, onApplyToSession, onQueueRosterCandidate, onDeleteMatch }) => {
     const [artifacts, setArtifacts] = useState<{ images: string[], imageFiles: ArtifactFile[], telemetry: TelemetryArchiveEvent[][] }>({ images: [], imageFiles: [], telemetry: [] });
     const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
     const screenshotsSectionRef = useRef<HTMLDivElement | null>(null);
@@ -1328,7 +1332,11 @@ const SmartMatchDetail: React.FC<{
     useEffect(() => {
         setArtifacts({ images: [], imageFiles: [], telemetry: [] });
         setRerunResults(null);
-        getMatchArtifactsStructured(match.id).then(setArtifacts).catch(() => {});
+        getMatchArtifactsStructured(match.id)
+            .then(setArtifacts)
+            .catch((error: unknown) => {
+                Logger.warn('SmartCapturesPanel', `Failed to load artifacts for match ${match.id}`, error);
+            });
     }, [match.id]);
 
     const totalKills = Object.values(match.kills || {}).reduce((a, b) => a + (Number(b) || 0), 0);
@@ -1532,7 +1540,7 @@ const SmartMatchDetail: React.FC<{
         setRerunProgress({ current: 0, total: imagePaths.length, status: `Processing ${imagePaths.length} images in parallel...`, cloudStatus: cloudLabel ? `${cloudLabel} active` : '' });
         const settled = await Promise.allSettled(
             imagePaths.map(async (path) => {
-                const result = await rerunOCROnArtifact(path, activeUser, ocrMode);
+                const result = await rerunOCROnArtifact(path, activeUser, ocrMode, ocrRegions);
                 completed++;
                 const filename = path.split(/[\\/]/).pop() || 'image';
                 setRerunProgress(prev => ({ ...prev, current: completed, status: `Completed ${filename} (${completed}/${imagePaths.length})` }));
@@ -2579,7 +2587,7 @@ const SmartMatchDetail: React.FC<{
                     <div className="md3-dialog w-full max-w-2xl max-h-80vh overflow-hidden sc-bordered" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between p-4 border-b border-md-sys-outline/10">
                             <div className="text-body font-bold">{jsonExport.title}</div>
-                            <button onClick={() => setJsonExport(null)} className="md3-icon-btn">
+                            <button onClick={() => setJsonExport(null)} className="md3-icon-btn" aria-label="Close JSON export dialog">
                                 <X size={16} />
                             </button>
                         </div>

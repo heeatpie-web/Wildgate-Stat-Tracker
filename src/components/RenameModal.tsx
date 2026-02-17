@@ -1,12 +1,20 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
 import { Match } from '../types';
 import { parseShareCode } from '../utils/export';
+import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
 export const RenameModal: React.FC = () => {
     const { renameModal, setRenameModal, renameValue, setRenameValue, setToast, activeUser, setActiveUser } = useUIState();
     const { addPlayer, renamePilot, addMatch } = useGameData();
+    const dialogTitleId = useId();
+    const dialogDescriptionId = useId();
+    const focusTrapRef = useFocusTrap<HTMLDivElement>(renameModal != null);
+    useKeyboardShortcuts([
+        { key: 'Escape', handler: () => setRenameModal(null) },
+    ], renameModal != null);
 
     if (!renameModal) return null;
 
@@ -50,9 +58,17 @@ export const RenameModal: React.FC = () => {
 
     return (
         <div className="fixed inset-0 md3-dialog-scrim z-modal flex items-center justify-center p-4 animate-fade-in" onClick={() => setRenameModal(null)}>
-            <div className="md3-dialog p-5 rounded-modal max-w-sm w-full shadow-2xl border border-md-sys-outline/20 animate-scale-in" onClick={e => e.stopPropagation()}>
-                <h3 className="text-title font-bold uppercase mb-2">{title}</h3>
-                <p className="text-label-sm font-bold opacity-60 uppercase tracking-widest mb-6">{sub}</p>
+            <div
+                ref={focusTrapRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={dialogTitleId}
+                aria-describedby={dialogDescriptionId}
+                className="md3-dialog p-5 rounded-modal max-w-sm w-full shadow-2xl border border-md-sys-outline/20 animate-scale-in"
+                onClick={e => e.stopPropagation()}
+            >
+                <h3 id={dialogTitleId} className="text-title font-bold uppercase mb-2">{title}</h3>
+                <p id={dialogDescriptionId} className="text-label-sm font-bold opacity-60 uppercase tracking-widest mb-6">{sub}</p>
 
                 <input
                     autoFocus

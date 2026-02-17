@@ -22,7 +22,7 @@ const INVOKE_CHANNELS = [
   'load-archived-telemetry', 'list-telemetry-archives', 'load-telemetry-archive-file',
   'telemetry-retention-status', 'telemetry-prune-preview', 'telemetry-prune-apply',
   'decode-telemetry-cache', 'clear-telemetry-archives',
-  'clear-ocr-preprocessed', 'get-ocr-debug-dir', 'list-ocr-debug-files',
+  'clear-ocr-preprocessed', 'get-ocr-debug-dir', 'list-ocr-debug-files', 'get-ocr-cache-stats', 'benchmark-ocr-preprocessing', 'regenerate-ocr-dictionary',
   'scan-epic-ids',
   'read-file-base64', 'open-path',
   'ocr-corpus-load', 'ocr-corpus-save', 'ocr-corpus-eval', 'ocr-corpus-threshold-recommend', 'ocr-corpus-promote-baseline',

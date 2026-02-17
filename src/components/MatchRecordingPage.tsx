@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useId } from 'react';
 import {
     Search, Filter, ChevronRight, Trophy, Skull, Minus,
     Clock, HeartCrack, Target, Image, Eye, X, Edit3, Check,
@@ -8,7 +8,10 @@ import { Match, SHIPS, getShipColor } from '../types';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { getMatchArtifactsStructured } from '../utils/artifactService';
+import Logger from '../utils/logger';
 import { LocalImage } from './LocalImage';
+import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
 type ModeFilter = 'all' | 'Artifact Brawl' | 'Fleet Battle';
 
@@ -187,6 +190,13 @@ const MatchDetail: React.FC<{
     const [editingField, setEditingField] = useState<string | null>(null);
     const [editValue, setEditValue] = useState<string>('');
     const [showRawOcr, setShowRawOcr] = useState(false);
+    const lightboxTitleId = useId();
+    const lightboxDescriptionId = useId();
+    const lightboxFocusTrapRef = useFocusTrap<HTMLDivElement>(Boolean(lightboxSrc));
+
+    useKeyboardShortcuts([
+        { key: 'Escape', handler: () => setLightboxSrc(null) },
+    ], Boolean(lightboxSrc));
 
     // Load artifacts when match changes
     useEffect(() => {
@@ -194,7 +204,11 @@ const MatchDetail: React.FC<{
         if (match.artifacts && match.artifacts.length > 0) {
             setArtifacts(match.artifacts);
         } else {
-            getMatchArtifactsStructured(match.id).then(r => setArtifacts(r.images)).catch(() => {});
+            getMatchArtifactsStructured(match.id)
+                .then(r => setArtifacts(r.images))
+                .catch((error: unknown) => {
+                    Logger.warn('MatchRecordingPage', `Failed to load artifacts for match ${match.id}`, error);
+                });
         }
     }, [match.id, match.artifacts]);
 
@@ -292,7 +306,9 @@ const MatchDetail: React.FC<{
                         {artifacts.map((src, i) => (
                             <button
                                 key={i}
+                                type="button"
                                 onClick={() => setLightboxSrc(src)}
+                                aria-label={`Open screenshot ${i + 1} preview`}
                                 className="relative aspect-video bg-md-sys-surface3 rounded-lg overflow-hidden group"
                             >
                                 <LocalImage
@@ -309,6 +325,7 @@ const MatchDetail: React.FC<{
                     </div>
                     {onViewCaptures && (
                         <button
+                            type="button"
                             onClick={onViewCaptures}
                             className="mt-2 flex items-center gap-1.5 text-label-sm font-bold text-md-sys-primary hover:underline"
                         >
@@ -462,10 +479,27 @@ const MatchDetail: React.FC<{
             {/* Lightbox */}
             {lightboxSrc && (
                 <div className="fixed inset-0 z-modal bg-scrim-90 flex items-center justify-center p-8" onClick={() => setLightboxSrc(null)}>
-                    <button onClick={() => setLightboxSrc(null)} className="absolute top-4 right-4 text-md-sys-on-surface/60 hover:text-md-sys-on-surface">
-                        <X size={24} />
-                    </button>
-                    <LocalImage src={lightboxSrc} alt="Screenshot" className="max-w-full max-h-full object-contain rounded-lg" />
+                    <div
+                        ref={lightboxFocusTrapRef}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby={lightboxTitleId}
+                        aria-describedby={lightboxDescriptionId}
+                        className="relative max-w-full max-h-full"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <h2 id={lightboxTitleId} className="a11y-sr-only">Screenshot preview</h2>
+                        <p id={lightboxDescriptionId} className="a11y-sr-only">Expanded match screenshot image.</p>
+                        <button
+                            type="button"
+                            onClick={() => setLightboxSrc(null)}
+                            aria-label="Close screenshot preview"
+                            className="absolute top-4 right-4 text-md-sys-on-surface/60 hover:text-md-sys-on-surface"
+                        >
+                            <X size={24} />
+                        </button>
+                        <LocalImage src={lightboxSrc} alt="Match screenshot preview" className="max-w-full max-h-full object-contain rounded-lg" />
+                    </div>
                 </div>
             )}
         </div>

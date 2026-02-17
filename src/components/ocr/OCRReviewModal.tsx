@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useId } from 'react';
 import {
   X,
   Check,
@@ -19,6 +19,11 @@ import type { OCRExtractedData, ExtractedOpponentTeam, TeamColor } from '../../u
 import { SHIPS, UI_REACH_MODIFIERS } from '../../utils/constants';
 import { useAppStore } from '../../store/useAppStore';
 import { findClosestMatch, normalizeOcrName } from '../../utils/stringUtils';
+import Logger from '../../utils/logger';
+import { getElectronAPI } from '../../utils/electronAPI';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { useAriaLiveRegion } from '../../hooks/useAriaLiveRegion';
 
 interface OCRReviewModalProps {
   data: OCRExtractedData;
@@ -68,6 +73,12 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
     opponents: true,
   });
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const dialogTitleId = useId();
+  const dialogDescriptionId = useId();
+  const lightboxTitleId = useId();
+  const modalFocusTrapRef = useFocusTrap<HTMLDivElement>(lightboxIdx === null);
+  const lightboxFocusTrapRef = useFocusTrap<HTMLDivElement>(lightboxIdx !== null);
+  const { announce } = useAriaLiveRegion(true);
   const [newTeammateName, setNewTeammateName] = useState('');
   const [showCoachmark, setShowCoachmark] = useState(false);
   const confidenceSummary = useMemo(() => {
@@ -154,6 +165,11 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
       setShowCoachmark(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (lightboxIdx === null || !Array.isArray(screenshots) || screenshots.length === 0) return;
+    announce(`Opened screenshot ${lightboxIdx + 1} of ${screenshots.length}.`, 'polite');
+  }, [lightboxIdx, screenshots, announce]);
 
   const dismissCoachmark = () => {
     setShowCoachmark(false);
@@ -424,7 +440,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
 
     if (corrections.length > 0 && Array.isArray(screenshots) && screenshots.length > 0) {
       try {
-        const api = (window as any).electronAPI;
+        const api = getElectronAPI();
         if (api?.invoke) {
           const firstScreenshot = String(screenshots[0] || '');
           const screenshotBase64 = firstScreenshot.replace(/^data:image\/\w+;base64,/, '');
@@ -442,7 +458,10 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
               timestamp: new Date().toISOString(),
             },
           };
-          void api.invoke('ocr-corpus-add-corrected-sample', payload).catch(() => undefined);
+          void api.invoke('ocr-corpus-add-corrected-sample', payload).catch((error: unknown) => {
+            Logger.warn('OCRReviewModal', 'Failed to add corrected OCR sample to corpus', error);
+            return undefined;
+          });
         }
       } catch {
         // Non-blocking: corpus auto-growth must never block apply flow.
@@ -482,16 +501,49 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
     onApply(filtered);
   };
 
+  const closeLightbox = () => {
+    setLightboxIdx(null);
+    announce('Closed screenshot preview.', 'polite');
+  };
+
+  useKeyboardShortcuts([
+    {
+      key: 'Escape',
+      handler: () => {
+        if (lightboxIdx !== null) {
+          closeLightbox();
+          return;
+        }
+        onCancel();
+      },
+    },
+    {
+      key: 'Enter',
+      ctrl: true,
+      handler: () => {
+        if (lightboxIdx !== null) return;
+        handleApply();
+      },
+    },
+  ], true);
+
   return (
-    <div className="fixed inset-0 md3-dialog-scrim backdrop-blur-sm z-modal-top flex items-center justify-center p-4">
-        <div className="md3-dialog rounded-modal shadow-2xl max-w-2xl w-full max-h-90vh overflow-hidden flex flex-col relative z-0">
+    <div className="fixed inset-0 md3-dialog-scrim backdrop-blur-sm z-modal-top flex items-start justify-center p-4 overflow-y-auto">
+        <div
+          ref={modalFocusTrapRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={dialogTitleId}
+          aria-describedby={dialogDescriptionId}
+          className="md3-dialog rounded-modal shadow-2xl max-w-2xl w-full max-h-90vh my-2 overflow-hidden flex flex-col relative z-0"
+        >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="md3-surface-high p-2 rounded-card">
               <Ship className="text-accent" size={20} />
             </div>
             <div>
-              <h2 className="text-title font-bold">Review and Correct OCR Data</h2>
+              <h2 id={dialogTitleId} className="text-title font-bold">Review and Correct OCR Data</h2>
               {stepLabel && (
                 <p className="text-label-sm font-bold uppercase tracking-widest text-md-sys-primary mt-0.5">{stepLabel}</p>
               )}
@@ -511,10 +563,14 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
           <button
             onClick={onCancel}
             className="md3-icon-btn"
+            aria-label="Close OCR review modal"
           >
             <X size={18} />
           </button>
         </div>
+        <p id={dialogDescriptionId} className="a11y-sr-only">
+          Review OCR teammates, opponents, ship, and modifiers. Use Tab to navigate controls, Escape to close, and Control Enter to apply.
+        </p>
         <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar md3-dialog-content">
           <div className="grid grid-cols-4 gap-2">
             <div className="md3-surface-high rounded-card p-2 text-center">
@@ -810,6 +866,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                         <button
                           onClick={() => removeTeammate(index)}
                           className="md3-icon-btn text-danger"
+                          aria-label={`Remove teammate ${teammate.name}`}
                         >
                           <Trash2 size={14} className="text-danger" />
                         </button>
@@ -913,6 +970,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                           onClick={() => removeOpponentTeam(teamIndex)}
                           className="md3-icon-btn text-danger"
                           title="Remove team"
+                          aria-label={`Remove opponent team ${teamIndex + 1}`}
                         >
                           <Trash2 size={12} className="text-danger" />
                         </button>
@@ -964,6 +1022,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                                 <button
                                   onClick={() => removeOpponent(teamIndex, playerIndex)}
                                   className="md3-icon-btn text-danger"
+                                  aria-label={`Remove opponent ${player.name}`}
                                 >
                                   <Trash2 size={12} className="text-danger" />
                                 </button>
@@ -1064,37 +1123,50 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
       {lightboxIdx !== null && screenshots && screenshots[lightboxIdx] && (
         <div
           className="fixed inset-0 z-top bg-scrim-90 flex items-center justify-center p-8"
-          onClick={() => setLightboxIdx(null)}
+          onClick={closeLightbox}
         >
           <button
-            onClick={() => setLightboxIdx(null)}
+            type="button"
+            onClick={closeLightbox}
             className="absolute top-4 right-4 text-on-scrim-muted hover:text-on-scrim z-10"
+            aria-label="Close screenshot preview"
           >
             <X size={24} />
           </button>
           {screenshots.length > 1 && (
             <>
               <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); setLightboxIdx((lightboxIdx - 1 + screenshots.length) % screenshots.length); }}
                 className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-frost-10 rounded-full hover:bg-frost-20 text-on-scrim z-10"
+                aria-label="Previous screenshot"
               >
                 <ChevronDown size={20} className="rotate-90" />
               </button>
               <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); setLightboxIdx((lightboxIdx + 1) % screenshots.length); }}
                 className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-frost-10 rounded-full hover:bg-frost-20 text-on-scrim z-10"
+                aria-label="Next screenshot"
               >
                 <ChevronUp size={20} className="rotate-90" />
               </button>
             </>
           )}
-          <div onClick={(e) => e.stopPropagation()} className="max-w-full max-h-full">
+          <div
+            ref={lightboxFocusTrapRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={lightboxTitleId}
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-full max-h-full"
+          >
             <LocalImage
               src={screenshots[lightboxIdx]}
               alt={`Screenshot ${lightboxIdx + 1}`}
               className="max-w-full max-h-85vh object-contain rounded-lg"
             />
-              <div className="text-center mt-2 text-label-sm text-on-scrim-muted font-bold">
+              <div id={lightboxTitleId} className="text-center mt-2 text-label-sm text-on-scrim-muted font-bold">
               Screenshot {lightboxIdx + 1} of {screenshots.length}
             </div>
           </div>

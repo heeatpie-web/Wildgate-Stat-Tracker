@@ -39,10 +39,12 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   private handleClearData = () => {
-      if(confirm("This will clear local storage settings (not your database). Continue?")) {
-          localStorage.clear();
-          window.location.reload();
-      }
+      const confirmed = window.confirm(
+        'Emergency reset will clear local cache/settings and reload the app. Continue?'
+      );
+      if (!confirmed) return;
+      localStorage.clear();
+      window.location.reload();
   }
 
   public render() {

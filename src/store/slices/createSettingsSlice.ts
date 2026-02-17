@@ -1,6 +1,9 @@
 import { StateCreator } from 'zustand';
 import { GameMode, ColorblindMode, Language, VisualMode } from '../../types';
 import type { OcrCalibration } from '../../utils/scan/types';
+import { normalizeOcrBatchThreshold } from '../../utils/ocrBatchActions';
+import { appendCalibrationSample, OCR_CALIBRATION_MAX_SAMPLES } from '../../utils/ocrCalibration';
+import type { CalibrationSample } from '../../utils/ocrCalibration';
 
 /** Visual style variant for the in-game overlay. */
 export type OverlayStyle = 'compact' | 'transparent';
@@ -37,6 +40,58 @@ export interface DashboardPreloadStat {
   switchCount: number;
   lastVisitedAt: number;
 }
+
+export interface OcrRegionBounds {
+  xMin: number;
+  xMax: number;
+  yMin: number;
+  yMax: number;
+}
+
+export interface OcrRegionSettings {
+  crewHub: {
+    leftPanel: OcrRegionBounds;
+    rightPanel: OcrRegionBounds;
+    teamHeader: OcrRegionBounds;
+  };
+  mapScreen: {
+    yourShip: OcrRegionBounds;
+    enemyShips: OcrRegionBounds;
+    hazards: OcrRegionBounds;
+    players: OcrRegionBounds;
+  };
+}
+
+export interface OcrRegionUpdate {
+  crewHub?: Partial<OcrRegionSettings['crewHub']>;
+  mapScreen?: Partial<OcrRegionSettings['mapScreen']>;
+}
+
+export interface OcrCacheStats {
+  hits: number;
+  misses: number;
+  evictions: number;
+  totalRequests: number;
+  avgHitTimeMs: number;
+  avgMissTimeMs: number;
+  hitRate: number;
+  currentSize: number;
+  maxSize: number;
+}
+
+export const createDefaultOcrRegions = (): OcrRegionSettings => ({
+  crewHub: {
+    leftPanel: { xMin: 0.0, xMax: 0.36, yMin: 0.10, yMax: 0.80 },
+    rightPanel: { xMin: 0.45, xMax: 1.0, yMin: 0.10, yMax: 0.90 },
+    teamHeader: { xMin: 0.0, xMax: 0.45, yMin: 0.05, yMax: 0.20 },
+  },
+  mapScreen: {
+    yourShip: { xMin: 0.0, xMax: 0.30, yMin: 0.0, yMax: 0.25 },
+    enemyShips: { xMin: 0.60, xMax: 1.0, yMin: 0.0, yMax: 0.35 },
+    hazards: { xMin: 0.60, xMax: 1.0, yMin: 0.30, yMax: 0.70 },
+    players: { xMin: 0.0, xMax: 0.40, yMin: 0.70, yMax: 1.0 },
+  },
+});
 
 export interface SettingsSlice {
   activeMode: GameMode;
@@ -77,6 +132,9 @@ export interface SettingsSlice {
   ocrThresholdHistory: OcrThresholdHistoryEntry[];
   ocrBestGuessThresholds: OcrBestGuessThresholds;
   ocrCalibration: OcrCalibration;
+  ocrCalibrationSamples: CalibrationSample[];
+  ocrBatchAcceptThreshold: number;
+  ocrRegions: OcrRegionSettings;
   tutorialCompleted: boolean;
 
   setActiveMode: (mode: GameMode) => void;
@@ -120,6 +178,11 @@ export interface SettingsSlice {
   setOcrBestGuessThresholds: (update: Partial<OcrBestGuessThresholds>) => void;
   setOcrCalibration: (update: Partial<OcrCalibration>) => void;
   resetOcrCalibration: () => void;
+  recordCalibrationSample: (sample: CalibrationSample) => void;
+  clearOcrCalibrationSamples: () => void;
+  setOcrBatchAcceptThreshold: (threshold: number) => void;
+  setOcrRegions: (update: OcrRegionUpdate) => void;
+  resetOcrRegions: () => void;
   setTutorialCompleted: (completed: boolean) => void;
 }
 
@@ -148,7 +211,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   customBgUrl: '',
   enableAutoLogRecording: true,
   telemetryPerformanceProfile: 'balanced',
-  enableAutoBackup: true,
+  enableAutoBackup: false,
   startupSmartPreloadEnabled: true,
   overlayStyle: 'compact',
   visualMode: 'dense',
@@ -182,6 +245,9 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
     saturationMin: 35,
     luminanceMin: 30
   },
+  ocrCalibrationSamples: [],
+  ocrBatchAcceptThreshold: 85,
+  ocrRegions: createDefaultOcrRegions(),
   tutorialCompleted: false,
 
   setActiveMode: (mode) => set({ activeMode: mode }),
@@ -279,6 +345,35 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
       luminanceMin: 30
     }
   }),
+  recordCalibrationSample: (sample) => set((state) => ({
+    ocrCalibrationSamples: appendCalibrationSample(
+      state.ocrCalibrationSamples || [],
+      sample,
+      OCR_CALIBRATION_MAX_SAMPLES
+    ),
+  })),
+  clearOcrCalibrationSamples: () => set({ ocrCalibrationSamples: [] }),
+  setOcrBatchAcceptThreshold: (threshold) => set({ ocrBatchAcceptThreshold: normalizeOcrBatchThreshold(threshold) }),
+  setOcrRegions: (update) => set(state => ({
+    ocrRegions: {
+      crewHub: {
+        ...state.ocrRegions.crewHub,
+        ...(update.crewHub || {}),
+        leftPanel: { ...state.ocrRegions.crewHub.leftPanel, ...(update.crewHub?.leftPanel || {}) },
+        rightPanel: { ...state.ocrRegions.crewHub.rightPanel, ...(update.crewHub?.rightPanel || {}) },
+        teamHeader: { ...state.ocrRegions.crewHub.teamHeader, ...(update.crewHub?.teamHeader || {}) },
+      },
+      mapScreen: {
+        ...state.ocrRegions.mapScreen,
+        ...(update.mapScreen || {}),
+        yourShip: { ...state.ocrRegions.mapScreen.yourShip, ...(update.mapScreen?.yourShip || {}) },
+        enemyShips: { ...state.ocrRegions.mapScreen.enemyShips, ...(update.mapScreen?.enemyShips || {}) },
+        hazards: { ...state.ocrRegions.mapScreen.hazards, ...(update.mapScreen?.hazards || {}) },
+        players: { ...state.ocrRegions.mapScreen.players, ...(update.mapScreen?.players || {}) },
+      },
+    }
+  })),
+  resetOcrRegions: () => set({ ocrRegions: createDefaultOcrRegions() }),
   setTutorialCompleted: (completed) => set({ tutorialCompleted: completed }),
 });
 

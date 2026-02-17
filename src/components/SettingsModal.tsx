@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useId, useState } from 'react';
 import { Palette, FileJson, Save, Download, RefreshCw, X, Cloud, Monitor, Merge, Check, Sparkles } from 'lucide-react';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { useUIState } from '../providers/UIStateProvider';
@@ -15,11 +15,16 @@ import type {
     ResultOcrFlowMode,
     TelemetryPerformanceProfile,
     OcrLearningReviewMode,
-    OcrThresholdRecommendationMode
+    OcrThresholdRecommendationMode,
+    OcrRegionBounds,
+    OcrRegionSettings,
 } from '../store/slices/createSettingsSlice';
 import { normalizeOcrName, similarityScore } from '../utils/stringUtils';
 import { DEFAULT_OCR_BEST_GUESS_THRESHOLDS, getPreset, detectSensitivityLevel } from './settings/ocrThresholdPresets';
 import { Button, Input } from './ui';
+import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import OcrRegionEditorModal from './OcrRegionEditorModal';
 
 type SettingsTabId = 'identity' | 'interface' | 'ocr-capture' | 'data';
 type DashboardStatView = 'analytics' | 'history' | 'smart-captures' | 'players' | 'dev-ocr';
@@ -113,6 +118,9 @@ export const SettingsModal: React.FC = () => {
     const ocrCalibration = useAppStore(s => s.ocrCalibration);
     const setOcrCalibration = useAppStore(s => s.setOcrCalibration);
     const resetOcrCalibration = useAppStore(s => s.resetOcrCalibration);
+    const ocrRegions = useAppStore(s => s.ocrRegions);
+    const setOcrRegions = useAppStore(s => s.setOcrRegions);
+    const resetOcrRegions = useAppStore(s => s.resetOcrRegions);
     const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
     const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
     const removeOcrAliasCorrection = useAppStore(s => s.removeOcrAliasCorrection);
@@ -125,6 +133,7 @@ export const SettingsModal: React.FC = () => {
     const [gcloudStatus, setGcloudStatus] = useState<GCloudStatus | null>(null);
     const [aliasFrom, setAliasFrom] = useState('');
     const [aliasTo, setAliasTo] = useState('');
+    const [showRoiEditor, setShowRoiEditor] = useState(false);
     const [pendingSuspiciousAliasPair, setPendingSuspiciousAliasPair] = useState<string | null>(null);
     const [thresholdRecBusy, setThresholdRecBusy] = useState(false);
     const [thresholdRecommendation, setThresholdRecommendation] = useState<ThresholdRecommendationPayload | null>(null);
@@ -181,11 +190,19 @@ export const SettingsModal: React.FC = () => {
     useEffect(() => {
         if (showSettings) {
             getGCloudStatus().then(status => setGcloudStatus(status));
+        } else {
+            setShowRoiEditor(false);
         }
     }, [showSettings]);
 
     const [saved, setSaved] = useState(false);
     const [activeTab, setActiveTab] = useState<SettingsTabId>('interface');
+    const dialogTitleId = useId();
+    const dialogDescriptionId = useId();
+    const focusTrapRef = useFocusTrap<HTMLDivElement>(showSettings);
+    useKeyboardShortcuts([
+        { key: 'Escape', handler: () => setShowSettings(false) },
+    ], showSettings);
     const cloudReady = !!gcloudStatus?.visionReady;
     useEffect(() => {
         if (isOverlayMode && activeTab === 'data') {
@@ -245,6 +262,7 @@ export const SettingsModal: React.FC = () => {
                 autoBackup: state.enableAutoBackup,
                 startupSmartPreloadEnabled: (state as any).startupSmartPreloadEnabled,
                 ocrCalibration: state.ocrCalibration,
+                ocrRegions: state.ocrRegions,
                 tutorialCompleted: state.tutorialCompleted,
             },
             layouts: (state as any).layouts,
@@ -323,23 +341,98 @@ export const SettingsModal: React.FC = () => {
             };
         })
         .sort((a, b) => b.switchCount - a.switchCount);
+    type CrewRegionKey = keyof OcrRegionSettings['crewHub'];
+    type MapRegionKey = keyof OcrRegionSettings['mapScreen'];
+    const regionLabels: Record<CrewRegionKey | MapRegionKey, string> = {
+        leftPanel: 'Left Panel',
+        rightPanel: 'Right Panel',
+        teamHeader: 'Team Header',
+        yourShip: 'Your Ship',
+        enemyShips: 'Enemy Ships',
+        hazards: 'Hazards',
+        players: 'Players',
+    };
+    const regionFields: Array<keyof OcrRegionBounds> = ['xMin', 'xMax', 'yMin', 'yMax'];
+    const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+    const normalizeRegionBounds = (bounds: OcrRegionBounds): OcrRegionBounds => {
+        let xMin = clamp01(bounds.xMin);
+        let xMax = clamp01(bounds.xMax);
+        let yMin = clamp01(bounds.yMin);
+        let yMax = clamp01(bounds.yMax);
+        if (xMin >= xMax) {
+            if (xMin >= 1) xMin = Math.max(0, xMax - 0.01);
+            else xMax = Math.min(1, xMin + 0.01);
+        }
+        if (yMin >= yMax) {
+            if (yMin >= 1) yMin = Math.max(0, yMax - 0.01);
+            else yMax = Math.min(1, yMin + 0.01);
+        }
+        return { xMin, xMax, yMin, yMax };
+    };
+    const toPercent = (value: number) => Math.round((value || 0) * 1000) / 10;
+    const updateCrewRegionField = (region: CrewRegionKey, field: keyof OcrRegionBounds, rawPercent: string) => {
+        const parsed = Number(rawPercent);
+        if (!Number.isFinite(parsed)) return;
+        const current = ocrRegions.crewHub[region];
+        const next = normalizeRegionBounds({
+            ...current,
+            [field]: clamp01(parsed / 100),
+        });
+        setOcrRegions({
+            crewHub: {
+                [region]: next,
+            } as Partial<OcrRegionSettings['crewHub']>,
+        });
+    };
+    const updateMapRegionField = (region: MapRegionKey, field: keyof OcrRegionBounds, rawPercent: string) => {
+        const parsed = Number(rawPercent);
+        if (!Number.isFinite(parsed)) return;
+        const current = ocrRegions.mapScreen[region];
+        const next = normalizeRegionBounds({
+            ...current,
+            [field]: clamp01(parsed / 100),
+        });
+        setOcrRegions({
+            mapScreen: {
+                [region]: next,
+            } as Partial<OcrRegionSettings['mapScreen']>,
+        });
+    };
+    const crewHubRegionKeys: CrewRegionKey[] = ['leftPanel', 'rightPanel', 'teamHeader'];
+    const mapRegionKeys: MapRegionKey[] = ['yourShip', 'enemyShips', 'hazards', 'players'];
+    const applyVisualRoiRegions = useCallback((nextRegions: OcrRegionSettings) => {
+        setOcrRegions({
+            crewHub: { ...nextRegions.crewHub },
+            mapScreen: { ...nextRegions.mapScreen },
+        });
+    }, [setOcrRegions]);
 
     return (
-        <div className="fixed inset-0 z-modal md3-dialog-scrim flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowSettings(false)}>
-            <div
-                className={`md3-dialog overflow-hidden ${isOverlayMode ? 'max-w-400px' : 'max-w-2xl'} w-full max-h-85vh flex flex-col ring-1 ring-md-sys-outline/10 bg-md-sys-surface/90 backdrop-blur-xl shadow-2xl rounded-modal`}
-                onClick={e => e.stopPropagation()}
-            >
+        <>
+            <div className="fixed inset-0 z-modal md3-dialog-scrim flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowSettings(false)}>
+                <div
+                    ref={focusTrapRef}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby={dialogTitleId}
+                    aria-describedby={dialogDescriptionId}
+                    className={`md3-dialog overflow-hidden ${isOverlayMode ? 'max-w-400px' : 'max-w-2xl'} w-full max-h-85vh flex flex-col ring-1 ring-md-sys-outline/10 bg-md-sys-surface/90 backdrop-blur-xl shadow-2xl rounded-modal`}
+                    onClick={e => e.stopPropagation()}
+                >
                 {/* Modal Header */}
                 <div className="flex justify-between items-center p-5 border-b border-md-sys-outline/10">
-                    <h2 className="text-title font-bold">Settings</h2>
+                    <h2 id={dialogTitleId} className="text-title font-bold">Settings</h2>
                     <button
                         onClick={() => setShowSettings(false)}
                         className="md3-icon-btn w-10 h-10"
+                        aria-label="Close settings"
                     >
                         <X size={18} />
                     </button>
                 </div>
+                <p id={dialogDescriptionId} className="a11y-sr-only">
+                    App settings dialog. Use Tab to navigate sections and Escape to close.
+                </p>
 
                 <div className="px-5 py-3 border-b border-md-sys-outline/10">
                     <div className={`grid gap-2 ${settingsTabs.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
@@ -1187,6 +1280,82 @@ export const SettingsModal: React.FC = () => {
                                 ))}
                             </div>
                         </div>
+                        <div className="mt-4 pt-4 border-t border-md-sys-outline/10 space-y-3">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                        <h4 className="text-label-sm font-bold mb-1">OCR Scan Regions (ROI)</h4>
+                                        <p className="text-label-sm opacity-60">Updates apply immediately to OCR reruns and future scans.</p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => setShowRoiEditor(true)}
+                                            className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
+                                        >
+                                            Visual Editor
+                                        </button>
+                                        <button
+                                            onClick={resetOcrRegions}
+                                            className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
+                                        >
+                                            Reset ROI
+                                        </button>
+                                    </div>
+                                </div>
+
+                            <div className="space-y-3">
+                                <div className="md3-surface rounded-card border border-md-sys-outline/10 p-3 space-y-2">
+                                    <div className="text-label-sm font-bold">Crew Hub Regions</div>
+                                    {crewHubRegionKeys.map((regionKey) => {
+                                        const bounds = ocrRegions.crewHub[regionKey];
+                                        return (
+                                            <div key={regionKey} className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+                                                <div className="text-label-sm font-semibold opacity-60 md:col-span-1">{regionLabels[regionKey]}</div>
+                                                {regionFields.map((field) => (
+                                                    <label key={`${regionKey}-${field}`} className="flex flex-col gap-1">
+                                                        <span className="text-label-xs font-mono opacity-60">{field} %</span>
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            max={100}
+                                                            step={0.5}
+                                                            value={toPercent(bounds[field])}
+                                                            onChange={(e) => updateCrewRegionField(regionKey, field, e.target.value)}
+                                                            className="h-9 md3-surface-low rounded-control px-2 text-label-sm outline-none border border-md-sys-outline/20"
+                                                        />
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="md3-surface rounded-card border border-md-sys-outline/10 p-3 space-y-2">
+                                    <div className="text-label-sm font-bold">Map Screen Regions</div>
+                                    {mapRegionKeys.map((regionKey) => {
+                                        const bounds = ocrRegions.mapScreen[regionKey];
+                                        return (
+                                            <div key={regionKey} className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
+                                                <div className="text-label-sm font-semibold opacity-60 md:col-span-1">{regionLabels[regionKey]}</div>
+                                                {regionFields.map((field) => (
+                                                    <label key={`${regionKey}-${field}`} className="flex flex-col gap-1">
+                                                        <span className="text-label-xs font-mono opacity-60">{field} %</span>
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            max={100}
+                                                            step={0.5}
+                                                            value={toPercent(bounds[field])}
+                                                            onChange={(e) => updateMapRegionField(regionKey, field, e.target.value)}
+                                                            className="h-9 md3-surface-low rounded-control px-2 text-label-sm outline-none border border-md-sys-outline/20"
+                                                        />
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
                         </section>
                     )}
 
@@ -1291,8 +1460,15 @@ export const SettingsModal: React.FC = () => {
                     </div>
 
                 </div>
+                </div >
             </div >
-        </div >
+            <OcrRegionEditorModal
+                isOpen={showRoiEditor}
+                initialRegions={ocrRegions}
+                onApply={applyVisualRoiRegions}
+                onClose={() => setShowRoiEditor(false)}
+            />
+        </>
     );
 };
 

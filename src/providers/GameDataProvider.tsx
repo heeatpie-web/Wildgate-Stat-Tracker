@@ -4,12 +4,14 @@
  * and mapping actions to the component tree. Subscribes to only the
  * game-data-related fields of the Zustand store via useShallow.
  */
-import React, { createContext, useContext, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useShallow } from 'zustand/react/shallow';
 import { Match, DrillDownTarget, KillMap, Loadout, GameMode } from '../types';
 import { PlayerProfile } from '../store/slices/createMappingSlice';
 import type { PendingReview, TimelineEvent } from '../store/slices/createDataSlice';
+import { getElectronAPI } from '../utils/electronAPI';
+import Logger from '../utils/logger';
 
 interface GameDataContextType {
     matches: Match[];
@@ -144,6 +146,9 @@ export const useGameData = () => {
 };
 
 export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const dictionarySignatureRef = useRef('');
+    const dictionaryUpdateInFlightRef = useRef(false);
+
     const store = useAppStore(useShallow(s => ({
         matches: s.matches, setMatches: s.setMatches,
         addMatch: s.addMatch, updateMatch: s.updateMatch,
@@ -202,6 +207,60 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setOverlayPhase: s.setOverlayPhase,
         playerProfiles: s.playerProfiles,
     })));
+
+    useEffect(() => {
+        const api = getElectronAPI();
+        if (!api) return;
+        if (dictionaryUpdateInFlightRef.current) return;
+
+        const pilots = Array.from(new Set(
+            (store.pilotRegistry || [])
+                .filter((name): name is string => typeof name === 'string')
+                .map(name => name.replace(/\s+/g, ' ').trim())
+                .filter(Boolean)
+        ));
+
+        if (pilots.length < 5) return;
+
+        const recentMatches = (store.matches || []).slice(-500);
+        const latestTimestamp = recentMatches.reduce((maxTs, match) => {
+            const candidate = Number(match?.timestamp) || 0;
+            return candidate > maxTs ? candidate : maxTs;
+        }, 0);
+        const signature = `${pilots.map(name => name.toLowerCase()).sort().join('|')}::${recentMatches.length}:${latestTimestamp}`;
+        if (dictionarySignatureRef.current === signature) return;
+
+        const timeoutId = window.setTimeout(() => {
+            dictionarySignatureRef.current = signature;
+            dictionaryUpdateInFlightRef.current = true;
+
+            api.invoke('regenerate-ocr-dictionary', {
+                pilotRegistry: pilots,
+                matches: recentMatches,
+            })
+                .then((result: unknown) => {
+                    if (!result || typeof result !== 'object' || !('success' in result) || (result as { success: boolean }).success !== true) {
+                        const errorMessage = (result && typeof result === 'object' && 'error' in result)
+                            ? String((result as { error?: string }).error || 'unknown error')
+                            : 'unknown error';
+                        Logger.warn('OCR-Dict', `Auto dictionary regeneration failed: ${errorMessage}`);
+                        return;
+                    }
+                    const stats = result as { totalWords?: number; pilotCount?: number };
+                    Logger.info('OCR-Dict', `Auto dictionary regenerated (${stats.totalWords || 0} words from ${stats.pilotCount || pilots.length} pilots)`);
+                })
+                .catch((error: unknown) => {
+                    Logger.warn('OCR-Dict', 'Auto dictionary regeneration error', error);
+                })
+                .finally(() => {
+                    dictionaryUpdateInFlightRef.current = false;
+                });
+        }, 1200);
+
+        return () => {
+            window.clearTimeout(timeoutId);
+        };
+    }, [store.pilotRegistry, store.matches]);
 
     const value = useMemo(() => store, [store]);
 

@@ -44,6 +44,7 @@ export const WindowFrame: React.FC = () => {
                     onClick={handleMinimize}
                     className="md3-icon-btn w-9 h-7 rounded-control"
                     title="Minimize"
+                    aria-label="Minimize window"
                 >
                     <Minus size={14} className="opacity-60" />
                 </button>
@@ -51,6 +52,7 @@ export const WindowFrame: React.FC = () => {
                     onClick={handleMaximize}
                     className="md3-icon-btn w-9 h-7 rounded-control"
                     title={isMaximized ? "Restore" : "Maximize"}
+                    aria-label={isMaximized ? "Restore window" : "Maximize window"}
                 >
                     {isMaximized ? (
                         <Minimize2 size={12} className="opacity-60" />
@@ -62,6 +64,7 @@ export const WindowFrame: React.FC = () => {
                     onClick={handleClose}
                     className="md3-icon-btn group w-9 h-7 rounded-control hover:bg-md-sys-error hover:text-md-sys-on-error"
                     title="Close"
+                    aria-label="Close window"
                 >
                     <X size={14} className="opacity-60 group-hover:opacity-100" />
                 </button>

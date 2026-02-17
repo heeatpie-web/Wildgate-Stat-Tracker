@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Match, SHIPS, WEAPONS, SYSTEMS } from '../types';
 import { X, Save, Trash2, AlertCircle, Skull, Crosshair, Plus, Zap } from 'lucide-react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
 interface EditMatchModalProps {
   match: Match;
@@ -13,6 +15,13 @@ export const EditMatchModal: React.FC<EditMatchModalProps> = ({ match, onSave, o
   const [editedMatch, setEditedMatch] = useState<Match>({ ...match });
   const [newTeammate, setNewTeammate] = useState("");
   const [newOpponent, setNewOpponent] = useState("");
+  const dialogTitleId = useId();
+  const dialogDescriptionId = useId();
+  const focusTrapRef = useFocusTrap<HTMLDivElement>(true);
+
+  useKeyboardShortcuts([
+    { key: 'Escape', handler: () => onClose() },
+  ], true);
 
   const handleSave = () => {
     onSave(editedMatch);
@@ -55,14 +64,25 @@ export const EditMatchModal: React.FC<EditMatchModalProps> = ({ match, onSave, o
 
   return createPortal(
     <div className="fixed inset-0 md3-dialog-scrim z-modal flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
-      <div className="md3-dialog rounded-modal w-full max-w-2xl border border-md-sys-outline/20 flex flex-col gap-6 max-h-90vh overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
+      <div
+        ref={focusTrapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={dialogTitleId}
+        aria-describedby={dialogDescriptionId}
+        className="md3-dialog rounded-modal w-full max-w-2xl border border-md-sys-outline/20 flex flex-col gap-6 max-h-90vh overflow-y-auto custom-scrollbar"
+        onClick={e => e.stopPropagation()}
+      >
 
         <div className="flex justify-between items-center border-b border-md-sys-outline/10 pb-4">
-          <h3 className="text-title font-bold uppercase tracking-tight flex items-center gap-2">
+          <h3 id={dialogTitleId} className="text-title font-bold uppercase tracking-tight flex items-center gap-2">
             <Edit2Icon className="text-md-sys-primary" size={24} /> Edit Mission Log
           </h3>
-          <button onClick={onClose} className="md3-icon-btn"><X size={18} /></button>
+          <button onClick={onClose} className="md3-icon-btn" aria-label="Close edit match dialog"><X size={18} /></button>
         </div>
+        <p id={dialogDescriptionId} className="a11y-sr-only">
+          Edit recorded match details. Use Tab to move through controls and Escape to close.
+        </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Result & SubType */}
@@ -130,13 +150,13 @@ export const EditMatchModal: React.FC<EditMatchModalProps> = ({ match, onSave, o
               {(editedMatch.teammates || []).map((t, i) => (
                 <div key={i} className="flex items-center gap-2 bg-info-soft text-info px-3 py-1.5 rounded-lg text-label-sm font-bold">
                   {t}
-                  <button onClick={() => removeTeammate(i)} className="hover:text-md-sys-on-surface"><X size={12} /></button>
+                  <button onClick={() => removeTeammate(i)} className="hover:text-md-sys-on-surface" aria-label={`Remove teammate ${t}`}><X size={12} /></button>
                 </div>
               ))}
             </div>
             <div className="flex gap-2">
               <input type="text" value={newTeammate} onChange={e => setNewTeammate(e.target.value)} placeholder="Add Teammate" className="flex-1 md3-textfield--outlined px-3 py-1.5 text-label-sm font-bold outline-none" onKeyDown={e => e.key === 'Enter' && addTeammate()} />
-              <button onClick={addTeammate} className="md3-btn-filled p-1.5 rounded-control"><Plus size={16} /></button>
+              <button onClick={addTeammate} className="md3-btn-filled p-1.5 rounded-control" aria-label="Add teammate"><Plus size={16} /></button>
             </div>
           </div>
 
@@ -147,13 +167,13 @@ export const EditMatchModal: React.FC<EditMatchModalProps> = ({ match, onSave, o
               {(editedMatch.opponents || []).map((o, i) => (
                 <div key={i} className="flex items-center gap-2 bg-danger-soft text-danger px-3 py-1.5 rounded-lg text-label-sm font-bold">
                   {o}
-                  <button onClick={() => removeOpponent(i)} className="hover:text-md-sys-on-surface"><X size={12} /></button>
+                  <button onClick={() => removeOpponent(i)} className="hover:text-md-sys-on-surface" aria-label={`Remove opponent ${o}`}><X size={12} /></button>
                 </div>
               ))}
             </div>
             <div className="flex gap-2">
               <input type="text" value={newOpponent} onChange={e => setNewOpponent(e.target.value)} placeholder="Add Opponent" className="flex-1 md3-textfield--outlined px-3 py-1.5 text-label-sm font-bold outline-none" onKeyDown={e => e.key === 'Enter' && addOpponent()} />
-              <button onClick={addOpponent} className="md3-btn-filled p-1.5 rounded-control bg-md-sys-error text-md-sys-on-error"><Plus size={16} /></button>
+              <button onClick={addOpponent} className="md3-btn-filled p-1.5 rounded-control bg-md-sys-error text-md-sys-on-error" aria-label="Add opponent"><Plus size={16} /></button>
             </div>
           </div>
 
@@ -164,7 +184,7 @@ export const EditMatchModal: React.FC<EditMatchModalProps> = ({ match, onSave, o
               {(editedMatch.reachModifiers || []).map((m, i) => (
                 <div key={i} className="flex items-center gap-2 md3-surface-high px-3 py-1.5 rounded-lg text-label-sm font-bold border border-md-sys-outline/10">
                   {m}
-                  <button onClick={() => removeModifier(i)} className="hover:text-md-sys-primary"><X size={12} /></button>
+                  <button onClick={() => removeModifier(i)} className="hover:text-md-sys-primary" aria-label={`Remove modifier ${m}`}><X size={12} /></button>
                 </div>
               ))}
             </div>
@@ -180,8 +200,8 @@ export const EditMatchModal: React.FC<EditMatchModalProps> = ({ match, onSave, o
                     <span className="text-lg font-bold">{editedMatch.weapons?.[w] || 0}</span>
                   </div>
                   <div className="flex gap-1 items-center">
-                    <button onClick={() => setEditedMatch(prev => ({ ...prev, weapons: { ...(prev.weapons || {}), [w]: Math.max(0, (prev.weapons?.[w] || 0) - 1) } }))} className="md3-icon-btn w-6 h-6 text-md-sys-on-surface">-</button>
-                    <button onClick={() => setEditedMatch(prev => ({ ...prev, weapons: { ...(prev.weapons || {}), [w]: (prev.weapons?.[w] || 0) + 1 } }))} className="md3-icon-btn w-6 h-6 bg-md-sys-primary text-md-sys-onPrimary">+</button>
+                    <button onClick={() => setEditedMatch(prev => ({ ...prev, weapons: { ...(prev.weapons || {}), [w]: Math.max(0, (prev.weapons?.[w] || 0) - 1) } }))} className="md3-icon-btn w-6 h-6 text-md-sys-on-surface" aria-label={`Decrease ${w}`}>-</button>
+                    <button onClick={() => setEditedMatch(prev => ({ ...prev, weapons: { ...(prev.weapons || {}), [w]: (prev.weapons?.[w] || 0) + 1 } }))} className="md3-icon-btn w-6 h-6 bg-md-sys-primary text-md-sys-onPrimary" aria-label={`Increase ${w}`}>+</button>
                   </div>
                 </div>
               ))}
@@ -198,8 +218,8 @@ export const EditMatchModal: React.FC<EditMatchModalProps> = ({ match, onSave, o
                     <span className="text-lg font-bold">{editedMatch.weapons?.[s] || 0}</span>
                   </div>
                   <div className="flex gap-1 items-center">
-                    <button onClick={() => setEditedMatch(prev => ({ ...prev, weapons: { ...(prev.weapons || {}), [s]: Math.max(0, (prev.weapons?.[s] || 0) - 1) } }))} className="md3-icon-btn w-6 h-6 text-md-sys-on-surface">-</button>
-                    <button onClick={() => setEditedMatch(prev => ({ ...prev, weapons: { ...(prev.weapons || {}), [s]: (prev.weapons?.[s] || 0) + 1 } }))} className="md3-icon-btn w-6 h-6 bg-info text-on-scrim">+</button>
+                    <button onClick={() => setEditedMatch(prev => ({ ...prev, weapons: { ...(prev.weapons || {}), [s]: Math.max(0, (prev.weapons?.[s] || 0) - 1) } }))} className="md3-icon-btn w-6 h-6 text-md-sys-on-surface" aria-label={`Decrease ${s}`}>-</button>
+                    <button onClick={() => setEditedMatch(prev => ({ ...prev, weapons: { ...(prev.weapons || {}), [s]: (prev.weapons?.[s] || 0) + 1 } }))} className="md3-icon-btn w-6 h-6 bg-info text-on-scrim" aria-label={`Increase ${s}`}>+</button>
                   </div>
                 </div>
               ))}
@@ -213,9 +233,9 @@ export const EditMatchModal: React.FC<EditMatchModalProps> = ({ match, onSave, o
                 <div key={ship} className={`flex justify-between items-center p-2 rounded-card ${ship === 'AI Legion' ? 'md3-surface-high ring-1 ring-accent/30' : 'md3-surface-low border border-md-sys-outline/5'}`}>
                   <span className={`text-label-sm font-bold uppercase ${ship === 'AI Legion' ? 'text-accent' : 'opacity-60'}`}>{ship.split('(')[0]}</span>
                   <div className="flex gap-2 items-center">
-                    <button onClick={() => setEditedMatch(prev => ({ ...prev, kills: { ...prev.kills, [ship]: Math.max(0, (prev.kills?.[ship] || 0) - 1) } }))} className={`md3-icon-btn w-6 h-6 ${ship === 'AI Legion' ? 'bg-accent-soft text-accent' : 'text-md-sys-on-surface'}`}>-</button>
+                    <button onClick={() => setEditedMatch(prev => ({ ...prev, kills: { ...prev.kills, [ship]: Math.max(0, (prev.kills?.[ship] || 0) - 1) } }))} className={`md3-icon-btn w-6 h-6 ${ship === 'AI Legion' ? 'bg-accent-soft text-accent' : 'text-md-sys-on-surface'}`} aria-label={`Decrease ${ship} eliminations`}>-</button>
                     <span className={`font-bold w-5 text-center ${ship === 'AI Legion' ? 'text-accent' : ''}`}>{editedMatch.kills?.[ship] || 0}</span>
-                    <button onClick={() => setEditedMatch(prev => ({ ...prev, kills: { ...prev.kills, [ship]: (prev.kills?.[ship] || 0) + 1 } }))} className={`md3-icon-btn w-6 h-6 ${ship === 'AI Legion' ? 'bg-accent text-on-scrim' : 'bg-md-sys-primary text-md-sys-onPrimary'}`}>+</button>
+                    <button onClick={() => setEditedMatch(prev => ({ ...prev, kills: { ...prev.kills, [ship]: (prev.kills?.[ship] || 0) + 1 } }))} className={`md3-icon-btn w-6 h-6 ${ship === 'AI Legion' ? 'bg-accent text-on-scrim' : 'bg-md-sys-primary text-md-sys-onPrimary'}`} aria-label={`Increase ${ship} eliminations`}>+</button>
                   </div>
                 </div>
               ))}

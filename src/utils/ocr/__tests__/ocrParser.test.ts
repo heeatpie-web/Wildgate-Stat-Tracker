@@ -382,6 +382,60 @@ describe('mergeOCRData (parser)', () => {
     const merged = mergeOCRData(existing, newData);
     expect(merged.hazards).toHaveLength(2);
   });
+
+  it('caps merged teammates to ship teammate limit', () => {
+    const existing: Partial<OCRExtractedData> = {
+      playerShip: { shipType: 'Hunter (4 Player)', confidence: 90 },
+      teammates: [
+        { name: 'A', confidence: 80, isTeammate: true },
+        { name: 'B', confidence: 81, isTeammate: true },
+      ],
+    };
+    const newData: Partial<OCRExtractedData> = {
+      teammates: [
+        { name: 'C', confidence: 82, isTeammate: true },
+        { name: 'D', confidence: 83, isTeammate: true },
+        { name: 'E', confidence: 84, isTeammate: true },
+      ],
+    };
+    const merged = mergeOCRData(existing, newData);
+    expect(merged.teammates).toHaveLength(3);
+    const names = new Set((merged.teammates || []).map((p) => p.name));
+    expect(names.size).toBe(3);
+  });
+
+  it('caps merged opponent team players at 4', () => {
+    const existing: Partial<OCRExtractedData> = {
+      opponentTeams: [{
+        teamName: 'Blue Team',
+        shipType: 'Hunter',
+        color: 'blue' as const,
+        players: [
+          { name: 'P1', confidence: 60, isTeammate: false },
+          { name: 'P2', confidence: 61, isTeammate: false },
+          { name: 'P3', confidence: 62, isTeammate: false },
+        ],
+        confidence: 70,
+      }],
+    };
+    const newData: Partial<OCRExtractedData> = {
+      opponentTeams: [{
+        teamName: 'Blue Team',
+        shipType: '',
+        color: 'blue' as const,
+        players: [
+          { name: 'P4', confidence: 95, isTeammate: false },
+          { name: 'P5', confidence: 94, isTeammate: false },
+          { name: 'P6', confidence: 93, isTeammate: false },
+          { name: 'P7', confidence: 92, isTeammate: false },
+        ],
+        confidence: 75,
+      }],
+    };
+    const merged = mergeOCRData(existing, newData);
+    expect(merged.opponentTeams).toHaveLength(1);
+    expect(merged.opponentTeams?.[0].players).toHaveLength(4);
+  });
 });
 
 // ── calculateOverallConfidence ──

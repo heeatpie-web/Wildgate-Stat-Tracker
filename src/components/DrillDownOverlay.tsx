@@ -1,12 +1,22 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { X, TrendingUp } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
+import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
 export const DrillDownOverlay: React.FC = () => {
     const { matches, drillDownTarget, setDrillDownTarget } = useGameData();
     const { activeMode } = useUIState();
+    const isOpen = Boolean(drillDownTarget);
+    const dialogTitleId = useId();
+    const dialogDescriptionId = useId();
+    const focusTrapRef = useFocusTrap<HTMLDivElement>(isOpen);
+
+    useKeyboardShortcuts([
+        { key: 'Escape', handler: () => setDrillDownTarget(null) },
+    ], isOpen);
 
     if (!drillDownTarget) return null;
 
@@ -135,13 +145,21 @@ export const DrillDownOverlay: React.FC = () => {
 
     return (
         <div className="fixed inset-0 md3-dialog-scrim backdrop-blur-md z-overlay flex items-center justify-center p-6 animate-fade-in" onClick={() => setDrillDownTarget(null)}>
-            <div className="md3-card w-full max-w-6xl rounded-2xl p-6 shadow-2xl border border-md-sys-outline/20 flex flex-col max-h-90vh" onClick={e => e.stopPropagation()}>
+            <div
+                ref={focusTrapRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={dialogTitleId}
+                aria-describedby={dialogDescriptionId}
+                className="md3-card w-full max-w-6xl rounded-2xl p-6 shadow-2xl border border-md-sys-outline/20 flex flex-col max-h-90vh"
+                onClick={e => e.stopPropagation()}
+            >
 
                 {/* Header */}
                 <div className="flex justify-between items-start mb-8 flex-shrink-0">
                     <div>
-                        <div className="text-body font-black uppercase opacity-40 tracking-wide-20 mb-1">Deep Dive Analysis - {drillDownTarget.type}</div>
-                        <h2 className="text-5xl font-black">{drillDownTarget.name}</h2>
+                        <div id={dialogDescriptionId} className="text-body font-black uppercase opacity-40 tracking-wide-20 mb-1">Deep Dive Analysis - {drillDownTarget.type}</div>
+                        <h2 id={dialogTitleId} className="text-5xl font-black">{drillDownTarget.name}</h2>
                         <div className="flex gap-4 mt-4">
                             <div className="md3-surface-high px-4 py-2 rounded-xl text-label-sm font-black uppercase"><span className="opacity-60">Matches:</span> {targetMatches.length}</div>
                             <div className="md3-surface-high px-4 py-2 rounded-xl text-label-sm font-black uppercase flex items-center gap-2">
@@ -156,7 +174,7 @@ export const DrillDownOverlay: React.FC = () => {
                             {avgDmg > 0 && <div className="md3-surface-high px-4 py-2 rounded-xl text-label-sm font-black uppercase"><span className="opacity-60">Avg Dmg:</span> {avgDmg}</div>}
                         </div>
                     </div>
-                    <button onClick={() => setDrillDownTarget(null)} className="md3-icon-btn"><X size={24} /></button>
+                    <button type="button" onClick={() => setDrillDownTarget(null)} className="md3-icon-btn" aria-label="Close drill-down overlay"><X size={24} /></button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-6">

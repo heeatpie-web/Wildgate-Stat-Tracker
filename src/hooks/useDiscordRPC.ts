@@ -5,6 +5,7 @@
  */
 import { useEffect } from 'react';
 import { getElectronAPI } from '../utils/electronAPI';
+import { runtimeConfig } from '../config/runtimeConfig';
 
 export const useDiscordRPC = (sessionWins: number, sessionTotal: number, activeMode: string, sessionStartTime: number) => {
   useEffect(() => {
@@ -21,7 +22,7 @@ export const useDiscordRPC = (sessionWins: number, sessionTotal: number, activeM
     };
 
     sendPresence();
-    const interval = setInterval(sendPresence, 15000);
+    const interval = setInterval(sendPresence, runtimeConfig.discord.presenceUpdateIntervalMs);
     return () => clearInterval(interval);
   }, [sessionWins, sessionTotal, activeMode, sessionStartTime]);
 };
