@@ -207,21 +207,14 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
         poiMedium: 0,
         poiEpic: 0,
         kills: { "AI Legion": 0 },
-        timeMin: "",
-        timeSec: "",
         selectedReachModifiers: [],
         modifiersSource: undefined,
         heroSource: undefined,
         shipSource: undefined,
         telemetryDetectedHero: undefined,
         telemetryDetectedShip: undefined,
-        damageTaken: "",
         elims: "",
         currentNote: "",
-        // Do NOT reset activeWeapons to empty? Or reset to CURRENT hero's defaults?
-        // Match submission usually means we are done. But if we start a new match, we might want same loadout.
-        // Resetting to empty is annoying.
-        // Let's reset to the saved loadout for the active hero (which is effectively current, or empty check).
         activeWeapons: state.characterLoadouts[state.activeHero] || {}
     }))
 });

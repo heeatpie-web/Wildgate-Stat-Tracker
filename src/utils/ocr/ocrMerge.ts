@@ -104,7 +104,7 @@ function mergeOpponentTeams(
  * @param incoming - New OCR data to merge in
  * @returns Merged OCR data
  */
-export function mergeOCRData(
+export function mergeFullOCRData(
   existing: OCRExtractedData,
   incoming: OCRExtractedData
 ): OCRExtractedData {
@@ -185,6 +185,27 @@ export function mergeOCRData(
   // Use earliest timestamp
   const mergedTimestamp = Math.min(existing.captureTimestamp, incoming.captureTimestamp);
 
+  // Merge hazards (deduplicate case-insensitively)
+  const mergedHazards = (() => {
+    const both = [...(existing.hazards || []), ...(incoming.hazards || [])];
+    if (both.length === 0) return undefined;
+    const seen = new Set<string>();
+    return both.filter(h => {
+      const key = h.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  })();
+
+  // Artifact type: prefer non-empty value
+  const mergedArtifactType = existing.artifactType || incoming.artifactType;
+
+  // Raw text: only concatenate if at least one is present
+  const mergedRawText = (existing.rawText || incoming.rawText)
+    ? (existing.rawText || '') + (existing.rawText && incoming.rawText ? '\n---MERGE---\n' : '') + (incoming.rawText || '')
+    : undefined;
+
   const merged: OCRExtractedData = {
     screenshotType: mergedType,
     playerShip: mergedPlayerShip,
@@ -195,7 +216,9 @@ export function mergeOCRData(
     opponentTeams: mergedOpponentTeams,
     overallConfidence: mergedConfidence,
     captureTimestamp: mergedTimestamp,
-    rawText: (existing.rawText || '') + '\n---MERGE---\n' + (incoming.rawText || ''),
+    ...(mergedHazards !== undefined && { hazards: mergedHazards }),
+    ...(mergedArtifactType !== undefined && { artifactType: mergedArtifactType }),
+    ...(mergedRawText !== undefined && { rawText: mergedRawText }),
   };
 
   console.log('[OCR Merge] Merge complete:', {

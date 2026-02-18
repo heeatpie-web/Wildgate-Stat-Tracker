@@ -158,8 +158,10 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
         return [...pinned, ...unpinned];
     }, [filteredMatches, sortField, sortDesc]);
 
-    const shouldLimitAll = itemsPerPage === 'Infinity' && sortedMatches.length > 500 && !renderAll;
-    const effectiveAllList = shouldLimitAll ? sortedMatches.slice(0, 500) : sortedMatches;
+    const effectiveAllList = useMemo(() => {
+        const shouldLimitAll = itemsPerPage === 'Infinity' && sortedMatches.length > 500 && !renderAll;
+        return shouldLimitAll ? sortedMatches.slice(0, 500) : sortedMatches;
+    }, [sortedMatches, itemsPerPage, renderAll]);
 
     const paginatedMatches = useMemo(() => {
         if (itemsPerPage === 'Infinity') return effectiveAllList;

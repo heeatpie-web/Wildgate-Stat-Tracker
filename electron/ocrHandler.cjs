@@ -1168,14 +1168,27 @@ async function runCloudOCR(imagePath, timeoutMs = 3000) {
     ]);
   };
 
+  // Errors that won't be resolved by retrying (auth, quota, billing, not found).
+  const isNonRetriable = (msg = '') => {
+    const lower = msg.toLowerCase();
+    return lower.includes('auth') || lower.includes('permission') || lower.includes('credential')
+      || lower.includes('quota') || lower.includes('billing') || lower.includes('not found')
+      || lower.includes('invalid') || lower.includes('api key');
+  };
+
   try {
     return await executeOnce();
   } catch (err) {
-    console.warn(`[OCR-Cloud] First attempt failed (${err.message}), retrying once...`);
+    const msg = err?.message || '';
+    if (isNonRetriable(msg)) {
+      console.warn(`[OCR-Cloud] Non-retriable error, skipping retry: ${msg}`);
+      return null;
+    }
+    console.warn(`[OCR-Cloud] First attempt failed (${msg}), retrying once...`);
     try {
       return await executeOnce();
     } catch (retryErr) {
-      console.warn(`[OCR-Cloud] Retry failed (${retryErr.message})`);
+      console.warn(`[OCR-Cloud] Retry failed (${retryErr?.message})`);
       return null;
     }
   }

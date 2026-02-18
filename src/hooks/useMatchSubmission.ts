@@ -112,7 +112,7 @@ export const useMatchSubmission = () => {
         const unresolvedDraft = pendingDraft || (Array.isArray(matches)
             ? matches.find((m: Match) => {
                 if (m.subType !== 'Telemetry Draft') return false;
-                if (m.timestamp < recentCutoff) return false;
+                if (!m.timestamp || m.timestamp < recentCutoff) return false;
                 if (activeUser && m.player && m.player !== activeUser) return false;
                 return true;
             })

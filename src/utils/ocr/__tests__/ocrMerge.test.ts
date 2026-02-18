@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeOCRData, isSameMatchSession, createEmptyOCRData } from '../ocrMerge';
+import { mergeFullOCRData as mergeOCRData, isSameMatchSession, createEmptyOCRData } from '../ocrMerge';
 import type { OCRExtractedData } from '../ocrTypes';
 
 // ── Helpers ──
