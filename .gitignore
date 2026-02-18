@@ -21,8 +21,7 @@ _savepoint_*
 .visual/ui-hardcoded-report.md
 
 # Editor directories and files
-.vscode/*
-!.vscode/extensions.json
+.vscode/
 .idea
 .DS_Store
 *.suo
@@ -54,8 +53,11 @@ dataset/
 # AI assistant configuration files
 .cursorrules
 .gemini_memory.md
+.autogenstudio/
+.cursor/
 .claude/
 .codemachine/
+.windsurf/
 
 # Test coverage
 coverage/
