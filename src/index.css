@@ -178,6 +178,23 @@ body[data-mode='twilight'] .recording-inside-panel input[type='number'] {
   border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 80%);
 }
 
+/* Twilight click-target clarity improvements for dense list/action UIs. */
+body[data-mode='twilight'] .idmapper-click-target,
+body[data-mode='twilight'] .player-list-item {
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 52%);
+  box-shadow: 0 1px 0 color-mix(in srgb, #000, transparent 45%);
+}
+
+body[data-mode='twilight'] .idmapper-click-target:hover,
+body[data-mode='twilight'] .player-list-item:hover {
+  border-color: color-mix(in srgb, var(--md-sys-color-primary), transparent 55%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 72%);
+}
+
+body[data-mode='twilight'] .player-list-name {
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+}
+
 /* Explicit gradient shells to avoid mg-surface override flattening. */
 .analytics-shell-gradient {
   background:
@@ -626,36 +643,38 @@ body[data-mode='twilight'] .sc-bordered {
 
 .sc-status-chip {
   border: 1px solid transparent;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .sc-status-chip--success {
-  background: color-mix(in srgb, var(--md-sys-color-success), transparent 86%);
+  background: color-mix(in srgb, var(--md-sys-color-success), transparent 78%);
   color: var(--md-sys-color-success);
-  border-color: color-mix(in srgb, var(--md-sys-color-success), transparent 66%);
+  border-color: color-mix(in srgb, var(--md-sys-color-success), transparent 48%);
 }
 
 .sc-status-chip--warning {
-  background: color-mix(in srgb, var(--md-sys-color-warning), transparent 86%);
+  background: color-mix(in srgb, var(--md-sys-color-warning), transparent 78%);
   color: var(--md-sys-color-warning);
-  border-color: color-mix(in srgb, var(--md-sys-color-warning), transparent 66%);
+  border-color: color-mix(in srgb, var(--md-sys-color-warning), transparent 48%);
 }
 
 .sc-status-chip--danger {
-  background: color-mix(in srgb, var(--md-sys-color-danger), transparent 86%);
+  background: color-mix(in srgb, var(--md-sys-color-danger), transparent 78%);
   color: var(--md-sys-color-danger);
-  border-color: color-mix(in srgb, var(--md-sys-color-danger), transparent 66%);
+  border-color: color-mix(in srgb, var(--md-sys-color-danger), transparent 48%);
 }
 
 .sc-status-chip--info {
-  background: color-mix(in srgb, var(--md-sys-color-info), transparent 86%);
+  background: color-mix(in srgb, var(--md-sys-color-info), transparent 78%);
   color: var(--md-sys-color-info);
-  border-color: color-mix(in srgb, var(--md-sys-color-info), transparent 66%);
+  border-color: color-mix(in srgb, var(--md-sys-color-info), transparent 48%);
 }
 
 .sc-status-chip--neutral {
-  background: color-mix(in srgb, var(--md-sys-color-outline), transparent 80%);
+  background: color-mix(in srgb, var(--md-sys-color-outline), transparent 72%);
   color: var(--md-sys-color-on-surface);
-  border-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 65%);
+  border-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 45%);
 }
 
 .sc-collapsed-glyph {
@@ -2488,22 +2507,41 @@ body.perf-lite .shadow-2xl {
 }
 
 
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+.custom-scrollbar {
+  scrollbar-width: auto;
+  scrollbar-color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 55%) color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 28%);
+  scrollbar-gutter: stable;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
+.custom-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
 }
 
-::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 40%);
-  border-radius: 3px;
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 28%);
+  border-radius: 999px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--md-sys-color-outline-variant);
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 58%);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 42%);
+}
+
+body[data-mode='twilight'] .custom-scrollbar::-webkit-scrollbar-track,
+body[data-mode='dark'] .custom-scrollbar::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), transparent 22%);
+}
+
+body[data-mode='twilight'] .custom-scrollbar::-webkit-scrollbar-thumb,
+body[data-mode='dark'] .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 50%);
 }
 
 .header-shell-glow {

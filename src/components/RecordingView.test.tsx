@@ -62,7 +62,7 @@ describe('RecordingView', () => {
 
   it('renders compact left panel tabs on short heights and swaps Actions vs Loadout without scrolling the panel', async () => {
     // Short height triggers compact density (even on wide screens).
-    setViewport(1600, 800);
+    setViewport(1600, 680);
     const { RecordingView } = await import('./RecordingView');
 
     render(<RecordingView />);
@@ -122,4 +122,3 @@ describe('RecordingView', () => {
     expect(screen.getByTestId('MissionPanel')).toBeInTheDocument();
   });
 });
-

@@ -4,6 +4,7 @@ import {
     Clock, HeartCrack, Target, Image, Eye, X, Edit3, Check,
     ShieldCheck, Crosshair, Users, AlertTriangle, FileText,
     ScanEye, RefreshCw, Plus, ImageOff, Trash2, Upload, Camera, Zap, Loader2, FolderOpen,
+    FlaskConical,
 } from 'lucide-react';
 import { Match, SHIPS, getShipColor, OpponentTeam, Loadout } from '../types';
 import { UI_REACH_MODIFIERS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT, SYSTEMS } from '../utils/constants';
@@ -58,6 +59,7 @@ import { findClosestMatch, normalizeOcrName, similarityScore } from '../utils/st
 import { getTelemetryEventTimestamp, type TelemetryArchiveEvent } from '../utils/telemetryArchive';
 import type { TimelineEvent } from '../store/slices/createDataSlice';
 import { capTeammateNames, getMaxTeammatesForShip as getMaxTeammatesForShipLimit } from '../utils/teamLimits';
+import { moveOpponentPlayerBetweenTeams } from '../utils/opponentTeamTransfer';
 import Logger from '../utils/logger';
 
 let autoArtifactRepairAttempted = false;
@@ -89,7 +91,13 @@ const normalizeModifierEntries = (
 
 const SmartCapturesPanel: React.FC = () => {
     const { matches, updateMatch, deleteMatch, pilotRegistry, setSelectedTeammates, setSelectedOpponents, setActiveShip, setSessionTeams, setSessionShipTypes, setSelectedReachModifiers, selectedTeammates, selectedOpponents, sessionTeams, activeShip } = useGameData();
-    const { activeUser, setToast, smartCapturesFocusMatchId, setSmartCapturesFocusMatchId } = useUIState();
+    const {
+        activeUser,
+        setToast,
+        smartCapturesFocusMatchId,
+        setSmartCapturesFocusMatchId,
+        setActiveView,
+    } = useUIState();
     const ocrMode = useAppStore(s => s.ocrMode);
     const ocrRegions = useAppStore(s => s.ocrRegions);
     const setOcrMode = useAppStore(s => s.setOcrMode);
@@ -124,11 +132,12 @@ const SmartCapturesPanel: React.FC = () => {
         const match = UI_REACH_MODIFIERS.find(m => m.toLowerCase() === name.toLowerCase());
         return match || name;
     }, []);
-    const resolveRosterName = useCallback((rawName: string) => {
+    const resolveRosterName = useCallback((rawName: string, opts?: { allowFuzzy?: boolean }) => {
         const normalized = normalizeOcrName(rawName || '');
         if (!normalized || normalized.length < 2) return '';
         const exact = pilotRegistry.find(p => normalizeOcrName(p).toLowerCase() === normalized.toLowerCase());
         if (exact) return exact;
+        if (!opts?.allowFuzzy) return normalized;
         const threshold = normalized.length > 8 ? 2 : 1;
         const fuzzy = findClosestMatch(normalized, pilotRegistry, threshold);
         return fuzzy || normalized;
@@ -667,6 +676,9 @@ const SmartCapturesPanel: React.FC = () => {
                         rawText: combined.rawText,
                         confidence: combined.overallConfidence,
                         source: combined.ocrSource || match.ocrDebug?.source,
+                        fallbackReason: combined.ocrFallbackReason || match.ocrDebug?.fallbackReason,
+                        cloudError: combined.ocrCloudError || match.ocrDebug?.cloudError,
+                        geminiError: combined.ocrGeminiError || match.ocrDebug?.geminiError,
                         mergeStats: combined.mergeStats ? {
                             total: combined.mergeStats.total,
                             agreed: combined.mergeStats.agreed,
@@ -1053,13 +1065,31 @@ const SmartCapturesPanel: React.FC = () => {
                                             if (data.playerShip?.shipType) matchUpdates.ship = data.playerShip.shipType;
                                             if (data.teammates?.length > 0) {
                                                 const resolvedTeam = data.teammates
-                                                    .map(t => resolveRosterName(t.name || ''))
+                                                    .map(t => resolveRosterName(t.name || '', { allowFuzzy: false }))
                                                     .filter(Boolean);
-                                                matchUpdates.teammates = capTeammateNames(resolvedTeam, shipForCapacity);
+                                                const manualTeam = selectedMatch.teammates || [];
+                                                const mergedTeam = [...manualTeam];
+                                                const mergedTeamKeys = new Set(manualTeam.map((name) => normalizeOcrName(name).toLowerCase()));
+                                                resolvedTeam.forEach((name) => {
+                                                    const key = normalizeOcrName(name).toLowerCase();
+                                                    if (!key || mergedTeamKeys.has(key)) return;
+                                                    mergedTeam.push(name);
+                                                    mergedTeamKeys.add(key);
+                                                });
+                                                matchUpdates.teammates = capTeammateNames(mergedTeam, shipForCapacity);
                                             }
                                             if (resolvedOpponentTeams.length > 0) {
                                                 const resolvedOpps = resolvedOpponentTeams.flatMap((team) => team.players).filter(Boolean);
-                                                matchUpdates.opponents = Array.from(new Set(resolvedOpps));
+                                                const manualOpponents = selectedMatch.opponents || [];
+                                                const mergedOpponents = [...manualOpponents];
+                                                const mergedOpponentKeys = new Set(manualOpponents.map((name) => normalizeOcrName(name).toLowerCase()));
+                                                resolvedOpps.forEach((name) => {
+                                                    const key = normalizeOcrName(name).toLowerCase();
+                                                    if (!key || mergedOpponentKeys.has(key)) return;
+                                                    mergedOpponents.push(name);
+                                                    mergedOpponentKeys.add(key);
+                                                });
+                                                matchUpdates.opponents = mergedOpponents;
                                                 matchUpdates.opponentTeams = resolvedOpponentTeams.map((team) => ({
                                                     teamName: team.teamName || 'Unknown Team',
                                                     shipType: team.shipType || '',
@@ -1143,6 +1173,20 @@ const SmartCapturesPanel: React.FC = () => {
                                 <span className="text-label-xs text-md-sys-on-surface/60">{bulkBusy ? 'Working...' : 'Actions apply to selected rows'}</span>
                             </div>
                         )}
+                    </section>
+                    <section className="md3-surface rounded-card p-4 border border-md-sys-outline/10" aria-labelledby="sc-tools-debug-heading">
+                        <h2 id="sc-tools-debug-heading" className="text-label-lg font-bold text-md-sys-on-surface mb-3">OCR Debug</h2>
+                        <p className="text-label-sm text-md-sys-on-surface/60 mb-3">
+                            Open OCR Debug tools directly from Smart Captures for fast reruns, corpus review, and OCR diagnostics.
+                        </p>
+                        <Button
+                            type="button"
+                            className="px-3 py-2 text-label-sm font-bold rounded-control"
+                            onClick={() => setActiveView('dev-ocr')}
+                            icon={<FlaskConical size={14} />}
+                        >
+                            Open OCR Debug
+                        </Button>
                     </section>
                     <section className="md3-surface rounded-card p-4 border border-md-sys-outline/10" aria-labelledby="sc-tools-artifact-repair-heading">
                         <h2 id="sc-tools-artifact-repair-heading" className="text-label-lg font-bold text-md-sys-on-surface mb-3">Artifact Repair</h2>
@@ -1266,6 +1310,11 @@ const SmartMatchDetail: React.FC<{
     const [editPlayerValue, setEditPlayerValue] = useState('');
     const [addingPlayer, setAddingPlayer] = useState<'teammate' | 'opponent' | null>(null);
     const [newPlayerName, setNewPlayerName] = useState('');
+    const [draggedOpponentPlayer, setDraggedOpponentPlayer] = useState<{
+        teamIndex: number;
+        playerIndex: number;
+    } | null>(null);
+    const [dragHoverTeamIndex, setDragHoverTeamIndex] = useState<number | null>(null);
     const [rerunning, setRerunning] = useState(false);
     const [rerunResults, setRerunResults] = useState<RerunResultWithMeta[] | null>(null);
     const [reviewData, setReviewData] = useState<OCRExtractedData | null>(null);
@@ -1288,11 +1337,12 @@ const SmartMatchDetail: React.FC<{
         const match = UI_REACH_MODIFIERS.find(m => m.toLowerCase() === name.toLowerCase());
         return match || name;
     }, []);
-    const resolveRosterName = useCallback((rawName: string) => {
+    const resolveRosterName = useCallback((rawName: string, opts?: { allowFuzzy?: boolean }) => {
         const normalized = normalizeOcrName(rawName || '');
         if (!normalized || normalized.length < 2) return '';
         const exact = pilotRegistry.find(p => normalizeOcrName(p).toLowerCase() === normalized.toLowerCase());
         if (exact) return exact;
+        if (!opts?.allowFuzzy) return normalized;
         const threshold = normalized.length > 8 ? 2 : 1;
         const fuzzy = findClosestMatch(normalized, pilotRegistry, threshold);
         return fuzzy || normalized;
@@ -1427,6 +1477,49 @@ const SmartMatchDetail: React.FC<{
             : match.placement;
         onUpdate({ ...match, result, placement });
     };
+    const moveOpponentPlayer = useCallback((
+        fromTeamIndex: number,
+        fromPlayerIndex: number,
+        toTeamIndex: number,
+        toPlayerIndex?: number | null
+    ) => {
+        const currentTeams = match.opponentTeams || [];
+        const movedTeams = moveOpponentPlayerBetweenTeams(currentTeams, {
+            fromTeamIndex,
+            fromPlayerIndex,
+            toTeamIndex,
+            toPlayerIndex,
+        });
+        if (movedTeams === currentTeams) return;
+        onUpdate({
+            ...match,
+            opponentTeams: movedTeams,
+            opponents: movedTeams.flatMap((team) => team.players).filter(Boolean),
+        });
+    }, [match, onUpdate]);
+    const allowOpponentDrop = useCallback((event: React.DragEvent<HTMLElement>, teamIndex: number) => {
+        if (!draggedOpponentPlayer) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        setDragHoverTeamIndex(teamIndex);
+    }, [draggedOpponentPlayer]);
+    const dropOpponentPlayer = useCallback((
+        event: React.DragEvent<HTMLElement>,
+        teamIndex: number,
+        playerIndex?: number | null
+    ) => {
+        if (!draggedOpponentPlayer) return;
+        event.preventDefault();
+        event.stopPropagation();
+        moveOpponentPlayer(
+            draggedOpponentPlayer.teamIndex,
+            draggedOpponentPlayer.playerIndex,
+            teamIndex,
+            playerIndex
+        );
+        setDraggedOpponentPlayer(null);
+        setDragHoverTeamIndex(null);
+    }, [draggedOpponentPlayer, moveOpponentPlayer]);
 
     const renderPlayerChips = (players: string[], type: 'teammate' | 'opponent') => {
         const chipClass = type === 'teammate' ? 'sc-player-chip sc-player-chip--teammate' : 'sc-player-chip sc-player-chip--opponent';
@@ -1557,10 +1650,22 @@ const SmartMatchDetail: React.FC<{
         setRerunning(false);
         const successful = results.filter((r): r is RerunResultWithMeta & { success: true; data: OCRExtractedData } => !!(r.success && r.data));
         const cloudUsed = successful.some(r => r.data?.ocrSource === 'merged' || r.data?.ocrSource === 'cloud');
+        const fallbackReasons = successful
+            .map((r) => String(r.data?.ocrFallbackReason || '').trim())
+            .filter(Boolean);
+        const cloudErrors = successful
+            .map((r) => String(r.data?.ocrCloudError || '').trim())
+            .filter(Boolean);
         setRerunProgress(prev => ({
             ...prev,
             status: `Done - ${successful.length}/${results.length} succeeded`,
-            cloudStatus: cloudUsed ? 'Cloud OCR contributed' : (cloudLabel ? 'Cloud OCR unavailable' : ''),
+            cloudStatus: cloudUsed
+                ? 'Cloud OCR contributed'
+                : (fallbackReasons[0]
+                    ? fallbackReasons[0]
+                    : (cloudLabel
+                        ? (cloudErrors[0] ? `Cloud OCR unavailable (${cloudErrors[0]})` : 'Cloud OCR unavailable')
+                        : '')),
         }));
 
         if (successful.length > 0) {
@@ -1601,6 +1706,9 @@ const SmartMatchDetail: React.FC<{
                 captureTimestamp: Date.now(),
                 rawText: lastData.rawText,
                 ocrSource: lastData.ocrSource,
+                ocrFallbackReason: lastData.ocrFallbackReason,
+                ocrCloudError: lastData.ocrCloudError,
+                ocrGeminiError: lastData.ocrGeminiError,
                 mergeStats: lastData.mergeStats,
             };
             setReviewData(combinedData);
@@ -1708,9 +1816,18 @@ const SmartMatchDetail: React.FC<{
         if (data.teammates?.length > 0) {
             data.teammates.forEach((teammate) => maybeQueueRoster(teammate.name || ''));
             const resolvedTeam = data.teammates
-                .map(t => resolveRosterName(t.name || ''))
+                .map(t => resolveRosterName(t.name || '', { allowFuzzy: false }))
                 .filter(Boolean);
-            updates.teammates = capTeammateNames(resolvedTeam, shipForCapacity);
+            const manualTeam = match.teammates || [];
+            const mergedTeam = [...manualTeam];
+            const mergedTeamKeys = new Set(manualTeam.map((name) => normalizeOcrName(name).toLowerCase()));
+            resolvedTeam.forEach((name) => {
+                const key = normalizeOcrName(name).toLowerCase();
+                if (!key || mergedTeamKeys.has(key)) return;
+                mergedTeam.push(name);
+                mergedTeamKeys.add(key);
+            });
+            updates.teammates = capTeammateNames(mergedTeam, shipForCapacity);
         }
         if (data.opponentTeams?.length > 0) {
             data.opponentTeams.forEach((team) => {
@@ -1723,7 +1840,7 @@ const SmartMatchDetail: React.FC<{
                 players: Array.from(
                     new Map(
                         team.players
-                            .map((player) => resolveRosterName(player.name || ''))
+                            .map((player) => resolveRosterName(player.name || '', { allowFuzzy: false }))
                             .filter(Boolean)
                             .map((name) => [normalizeOcrName(name).toLowerCase(), name])
                     ).values()
@@ -1740,7 +1857,16 @@ const SmartMatchDetail: React.FC<{
             const resolvedOpps = resolvedOpponentTeams
                 .flatMap((team) => team.players)
                 .filter(Boolean);
-            updates.opponents = Array.from(new Set(resolvedOpps));
+            const manualOpponents = match.opponents || [];
+            const mergedOpponents = [...manualOpponents];
+            const mergedOpponentKeys = new Set(manualOpponents.map((name) => normalizeOcrName(name).toLowerCase()));
+            resolvedOpps.forEach((name) => {
+                const key = normalizeOcrName(name).toLowerCase();
+                if (!key || mergedOpponentKeys.has(key)) return;
+                mergedOpponents.push(name);
+                mergedOpponentKeys.add(key);
+            });
+            updates.opponents = mergedOpponents;
             updates.opponentTeams = resolvedOpponentTeams.map((team) => ({
                 teamName: team.teamName || 'Unknown Team',
                 shipType: team.shipType || '',
@@ -1983,7 +2109,7 @@ const SmartMatchDetail: React.FC<{
                             placeholder="MM:SS"
                         />
                         <EditableStatCard
-                            icon={<HeartCrack size={14} className="text-danger" />} label="Damage" value={match.damageTaken?.toString() || '0'}
+                            icon={<HeartCrack size={14} className="text-danger" />} label="Damage in the last 2 minutes" value={match.damageTaken?.toString() || '0'}
                             onSave={(v) => onUpdate({ ...match, damageTaken: parseInt(v) || 0 })}
                             type="number"
                         />
@@ -2107,7 +2233,15 @@ const SmartMatchDetail: React.FC<{
                                         };
                                         const COLORS = ['red', 'orange', 'yellow', 'green', 'blue', 'cyan', 'purple', 'unknown'];
                                         return (
-                                            <div key={ti} className="md3-surface-high rounded-lg p-2 space-y-1.5 group/team">
+                                            <div
+                                                key={ti}
+                                                className={`md3-surface-high rounded-lg p-2 space-y-1.5 group/team ${
+                                                    dragHoverTeamIndex === ti ? 'ring-1 ring-md-sys-primary/30' : ''
+                                                }`}
+                                                onDragOver={(event) => allowOpponentDrop(event, ti)}
+                                                onDragLeave={() => setDragHoverTeamIndex(null)}
+                                                onDrop={(event) => dropOpponentPlayer(event, ti, null)}
+                                            >
                                                 <div className="flex items-center gap-2">
                                                     <button
                                                         onClick={() => {
@@ -2155,9 +2289,31 @@ const SmartMatchDetail: React.FC<{
                                                         <Trash2 size={12} />
                                                     </button>
                                                 </div>
+                                                <p className="text-label-xs opacity-50 pl-4">
+                                                    Drag opponent chips between teams to reassign ship/team.
+                                                </p>
                                                 <div className="flex flex-wrap gap-1 pl-4 items-center">
                                                     {team.players.map((p, pi) => (
-                                                        <span key={pi} className="px-2 py-0.5 bg-danger-soft text-danger rounded-md text-label-sm font-bold flex items-center gap-1 group/player">
+                                                        <span
+                                                            key={pi}
+                                                            className={`px-2 py-0.5 bg-danger-soft text-danger rounded-md text-label-sm font-bold flex items-center gap-1 group/player cursor-grab ${
+                                                                draggedOpponentPlayer?.teamIndex === ti
+                                                                && draggedOpponentPlayer?.playerIndex === pi
+                                                                    ? 'opacity-60'
+                                                                    : ''
+                                                            }`}
+                                                            draggable
+                                                            onDragStart={(event) => {
+                                                                event.dataTransfer.effectAllowed = 'move';
+                                                                setDraggedOpponentPlayer({ teamIndex: ti, playerIndex: pi });
+                                                            }}
+                                                            onDragEnd={() => {
+                                                                setDraggedOpponentPlayer(null);
+                                                                setDragHoverTeamIndex(null);
+                                                            }}
+                                                            onDragOver={(event) => allowOpponentDrop(event, ti)}
+                                                            onDrop={(event) => dropOpponentPlayer(event, ti, pi)}
+                                                        >
                                                             {p}
                                                             <button
                                                                 onClick={() => {
@@ -2338,6 +2494,28 @@ const SmartMatchDetail: React.FC<{
                                 <span>cloudOnly: {match.ocrDebug.mergeStats.cloudOnly}</span>
                                 <span>conflicts: {match.ocrDebug.mergeStats.conflicts}</span>
                                 <span>total: {match.ocrDebug.mergeStats.total}</span>
+                            </div>
+                        )}
+                        {(match.ocrDebug.fallbackReason || match.ocrDebug.cloudError || match.ocrDebug.geminiError) && (
+                            <div className="space-y-1 rounded-lg md3-surface-high p-2 text-label-xs">
+                                {match.ocrDebug.fallbackReason && (
+                                    <div>
+                                        <span className="opacity-50 mr-1">Fallback:</span>
+                                        <span className="font-semibold">{match.ocrDebug.fallbackReason}</span>
+                                    </div>
+                                )}
+                                {match.ocrDebug.cloudError && (
+                                    <div>
+                                        <span className="opacity-50 mr-1">Cloud:</span>
+                                        <span className="font-semibold">{match.ocrDebug.cloudError}</span>
+                                    </div>
+                                )}
+                                {match.ocrDebug.geminiError && (
+                                    <div>
+                                        <span className="opacity-50 mr-1">Gemini:</span>
+                                        <span className="font-semibold">{match.ocrDebug.geminiError}</span>
+                                    </div>
+                                )}
                             </div>
                         )}
                         {match.ocrDebug.rawText && (

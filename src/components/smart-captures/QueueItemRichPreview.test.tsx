@@ -38,7 +38,7 @@ describe('QueueItemRichPreview', () => {
     );
 
     expect(screen.getByText(/Match #73/)).toBeInTheDocument();
-    expect(screen.getByText(/ID 12345/)).toBeInTheDocument();
+    expect(screen.queryByText(/ID 12345/)).toBeNull();
     expect(screen.getByText('Win')).toBeInTheDocument();
     expect(screen.getByText('85%')).toBeInTheDocument();
     expect(screen.getByText(/bundled/i)).toBeInTheDocument();

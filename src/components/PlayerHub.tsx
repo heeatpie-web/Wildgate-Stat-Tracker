@@ -362,7 +362,7 @@ const PlayerHub: React.FC = () => {
                             <button
                                 key={pilot.name}
                                 onClick={() => setSelectedPilot(pilot.name)}
-                                className={`w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3 transition-all group ${selectedPilot === pilot.name
+                                className={`player-list-item w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3 transition-all group ${selectedPilot === pilot.name
                                     ? 'bg-md-sys-primary/10 border border-md-sys-primary/20 text-md-sys-on-surface'
                                     : 'hover:bg-md-sys-on-surface/5 text-md-sys-on-surface/60'
                                     }`}
@@ -370,7 +370,7 @@ const PlayerHub: React.FC = () => {
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-1.5">
                                         {pilot.isFavorite && <Star size={10} className="text-warning fill-amber-400 shrink-0" />}
-                                        <span className="text-label-sm font-semibold truncate">{pilot.name}</span>
+                                        <span className="player-list-name text-label-sm font-semibold truncate">{pilot.name}</span>
                                     </div>
                                     {pilot.totalEncounters > 0 && (
                                         <span className="text-label-xs text-md-sys-on-surface/40">

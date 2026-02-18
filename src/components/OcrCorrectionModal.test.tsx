@@ -8,6 +8,12 @@ const gameData = {
     sessionShipTypes: {} as Record<string, string>,
     pilotRegistry: [] as string[],
     addToRegistry: vi.fn(),
+    matches: [],
+    selectedTeammates: [] as string[],
+    setSelectedTeammates: vi.fn(),
+    setSelectedOpponents: vi.fn(),
+    setSessionTeams: vi.fn(),
+    setSessionShipTypes: vi.fn(),
 };
 
 const appStoreState = {
@@ -31,11 +37,19 @@ vi.mock('../store/useAppStore', () => ({
     ),
 }));
 
+vi.mock('../providers/UIStateProvider', () => ({
+    useUIState: () => ({
+        activeUser: 'ActivePilot',
+    }),
+}));
+
 describe('OcrCorrectionModal', () => {
     beforeEach(() => {
         gameData.sessionTeams = {};
         gameData.sessionShipTypes = {};
         gameData.pilotRegistry = [];
+        gameData.matches = [];
+        gameData.selectedTeammates = [];
         appStoreState.ocrCorrections = {};
         vi.clearAllMocks();
     });
@@ -76,5 +90,30 @@ describe('OcrCorrectionModal', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /undo ignore/i }));
         expect(screen.getByRole('button', { name: /^ignore$/i })).toBeInTheDocument();
+    });
+
+    it('renders screenshot references and opens image lightbox', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['PilotOne'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['PilotOne'];
+
+        render(
+            <OcrCorrectionModal
+                isOpen
+                onClose={onClose}
+                onAcceptAll={onAcceptAll}
+                screenshots={['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB']}
+            />
+        );
+
+        expect(screen.getByText(/screenshot references/i)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /open screenshot 1/i }));
+        expect(screen.getByText(/screenshot 1 of 1/i)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /close screenshot preview/i }));
+        expect(screen.queryByText(/screenshot 1 of 1/i)).not.toBeInTheDocument();
     });
 });

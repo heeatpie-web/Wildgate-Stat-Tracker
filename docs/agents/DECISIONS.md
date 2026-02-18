@@ -1693,3 +1693,253 @@ Rule:
   - `src/components/DevOCRPanel.tsx`
 - Revisit trigger/expiry:
   - Revisit if Dev OCR utilities are split into dedicated sub-views.
+
+- Type: `emergency-restore-session-local-snapshot`
+- Decision: implement restore-session using renderer-side localStorage draft snapshots (periodic + beforeunload) with startup restore/discard prompt.
+- Date: 2026-02-18
+- Options considered:
+  - Persist all transient form/session state inside primary DB schema.
+  - Add a lightweight side-channel snapshot dedicated to crash/close recovery.
+- Rationale:
+  - Avoids destructive schema migration during emergency patch.
+  - Keeps restoration bounded to in-progress draft context without affecting normal match history semantics.
+- Impacted files/artifacts:
+  - `src/App.tsx`
+- Revisit trigger/expiry:
+  - Revisit if restore-session needs cross-device sync or multi-profile recovery policies.
+
+- Type: `telemetry-startup-override-once`
+- Decision: allow first telemetry ship/hero event to override stale manual startup selection only when no telemetry baseline has been established yet.
+- Date: 2026-02-18
+- Options considered:
+  - Keep strict manual > telemetry precedence always.
+  - Let telemetry always override manual.
+  - One-time telemetry startup override, then retain manual precedence.
+- Rationale:
+  - Fixes stale startup mismatch without removing operator manual override control.
+  - Matches user expectation: telemetry should auto-correct initial wrong selection, but not fight later intentional manual edits.
+- Impacted files/artifacts:
+  - `src/store/slices/createFormSlice.ts`
+  - `src/store/slices/__tests__/createFormSlice.test.ts`
+- Revisit trigger/expiry:
+  - Revisit if match-lifecycle state introduces explicit "manual lock" toggles per field.
+
+- Type: `ocr-debug-nav-availability`
+- Decision: expose OCR Debug navigation in sidebar regardless of global Dev Mode toggle.
+- Date: 2026-02-18
+- Options considered:
+  - Keep OCR Debug dev-mode gated.
+  - Move OCR Debug controls to settings only.
+  - Keep dedicated sidebar entry always accessible.
+- Rationale:
+  - Directly addresses operational support need for OCR debugging when Dev Mode is off.
+  - Low-risk UI change with no back-end contract impact.
+- Impacted files/artifacts:
+  - `src/components/Sidebar.tsx`
+- Revisit trigger/expiry:
+  - Revisit if feature-flag/permission system is introduced for support-only tools.
+
+- Type: `smart-capture-confidence-progress-visibility`
+- Decision: show confidence/progress row for OCR-state items even when confidence value is not yet finalized.
+- Date: 2026-02-18
+- Options considered:
+  - Hide confidence row until confidence > 0.
+  - Always show row with pending progress fallback.
+- Rationale:
+  - Prevents "confidence bar missing" perception and improves queue state legibility.
+- Impacted files/artifacts:
+  - `src/components/smart-captures/QueueItemRichPreview.tsx`
+  - `src/components/smart-captures/primitives/ConfidenceMeter.tsx`
+  - `src/index.css`
+- Revisit trigger/expiry:
+  - Revisit if OCR pipeline begins exposing explicit numeric progress per artifact.
+
+- Type: ocr-drag-shared-transfer-utility
+- Decision: implement opponent-player drag/reassignment through a shared immutable transfer helper used by both OCR review and Smart Captures surfaces.
+- Date: 2026-02-18
+- Options considered:
+  - Implement separate drag/move mutation logic directly in each component.
+  - Create one shared utility and reuse it in both components.
+- Rationale:
+  - Keeps behavior consistent between OCRReviewModal and SmartCapturesPanel.
+  - Reduces duplicated index/reorder edge-case logic and simplifies targeted testing.
+- Impacted files/artifacts:
+  - src/utils/opponentTeamTransfer.ts
+  - src/utils/__tests__/opponentTeamTransfer.test.ts
+  - src/components/ocr/OCRReviewModal.tsx
+  - src/components/SmartCapturesPanel.tsx
+- Revisit trigger/expiry:
+  - Revisit if teammate/opponent drag semantics diverge by workflow and require separate policy controls.
+
+- Type: ocr-review-sticky-screenshot-reference
+- Decision: keep OCRReviewModal screenshot reference section sticky during scroll instead of adding a separate floating screenshot panel.
+- Date: 2026-02-18
+- Options considered:
+  - Add a new dedicated screenshot rail/panel to the modal layout.
+  - Reuse existing screenshot section and make it sticky.
+- Rationale:
+  - Delivers requested "see screenshots while editing" behavior with minimal layout churn.
+  - Preserves existing click-to-enlarge lightbox flow and avoids introducing a second screenshot system in the same modal.
+- Impacted files/artifacts:
+  - src/components/ocr/OCRReviewModal.tsx
+- Revisit trigger/expiry:
+  - Revisit if users request dual-pane side-by-side OCR editing with larger persistent preview.
+
+- Type: wizard-ocr-team-draft-commit-on-apply
+- Decision: keep OcrCorrectionModal team/ship reassignment in local draft state and commit to session state only on `Apply and Learn`.
+- Date: 2026-02-18
+- Options considered:
+  - Apply drag/ship edits to session state immediately while the modal is open.
+  - Keep edits local until user confirms with the existing apply action.
+- Rationale:
+  - Preserves the modal's existing review semantics and prevents partial accidental session mutations.
+  - Keeps behavior consistent with correction-learning flow where edits become authoritative at submit time.
+- Impacted files/artifacts:
+  - `src/components/OcrCorrectionModal.tsx`
+- Revisit trigger/expiry:
+  - Revisit if product direction requires live in-modal session preview updates.
+
+- Type: wizard-ocr-friendly-team-resolution-fallback
+- Decision: resolve teammate/opponent outputs from reviewed team cards by preferring active-user membership, then teammate-overlap fallback, then first-team fallback.
+- Date: 2026-02-18
+- Options considered:
+  - Always use first team as friendly team.
+  - Infer friendly team from active user and existing teammate context.
+- Rationale:
+  - Reduces misclassification when OCR team ordering is unstable.
+  - Uses available user/session context before applying a deterministic fallback.
+- Impacted files/artifacts:
+  - `src/components/OcrCorrectionModal.tsx`
+- Revisit trigger/expiry:
+  - Revisit if explicit "friendly team" selection is added to wizard OCR review.
+
+- Type: telemetry-loadout-nested-slot-extraction
+- Decision: parse telemetry loadout candidates recursively from nested arrays/objects (slot payloads) rather than stringifying complex values.
+- Date: 2026-02-18
+- Options considered:
+  - Keep flat string extraction and rely on simple scalar payloads only.
+  - Add bounded recursive extraction for slot/object telemetry shapes.
+- Rationale:
+  - Current telemetry often emits weapon/equipment slots as object arrays; flat stringification drops usable names/ids.
+  - Recursive extraction improves reliability without changing persistence contracts.
+- Impacted files/artifacts:
+  - `src/hooks/useLogMonitor.ts`
+  - `src/hooks/__tests__/useLogMonitor.test.ts`
+- Revisit trigger/expiry:
+  - Revisit if telemetry payload schema is formally versioned with typed slot models.
+
+- Type: squadronpanel-auto-loadout-visibility
+- Decision: mirror ActionPanel loadout telemetry labeling inside SquadronPanel by showing `Weapons`/`Equipment` rows with `(auto)` badges in both densities.
+- Date: 2026-02-18
+- Options considered:
+  - Keep telemetry loadout visibility only in ActionPanel.
+  - Add explicit indicators inside the dedicated ship/prospector loadout panel.
+- Rationale:
+  - Addresses user-reported discoverability gap in the separate loadout box.
+  - Keeps indicator semantics consistent across recording surfaces.
+- Impacted files/artifacts:
+  - `src/components/recording/SquadronPanel.tsx`
+  - `src/components/recording/SquadronPanel.test.tsx`
+- Revisit trigger/expiry:
+  - Revisit if a shared reusable telemetry-loadout indicator component is introduced.
+
+- Type: analytics-overview-snapshot-expansion
+- Decision: expand Overview with additive `Operational Snapshot` and `Priority Insights` cards instead of replacing existing dashboard cards.
+- Date: 2026-02-18
+- Options considered:
+  - Replace existing row cards with denser but less familiar layout.
+  - Add bounded new cards while preserving current navigation/card affordances.
+- Rationale:
+  - Increases useful narrative density quickly without relearning cost.
+  - Keeps existing overview interaction model stable during emergency follow-up.
+- Impacted files/artifacts:
+  - `src/components/analytics/AnalyticsDashboard.tsx`
+- Revisit trigger/expiry:
+  - Revisit if analytics IA is redesigned around a new overview information architecture.
+
+- Type: artifact-repair-timeline-window-fallback
+- Decision: add timeline-window match fallback and per-item failure tolerance to artifact relinker apply flow.
+- Date: 2026-02-18
+- Options considered:
+  - Keep strict nearest-delta matching with fail-fast apply.
+  - Add tolerant matching fallback and continue-on-error behavior.
+- Rationale:
+  - Historical data may store timestamps in seconds or with sparse spacing; strict-only matching misses recoverable files.
+  - Continue-on-error prevents one bad file from blocking all candidate links.
+- Impacted files/artifacts:
+  - `electron/helpers/artifactRelinker.cjs`
+- Revisit trigger/expiry:
+  - Revisit if match lifecycle begins persisting explicit artifact windows/start-end bounds.
+
+- Type: fuzzy-id-prompts-manual-confirmation
+- Decision: surface automatic fuzzy/ID prompts but keep merge/mapping actions user-confirmed (no silent auto-apply).
+- Date: 2026-02-18
+- Options considered:
+  - Auto-merge high-score fuzzy candidates.
+  - Add reminder prompts that route users into existing review flows.
+- Rationale:
+  - Resolves discoverability complaints while preserving data integrity safeguards.
+  - Keeps authoritative roster/mapping changes explicitly user-driven.
+- Impacted files/artifacts:
+  - `src/App.tsx`
+  - `src/components/ReviewQueueModal.tsx`
+  - `src/components/IdMapper.tsx`
+- Revisit trigger/expiry:
+  - Revisit if explicit confidence-threshold auto-merge policy is later approved.
+
+- Type: settings-modal-mount-gated-stability
+- Decision: split `SettingsModal` into a mount-gated wrapper and inner content component so settings hooks only execute while the modal is mounted.
+- Date: 2026-02-18
+- Options considered:
+  - Keep monolithic modal with `if (!showSettings) return null` guard in the same component.
+  - Split into wrapper (`showSettings` gate) + inner modal content component.
+- Rationale:
+  - Eliminates close/open hook-order drift risk in the reported settings crash path.
+  - Keeps behavior unchanged while reducing modal lifecycle complexity.
+- Impacted files/artifacts:
+  - `src/components/SettingsModal.tsx`
+- Revisit trigger/expiry:
+  - Revisit if settings architecture is migrated to route-level pages.
+
+- Type: db-write-serialization-queue
+- Decision: serialize Electron `db-write` commits through a single promise queue to avoid concurrent WAL/DB temp-file rename collisions.
+- Date: 2026-02-18
+- Options considered:
+  - Keep current concurrent IPC write handling with retry/fallback rename logic only.
+  - Add process-local queue to enforce one DB commit at a time.
+- Rationale:
+  - Reported `ENOENT`/`EPERM` rename failures are consistent with concurrent temp-file commit contention.
+  - Queue preserves existing durable-write/WAL semantics while removing race windows.
+- Impacted files/artifacts:
+  - `electron/main.cjs`
+- Revisit trigger/expiry:
+  - Revisit if DB backend changes to a transactional engine with native write locking.
+
+- Type: always-visible-shell-scrollbars
+- Decision: use `overflow-y-scroll custom-scrollbar` for dashboard wrappers and History root shell to keep scroll affordance visible by default.
+- Date: 2026-02-18
+- Options considered:
+  - Keep `overflow-y-auto` and rely on content-overflow-only scrollbar rendering.
+  - Force visible vertical scrollbars on primary dashboard shells.
+- Rationale:
+  - Addresses repeated feedback that multiple views appeared to have no working scrollbars.
+  - Improves discoverability without changing content structure.
+- Impacted files/artifacts:
+  - `src/App.tsx`
+  - `src/components/HistoryTable.tsx`
+- Revisit trigger/expiry:
+  - Revisit if a future design pass introduces alternative scroll affordance patterns.
+
+- Type: queue-hidden-id-test-contract
+- Decision: align queue preview test expectations to enforce non-visibility of raw match IDs in left queue rows.
+- Date: 2026-02-18
+- Options considered:
+  - Reintroduce raw match ID text in runtime UI to satisfy legacy test.
+  - Update stale test to match the already-shipped hidden-ID queue behavior.
+- Rationale:
+  - Raw ID display was intentionally removed for readability; restoring it would violate accepted UX change.
+  - The failure was test-only drift, not a runtime regression.
+- Impacted files/artifacts:
+  - `src/components/smart-captures/QueueItemRichPreview.test.tsx`
+- Revisit trigger/expiry:
+  - Revisit if product requirements later call for optional raw ID display in queue items.

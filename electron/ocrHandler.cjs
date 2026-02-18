@@ -1452,6 +1452,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     let mergeStats = null;
     let mergeLog = null;
     let localOCRForFallback = null;
+    let cloudFailureReason = '';
+    let geminiFailureReason = '';
 
     if (useHybridMerge) {
       // Run both in parallel
@@ -1471,7 +1473,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         console.error('[OCR] Local Tesseract failed:', localResult.reason?.message);
       }
       if (cloudResult.status === 'rejected') {
-        console.warn('[OCR-Cloud] Cloud Vision failed:', cloudResult.reason?.message);
+        cloudFailureReason = cloudResult.reason?.message || 'Cloud Vision request failed';
+        console.warn('[OCR-Cloud] Cloud Vision failed:', cloudFailureReason);
       }
 
       console.log(`[OCR-Merge] Local: ${localOCR ? localOCR.words?.length + ' words' : 'FAILED'} | Cloud: ${cloudOCR ? (cloudOCR.annotations?.length || 0) + ' annotations' : 'FAILED/UNAVAILABLE'}`);
@@ -1507,6 +1510,9 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         }
       } else if (localOCR) {
         console.log('[OCR-Merge] Cloud unavailable, using local-only result');
+        if (cloudFailureReason) {
+          console.warn(`[OCR-Merge] Local fallback reason: ${cloudFailureReason}`);
+        }
         ocrResult = localOCR;
         ocrSource = 'local';
       } else if (cloudOCR) {
@@ -1530,20 +1536,31 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       if (!rawDebugPath) {
         rawDebugPath = await saveDebugImage(imageBuffer, 'raw_capture');
       }
-      const cloudOCR = await runCloudOCR(rawDebugPath, 10000); // longer timeout for cloud-only mode
-      if (!cloudOCR) {
-        throw new Error('Cloud OCR failed or unavailable (GCloud Vision not initialized?)');
+      let cloudOCR = null;
+      try {
+        cloudOCR = await runCloudOCR(rawDebugPath, 10000); // longer timeout for cloud-only mode
+      } catch (cloudError) {
+        cloudFailureReason = cloudError?.message || 'Cloud OCR request failed';
       }
-      const cloudWords = cloudAnnotationsToWords(cloudOCR.annotations || []);
-      ocrResult = {
-        text: cloudOCR.fullText || '',
-        confidence: 80,
-        words: cloudWords,
-        lines: [{ text: cloudOCR.fullText || '', confidence: 80, bbox: { x0: 0, y0: 0, x1: processed.width, y1: processed.height } }],
-      };
-      cloudContributed = true;
-      ocrSource = 'cloud';
-      console.log(`[OCR] Cloud-only done, text length: ${ocrResult.text?.length || 0}`);
+
+      if (cloudOCR) {
+        const cloudWords = cloudAnnotationsToWords(cloudOCR.annotations || []);
+        ocrResult = {
+          text: cloudOCR.fullText || '',
+          confidence: 80,
+          words: cloudWords,
+          lines: [{ text: cloudOCR.fullText || '', confidence: 80, bbox: { x0: 0, y0: 0, x1: processed.width, y1: processed.height } }],
+        };
+        cloudContributed = true;
+        ocrSource = 'cloud';
+        console.log(`[OCR] Cloud-only done, text length: ${ocrResult.text?.length || 0}`);
+      } else {
+        cloudFailureReason = cloudFailureReason || 'Cloud OCR unavailable';
+        console.warn(`[OCR] Cloud-only unavailable, falling back to local OCR: ${cloudFailureReason}`);
+        ocrResult = await runOCR(processed.buffer);
+        localOCRForFallback = ocrResult;
+        ocrSource = 'local';
+      }
     } else {
       // Local only (default / fallback)
       console.log('[OCR] Running LOCAL-ONLY mode...');
@@ -1702,7 +1719,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           console.log('[OCR-AI] Gemini contributed structured refinements');
         }
       } catch (e) {
-        console.warn('[OCR-AI] Gemini refinement failed:', e.message);
+        geminiFailureReason = e?.message || 'Gemini refinement failed';
+        console.warn('[OCR-AI] Gemini refinement failed:', geminiFailureReason);
       }
     }
 
@@ -1726,6 +1744,13 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     // Attach cloud/merge metadata to extracted data
     extractedData.cloudContributed = cloudContributed;
     extractedData.ocrSource = ocrSource;
+    if (cloudFailureReason) {
+      extractedData.ocrFallbackReason = 'Cloud OCR unavailable, local OCR used';
+      extractedData.ocrCloudError = cloudFailureReason;
+    }
+    if (geminiFailureReason) {
+      extractedData.ocrGeminiError = geminiFailureReason;
+    }
     if (mergeStats) extractedData.mergeStats = mergeStats;
     if (includeBboxes) {
       extractedData.ocrBoundingBoxes = buildOcrBoundingBoxDebugPayload(

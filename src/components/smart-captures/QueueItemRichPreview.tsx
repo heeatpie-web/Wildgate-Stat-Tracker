@@ -57,7 +57,22 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
   const shipLabel = match.ship ? match.ship.split('(')[0].trim() : 'No ship';
   const heroLabel = match.hero ? match.hero.trim() : '';
   const when = new Date(match.timestamp);
-  const confidence = Math.round(match.ocrDebug?.confidence || 0);
+  const rawConfidence = Number(match.ocrDebug?.confidence);
+  const hasConfidence = Number.isFinite(rawConfidence) && rawConfidence > 0;
+  const confidence = hasConfidence ? Math.round(rawConfidence) : 0;
+  const fallbackProgress = match.ocrState === 'queued'
+    ? 12
+    : match.ocrState === 'processing'
+      ? 38
+      : match.ocrState === 'reviewing'
+        ? 56
+        : match.ocrState === 'ready'
+          ? 72
+          : match.ocrState === 'saved'
+            ? 100
+            : 0;
+  const showConfidence = hasConfidence || !!match.ocrDebug || !!match.ocrState;
+  const meterPercent = hasConfidence ? confidence : fallbackProgress;
   const bundledCount = countImages(match.artifacts || []);
   const tone = getSemanticStatusTone(qs.key);
   const statusMeta = getStatusMeta(qs.key);
@@ -99,7 +114,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
             ? 'bg-md-sys-primary/12 border-md-sys-primary text-md-sys-primary'
             : 'border-md-sys-outline/20 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/8'
         }`}
-        title={`Match #${displayNumber}${rawMatchId ? ` (ID ${rawMatchId})` : ''}`}
+        title={`Match #${displayNumber}`}
       >
         <span className={`inline-flex items-center justify-center w-4 h-4 sc-collapsed-glyph sc-collapsed-glyph--${tone}`}>{collapsedIcon}</span>
         <span className="text-label-xs font-bold leading-none">{displayNumber}</span>
@@ -110,14 +125,19 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
   return (
     <button
       onClick={onClick}
-      className={`group sc-queue-item w-full text-left rounded-card border-l-4 transition-all relative overflow-hidden min-h-[126px] ${
+      className={`group sc-queue-item w-full text-left rounded-card border-l-4 transition-all relative min-h-[136px] ${
         isSelected
-          ? 'bg-md-sys-primary/12 border-l-md-sys-primary border border-md-sys-outline/20 p-3.5'
+          ? 'bg-md-sys-primary/14 border-l-md-sys-primary border border-md-sys-primary/45 p-3.5 ring-1 ring-md-sys-primary/35 shadow-md'
           : 'border-l-md-sys-outline/30 border border-md-sys-outline/10 hover:bg-md-sys-on-surface/8 p-3.5'
       } ${qs.key === 'Resolved' ? 'opacity-70' : ''}`}
       style={{ borderLeftColor: isSelected ? 'var(--md-sys-color-primary)' : BORDER_BY_TONE[tone] }}
-      title={`Match #${displayNumber}${rawMatchId ? ` (ID ${rawMatchId})` : ''}`}
+      title={`Match #${displayNumber}`}
     >
+      {isSelected ? (
+        <span className="absolute right-2 top-2 rounded-pill bg-md-sys-primary text-md-sys-onPrimary px-1.5 py-0.5 text-label-xs font-bold uppercase tracking-wide">
+          Selected
+        </span>
+      ) : null}
       <div className="flex items-start gap-2.5">
         {onToggleSelect ? (
           <input
@@ -140,7 +160,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
             <div className="min-w-0 space-y-0.5">
               <div className="text-body font-bold text-md-sys-on-surface truncate">Match #{displayNumber}</div>
               <div className={`text-label-sm truncate ${match.ship ? 'text-md-sys-on-surface/68' : 'text-md-sys-on-surface/40 italic'}`}>
-                ID {rawMatchId || match.id} | {shipLabel}
+                {shipLabel}
               </div>
               <div className="text-label-sm text-md-sys-on-surface/60 truncate">
                 {when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} | {when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -161,13 +181,17 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
             </div>
           </div>
 
-          {confidence > 0 ? (
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-label-xs">
+          {showConfidence ? (
+            <div className="space-y-1.5 pt-0.5">
+              <div className="flex items-center justify-between gap-2 text-label-xs">
                 <span className="text-md-sys-on-surface/60">OCR Confidence</span>
-                <ConfidenceBadge percent={confidence} />
+                {hasConfidence ? (
+                  <ConfidenceBadge percent={confidence} />
+                ) : (
+                  <span className="text-md-sys-on-surface/55 font-bold uppercase tracking-wide">Pending</span>
+                )}
               </div>
-              <ConfidenceMeter percent={confidence} />
+              <ConfidenceMeter percent={meterPercent} />
             </div>
           ) : null}
         </div>

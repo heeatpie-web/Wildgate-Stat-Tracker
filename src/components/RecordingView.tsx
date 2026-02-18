@@ -45,8 +45,8 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
     }, []);
 
     // Use measured container size (not raw window size) so mode switching follows available dashboard space.
-    const isNarrow = viewport.w < 1100;
-    const isHeightConstrained = viewport.h < 1000;
+    const isNarrow = viewport.w < 980;
+    const isHeightConstrained = viewport.h < 720;
     const density: 'standard' | 'compact' = (isHeightConstrained || isNarrow) ? 'compact' : 'standard';
     const shouldScrollLeftPanel = !isNarrow && isHeightConstrained;
     const shouldScrollWideLayout = !isNarrow && isHeightConstrained;

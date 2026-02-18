@@ -171,7 +171,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                     <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-info" title={`Auto-detected from ${damageSource}`} />
                                 )}
                                 <HeartCrack size={accordionMode ? 12 : 16} className="text-danger mb-0.5" />
-                                <span className="text-label-sm font-semibold text-danger mb-0.5">Dmg</span>
+                                <span className="text-label-sm font-semibold text-danger mb-0.5 text-center leading-tight">Damage in the last 2 minutes</span>
                                 <div className="relative z-10">
                                     <input
                                         type="text"

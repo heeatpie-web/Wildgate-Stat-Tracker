@@ -1,6 +1,6 @@
 import React from 'react';
 import { TimePatternData, VisualMode } from '../../types';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from 'recharts';
 import { Clock } from 'lucide-react';
 import { generateTimePatternEditorial } from '../../utils/analyticsEditorial';
 
@@ -10,29 +10,39 @@ const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export const TimePatternView: React.FC<TimePatternViewProps> = ({ data, visualMode }) => {
     const dense = visualMode === 'dense';
+    const maxHourMatches = Math.max(1, ...data.byHour.map((h) => h.matches || 0));
 
     const hourData = data.byHour.map(h => ({
         name: `${h.hour}:00`,
         matches: h.matches,
         winRate: h.winRate,
+        fill: h.winRate >= 60
+            ? 'var(--md-sys-color-success)'
+            : h.winRate >= 45
+                ? 'var(--md-sys-color-info)'
+                : 'var(--md-sys-color-warning)',
+        opacity: Math.max(0.35, Math.min(1, (h.matches || 0) / maxHourMatches)),
     }));
 
     const dayData = data.byDayOfWeek.map(d => ({
         name: d.dayName,
         matches: d.matches,
         winRate: d.winRate,
+        fill: d.winRate >= 60
+            ? 'var(--md-sys-color-success)'
+            : d.winRate >= 45
+                ? 'var(--md-sys-color-info)'
+                : 'var(--md-sys-color-danger)',
     }));
 
     return (
         <div className="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar animate-fade-in p-1">
-            {/* Editorial Summary */}
             {!dense && (
                 <div className="md3-card rounded-2xl p-6">
                     <p className="text-body leading-relaxed opacity-60">{generateTimePatternEditorial(data)}</p>
                 </div>
             )}
 
-            {/* Summary */}
             <div className={`grid gap-4 ${dense ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2'}`}>
                 <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
                     <div className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-1">Peak Hour</div>
@@ -46,7 +56,6 @@ export const TimePatternView: React.FC<TimePatternViewProps> = ({ data, visualMo
                 </div>
             </div>
 
-            {/* Hour-of-day chart */}
             <div className={`md3-card rounded-2xl ${dense ? 'p-4 min-h-250px' : 'p-6 min-h-350px'}`}>
                 <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-label-sm' : 'text-body'}`}><Clock size={14} /> Matches by Hour</h3>
                 <ResponsiveContainer width="100%" height={dense ? 200 : 280}>
@@ -54,14 +63,25 @@ export const TimePatternView: React.FC<TimePatternViewProps> = ({ data, visualMo
                         <CartesianGrid strokeOpacity={0.05} vertical={false} />
                         <XAxis dataKey="name" tick={{ fontSize: 9 }} interval={dense ? 2 : 1} minTickGap={18} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fontSize: 9 }} width={28} axisLine={false} tickLine={false} />
-                        <Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }}
-                            formatter={(value: any, name: string) => [value, name === 'winRate' ? 'Win Rate %' : 'Matches']} />
-                        <Bar dataKey="matches" fill="var(--md-sys-color-primary)" radius={[2, 2, 0, 0]} opacity={0.8} />
+                        <Tooltip
+                            shared={false}
+                            cursor={{ fill: 'var(--md-sys-color-surface3)', opacity: 0.35 }}
+                            contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }}
+                            formatter={(value: string | number, name: string) => [value, name === 'winRate' ? 'Win Rate %' : 'Matches']}
+                        />
+                        <Bar dataKey="matches" radius={[2, 2, 0, 0]}>
+                            {hourData.map((entry) => (
+                                <Cell
+                                    key={`hour-${entry.name}`}
+                                    fill={entry.fill}
+                                    fillOpacity={entry.opacity}
+                                />
+                            ))}
+                        </Bar>
                     </BarChart>
                 </ResponsiveContainer>
             </div>
 
-            {/* Day-of-week chart */}
             <div className={`md3-card rounded-2xl ${dense ? 'p-4 min-h-250px' : 'p-6 min-h-350px'}`}>
                 <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-label-sm' : 'text-body'}`}><Clock size={14} /> Win Rate by Day</h3>
                 <ResponsiveContainer width="100%" height={dense ? 200 : 280}>
@@ -69,19 +89,21 @@ export const TimePatternView: React.FC<TimePatternViewProps> = ({ data, visualMo
                         <CartesianGrid strokeOpacity={0.05} vertical={false} />
                         <XAxis dataKey="name" tick={{ fontSize: 9 }} interval="preserveStartEnd" minTickGap={18} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fontSize: 9 }} domain={[0, 100]} width={28} axisLine={false} tickLine={false} />
-                        <Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }} />
+                        <Tooltip
+                            shared={false}
+                            cursor={{ fill: 'var(--md-sys-color-surface3)', opacity: 0.35 }}
+                            contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }}
+                            formatter={(value: string | number, name: string) => [value, name === 'winRate' ? 'Win Rate %' : String(name)]}
+                        />
                         <Bar dataKey="winRate" name="Win Rate %" radius={[2, 2, 0, 0]}>
-                            {dayData.map((entry, i) => (
-                                <React.Fragment key={i}>
-                                    {/* Recharts Cell not needed — use single fill with conditional */}
-                                </React.Fragment>
+                            {dayData.map((entry) => (
+                                <Cell key={`day-${entry.name}`} fill={entry.fill} />
                             ))}
                         </Bar>
                     </BarChart>
                 </ResponsiveContainer>
             </div>
 
-            {/* Heatmap */}
             <div className={`md3-card rounded-2xl ${dense ? 'p-4' : 'p-6'}`}>
                 <h3 className={`font-black uppercase opacity-60 mb-4 flex items-center gap-2 ${dense ? 'text-label-sm' : 'text-body'}`}><Clock size={14} /> Activity Heatmap</h3>
                 <div className="overflow-x-auto">
@@ -97,10 +119,13 @@ export const TimePatternView: React.FC<TimePatternViewProps> = ({ data, visualMo
                                     const cell = data.heatmap.find(c => c.day === d && c.hour === h);
                                     const intensity = cell ? Math.min(1, cell.matches / 5) : 0;
                                     return (
-                                        <div key={h} className="aspect-square rounded-sm relative group"
-                                            style={{ backgroundColor: `rgba(var(--md-sys-color-primary-rgb, 99, 102, 241), ${intensity * 0.8 + 0.05})` }}>
+                                        <div
+                                            key={h}
+                                            className="aspect-square rounded-sm relative group/heatcell"
+                                            style={{ backgroundColor: `rgba(var(--md-sys-color-primary-rgb, 99, 102, 241), ${intensity * 0.8 + 0.05})` }}
+                                        >
                                             {cell && cell.matches > 0 && (
-                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-scrim-80 text-on-scrim text-label-xs p-1.5 rounded-lg whitespace-nowrap hidden group-hover:block z-50">
+                                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-scrim-80 text-on-scrim text-label-xs p-1.5 rounded-lg whitespace-nowrap hidden group-hover/heatcell:block z-50 pointer-events-none">
                                                     {cell.matches} match{cell.matches > 1 ? 'es' : ''} - {cell.winRate}% WR
                                                 </div>
                                             )}
@@ -115,7 +140,3 @@ export const TimePatternView: React.FC<TimePatternViewProps> = ({ data, visualMo
         </div>
     );
 };
-
-
-
-

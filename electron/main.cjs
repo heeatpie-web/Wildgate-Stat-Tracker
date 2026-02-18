@@ -736,6 +736,13 @@ function devMark(label) {
 
 let win;
 let tray = null;
+function resolveAppIconPath() {
+  const candidates = [
+    path.join(__dirname, '../public/favicon.ico'),
+    path.join(__dirname, '../public/favicon.png'),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[candidates.length - 1];
+}
 let previousBounds = { x: 0, y: 0, width: 1440, height: 900 };
 let lastOverlayBounds = null;
 let currentOverlayStyle = 'compact';
@@ -1030,7 +1037,7 @@ function startDevRendererWithRetry(win, targetUrl) {
 
 function createTray() {
   try {
-    const iconPath = path.join(__dirname, '../public/favicon.png');
+    const iconPath = resolveAppIconPath();
     if (fs.existsSync(iconPath)) {
       tray = new Tray(iconPath);
 
@@ -1085,6 +1092,7 @@ const DB_PREV_PATH = DB_PATH.replace('.json', '.prev.json');
 const DB_WAL_PATH = DB_PATH.replace('.json', '.wal.json');
 const DB_BACKUP_DIR = path.join(app.getPath('documents'), 'Wildgate Stat Tracker', 'Backups');
 let lastAutoBackupAtMs = 0;
+let dbWriteQueue = Promise.resolve(true);
 
 const LEGACY_APP_NAMES = ['Wildgate Stat Tracker', 'wildgate-stat-tracker', 'Wildgate Tracker'];
 const LEGACY_APPDATA_ROOTS = [app.getPath('appData')];
@@ -1213,7 +1221,34 @@ async function writeFileDurableAtomic(filePath, payload) {
     await fileHandle.close();
   }
 
-  await fsPromises.rename(tempPath, filePath);
+  const RETRYABLE_RENAME_CODES = new Set(['EPERM', 'EACCES', 'EBUSY', 'ENOENT']);
+  let renameError = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      await fsPromises.rename(tempPath, filePath);
+      renameError = null;
+      break;
+    } catch (error) {
+      renameError = error;
+      const code = String(error?.code || '');
+      if (!RETRYABLE_RENAME_CODES.has(code)) {
+        throw error;
+      }
+      const waitMs = 25 * (attempt + 1) * (attempt + 1);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+
+  if (renameError) {
+    // Last-resort fallback for Windows rename contention: replace via copy + unlink.
+    await fsPromises.copyFile(tempPath, filePath);
+    try {
+      await fsPromises.unlink(tempPath);
+    } catch {
+      // Best effort cleanup only.
+    }
+  }
+
   await fsyncDirBestEffort(path.dirname(filePath));
 }
 
@@ -1325,7 +1360,7 @@ ipcMain.handle('read-uid-seed', async () => {
   }
 });
 
-ipcMain.handle('db-write', async (event, data) => {
+async function commitDbWrite(data) {
   try {
     // 1) Persist WAL first so a crash before DB write can still recover.
     await writeWalDurable(data);
@@ -1352,14 +1387,22 @@ ipcMain.handle('db-write', async (event, data) => {
     return true;
   } catch (e) {
     console.error("DB Write Error", e);
-    try {
-      await fsPromises.unlink(DB_TEMP_PATH);
-    } catch (unlinkErr) {
-      console.error("Failed to cleanup temp file", unlinkErr);
+    for (const tempPath of [DB_TEMP_PATH, `${DB_WAL_PATH}.tmp`]) {
+      try {
+        await fsPromises.unlink(tempPath);
+      } catch {
+        // Best-effort cleanup only.
+      }
     }
     // Intentionally keep WAL for next startup replay.
     return false;
   }
+}
+
+ipcMain.handle('db-write', async (_event, data) => {
+  const queuedWrite = dbWriteQueue.then(() => commitDbWrite(data));
+  dbWriteQueue = queuedWrite.catch(() => true);
+  return queuedWrite;
 });
 
 // Window Control Handlers
@@ -1473,6 +1516,7 @@ let lastLogContent = null;
 let logMonitorProfile = 'balanced';
 let logMonitorLastDecodeAt = 0;
 let logMonitorLastSnapshotWriteAt = 0;
+let logMonitorFingerprint = '';
 
 function resolveLogMonitorProfile(input) {
   const raw = String(input || '').trim().toLowerCase();
@@ -1573,26 +1617,40 @@ async function decodeLog() {
 }
 
 ipcMain.on('start-log-monitoring', (_event, options = {}) => {
-  if (logMonitorInterval) clearInterval(logMonitorInterval);
-  logMonitorProfile = resolveLogMonitorProfile(options && typeof options === 'object' ? options.performanceProfile : null);
-  const monitorCfg = getLogMonitorConfig(logMonitorProfile);
-  logMonitorLastDecodeAt = 0;
-  logMonitorLastSnapshotWriteAt = 0;
+  const requestedProfile = resolveLogMonitorProfile(options && typeof options === 'object' ? options.performanceProfile : null);
+  const monitorCfg = getLogMonitorConfig(requestedProfile);
 
   const localAppData = path.join(app.getPath('home'), 'AppData', 'Local');
   const pathNebula = path.join(localAppData, 'Nebula', 'Saved', 'Logs', 'AccelByteTelemetryCache');
   const pathWildgate = path.join(localAppData, 'Wildgate', 'Saved', 'Logs', 'AccelByteTelemetryCache');
 
+  let nextLogPath = pathNebula;
   // Logic: Prefer Wildgate (Local) if exists, else Nebula (Game)
   if (fs.existsSync(pathWildgate)) {
-    LOG_PATH = pathWildgate;
+    nextLogPath = pathWildgate;
   } else if (fs.existsSync(pathNebula)) {
-    LOG_PATH = pathNebula;
-  } else {
-    // If neither exists, check if we have a saved DECODED log to fallback on?
-    // For now default to Nebula path to keep watching
-    LOG_PATH = pathNebula;
+    nextLogPath = pathNebula;
   }
+
+  const nextFingerprint = `${nextLogPath}|${requestedProfile}|${monitorCfg.pollMs}|${monitorCfg.minDecodeIntervalMs}|${monitorCfg.snapshotWriteIntervalMs}`;
+  if (logMonitorInterval && logMonitorFingerprint === nextFingerprint) {
+    if (win) {
+      win.webContents.send('log-status', {
+        exists: fs.existsSync(nextLogPath),
+        path: nextLogPath,
+        profile: requestedProfile,
+        lastCheck: Date.now(),
+      });
+    }
+    return;
+  }
+
+  if (logMonitorInterval) clearInterval(logMonitorInterval);
+  LOG_PATH = nextLogPath;
+  logMonitorProfile = requestedProfile;
+  logMonitorFingerprint = nextFingerprint;
+  logMonitorLastDecodeAt = 0;
+  logMonitorLastSnapshotWriteAt = 0;
 
   console.log(`Starting log monitoring... ${LOG_PATH} (profile=${logMonitorProfile}, poll=${monitorCfg.pollMs}ms)`);
 
@@ -1707,6 +1765,7 @@ ipcMain.on('stop-log-monitoring', () => {
     clearInterval(logMonitorInterval);
     logMonitorInterval = null;
   }
+  logMonitorFingerprint = '';
   console.log("Stopped log monitoring.");
 });
 
@@ -1946,6 +2005,7 @@ async function setActivity(stats) {
 }
 
 function createWindow() {
+  const iconPath = resolveAppIconPath();
   win = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -1957,7 +2017,7 @@ function createWindow() {
       webSecurity: true,
       preload: path.join(__dirname, 'preload.cjs'),
     },
-    icon: path.join(__dirname, '../public/favicon.png'),
+    icon: iconPath,
     autoHideMenuBar: true,
     transparent: true,
     frame: false,
@@ -2894,6 +2954,7 @@ app.on('before-quit', () => {
     clearInterval(logMonitorInterval);
     logMonitorInterval = null;
   }
+  logMonitorFingerprint = '';
   // Dev safety net: mirror latest userData corpus into repo on app shutdown.
   if (!isDev || !AUTO_SYNC_CORPUS_TO_REPO) return;
   syncCorpusToRepo('before-quit').catch((e) => {

@@ -1135,7 +1135,7 @@ const DevOCRPanel: React.FC = () => {
                     {/* Main Content */}
                     <div className="flex-1 flex flex-col gap-4">
                         <div className="flex justify-between items-center">
-                            <h2 className="text-2xl font-black text-md-sys-primary tracking-wide uppercase">DevMode OCR Lab</h2>
+                            <h2 className="text-2xl font-black text-md-sys-primary tracking-wide uppercase">OCR Debug Lab</h2>
                             <div className="flex gap-2">
                                 <button onClick={loadRecentFiles} className="px-3 py-1 bg-md-sys-surface3 rounded hover:bg-md-sys-surface4 text-label-sm font-bold">Refresh Files</button>
                                 <input
@@ -1196,6 +1196,17 @@ const DevOCRPanel: React.FC = () => {
                                 >
                                     {loading ? 'Processing...' : 'Capture with Bounding Boxes'}
                                 </button>
+
+                                <div className="md3-card md3-surface-high rounded-xl border border-md-sys-outline/10 p-3">
+                                    <div className="text-label-sm font-bold uppercase opacity-60">Fast OCR Improvement Loop</div>
+                                    <ol className="mt-2 space-y-1 text-label-sm">
+                                        <li>1. Load a failed screenshot and run OCR once.</li>
+                                        <li>2. Use <span className="font-bold">Capture with Bounding Boxes</span> to verify wrong regions quickly.</li>
+                                        <li>3. Fix names in review flow, then rerun this same image.</li>
+                                        <li>4. If confidence is still low, adjust ROI in Settings and rerun benchmark.</li>
+                                        <li>5. When results stabilize, export corpus and run eval to confirm improvement.</li>
+                                    </ol>
+                                </div>
 
                                 <div className="md3-card md3-surface-high rounded-xl border border-md-sys-outline/10 p-3">
                                     <div className="flex items-center justify-between">

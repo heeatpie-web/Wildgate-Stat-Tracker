@@ -7,6 +7,7 @@ const path = require('path');
 
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.webp']);
 const DEFAULT_MAX_DELTA_MS = Number(process.env.WILDGATE_ARTIFACT_REPAIR_MAX_DELTA_MS || (30 * 60 * 1000));
+const DEFAULT_FALLBACK_MAX_DELTA_MS = Number(process.env.WILDGATE_ARTIFACT_REPAIR_FALLBACK_MAX_DELTA_MS || (12 * 60 * 60 * 1000));
 const MAX_CANDIDATES = Number(process.env.WILDGATE_ARTIFACT_REPAIR_MAX_RESULTS || 2000);
 
 function toPathKey(inputPath) {
@@ -29,6 +30,37 @@ function parseCaptureTimestampMs(name) {
   const iso = `${token.slice(0, 13)}:${token.slice(14, 16)}:${token.slice(17, 19)}.${token.slice(20, 23)}Z`;
   const millis = Date.parse(iso);
   return Number.isFinite(millis) ? millis : null;
+}
+
+function normalizeEpochMs(value) {
+  const parsed = Number(value || 0);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  return parsed < 1000000000000 ? parsed * 1000 : parsed;
+}
+
+function parseMatchDurationMs(match) {
+  if (!match || typeof match !== 'object') return 0;
+  const timeValue = typeof match.time === 'string' ? match.time.trim() : '';
+  if (!timeValue || !timeValue.includes(':')) return 0;
+  const parts = timeValue.split(':').map((token) => Number(token));
+  if (parts.some((part) => !Number.isFinite(part) || part < 0)) return 0;
+  if (parts.length === 2) {
+    return ((parts[0] * 60) + parts[1]) * 1000;
+  }
+  if (parts.length === 3) {
+    return ((parts[0] * 3600) + (parts[1] * 60) + parts[2]) * 1000;
+  }
+  return 0;
+}
+
+function parseMatchTimestampMs(match) {
+  if (!match || typeof match !== 'object') return 0;
+  const direct = normalizeEpochMs(match.timestamp);
+  if (direct > 0) return direct;
+  const dateString = typeof match.date === 'string' ? match.date.trim() : '';
+  if (!dateString) return 0;
+  const parsedDate = Date.parse(dateString);
+  return Number.isFinite(parsedDate) ? parsedDate : 0;
 }
 
 function getMatchCount(db) {
@@ -129,12 +161,42 @@ function buildMatchMaps(matches) {
   for (const match of matches) {
     if (!match || !Number.isFinite(Number(match.id))) continue;
     const id = Number(match.id);
-    const ts = Number(match.timestamp || 0);
+    const ts = parseMatchTimestampMs(match);
+    const durationMs = parseMatchDurationMs(match);
     byId.set(id, match);
-    sorted.push({ id, timestamp: Number.isFinite(ts) ? ts : 0 });
+    if (ts > 0) {
+      sorted.push({ id, timestamp: ts, durationMs });
+    }
   }
   sorted.sort((a, b) => a.timestamp - b.timestamp);
   return { byId, sorted };
+}
+
+function buildMatchWindows(sortedMatches, fallbackMaxDeltaMs) {
+  return sortedMatches.map((match, index) => {
+    const prev = index > 0 ? sortedMatches[index - 1] : null;
+    const next = index < sortedMatches.length - 1 ? sortedMatches[index + 1] : null;
+    const midpointStart = prev ? Math.round((prev.timestamp + match.timestamp) / 2) : (match.timestamp - fallbackMaxDeltaMs);
+    const midpointEnd = next ? Math.round((next.timestamp + match.timestamp) / 2) : (match.timestamp + fallbackMaxDeltaMs);
+    const durationStart = match.durationMs > 0 ? Math.max(0, match.timestamp - match.durationMs) : midpointStart;
+
+    return {
+      id: match.id,
+      timestamp: match.timestamp,
+      startMs: Math.min(midpointStart, durationStart),
+      endMs: midpointEnd,
+    };
+  });
+}
+
+function findWindowMatch(matchWindows, timestampMs, fallbackMaxDeltaMs) {
+  for (const matchWindow of matchWindows) {
+    if (timestampMs < matchWindow.startMs || timestampMs > matchWindow.endMs) continue;
+    const deltaMs = Math.abs(matchWindow.timestamp - timestampMs);
+    if (deltaMs > fallbackMaxDeltaMs) continue;
+    return { id: matchWindow.id, deltaMs, timestamp: matchWindow.timestamp };
+  }
+  return null;
 }
 
 function findNearestMatch(sortedMatches, timestampMs, maxDeltaMs) {
@@ -196,6 +258,7 @@ function chooseTargetPath(targetDir, preferredName, sourcePath, sourceSize, take
 function scoreCandidate(sourceKind, reason, deltaMs) {
   let score = 500;
   if (reason === 'directory-id') score += 5000;
+  if (reason === 'timeline-window') score += 2600;
   if (Number.isFinite(deltaMs)) score += Math.max(0, 1800 - Math.floor(deltaMs / 1000));
   if (sourceKind === 'screenshots') score += 140;
   if (sourceKind === 'match_artifacts') score += 90;
@@ -210,6 +273,10 @@ function buildRepairPlan(db, userData) {
   const maxDeltaMs = Number.isFinite(DEFAULT_MAX_DELTA_MS) && DEFAULT_MAX_DELTA_MS > 0
     ? DEFAULT_MAX_DELTA_MS
     : (30 * 60 * 1000);
+  const fallbackMaxDeltaMs = Number.isFinite(DEFAULT_FALLBACK_MAX_DELTA_MS) && DEFAULT_FALLBACK_MAX_DELTA_MS > 0
+    ? DEFAULT_FALLBACK_MAX_DELTA_MS
+    : (12 * 60 * 60 * 1000);
+  const matchWindows = buildMatchWindows(sorted, fallbackMaxDeltaMs);
 
   const candidates = collectCandidates(userData);
   const plansByKey = new Map();
@@ -226,13 +293,20 @@ function buildRepairPlan(db, userData) {
       target = { id: candidate.sourceMatchId };
       reason = 'directory-id';
       if (Number.isFinite(candidate.timestampMs)) {
-        deltaMs = Math.abs(Number(byId.get(candidate.sourceMatchId).timestamp || 0) - Number(candidate.timestampMs));
+        deltaMs = Math.abs(parseMatchTimestampMs(byId.get(candidate.sourceMatchId)) - Number(candidate.timestampMs));
       }
     } else if (Number.isFinite(candidate.timestampMs)) {
       const nearest = findNearestMatch(sorted, candidate.timestampMs, maxDeltaMs);
-      if (!nearest) continue;
-      target = { id: nearest.id };
-      deltaMs = nearest.deltaMs;
+      if (nearest) {
+        target = { id: nearest.id };
+        deltaMs = nearest.deltaMs;
+      } else {
+        const windowMatch = findWindowMatch(matchWindows, candidate.timestampMs, fallbackMaxDeltaMs);
+        if (!windowMatch) continue;
+        target = { id: windowMatch.id };
+        reason = 'timeline-window';
+        deltaMs = windowMatch.deltaMs;
+      }
     }
 
     if (!target || !byId.has(target.id)) continue;
@@ -344,42 +418,65 @@ function applyArtifactRepair({ dbPath, userData } = {}) {
     const matchById = new Map();
     for (const match of db.matches || []) matchById.set(Number(match.id), match);
     const appliedByMatch = new Map();
+    const failures = [];
     let appliedLinks = 0;
 
     for (const planItem of plan.plans) {
-      const match = matchById.get(Number(planItem.matchId));
-      if (!match) continue;
+      try {
+        const match = matchById.get(Number(planItem.matchId));
+        if (!match) continue;
 
-      const targetDir = path.dirname(planItem.targetPath);
-      fs.mkdirSync(targetDir, { recursive: true });
+        const targetDir = path.dirname(planItem.targetPath);
+        fs.mkdirSync(targetDir, { recursive: true });
 
-      let finalTargetPath = planItem.targetPath;
-      const sourceKey = toPathKey(planItem.sourcePath);
-      const targetKey = toPathKey(finalTargetPath);
+        const artifacts = ensureArtifactsArray(match);
+        const existing = new Set(artifacts.map(toPathKey));
 
-      if (sourceKey !== targetKey) {
-        if (!fs.existsSync(finalTargetPath)) {
-          fs.copyFileSync(planItem.sourcePath, finalTargetPath);
-        } else {
-          const sourceStat = safeStat(planItem.sourcePath);
-          const targetStat = safeStat(finalTargetPath);
-          const sameSize = sourceStat && targetStat && Number(sourceStat.size) === Number(targetStat.size);
-          if (!sameSize) {
-            finalTargetPath = chooseTargetPath(targetDir, path.basename(planItem.targetPath), planItem.sourcePath, sourceStat ? sourceStat.size : 0, new Set());
+        let finalTargetPath = planItem.targetPath;
+        let finalKey = toPathKey(finalTargetPath);
+        const sourceKey = toPathKey(planItem.sourcePath);
+        if (existing.has(finalKey)) continue;
+
+        const sourceStat = safeStat(planItem.sourcePath);
+        if (!sourceStat || !sourceStat.isFile()) {
+          throw new Error('Source file missing or unreadable');
+        }
+
+        if (sourceKey !== finalKey) {
+          if (!fs.existsSync(finalTargetPath)) {
             fs.copyFileSync(planItem.sourcePath, finalTargetPath);
+          } else {
+            const targetStat = safeStat(finalTargetPath);
+            const sameSize = targetStat && Number(targetStat.size) === Number(sourceStat.size);
+            if (!sameSize) {
+              finalTargetPath = chooseTargetPath(
+                targetDir,
+                path.basename(planItem.targetPath),
+                planItem.sourcePath,
+                sourceStat.size,
+                existing
+              );
+              finalKey = toPathKey(finalTargetPath);
+              if (!existing.has(finalKey)) {
+                fs.copyFileSync(planItem.sourcePath, finalTargetPath);
+              }
+            }
           }
         }
+
+        if (existing.has(finalKey)) continue;
+        artifacts.push(finalTargetPath);
+        if (!appliedByMatch.has(Number(match.id))) appliedByMatch.set(Number(match.id), []);
+        appliedByMatch.get(Number(match.id)).push(finalTargetPath);
+        appliedLinks += 1;
+      } catch (error) {
+        failures.push({
+          matchId: planItem.matchId,
+          sourcePath: planItem.sourcePath,
+          targetPath: planItem.targetPath,
+          error: error?.message || 'Failed to apply candidate',
+        });
       }
-
-      const artifacts = ensureArtifactsArray(match);
-      const existing = new Set(artifacts.map(toPathKey));
-      const finalKey = toPathKey(finalTargetPath);
-      if (existing.has(finalKey)) continue;
-
-      artifacts.push(finalTargetPath);
-      if (!appliedByMatch.has(Number(match.id))) appliedByMatch.set(Number(match.id), []);
-      appliedByMatch.get(Number(match.id)).push(finalTargetPath);
-      appliedLinks += 1;
     }
 
     if (appliedLinks > 0) {
@@ -400,10 +497,12 @@ function applyArtifactRepair({ dbPath, userData } = {}) {
         plannedLinks: plan.summary.plannedLinks,
         appliedLinks,
         updatedMatches: applied.length,
+        failedLinks: failures.length,
         backupPath,
       },
       candidates: plan.candidatesOut,
       applied,
+      failed: failures,
     };
   } catch (error) {
     return {

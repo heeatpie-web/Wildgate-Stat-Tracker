@@ -141,7 +141,10 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
         const telemetryUpdate = source === 'telemetry' ? { telemetryDetectedHero: hero } : {};
         const currentP = getPriority(state.heroSource);
         const newP = getPriority(source);
-        if (newP >= currentP || !state.heroSource) {
+        const allowInitialTelemetryOverride = source === 'telemetry'
+            && state.heroSource === 'manual'
+            && !state.telemetryDetectedHero;
+        if (newP >= currentP || !state.heroSource || allowInitialTelemetryOverride) {
             return {
                 activeHero: hero,
                 heroSource: source,
@@ -155,7 +158,10 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
         const telemetryUpdate = source === 'telemetry' ? { telemetryDetectedShip: ship } : {};
         const currentP = getPriority(state.shipSource);
         const newP = getPriority(source);
-        if (newP >= currentP || !state.shipSource) {
+        const allowInitialTelemetryOverride = source === 'telemetry'
+            && state.shipSource === 'manual'
+            && !state.telemetryDetectedShip;
+        if (newP >= currentP || !state.shipSource || allowInitialTelemetryOverride) {
             const newTeammates = sanitizeTeammates(state.selectedTeammates, ship);
             return { activeShip: ship, shipSource: source, selectedTeammates: newTeammates, ...telemetryUpdate };
         }

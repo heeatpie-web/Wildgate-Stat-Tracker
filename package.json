@@ -2,7 +2,7 @@
   "name": "wildgate-stat-tracker",
   "productName": "Wildgate Stat Tracker",
   "private": true,
-  "version": "2.15.0",
+  "version": "2.17.0",
   "type": "module",
   "main": "electron/main.cjs",
   "author": {
@@ -94,6 +94,7 @@
   "build": {
     "appId": "com.wildgate.tracker",
     "productName": "Wildgate Stat Tracker",
+    "icon": "public/favicon.ico",
     "compression": "maximum",
     "npmRebuild": false,
     "directories": {
@@ -113,6 +114,7 @@
       "node_modules/screenshot-desktop/**/*"
     ],
     "win": {
+      "icon": "public/favicon.ico",
       "target": "nsis",
       "forceCodeSigning": false,
       "artifactName": "Wildgate-Stat-Tracker-Setup-${version}.${ext}"

@@ -75,6 +75,9 @@ export interface OCRExtractedData {
   // Cloud OCR metadata
   cloudContributed?: boolean;
   ocrSource?: 'local' | 'cloud' | 'merged';
+  ocrFallbackReason?: string;
+  ocrCloudError?: string;
+  ocrGeminiError?: string;
   mergeStats?: {
     total: number;
     agreed: number;

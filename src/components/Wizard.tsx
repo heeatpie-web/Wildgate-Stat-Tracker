@@ -19,6 +19,7 @@ import { useMatchSubmission } from '../hooks/useMatchSubmission';
 import { OcrCorrectionModal } from './OcrCorrectionModal';
 import { useAppStore } from '../store/useAppStore';
 import { getElectronAPI } from '../utils/electronAPI';
+import { EQUIPMENT_DB } from '../utils/equipmentDb';
 
 export const Wizard: React.FC = () => {
     const {
@@ -51,11 +52,36 @@ export const Wizard: React.FC = () => {
 
     const [selectedWinType, setSelectedWinType] = useState<'Combat' | 'Artifact' | 'Objective'>('Combat');
     const [showOcrReview, setShowOcrReview] = useState(false);
+    const weaponOptions = React.useMemo(() => (
+        Array.from(new Set(
+            EQUIPMENT_DB
+                .filter((item) => item.type === 'Weapon' || item.type === 'CharacterWeapon')
+                .map((item) => item.name)
+                .filter(Boolean)
+        )).sort((a, b) => a.localeCompare(b))
+    ), []);
+    const equipmentOptions = React.useMemo(() => (
+        Array.from(new Set(
+            EQUIPMENT_DB
+                .filter((item) => item.type !== 'Weapon' && item.type !== 'CharacterWeapon')
+                .map((item) => item.name)
+                .filter(Boolean)
+        )).sort((a, b) => a.localeCompare(b))
+    ), []);
 
     const detectedPlayerCount = React.useMemo(() => {
         if (!sessionTeams) return 0;
         return Object.values(sessionTeams).reduce((sum, players) => sum + (players as string[]).length, 0);
     }, [sessionTeams]);
+    const wizardReviewScreenshots = React.useMemo(() => {
+        const artifacts = Array.isArray(pendingMatchData?.artifacts)
+            ? pendingMatchData.artifacts
+            : [];
+        return artifacts
+            .map((entry) => String(entry || '').trim())
+            .filter((entry) => entry.length > 0)
+            .filter((entry) => entry.startsWith('data:image/') || /\.(png|jpe?g|webp|bmp|gif)$/i.test(entry));
+    }, [pendingMatchData?.artifacts]);
 
     const loadoutDraft = React.useMemo(() => {
         const base = pendingMatchData?.loadout || currentLoadout || null;
@@ -232,44 +258,56 @@ export const Wizard: React.FC = () => {
                             <ShieldAlert size={14} className="opacity-50" />
                         </div>
                         <p className="text-label-xs opacity-60 mb-3">
-                            Manual entries here are saved into the final match loadout.
+                            Choose loadout slots from known tools. These selections are saved into the final match loadout.
                         </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-2">
                                 <label className="text-label-xs font-bold uppercase tracking-widest opacity-60">Weapon 1</label>
-                                <input
-                                    type="text"
+                                <select
                                     value={loadoutDraft.weapons[0]}
                                     onChange={(e) => updateLoadoutSlot('weapons', 0, e.target.value)}
-                                    placeholder="Primary weapon"
                                     className="w-full text-left px-3 py-2 rounded-xl mg-surface-high border border-md-sys-outline/10 text-label-sm font-semibold outline-none focus:border-md-sys-primary/40"
-                                />
+                                >
+                                    <option value="">Select weapon</option>
+                                    {weaponOptions.map((name) => (
+                                        <option key={`w1-${name}`} value={name}>{name}</option>
+                                    ))}
+                                </select>
                                 <label className="text-label-xs font-bold uppercase tracking-widest opacity-60">Weapon 2</label>
-                                <input
-                                    type="text"
+                                <select
                                     value={loadoutDraft.weapons[1]}
                                     onChange={(e) => updateLoadoutSlot('weapons', 1, e.target.value)}
-                                    placeholder="Secondary weapon"
                                     className="w-full text-left px-3 py-2 rounded-xl mg-surface-high border border-md-sys-outline/10 text-label-sm font-semibold outline-none focus:border-md-sys-primary/40"
-                                />
+                                >
+                                    <option value="">Select weapon</option>
+                                    {weaponOptions.map((name) => (
+                                        <option key={`w2-${name}`} value={name}>{name}</option>
+                                    ))}
+                                </select>
                             </div>
                             <div className="space-y-2">
                                 <label className="text-label-xs font-bold uppercase tracking-widest opacity-60">Equipment 1</label>
-                                <input
-                                    type="text"
+                                <select
                                     value={loadoutDraft.equipment[0]}
                                     onChange={(e) => updateLoadoutSlot('equipment', 0, e.target.value)}
-                                    placeholder="Primary equipment"
                                     className="w-full text-left px-3 py-2 rounded-xl mg-surface-high border border-md-sys-outline/10 text-label-sm font-semibold outline-none focus:border-md-sys-primary/40"
-                                />
+                                >
+                                    <option value="">Select equipment</option>
+                                    {equipmentOptions.map((name) => (
+                                        <option key={`e1-${name}`} value={name}>{name}</option>
+                                    ))}
+                                </select>
                                 <label className="text-label-xs font-bold uppercase tracking-widest opacity-60">Equipment 2</label>
-                                <input
-                                    type="text"
+                                <select
                                     value={loadoutDraft.equipment[1]}
                                     onChange={(e) => updateLoadoutSlot('equipment', 1, e.target.value)}
-                                    placeholder="Secondary equipment"
                                     className="w-full text-left px-3 py-2 rounded-xl mg-surface-high border border-md-sys-outline/10 text-label-sm font-semibold outline-none focus:border-md-sys-primary/40"
-                                />
+                                >
+                                    <option value="">Select equipment</option>
+                                    {equipmentOptions.map((name) => (
+                                        <option key={`e2-${name}`} value={name}>{name}</option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -368,6 +406,7 @@ export const Wizard: React.FC = () => {
                 isOpen={showOcrReview}
                 onClose={() => setShowOcrReview(false)}
                 onAcceptAll={() => setShowOcrReview(false)}
+                screenshots={wizardReviewScreenshots}
             />
         </div>
     );

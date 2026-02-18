@@ -280,7 +280,7 @@ const MatchDetail: React.FC<{
             {/* Stats Summary */}
             <div className="grid grid-cols-4 gap-2">
                 <StatCard icon={<Clock size={14} />} label="Time" value={match.time || '—'} />
-                <StatCard icon={<HeartCrack size={14} className="text-danger" />} label="Damage" value={match.damageTaken?.toString() || '0'} />
+                <StatCard icon={<HeartCrack size={14} className="text-danger" />} label="Damage in the last 2 minutes" value={match.damageTaken?.toString() || '0'} />
                 <StatCard icon={<Target size={14} className="text-success" />} label="Kills" value={totalKills.toString()} />
                 {match.placement && <StatCard icon={<Trophy size={14} className="text-warning" />} label="Place" value={`#${match.placement}`} />}
             </div>

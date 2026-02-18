@@ -45,7 +45,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
         setActiveView,
         setShowSettings,
         setShowIdMapper,
-        devMode,
         activeUser,
         setActiveUser,
         setRenameModal,
@@ -162,25 +161,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
                     {showLabels && <span className="text-label-xs font-semibold tracking-wide-02 leading-tight">ID Mapper</span>}
                 </button>
 
-                {devMode && (
-                    <button
-                        onClick={() => {
-                            setActiveView('dev-ocr');
-                            closeDrawerIfNeeded();
-                        }}
-                        aria-current={activeView === 'dev-ocr' ? 'page' : undefined}
-                        className={`relative w-full py-2.5 premium-nav-item md3-nav-item sidebar-nav-item flex items-center transition-all duration-150 group ${
-                            activeView === 'dev-ocr' ? 'premium-nav-item--active sidebar-nav-item--active' : 'text-md-sys-on-surface/60'
-                        } ${showLabels ? 'justify-start px-3 gap-2.5' : 'justify-center'}`}
-                        title="Dev OCR"
-                    >
-                        <span className="sidebar-nav-accent" aria-hidden />
-                        <span className="md3-nav-icon premium-nav-icon">
-                            <FlaskConical size={18} />
-                        </span>
-                        {showLabels && <span className="text-label-xs font-semibold tracking-wide-02 leading-tight">Dev OCR</span>}
-                    </button>
-                )}
+                <button
+                    onClick={() => {
+                        setActiveView('dev-ocr');
+                        closeDrawerIfNeeded();
+                    }}
+                    aria-current={activeView === 'dev-ocr' ? 'page' : undefined}
+                    className={`relative w-full py-2.5 premium-nav-item md3-nav-item sidebar-nav-item flex items-center transition-all duration-150 group ${
+                        activeView === 'dev-ocr' ? 'premium-nav-item--active sidebar-nav-item--active' : 'text-md-sys-on-surface/60'
+                    } ${showLabels ? 'justify-start px-3 gap-2.5' : 'justify-center'}`}
+                    title="OCR Debug"
+                >
+                    <span className="sidebar-nav-accent" aria-hidden />
+                    <span className="md3-nav-icon premium-nav-icon">
+                        <FlaskConical size={18} />
+                    </span>
+                    {showLabels && <span className="text-label-xs font-semibold tracking-wide-02 leading-tight">OCR Debug</span>}
+                </button>
             </div>
 
             <div ref={profileMenuRef} className="relative w-full" data-tour="profile-selector">
@@ -199,6 +196,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
                     <span className="md3-nav-icon premium-nav-icon">
                         <User size={16} />
                     </span>
+                    {showLabels && (
+                        <span className="text-label-xs font-semibold tracking-wide-02 leading-tight truncate">
+                            {activeUser?.trim() ? activeUser : 'No Profile'}
+                        </span>
+                    )}
                 </button>
 
                 {profileMenuOpen && (

@@ -637,7 +637,7 @@
 
 - Intelligence Review routing:
   - `src/App.tsx`
-  - Mounted `ReviewQueueModal` so recording-panel “Intelligence Review Required” opens the actual review queue.
+  - Mounted `ReviewQueueModal` so recording-panel "Intelligence Review Required" opens the actual review queue.
 
 - Ongoing telemetry draft semantics:
   - `src/types.ts`
@@ -2210,3 +2210,240 @@
 ## Remaining / Risks
 - Local/CI rerun needed for targeted vitest command because of environment process-spawn restriction.
 - ROI editor currently requires manual image load each session and does not persist a preview image path (intentional for bounded scope).
+
+---
+
+## Handoff - 2026-02-18 - EMERGENCY-BATCH-2026-02-18-001
+## Status
+- Completed (integrated emergency patch set).
+
+## What Changed
+- Core runtime/data-integrity fixes already in working batch were kept and finalized:
+  - `src/hooks/useLogMonitor.ts`: telemetry local-player/loadout parsing hardening and case-insensitive fallback matching.
+  - `src/App.tsx`: telemetry draft Smart Capture prompt now supports up to 3 mid-match clicks before dismissal.
+  - `src/hooks/useMatchSubmission.ts`: teammate selections are no longer reset on submission.
+  - `src/components/SmartCapturesPanel.tsx`: manual teammate/opponent entries preserved and merged over OCR; manual edit paths avoid fuzzy auto-remap.
+  - `src/components/Wizard.tsx`: weapon/equipment entry switched from free-text to controlled equipment DB selectors.
+
+- Additional emergency fixes implemented this pass:
+  - `src/components/recording/ActionPanel.tsx`: added Smart Capture button to default panel variant (overlay parity) with pending-count badge.
+  - `src/components/Sidebar.tsx`: OCR Debug navigation is now available without requiring Dev Mode.
+  - `src/components/analytics/AnalyticsShell.tsx`: fixed Pro drill tile click-through bug (`Open detail` now works reliably).
+  - `src/components/analytics/TimePatternView.tsx`: fixed active-times tooltip isolation and day-bar color differentiation by win-rate band.
+  - `src/App.tsx`: implemented restore-session persistence + startup prompt (`Restore session` / `Discard`) and automatic snapshot lifecycle handling.
+  - `src/components/smart-captures/primitives/ConfidenceMeter.tsx`: improved confidence bar visibility.
+  - `src/components/smart-captures/QueueItemRichPreview.tsx`: confidence/progress row now appears for OCR-state items even before final confidence is available.
+  - `src/index.css`: strengthened Smart Captures queue status chip contrast.
+  - `src/components/IdMapper.tsx`: improved default tab behavior so panel no longer appears blank when Unknowns is empty.
+  - `src/components/DevOCRPanel.tsx`: added a concise “Fast OCR Improvement Loop” explanation.
+  - `src/store/slices/createFormSlice.ts`: first telemetry ship/hero update can override stale manual startup selection, while preserving manual override behavior after telemetry baseline is established.
+  - `src/store/slices/__tests__/createFormSlice.test.ts`: added/updated regression tests for the new telemetry startup override semantics.
+
+- Version bump:
+  - `package.json` -> `2.16.0`
+  - `src/utils/constants.ts` -> `v2.16`
+  - `src/utils/changelog.ts` -> new `v2.16` release notes entry.
+
+## What Was Verified
+- `npx eslint` on touched emergency files: PASS.
+- `npx vitest run src/store/slices/__tests__/createFormSlice.test.ts src/components/recording/ActionPanel.test.tsx src/App.test.tsx`: PASS (`41/41`).
+- `npm run -s typecheck`: PASS.
+- Follow-up focused lint/tests after telemetry/startup/chart refinements: PASS.
+
+## Remaining / Risks
+- The emergency set did not include full drag-and-drop reassignment of OCR players between ships in Wizard/Smart Captures (new feature-level scope).
+- The emergency set did not include a full analytics content expansion (new charts/narrative architecture); this pass fixed critical interaction/readability regressions.
+
+---
+
+## Handoff - 2026-02-18 - OCR-DRAG-REVIEW-002
+## Status
+- Completed.
+
+## What Changed
+- Added shared opponent-team move utility:
+  - `src/utils/opponentTeamTransfer.ts`
+    - new `moveOpponentPlayerBetweenTeams` helper for immutable cross-team move/reorder with no-op guardrails.
+  - `src/utils/__tests__/opponentTeamTransfer.test.ts`
+    - focused regression tests for cross-team move, in-team reorder, immutability, and invalid-index safety.
+
+- OCR review drag + sticky screenshots:
+  - `src/components/ocr/OCRReviewModal.tsx`
+    - enabled dragging opponent rows between team cards (including in-team reorder),
+    - added team drop-zone highlight and move announcements,
+    - made screenshot reference section sticky during scroll while preserving click-to-enlarge lightbox behavior.
+
+- Smart Captures drag between teams/ships:
+  - `src/components/SmartCapturesPanel.tsx`
+    - enabled dragging enemy player chips between team cards in Smart Match detail editor,
+    - keeps `opponentTeams` and flattened `opponents` list synchronized after reassignment,
+    - added inline helper copy to make drag behavior discoverable.
+
+## What Was Verified
+- `npx eslint src/components/ocr/OCRReviewModal.tsx src/components/SmartCapturesPanel.tsx src/utils/opponentTeamTransfer.ts src/utils/__tests__/opponentTeamTransfer.test.ts` passed.
+- `npx vitest run src/utils/__tests__/opponentTeamTransfer.test.ts src/components/ocr/OCRReviewModal.test.tsx` passed (`6/6` tests).
+- `npm run -s typecheck` passed.
+
+## Remaining / Risks
+- This increment is limited to opponent-team drag/reassign and sticky screenshot references; broader OCR workflow changes (for example custom fuzzy-match popup behavior or additional wizard screenshot panes) are still pending future scope.
+
+---
+
+## Handoff - 2026-02-18 - OCR-WIZARD-REASSIGN-003
+## Status
+- Completed.
+
+## What Changed
+- Wizard OCR reassignment in `src/components/OcrCorrectionModal.tsx`:
+  - added drag/drop team-assignment board so OCR-detected players can be moved between team cards,
+  - added per-team ship selector using built-in ship options,
+  - added apply-time session sync:
+    - writes reviewed team/player mapping to `sessionTeams`,
+    - writes reviewed ship mapping to `sessionShipTypes` (manual source),
+    - refreshes teammate/opponent picks from reviewed teams (active user match first, teammate-overlap fallback).
+  - added sticky screenshot reference rail with one-click lightbox preview while scrolling OCR edits.
+
+- Wizard wiring in `src/components/Wizard.tsx`:
+  - extracts image artifacts from `pendingMatchData.artifacts`,
+  - passes screenshot list into `OcrCorrectionModal`.
+
+- Focused tests in `src/components/OcrCorrectionModal.test.tsx`:
+  - expanded mocks for new provider dependencies,
+  - added regression test for screenshot references + lightbox open/close.
+
+## What Was Verified
+- `npx eslint src/components/OcrCorrectionModal.tsx src/components/Wizard.tsx src/components/OcrCorrectionModal.test.tsx` passed.
+- `npx vitest run src/components/OcrCorrectionModal.test.tsx` passed (`3/3` tests).
+- `npm run -s typecheck` passed.
+
+## Remaining / Risks
+- This increment is intentionally bounded to the wizard OCR correction modal path; wider OCR flow changes (for example new ID-mapper fuzzy prompt UX or analytics expansions) remain outside this task scope.
+
+---
+
+## Handoff - 2026-02-18 - TELEMETRY-LOADOUT-INDICATORS-004
+## Status
+- Completed.
+
+## What Changed
+- Telemetry loadout parsing hardening in `src/hooks/useLogMonitor.ts`:
+  - broadened loadout signal detection for more telemetry key variants,
+  - added nested candidate extraction for array/object slot payload shapes,
+  - expanded weapon/equipment key candidates,
+  - extended fuzzy name matching with `EQUIPMENT_DB` names so non-guid payloads resolve more reliably.
+
+- Dedicated loadout panel indicators in `src/components/recording/SquadronPanel.tsx`:
+  - added explicit `Weapons`/`Equipment` rows with `(auto)` badges,
+  - rendered in both standard and compact densities,
+  - keeps indicators inside the separate ship/prospector box as requested.
+
+- Focused regression coverage:
+  - `src/hooks/__tests__/useLogMonitor.test.ts`: nested local telemetry loadout payload resolves weapon/equipment into `currentLoadout`.
+  - `src/components/recording/SquadronPanel.test.tsx`: verifies `(auto)` indicators and item names in standard + compact panel variants.
+
+## What Was Verified
+- `npx eslint src/hooks/useLogMonitor.ts src/components/recording/SquadronPanel.tsx src/hooks/__tests__/useLogMonitor.test.ts src/components/recording/SquadronPanel.test.tsx` passed.
+- `npx vitest run src/hooks/__tests__/useLogMonitor.test.ts src/components/recording/SquadronPanel.test.tsx` passed (`6/6` tests).
+- `npm run -s typecheck` passed.
+
+## Remaining / Risks
+- This increment is limited to telemetry loadout parsing and dedicated panel indicator visibility; broader telemetry event coverage for entirely unknown GUID catalogs still depends on user mapping updates or future GUID list expansion.
+
+---
+
+## Handoff - 2026-02-18 - ANALYTICS-ARTIFACT-IDFLOW-005
+## Status
+- Completed.
+
+## What Changed
+- Analytics overview and chart readability:
+  - `src/components/analytics/AnalyticsDashboard.tsx`
+    - added `Operational Snapshot` and `Priority Insights` cards to increase narrative/actionable overview density.
+    - improved mini placement distribution color readability by placement bands.
+  - `src/components/analytics/TimePatternView.tsx`
+    - added per-bar coloring/intensity for hourly activity chart.
+    - changed tooltip behavior to per-bar (`shared={false}`) for clearer hover interaction.
+  - `src/components/analytics/KillEfficiencyView.tsx`
+    - replaced single-color bar charts with multi-color per-row bars.
+  - `src/components/analytics/PlacementDistView.tsx`
+    - replaced single-color placement histogram bars with semantic placement-band colors.
+
+- Artifact repair reliability:
+  - `electron/helpers/artifactRelinker.cjs`
+    - normalizes seconds/milliseconds timestamp formats for historical match records.
+    - adds timeline-window fallback matching when strict delta-based nearest match fails.
+    - hardens apply flow so individual file failures do not abort all repair work.
+    - includes `failedLinks` and detailed failure entries in apply results for operator visibility.
+
+- Fuzzy/ID mapping surfacing flow:
+  - `src/App.tsx`
+    - adds automatic `Fuzzy Match Review Ready` prompt for high-confidence roster candidates.
+    - adds automatic `ID Info Requested` prompt for unknown telemetry IDs.
+    - prompt actions jump directly to review queue / ID mapper.
+  - `src/components/ReviewQueueModal.tsx`
+    - prioritizes roster-candidate items by score so fuzzy-match decisions are surfaced first.
+  - `src/components/IdMapper.tsx`
+    - auto-focuses `Unknowns` tab when unknown IDs first appear post-mount.
+
+## What Was Verified
+- `npx eslint src/components/analytics/AnalyticsDashboard.tsx src/components/analytics/TimePatternView.tsx src/components/analytics/KillEfficiencyView.tsx src/components/analytics/PlacementDistView.tsx src/App.tsx src/components/IdMapper.tsx src/components/ReviewQueueModal.tsx electron/helpers/artifactRelinker.cjs` passed.
+- `npx vitest run src/App.test.tsx src/components/ReviewQueueModal.test.tsx src/components/recording/ActionPanel.test.tsx` passed (`23/23` tests).
+- `npm run -s typecheck` passed.
+
+## Remaining / Risks
+- Artifact relinker reliability is improved for timestamp variance and partial failures, but cannot recover screenshots that were never persisted to local storage.
+- Fuzzy/ID prompts are informational with manual confirmation; no auto-merge logic was introduced by design.
+
+---
+
+## Handoff - 2026-02-18 - RECOVERY-CONTINUATION-001 (Closeout Addendum)
+## Status
+- Completed.
+
+## What Changed
+- Settings crash hardening:
+  - `src/components/SettingsModal.tsx`
+    - refactored to mount-gated wrapper + inner modal component so settings hooks only mount while open.
+    - removes modal close/open hook-order drift risk tied to the reported `Rendered more hooks than during the previous render` crash.
+
+- DB write contention hardening:
+  - `electron/main.cjs`
+    - serialized `db-write` handler through a queue (`dbWriteQueue`) to prevent concurrent temp-file rename collisions.
+    - cleanup path now best-effort unlinks DB/WAL temp files without secondary noisy cleanup errors.
+
+- Shell/layout usability refinements:
+  - `src/components/RecordingView.tsx`
+    - lowered narrow breakpoint to `980px` so default-size app keeps combined vertical Loadout+Actions panel; compact tab mode now activates later on true shrink.
+  - `src/App.tsx`
+    - switched dashboard wrappers (Analytics/History/Smart Captures/Players/Dev OCR) to `overflow-y-scroll custom-scrollbar` for persistent scrollbar visibility.
+  - `src/components/HistoryTable.tsx`
+    - switched history root shell to `overflow-y-scroll custom-scrollbar` to keep scrollbars visible and reliable.
+
+## What Was Verified
+- `npx eslint src/components/SettingsModal.tsx src/components/RecordingView.tsx src/App.tsx src/components/HistoryTable.tsx electron/main.cjs` passed.
+- `npm run -s typecheck` passed.
+- `npx vitest run src/hooks/__tests__/useLogMonitor.test.ts src/App.test.tsx` passed (`8/8` tests).
+- Reviewed persisted runtime logs confirming prior hook-order crash signature used as closeout repro anchor:
+  - `C:\Users\Alec Gougebas\AppData\Roaming\Wildgate Stat Tracker\app_logs.txt`.
+
+## Remaining / Risks
+- The settings crash hardening removes the identified modal hook-order risk path; final runtime confirmation should be taken from a fresh packaged run on the target laptop session.
+- Existing stale lock rows in `docs/WORKLOCKS.md` remain historically noisy; they do not affect runtime behavior but should be normalized in a dedicated documentation cleanup pass.
+
+---
+
+## Handoff - 2026-02-18 - RECOVERY-CONTINUATION-006 (Gate Reconcile)
+## Status
+- Completed.
+
+## What Changed
+- Reconciled final stale test expectation:
+  - `src/components/smart-captures/QueueItemRichPreview.test.tsx`
+    - updated queue assertion to enforce hidden raw-ID behavior (`queryByText(/ID 12345/)` is null).
+
+## What Was Verified
+- `npx vitest run src/components/smart-captures/QueueItemRichPreview.test.tsx` passed (`2/2` tests).
+- `npm run -s ci:quality` passed end-to-end (`lint`, `test`, `typecheck`, `build`).
+
+## Remaining / Risks
+- No additional gate failures remain in this continuation increment.

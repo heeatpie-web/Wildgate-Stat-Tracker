@@ -256,8 +256,49 @@
   - UI redesign of splash screen.
   - Removal of cloud OCR features.
 - Done condition:
-  - Settings modal no longer triggers hook-order runtime error on open.
-  - Dev command launches Electron immediately (no pre-wait for Vite) so splash appears earlier.
+- Settings modal no longer triggers hook-order runtime error on open.
+- Dev command launches Electron immediately (no pre-wait for Vite) so splash appears earlier.
+
+---
+
+## Intake - 2026-02-18 - RECOVERY-CONTINUATION-001
+- Goal: recover from interrupted implementation session and complete all remaining user-reported issues in one pass.
+- Constraints:
+  - Continue from existing dirty workspace state without reverting unrelated prior work.
+  - Keep UI changes aligned to `docs/agents/UI_MASTERPLAN.md`.
+  - Preserve existing IPC contracts where possible; only add non-breaking metadata fields.
+- In scope:
+  - Settings open crash (`Rendered more hooks than previous render`).
+  - Scrollbar/overflow usability regressions (including History).
+  - Recording panel default-size vertical behavior and shrink-mode tab switching.
+  - Mission Intel copy correction (`Damage in the last 2 minutes`).
+  - Twilight-mode contrast/click affordance improvements (ID Mapper + player list).
+  - Smart Captures queue readability/selection clarity and OCR debug-tool access from tools pane.
+  - Cloud/Gemini OCR failure fallback to local with surfaced status metadata.
+  - Sidebar profile button username visibility.
+  - Windows DB write rename resilience (`EPERM`/`ENOENT` cases).
+  - Splash-style gradient W icon wiring for app/tray/package assets.
+  - Startup intro/onboarding gating until completion.
+  - Log-monitor duplicate start protection/idempotency.
+- Out of scope:
+  - Broad analytics feature redesign beyond reported blockers.
+  - New backend services or schema migrations.
+- Done condition:
+  - All listed in-scope issues are implemented and validated with evidence in `03_VALIDATION`.
+  - Agent workflow artifacts (`00`-`04`, decisions, locks) updated for this task.
+- AOM_V2:
+  - Risk Tier: `T3`
+  - Execution Path: `FULL_PATH`
+  - Reason: cross-cutting runtime/UI/Electron changes affecting startup, persistence, OCR fallback, and packaging behavior.
+
+### Follow-up Addendum - 2026-02-18 (Closeout)
+- Additional user-reported residuals to close inside same RECOVERY scope:
+  - Settings open still triggering hook-order crash.
+  - Persistent scrollbar visibility/readability gaps across dashboard views (explicitly History).
+  - Recording default-size should keep combined vertical Loadout+Match Recording; compact tabs only when window is truly shrunk.
+  - Ongoing DB temp-file rename contention (`ENOENT` / `EPERM`) in Electron write path.
+- Safest minimal interpretation:
+  - Apply bounded stability hardening and layout threshold/overflow tuning only; no schema/API migrations.
 
 ---
 
@@ -1679,3 +1720,195 @@
   - Risk Tier: `T2`
   - Execution Path: `FULL_PATH`
   - Reason: multi-file user-facing interaction/layout changes across settings/editor/modal/dashboard surfaces.
+
+---
+
+## Intake - 2026-02-18 - EMERGENCY-BATCH-2026-02-18-001
+- Goal: implement the approved emergency one-release stabilization plan across crash recovery, telemetry/loadout reliability, smart-capture persistence, roster precedence/persistence, OCR workflow UX, analytics/chart regressions, ID mapper visibility, and restore-session startup flow.
+- Intent confirmation block:
+  - Goal: deliver immediate high-friction bug fixes in one integrated release.
+  - Constraints: keep all changes in existing architecture (no destructive schema migration), preserve current data compatibility, and provide validation evidence for touched behavior.
+  - Done: reported priority regressions are patched with code + validation evidence and app version is increased.
+- Constraints:
+  - Single integrated patch set (Everything At Once) per user choice.
+  - Restore-session policy must be full draft restore.
+  - Teammates must persist until manually changed.
+  - Manual teammate/opponent entries are authoritative over OCR.
+- In scope:
+  - Settings crash (#310) hardening and regression coverage.
+  - Telemetry loadout fixes (ship/prospector/weapons/equipment detection and indicator consistency).
+  - Smart Capture prompt retry behavior and artifact persistence reliability.
+  - Teammate persistence + manual-over-OCR precedence + fuzzy backspace safety.
+  - Wizard loadout controlled input tooling.
+  - OCR debug accessibility without global dev-mode gate.
+  - Session restore prompt and apply/discard flow.
+  - Smart captures confidence/queue readability and analytics active-times tooltip behavior.
+  - ID mapper visibility defaults and emergency UX polish.
+  - Version bump.
+- Out-of-scope (this emergency batch):
+  - New backend services or cloud schema changes.
+  - OCR model architecture replacement.
+  - Broad full app redesign outside targeted regressions.
+- Done condition:
+  - Core crash/data-integrity/telemetry failures are fixed.
+  - User-critical UX issues in OCR/Smart Capture/teammate persistence are fixed.
+  - Restore session is available at relaunch.
+  - Validation evidence exists in docs/agents/03_VALIDATION.md for targeted checks.
+- AOM_V2:
+  - Risk Tier: T3
+  - Execution Path: FULL_PATH
+  - Reason: multi-file runtime behavior changes across core capture, telemetry, persistence, and user-facing flows.
+
+---
+
+## Intake - 2026-02-18 - OCR-DRAG-REVIEW-002
+- Goal: implement the next unresolved OCR usability items from the emergency bug list by enabling drag-and-drop opponent player reassignment between ship teams in both OCR review surfaces, plus sticky screenshot reference while editing OCR teammate/enemy names.
+- Intent confirmation block:
+  - Goal: make OCR corrections faster by allowing direct player moves between teams/ships and keeping screenshot evidence visible while scrolling edits.
+  - Constraints: keep scope narrowly bounded to OCR review + Smart Captures editor surfaces; no schema or IPC contract changes.
+  - Done: users can drag opponent player entries between teams in OCRReviewModal and Smart Captures detail editor, and OCRReviewModal keeps screenshot references visible while scrolling with one-click enlarge.
+- Constraints:
+  - Scope limited to renderer logic/components and a shared pure utility for team-player transfer.
+  - Preserve existing OCR/manual correction behavior and accessibility semantics.
+  - Keep changes additive and backward-compatible with current match/OCR data models.
+- In scope:
+  - Add shared immutable opponent-team player transfer utility + focused tests.
+  - Wire drag/drop move behavior in src/components/ocr/OCRReviewModal.tsx.
+  - Wire drag/drop move behavior in src/components/SmartCapturesPanel.tsx enemy-team editor.
+  - Keep screenshot reference section sticky in OCR review while editing and retain lightbox enlarge flow.
+- Out-of-scope (this increment):
+  - Analytics dashboard content expansion.
+  - Artifact repair redesign for historical missing screenshots.
+  - New OCR model/training architecture changes.
+- Done condition:
+  - Drag/drop between teams works in both OCR review and Smart Captures enemy-team editor.
+  - OCR review screenshot references remain available while scrolling and still support enlarge preview.
+  - Focused validation evidence is recorded in docs/agents/03_VALIDATION.md.
+- AOM_V2:
+  - Risk Tier: T2
+  - Execution Path: FULL_PATH
+  - Reason: multi-file runtime behavior changes in high-traffic OCR correction/editor flows.
+
+---
+
+## Intake - 2026-02-18 - OCR-WIZARD-REASSIGN-003
+- Goal: finish the remaining OCR wizard usability gaps by adding team/ship reassignment drag controls in OcrCorrectionModal and screenshot-assisted editing with enlarge support.
+- Intent confirmation block:
+  - Goal: allow users to quickly move OCR-detected names between ship teams during wizard review while keeping screenshot evidence visible.
+  - Constraints: keep scope limited to wizard OCR correction flow (OcrCorrectionModal + Wizard wiring), no schema or IPC contract changes.
+  - Done: users can drag names between team cards in OCR wizard review, edit team ship assignment, and see/enlarge screenshot references while scrolling.
+- Constraints:
+  - Preserve existing correction/learning behavior and keyboard shortcuts.
+  - Keep UI additive and consistent with current modal style patterns.
+  - Avoid changes to telemetry/archive back-end contracts.
+- In scope:
+  - Add team assignment state + drag/drop move between teams in src/components/OcrCorrectionModal.tsx.
+  - Add team ship selection controls in same modal and persist to session state on apply.
+  - Add sticky screenshot reference rail with enlarge/lightbox in OcrCorrectionModal.
+  - Pass wizard-available screenshot artifacts into OcrCorrectionModal from src/components/Wizard.tsx.
+- Out-of-scope (this increment):
+  - New analytics dashboards.
+  - Historical artifact-repair redesign.
+  - OCR model pipeline changes.
+- Done condition:
+  - OCR wizard review supports drag/move between team/ship cards.
+  - OCR wizard review keeps screenshots visible while scrolling and supports enlarge preview.
+  - Focused validation evidence is recorded in docs/agents/03_VALIDATION.md.
+- AOM_V2:
+  - Risk Tier: T2
+  - Execution Path: FULL_PATH
+  - Reason: user-facing multi-file interaction changes in a core OCR correction path.
+
+---
+
+## Intake - 2026-02-18 - TELEMETRY-LOADOUT-INDICATORS-004
+- Goal: continue emergency follow-up by fixing remaining telemetry loadout reliability gaps for Prospector weapons/equipment and exposing explicit auto-selected indicators inside the dedicated ship/prospector loadout panel.
+- Intent confirmation block:
+  - Goal: improve real telemetry weapon/equipment detection robustness and make auto-selected loadout visibility consistent in the separate loadout box.
+  - Constraints: keep scope narrowly bounded to telemetry loadout parsing + SquadronPanel UI; no schema/IPC contract changes.
+  - Done: nested telemetry loadout payloads resolve weapons/equipment more reliably and SquadronPanel clearly shows auto-selected weapon/equipment indicators.
+- Constraints:
+  - Preserve existing manual override behavior and source-priority semantics.
+  - Keep changes additive and backwards-compatible with current session/loadout state.
+  - Limit UI changes to `src/components/recording/SquadronPanel.tsx`.
+- In scope:
+  - Harden `src/hooks/useLogMonitor.ts` loadout candidate extraction for nested array/object telemetry payload shapes.
+  - Improve name matching pool for telemetry-derived weapon/equipment names.
+  - Add explicit auto-selected weapon/equipment display in `src/components/recording/SquadronPanel.tsx` (standard + compact variants).
+  - Add focused tests for telemetry extraction behavior and SquadronPanel loadout indicators.
+- Out-of-scope (this increment):
+  - Analytics dashboard expansion.
+  - OCR workflow redesign.
+  - Storage/schema migrations.
+- Done condition:
+  - Prospector loadout events with nested slots can produce resolved weapon/equipment names into `currentLoadout`.
+  - Ship/prospector loadout panel includes clear auto-selected weapon/equipment indicators.
+  - Focused validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: T2
+  - Execution Path: FULL_PATH
+  - Reason: runtime behavior changes in telemetry parsing plus user-facing panel updates.
+
+---
+
+## Intake - 2026-02-18 - ANALYTICS-ARTIFACT-IDFLOW-005
+- Goal: continue the three pending follow-up tasks by shipping:
+  - analytics overview expansion + bar-chart readability fixes,
+  - historical artifact repair reliability hardening,
+  - automatic fuzzy-review / ID-info prompt flow polish.
+- Intent confirmation block:
+  - Goal: close the remaining usability/reliability gaps called out after emergency stabilization.
+  - Constraints: keep scope tightly bounded to analytics renderer views, artifact relinker helper, and review/ID mapping surfacing flow.
+  - Done: overview has richer narrative/summary signals, charts are easier to read, artifact repair handles more historical cases safely, and fuzzy/ID prompts are surfaced automatically.
+- Constraints:
+  - No schema migrations or IPC contract breaks.
+  - Keep manual confirmation behavior for OCR/fuzzy merges (no silent auto-apply of names).
+  - Keep artifact repair non-destructive and backup-aware.
+- In scope:
+  - `src/components/analytics/AnalyticsDashboard.tsx` narrative/insight expansion.
+  - `src/components/analytics/TimePatternView.tsx` active-times tooltip and per-bar readability improvements.
+  - `src/components/analytics/KillEfficiencyView.tsx` and `src/components/analytics/PlacementDistView.tsx` bar-color differentiation.
+  - `electron/helpers/artifactRelinker.cjs` match-time normalization + window fallback + per-item failure tolerance.
+  - `src/App.tsx`, `src/components/ReviewQueueModal.tsx`, and `src/components/IdMapper.tsx` for fuzzy/ID prompt discoverability and prioritization.
+- Out-of-scope (this increment):
+  - New analytics backend calculations or schema changes.
+  - Full artifact storage redesign.
+  - Auto-merging names without user review.
+- Done condition:
+  - Analytics overview includes additional actionable summary content and clearer chart color cues.
+  - Active-times hover behavior is isolated per bar interaction.
+  - Artifact repair can recover more historical screenshots without aborting entire apply on single-file failures.
+  - User sees automatic prompts for high-confidence fuzzy roster candidates and unknown telemetry IDs.
+  - Validation evidence is logged in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: T2
+  - Execution Path: FULL_PATH
+  - Reason: multi-file runtime behavior changes across renderer analytics, review UX flow, and Electron artifact-linking logic.
+
+---
+
+## Intake - 2026-02-18 - RECOVERY-CONTINUATION-006
+- Goal: continue recovery closeout by reconciling stale test expectations with already-shipped queue/recording UI behavior and re-running full release gates.
+- Intent confirmation block:
+  - Goal: close the final quality gate failure without adding new runtime scope.
+  - Constraints: keep this increment limited to tests/doc evidence; do not change shipped runtime behavior unless a gate proves mismatch.
+  - Done: stale tests are updated to match current UI contract and `npm run -s ci:quality` passes.
+- Constraints:
+  - Scope limited to test expectation alignment and documentation evidence updates.
+  - No schema, IPC, or business-logic changes in this increment.
+  - Preserve user-requested queue behavior (no visible raw match ID in left queue rows).
+- In scope:
+  - Update `src/components/smart-captures/QueueItemRichPreview.test.tsx` stale ID visibility assertion.
+  - Re-run focused and full quality gates.
+  - Record continuation evidence in `docs/agents/02_EXECUTION_LOG.md`, `03_VALIDATION.md`, and `04_HANDOFF.md`.
+- Out-of-scope (this increment):
+  - Additional feature/UI changes beyond gate reconciliation.
+  - New telemetry/OCR/runtime behavior updates.
+- Done condition:
+  - Queue preview tests align with current hidden-ID UI behavior.
+  - Full `ci:quality` pipeline passes.
+  - Continuation evidence and closeout status are documented.
+- AOM_V2:
+  - Risk Tier: T0
+  - Execution Path: FAST_PATH
+  - Reason: single-test expectation correction plus validation/docs updates; no runtime logic change.

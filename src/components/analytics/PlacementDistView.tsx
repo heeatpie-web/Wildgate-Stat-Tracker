@@ -1,6 +1,6 @@
 import React from 'react';
 import { PlacementData, VisualMode } from '../../types';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from 'recharts';
 import { Medal } from 'lucide-react';
 import { generatePlacementEditorial } from '../../utils/analyticsEditorial';
 
@@ -8,6 +8,12 @@ interface PlacementDistViewProps { data: PlacementData | null; visualMode: Visua
 
 export const PlacementDistView: React.FC<PlacementDistViewProps> = ({ data, visualMode }) => {
     const dense = visualMode === 'dense';
+    const getPlacementColor = (placement: number) => {
+        if (placement <= 3) return 'var(--md-sys-color-success)';
+        if (placement <= 6) return 'var(--md-sys-color-info)';
+        if (placement <= 10) return 'var(--md-sys-color-warning)';
+        return 'var(--md-sys-color-danger)';
+    };
 
     if (!data) {
         return (
@@ -56,7 +62,11 @@ export const PlacementDistView: React.FC<PlacementDistViewProps> = ({ data, visu
                         <Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }}
                             formatter={(value: any) => [value, 'Times']}
                             labelFormatter={(label) => `#${label}`} />
-                        <Bar dataKey="count" name="Count" fill="var(--md-sys-color-primary)" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="count" name="Count" radius={[4, 4, 0, 0]}>
+                            {data.distribution.map((entry) => (
+                                <Cell key={`placement-bar-${entry.placement}`} fill={getPlacementColor(entry.placement)} />
+                            ))}
+                        </Bar>
                     </BarChart>
                 </ResponsiveContainer>
             </div>

@@ -1661,3 +1661,178 @@
 
 - PM response evidence:
   - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-ENHANCEMENT-T3-025`.
+
+---
+
+## Validation - 2026-02-18 - EMERGENCY-BATCH-2026-02-18-001
+- Command: `npx eslint src/App.tsx src/components/DevOCRPanel.tsx src/components/IdMapper.tsx src/components/Sidebar.tsx src/components/SmartCapturesPanel.tsx src/components/Wizard.tsx src/components/analytics/AnalyticsShell.tsx src/components/analytics/TimePatternView.tsx src/components/recording/ActionPanel.tsx src/components/smart-captures/QueueItemRichPreview.tsx src/components/smart-captures/primitives/ConfidenceMeter.tsx src/hooks/useLogMonitor.ts src/hooks/useMatchSubmission.ts src/store/slices/createFormSlice.ts src/store/slices/__tests__/createFormSlice.test.ts`
+  - Result: PASS
+  - Evidence:
+    - no lint violations across all touched emergency files.
+
+- Command: `npx vitest run src/store/slices/__tests__/createFormSlice.test.ts src/components/recording/ActionPanel.test.tsx src/App.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 3 files passed.
+    - 41 tests passed.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded for integrated emergency patch set.
+
+- Follow-up confirmation after telemetry/startup and chart refinements:
+  - Command: `npx eslint src/App.tsx src/components/analytics/TimePatternView.tsx src/store/slices/createFormSlice.ts src/store/slices/__tests__/createFormSlice.test.ts`
+    - Result: PASS
+  - Command: `npx vitest run src/store/slices/__tests__/createFormSlice.test.ts src/App.test.tsx`
+    - Result: PASS
+    - Evidence: 2 files passed, 27 tests passed.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `EMERGENCY-BATCH-2026-02-18-001`.
+
+---
+
+## Validation - 2026-02-18 - OCR-DRAG-REVIEW-002
+- Command: `npx eslint src/components/ocr/OCRReviewModal.tsx src/components/SmartCapturesPanel.tsx src/utils/opponentTeamTransfer.ts src/utils/__tests__/opponentTeamTransfer.test.ts`
+  - Result: PASS
+  - Evidence:
+    - no lint violations across drag/drop implementation surfaces and new utility/test files.
+
+- Command: `npx vitest run src/utils/__tests__/opponentTeamTransfer.test.ts src/components/ocr/OCRReviewModal.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 2 files passed.
+    - 6 tests passed.
+    - validates new opponent-team transfer helper behavior and keeps OCRReviewModal baseline suite green.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after shared utility import and drag/drop state wiring updates.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-DRAG-REVIEW-002`.
+
+---
+
+## Validation - 2026-02-18 - OCR-WIZARD-REASSIGN-003
+- Command: `npx eslint src/components/OcrCorrectionModal.tsx src/components/Wizard.tsx src/components/OcrCorrectionModal.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations across wizard OCR reassignment implementation and focused test updates.
+
+- Command: `npx vitest run src/components/OcrCorrectionModal.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 1 file passed.
+    - 3 tests passed.
+    - includes new screenshot reference/lightbox coverage.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after modal team-draft state wiring and wizard screenshot-prop integration.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `OCR-WIZARD-REASSIGN-003`.
+
+- Command: `npx vitest run src/components/Wizard.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 1 file passed.
+    - 1 test passed.
+    - confirms wizard closed->open transition remains stable after screenshot prop wiring.
+
+---
+
+## Validation - 2026-02-18 - TELEMETRY-LOADOUT-INDICATORS-004
+- Command: `npx eslint src/hooks/useLogMonitor.ts src/components/recording/SquadronPanel.tsx src/hooks/__tests__/useLogMonitor.test.ts src/components/recording/SquadronPanel.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations across telemetry parser updates, dedicated loadout panel updates, and focused regression tests.
+
+- Command: `npx vitest run src/hooks/__tests__/useLogMonitor.test.ts src/components/recording/SquadronPanel.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 2 files passed.
+    - 6 tests passed.
+    - validates nested telemetry loadout extraction and explicit auto-indicator rendering in both panel densities.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after telemetry parsing and SquadronPanel UI changes.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `TELEMETRY-LOADOUT-INDICATORS-004`.
+
+---
+
+## Validation - 2026-02-18 - ANALYTICS-ARTIFACT-IDFLOW-005
+- Command: `npx eslint src/components/analytics/AnalyticsDashboard.tsx src/components/analytics/TimePatternView.tsx src/components/analytics/KillEfficiencyView.tsx src/components/analytics/PlacementDistView.tsx src/App.tsx src/components/IdMapper.tsx src/components/ReviewQueueModal.tsx electron/helpers/artifactRelinker.cjs`
+  - Result: PASS
+  - Evidence:
+    - no lint violations across targeted analytics, app/review UX, and Electron relinker changes.
+
+- Command: `npx vitest run src/App.test.tsx src/components/ReviewQueueModal.test.tsx src/components/recording/ActionPanel.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 3 files passed.
+    - 23 tests passed.
+    - verifies App overlay/prompt semantics, review queue behavior, and recording action panel integration did not regress.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after analytics chart updates, prompt-flow additions, and relinker helper hardening.
+
+- PM response evidence:
+  - `docs/agents/02_EXECUTION_LOG.md` contains `PM-FEEDBACK-REQ` and `PM Response | APPROVED` for `ANALYTICS-ARTIFACT-IDFLOW-005`.
+
+---
+
+## Validation - 2026-02-18 - RECOVERY-CONTINUATION-001 (Closeout Addendum)
+- Command: `npx eslint src/components/SettingsModal.tsx src/components/RecordingView.tsx src/App.tsx src/components/HistoryTable.tsx electron/main.cjs`
+  - Result: PASS
+  - Evidence:
+    - no lint violations after settings mount-gating, recording threshold adjustment, shell scrollbar changes, and DB-write serialization updates.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after closeout adjustments.
+
+- Command: `npx vitest run src/hooks/__tests__/useLogMonitor.test.ts src/App.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 2 files passed.
+    - 8 tests passed.
+    - confirms telemetry-monitor startup/profile behavior and App-level baseline flow did not regress during closeout.
+
+- Runtime evidence check (manual log review):
+  - Source: `C:\Users\Alec Gougebas\AppData\Roaming\Wildgate Stat Tracker\app_logs.txt`
+  - Result: PASS (evidence collected for reported crash signature)
+  - Evidence:
+    - confirmed prior persisted occurrences of `Rendered more hooks than during the previous render` used as closeout repro anchor for settings hardening.
+
+---
+
+## Validation - 2026-02-18 - RECOVERY-CONTINUATION-006 (Gate Reconcile)
+- Command: `npx vitest run src/components/RecordingView.test.tsx src/components/smart-captures/QueueItemRichPreview.test.tsx`
+  - Result: FAIL (initial repro)
+  - Evidence:
+    - isolated stale assertion in `QueueItemRichPreview.test.tsx` expecting visible raw match ID text that is no longer rendered by design.
+
+- Command: `npx vitest run src/components/smart-captures/QueueItemRichPreview.test.tsx`
+  - Result: PASS (post-fix)
+  - Evidence:
+    - 1 file passed.
+    - 2 tests passed.
+    - confirms hidden-ID queue test contract now matches runtime UI behavior.
+
+- Command: `npm run -s ci:quality`
+  - Result: PASS
+  - Evidence:
+    - full pipeline passed (`lint`, `test`, `typecheck`, `build`).
+    - test suite passed (`50` files, `455` tests).

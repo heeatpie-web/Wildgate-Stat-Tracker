@@ -84,6 +84,9 @@ export interface Match {
     rawText?: string;
     confidence?: number;
     source?: 'local' | 'cloud' | 'merged';
+    fallbackReason?: string;
+    cloudError?: string;
+    geminiError?: string;
     mergeStats?: { total: number; agreed: number; cloudPreferred: number; localOnly: number; cloudOnly: number; conflicts: number };
     timestamp?: number;
   };

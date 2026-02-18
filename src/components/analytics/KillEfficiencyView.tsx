@@ -1,6 +1,6 @@
 import React from 'react';
 import { KillEfficiencyData, VisualMode } from '../../types';
-import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, BarChart, Bar, Cell } from 'recharts';
 import { Crosshair, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { generateKillEfficiencyEditorial } from '../../utils/analyticsEditorial';
 
@@ -10,6 +10,13 @@ export const KillEfficiencyView: React.FC<KillEfficiencyViewProps> = ({ data, vi
     const dense = visualMode === 'dense';
     const TrendIcon = data.trendDirection === 'up' ? TrendingUp : data.trendDirection === 'down' ? TrendingDown : Minus;
     const trendColor = data.trendDirection === 'up' ? 'text-success' : data.trendDirection === 'down' ? 'text-danger' : 'opacity-60';
+    const barPalette = [
+        'var(--md-sys-color-primary)',
+        'var(--md-sys-color-info)',
+        'var(--md-sys-color-accent)',
+        'var(--md-sys-color-warning)',
+        'var(--md-sys-color-secondary)',
+    ];
 
     const shipData = Object.entries(data.killsByShipType)
         .map(([name, s]) => ({ name, avgKills: s.avgKills, total: s.total }))
@@ -78,7 +85,11 @@ export const KillEfficiencyView: React.FC<KillEfficiencyViewProps> = ({ data, vi
                             <XAxis type="number" hide />
                             <YAxis dataKey="name" type="category" width={72} tick={{ fontSize: 9, fontWeight: 'bold', fill: 'var(--md-sys-color-on-surface-variant)' }} axisLine={false} tickLine={false} />
                             <Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }} />
-                            <Bar dataKey="avgKills" name="Avg Kills" fill="var(--color-warning)" radius={[0, 4, 4, 0]} />
+                            <Bar dataKey="avgKills" name="Avg Kills" radius={[0, 4, 4, 0]}>
+                                {shipData.map((entry, index) => (
+                                    <Cell key={`ship-bar-${entry.name}`} fill={barPalette[index % barPalette.length]} />
+                                ))}
+                            </Bar>
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -89,7 +100,11 @@ export const KillEfficiencyView: React.FC<KillEfficiencyViewProps> = ({ data, vi
                             <XAxis type="number" hide />
                             <YAxis dataKey="name" type="category" width={72} tick={{ fontSize: 9, fontWeight: 'bold', fill: 'var(--md-sys-color-on-surface-variant)' }} axisLine={false} tickLine={false} />
                             <Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }} />
-                            <Bar dataKey="avgKills" name="Avg Kills" fill="var(--color-accent)" radius={[0, 4, 4, 0]} />
+                            <Bar dataKey="avgKills" name="Avg Kills" radius={[0, 4, 4, 0]}>
+                                {heroData.map((entry, index) => (
+                                    <Cell key={`hero-bar-${entry.name}`} fill={barPalette[(index + 1) % barPalette.length]} />
+                                ))}
+                            </Bar>
                         </BarChart>
                     </ResponsiveContainer>
                 </div>

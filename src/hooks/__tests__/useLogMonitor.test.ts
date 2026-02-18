@@ -177,4 +177,39 @@ describe('useLogMonitor', () => {
       ocrState: 'queued',
     });
   });
+
+  it('resolves nested telemetry weapon/equipment payloads into current loadout', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'CharacterLoadoutChanged',
+          Payload: {
+            isLocalPlayer: true,
+            hero: 'Adrian',
+            ship: 'Hunter',
+            weapons: [
+              { weaponName: 'Double Whammy' },
+              { displayName: 'The Doctor' },
+            ],
+            equipmentSlots: [
+              { name: 'Repair Drone' },
+            ],
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(gameDataState.setCurrentLoadout).toHaveBeenCalled();
+    const latestCall = gameDataState.setCurrentLoadout.mock.calls[gameDataState.setCurrentLoadout.mock.calls.length - 1];
+    const latestLoadout = latestCall?.[0] as {
+      weapons?: string[];
+      equipment?: string[];
+    };
+    expect(latestLoadout?.weapons).toEqual(expect.arrayContaining(['Double Whammy', 'The Doctor']));
+    expect(latestLoadout?.equipment).toEqual(expect.arrayContaining(['Repair Drone']));
+  });
 });

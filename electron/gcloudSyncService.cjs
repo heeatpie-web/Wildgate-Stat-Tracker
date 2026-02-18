@@ -46,10 +46,12 @@ class GCloudSyncService {
         const isMetadataPermissionGap = /storage\.buckets\.get|Permission 'storage\.buckets\.get' denied|403/.test(message);
         if (isMetadataPermissionGap) {
           console.log(`[GCloudSync] Bucket metadata check skipped (non-fatal): ${message}`);
+          // Non-fatal: uploads can still work without storage.buckets.get.
+          this.lastError = null;
         } else {
           console.warn(`[GCloudSync] Bucket validation failed (may still work): ${message}`);
+          this.lastError = `Bucket validation: ${message}`;
         }
-        this.lastError = `Bucket validation: ${message}`;
       }
     } catch (error) {
       console.error('[GCloudSync] Storage Init Error:', error);

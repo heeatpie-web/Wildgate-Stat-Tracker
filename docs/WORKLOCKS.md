@@ -1,4 +1,4 @@
-# Work Locks
+﻿# Work Locks
 
 Use this file to temporarily claim high-conflict files while an agent is actively editing them.
 
@@ -19,6 +19,37 @@ Rules:
 
 | File | Owner | Started (UTC) | Purpose |
 |---|---|---|---|
+| electron/main.cjs | builder | 2026-02-18T03:05:00Z | RECOVERY-CONTINUATION-001 log-monitor idempotency, DB rename retry fallback, icon wiring, startup onboarding/session restore alignment |
+| electron/ocrHandler.cjs | builder | 2026-02-18T03:05:00Z | RECOVERY-CONTINUATION-001 cloud OCR failure fallback to local with surfaced metadata |
+| src/components/SettingsModal.tsx | builder | 2026-02-18T03:05:00Z | RECOVERY-CONTINUATION-001 fix settings hook-order crash and cloud-status UX clarity |
+| src/components/RecordingView.tsx | builder | 2026-02-18T03:05:00Z | RECOVERY-CONTINUATION-001 default-size recording panel behavior and shrink-threshold tab switch |
+| src/components/recording/MissionPanel.tsx | builder | 2026-02-18T03:05:00Z | RECOVERY-CONTINUATION-001 mission intel copy update for damage time-window clarity |
+| src/components/MatchRecordingPage.tsx | builder | 2026-02-18T03:05:00Z | RECOVERY-CONTINUATION-001 mission/detail damage label consistency |
+| src/components/PlayerHub.tsx | builder | 2026-02-18T03:05:00Z | RECOVERY-CONTINUATION-001 twilight-mode player-list clickability/contrast affordance update |
+| src/utils/ocr/ocrTypes.ts | builder | 2026-02-18T03:05:00Z | RECOVERY-CONTINUATION-001 extend OCR result metadata for cloud fallback reporting |
+| public/favicon.png | release-manager | 2026-02-18T03:05:00Z | RECOVERY-CONTINUATION-001 replace runtime/app icon asset with splash-style gradient W |
+| public/favicon-32.png | release-manager | 2026-02-18T03:05:00Z | RECOVERY-CONTINUATION-001 replace runtime/app icon asset with splash-style gradient W |
+| public/favicon-64.png | release-manager | 2026-02-18T03:05:00Z | RECOVERY-CONTINUATION-001 replace runtime/app icon asset with splash-style gradient W |
+| public/favicon.ico | release-manager | 2026-02-18T03:05:00Z | RECOVERY-CONTINUATION-001 replace runtime/app icon asset with splash-style gradient W |
+| src/hooks/useLogMonitor.ts | builder | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 telemetry loadout detection and local-player apply reliability |
+| src/hooks/useMatchSubmission.ts | builder | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 teammate persistence and submission boundary authority rules |
+| src/App.tsx | builder | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 telemetry prompt retries, restore-session modal, and OCR/manual precedence wiring |
+| src/components/Wizard.tsx | builder | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 replace free-text loadout entry with controlled weapon/equipment selectors |
+| src/components/SmartCapturesPanel.tsx | builder | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 manual-name safety, drag/edit improvements, and OCR precedence handling |
+| src/components/ocr/OCRReviewModal.tsx | builder | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 OCR review drag/move and screenshot-assisted correction UX updates |
+| src/components/recording/ActionPanel.tsx | builder | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 telemetry auto-selected loadout indicator clarity and capture flow parity |
+| src/components/Sidebar.tsx | builder | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 Dev OCR discoverability without global dev-mode gate |
+| src/components/DevOCRPanel.tsx | builder | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 OCR debug guidance content and accessibility entry updates |
+| src/components/analytics/TimePatternView.tsx | builder | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 active-times tooltip and bar readability fixes |
+| src/components/smart-captures/QueueItemRichPreview.tsx | builder | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 queue confidence bar visibility/readability hardening |
+| src/components/smart-captures/primitives/ConfidenceMeter.tsx | builder | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 confidence meter rendering/readability hardening |
+| src/components/IdMapper.tsx | builder | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 ID mapper blank/default tab visibility remediation |
+| src/index.css | builder | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 smart-capture queue/status color contrast improvements |
+| package.json | release-manager | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 emergency version bump |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 execution log and PM feedback lifecycle entries |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 validation evidence log |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 final handoff summary |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-18T00:31:00Z | EMERGENCY-BATCH-2026-02-18-001 implementation decisions and exceptions |
 | `src/utils/storage.ts` | builder | 2026-02-17T01:15:29Z | AUDIT-REMEDIATION-001: harden storage typing and add one-time legacy migration marker handling |
 | `src/store/useAppStore.ts` | builder | 2026-02-17T01:15:29Z | AUDIT-REMEDIATION-001: tighten persisted state hydration typing and preserve storage metadata |
 | `src/utils/artifactService.ts` | builder | 2026-02-17T01:15:29Z | AUDIT-REMEDIATION-001: harden IPC result typing and canonicalize telemetry artifact payload shape |
@@ -54,6 +85,8 @@ Use this row format when claiming:
 
 | File | Owner | Started (UTC) | Purpose |
 |---|---|---|---|
+| src/components/OcrCorrectionModal.tsx | builder | 2026-02-18T18:12:00Z | OCR-WIZARD-REASSIGN-003 team/ship drag reassignment and screenshot-assisted OCR wizard review |
+| src/components/Wizard.tsx | builder | 2026-02-18T18:12:00Z | OCR-WIZARD-REASSIGN-003 pass wizard artifacts into OCR correction modal screenshot references |
 | path/to/file | ui-designer | 2026-02-12T16:20:00Z | one-line reason |
 
 ## Lock Release
@@ -65,6 +98,11 @@ Use this row format when claiming:
 
 | File | Owner | Started (UTC) | Released (UTC) | Purpose |
 |---|---|---|---|---|
+| src/components/recording/SquadronPanel.tsx | builder | 2026-02-18T18:40:00Z | 2026-02-18T18:46:00Z | TELEMETRY-LOADOUT-INDICATORS-004 lock released |
+| src/hooks/__tests__/useLogMonitor.test.ts | builder | 2026-02-18T18:40:00Z | 2026-02-18T18:46:00Z | TELEMETRY-LOADOUT-INDICATORS-004 lock released |
+| src/components/recording/SquadronPanel.test.tsx | builder | 2026-02-18T18:40:00Z | 2026-02-18T18:46:00Z | TELEMETRY-LOADOUT-INDICATORS-004 lock released |
+| src/components/OcrCorrectionModal.tsx | builder | 2026-02-18T18:12:00Z | 2026-02-18T18:35:00Z | OCR-WIZARD-REASSIGN-003 lock released |
+| src/components/Wizard.tsx | builder | 2026-02-18T18:12:00Z | 2026-02-18T18:35:00Z | OCR-WIZARD-REASSIGN-003 lock released |
 | `src/components/ocr/OCRReviewModal.test.tsx` | verifier | 2026-02-17T20:47:00Z | 2026-02-17T20:57:00Z | OCR-ENHANCEMENT-T3-022: focused modal accessibility regression coverage |
 | `src/index.tsx` | builder | 2026-02-17T20:26:00Z | 2026-02-17T20:41:00Z | OCR-ENHANCEMENT-T3-021: import shared accessibility stylesheet |
 | `src/components/EditMatchModal.tsx` | ui-designer | 2026-02-17T20:26:00Z | 2026-02-17T20:41:00Z | OCR-ENHANCEMENT-T3-021: add modal dialog ARIA + focus trap wiring |
@@ -422,6 +460,8 @@ Use this row format when claiming:
 ### Active Lock Schema (required)
 | File | Owner | Lock Class | Started (UTC) | Expected Release (UTC) | Purpose |
 |---|---|---|---|---|---|
+| src/components/OcrCorrectionModal.tsx | builder | 2026-02-18T18:12:00Z | OCR-WIZARD-REASSIGN-003 team/ship drag reassignment and screenshot-assisted OCR wizard review |
+| src/components/Wizard.tsx | builder | 2026-02-18T18:12:00Z | OCR-WIZARD-REASSIGN-003 pass wizard artifacts into OCR correction modal screenshot references |
 
 Lock Class:
 - `exclusive`: one editor only, high conflict risk.
@@ -638,3 +678,29 @@ Lock Class:
 | src/components/ocr/OCRReviewModal.tsx | builder | 2026-02-17T22:36:00Z | 2026-02-17T22:36:00Z | OCR-ENHANCEMENT-T3-025 lock released |
 | src/App.tsx | builder | 2026-02-17T22:36:00Z | 2026-02-17T22:36:00Z | OCR-ENHANCEMENT-T3-025 lock released |
 | src/components/Wizard.tsx | builder | 2026-02-17T22:36:00Z | 2026-02-17T22:36:00Z | OCR-ENHANCEMENT-T3-025 lock released |
+| src/App.tsx | builder | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| src/components/recording/ActionPanel.tsx | builder | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| src/components/Sidebar.tsx | builder | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| src/components/analytics/AnalyticsShell.tsx | builder | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| src/components/analytics/TimePatternView.tsx | builder | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| src/components/IdMapper.tsx | builder | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| src/components/DevOCRPanel.tsx | builder | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| src/components/smart-captures/QueueItemRichPreview.tsx | builder | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| src/components/smart-captures/primitives/ConfidenceMeter.tsx | builder | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| src/store/slices/createFormSlice.ts | builder | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| src/store/slices/__tests__/createFormSlice.test.ts | verifier | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| src/index.css | ui-designer | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| package.json | release-manager | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| src/utils/constants.ts | release-manager | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| src/utils/changelog.ts | release-manager | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| docs/agents/01_PLAN.md | project-manager | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| docs/agents/03_VALIDATION.md | verifier | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| docs/agents/DECISIONS.md | project-manager | hot | 2026-02-18T17:55:00Z | 2026-02-18T17:55:00Z | EMERGENCY-BATCH-2026-02-18-001 lock released |
+| src/components/analytics/AnalyticsDashboard.tsx | builder | 2026-02-18T18:48:00Z | 2026-02-18T18:58:00Z | ANALYTICS-ARTIFACT-IDFLOW-005 overview narrative/insight expansion |
+| src/components/analytics/KillEfficiencyView.tsx | builder | 2026-02-18T18:48:00Z | 2026-02-18T18:58:00Z | ANALYTICS-ARTIFACT-IDFLOW-005 bar-color differentiation |
+| src/components/analytics/PlacementDistView.tsx | builder | 2026-02-18T18:48:00Z | 2026-02-18T18:58:00Z | ANALYTICS-ARTIFACT-IDFLOW-005 placement histogram readability updates |
+| src/components/ReviewQueueModal.tsx | builder | 2026-02-18T18:48:00Z | 2026-02-18T18:58:00Z | ANALYTICS-ARTIFACT-IDFLOW-005 fuzzy review prioritization |
+| electron/helpers/artifactRelinker.cjs | builder | 2026-02-18T18:48:00Z | 2026-02-18T18:58:00Z | ANALYTICS-ARTIFACT-IDFLOW-005 historical artifact relink reliability hardening |
+

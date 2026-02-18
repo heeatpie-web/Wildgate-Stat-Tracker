@@ -318,6 +318,15 @@
 5. `COMPLETED` - Add focused regression tests for rerun payload and run validation (`eslint`, `typecheck`, targeted `vitest`), then update docs and release locks.
 
 ## Current Task Plan (OCR-CORPUS-ROI-012)
+
+## Current Task Plan (RECOVERY-CONTINUATION-001)
+1. `COMPLETED` - Fix immediate runtime stability blockers (Settings hook-order crash hardening, DB rename retry/fallback, log-monitor idempotent start behavior).
+2. `COMPLETED` - Resolve shell/layout usability regressions (History/other scroll containers, recording default-size vertical panel + shrink-mode tab switching, mission damage label copy updates).
+3. `COMPLETED` - Complete Smart Captures UX fixes (queue ID removal, selected-row emphasis, confidence meter clipping, tools-pane OCR debug access).
+4. `COMPLETED` - Implement cloud OCR degradation behavior (cloud/hybrid failure auto-fallback to local, surfaced fallback metadata/status).
+5. `COMPLETED` - Ship identity/onboarding polish (sidebar profile username visibility, startup intro gating until tutorial completion).
+6. `COMPLETED` - Replace app/tray/build icons with splash-style gradient W assets and bump release version/changelog.
+7. `COMPLETED` - Run focused + full validation gates, then update execution/validation/handoff/decision evidence and release locks.
 1. `COMPLETED` - Wire Dev OCR corpus pipeline invoke payload to include live `ocrRegions`.
 2. `COMPLETED` - Thread optional `ocrRegions` in Electron `ocr-corpus-run-pipeline` and pass to `processCapture(...)`.
 3. `COMPLETED` - Run focused validation (`eslint` touched files, `typecheck`) and update execution/validation/handoff docs.
@@ -424,3 +433,49 @@
 5. `COMPLETED` - Fix OCR modal top cutoff and OCR correction input focus/typing regression in correction/review modal flows.
 6. `COMPLETED` - Run focused validation (`eslint` touched files, targeted `vitest`, `typecheck`) and collect evidence.
 7. `COMPLETED` - Complete AGENTS execution/validation/handoff/decision updates, PM feedback cycle, and release temporary locks.
+
+## Current Task Plan (EMERGENCY-BATCH-2026-02-18-001)
+1. COMPLETED - Apply core runtime stabilizers: settings-open crash guard, telemetry loadout parsing/selection reliability, and smart-capture prompt retry behavior.
+2. COMPLETED - Implement data-integrity and precedence fixes: teammate persistence across matches, manual-over-OCR authority, and fuzzy-edit safety for manual names.
+3. COMPLETED - Implement UX/flow fixes: wizard controlled loadout selectors, OCR debug availability without dev-mode gate, overlay/header capture affordance parity, and confidence/queue readability.
+4. COMPLETED - Implement restore-session startup flow with full draft restore/discard options.
+5. COMPLETED - Patch analytics + ID mapper regressions and bump app version.
+6. COMPLETED - Run focused validation (eslint/typecheck/targeted vitest) and document evidence.
+7. COMPLETED - Complete execution/validation/handoff/decisions updates and release locks.
+
+## Current Task Plan (OCR-DRAG-REVIEW-002)
+1. `COMPLETED` - Add shared immutable opponent-team player transfer utility and focused tests.
+2. `COMPLETED` - Wire drag/drop player reassignment between opponent teams in `src/components/ocr/OCRReviewModal.tsx`.
+3. `COMPLETED` - Wire drag/drop player reassignment between enemy teams in `src/components/SmartCapturesPanel.tsx`.
+4. `COMPLETED` - Make OCR review screenshot reference section sticky while editing and preserve lightbox behavior.
+5. `COMPLETED` - Run focused validation (`eslint` touched files, targeted `vitest`, `typecheck`) and record evidence.
+6. `COMPLETED` - Update execution/validation/handoff/decision docs and release temporary locks.
+
+## Current Task Plan (OCR-WIZARD-REASSIGN-003)
+1. COMPLETED - Add team-assignment state and drag/drop opponent/player reassignment UI in src/components/OcrCorrectionModal.tsx.
+2. COMPLETED - Add team ship selectors and apply updated team/ship assignments back into session state on submit.
+3. COMPLETED - Add sticky screenshot reference strip + lightbox in src/components/OcrCorrectionModal.tsx.
+4. COMPLETED - Wire src/components/Wizard.tsx to pass available screenshot artifacts to OcrCorrectionModal.
+5. COMPLETED - Add/adjust focused tests for OcrCorrectionModal interactions and run validation (eslint, targeted vitest, typecheck).
+6. COMPLETED - Update execution/validation/handoff/decisions docs and release temporary locks.
+
+## Current Task Plan (TELEMETRY-LOADOUT-INDICATORS-004)
+1. COMPLETED - Harden telemetry loadout extraction in src/hooks/useLogMonitor.ts for nested weapon/equipment payload shapes and broader name matching.
+2. COMPLETED - Add explicit auto-selected weapon/equipment indicators to src/components/recording/SquadronPanel.tsx (standard + compact).
+3. COMPLETED - Add focused regression tests for nested telemetry loadout extraction and SquadronPanel indicator rendering.
+4. COMPLETED - Run focused validation (eslint, targeted vitest, typecheck) and record evidence in docs/agents/03_VALIDATION.md.
+5. COMPLETED - Update execution/handoff/decisions logs and release temporary locks.
+
+## Current Task Plan (ANALYTICS-ARTIFACT-IDFLOW-005)
+1. COMPLETED - Expand analytics overview narrative/actionability and improve bar-chart color differentiation/readability across targeted analytics views.
+2. COMPLETED - Patch active-times interaction behavior in TimePattern charts so tooltip feedback is isolated to hovered bars.
+3. COMPLETED - Harden historical artifact repair helper with timestamp normalization/window fallback and per-item failure tolerance.
+4. COMPLETED - Implement fuzzy-match and ID-info auto-prompt flow plus review prioritization polish (`App`, `ReviewQueueModal`, `IdMapper`).
+5. COMPLETED - Run focused validation (`eslint`, targeted `vitest`, `typecheck`) and capture evidence.
+6. COMPLETED - Update execution/validation/handoff/decisions artifacts and PM feedback cycle entries.
+
+## Current Task Plan (RECOVERY-CONTINUATION-006)
+1. `COMPLETED` - Reproduce remaining gate failure and isolate stale expectation(s) without changing runtime behavior.
+2. `COMPLETED` - Patch stale queue test expectation to match hidden raw-ID queue contract.
+3. `COMPLETED` - Run focused test and full `npm run -s ci:quality` release gates.
+4. `COMPLETED` - Update execution/validation/handoff/decision artifacts for continuation closeout.

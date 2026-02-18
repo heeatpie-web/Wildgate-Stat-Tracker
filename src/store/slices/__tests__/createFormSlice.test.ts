@@ -106,12 +106,19 @@ describe('createFormSlice', () => {
       expect(store.getState().activeHero).toBe('Ion');
     });
 
-    it('tracks telemetryDetectedHero regardless of priority', () => {
+    it('lets first telemetry hero override stale manual startup selection', () => {
       store.getState().setActiveHero('Kae', 'manual');
       store.getState().setActiveHero('Ion', 'telemetry');
-      // Hero should stay Kae (manual > telemetry) but telemetryDetectedHero should update
-      expect(store.getState().activeHero).toBe('Kae');
+      expect(store.getState().activeHero).toBe('Ion');
       expect(store.getState().telemetryDetectedHero).toBe('Ion');
+    });
+
+    it('respects manual hero override after telemetry baseline is established', () => {
+      store.getState().setActiveHero('Kae', 'telemetry');
+      store.getState().setActiveHero('Ion', 'manual');
+      store.getState().setActiveHero('Cato', 'telemetry');
+      expect(store.getState().activeHero).toBe('Ion');
+      expect(store.getState().telemetryDetectedHero).toBe('Cato');
     });
 
     it('syncs activeWeapons from characterLoadouts', () => {
@@ -145,6 +152,21 @@ describe('createFormSlice', () => {
     it('tracks telemetryDetectedShip', () => {
       store.getState().setActiveShip('Scout (3 Player)', 'telemetry');
       expect(store.getState().telemetryDetectedShip).toBe('Scout (3 Player)');
+    });
+
+    it('lets first telemetry ship override stale manual startup selection', () => {
+      store.getState().setActiveShip('Hunter (4 Player)', 'manual');
+      store.getState().setActiveShip('Scout (3 Player)', 'telemetry');
+      expect(store.getState().activeShip).toBe('Scout (3 Player)');
+      expect(store.getState().telemetryDetectedShip).toBe('Scout (3 Player)');
+    });
+
+    it('respects manual ship override after telemetry baseline is established', () => {
+      store.getState().setActiveShip('Scout (3 Player)', 'telemetry');
+      store.getState().setActiveShip('Outlaw (2 Player)', 'manual');
+      store.getState().setActiveShip('Hunter (4 Player)', 'telemetry');
+      expect(store.getState().activeShip).toBe('Outlaw (2 Player)');
+      expect(store.getState().telemetryDetectedShip).toBe('Hunter (4 Player)');
     });
   });
 

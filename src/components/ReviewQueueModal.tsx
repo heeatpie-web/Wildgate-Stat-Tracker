@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { Check, X, Edit2, AlertTriangle, Trash2, Image as ImageIcon } from 'lucide-react';
@@ -127,7 +127,16 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         explanation: item.explanation || [],
     }));
 
-    const allItems: ReviewItem[] = [...learningItems, ...pendingReviews, ...unknownItems];
+    const prioritizedPending = useMemo(() => (
+        [...pendingReviews].sort((a, b) => {
+            const aPriority = a.type === 'roster_candidate' ? 2 : 1;
+            const bPriority = b.type === 'roster_candidate' ? 2 : 1;
+            if (aPriority !== bPriority) return bPriority - aPriority;
+            return (Number(b.bestScore || 0) - Number(a.bestScore || 0));
+        })
+    ), [pendingReviews]);
+
+    const allItems: ReviewItem[] = [...learningItems, ...prioritizedPending, ...unknownItems];
 
     useKeyboardShortcuts([
         {

@@ -19,6 +19,7 @@ import type { OCRExtractedData, ExtractedOpponentTeam, TeamColor } from '../../u
 import { SHIPS, UI_REACH_MODIFIERS } from '../../utils/constants';
 import { useAppStore } from '../../store/useAppStore';
 import { findClosestMatch, normalizeOcrName } from '../../utils/stringUtils';
+import { moveOpponentPlayerBetweenTeams } from '../../utils/opponentTeamTransfer';
 import Logger from '../../utils/logger';
 import { getElectronAPI } from '../../utils/electronAPI';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
@@ -81,6 +82,11 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
   const { announce } = useAriaLiveRegion(true);
   const [newTeammateName, setNewTeammateName] = useState('');
   const [showCoachmark, setShowCoachmark] = useState(false);
+  const [draggedOpponentPlayer, setDraggedOpponentPlayer] = useState<{
+    teamIndex: number;
+    playerIndex: number;
+  } | null>(null);
+  const [dragHoverTeamIndex, setDragHoverTeamIndex] = useState<number | null>(null);
   const confidenceSummary = useMemo(() => {
     const avg = (vals: number[]) => vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
     const teammateConf = avg((editedData.teammates || []).map(t => t.confidence || 0));
@@ -317,6 +323,57 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
           : team
       ),
     }));
+  };
+  const moveOpponentPlayer = (
+    fromTeamIndex: number,
+    fromPlayerIndex: number,
+    toTeamIndex: number,
+    toPlayerIndex?: number | null
+  ) => {
+    const preview = moveOpponentPlayerBetweenTeams(editedData.opponentTeams, {
+      fromTeamIndex,
+      fromPlayerIndex,
+      toTeamIndex,
+      toPlayerIndex,
+    });
+    if (preview === editedData.opponentTeams) return;
+    const movedName = editedData.opponentTeams[fromTeamIndex]?.players[fromPlayerIndex]?.name || '';
+    const targetTeamName = editedData.opponentTeams[toTeamIndex]?.teamName || `Enemy Team ${toTeamIndex + 1}`;
+    setEditedData(prev => ({
+      ...prev,
+      opponentTeams: moveOpponentPlayerBetweenTeams(prev.opponentTeams, {
+        fromTeamIndex,
+        fromPlayerIndex,
+        toTeamIndex,
+        toPlayerIndex,
+      }),
+    }));
+    if (movedName) {
+      announce(`Moved ${movedName} to ${targetTeamName}.`, 'polite');
+    }
+  };
+  const allowOpponentDrop = (event: React.DragEvent<HTMLElement>, teamIndex: number) => {
+    if (!draggedOpponentPlayer) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDragHoverTeamIndex(teamIndex);
+  };
+  const dropOpponentPlayer = (
+    event: React.DragEvent<HTMLElement>,
+    teamIndex: number,
+    playerIndex?: number | null
+  ) => {
+    if (!draggedOpponentPlayer) return;
+    event.preventDefault();
+    event.stopPropagation();
+    moveOpponentPlayer(
+      draggedOpponentPlayer.teamIndex,
+      draggedOpponentPlayer.playerIndex,
+      teamIndex,
+      playerIndex
+    );
+    setDraggedOpponentPlayer(null);
+    setDragHoverTeamIndex(null);
   };
   const getRosterMatchMeta = (name: string) => {
     const normalized = normalizeOcrName(name || '');
@@ -656,7 +713,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
             </div>
           )}
           {screenshots && screenshots.length > 0 && (
-            <div className="md3-card rounded-card overflow-hidden">
+            <div className="md3-card rounded-card overflow-hidden sticky top-0 z-10 backdrop-blur-sm">
               <button
                 onClick={() => toggleSection('screenshots')}
                 className="w-full p-3 flex items-center justify-between hover:bg-md-sys-on-surface/5 transition-colors"
@@ -926,7 +983,15 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                   <p className="text-label-sm opacity-40 italic">No opponents detected</p>
                 ) : (
                   editedData.opponentTeams.map((team, teamIndex) => (
-                    <div key={teamIndex} className="md3-surface-high rounded-card p-2">
+                    <div
+                      key={teamIndex}
+                      className={`md3-surface-high rounded-card p-2 ${
+                        dragHoverTeamIndex === teamIndex ? 'ring-1 ring-md-sys-primary/30' : ''
+                      }`}
+                      onDragOver={(event) => allowOpponentDrop(event, teamIndex)}
+                      onDragLeave={() => setDragHoverTeamIndex(null)}
+                      onDrop={(event) => dropOpponentPlayer(event, teamIndex, null)}
+                    >
                       <div className="flex items-center gap-2 mb-2">
                         <div
                           className={`w-3 h-3 rounded-full ${
@@ -975,6 +1040,9 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                           <Trash2 size={12} className="text-danger" />
                         </button>
                       </div>
+                      <p className="text-label-xs opacity-50 pl-5 mb-1">
+                        Drag player rows between team cards to reassign ships.
+                      </p>
                       <div className="space-y-1">
                         {team.players.map((player, playerIndex) => (
                           (() => {
@@ -983,7 +1051,23 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                             return (
                               <div
                                 key={playerIndex}
-                                className="flex items-center gap-2 pl-5"
+                                className={`flex items-center gap-2 pl-5 ${
+                                  draggedOpponentPlayer?.teamIndex === teamIndex
+                                  && draggedOpponentPlayer?.playerIndex === playerIndex
+                                    ? 'opacity-60'
+                                    : ''
+                                }`}
+                                draggable
+                                onDragStart={(event) => {
+                                  event.dataTransfer.effectAllowed = 'move';
+                                  setDraggedOpponentPlayer({ teamIndex, playerIndex });
+                                }}
+                                onDragEnd={() => {
+                                  setDraggedOpponentPlayer(null);
+                                  setDragHoverTeamIndex(null);
+                                }}
+                                onDragOver={(event) => allowOpponentDrop(event, teamIndex)}
+                                onDrop={(event) => dropOpponentPlayer(event, teamIndex, playerIndex)}
                               >
                                 <div className="flex-1 min-w-0">
                                   <input

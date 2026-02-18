@@ -9,6 +9,7 @@ import {
     Gauge,
     Crosshair,
     Lightbulb,
+    Clock3,
     Handshake,
     Trophy,
     Swords,
@@ -105,6 +106,36 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         return { rows, maxCount };
     }, [placementData]);
 
+    const pulseSummary = useMemo(() => {
+        const recent = [...(filteredMatches as any[])].slice(-10);
+        const recentWins = recent.filter((m) => m.result === 'Win').length;
+        const recentWinRate = recent.length > 0 ? Math.round((recentWins / recent.length) * 100) : 0;
+        const avgKills = recent.length > 0
+            ? (recent.reduce((sum, match) => {
+                const kills = Object.values(match?.kills || {}).reduce((kSum: number, val) => kSum + (Number(val) || 0), 0);
+                return sum + kills;
+            }, 0) / recent.length)
+            : 0;
+        const weekDelta = Number(periodComparison?.weekDelta?.winRate || 0);
+        const topHour = (timePatterns?.byHour || []).reduce((best: any, point: any) => {
+            if (!best) return point;
+            if ((point.matches || 0) > (best.matches || 0)) return point;
+            return best;
+        }, null);
+        return {
+            recentWinRate,
+            avgKills: Number(avgKills.toFixed(1)),
+            weekDelta,
+            topHourLabel: topHour ? `${topHour.hour}:00` : '--',
+            topHourMatches: topHour ? Number(topHour.matches || 0) : 0,
+        };
+    }, [filteredMatches, periodComparison, timePatterns]);
+
+    const topInsights = useMemo(
+        () => [...(insights || [])].sort((a, b) => b.priority - a.priority).slice(0, dense ? 2 : 3),
+        [insights, dense]
+    );
+
     const editorial = useMemo(() => {
         return synthesizeNarrative({
             matches: filteredMatches as any,
@@ -196,6 +227,60 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                                     Read Full Analysis <ArrowRight size={14} />
                                 </button>
                             </div>
+                        </div>
+                    </AnalyticsCard>
+                )}
+
+                {!dense && (
+                    <AnalyticsCard
+                        title="Operational Snapshot"
+                        icon={<Clock3 size={12} />}
+                        visualMode={visualMode}
+                        className="md:col-span-3"
+                        accentColor="bg-info"
+                        onExpand={() => onNavigate('timePatterns')}
+                    >
+                        <div className="grid grid-cols-3 gap-3">
+                            <div className="rounded-control bg-md-sys-on-surface/6 p-2.5">
+                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/40">Last 10</div>
+                                <div className="text-title font-bold text-md-sys-on-surface">{pulseSummary.recentWinRate}% WR</div>
+                                <div className="text-label-sm text-md-sys-on-surface/55">{pulseSummary.avgKills} avg kills</div>
+                            </div>
+                            <div className="rounded-control bg-md-sys-on-surface/6 p-2.5">
+                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/40">Weekly Delta</div>
+                                <div className={`text-title font-bold ${pulseSummary.weekDelta >= 0 ? 'text-success' : 'text-danger'}`}>
+                                    {pulseSummary.weekDelta >= 0 ? '+' : ''}{pulseSummary.weekDelta}pp
+                                </div>
+                                <div className="text-label-sm text-md-sys-on-surface/55">Win-rate trend</div>
+                            </div>
+                            <div className="rounded-control bg-md-sys-on-surface/6 p-2.5">
+                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/40">Peak Window</div>
+                                <div className="text-title font-bold text-md-sys-on-surface">{pulseSummary.topHourLabel}</div>
+                                <div className="text-label-sm text-md-sys-on-surface/55">{pulseSummary.topHourMatches} matches</div>
+                            </div>
+                        </div>
+                    </AnalyticsCard>
+                )}
+
+                {!dense && topInsights.length > 0 && (
+                    <AnalyticsCard
+                        title="Priority Insights"
+                        icon={<Lightbulb size={12} />}
+                        visualMode={visualMode}
+                        className="md:col-span-3"
+                        accentColor="bg-accent"
+                        onExpand={() => onNavigate('insights')}
+                    >
+                        <div className="space-y-2">
+                            {topInsights.map((insight) => (
+                                <div key={`${insight.title}_${insight.value}`} className="rounded-control bg-md-sys-on-surface/6 p-2.5">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="text-label-sm font-bold text-md-sys-on-surface truncate">{insight.title}</div>
+                                        <div className="text-label-sm font-bold text-md-sys-primary">{insight.value}</div>
+                                    </div>
+                                    <div className="text-label-sm text-md-sys-on-surface/60">{insight.subtitle || insight.subValue}</div>
+                                </div>
+                            ))}
                         </div>
                     </AnalyticsCard>
                 )}
@@ -299,7 +384,15 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                             {placementBuckets.rows.map((b) => (
                                 <div key={b.placement} className="flex flex-col items-center justify-end gap-1">
                                     <div
-                                        className="w-full rounded-sm bg-md-sys-primary/55"
+                                        className={`w-full rounded-sm ${
+                                            b.placement <= 3
+                                                ? 'bg-success'
+                                                : b.placement <= 6
+                                                    ? 'bg-info'
+                                                    : b.placement <= 10
+                                                        ? 'bg-warning'
+                                                        : 'bg-danger'
+                                        }`}
                                         style={{ height: `${Math.max(6, Math.round((b.count / placementBuckets.maxCount) * 40))}px` }}
                                         title={`Place ${b.placement}: ${b.count}`}
                                     />

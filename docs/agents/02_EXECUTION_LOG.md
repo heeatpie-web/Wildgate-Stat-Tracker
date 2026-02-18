@@ -3804,3 +3804,418 @@
   - Reason: requested UX fixes are implemented and validated with lint/typecheck; vitest environment blocker documented for local follow-up.
 - 22:36Z
   - Released `OCR-ENHANCEMENT-T3-025` temporary lock claims (`src/components/OcrRegionEditorModal.tsx`, `src/components/SettingsModal.tsx`, `src/components/PlayerHub.tsx`, `src/components/DevOCRPanel.tsx`, `src/components/OcrCorrectionModal.tsx`, `src/components/ocr/OCRReviewModal.tsx`, `src/components/Wizard.tsx`, `src/App.tsx`) and recorded release rows in `docs/WORKLOCKS.md`.
+
+---
+
+## 2026-02-18 - EMERGENCY-BATCH-2026-02-18-001 (Implementation)
+- Scope: execute the approved emergency stabilization plan across telemetry reliability, overlay/ocr UX regressions, restore-session flow, analytics/id-mapper regressions, and release metadata bump.
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-EMERGENCY-2026-02-18-001` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: implement remaining pending emergency steps after prior partial patchset.
+  - `REQ-EMERGENCY-2026-02-18-001` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted and began direct code implementation.
+  - `REQ-EMERGENCY-2026-02-18-001` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across App/session restore, analytics, overlay/action panel, Smart Captures, and metadata updates.
+
+- Work entries:
+  - Completed overlay/action parity + debug access fixes:
+    - `src/components/recording/ActionPanel.tsx`: added Smart Capture button to default panel variant with queued-count badge.
+    - `src/components/Sidebar.tsx`: removed dev-mode gate for OCR Debug nav entry.
+  - Completed analytics regressions:
+    - `src/components/analytics/AnalyticsShell.tsx`: fixed pro-drill click guard (no longer self-blocks by wrapper role).
+    - `src/components/analytics/TimePatternView.tsx`: isolated heatmap tooltips per-cell, added day-bar per-day color fills, and explicit tooltip label formatters.
+  - Completed restore-session startup flow:
+    - `src/App.tsx`: added periodic/beforeunload draft snapshot persistence, startup restore prompt, restore/discard handlers, and snapshot hydration logic.
+  - Completed Smart Captures readability + ID mapper visibility:
+    - `src/components/smart-captures/primitives/ConfidenceMeter.tsx`: stronger meter track/height and min visible width.
+    - `src/components/smart-captures/QueueItemRichPreview.tsx`: always show OCR confidence/progress row for OCR-state items (including pending progress fallback).
+    - `src/index.css`: improved queue status chip contrast/readability.
+    - `src/components/IdMapper.tsx`: auto-fallback tab selection when Unknowns is empty + quick jump buttons.
+  - Completed OCR debug guidance UX:
+    - `src/components/DevOCRPanel.tsx`: added “Fast OCR Improvement Loop” explainer and updated heading to OCR Debug Lab.
+  - Completed telemetry startup override reliability:
+    - `src/store/slices/createFormSlice.ts`: allow first telemetry ship/hero update to override stale manual startup selection; preserve manual priority after telemetry baseline exists.
+    - `src/store/slices/__tests__/createFormSlice.test.ts`: updated/expanded regression coverage for new startup-override semantics.
+  - Completed release metadata update:
+    - `package.json`: bumped to `2.16.0`.
+    - `src/utils/constants.ts`: bumped app version to `v2.16`.
+    - `src/utils/changelog.ts`: added `v2.16` notes for emergency fixes.
+
+- `REQ-EMERGENCY-2026-02-18-001` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/App.tsx`
+    - `src/components/recording/ActionPanel.tsx`
+    - `src/components/Sidebar.tsx`
+    - `src/components/analytics/AnalyticsShell.tsx`
+    - `src/components/analytics/TimePatternView.tsx`
+    - `src/components/IdMapper.tsx`
+    - `src/components/DevOCRPanel.tsx`
+    - `src/components/smart-captures/QueueItemRichPreview.tsx`
+    - `src/components/smart-captures/primitives/ConfidenceMeter.tsx`
+    - `src/store/slices/createFormSlice.ts`
+    - `src/store/slices/__tests__/createFormSlice.test.ts`
+    - `src/index.css`
+    - `package.json`
+    - `src/utils/constants.ts`
+    - `src/utils/changelog.ts`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-EMERGENCY-2026-02-18-001` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md` + touched source files listed above.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `EMERGENCY-BATCH-2026-02-18-001#1/#2/#3/#4/#5/#6/#7` | Owner: `builder`
+  - Delta:
+    - finalized pending emergency runtime and UX fixes,
+    - added restore-session startup recovery,
+    - fixed analytics click/tooltip/color regressions,
+    - improved Smart Captures queue readability + ID mapper default-tab behavior,
+    - completed version/changelog bump and validation.
+  - Evidence pointers:
+    - `src/App.tsx`
+    - `src/components/recording/ActionPanel.tsx`
+    - `src/components/Sidebar.tsx`
+    - `src/components/analytics/AnalyticsShell.tsx`
+    - `src/components/analytics/TimePatternView.tsx`
+    - `src/components/IdMapper.tsx`
+    - `src/components/DevOCRPanel.tsx`
+    - `src/components/smart-captures/QueueItemRichPreview.tsx`
+    - `src/components/smart-captures/primitives/ConfidenceMeter.tsx`
+    - `src/store/slices/createFormSlice.ts`
+    - `src/store/slices/__tests__/createFormSlice.test.ts`
+    - `src/index.css`
+    - `package.json`
+    - `src/utils/constants.ts`
+    - `src/utils/changelog.ts`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `EMERGENCY-BATCH-2026-02-18-001` integrated release patch.
+- `PM Response` | `APPROVED`
+  - Reason: requested emergency scope implemented and validation evidence is complete.
+
+---
+
+## 2026-02-18 - OCR-DRAG-REVIEW-002 (Implementation)
+- Scope: continue emergency follow-up by adding direct opponent-player drag/reassign controls in OCR review surfaces and sticky screenshot reference support while editing.
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-OCR-DRAG-REVIEW-002` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: implement bounded drag/drop reassignment and screenshot-sticky UX in OCR review + Smart Captures.
+  - `REQ-OCR-DRAG-REVIEW-002` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted bounded follow-up scope and started intake/plan updates.
+  - `REQ-OCR-DRAG-REVIEW-002` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across shared utility, OCRReviewModal, and SmartCapturesPanel.
+
+- Work entries:
+  - Added shared utility and tests:
+    - `src/utils/opponentTeamTransfer.ts`: new immutable transfer helper (`moveOpponentPlayerBetweenTeams`) with bounds/no-op guardrails.
+    - `src/utils/__tests__/opponentTeamTransfer.test.ts`: focused coverage for cross-team move, in-team reorder, immutability, and invalid-index no-op.
+  - Added drag/drop reassignment + sticky screenshot behavior in OCR review:
+    - `src/components/ocr/OCRReviewModal.tsx`:
+      - added opponent-player drag state + drop handlers,
+      - enabled drag/drop on opponent rows and team-card drop zones,
+      - added drop-zone highlight and move announcements,
+      - made screenshot reference card sticky so thumbnails stay visible while editing scroll sections.
+  - Added drag/drop reassignment in Smart Captures editor:
+    - `src/components/SmartCapturesPanel.tsx` (`SmartMatchDetail`):
+      - added opponent-player drag state + drop handlers,
+      - enabled drag/drop on enemy player chips and team-card drop zones,
+      - kept flat opponents array synchronized after cross-team reassignment,
+      - added inline helper copy for drag workflow discoverability.
+
+- `REQ-OCR-DRAG-REVIEW-002` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/utils/opponentTeamTransfer.ts`
+    - `src/utils/__tests__/opponentTeamTransfer.test.ts`
+    - `src/components/ocr/OCRReviewModal.tsx`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-OCR-DRAG-REVIEW-002` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md` + touched files listed above.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-DRAG-REVIEW-002#1/#2/#3/#4/#5/#6` | Owner: `builder`
+  - Delta:
+    - added shared opponent-team move utility + focused tests,
+    - enabled drag/drop reassignment in both OCRReviewModal and Smart Captures enemy-team editor,
+    - made OCR review screenshot references sticky while preserving lightbox behavior,
+    - completed focused validation (`eslint`, targeted `vitest`, `typecheck`).
+  - Evidence pointers:
+    - `src/utils/opponentTeamTransfer.ts`
+    - `src/utils/__tests__/opponentTeamTransfer.test.ts`
+    - `src/components/ocr/OCRReviewModal.tsx`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-DRAG-REVIEW-002` as the next bounded emergency follow-up increment.
+- `PM Response` | `APPROVED`
+  - Reason: requested drag/reassignment + screenshot editing UX improvements are implemented with focused validation evidence.
+
+---
+
+## 2026-02-18 - OCR-WIZARD-REASSIGN-003 (Implementation)
+- Scope: complete remaining wizard OCR usability gaps with in-modal team/ship reassignment and screenshot-assisted review.
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-OCR-WIZARD-REASSIGN-003` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: implement bounded wizard-only OCR reassignment + screenshot-reference enhancements.
+  - `REQ-OCR-WIZARD-REASSIGN-003` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted bounded scope and started modal/wizard implementation.
+  - `REQ-OCR-WIZARD-REASSIGN-003` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across `OcrCorrectionModal`, `Wizard`, and focused modal tests.
+
+- Work entries:
+  - Updated `src/components/OcrCorrectionModal.tsx`:
+    - added draft team model with drag/drop player reassignment between team cards,
+    - added per-team ship selectors using built-in ship options,
+    - persisted reviewed team/ship assignments back into `sessionTeams` + `sessionShipTypes` on `Apply and Learn`,
+    - recomputed teammates/opponents from reviewed teams (active-user first, teammate-overlap fallback),
+    - added sticky screenshot reference rail in modal scroll flow with click-to-enlarge lightbox,
+    - ensured `Escape` closes screenshot lightbox before closing the modal.
+  - Updated `src/components/Wizard.tsx`:
+    - collected image artifacts from `pendingMatchData.artifacts`,
+    - passed screenshot list into `OcrCorrectionModal` for wizard-side OCR review context.
+  - Updated focused test coverage in `src/components/OcrCorrectionModal.test.tsx`:
+    - added screenshot reference/lightbox regression case,
+    - expanded mocks for new `useGameData` and `useUIState` dependencies.
+
+- `REQ-OCR-WIZARD-REASSIGN-003` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/components/OcrCorrectionModal.tsx`
+    - `src/components/Wizard.tsx`
+    - `src/components/OcrCorrectionModal.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-OCR-WIZARD-REASSIGN-003` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md` + touched files listed above.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-WIZARD-REASSIGN-003#1/#2/#3/#4/#5/#6` | Owner: `builder`
+  - Delta:
+    - wizard OCR correction modal now supports drag-based team/player reassignment and explicit ship assignment,
+    - screenshot references remain visible while scrolling and support enlarge preview,
+    - apply flow now writes reviewed teams/ships back to session and updates teammate/opponent selections.
+  - Evidence pointers:
+    - `src/components/OcrCorrectionModal.tsx`
+    - `src/components/Wizard.tsx`
+    - `src/components/OcrCorrectionModal.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `OCR-WIZARD-REASSIGN-003` as the next bounded wizard follow-up increment.
+- `PM Response` | `APPROVED`
+  - Reason: requested wizard OCR reassignment + screenshot-assisted review behavior is implemented with focused validation evidence.
+
+---
+
+## 2026-02-18 - TELEMETRY-LOADOUT-INDICATORS-004 (Implementation)
+- Scope: continue emergency follow-up by fixing remaining telemetry loadout parsing gaps and exposing explicit auto-selected weapon/equipment indicators inside the dedicated ship/prospector loadout panel.
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-TELEMETRY-LOADOUT-INDICATORS-004` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: implement bounded telemetry-loadout parsing hardening + SquadronPanel indicator visibility.
+  - `REQ-TELEMETRY-LOADOUT-INDICATORS-004` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted scoped follow-up and began telemetry parser + panel updates.
+  - `REQ-TELEMETRY-LOADOUT-INDICATORS-004` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across `useLogMonitor`, `SquadronPanel`, and focused tests.
+
+- Work entries:
+  - Updated `src/hooks/useLogMonitor.ts`:
+    - expanded loadout signal detection keys so non-canonical telemetry payloads are treated as loadout candidates,
+    - added telemetry name match pools from `EQUIPMENT_DB` for broader weapon/equipment recognition,
+    - hardened nested extraction logic to parse strings from arrays/objects/slot payloads instead of stringifying objects,
+    - expanded guid/name candidate keys for weapon/equipment slot variants.
+  - Updated `src/components/recording/SquadronPanel.tsx`:
+    - added explicit auto-selected loadout rows for `Weapons` and `Equipment` in both standard and compact panel variants,
+    - reused `(auto)` indicator styling for parity with ActionPanel telemetry summary.
+  - Added focused tests:
+    - `src/hooks/__tests__/useLogMonitor.test.ts`: nested telemetry loadout payload resolves into `currentLoadout` weapon/equipment names.
+    - `src/components/recording/SquadronPanel.test.tsx`: renders auto-selected weapon/equipment indicators in standard + compact variants.
+
+- `REQ-TELEMETRY-LOADOUT-INDICATORS-004` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/hooks/useLogMonitor.ts`
+    - `src/components/recording/SquadronPanel.tsx`
+    - `src/hooks/__tests__/useLogMonitor.test.ts`
+    - `src/components/recording/SquadronPanel.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-TELEMETRY-LOADOUT-INDICATORS-004` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md` + touched files listed above.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `TELEMETRY-LOADOUT-INDICATORS-004#1/#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - telemetry loadout parser now handles nested slot/object payloads and broader weapon/equipment name matching,
+    - separate ship/prospector loadout panel now explicitly shows auto-selected weapons/equipment,
+    - focused coverage added for parser behavior and panel indicator rendering.
+  - Evidence pointers:
+    - `src/hooks/useLogMonitor.ts`
+    - `src/components/recording/SquadronPanel.tsx`
+    - `src/hooks/__tests__/useLogMonitor.test.ts`
+    - `src/components/recording/SquadronPanel.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `TELEMETRY-LOADOUT-INDICATORS-004` as the next bounded emergency follow-up increment.
+- `PM Response` | `APPROVED`
+  - Reason: telemetry loadout reliability and dedicated panel indicator visibility were addressed with focused validation evidence.
+
+---
+
+## 2026-02-18 - ANALYTICS-ARTIFACT-IDFLOW-005 (Implementation)
+- Scope: complete the three pending tracks (analytics expansion/readability, artifact repair reliability hardening, fuzzy/ID prompt flow).
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-ANALYTICS-ARTIFACT-IDFLOW-005` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: implement bounded three-track follow-up increment from user-approved continuation request.
+  - `REQ-ANALYTICS-ARTIFACT-IDFLOW-005` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted scope and started targeted analytics/artifact/id-flow patch set.
+  - `REQ-ANALYTICS-ARTIFACT-IDFLOW-005` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across analytics components, artifact relinker helper, and App/review surfaces.
+
+- Work entries:
+  - Analytics overview and readability updates:
+    - `src/components/analytics/AnalyticsDashboard.tsx`
+      - added `Operational Snapshot` and `Priority Insights` cards for richer high-level narrative context.
+      - improved overview placement mini-chart differentiation by placement band colors.
+    - `src/components/analytics/TimePatternView.tsx`
+      - added per-hour bar color/intensity encoding.
+      - set tooltip `shared={false}` for per-bar hover isolation in active-times chart interactions.
+    - `src/components/analytics/KillEfficiencyView.tsx`
+      - changed ship/hero breakdown bars from single-color to multi-color per-row palette cells.
+    - `src/components/analytics/PlacementDistView.tsx`
+      - changed placement histogram bars to semantic placement-band colors.
+
+  - Artifact repair reliability hardening:
+    - `electron/helpers/artifactRelinker.cjs`
+      - added timestamp normalization for second-vs-millisecond stored match timestamps.
+      - added fallback timeline-window matching when strict nearest-delta matching fails.
+      - added duration/date parsing helpers for broader historical compatibility.
+      - changed apply path to tolerate per-item copy/link failures instead of aborting entire repair run.
+      - added `failedLinks` summary and `failed` details in apply result payload for visibility.
+
+  - Fuzzy/ID prompt flow polish:
+    - `src/App.tsx`
+      - added auto-surfaced `Fuzzy Match Review Ready` prompt for high-confidence roster candidates.
+      - added auto-surfaced `ID Info Requested` prompt for detected unknown telemetry IDs.
+      - wired prompt actions to open `ReviewQueueModal`/`IdMapper` directly.
+    - `src/components/ReviewQueueModal.tsx`
+      - prioritized roster-candidate review entries by type/score so fuzzy merge actions appear first.
+    - `src/components/IdMapper.tsx`
+      - auto-switches to `Unknowns` tab when unknown IDs first appear after mount, preventing blank-feel known tab landings.
+
+- `REQ-ANALYTICS-ARTIFACT-IDFLOW-005` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/components/analytics/AnalyticsDashboard.tsx`
+    - `src/components/analytics/TimePatternView.tsx`
+    - `src/components/analytics/KillEfficiencyView.tsx`
+    - `src/components/analytics/PlacementDistView.tsx`
+    - `electron/helpers/artifactRelinker.cjs`
+    - `src/App.tsx`
+    - `src/components/ReviewQueueModal.tsx`
+    - `src/components/IdMapper.tsx`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-ANALYTICS-ARTIFACT-IDFLOW-005` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md` + touched files listed above.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `ANALYTICS-ARTIFACT-IDFLOW-005#1/#2/#3/#4/#5/#6` | Owner: `builder`
+  - Delta:
+    - expanded analytics overview with new summary and insight cards plus clearer bar differentiation.
+    - fixed active-times hover behavior to per-bar tooltip interaction.
+    - hardened artifact relinker for historical timestamp variance and non-fatal per-item failures.
+    - added automatic fuzzy/ID prompt surfacing and improved review prioritization in queue/mapper flow.
+  - Evidence pointers:
+    - `src/components/analytics/AnalyticsDashboard.tsx`
+    - `src/components/analytics/TimePatternView.tsx`
+    - `src/components/analytics/KillEfficiencyView.tsx`
+    - `src/components/analytics/PlacementDistView.tsx`
+    - `electron/helpers/artifactRelinker.cjs`
+    - `src/App.tsx`
+    - `src/components/ReviewQueueModal.tsx`
+    - `src/components/IdMapper.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of `ANALYTICS-ARTIFACT-IDFLOW-005` as completion of the three pending continuation tasks.
+- `PM Response` | `APPROVED`
+  - Reason: all three continuation tracks were implemented with focused validation evidence and no gate regressions.
+
+---
+
+## 2026-02-18 - RECOVERY-CONTINUATION-001 (Closeout Addendum)
+- Scope: finalize post-recovery regressions still reported after prior emergency continuation pass.
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-RECOVERY-CONTINUATION-001-CLOSEOUT` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: hard-fix remaining settings/runtime stability + shell usability regressions and close evidence/docs loop.
+  - `REQ-RECOVERY-CONTINUATION-001-CLOSEOUT` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted bounded closeout scope and started targeted patch set.
+  - `REQ-RECOVERY-CONTINUATION-001-CLOSEOUT` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across settings modal, recording layout, shell scroll behavior, and Electron DB write path.
+
+- Work entries:
+  - `src/components/SettingsModal.tsx`
+    - split into mount-gated wrapper + inner content component so settings UI hooks only mount when modal is open.
+    - removes close/open hook-order drift risk for reported `Rendered more hooks than during the previous render` crash path.
+  - `electron/main.cjs`
+    - serialized `db-write` commits through a queue to prevent concurrent WAL/DB temp-file rename collisions.
+    - hardened cleanup path to best-effort unlink without noisy secondary temp-file cleanup errors.
+  - `src/components/RecordingView.tsx`
+    - adjusted narrow threshold (`< 980`) so default-size dashboard keeps combined vertical Loadout+Actions panel and switches to compact tabs only when truly shrunk.
+  - `src/App.tsx`
+    - made dashboard view wrappers use `overflow-y-scroll custom-scrollbar` for persistent scrollbar visibility.
+  - `src/components/HistoryTable.tsx`
+    - switched history root shell to `overflow-y-scroll custom-scrollbar` for clearer scrollbar availability in History.
+
+- `REQ-RECOVERY-CONTINUATION-001-CLOSEOUT` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/components/SettingsModal.tsx`
+    - `electron/main.cjs`
+    - `src/components/RecordingView.tsx`
+    - `src/App.tsx`
+    - `src/components/HistoryTable.tsx`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-RECOVERY-CONTINUATION-001-CLOSEOUT` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md` + touched files listed above.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `RECOVERY-CONTINUATION-001#1/#2/#7` | Owner: `builder`
+  - Delta:
+    - implemented mount-gated settings modal hardening for hook-order crash path,
+    - serialized DB writes to remove rename contention (`ENOENT`/`EPERM`) and reduced cleanup noise,
+    - strengthened shell scrollbar visibility and tuned recording default-size behavior.
+  - Evidence pointers:
+    - `src/components/SettingsModal.tsx`
+    - `electron/main.cjs`
+    - `src/components/RecordingView.tsx`
+    - `src/App.tsx`
+    - `src/components/HistoryTable.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve RECOVERY closeout addendum and mark remaining listed regressions complete.
+- `PM Response` | `APPROVED`
+  - Reason: closeout deltas match reported residual issues and validation evidence is complete.
+
+---
+
+## 2026-02-18 - RECOVERY-CONTINUATION-006 (Gate Reconcile)
+- Scope: final continuation pass to reconcile stale tests and re-run full release-quality gates after the integrated recovery patch set.
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-RECOVERY-CONTINUATION-006` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: isolate and resolve remaining gate mismatch with minimal in-scope change.
+  - `REQ-RECOVERY-CONTINUATION-006` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted bounded scope; begin focused gate repro and stale assertion reconciliation.
+  - `REQ-RECOVERY-CONTINUATION-006` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active in queue preview test contract and final quality-gate verification.
+
+- Work entries:
+  - Reproduced focused failures and confirmed only stale queue assertion remained:
+    - `src/components/smart-captures/QueueItemRichPreview.test.tsx` expected visible `ID 12345` text, while runtime now intentionally hides raw match ID.
+  - Updated test contract:
+    - `src/components/smart-captures/QueueItemRichPreview.test.tsx`
+      - replaced `expect(screen.getByText(/ID 12345/)).toBeInTheDocument()` with hidden-ID assertion (`queryByText(...).toBeNull()`).
+  - Re-ran focused + full gates and confirmed green.
+
+- `REQ-RECOVERY-CONTINUATION-006` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/components/smart-captures/QueueItemRichPreview.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-RECOVERY-CONTINUATION-006` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md` + touched files listed above.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `RECOVERY-CONTINUATION-006#1/#2/#3/#4` | Owner: `builder`
+  - Delta:
+    - reconciled stale queue test assertion to align with shipped hidden-ID queue behavior,
+    - re-ran complete quality gates to verify integrated branch health.
+  - Evidence pointers:
+    - `src/components/smart-captures/QueueItemRichPreview.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve final continuation gate-reconcile closeout with no further runtime deltas.
+- `PM Response` | `APPROVED`
+  - Reason: final failing expectation was corrected to match intended UI contract and full gates are green.

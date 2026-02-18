@@ -18,6 +18,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
     telemetryDetectedHero,
     setActiveHero,
     isMatchInProgress,
+    currentLoadout,
   } = useGameData();
 
   const shipTelemetryActive = Boolean(telemetryDetectedShip || shipSource === 'telemetry');
@@ -26,6 +27,8 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
   const sameShip = (a: string | undefined, b: string | undefined) => toShipKey(a) && toShipKey(a) === toShipKey(b);
   const hasShipManualOverride = Boolean(telemetryDetectedShip && activeShip && !sameShip(telemetryDetectedShip, activeShip));
   const hasHeroManualOverride = Boolean(telemetryDetectedHero && activeHero && telemetryDetectedHero !== activeHero);
+  const hasAutoWeapons = Array.isArray(currentLoadout?.weapons) && currentLoadout.weapons.length > 0;
+  const hasAutoEquipment = Array.isArray(currentLoadout?.equipment) && currentLoadout.equipment.length > 0;
 
   const sourceChip = (label: string, source?: 'manual' | 'telemetry' | 'ocr') => {
     if (!source || source === 'manual') return null;
@@ -81,6 +84,28 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
             <span className="text-info font-black uppercase tracking-wide mr-2">Telemetry</span>
             Detected prospector: <span className="font-black">{telemetryDetectedHero}</span>
             {hasHeroManualOverride ? <span className="opacity-60"> (manual override)</span> : null}
+          </div>
+        )}
+        {(hasAutoWeapons || hasAutoEquipment) && (
+          <div className="mg-surface rounded-card p-2 border border-info/15 space-y-1.5">
+            {hasAutoWeapons && (
+              <div className="flex items-start gap-2 text-label-sm">
+                <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
+                <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
+                <span className="text-md-sys-on-surface/80 break-words">
+                  {currentLoadout?.weapons?.join(', ')}
+                </span>
+              </div>
+            )}
+            {hasAutoEquipment && (
+              <div className="flex items-start gap-2 text-label-sm">
+                <span className="font-bold uppercase tracking-wide text-info">Equipment</span>
+                <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
+                <span className="text-md-sys-on-surface/80 break-words">
+                  {currentLoadout?.equipment?.join(', ')}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -164,6 +189,28 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
           <span className="text-info font-black uppercase tracking-wide mr-2">Telemetry</span>
           Detected prospector: <span className="font-black">{telemetryDetectedHero}</span>
           {hasHeroManualOverride ? <span className="opacity-60"> (manual override)</span> : null}
+        </div>
+      )}
+      {(hasAutoWeapons || hasAutoEquipment) && (
+        <div className="mg-surface rounded-card p-2 border border-info/15 space-y-1.5">
+          {hasAutoWeapons && (
+            <div className="flex items-start gap-2 text-label-sm">
+              <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
+              <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
+              <span className="text-md-sys-on-surface/80 break-words">
+                {currentLoadout?.weapons?.join(', ')}
+              </span>
+            </div>
+          )}
+          {hasAutoEquipment && (
+            <div className="flex items-start gap-2 text-label-sm">
+              <span className="font-bold uppercase tracking-wide text-info">Equipment</span>
+              <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
+              <span className="text-md-sys-on-surface/80 break-words">
+                {currentLoadout?.equipment?.join(', ')}
+              </span>
+            </div>
+          )}
         </div>
       )}
 

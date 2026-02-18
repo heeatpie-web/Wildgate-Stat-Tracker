@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Save, Trash2, Download, Upload, Users, UserMinus, UserCheck, Eye, ChevronDown, FileJson, X } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
@@ -38,11 +38,37 @@ export const IdMapper: React.FC = () => {
     const [nameInputs, setNameInputs] = useState<Record<string, string>>({});
     const [jsonInput, setJsonInput] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
-    const [activeTab, setActiveTab] = useState<'unknowns' | 'known' | 'relationships'>('unknowns');
+    const [activeTab, setActiveTab] = useState<'unknowns' | 'known' | 'relationships'>(() => (
+        Object.keys(detectedUnknowns || {}).length > 0 ? 'unknowns' : 'known'
+    ));
+    const previousUnknownCountRef = useRef(Object.keys(detectedUnknowns || {}).length);
 
     // Computed relationship data
     const topOpponents = useMemo(() => getMostFrequentOpponents(5), [playerProfiles]);
     const topTeammates = useMemo(() => getMostFrequentTeammates(5), [playerProfiles]);
+
+    useEffect(() => {
+        const unknownCount = Object.keys(detectedUnknowns || {}).length;
+        if (unknownCount > 0 && previousUnknownCountRef.current === 0) {
+            setActiveTab('unknowns');
+        }
+        previousUnknownCountRef.current = unknownCount;
+    }, [detectedUnknowns]);
+
+    useEffect(() => {
+        const unknownCount = Object.keys(detectedUnknowns || {}).length;
+        const knownCount = Object.keys(knownMappings || {}).length;
+        const relationshipCount = Object.keys(playerProfiles || {}).length;
+        if (activeTab === 'unknowns' && unknownCount === 0) {
+            if (knownCount > 0) {
+                setActiveTab('known');
+                return;
+            }
+            if (relationshipCount > 0) {
+                setActiveTab('relationships');
+            }
+        }
+    }, [activeTab, detectedUnknowns, knownMappings, playerProfiles]);
 
     const handleSave = (id: string) => {
         const name = nameInputs[id];
@@ -115,7 +141,7 @@ export const IdMapper: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col gap-4 p-4 md3-card rounded-xl">
+        <div className="idmapper-shell flex flex-col gap-4 p-4 md3-card rounded-xl">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
@@ -128,10 +154,10 @@ export const IdMapper: React.FC = () => {
                         const code = `// Paste into utils/guids.ts\n${lines}`;
                         navigator.clipboard.writeText(code);
                         setToast({ message: "Copied to Clipboard!", type: 'success' });
-                    }} className="flex items-center gap-2 px-3 py-1.5 bg-md-sys-primary/10 text-md-sys-primary rounded-lg text-body font-bold hover:bg-md-sys-primary/20 transition-colors">
+                    }} className="idmapper-click-target flex items-center gap-2 px-3 py-1.5 bg-md-sys-primary/10 text-md-sys-primary rounded-lg text-body font-bold hover:bg-md-sys-primary/20 transition-colors">
                         <FileJson size={14} /> Copy Code
                     </button>
-                    <button onClick={handleExport} className="flex items-center gap-2 px-3 py-1.5 bg-md-sys-primary/10 text-md-sys-primary rounded-lg text-body font-bold hover:bg-md-sys-primary/20 transition-colors">
+                    <button onClick={handleExport} className="idmapper-click-target flex items-center gap-2 px-3 py-1.5 bg-md-sys-primary/10 text-md-sys-primary rounded-lg text-body font-bold hover:bg-md-sys-primary/20 transition-colors">
                         <Download size={14} /> Export JSON
                     </button>
                 </div>
@@ -164,7 +190,7 @@ export const IdMapper: React.FC = () => {
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as any)}
-                        className={`flex-1 px-3 py-2 rounded-md text-label-sm font-bold transition-all flex items-center justify-center gap-1.5 ${activeTab === tab.id
+                        className={`idmapper-click-target flex-1 px-3 py-2 rounded-md text-label-sm font-bold transition-all flex items-center justify-center gap-1.5 ${activeTab === tab.id
                             ? 'bg-md-sys-primary text-md-sys-onPrimary'
                             : 'hover:bg-md-sys-on-surface/10 text-md-sys-on-surface/60'
                             }`}
@@ -184,7 +210,25 @@ export const IdMapper: React.FC = () => {
                 {activeTab === 'unknowns' && (
                     <div className="md3-card rounded-lg p-2 max-h-60 overflow-y-auto space-y-2">
                         {Object.keys(detectedUnknowns).length === 0 ? (
-                            <div className="text-center p-8 text-label-sm opacity-40">No unknown IDs detected yet</div>
+                            <div className="text-center p-6 text-label-sm opacity-50 space-y-2">
+                                <div>No unknown IDs detected yet.</div>
+                                <div className="flex items-center justify-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab('known')}
+                                        className="px-2 py-1 rounded-control md3-btn-tonal text-label-sm font-bold"
+                                    >
+                                        View Known
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab('relationships')}
+                                        className="px-2 py-1 rounded-control md3-btn-tonal text-label-sm font-bold"
+                                    >
+                                        View Relationships
+                                    </button>
+                                </div>
+                            </div>
                         ) : (
                             Object.entries(detectedUnknowns)
                                 .filter(([id, meta]) =>
@@ -196,7 +240,7 @@ export const IdMapper: React.FC = () => {
                                     const profile = playerProfiles[id];
                                     const role = getPlayerRole(id);
                                     return (
-                                        <div key={id} className="flex items-center gap-3 md3-surface-high p-2 rounded-md">
+                                        <div key={id} className="idmapper-click-target flex items-center gap-3 md3-surface-high p-2 rounded-md">
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-label-sm font-mono opacity-40 bg-scrim-20 px-1 rounded">{meta.type}</span>

@@ -104,7 +104,7 @@ export const AnalyticsShell: React.FC = () => {
     const isInteractiveTarget = (target: EventTarget | null) => {
         const el = target as HTMLElement | null;
         if (!el) return false;
-        return Boolean(el.closest('button, a, input, select, textarea, [role="button"], [data-no-pro-drill]'));
+        return Boolean(el.closest('button, a, input, select, textarea, [data-no-pro-drill]'));
     };
 
     const renderProDrillTile = (view: AnalyticsView, label: string, content: React.ReactNode) => (

@@ -107,6 +107,42 @@ interface TelemetryDraftPromptState {
     phase: 'midmatch' | 'postmatch';
 }
 
+interface RestoreSessionPayload {
+    activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr';
+    showWizard: 'Win' | 'Loss' | 'Draw' | null;
+    pendingMatchData: Partial<Match> | null;
+    selectedTeammates: string[];
+    selectedOpponents: string[];
+    sessionTeams: Record<string, string[]>;
+    sessionShipTypes: Record<string, string>;
+    activeShip: string | null;
+    activeHero: string | null;
+    currentLoadout: Match['loadout'] | null;
+    selectedReachModifiers: string[];
+    timeMin: string;
+    timeSec: string;
+    damageTaken: string;
+    kills: Record<string, number>;
+    poiEasy: number;
+    poiMedium: number;
+    poiEpic: number;
+    pendingPlacement: number | null;
+    pendingArtifactType: string;
+    pendingKilledBy: string;
+    pendingKilledByShip: string;
+    matchStartTime: number | null;
+    isMatchInProgress: boolean;
+}
+
+interface RestoreSessionSnapshot {
+    version: 1;
+    savedAt: number;
+    payload: RestoreSessionPayload;
+}
+
+const RESTORE_SESSION_STORAGE_KEY = 'wg_restore_session_v1';
+const RESTORE_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
 interface WindowWithIdleCallbacks {
     requestIdleCallback?: (callback: IdleRequestCallback, opts?: { timeout: number }) => number;
     cancelIdleCallback?: (id: number) => void;
@@ -146,6 +182,9 @@ const App: React.FC = () => {
     const [telemetryPruneBusy, setTelemetryPruneBusy] = useState(false);
     const [telemetryDraftPrompt, setTelemetryDraftPrompt] = useState<TelemetryDraftPromptState | null>(null);
     const [telemetryDraftPendingResult, setTelemetryDraftPendingResult] = useState<FinalMatchResult | null>(null);
+    const [restoreSessionPrompt, setRestoreSessionPrompt] = useState<RestoreSessionSnapshot | null>(null);
+    const [showFuzzyReviewPrompt, setShowFuzzyReviewPrompt] = useState(false);
+    const [showIdInfoPrompt, setShowIdInfoPrompt] = useState(false);
     const [isCompactNav, setIsCompactNav] = useState(() => window.innerWidth < 1024);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const navToggleRef = React.useRef<HTMLButtonElement | null>(null);
@@ -153,6 +192,11 @@ const App: React.FC = () => {
     const telemetryPruneSnoozedRef = React.useRef(false);
     const dismissedTelemetryDraftMidmatchPromptIdsRef = React.useRef<Set<number>>(new Set());
     const handledTelemetryDraftPostmatchPromptIdsRef = React.useRef<Set<number>>(new Set());
+    const telemetryDraftCaptureClicksRef = React.useRef<Map<number, number>>(new Map());
+    const restorePromptCheckedRef = React.useRef(false);
+    const onboardingPromptedRef = React.useRef(false);
+    const fuzzyPromptCountRef = React.useRef(0);
+    const idPromptCountRef = React.useRef(0);
     const setTutorialCompleted = useAppStore(s => s.setTutorialCompleted);
     const isStoreLoading = useAppStore(s => s.isLoading);
     const startupSmartPreloadEnabled = useAppStore(s => s.startupSmartPreloadEnabled);
@@ -186,7 +230,8 @@ const App: React.FC = () => {
         showReviewQueue, setShowReviewQueue,
         requestSmartCapture,
         showIdMapper, setShowIdMapper,
-        sidebarCollapsed, setSidebarCollapsed
+        sidebarCollapsed, setSidebarCollapsed,
+        renameModal, setRenameModal, setRenameValue,
     } = useUIState();
 
     const changelogDialogTitleId = React.useId();
@@ -198,6 +243,7 @@ const App: React.FC = () => {
 
     const {
         matches,
+        players,
         sessionStartTime,
         setPendingMatchData,
         pilotRegistry,
@@ -207,6 +253,7 @@ const App: React.FC = () => {
         selectedReachModifiers, setSelectedReachModifiers,
         addPendingReview,
         pendingReviews,
+        detectedUnknowns,
         sessionTeams, setSessionTeams,
         setSessionShipTypes
     } = useGameData();
@@ -214,6 +261,51 @@ const App: React.FC = () => {
     const { overlayStyle, soundEnabled, performanceMode } = useUserPreferences();
 
     const { logFeed, logStatus } = useLogMonitor();
+
+    const fuzzyRosterCandidates = React.useMemo(() => (
+        (pendingReviews || [])
+            .filter((review) => review.type === 'roster_candidate' && Number(review.bestScore || 0) >= 70)
+            .sort((a, b) => Number(b.bestScore || 0) - Number(a.bestScore || 0))
+    ), [pendingReviews]);
+    const unknownIdCount = React.useMemo(
+        () => Object.keys(detectedUnknowns || {}).length,
+        [detectedUnknowns]
+    );
+
+    useEffect(() => {
+        const fuzzyCount = fuzzyRosterCandidates.length;
+        if (showReviewQueue) {
+            setShowFuzzyReviewPrompt(false);
+            fuzzyPromptCountRef.current = fuzzyCount;
+            return;
+        }
+        if (fuzzyCount === 0) {
+            setShowFuzzyReviewPrompt(false);
+            fuzzyPromptCountRef.current = 0;
+            return;
+        }
+        if (fuzzyCount > fuzzyPromptCountRef.current) {
+            setShowFuzzyReviewPrompt(true);
+        }
+        fuzzyPromptCountRef.current = fuzzyCount;
+    }, [fuzzyRosterCandidates.length, showReviewQueue]);
+
+    useEffect(() => {
+        if (showIdMapper) {
+            setShowIdInfoPrompt(false);
+            idPromptCountRef.current = unknownIdCount;
+            return;
+        }
+        if (unknownIdCount === 0) {
+            setShowIdInfoPrompt(false);
+            idPromptCountRef.current = 0;
+            return;
+        }
+        if (unknownIdCount > idPromptCountRef.current) {
+            setShowIdInfoPrompt(true);
+        }
+        idPromptCountRef.current = unknownIdCount;
+    }, [showIdMapper, unknownIdCount]);
 
     useEffect(() => {
         if (welcomeBackToastShownRef.current) return;
@@ -236,6 +328,263 @@ const App: React.FC = () => {
         welcomeBackToastShownRef.current = true;
         setToast({ message: `Welcome back ${name}`, type: 'success' });
     }, [activeUser, isStoreLoading, setToast]);
+
+    useEffect(() => {
+        if (onboardingPromptedRef.current) return;
+        if (isStoreLoading) return;
+        if (renameModal) return;
+
+        const hasActiveUser = Boolean((activeUser || '').trim());
+        const hasProfiles = Array.isArray(players) && players.some((name) => String(name || '').trim().length > 0);
+        if (hasActiveUser || hasProfiles) {
+            onboardingPromptedRef.current = true;
+            return;
+        }
+
+        onboardingPromptedRef.current = true;
+        setRenameValue('');
+        setRenameModal({ type: 'new' });
+    }, [activeUser, isStoreLoading, players, renameModal, setRenameModal, setRenameValue]);
+
+    const clearRestoreSessionSnapshot = useCallback(() => {
+        try {
+            window.localStorage.removeItem(RESTORE_SESSION_STORAGE_KEY);
+        } catch {
+            // no-op: localStorage can be unavailable in rare embedded contexts
+        }
+    }, []);
+
+    const persistRestoreSessionSnapshot = useCallback(() => {
+        const state = useAppStore.getState();
+        const pendingMatchData = isRecord(state.pendingMatchData) ? state.pendingMatchData as Partial<Match> : null;
+        const selectedTeammates = Array.isArray(state.selectedTeammates) ? state.selectedTeammates.filter(Boolean) : [];
+        const selectedOpponents = Array.isArray(state.selectedOpponents) ? state.selectedOpponents.filter(Boolean) : [];
+        const sessionTeams = isRecord(state.sessionTeams)
+            ? Object.entries(state.sessionTeams).reduce<Record<string, string[]>>((acc, [key, value]) => {
+                if (!Array.isArray(value)) return acc;
+                const cleaned = value.map((name) => String(name || '').trim()).filter(Boolean);
+                if (cleaned.length > 0) acc[key] = cleaned;
+                return acc;
+            }, {})
+            : {};
+        const sessionShipTypes = isRecord(state.sessionShipTypes)
+            ? Object.entries(state.sessionShipTypes).reduce<Record<string, string>>((acc, [key, value]) => {
+                const cleaned = String(value || '').trim();
+                if (!cleaned) return acc;
+                acc[key] = cleaned;
+                return acc;
+            }, {})
+            : {};
+        const selectedReachModifiers = Array.isArray(state.selectedReachModifiers) ? state.selectedReachModifiers.filter(Boolean) : [];
+        const currentLoadout = isRecord(state.currentLoadout)
+            ? {
+                hero: typeof state.currentLoadout.hero === 'string' ? state.currentLoadout.hero : null,
+                ship: typeof state.currentLoadout.ship === 'string' ? state.currentLoadout.ship : null,
+                weapons: Array.isArray(state.currentLoadout.weapons) ? state.currentLoadout.weapons.filter(Boolean).slice(0, 2) : [],
+                equipment: Array.isArray(state.currentLoadout.equipment) ? state.currentLoadout.equipment.filter(Boolean).slice(0, 2) : [],
+            }
+            : null;
+        const kills = isRecord(state.kills)
+            ? Object.entries(state.kills).reduce<Record<string, number>>((acc, [key, value]) => {
+                const parsed = Number(value);
+                if (!Number.isFinite(parsed) || parsed <= 0) return acc;
+                acc[key] = parsed;
+                return acc;
+            }, {})
+            : {};
+        const hasPendingMatch = !!pendingMatchData && Object.keys(pendingMatchData).length > 0;
+        const hasRosterProgress = selectedTeammates.length > 0
+            || selectedOpponents.length > 0
+            || Object.keys(sessionTeams).length > 0
+            || Object.keys(sessionShipTypes).length > 0;
+        const hasFormProgress = Boolean(state.showWizard)
+            || selectedReachModifiers.length > 0
+            || !!String(state.timeMin || '').trim()
+            || !!String(state.timeSec || '').trim()
+            || !!String(state.damageTaken || '').trim()
+            || Object.keys(kills).length > 0
+            || Number(state.poiEasy || 0) > 0
+            || Number(state.poiMedium || 0) > 0
+            || Number(state.poiEpic || 0) > 0
+            || !!String(state.pendingKilledBy || '').trim()
+            || !!String(state.pendingKilledByShip || '').trim()
+            || !!state.isMatchInProgress
+            || Number(state.matchStartTime || 0) > 0;
+        if (!hasPendingMatch && !hasRosterProgress && !hasFormProgress) {
+            clearRestoreSessionSnapshot();
+            return;
+        }
+        const snapshot: RestoreSessionSnapshot = {
+            version: 1,
+            savedAt: Date.now(),
+            payload: {
+                activeView: state.activeView,
+                showWizard: state.showWizard || null,
+                pendingMatchData,
+                selectedTeammates,
+                selectedOpponents,
+                sessionTeams,
+                sessionShipTypes,
+                activeShip: String(state.activeShip || '').trim() || null,
+                activeHero: String(state.activeHero || '').trim() || null,
+                currentLoadout,
+                selectedReachModifiers,
+                timeMin: String(state.timeMin || ''),
+                timeSec: String(state.timeSec || ''),
+                damageTaken: String(state.damageTaken || ''),
+                kills,
+                poiEasy: Number(state.poiEasy || 0),
+                poiMedium: Number(state.poiMedium || 0),
+                poiEpic: Number(state.poiEpic || 0),
+                pendingPlacement: Number.isInteger(state.pendingPlacement) ? Number(state.pendingPlacement) : null,
+                pendingArtifactType: String(state.pendingArtifactType || ''),
+                pendingKilledBy: String(state.pendingKilledBy || ''),
+                pendingKilledByShip: String(state.pendingKilledByShip || ''),
+                matchStartTime: Number(state.matchStartTime || 0) > 0 ? Number(state.matchStartTime) : null,
+                isMatchInProgress: !!state.isMatchInProgress,
+            },
+        };
+        try {
+            window.localStorage.setItem(RESTORE_SESSION_STORAGE_KEY, JSON.stringify(snapshot));
+        } catch {
+            // no-op
+        }
+    }, [clearRestoreSessionSnapshot]);
+
+    const applyRestoreSessionSnapshot = useCallback((snapshot: RestoreSessionSnapshot) => {
+        const state = useAppStore.getState();
+        const payload = snapshot.payload;
+        state.setPendingMatchData(payload.pendingMatchData || null);
+        state.setSelectedTeammates(Array.isArray(payload.selectedTeammates) ? payload.selectedTeammates : []);
+        state.setSelectedOpponents(Array.isArray(payload.selectedOpponents) ? payload.selectedOpponents : []);
+        state.setSessionTeams(isRecord(payload.sessionTeams) ? payload.sessionTeams : {});
+        state.setSessionShipTypes(isRecord(payload.sessionShipTypes) ? payload.sessionShipTypes : {}, 'manual');
+        if (payload.activeShip) state.setActiveShip(payload.activeShip, 'manual');
+        if (payload.activeHero) state.setActiveHero(payload.activeHero, 'manual');
+        state.setCurrentLoadout(payload.currentLoadout || null);
+        state.setSelectedReachModifiers(Array.isArray(payload.selectedReachModifiers) ? payload.selectedReachModifiers : [], 'manual');
+        state.setTimeMin(String(payload.timeMin || ''), 'manual');
+        state.setTimeSec(String(payload.timeSec || ''), 'manual');
+        state.setDamageTaken(String(payload.damageTaken || ''), 'manual');
+        state.setKills(isRecord(payload.kills) ? payload.kills : {});
+        state.setPoiEasy(Number(payload.poiEasy || 0));
+        state.setPoiMedium(Number(payload.poiMedium || 0));
+        state.setPoiEpic(Number(payload.poiEpic || 0));
+        state.setPendingPlacement(Number.isInteger(payload.pendingPlacement) ? Number(payload.pendingPlacement) : null);
+        state.setPendingArtifactType(String(payload.pendingArtifactType || ''));
+        state.setPendingKilledBy(String(payload.pendingKilledBy || ''));
+        state.setPendingKilledByShip(String(payload.pendingKilledByShip || ''));
+        state.setMatchStartTime(Number.isFinite(Number(payload.matchStartTime)) ? Number(payload.matchStartTime) : null);
+        state.setIsMatchInProgress(!!payload.isMatchInProgress);
+        state.setShowWizard(payload.showWizard || null);
+        setActiveView(payload.activeView || 'recording');
+    }, [setActiveView]);
+
+    useEffect(() => {
+        if (isStoreLoading) return;
+        if (restorePromptCheckedRef.current) return;
+        restorePromptCheckedRef.current = true;
+        let parsed: unknown = null;
+        try {
+            const raw = window.localStorage.getItem(RESTORE_SESSION_STORAGE_KEY);
+            if (!raw) return;
+            parsed = JSON.parse(raw);
+        } catch {
+            clearRestoreSessionSnapshot();
+            return;
+        }
+        if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.payload)) {
+            clearRestoreSessionSnapshot();
+            return;
+        }
+        const savedAt = Number(parsed.savedAt);
+        if (!Number.isFinite(savedAt) || savedAt <= 0) {
+            clearRestoreSessionSnapshot();
+            return;
+        }
+        if ((Date.now() - savedAt) > RESTORE_SESSION_MAX_AGE_MS) {
+            clearRestoreSessionSnapshot();
+            return;
+        }
+        const payloadRecord = parsed.payload as Record<string, unknown>;
+        const snapshot: RestoreSessionSnapshot = {
+            version: 1,
+            savedAt,
+            payload: {
+                activeView: isLazyDashboardView(String(payloadRecord.activeView || ''))
+                    ? String(payloadRecord.activeView) as LazyDashboardView
+                    : (String(payloadRecord.activeView || '') === 'recording' ? 'recording' : 'recording'),
+                showWizard: payloadRecord.showWizard === 'Win' || payloadRecord.showWizard === 'Loss' || payloadRecord.showWizard === 'Draw'
+                    ? payloadRecord.showWizard
+                    : null,
+                pendingMatchData: isRecord(payloadRecord.pendingMatchData) ? payloadRecord.pendingMatchData as Partial<Match> : null,
+                selectedTeammates: Array.isArray(payloadRecord.selectedTeammates) ? payloadRecord.selectedTeammates.map(v => String(v || '').trim()).filter(Boolean) : [],
+                selectedOpponents: Array.isArray(payloadRecord.selectedOpponents) ? payloadRecord.selectedOpponents.map(v => String(v || '').trim()).filter(Boolean) : [],
+                sessionTeams: isRecord(payloadRecord.sessionTeams)
+                    ? Object.entries(payloadRecord.sessionTeams).reduce<Record<string, string[]>>((acc, [k, v]) => {
+                        if (!Array.isArray(v)) return acc;
+                        const clean = v.map(name => String(name || '').trim()).filter(Boolean);
+                        if (clean.length > 0) acc[k] = clean;
+                        return acc;
+                    }, {})
+                    : {},
+                sessionShipTypes: isRecord(payloadRecord.sessionShipTypes)
+                    ? Object.entries(payloadRecord.sessionShipTypes).reduce<Record<string, string>>((acc, [k, v]) => {
+                        const clean = String(v || '').trim();
+                        if (!clean) return acc;
+                        acc[k] = clean;
+                        return acc;
+                    }, {})
+                    : {},
+                activeShip: String(payloadRecord.activeShip || '').trim() || null,
+                activeHero: String(payloadRecord.activeHero || '').trim() || null,
+                currentLoadout: isRecord(payloadRecord.currentLoadout) ? {
+                    hero: String(payloadRecord.currentLoadout.hero || '').trim() || null,
+                    ship: String(payloadRecord.currentLoadout.ship || '').trim() || null,
+                    weapons: Array.isArray(payloadRecord.currentLoadout.weapons) ? payloadRecord.currentLoadout.weapons.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
+                    equipment: Array.isArray(payloadRecord.currentLoadout.equipment) ? payloadRecord.currentLoadout.equipment.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
+                } : null,
+                selectedReachModifiers: Array.isArray(payloadRecord.selectedReachModifiers) ? payloadRecord.selectedReachModifiers.map(v => String(v || '').trim()).filter(Boolean) : [],
+                timeMin: String(payloadRecord.timeMin || ''),
+                timeSec: String(payloadRecord.timeSec || ''),
+                damageTaken: String(payloadRecord.damageTaken || ''),
+                kills: isRecord(payloadRecord.kills)
+                    ? Object.entries(payloadRecord.kills).reduce<Record<string, number>>((acc, [k, v]) => {
+                        const parsedNumber = Number(v);
+                        if (!Number.isFinite(parsedNumber) || parsedNumber <= 0) return acc;
+                        acc[k] = parsedNumber;
+                        return acc;
+                    }, {})
+                    : {},
+                poiEasy: toFiniteNumber(payloadRecord.poiEasy, 0),
+                poiMedium: toFiniteNumber(payloadRecord.poiMedium, 0),
+                poiEpic: toFiniteNumber(payloadRecord.poiEpic, 0),
+                pendingPlacement: payloadRecord.pendingPlacement === null || payloadRecord.pendingPlacement === undefined || payloadRecord.pendingPlacement === ''
+                    ? null
+                    : (Number.isInteger(Number(payloadRecord.pendingPlacement)) ? Number(payloadRecord.pendingPlacement) : null),
+                pendingArtifactType: String(payloadRecord.pendingArtifactType || ''),
+                pendingKilledBy: String(payloadRecord.pendingKilledBy || ''),
+                pendingKilledByShip: String(payloadRecord.pendingKilledByShip || ''),
+                matchStartTime: Number(payloadRecord.matchStartTime || 0) > 0 ? Number(payloadRecord.matchStartTime) : null,
+                isMatchInProgress: !!payloadRecord.isMatchInProgress,
+            },
+        };
+        setRestoreSessionPrompt(snapshot);
+    }, [clearRestoreSessionSnapshot, isStoreLoading]);
+
+    const handleRestoreSessionNow = useCallback(() => {
+        if (!restoreSessionPrompt) return;
+        applyRestoreSessionSnapshot(restoreSessionPrompt);
+        setRestoreSessionPrompt(null);
+        setToast({ message: 'Previous session restored.', type: 'success' });
+        persistRestoreSessionSnapshot();
+    }, [applyRestoreSessionSnapshot, persistRestoreSessionSnapshot, restoreSessionPrompt, setToast]);
+
+    const handleDiscardRestoreSession = useCallback(() => {
+        clearRestoreSessionSnapshot();
+        setRestoreSessionPrompt(null);
+        setToast({ message: 'Saved session draft discarded.', type: 'info' });
+    }, [clearRestoreSessionSnapshot, setToast]);
 
     const overlayTransitionRef = React.useRef(false);
     const viewSwitchSoundArmedRef = React.useRef(false);
@@ -585,6 +934,7 @@ const App: React.FC = () => {
         if (!telemetryDraftPrompt) return;
         if (telemetryDraftPrompt.phase === 'midmatch') {
             dismissedTelemetryDraftMidmatchPromptIdsRef.current.add(telemetryDraftPrompt.matchId);
+            telemetryDraftCaptureClicksRef.current.delete(telemetryDraftPrompt.matchId);
         } else {
             handledTelemetryDraftPostmatchPromptIdsRef.current.add(telemetryDraftPrompt.matchId);
         }
@@ -599,6 +949,7 @@ const App: React.FC = () => {
 
     const handleTelemetryDraftSmartCapture = useCallback(() => {
         if (!telemetryDraftPrompt) return;
+        const maxMidmatchCaptures = 3;
         const requestId = requestSmartCapture({
             activeUser: activeUser || null,
             source: 'telemetry-draft-prompt',
@@ -614,9 +965,15 @@ const App: React.FC = () => {
             },
         }));
         if (telemetryDraftPrompt.phase === 'midmatch') {
-            dismissedTelemetryDraftMidmatchPromptIdsRef.current.add(telemetryDraftPrompt.matchId);
-            setTelemetryDraftPrompt(null);
-            setToast({ message: 'Smart Capture started. Capture now; you can submit result after mission end.', type: 'info' });
+            const clicks = (telemetryDraftCaptureClicksRef.current.get(telemetryDraftPrompt.matchId) || 0) + 1;
+            telemetryDraftCaptureClicksRef.current.set(telemetryDraftPrompt.matchId, clicks);
+            if (clicks >= maxMidmatchCaptures) {
+                dismissedTelemetryDraftMidmatchPromptIdsRef.current.add(telemetryDraftPrompt.matchId);
+                setTelemetryDraftPrompt(null);
+                setToast({ message: 'Smart Capture started (3/3). Prompt dismissed for this match.', type: 'info' });
+                return;
+            }
+            setToast({ message: `Smart Capture started (${clicks}/${maxMidmatchCaptures}). You can capture again from this prompt.`, type: 'info' });
             return;
         }
         setToast({ message: 'Smart Capture started. You can submit result when ready.', type: 'info' });
@@ -627,6 +984,7 @@ const App: React.FC = () => {
         const draft = matches.find(m => m.id === telemetryDraftPrompt.matchId);
         if (!draft) {
             handledTelemetryDraftPostmatchPromptIdsRef.current.add(telemetryDraftPrompt.matchId);
+            telemetryDraftCaptureClicksRef.current.delete(telemetryDraftPrompt.matchId);
             setTelemetryDraftPrompt(null);
             setToast({ message: 'Telemetry draft no longer exists. Start from Win/Loss/Draw buttons.', type: 'warning' });
             return;
@@ -663,6 +1021,7 @@ const App: React.FC = () => {
         };
 
         handledTelemetryDraftPostmatchPromptIdsRef.current.add(draft.id);
+        telemetryDraftCaptureClicksRef.current.delete(draft.id);
         setPendingMatchData(pendingData);
         setTelemetryDraftPrompt(null);
         if (activeView !== 'recording') {
@@ -702,6 +1061,11 @@ const App: React.FC = () => {
             const matchId = Number(customEvt?.detail?.matchId || 0);
             if (!Number.isInteger(matchId) || matchId <= 0) return;
             if (dismissedTelemetryDraftMidmatchPromptIdsRef.current.has(matchId)) return;
+            const clickCount = telemetryDraftCaptureClicksRef.current.get(matchId) || 0;
+            if (clickCount >= 3) {
+                dismissedTelemetryDraftMidmatchPromptIdsRef.current.add(matchId);
+                return;
+            }
             setTelemetryDraftPrompt(current => {
                 if (current?.phase === 'postmatch') return current;
                 return {
@@ -1088,6 +1452,9 @@ const App: React.FC = () => {
                 rawText: data.rawText?.substring(0, 2000),
                 confidence: data.overallConfidence,
                 source: data.ocrSource,
+                fallbackReason: data.ocrFallbackReason,
+                cloudError: data.ocrCloudError,
+                geminiError: data.ocrGeminiError,
                 mergeStats: data.mergeStats,
                 timestamp: data.captureTimestamp || Date.now(),
             }
@@ -1134,12 +1501,21 @@ const App: React.FC = () => {
     }, [closeChangelog, showChangelog, showIdMapper, setShowIdMapper]);
 
     useEffect(() => {
+        if (isStoreLoading) return;
+        persistRestoreSessionSnapshot();
+        const persistInterval = window.setInterval(() => {
+            persistRestoreSessionSnapshot();
+        }, 3000);
         const onBeforeUnload = () => {
+            persistRestoreSessionSnapshot();
             StorageService.flush?.();
         };
         window.addEventListener('beforeunload', onBeforeUnload);
-        return () => window.removeEventListener('beforeunload', onBeforeUnload);
-    }, []);
+        return () => {
+            window.clearInterval(persistInterval);
+            window.removeEventListener('beforeunload', onBeforeUnload);
+        };
+    }, [isStoreLoading, persistRestoreSessionSnapshot]);
 
     useEffect(() => {
         const onOcrGateRequest = (evt: Event) => {
@@ -1160,31 +1536,31 @@ const App: React.FC = () => {
                 return <RecordingView onSmartCaptureData={setOcrReviewData} />;
             case 'analytics':
                 return (
-                    <div className="h-full overflow-hidden p-3">
+                    <div className="h-full min-h-0 overflow-y-scroll custom-scrollbar p-3">
                         <AnalyticsPanel />
                     </div>
                 );
             case 'history':
                 return (
-                    <div className="h-full overflow-hidden p-3">
+                    <div className="h-full min-h-0 overflow-y-scroll custom-scrollbar p-3">
                         <HistoryTable />
                     </div>
                 );
             case 'smart-captures':
                 return (
-                    <div className="h-full overflow-hidden p-3">
+                    <div className="h-full min-h-0 overflow-y-scroll custom-scrollbar p-3">
                         <SmartCapturesPanel />
                     </div>
                 );
             case 'players':
                 return (
-                    <div className="h-full min-h-0 overflow-hidden p-3">
+                    <div className="h-full min-h-0 overflow-y-scroll custom-scrollbar p-3">
                         <PlayerHub />
                     </div>
                 );
             case 'dev-ocr':
                 return (
-                    <div className="h-full overflow-hidden p-3">
+                    <div className="h-full min-h-0 overflow-y-scroll custom-scrollbar p-3">
                         <DevOCRPanel />
                     </div>
                 );
@@ -1359,6 +1735,34 @@ const App: React.FC = () => {
                 </div>
             )}
 
+            {restoreSessionPrompt && (
+                <div className="fixed inset-0 z-popover bg-scrim-60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="w-full max-w-md rounded-2xl border border-md-sys-outline/20 bg-md-sys-surface1 shadow-2xl p-5 space-y-3">
+                        <div className="text-title font-bold">Restore Session</div>
+                        <div className="text-label-sm opacity-70">
+                            A draft session from {new Date(restoreSessionPrompt.savedAt).toLocaleString()} was found.
+                            Restore your in-progress match data?
+                        </div>
+                        <div className="flex items-center gap-2 justify-end">
+                            <button
+                                type="button"
+                                onClick={handleDiscardRestoreSession}
+                                className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
+                            >
+                                Discard
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleRestoreSessionNow}
+                                className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
+                            >
+                                Restore session
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {telemetryPruneStatus && (
                 <div className="fixed z-popover bottom-4 right-4 left-4 md:left-auto md:w-96 pointer-events-none">
                     <div className="pointer-events-auto rounded-2xl border border-warning/40 bg-md-sys-surface1 shadow-2xl p-4">
@@ -1446,6 +1850,67 @@ const App: React.FC = () => {
                                 className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
                             >
                                 Later
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showFuzzyReviewPrompt && fuzzyRosterCandidates.length > 0 && !showReviewQueue && (
+                <div className="fixed z-popover bottom-4 right-4 left-4 md:left-auto md:w-[25rem] pointer-events-none">
+                    <div className="pointer-events-auto rounded-2xl border border-warning/40 bg-md-sys-surface1 shadow-2xl p-4 space-y-2">
+                        <div className="text-body font-bold">Fuzzy Match Review Ready</div>
+                        <div className="text-label-sm opacity-70">
+                            {fuzzyRosterCandidates.length} OCR name{fuzzyRosterCandidates.length === 1 ? '' : 's'} can be merged.
+                            Top candidate: "{fuzzyRosterCandidates[0].value}" {'->'} "{fuzzyRosterCandidates[0].bestMatch}" ({Math.round(Number(fuzzyRosterCandidates[0].bestScore || 0))}%)
+                        </div>
+                        <div className="flex items-center gap-2 justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setShowFuzzyReviewPrompt(false)}
+                                className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
+                            >
+                                Later
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowFuzzyReviewPrompt(false);
+                                    setShowReviewQueue(true);
+                                }}
+                                className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
+                            >
+                                Review now
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showIdInfoPrompt && unknownIdCount > 0 && !showIdMapper && (
+                <div className="fixed z-popover bottom-[9.5rem] right-4 left-4 md:left-auto md:w-[25rem] pointer-events-none">
+                    <div className="pointer-events-auto rounded-2xl border border-info/45 bg-md-sys-surface1 shadow-2xl p-4 space-y-2">
+                        <div className="text-body font-bold">ID Info Requested</div>
+                        <div className="text-label-sm opacity-70">
+                            {unknownIdCount} unknown telemetry ID{unknownIdCount === 1 ? '' : 's'} detected. Map them now so ship/prospector/loadout tracking stays accurate.
+                        </div>
+                        <div className="flex items-center gap-2 justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setShowIdInfoPrompt(false)}
+                                className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
+                            >
+                                Later
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowIdInfoPrompt(false);
+                                    setShowIdMapper(true);
+                                }}
+                                className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
+                            >
+                                Open ID Mapper
                             </button>
                         </div>
                     </div>

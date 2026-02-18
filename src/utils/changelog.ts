@@ -1,4 +1,26 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v2.17": [
+    "Fix: Settings hook-order crash path stabilized to prevent render-hook mismatch when opening Settings.",
+    "Fix: Recording view now keeps Loadout + Match Recording stacked by default and switches to tab mode only at tighter heights.",
+    "Fix: Smart Captures queue rows now emphasize selected matches more clearly and no longer show raw match IDs in the left queue list.",
+    "Fix: Smart Captures queue confidence layout was resized to avoid clipping and keep confidence indicators visible.",
+    "Fix: Added direct OCR Debug access in Smart Captures Tools for faster OCR troubleshooting.",
+    "Fix: Sidebar profile button now shows the active username label in expanded navigation.",
+    "Fix: Startup now prompts for a prospector profile when no profile exists (first-launch onboarding guard).",
+    "Fix: Telemetry log monitor start is now hydration-aware to avoid duplicate startup monitor cycles.",
+    "Reliability: Cloud-only OCR now auto-falls back to local OCR and records fallback metadata/errors for review.",
+    "Reliability: Non-fatal GCS bucket-metadata permission gaps no longer surface as persistent storage errors."
+  ],
+  "v2.16": [
+    "Fix: Added restore-session prompt on relaunch with full in-progress draft recovery/discard flow.",
+    "Fix: Smart Capture prompt from telemetry now supports multiple clicks mid-match before auto-dismiss.",
+    "Fix: Overlay parity restored with Smart Capture action in the standard Action Panel layout.",
+    "Fix: OCR Debug is now accessible directly from sidebar without requiring global Dev Mode.",
+    "Fix: Analytics pro drill tiles open reliably, active-time heatmap tooltips isolate correctly, and day bars use clearer per-day colors.",
+    "Fix: Smart Captures queue readability improved with stronger status contrast and visible confidence/progress bars.",
+    "Fix: ID Mapper now auto-falls back to useful tabs when Unknowns is empty instead of appearing blank.",
+    "Fix: Telemetry startup detection now overrides stale manual ship/prospector defaults once, then preserves later manual overrides."
+  ],
   "v2.15": [
     "OCR: Added adaptive name resolution with variant-aware similarity scoring (LCS, edit similarity, and character overlap).",
     "OCR: Integrated shared canonical resolver across capture, scan, and apply flows with stricter contextual disambiguation.",

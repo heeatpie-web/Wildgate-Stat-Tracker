@@ -42,7 +42,7 @@ interface ThresholdRecommendationPayload {
     };
 }
 
-export const SettingsModal: React.FC = () => {
+const SettingsModalContent: React.FC = () => {
     const {
         appearanceMode, setAppearanceMode,
         colorTheme, setColorTheme,
@@ -277,8 +277,6 @@ export const SettingsModal: React.FC = () => {
             setShowSettings(false);
         }, 600);
     }, [setShowSettings]);
-
-    if (!showSettings) return null;
 
     const handleBackupDB = async () => {
         const res = await StorageService.backup();
@@ -1470,6 +1468,12 @@ export const SettingsModal: React.FC = () => {
             />
         </>
     );
+};
+
+export const SettingsModal: React.FC = () => {
+    const { showSettings } = useUIState();
+    if (!showSettings) return null;
+    return <SettingsModalContent />;
 };
 
 

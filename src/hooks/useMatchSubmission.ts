@@ -346,7 +346,6 @@ export const useMatchSubmission = () => {
             setPendingArtifactType("");
             setPendingKilledBy("");
             setPendingKilledByShip("");
-            setSelectedTeammates([]);
             setSelectedOpponents([]);
             setSessionTeams({});
             setTimelineEvents([]);

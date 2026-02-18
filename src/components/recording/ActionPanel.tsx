@@ -660,6 +660,22 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                 <ResultButtons compact={isCompact} />
 
                 <button
+                    onClick={handleNewSmartCapture}
+                    disabled={isBusy}
+                    data-tour="smart-capture"
+                    className="w-full bg-md-sys-primary text-md-sys-onPrimary py-3 rounded-control font-bold text-label-sm uppercase tracking-wide flex items-center justify-center gap-2 transition-all hover:brightness-110 active:scale-98 disabled:opacity-disabled disabled:cursor-not-allowed"
+                    title="Capture screenshot and queue OCR"
+                >
+                    {isBusy ? <Loader2 size={14} className="animate-spin" /> : <Scan size={14} />}
+                    <span>Smart Capture</span>
+                    {pendingOcrCountForSubmission > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-pill bg-md-sys-onPrimary/20 text-label-xs font-black">
+                            {pendingOcrCountForSubmission}
+                        </span>
+                    )}
+                </button>
+
+                <button
                     type="button"
                     onClick={() => setShowIdMapper(true)}
                     className="rounded-control text-label-sm font-semibold text-md-sys-on-surface/70 hover:text-md-sys-primary flex items-center justify-center gap-1.5 py-1.5"
