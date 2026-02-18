@@ -1967,3 +1967,38 @@
   - Risk Tier: T0
   - Execution Path: FAST_PATH
   - Reason: single-file configuration-string change with no structural/runtime-flow refactor.
+
+---
+
+## Intake - 2026-02-18 - TELEMETRY-UI-BATCH-009
+- Goal: implement the approved multi-issue telemetry/UI remediation batch covering telemetry retention prompt clarity, loadout detection/recording correctness, wizard selectors, roster/player/history/analytics/ROI UX defects, and telemetry lifecycle reliability.
+- Intent confirmation block:
+  - Goal: fix only the reported issues and approved plan items without unrelated refactors.
+  - Constraints: keep existing product behavior where explicitly requested (history pagination retained), preserve backward compatibility of persisted data, and avoid schema-breaking migrations.
+  - Done: all scoped defects are patched, validations are recorded, and handoff evidence is complete.
+- Constraints:
+  - Keep history pagination model; only resolve scrolling defects.
+  - Add explicit character loadout fields while preserving old saved matches.
+  - Keep changes bounded to telemetry lifecycle, loadout parsing, and targeted UI panels/components.
+- In scope:
+  - Telemetry retention warning reason accuracy (`size` vs `age`).
+  - Telemetry match lifecycle idempotency/start-end synchronization.
+  - Loadout parsing split for ship vs character weapon/equipment and persistence through submission.
+  - Wizard ship-only selector filtering.
+  - Roster teammate typography.
+  - ROI editor modal sizing/viewport anchoring.
+  - Players tab top-5 summary flow + full profile affordance + list truncation fix.
+  - ID-pattern visibility in Players flow.
+  - History scrollability with pagination preserved.
+  - Analytics pro/detailed drilldown click consistency.
+- Out-of-scope:
+  - New analytics features beyond requested visibility/clickability fixes.
+  - OCR engine/provider changes unrelated to ROI/modal behavior.
+  - Broad design-system/theme overhauls.
+- Done condition:
+  - Reported regressions are fixed in scope with targeted tests/lint/typecheck evidence.
+  - AGENTS workflow artifacts (`01_PLAN`, `02_EXECUTION_LOG`, `03_VALIDATION`, `04_HANDOFF`, `DECISIONS`) include this task lifecycle.
+- AOM_V2:
+  - Risk Tier: T3
+  - Execution Path: FULL_PATH
+  - Reason: multi-file runtime telemetry behavior + persistence model adjustments + high-visibility UI interaction fixes across multiple screens.

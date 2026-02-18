@@ -32,6 +32,8 @@ const sanitizeLoadoutSlots = (loadout: Loadout | null): Loadout | null => {
     ...loadout,
     weapons: (loadout.weapons || []).filter(Boolean).slice(0, 2),
     equipment: (loadout.equipment || []).filter(Boolean).slice(0, 2),
+    characterWeapons: (loadout.characterWeapons || []).filter(Boolean).slice(0, 2),
+    characterEquipment: (loadout.characterEquipment || []).filter(Boolean).slice(0, 2),
   };
 };
 

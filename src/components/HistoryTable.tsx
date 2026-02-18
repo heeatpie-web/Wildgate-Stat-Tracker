@@ -302,7 +302,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
     const totalPages = itemsPerPage === 'Infinity' ? 1 : Math.ceil(sortedMatches.length / (itemsPerPage as number)) || 1;
 
     return (
-        <div data-tour="view-history" className="w-full h-full min-h-0 overflow-y-scroll custom-scrollbar pr-1 flex flex-col gap-4 animate-slide-up">
+        <div data-tour="view-history" className="w-full h-full min-h-0 overflow-y-auto custom-scrollbar pr-1 flex flex-col gap-4 animate-slide-up">
             {/* ── Stats Summary Strip ── */}
             {filteredMatches.length > 0 && (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

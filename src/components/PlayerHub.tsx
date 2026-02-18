@@ -22,6 +22,8 @@ interface PlayerDetail {
     lastSeen: number | null;
     shipsObserved: Record<string, number>;
     teamsObserved: Record<string, number>;
+    playedWith: Record<string, number>;
+    playedAgainst: Record<string, number>;
     ocrSightings: number;
     manualSightings: number;
     lastOcrConfidence: number | null;
@@ -59,6 +61,7 @@ const PlayerHub: React.FC = () => {
     const [mergeSearch, setMergeSearch] = useState('');
     const [mergeKeepName, setMergeKeepName] = useState<string | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+    const [showFullProfile, setShowFullProfile] = useState(false);
     const PLAYERS_PAGE_SIZE = 10;
     const [playersPage, setPlayersPage] = useState(1);
 
@@ -104,6 +107,8 @@ const PlayerHub: React.FC = () => {
                 lastSeen: profile?.lastSeen || null,
                 shipsObserved: profile?.shipsObserved || {},
                 teamsObserved: profile?.teamsObserved || {},
+                playedWith: profile?.playedWith || {},
+                playedAgainst: profile?.playedAgainst || {},
                 ocrSightings: profile?.ocrSightings || 0,
                 manualSightings: profile?.manualSightings || 0,
                 lastOcrConfidence: profile?.lastOcrConfidence ?? null,
@@ -146,10 +151,32 @@ const PlayerHub: React.FC = () => {
         setPlayersPage(1);
     }, [searchTerm, sortMode]);
 
+    useEffect(() => {
+        setShowFullProfile(false);
+    }, [selectedPilot]);
+
     const selected = useMemo(() => {
         if (!selectedPilot) return null;
         return enrichedPilots.find(p => p.name === selectedPilot) || null;
     }, [selectedPilot, enrichedPilots]);
+
+    const selectedTopShip = useMemo(() => {
+        if (!selected) return null;
+        const top = Object.entries(selected.shipsObserved || {}).sort((a, b) => b[1] - a[1])[0];
+        return top || null;
+    }, [selected]);
+
+    const selectedTopTeammate = useMemo(() => {
+        if (!selected) return null;
+        const top = Object.entries(selected.playedWith || {}).sort((a, b) => b[1] - a[1])[0];
+        return top || null;
+    }, [selected]);
+
+    const selectedTopOpponent = useMemo(() => {
+        if (!selected) return null;
+        const top = Object.entries(selected.playedAgainst || {}).sort((a, b) => b[1] - a[1])[0];
+        return top || null;
+    }, [selected]);
 
     const handleStartNote = (pilot: string) => {
         setEditingNote(pilot);
@@ -361,7 +388,10 @@ const PlayerHub: React.FC = () => {
                             {paginatedPlayers.map(pilot => (
                             <button
                                 key={pilot.name}
-                                onClick={() => setSelectedPilot(pilot.name)}
+                                onClick={() => {
+                                    setSelectedPilot(pilot.name);
+                                    setShowFullProfile(false);
+                                }}
                                 className={`player-list-item w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3 transition-all group ${selectedPilot === pilot.name
                                     ? 'bg-md-sys-primary/10 border border-md-sys-primary/20 text-md-sys-on-surface'
                                     : 'hover:bg-md-sys-on-surface/5 text-md-sys-on-surface/60'
@@ -505,6 +535,69 @@ const PlayerHub: React.FC = () => {
                                 </div>
                             )}
                         </div>
+
+                        <div className="md3-card mg-surface shadow-lg p-4">
+                            <div className="flex items-center justify-between gap-2 mb-3">
+                                <div className="text-label-sm font-semibold uppercase tracking-wide text-md-sys-on-surface/60">Top 5 Snapshot</div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowFullProfile((prev) => !prev)}
+                                    className="text-label-xs font-bold uppercase tracking-wide text-md-sys-primary hover:text-md-sys-primary/80"
+                                >
+                                    {showFullProfile ? 'Hide Full Profile' : 'View Full Profile'}
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                <div className="rounded-lg bg-md-sys-on-surface/6 p-2.5">
+                                    <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/50">Teammate Win Rate</div>
+                                    <div className="text-title font-bold text-md-sys-on-surface">
+                                        {winRate(selected.asTeammate) !== null ? `${winRate(selected.asTeammate)}%` : '--'}
+                                    </div>
+                                </div>
+                                <div className="rounded-lg bg-md-sys-on-surface/6 p-2.5">
+                                    <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/50">Opponent Win Rate</div>
+                                    <div className="text-title font-bold text-md-sys-on-surface">
+                                        {winRate(selected.asOpponent) !== null ? `${winRate(selected.asOpponent)}%` : '--'}
+                                    </div>
+                                </div>
+                                <div className="rounded-lg bg-md-sys-on-surface/6 p-2.5">
+                                    <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/50">Total Encounters</div>
+                                    <div className="text-title font-bold text-md-sys-on-surface">{selected.totalEncounters}</div>
+                                </div>
+                                <div className="rounded-lg bg-md-sys-on-surface/6 p-2.5">
+                                    <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/50">Top Ship Seen</div>
+                                    <div className="text-title font-bold text-md-sys-on-surface">
+                                        {selectedTopShip ? `${selectedTopShip[0].split('(')[0].trim()} (${selectedTopShip[1]})` : '--'}
+                                    </div>
+                                </div>
+                                <div className="rounded-lg bg-md-sys-on-surface/6 p-2.5 md:col-span-2">
+                                    <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/50">Pattern Signals</div>
+                                    <div className="mt-1 text-label-sm text-md-sys-on-surface/70">
+                                        Wingmate: {selectedTopTeammate ? `${selectedTopTeammate[0]} (${selectedTopTeammate[1]})` : '--'} {' | '}
+                                        Opponent: {selectedTopOpponent ? `${selectedTopOpponent[0]} (${selectedTopOpponent[1]})` : '--'}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => handleOpenFullProfile(selected)}
+                                    className="px-3 py-1.5 rounded-control text-label-sm font-bold bg-md-sys-primary text-md-sys-onPrimary"
+                                >
+                                    Open Analytics Profile
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveView('recording')}
+                                    className="px-3 py-1.5 rounded-control text-label-sm font-bold bg-md-sys-on-surface/10 text-md-sys-on-surface/70"
+                                >
+                                    Back to Recording
+                                </button>
+                            </div>
+                        </div>
+
+                        {showFullProfile && (
+                        <>
 
                         {/* Merge UI */}
                         {mergeTarget && (
@@ -725,6 +818,8 @@ const PlayerHub: React.FC = () => {
                                         ))}
                                 </div>
                             </div>
+                        )}
+                        </>
                         )}
                     </div>
                 )}

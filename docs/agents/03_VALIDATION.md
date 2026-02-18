@@ -1913,3 +1913,45 @@
   - Evidence:
     - `electron/geminiService.cjs` now sets:
       - `this.model = process.env.WILDGATE_GEMINI_MODEL || 'gemini-3.0-flash';`
+
+---
+
+## Validation - 2026-02-18 - TELEMETRY-UI-BATCH-009
+- Command: `npx eslint src/App.tsx src/types.ts src/hooks/useLogMonitor.ts src/hooks/__tests__/useLogMonitor.test.ts src/hooks/useMatchSubmission.ts src/store/slices/createDataSlice.ts src/components/Wizard.tsx src/components/OcrRegionEditorModal.tsx src/components/recording/RosterPanel.tsx src/components/PlayerHub.tsx src/components/HistoryTable.tsx src/components/analytics/AnalyticsShell.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations across all telemetry/runtime and targeted UI components changed in this batch.
+
+- Command: `npx vitest run src/hooks/__tests__/useLogMonitor.test.ts src/components/Wizard.test.tsx src/components/recording/SquadronPanel.test.tsx src/App.test.tsx`
+  - Result: FAIL (initial run), then PASS (post-fix)
+  - Evidence:
+    - initial failure: stale expectation in `useLogMonitor.test.ts` assumed character weapon would be stored in ship `weapons` array.
+    - post-fix rerun: 4 files passed, 11 tests passed.
+
+- Command: `npm run -s typecheck`
+  - Result: FAIL (initial run), then PASS (post-fix)
+  - Evidence:
+    - initial failure: strict cast errors in `src/utils/export.ts` legacy hazard accessor path.
+    - post-fix rerun: TypeScript compile succeeded.
+
+- Command: `npx eslint src/utils/export.ts`
+  - Result: PASS
+  - Evidence:
+    - no lint violations after cast tightening.
+
+- Command: `npx vitest run src/hooks/__tests__/useMatchSubmission.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 1 file passed, 11 tests passed.
+    - verifies submission-path loadout sanitization remains correct after character loadout field propagation changes.
+
+- Closeout verification rerun (post-doc updates):
+  - Command: `npx eslint src/App.tsx src/types.ts src/hooks/useLogMonitor.ts src/hooks/__tests__/useLogMonitor.test.ts src/hooks/useMatchSubmission.ts src/store/slices/createDataSlice.ts src/components/Wizard.tsx src/components/OcrRegionEditorModal.tsx src/components/recording/RosterPanel.tsx src/components/PlayerHub.tsx src/components/HistoryTable.tsx src/components/analytics/AnalyticsShell.tsx src/utils/export.ts`
+    - Result: PASS
+  - Command: `npx vitest run src/hooks/__tests__/useLogMonitor.test.ts src/components/Wizard.test.tsx src/components/recording/SquadronPanel.test.tsx src/App.test.tsx src/hooks/__tests__/useMatchSubmission.test.ts`
+    - Result: PASS
+    - Evidence:
+      - 5 files passed.
+      - 22 tests passed.
+  - Command: `npm run -s typecheck`
+    - Result: PASS

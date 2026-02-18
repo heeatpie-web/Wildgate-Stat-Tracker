@@ -38,6 +38,8 @@ export interface Loadout {
   ship: string | null;
   weapons: string[];
   equipment: string[];
+  characterWeapons?: string[];
+  characterEquipment?: string[];
 }
 
 /** Structured opponent team data preserving team name, ship type, color, and player names. */

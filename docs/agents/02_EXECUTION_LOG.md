@@ -4357,3 +4357,89 @@
   - Review ask: approve closure of this FAST_PATH config update.
 - `PM Response` | `APPROVED`
   - Reason: scoped single-file update with focused validation evidence.
+
+---
+
+## 2026-02-18 - TELEMETRY-UI-BATCH-009 (Execution Start)
+- Scope: implement approved telemetry + UI remediation batch (retention warning clarity, telemetry lifecycle/loadout correctness, wizard filtering, roster/players/history/ROI/analytics fixes).
+
+### Lateral Communication / Request Lifecycle
+- `REQ-TELEMETRY-UI-BATCH-009` | Sender: `builder` | Receiver: `builder` | Status: `OPEN`
+  - Goal: execute full scoped remediation with evidence-first validation.
+- `REQ-TELEMETRY-UI-BATCH-009` | Sender: `builder` | Receiver: `builder` | Status: `ACK`
+  - Work accepted; implementation proceeding per `docs/agents/01_PLAN.md`.
+- `REQ-TELEMETRY-UI-BATCH-009` | Sender: `builder` | Receiver: `builder` | Status: `IN_PROGRESS`
+  - Active implementation across telemetry runtime, loadout persistence, and targeted UI components.
+
+## 2026-02-18 - TELEMETRY-UI-BATCH-009 (Implementation Closeout)
+- Scope: finalize telemetry + UI remediation batch implementation, focused regressions, validation evidence, and lock lifecycle closure.
+
+### Work Entries
+- `src/App.tsx`
+  - normalized telemetry retention status into `exceedsAge`/`exceedsSize` and updated warning copy to describe age, size, or combined-policy trigger.
+  - preserved character loadout arrays during telemetry draft assembly and restore-session serialization.
+  - changed players/history shell wrappers to `overflow-hidden` so table components own vertical scrolling.
+- `src/types.ts`
+  - extended `Loadout` with optional `characterWeapons` and `characterEquipment` arrays.
+- `src/store/slices/createDataSlice.ts`
+  - added character loadout sanitization (`slice(0, 2)`) in `sanitizeLoadoutSlots`.
+- `src/hooks/useMatchSubmission.ts`
+  - preserved character loadout arrays in submission-bound loadout sanitization.
+- `src/hooks/useLogMonitor.ts`
+  - split ship vs character loadout detection catalogs and routing.
+  - included character arrays in loadout signatures, active telemetry names, and draft updates.
+  - added telemetry lifecycle idempotency guard (`telemetryLifecycleActiveRef`) to reduce duplicate/inverted start/end handling.
+  - wired `setPlayerName` updates from telemetry payload IDs/names so player mapper continues learning newly observed names.
+- `src/hooks/__tests__/useLogMonitor.test.ts`
+  - updated expectations for character weapon/equipment routing and store mock shape.
+- `src/components/Wizard.tsx`
+  - filtered loadout selectors to ship-only categories (`Weapon`, `Utility`, `System`) and preserved character arrays in draft update paths.
+- `src/components/OcrRegionEditorModal.tsx`
+  - rendered modal via `createPortal(..., document.body)` so the ROI editor is not constrained by parent settings modal transforms/sizing.
+- `src/components/recording/RosterPanel.tsx` + `src/index.css`
+  - reduced teammate chip typography/height via dedicated `roster-teammate-chip` class.
+- `src/components/PlayerHub.tsx`
+  - added summary-first player detail flow with top-5 snapshot metrics and explicit full-profile toggle.
+  - surfaced teammate/opponent pattern insights (`playedWith` / `playedAgainst`) in the default detail card.
+- `src/components/HistoryTable.tsx`
+  - switched root table overflow handling to `overflow-y-auto` to restore paginated list scroll reach.
+- `src/components/analytics/AnalyticsShell.tsx`
+  - made Pro detailed-view drilldown CTA always visible for consistent click affordance.
+- `src/utils/export.ts`
+  - resolved strict cast typecheck issue in legacy hazard accessors (`unknown` intermediary cast).
+
+### Lateral Communication / Request Lifecycle
+- `REQ-TELEMETRY-UI-BATCH-009` | Sender: `builder` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/App.tsx`
+    - `src/hooks/useLogMonitor.ts`
+    - `src/components/Wizard.tsx`
+    - `src/components/OcrRegionEditorModal.tsx`
+    - `src/components/PlayerHub.tsx`
+    - `src/components/HistoryTable.tsx`
+    - `src/components/analytics/AnalyticsShell.tsx`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-TELEMETRY-UI-BATCH-009` | Sender: `builder` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md` + touched files above.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `TELEMETRY-UI-BATCH-009#1/#2/#3/#4/#5/#6` | Owner: `builder`
+  - Delta:
+    - implemented telemetry retention reason clarity and loadout split/persistence fixes (ship vs character),
+    - fixed telemetry lifecycle duplicate/inverted session handling path,
+    - resolved targeted UI regressions across wizard, roster, ROI editor, players, history, and analytics detailed drilldown affordance,
+    - completed focused lint/test/typecheck validation and documentation closeout.
+  - Evidence pointers:
+    - `src/App.tsx`
+    - `src/hooks/useLogMonitor.ts`
+    - `src/hooks/__tests__/useLogMonitor.test.ts`
+    - `src/components/Wizard.tsx`
+    - `src/components/recording/RosterPanel.tsx`
+    - `src/components/OcrRegionEditorModal.tsx`
+    - `src/components/PlayerHub.tsx`
+    - `src/components/HistoryTable.tsx`
+    - `src/components/analytics/AnalyticsShell.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of TELEMETRY-UI-BATCH-009.
+- `PM Response` | `APPROVED`
+  - Reason: scoped telemetry/runtime and UI defects are addressed with targeted regression and compile validation evidence.

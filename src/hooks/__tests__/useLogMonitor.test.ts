@@ -51,6 +51,7 @@ const appStoreState = {
   knownMappings: {},
   uidMappings: { players: {}, ships: {}, weapons: {}, equipment: {} },
   registerUnknownId: vi.fn(),
+  setPlayerName: vi.fn(),
   activeWeapons: {},
 };
 
@@ -111,6 +112,7 @@ describe('useLogMonitor', () => {
     setLastActivity.mockClear();
     setTelemetryStatus.mockClear();
     processTelemetryEvent.mockClear();
+    appStoreState.setPlayerName.mockClear();
     ipcMock.send.mockClear();
     ipcMock.on.mockClear();
     gameDataState.sessionStartTime = Date.now() - 5_000;
@@ -208,8 +210,11 @@ describe('useLogMonitor', () => {
     const latestLoadout = latestCall?.[0] as {
       weapons?: string[];
       equipment?: string[];
+      characterWeapons?: string[];
+      characterEquipment?: string[];
     };
-    expect(latestLoadout?.weapons).toEqual(expect.arrayContaining(['Double Whammy', 'The Doctor']));
-    expect(latestLoadout?.equipment).toEqual(expect.arrayContaining(['Repair Drone']));
+    expect(latestLoadout?.weapons || []).toHaveLength(0);
+    expect(latestLoadout?.characterWeapons).toEqual(expect.arrayContaining(['Double Whammy', 'The Doctor']));
+    expect(latestLoadout?.characterEquipment).toEqual(expect.arrayContaining(['Repair Drone']));
   });
 });

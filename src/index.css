@@ -225,6 +225,14 @@ body[data-mode='twilight'] .player-list-name {
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
 }
 
+.roster-teammate-chip {
+  font-size: 10px !important;
+  line-height: 14px !important;
+  height: 24px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
 /* Explicit gradient shells to avoid mg-surface override flattening. */
 .analytics-shell-gradient {
   background:

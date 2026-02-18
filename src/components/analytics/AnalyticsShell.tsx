@@ -130,7 +130,7 @@ export const AnalyticsShell: React.FC = () => {
                     e.stopPropagation();
                     openDetailedFromPro(view);
                 }}
-                className="absolute right-3 top-3 z-10 px-2 py-1 rounded-pill text-label-xs font-bold uppercase tracking-wide bg-md-sys-primary/12 text-md-sys-primary opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity"
+                className="absolute right-3 top-3 z-10 px-2 py-1 rounded-pill text-label-xs font-bold uppercase tracking-wide bg-md-sys-primary/14 text-md-sys-primary border border-md-sys-primary/25"
             >
                 Open detail
             </button>

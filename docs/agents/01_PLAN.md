@@ -492,3 +492,11 @@
 1. `COMPLETED` - Locate current Gemini default-model assignment.
 2. `COMPLETED` - Update fallback model string to `gemini-3.0-flash` in `electron/geminiService.cjs`.
 3. `COMPLETED` - Run focused lint check and record evidence.
+
+## Current Task Plan (TELEMETRY-UI-BATCH-009)
+1. `COMPLETED` - Implement telemetry/runtime correctness fixes (retention reason display, lifecycle idempotency, ship-vs-character loadout parsing, wizard selector filtering, loadout type/persistence updates).
+2. `COMPLETED` - Implement targeted UI fixes (roster teammate typography, ROI editor viewport modal behavior, players list truncation + top-5 summary flow + pattern visibility, history scroll ownership).
+3. `COMPLETED` - Implement analytics pro detailed-view drilldown consistency fix.
+4. `COMPLETED` - Add/adjust focused regression tests for touched telemetry/loadout/UI behavior.
+5. `COMPLETED` - Run focused validation (`eslint`, targeted `vitest`, `typecheck`) and log evidence.
+6. `COMPLETED` - Complete execution/decision/handoff documentation updates and release temporary locks.

@@ -87,6 +87,8 @@ import { runtimeConfig } from './config/runtimeConfig';
 
 interface TelemetryRetentionStatus {
     exceedsLimits: boolean;
+    exceedsSize: boolean;
+    exceedsAge: boolean;
     totalEntries: number;
     sizeBytes: number;
     maxBytes: number;
@@ -378,6 +380,8 @@ const App: React.FC = () => {
                 ship: typeof state.currentLoadout.ship === 'string' ? state.currentLoadout.ship : null,
                 weapons: Array.isArray(state.currentLoadout.weapons) ? state.currentLoadout.weapons.filter(Boolean).slice(0, 2) : [],
                 equipment: Array.isArray(state.currentLoadout.equipment) ? state.currentLoadout.equipment.filter(Boolean).slice(0, 2) : [],
+                characterWeapons: Array.isArray(state.currentLoadout.characterWeapons) ? state.currentLoadout.characterWeapons.filter(Boolean).slice(0, 2) : [],
+                characterEquipment: Array.isArray(state.currentLoadout.characterEquipment) ? state.currentLoadout.characterEquipment.filter(Boolean).slice(0, 2) : [],
             }
             : null;
         const kills = isRecord(state.kills)
@@ -539,6 +543,8 @@ const App: React.FC = () => {
                     ship: String(payloadRecord.currentLoadout.ship || '').trim() || null,
                     weapons: Array.isArray(payloadRecord.currentLoadout.weapons) ? payloadRecord.currentLoadout.weapons.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
                     equipment: Array.isArray(payloadRecord.currentLoadout.equipment) ? payloadRecord.currentLoadout.equipment.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
+                    characterWeapons: Array.isArray(payloadRecord.currentLoadout.characterWeapons) ? payloadRecord.currentLoadout.characterWeapons.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
+                    characterEquipment: Array.isArray(payloadRecord.currentLoadout.characterEquipment) ? payloadRecord.currentLoadout.characterEquipment.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
                 } : null,
                 selectedReachModifiers: Array.isArray(payloadRecord.selectedReachModifiers) ? payloadRecord.selectedReachModifiers.map(v => String(v || '').trim()).filter(Boolean) : [],
                 timeMin: String(payloadRecord.timeMin || ''),
@@ -861,6 +867,8 @@ const App: React.FC = () => {
                 'remainingBytes' in previewRecord;
             return {
                 exceedsLimits: normalized.exceedsLimits,
+                exceedsSize: normalized.exceedsSize === true,
+                exceedsAge: normalized.exceedsAge === true,
                 totalEntries: toFiniteNumber(normalized.totalEntries),
                 sizeBytes: toFiniteNumber(normalized.sizeBytes),
                 maxBytes: toFiniteNumber(normalized.maxBytes),
@@ -1007,6 +1015,8 @@ const App: React.FC = () => {
                 ship: draft.loadout.ship,
                 weapons: (draft.loadout.weapons || []).filter(Boolean),
                 equipment: (draft.loadout.equipment || []).filter(Boolean),
+                characterWeapons: (draft.loadout.characterWeapons || []).filter(Boolean),
+                characterEquipment: (draft.loadout.characterEquipment || []).filter(Boolean),
             } : undefined,
             reachModifiers: [...(draft.reachModifiers || [])],
             kills: { ...(draft.kills || {}) },
@@ -1545,7 +1555,7 @@ const App: React.FC = () => {
                 );
             case 'history':
                 return (
-                    <div className="h-full min-h-0 overflow-y-scroll custom-scrollbar p-3">
+                    <div className="h-full min-h-0 overflow-hidden p-3">
                         <HistoryTable />
                     </div>
                 );
@@ -1557,7 +1567,7 @@ const App: React.FC = () => {
                 );
             case 'players':
                 return (
-                    <div className="h-full min-h-0 overflow-y-scroll custom-scrollbar p-3">
+                    <div className="h-full min-h-0 overflow-hidden p-3">
                         <PlayerHub />
                     </div>
                 );
@@ -1769,10 +1779,23 @@ const App: React.FC = () => {
             {telemetryPruneStatus && (
                 <div className="fixed z-popover bottom-4 right-4 left-4 md:left-auto md:w-96 pointer-events-none">
                     <div className="pointer-events-auto rounded-2xl border border-warning/40 bg-md-sys-surface1 shadow-2xl p-4">
-                        <div className="text-body font-bold">Telemetry storage is over limit</div>
+                        <div className="text-body font-bold">Telemetry retention needs cleanup</div>
                         <div className="mt-1 text-label-sm opacity-70">
-                            Current: {formatBytes(telemetryPruneStatus.sizeBytes)} of {formatBytes(telemetryPruneStatus.maxBytes)}.
+                            {telemetryPruneStatus.exceedsSize && telemetryPruneStatus.exceedsAge
+                                ? 'Retention is exceeded by both size and age.'
+                                : telemetryPruneStatus.exceedsSize
+                                    ? 'Retention is exceeded by size.'
+                                    : 'Retention is exceeded by age.'}
                         </div>
+                        {telemetryPruneStatus.exceedsSize ? (
+                            <div className="mt-1 text-label-sm opacity-70">
+                                Current: {formatBytes(telemetryPruneStatus.sizeBytes)} of {formatBytes(telemetryPruneStatus.maxBytes)}.
+                            </div>
+                        ) : (
+                            <div className="mt-1 text-label-sm opacity-70">
+                                Age policy: keep telemetry newer than {Math.max(1, Math.round(telemetryPruneStatus.maxAgeMs / (24 * 60 * 60 * 1000)))} day(s).
+                            </div>
+                        )}
                         <div className="mt-1 text-label-sm opacity-70">
                             Suggested prune: {telemetryPruneStatus.prunePreview?.wouldRemoveEntries || 0} entries
                             ({formatBytes(telemetryPruneStatus.prunePreview?.wouldFreeBytes || 0)}).

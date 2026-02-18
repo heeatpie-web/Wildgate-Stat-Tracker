@@ -98,6 +98,13 @@ Use this row format when claiming:
 
 | File | Owner | Started (UTC) | Released (UTC) | Purpose |
 |---|---|---|---|---|
+| src/components/OcrRegionEditorModal.tsx | builder | 2026-02-18T15:45:13Z | 2026-02-18T23:01:31Z | TELEMETRY-UI-BATCH-009 lock released |
+| src/components/recording/RosterPanel.tsx | builder | 2026-02-18T15:45:13Z | 2026-02-18T23:01:31Z | TELEMETRY-UI-BATCH-009 lock released |
+| src/components/HistoryTable.tsx | builder | 2026-02-18T15:45:13Z | 2026-02-18T23:01:31Z | TELEMETRY-UI-BATCH-009 lock released |
+| src/components/analytics/AnalyticsShell.tsx | builder | 2026-02-18T15:45:13Z | 2026-02-18T23:01:31Z | TELEMETRY-UI-BATCH-009 lock released |
+| src/store/slices/createDataSlice.ts | builder | 2026-02-18T15:45:13Z | 2026-02-18T23:01:31Z | TELEMETRY-UI-BATCH-009 lock released |
+| src/types.ts | builder | 2026-02-18T15:45:13Z | 2026-02-18T23:01:31Z | TELEMETRY-UI-BATCH-009 lock released |
+| src/utils/telemetryProcessor.ts | builder | 2026-02-18T15:45:13Z | 2026-02-18T23:01:31Z | TELEMETRY-UI-BATCH-009 lock released |
 | src/utils/ocr/ocrParser.ts | builder | 2026-02-18T16:40:00Z | 2026-02-18T16:58:00Z | OCR-SYSTEM-IMPROVEMENTS-007 lock released |
 | src/utils/ocr/__tests__/ocrParser.test.ts | verifier | 2026-02-18T16:40:00Z | 2026-02-18T16:58:00Z | OCR-SYSTEM-IMPROVEMENTS-007 lock released |
 | src/config/runtimeConfig.ts | builder | 2026-02-18T16:40:00Z | 2026-02-18T16:58:00Z | OCR-SYSTEM-IMPROVEMENTS-007 lock released |

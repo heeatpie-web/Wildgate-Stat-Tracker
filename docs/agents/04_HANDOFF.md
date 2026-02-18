@@ -2542,3 +2542,60 @@
 
 ## Remaining / Risks
 - If `gemini-3.0-flash` is unavailable in the active Vertex region/project, runtime API calls will fail until overridden with `WILDGATE_GEMINI_MODEL`.
+
+---
+
+## Handoff - 2026-02-18 - TELEMETRY-UI-BATCH-009
+## Status
+- Completed.
+
+## What Changed
+- Telemetry/runtime correctness:
+  - `src/App.tsx`
+    - retention warning now reports the actual trigger (`age`, `size`, or both) instead of implying size overflow for age-only retention events.
+    - telemetry draft + restore-session persistence now carries character loadout arrays.
+    - players/history shell wrappers now avoid nested competing scroll containers.
+  - `src/types.ts`
+    - `Loadout` now includes optional `characterWeapons` and `characterEquipment`.
+  - `src/store/slices/createDataSlice.ts`
+    - loadout sanitization now includes character weapon/equipment arrays.
+  - `src/hooks/useMatchSubmission.ts`
+    - submission sanitization preserves character weapon/equipment arrays.
+  - `src/hooks/useLogMonitor.ts`
+    - separated ship vs character loadout detection/storage and included character arrays in signature/active-name paths.
+    - added lifecycle idempotency guard to reduce duplicate/inverted telemetry start/end handling.
+    - resumed telemetry-driven player-name learning updates for mapper/profile flows.
+  - `src/hooks/__tests__/useLogMonitor.test.ts`
+    - updated assertions for character loadout routing.
+
+- Wizard selector correctness:
+  - `src/components/Wizard.tsx`
+    - weapon selector now only includes ship `Weapon` entries.
+    - equipment selector now only includes ship `Utility`/`System` entries.
+    - character loadout arrays remain preserved while ship slots are edited.
+
+- UI fixes requested in batch:
+  - `src/components/recording/RosterPanel.tsx`, `src/index.css`
+    - reduced teammate chip name typography/height.
+  - `src/components/OcrRegionEditorModal.tsx`
+    - ROI editor now renders through a portal to `document.body`, preventing settings-modal-size clipping.
+  - `src/components/PlayerHub.tsx`
+    - clicking a player opens a top-5 snapshot-first detail card with teammate/opponent pattern visibility and explicit full-profile toggle.
+  - `src/components/HistoryTable.tsx`
+    - fixed history list scroll reach with `overflow-y-auto` ownership in table container.
+  - `src/components/analytics/AnalyticsShell.tsx`
+    - pro detailed-view drilldown CTA is now consistently visible/clickable.
+
+- Ancillary compile fix:
+  - `src/utils/export.ts`
+    - tightened legacy hazard accessor casts to satisfy strict typecheck.
+
+## What Was Verified
+- `npx eslint src/App.tsx src/types.ts src/hooks/useLogMonitor.ts src/hooks/__tests__/useLogMonitor.test.ts src/hooks/useMatchSubmission.ts src/store/slices/createDataSlice.ts src/components/Wizard.tsx src/components/OcrRegionEditorModal.tsx src/components/recording/RosterPanel.tsx src/components/PlayerHub.tsx src/components/HistoryTable.tsx src/components/analytics/AnalyticsShell.tsx` passed.
+- `npx vitest run src/hooks/__tests__/useLogMonitor.test.ts src/components/Wizard.test.tsx src/components/recording/SquadronPanel.test.tsx src/App.test.tsx` passed (`11/11` tests) after updating stale character-loadout expectation.
+- `npm run -s typecheck` passed after export-cast fix.
+- `npx vitest run src/hooks/__tests__/useMatchSubmission.test.ts` passed (`11/11` tests).
+
+## Remaining / Risks
+- Existing stale active rows in `docs/WORKLOCKS.md` from older tasks remain noisy; this batch released only TELEMETRY-UI-BATCH-009 lock rows.
+- Telemetry ship/character detection still depends on known equipment/weapon catalogs; newly introduced game items may require catalog updates if names diverge from current dictionaries.

@@ -71,20 +71,37 @@ const toStringOrEmpty = (value: unknown): string => {
     return '';
 };
 
-const TELEMETRY_WEAPON_NAMES = Array.from(new Set([
+const SHIP_WEAPON_NAMES = EQUIPMENT_DB
+    .filter((item) => item.type === 'Weapon')
+    .map((item) => item.name)
+    .filter(Boolean);
+const CHARACTER_WEAPON_NAMES = EQUIPMENT_DB
+    .filter((item) => item.type === 'CharacterWeapon')
+    .map((item) => item.name)
+    .filter(Boolean);
+const SHIP_EQUIPMENT_NAMES = EQUIPMENT_DB
+    .filter((item) => item.type === 'Utility' || item.type === 'System')
+    .map((item) => item.name)
+    .filter(Boolean);
+const CHARACTER_EQUIPMENT_NAMES = EQUIPMENT_DB
+    .filter((item) => item.type === 'CharacterEquipment')
+    .map((item) => item.name)
+    .filter(Boolean);
+const SHIP_WEAPON_SET = new Set(SHIP_WEAPON_NAMES);
+const CHARACTER_WEAPON_SET = new Set(CHARACTER_WEAPON_NAMES);
+const SHIP_EQUIPMENT_SET = new Set([...SHIP_EQUIPMENT_NAMES, ...Object.values(EQUIPMENT_GUIDS)]);
+const CHARACTER_EQUIPMENT_SET = new Set(CHARACTER_EQUIPMENT_NAMES);
+
+const TELEMETRY_ANY_WEAPON_NAMES = Array.from(new Set([
     ...Object.values(WEAPON_GUIDS),
-    ...EQUIPMENT_DB
-        .filter((item) => item.type === 'Weapon' || item.type === 'CharacterWeapon')
-        .map((item) => item.name)
-        .filter(Boolean),
+    ...SHIP_WEAPON_NAMES,
+    ...CHARACTER_WEAPON_NAMES,
 ]));
 
-const TELEMETRY_EQUIPMENT_NAMES = Array.from(new Set([
+const TELEMETRY_ANY_EQUIPMENT_NAMES = Array.from(new Set([
     ...Object.values(EQUIPMENT_GUIDS),
-    ...EQUIPMENT_DB
-        .filter((item) => item.type !== 'Weapon' && item.type !== 'CharacterWeapon')
-        .map((item) => item.name)
-        .filter(Boolean),
+    ...SHIP_EQUIPMENT_NAMES,
+    ...CHARACTER_EQUIPMENT_NAMES,
 ]));
 
 /**
@@ -143,6 +160,7 @@ export const useLogMonitor = (activeUser?: string) => {
     const telemetryDraftStartedAtRef = useRef<number | null>(null);
     const telemetryDraftLoadoutSignatureRef = useRef<string>('');
     const telemetryDraftCapturePromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const telemetryLifecycleActiveRef = useRef(isMatchInProgress);
 
     const clearTelemetryDraftCapturePromptTimer = () => {
         if (telemetryDraftCapturePromptTimerRef.current) {
@@ -177,6 +195,8 @@ export const useLogMonitor = (activeUser?: string) => {
             ship: loadout.ship || '',
             weapons: (loadout.weapons || []).filter(Boolean),
             equipment: (loadout.equipment || []).filter(Boolean),
+            characterWeapons: (loadout.characterWeapons || []).filter(Boolean),
+            characterEquipment: (loadout.characterEquipment || []).filter(Boolean),
         });
     };
 
@@ -195,6 +215,8 @@ export const useLogMonitor = (activeUser?: string) => {
             ship: loadout?.ship || null,
             weapons: (loadout?.weapons || []).filter(Boolean),
             equipment: (loadout?.equipment || []).filter(Boolean),
+            characterWeapons: (loadout?.characterWeapons || []).filter(Boolean),
+            characterEquipment: (loadout?.characterEquipment || []).filter(Boolean),
         },
         weapons: {},
         reachModifiers: [],
@@ -245,6 +267,8 @@ export const useLogMonitor = (activeUser?: string) => {
                 ship: loadout.ship || match.loadout?.ship || null,
                 weapons: (loadout.weapons || []).filter(Boolean),
                 equipment: (loadout.equipment || []).filter(Boolean),
+                characterWeapons: (loadout.characterWeapons || []).filter(Boolean),
+                characterEquipment: (loadout.characterEquipment || []).filter(Boolean),
             },
         });
     };
@@ -281,7 +305,10 @@ export const useLogMonitor = (activeUser?: string) => {
     useEffect(() => { playerIdMapRef.current = playerIdMap; }, [playerIdMap]);
     useEffect(() => { pilotRegistryRef.current = pilotRegistry; }, [pilotRegistry]);
     useEffect(() => { matchStartTimeRef.current = matchStartTime; }, [matchStartTime]);
-    useEffect(() => { isMatchInProgressRef.current = isMatchInProgress; }, [isMatchInProgress]);
+    useEffect(() => {
+        isMatchInProgressRef.current = isMatchInProgress;
+        telemetryLifecycleActiveRef.current = isMatchInProgress;
+    }, [isMatchInProgress]);
     useEffect(() => { currentLoadoutRef.current = currentLoadout; }, [currentLoadout]);
     useEffect(() => { activeHeroRef.current = activeHero; }, [activeHero]);
     useEffect(() => { activeShipRef.current = activeShip; }, [activeShip]);
@@ -348,7 +375,6 @@ export const useLogMonitor = (activeUser?: string) => {
                     const payload = extractEventPayload(e);
                     const clientTimestamp = Number(e.ClientTimestamp);
                     const gameTime = Number.isFinite(clientTimestamp) ? clientTimestamp * 1000 : Date.now();
-                    const wasMatchInProgress = isMatchInProgressRef.current;
                     const eventContext = asRecord(e.context);
                     const payloadContext = asRecord(asRecord(e.Payload).context);
                     const payloadContextAlt = asRecord(asRecord(e.payload).context);
@@ -363,7 +389,12 @@ export const useLogMonitor = (activeUser?: string) => {
                     const mapEndSignal = name === 'NebLoadingScreen' && loadingMapName.includes('Frontend');
                     const sessionStartSignal = !!currentMatchSessionId && !previousMatchSessionId;
                     const sessionEndSignal = !currentMatchSessionId && !!previousMatchSessionId;
-                    if (!telemetryDraftMatchIdRef.current && ((mapStartSignal && !wasMatchInProgress) || (sessionStartSignal && !wasMatchInProgress))) {
+                    const startLifecycleSignal = mapStartSignal || sessionStartSignal;
+                    const endLifecycleSignal = mapEndSignal || sessionEndSignal;
+                    if (startLifecycleSignal && !telemetryLifecycleActiveRef.current) {
+                        telemetryLifecycleActiveRef.current = true;
+                    }
+                    if (startLifecycleSignal && !telemetryDraftMatchIdRef.current) {
                         createTelemetryDraftIfNeeded(gameTime);
                     }
                     const isRelevantToSession = gameTime >= (sessionStartTimeRef.current - 60000);
@@ -375,6 +406,8 @@ export const useLogMonitor = (activeUser?: string) => {
 
                     if (potentialId) {
                         if (potentialName && typeof potentialName === 'string' && potentialName.length > 0) {
+                            const setPlayerName = useAppStore.getState().setPlayerName;
+                            setPlayerName(potentialId, potentialName);
                             const currentMappedName = playerIdMapRef.current[potentialId];
                             if (currentMappedName && currentMappedName.startsWith(UNNAMED_PLAYER_PREFIX) && currentMappedName !== potentialName) {
                                 updatePlayerIdMapping(potentialId, potentialName);
@@ -476,11 +509,11 @@ export const useLogMonitor = (activeUser?: string) => {
                             'guidweaponprimary', 'guidweaponsecondary', 'weaponprimary', 'weaponnameprimary',
                             'guidequipmentprimary', 'guidequipmentsecondary', 'equipmentprimary', 'equipmentnameprimary',
                             'weapontertiary', 'equipmenttertiary',
-                            'weapons', 'equipment',
+                            'weapons', 'equipment', 'characterweapons', 'charweapons', 'charactergear', 'characterequipment',
                             'weaponguids', 'equipmentguids',
                             'weaponids', 'equipmentids',
                             'weaponslots', 'equipmentslots',
-                            'loadoutweapons', 'loadoutequipment',
+                            'loadoutweapons', 'loadoutequipment', 'loadoutcharacterweapons', 'loadoutcharacterequipment',
                         ]);
                         const payloadKeysLower = Object.keys(payload || {}).map((k) => k.toLowerCase());
                         const hasSignals = payloadKeysLower.some((k) => loadoutSignals.has(k));
@@ -691,6 +724,12 @@ export const useLogMonitor = (activeUser?: string) => {
                             'weapon_name_primary', 'weapon_name_secondary', 'weapon_name_tertiary',
                             'weaponNames', 'weaponDisplayNames', 'loadoutWeapons', 'loadoutWeaponNames',
                         ]);
+                        const characterWeaponNameCandidates = extractByKeys(loadoutData, [
+                            'characterWeapons', 'characterWeapon', 'characterWeaponSlots', 'characterWeaponLoadout',
+                            'charWeapons', 'charWeapon', 'charWeaponSlots', 'charWeaponLoadout',
+                            'crewWeapons', 'crewWeaponSlots',
+                            'loadoutCharacterWeapons', 'loadoutCharWeapons',
+                        ]);
                         const equipmentNameCandidates = extractByKeys(loadoutData, [
                             'equipment', 'equipmentSlots', 'equipmentSlotData', 'equipmentLoadout',
                             'equipmentPrimary', 'equipmentSecondary', 'equipmentTertiary',
@@ -700,14 +739,46 @@ export const useLogMonitor = (activeUser?: string) => {
                             'equipment_name_primary', 'equipment_name_secondary', 'equipment_name_tertiary',
                             'equipmentNames', 'equipmentDisplayNames', 'loadoutEquipment', 'loadoutEquipmentNames',
                         ]);
+                        const characterEquipmentNameCandidates = extractByKeys(loadoutData, [
+                            'characterEquipment', 'characterEquipments', 'characterGear', 'characterEquipmentSlots', 'characterEquipmentLoadout',
+                            'charEquipment', 'charEquipments', 'charGear', 'charEquipmentSlots', 'charEquipmentLoadout',
+                            'crewEquipment', 'crewGear', 'loadoutCharacterEquipment', 'loadoutCharEquipment',
+                        ]);
+
+                        const resolvedGuidWeapons = weaponGuidCandidates
+                            .map((g) => resolveGuid(g, WEAPON_GUIDS, 'Weapon'))
+                            .filter(Boolean) as string[];
+                        const resolvedGuidEquipment = equipmentGuidCandidates
+                            .map((g) => resolveGuid(g, EQUIPMENT_GUIDS, 'Equipment'))
+                            .filter(Boolean) as string[];
+
+                        const matchedWeaponNames = Array.from(new Set([
+                            ...weaponNameCandidates,
+                            ...characterWeaponNameCandidates,
+                        ]
+                            .map((n) => fuzzyMatchList(n, TELEMETRY_ANY_WEAPON_NAMES))
+                            .filter(Boolean) as string[]));
+                        const matchedEquipmentNames = Array.from(new Set([
+                            ...equipmentNameCandidates,
+                            ...characterEquipmentNameCandidates,
+                        ]
+                            .map((n) => fuzzyMatchList(n, TELEMETRY_ANY_EQUIPMENT_NAMES))
+                            .filter(Boolean) as string[]));
+
                         const resolvedWeapons = Array.from(new Set([
-                            ...weaponGuidCandidates.map((g) => resolveGuid(g, WEAPON_GUIDS, 'Weapon')).filter(Boolean) as string[],
-                            ...weaponNameCandidates.map((n) => fuzzyMatchList(n, TELEMETRY_WEAPON_NAMES)).filter(Boolean) as string[],
+                            ...resolvedGuidWeapons,
+                            ...matchedWeaponNames.filter((name) => SHIP_WEAPON_SET.has(name)),
                         ]));
+                        const resolvedCharacterWeapons = Array.from(new Set(
+                            matchedWeaponNames.filter((name) => CHARACTER_WEAPON_SET.has(name))
+                        ));
                         const resolvedEquipment = Array.from(new Set([
-                            ...equipmentGuidCandidates.map((g) => resolveGuid(g, EQUIPMENT_GUIDS, 'Equipment')).filter(Boolean) as string[],
-                            ...equipmentNameCandidates.map((n) => fuzzyMatchList(n, TELEMETRY_EQUIPMENT_NAMES)).filter(Boolean) as string[],
+                            ...resolvedGuidEquipment,
+                            ...matchedEquipmentNames.filter((name) => SHIP_EQUIPMENT_SET.has(name)),
                         ]));
+                        const resolvedCharacterEquipment = Array.from(new Set(
+                            matchedEquipmentNames.filter((name) => CHARACTER_EQUIPMENT_SET.has(name))
+                        ));
                         const finalHero = (heroName && !heroName.startsWith('Unknown')) ? heroName : currentLoadoutRef.current?.hero;
                         const finalShip = (shipName && !shipName.startsWith('Unknown')) ? shipName : currentLoadoutRef.current?.ship;
 
@@ -719,15 +790,25 @@ export const useLogMonitor = (activeUser?: string) => {
                                 : (currentLoadoutRef.current?.weapons || []),
                             equipment: resolvedEquipment.length > 0
                                 ? resolvedEquipment
-                                : (currentLoadoutRef.current?.equipment || [])
+                                : (currentLoadoutRef.current?.equipment || []),
+                            characterWeapons: resolvedCharacterWeapons.length > 0
+                                ? resolvedCharacterWeapons
+                                : (currentLoadoutRef.current?.characterWeapons || []),
+                            characterEquipment: resolvedCharacterEquipment.length > 0
+                                ? resolvedCharacterEquipment
+                                : (currentLoadoutRef.current?.characterEquipment || []),
                         };
                         const previousLoadoutNames = new Set([
                             ...(currentLoadoutRef.current?.weapons || []),
-                            ...(currentLoadoutRef.current?.equipment || [])
+                            ...(currentLoadoutRef.current?.equipment || []),
+                            ...(currentLoadoutRef.current?.characterWeapons || []),
+                            ...(currentLoadoutRef.current?.characterEquipment || []),
                         ].filter(Boolean));
                         const nextLoadoutNames = new Set([
                             ...(nextLoadout.weapons || []),
-                            ...(nextLoadout.equipment || [])
+                            ...(nextLoadout.equipment || []),
+                            ...(nextLoadout.characterWeapons || []),
+                            ...(nextLoadout.characterEquipment || []),
                         ].filter(Boolean));
                         setCurrentLoadout(nextLoadout);
                         if (nextLoadoutNames.size > 0) {
@@ -745,7 +826,7 @@ export const useLogMonitor = (activeUser?: string) => {
                             });
                             setActiveWeapons(nextActiveWeapons);
                         }
-                        if (!telemetryDraftMatchIdRef.current && isMatchInProgressRef.current) {
+                        if (!telemetryDraftMatchIdRef.current && telemetryLifecycleActiveRef.current) {
                             createTelemetryDraftIfNeeded(gameTime, nextLoadout);
                         }
                         updateTelemetryDraftFromLoadout(nextLoadout, gameTime);
@@ -765,7 +846,7 @@ export const useLogMonitor = (activeUser?: string) => {
 
                     const context: TelemetryContext = {
                         matchStartTime: matchStartTimeRef.current,
-                        isMatchInProgress: isMatchInProgressRef.current,
+                        isMatchInProgress: telemetryLifecycleActiveRef.current,
                         playerIdMap: playerIdMapRef.current,
                         pilotRegistry: pilotRegistryRef.current,
                         lastMatchSessionId: lastMatchSessionIdRef.current
@@ -775,7 +856,9 @@ export const useLogMonitor = (activeUser?: string) => {
                     } else {
                         Logger.debug('LogMonitor', `Skipping old event: ${name} (age: ${ageSeconds}s, before session start)`);
                     }
-                    if ((mapEndSignal && wasMatchInProgress) || (sessionEndSignal && wasMatchInProgress)) {
+                    lastMatchSessionIdRef.current = currentMatchSessionId;
+                    if (endLifecycleSignal && telemetryLifecycleActiveRef.current) {
+                        telemetryLifecycleActiveRef.current = false;
                         finalizeTelemetryDraft(gameTime);
                     }
                 });

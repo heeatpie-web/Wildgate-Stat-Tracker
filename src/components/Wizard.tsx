@@ -55,7 +55,7 @@ export const Wizard: React.FC = () => {
     const weaponOptions = React.useMemo(() => (
         Array.from(new Set(
             EQUIPMENT_DB
-                .filter((item) => item.type === 'Weapon' || item.type === 'CharacterWeapon')
+                .filter((item) => item.type === 'Weapon')
                 .map((item) => item.name)
                 .filter(Boolean)
         )).sort((a, b) => a.localeCompare(b))
@@ -63,7 +63,7 @@ export const Wizard: React.FC = () => {
     const equipmentOptions = React.useMemo(() => (
         Array.from(new Set(
             EQUIPMENT_DB
-                .filter((item) => item.type !== 'Weapon' && item.type !== 'CharacterWeapon')
+                .filter((item) => item.type === 'Utility' || item.type === 'System')
                 .map((item) => item.name)
                 .filter(Boolean)
         )).sort((a, b) => a.localeCompare(b))
@@ -90,6 +90,8 @@ export const Wizard: React.FC = () => {
             ship: base?.ship || null,
             weapons: [base?.weapons?.[0] || '', base?.weapons?.[1] || ''],
             equipment: [base?.equipment?.[0] || '', base?.equipment?.[1] || ''],
+            characterWeapons: [base?.characterWeapons?.[0] || '', base?.characterWeapons?.[1] || ''],
+            characterEquipment: [base?.characterEquipment?.[0] || '', base?.characterEquipment?.[1] || ''],
         };
     }, [currentLoadout, pendingMatchData?.loadout]);
 
@@ -123,6 +125,8 @@ export const Wizard: React.FC = () => {
                 ship: loadoutDraft.ship,
                 weapons: compact(nextWeapons),
                 equipment: compact(nextEquipment),
+                characterWeapons: compact(loadoutDraft.characterWeapons),
+                characterEquipment: compact(loadoutDraft.characterEquipment),
             },
         });
     };

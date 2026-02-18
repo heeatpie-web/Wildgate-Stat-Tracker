@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { RotateCcw, Upload, X } from 'lucide-react';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -465,7 +466,9 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
 
     if (!isOpen) return null;
 
-    return (
+    if (typeof document === 'undefined') return null;
+
+    return createPortal(
         <div className="fixed inset-0 z-modal bg-scrim-70 backdrop-blur-sm flex items-center justify-center p-3" onClick={onClose}>
             <div
                 ref={focusTrapRef}
@@ -644,7 +647,8 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

@@ -1976,3 +1976,38 @@ Rule:
   - `docs/agents/04_HANDOFF.md`
 - Revisit trigger/expiry:
   - Revisit if reliable pre-OCR screen-type classification is unavailable in production captures and PSM logs show persistent auto-mode fallback for known screen types.
+
+- Type: telemetry-ui-batch-009-scope-defaults
+- Decision: add explicit character-loadout fields (`characterWeapons`, `characterEquipment`) while keeping history pagination behavior and introducing a players quick-summary-first detail flow.
+- Date: 2026-02-18
+- Options considered:
+  - Keep overloading existing ship `weapons`/`equipment` arrays and change history UX to continuous scroll.
+  - Split ship vs character loadout fields, preserve pagination, and add top-5 summary + explicit full-profile action.
+- Rationale:
+  - Prevents ship/character loadout collisions and truncation.
+  - Matches user-selected preference to keep pagination model unchanged.
+  - Improves players discoverability without removing existing deep profile/drill-down capabilities.
+- Impacted files/artifacts:
+  - `src/types.ts`
+  - `src/store/slices/createDataSlice.ts`
+  - `src/hooks/useLogMonitor.ts`
+  - `src/hooks/useMatchSubmission.ts`
+  - `src/components/Wizard.tsx`
+  - `src/components/PlayerHub.tsx`
+  - `src/components/HistoryTable.tsx`
+- Revisit trigger/expiry:
+  - Revisit if product requirements request unified loadout schema or history infinite-scroll mode.
+
+- Type: telemetry-retention-reason-clarity
+- Decision: telemetry retention warning copy must explicitly indicate whether retention is exceeded by age, size, or both.
+- Date: 2026-02-18
+- Options considered:
+  - Keep generic "over limit" copy tied only to bytes.
+  - Expose normalized `exceedsAge`/`exceedsSize` state and reason-specific warning text.
+- Rationale:
+  - Resolves misleading states like `100 KB / 100 MB` being presented as a size overflow.
+  - Keeps retention prompt behavior while improving user trust and diagnosis.
+- Impacted files/artifacts:
+  - `src/App.tsx`
+- Revisit trigger/expiry:
+  - Revisit if retention model changes to separate banners for age and size policies.
