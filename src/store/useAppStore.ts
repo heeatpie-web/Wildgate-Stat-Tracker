@@ -89,7 +89,7 @@ const customStorage: PersistStorage<AppState> = {
         .filter(isMatchRecord)
         .map((match) => {
         const recovered = match.ocrState === 'processing' ? { ...match, ocrState: 'queued' as const } : match;
-        if (recovered.subType === 'Telemetry Draft' && (!recovered.result || recovered.result === 'Draw')) {
+        if (recovered.subType === 'Telemetry Draft' && !recovered.result) {
           return { ...recovered, result: 'Ongoing' };
         }
         return recovered;
