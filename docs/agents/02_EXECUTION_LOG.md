@@ -4219,3 +4219,141 @@
   - Review ask: approve final continuation gate-reconcile closeout with no further runtime deltas.
 - `PM Response` | `APPROVED`
   - Reason: final failing expectation was corrected to match intended UI contract and full gates are green.
+
+---
+
+## 2026-02-18 - OCR-SYSTEM-IMPROVEMENTS-007 (Implementation)
+- Scope: implement the requested 11-item OCR/system improvement plan across Electron OCR pipeline, parser thresholds/tests, runtime env config, and store calibration/migration behavior.
+- Dependency requests (AOM_V2 lifecycle):
+  - `REQ-OCR-SYSTEM-IMPROVEMENTS-007` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+    - Request: apply bounded OCR/system improvement patch set exactly per provided file-by-file plan.
+  - `REQ-OCR-SYSTEM-IMPROVEMENTS-007` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+    - Response: accepted full scoped plan and started implementation with AGENTS intake/plan/lock updates.
+  - `REQ-OCR-SYSTEM-IMPROVEMENTS-007` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+    - Workstream active across `electron/*`, `src/config/*`, OCR parser/tests, and store slices/hydration.
+
+- Work entries:
+  - `electron/geminiService.cjs`
+    - fixed invalid default model from `gemini-3.0-flash` to `gemini-2.0-flash-exp`.
+  - `src/utils/ocr/ocrParser.ts`
+    - tightened long-name fuzzy distance scaling to `Math.max(maxDistance, Math.min(3, Math.floor(value.length / 5)))`.
+  - `src/utils/ocr/__tests__/ocrParser.test.ts`
+    - added long-name cap regression with `AlexanderSmith` variants.
+  - `src/config/runtimeConfig.ts`
+    - added new `ocr` runtime section with env-backed bounded config values.
+  - `electron/ocrHandler.cjs`
+    - wired env-driven OCR constants (`cache max`, `word confidence min`, `worker pool size`, `region scale`, cloud timeout),
+    - converted dictionary file existence check to async `fsPromises.access`,
+    - extended worker parameter builder with optional `tessedit_pageseg_mode`,
+    - added optional `psm` in `runOCR` and `cropRegionAndOCR`,
+    - filtered low-confidence OCR words before extractor output mapping,
+    - parallelized map-screen extraction and player-list region OCR paths while preserving apply order.
+  - `src/store/slices/createMappingSlice.ts`
+    - stopped legacy dual-write inside `recordOcrAliasCorrection` (alias model remains source-of-truth write target).
+  - `src/store/useAppStore.ts`
+    - added hydration callback migration from legacy `ocrCorrections` into `ocrAliasModel`,
+    - added hydration-time alias compaction.
+  - `src/store/slices/createSettingsSlice.ts`
+    - added `applyCalibrationRecommendations` action,
+    - added sample-batch trigger path in `recordCalibrationSample` (every 50 samples),
+    - kept threshold history snapshot format compatible with existing revert flow.
+  - `src/store/slices/__tests__/createMappingSlice.test.ts`
+    - updated legacy-correction expectations to match single-write alias model behavior.
+
+- `REQ-OCR-SYSTEM-IMPROVEMENTS-007` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `electron/geminiService.cjs`
+    - `electron/ocrHandler.cjs`
+    - `src/config/runtimeConfig.ts`
+    - `src/utils/ocr/ocrParser.ts`
+    - `src/utils/ocr/__tests__/ocrParser.test.ts`
+    - `src/store/slices/createMappingSlice.ts`
+    - `src/store/slices/__tests__/createMappingSlice.test.ts`
+    - `src/store/useAppStore.ts`
+    - `src/store/slices/createSettingsSlice.ts`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-OCR-SYSTEM-IMPROVEMENTS-007` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md` + touched files listed above.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-SYSTEM-IMPROVEMENTS-007#1/#2/#3/#4/#5/#6` | Owner: `builder`
+  - Delta:
+    - completed all requested OCR/system code changes (including env wiring, parser tuning/tests, migration/compaction, and calibration auto-apply trigger),
+    - recorded targeted validation evidence and documented unrelated pre-existing gate failures separately.
+  - Evidence pointers:
+    - `electron/geminiService.cjs`
+    - `electron/ocrHandler.cjs`
+    - `src/config/runtimeConfig.ts`
+    - `src/utils/ocr/ocrParser.ts`
+    - `src/utils/ocr/__tests__/ocrParser.test.ts`
+    - `src/store/slices/createMappingSlice.ts`
+    - `src/store/slices/__tests__/createMappingSlice.test.ts`
+    - `src/store/useAppStore.ts`
+    - `src/store/slices/createSettingsSlice.ts`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of OCR-SYSTEM-IMPROVEMENTS-007 with targeted validations complete and known unrelated suite/typecheck issues documented.
+- `PM Response` | `APPROVED`
+  - Reason: requested bounded OCR/system improvements are implemented with direct evidence; residual failures are unrelated pre-existing workspace issues.
+
+---
+
+## 2026-02-18 - OCR-SYSTEM-IMPROVEMENTS-007 (Post-Validation Addendum)
+- Scope: finalize requested mode-gating semantics and complete AGENTS closeout artifacts.
+
+- Work entries:
+  - `src/store/slices/createSettingsSlice.ts`
+    - aligned `applyCalibrationRecommendations` gating to run only when `ocrThresholdRecommendationMode === 'auto'` (removed assisted-mode auto-apply).
+  - `docs/agents/03_VALIDATION.md`, `docs/agents/04_HANDOFF.md`, `docs/agents/DECISIONS.md`, `docs/WORKLOCKS.md`
+    - added final validation/handoff/decision records and released OCR-SYSTEM-IMPROVEMENTS-007 lock rows.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-SYSTEM-IMPROVEMENTS-007#5/#6` | Owner: `builder`
+  - Delta:
+    - enforced strict auto-mode gating for calibration recommendations per requested plan,
+    - completed remaining AGENTS documentation and lock release closeout.
+  - Evidence pointers:
+    - `src/store/slices/createSettingsSlice.ts`
+    - `docs/agents/03_VALIDATION.md`
+    - `docs/agents/04_HANDOFF.md`
+    - `docs/agents/DECISIONS.md`
+    - `docs/WORKLOCKS.md`
+  - Review ask: approve final OCR-SYSTEM-IMPROVEMENTS-007 closeout addendum.
+- `PM Response` | `APPROVED`
+  - Reason: final behavior now matches requested auto-only gating and documentation lifecycle is complete.
+
+---
+
+## 2026-02-18 - OCR-SYSTEM-IMPROVEMENTS-007 (Runtime Verification Addendum)
+- Work entries:
+  - Executed main-process runtime checks for remaining manual verification targets.
+  - Confirmed Gemini default model initialization log, OCR worker-pool env override log, crew/map PSM logs, and confidence-threshold filtering effect on noisy capture.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-SYSTEM-IMPROVEMENTS-007#6 (runtime verification closeout)` | Owner: `builder`
+  - Delta:
+    - completed all remaining runtime verification checks that were previously pending manual app-run confirmation.
+  - Evidence pointers:
+    - `docs/agents/03_VALIDATION.md` (runtime verification command entries)
+    - `docs/agents/04_HANDOFF.md` (runtime verification addendum)
+  - Review ask: approve final runtime-evidence closeout for OCR-SYSTEM-IMPROVEMENTS-007.
+- `PM Response` | `APPROVED`
+  - Reason: all requested manual verification points now have direct runtime log evidence.
+
+---
+
+## 2026-02-18 - GEMINI-MODEL-DEFAULT-008 (Implementation)
+- Scope: one-line fallback model update in Gemini service.
+- Work entries:
+  - `electron/geminiService.cjs`
+    - changed fallback model from `gemini-2.0-flash-exp` to `gemini-3.0-flash`.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `GEMINI-MODEL-DEFAULT-008#2/#3` | Owner: `builder`
+  - Delta:
+    - updated default model string only; no auth/init/request-path logic changed.
+  - Evidence pointers:
+    - `electron/geminiService.cjs`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of this FAST_PATH config update.
+- `PM Response` | `APPROVED`
+  - Reason: scoped single-file update with focused validation evidence.

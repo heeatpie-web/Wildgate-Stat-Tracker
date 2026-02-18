@@ -15,7 +15,12 @@ import { FormSlice, createFormSlice } from './slices/createFormSlice';
 import { MappingSlice, createMappingSlice } from './slices/createMappingSlice';
 import { SmartCapturesUIState, createSmartCapturesSlice } from './slices/createSmartCapturesSlice';
 import { StorageService } from '../utils/storage';
-import { createEmptyOcrAliasModel, migrateLegacyOcrCorrections } from '../utils/ocrAliasEngine';
+import {
+  compactAliasModel,
+  createEmptyOcrAliasModel,
+  migrateLegacyOcrCorrections,
+  recordAliasCorrection,
+} from '../utils/ocrAliasEngine';
 import { normalizeOcrBatchThreshold } from '../utils/ocrBatchActions';
 import { sanitizeCalibrationSamples } from '../utils/ocrCalibration';
 import type { Match } from '../types';
@@ -370,6 +375,31 @@ export const useAppStore = create<AppState>()(
         ocrLearningQueue: state.ocrLearningQueue
         // sessionTeams removed from persistence to prevent color sticking
       } as any),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+
+        // Migrate ocrCorrections entries → ocrAliasModel (one-time, safe to re-run)
+        if (state.ocrCorrections && Object.keys(state.ocrCorrections).length > 0) {
+          for (const [rawText, correction] of Object.entries(state.ocrCorrections)) {
+            if (correction?.correctedTo && !state.ocrAliasModel?.entries?.[rawText]) {
+              state.ocrAliasModel = recordAliasCorrection(
+                state.ocrAliasModel || createEmptyOcrAliasModel(),
+                {
+                  ocrText: rawText,
+                  correctedTo: correction.correctedTo,
+                  source: correction.source || 'manual_correction',
+                  confidenceWeight: correction.confidenceWeight ?? 0.8,
+                }
+              );
+            }
+          }
+        }
+
+        // Auto-compact alias model: prune single-count entries older than 90 days
+        if (state.ocrAliasModel) {
+          state.ocrAliasModel = compactAliasModel(state.ocrAliasModel);
+        }
+      },
     }
   )
 );

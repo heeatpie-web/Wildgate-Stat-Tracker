@@ -50,7 +50,8 @@ function ensureCorpusArchiveDir() {
 }
 
 // ─── OCR Result Cache (LRU, max 50 entries) ───
-const OCR_CACHE_MAX = 50;
+const OCR_CACHE_MAX = Math.min(500, Math.max(10, parseInt(process.env.WILDGATE_OCR_CACHE_MAX || '50', 10) || 50));
+const LOW_WORD_CONFIDENCE_THRESHOLD = Math.min(80, Math.max(0, parseInt(process.env.WILDGATE_OCR_WORD_CONF_MIN || '25', 10) || 25));
 const ocrResultCache = new Map(); // hash → { result, timestamp }
 const cacheStats = {
   hits: 0,
@@ -269,21 +270,22 @@ const DICTIONARY_MATCH_LIMIT = 1000;
 let activeUserWordsFile = null;
 let latestDictionaryStats = null;
 
-function resolveExistingDictionaryFile() {
+async function resolveExistingDictionaryFile() {
   try {
-    if (fs.existsSync(OCR_USER_WORDS_FILE)) {
-      return OCR_USER_WORDS_FILE;
-    }
+    await fsPromises.access(OCR_USER_WORDS_FILE, fs.constants.F_OK);
+    return OCR_USER_WORDS_FILE;
   } catch {
-    // ignore
+    return null;
   }
-  return null;
 }
 
-function buildTesseractWorkerParameters(userWordsFile = null) {
+function buildTesseractWorkerParameters(userWordsFile = null, psm = null) {
   const params = { preserve_interword_spaces: '1' };
   if (userWordsFile && typeof userWordsFile === 'string' && userWordsFile.trim()) {
     params.user_words_file = userWordsFile;
+  }
+  if (psm !== null && Number.isInteger(psm) && psm >= 0 && psm <= 13) {
+    params.tessedit_pageseg_mode = String(psm);
   }
   return params;
 }
@@ -350,7 +352,7 @@ async function applyDictionaryToWorkers(userWordsFile) {
 }
 
 // Tesseract worker pool (scheduler + multiple workers)
-const WORKER_POOL_SIZE = 3;
+const WORKER_POOL_SIZE = Math.min(8, Math.max(1, parseInt(process.env.WILDGATE_OCR_WORKER_POOL_SIZE || '3', 10) || 3));
 let tesseractScheduler = null;
 let tesseractWorkers = [];
 let schedulerReady = null; // Promise that resolves when pool is initialized
@@ -369,7 +371,7 @@ async function getTesseractScheduler() {
   }
 
   if (!activeUserWordsFile) {
-    activeUserWordsFile = resolveExistingDictionaryFile();
+    activeUserWordsFile = await resolveExistingDictionaryFile();
   }
 
   console.log(`[OCR] Initializing Tesseract worker pool (${WORKER_POOL_SIZE} workers, eng+chi_sim)...`);
@@ -517,7 +519,7 @@ async function preprocessImage(imageBuffer) {
   }
 }
 
-const REGION_OCR_SCALE = 3;
+const REGION_OCR_SCALE = Math.min(6, Math.max(1, parseInt(process.env.WILDGATE_OCR_REGION_SCALE || '3', 10) || 3));
 const REGION_MIN_DIMENSION = 20;
 
 function resolveRegionPixels(region, fullWidth, fullHeight, minDimension = REGION_MIN_DIMENSION) {
@@ -690,7 +692,7 @@ async function benchmarkRegionPreprocessing(imageBuffer, ocrRegions, iterations 
  * @param {number} fullHeight - Full image height (pixels)
  * @returns {Promise<{ words: Array, text: string } | null>}
  */
-async function cropRegionAndOCR(imageBuffer, region, fullWidth, fullHeight) {
+async function cropRegionAndOCR(imageBuffer, region, fullWidth, fullHeight, psm = null) {
   if (!sharp) {
     console.warn('[OCR-Region] sharp not available, skipping region OCR');
     return null;
@@ -712,7 +714,7 @@ async function cropRegionAndOCR(imageBuffer, region, fullWidth, fullHeight) {
     console.log(`[OCR-Region] Cropped+upscaled buffer: ${cropped.length} bytes`);
 
     // Run dedicated Tesseract pass on the cropped region
-    const regionOCR = await runOCR(cropped);
+    const regionOCR = await runOCR(cropped, psm);
     if (!regionOCR || !regionOCR.words || regionOCR.words.length === 0) {
       console.log('[OCR-Region] No words detected in cropped region');
       return null;
@@ -748,11 +750,20 @@ async function cropRegionAndOCR(imageBuffer, region, fullWidth, fullHeight) {
  * Run OCR on image buffer
  * Returns structured data with words, lines, and text
  */
-async function runOCR(imageBuffer) {
+async function runOCR(imageBuffer, psm = null) {
   const scheduler = await getTesseractScheduler();
 
-  console.log('[OCR] Running recognition (worker pool)...');
+  console.log(`[OCR] Running recognition (worker pool)${psm !== null ? ` PSM=${psm}` : ''}...`);
   const startTime = Date.now();
+
+  // Apply per-recognition PSM when explicitly requested.
+  if (psm !== null) {
+    try {
+      await scheduler.addJob('setParameters', buildTesseractWorkerParameters(activeUserWordsFile, psm));
+    } catch {
+      // Non-critical: recognition can proceed with existing params.
+    }
+  }
 
   const result = await scheduler.addJob('recognize', imageBuffer);
 
@@ -783,21 +794,23 @@ async function runOCR(imageBuffer) {
     console.warn('[OCR] Failed to extract from hierarchy:', e.message);
   }
 
-  console.log(`[OCR] Extracted: ${text.length} chars, ${words.length} words, ${lines.length} lines`);
+  const filteredWords = words.filter(w => (w?.confidence || 0) >= LOW_WORD_CONFIDENCE_THRESHOLD);
+  console.log(`[OCR] Extracted: ${text.length} chars, ${filteredWords.length} words, ${lines.length} lines`);
 
   return {
     text,
     confidence,
-    words: words.map(w => ({
-      text: w?.text || '',
-      confidence: w?.confidence || 0,
-      bbox: w?.bbox ? {
-        x0: w.bbox.x0 || 0,
-        y0: w.bbox.y0 || 0,
-        x1: w.bbox.x1 || 0,
-        y1: w.bbox.y1 || 0,
-      } : { x0: 0, y0: 0, x1: 0, y1: 0 },
-    })),
+    words: filteredWords
+      .map(w => ({
+        text: w?.text || '',
+        confidence: w?.confidence || 0,
+        bbox: w?.bbox ? {
+          x0: w.bbox.x0 || 0,
+          y0: w.bbox.y0 || 0,
+          x1: w.bbox.x1 || 0,
+          y1: w.bbox.y1 || 0,
+        } : { x0: 0, y0: 0, x1: 0, y1: 0 },
+      })),
     lines: lines.map(l => ({
       text: l?.text || '',
       confidence: l?.confidence || 0,
@@ -1372,6 +1385,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       skipDebugSave = false,
       forceUncached = false,
       ocrRegions: rawOcrRegions = null,
+      screenTypeHint: rawScreenTypeHint = null,
       includeBboxes: rawIncludeBboxes = false,
       archiveOcrSample: rawArchiveOcrSample = false,
       archiveMetadata: rawArchiveMetadata = null,
@@ -1382,6 +1396,21 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       ? rawArchiveMetadata
       : {};
     const ocrRegions = sanitizeOcrRegions(rawOcrRegions);
+    const inferredScreenType =
+      (typeof rawScreenTypeHint === 'string' ? rawScreenTypeHint : '')
+      || (typeof existingData?.screenshotType === 'string' ? existingData.screenshotType : '');
+    const normalizedScreenTypeHint = String(inferredScreenType || '').trim().toLowerCase();
+    const hintedScreenType = (
+      normalizedScreenTypeHint === 'crewhub' ||
+      normalizedScreenTypeHint === 'crew_hub'
+    ) ? SCREEN_TYPES.CREW_HUB : (
+      normalizedScreenTypeHint === 'mapscreen' ||
+      normalizedScreenTypeHint === 'map_screen' ||
+      normalizedScreenTypeHint === 'tactical_map'
+    ) ? SCREEN_TYPES.MAP_SCREEN : null;
+    const ocrPsm = hintedScreenType === SCREEN_TYPES.CREW_HUB ? 4
+      : hintedScreenType === SCREEN_TYPES.MAP_SCREEN ? 11
+      : null;
     const ocrRegionFingerprint = getOcrRegionsCacheFingerprint(ocrRegions);
     console.log('[OCR] Starting processCapture');
     console.log('[OCR] activeUser:', activeUser);
@@ -1473,8 +1502,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       console.log('[OCR] Running LOCAL + CLOUD in parallel...');
       const localStart = Date.now();
       const [localResult, cloudResult] = await Promise.allSettled([
-        runOCR(processed.buffer),
-        rawDebugPath ? runCloudOCR(rawDebugPath, 7000) : Promise.resolve(null),
+        runOCR(processed.buffer, ocrPsm),
+        rawDebugPath ? runCloudOCR(rawDebugPath, Math.min(30000, Math.max(1000, parseInt(process.env.WILDGATE_OCR_CLOUD_TIMEOUT_MS || '7000', 10) || 7000))) : Promise.resolve(null),
       ]);
       const localDuration = Date.now() - localStart;
 
@@ -1570,14 +1599,14 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       } else {
         cloudFailureReason = cloudFailureReason || 'Cloud OCR unavailable';
         console.warn(`[OCR] Cloud-only unavailable, falling back to local OCR: ${cloudFailureReason}`);
-        ocrResult = await runOCR(processed.buffer);
+        ocrResult = await runOCR(processed.buffer, ocrPsm);
         localOCRForFallback = ocrResult;
         ocrSource = 'local';
       }
     } else {
       // Local only (default / fallback)
       console.log('[OCR] Running LOCAL-ONLY mode...');
-      ocrResult = await runOCR(processed.buffer);
+      ocrResult = await runOCR(processed.buffer, ocrPsm);
       localOCRForFallback = ocrResult;
       ocrSource = 'local';
       console.log(`[OCR] Local-only done, text length: ${ocrResult.text?.length || 0}`);
@@ -1616,16 +1645,31 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     } else if (screenDetection.type === SCREEN_TYPES.MAP_SCREEN) {
       console.log('[OCR] Processing as MAP SCREEN');
 
-      extractedData = await extractMapScreen(
-        processed.buffer,
-        ocrResult,
-        processed.width,
-        processed.height,
-        ocrRegions.mapScreen
-      );
+      const PLAYER_REGION = ocrRegions.mapScreen.players;
+      if (imageBuffer) {
+        console.log('[OCR-Region] Running region-specific OCR for map teammate list');
+      }
+      const [mapScreenData, regionResult] = await Promise.all([
+        extractMapScreen(
+          processed.buffer,
+          ocrResult,
+          processed.width,
+          processed.height,
+          ocrRegions.mapScreen
+        ),
+        imageBuffer
+          ? cropRegionAndOCR(
+            imageBuffer,
+            PLAYER_REGION,
+            processed.originalWidth,
+            processed.originalHeight,
+            11
+          )
+          : Promise.resolve(null),
+      ]);
 
       // Convert to legacy format
-      extractedData = convertMapScreenToLegacy(extractedData, ocrResult.text);
+      extractedData = convertMapScreenToLegacy(mapScreenData, ocrResult.text);
 
       // Bug 1 mitigation: when merged OCR is used, preserve high-confidence local modifier detections.
       // This avoids cloud noise degrading modifier recall while keeping merged name/roster benefits.
@@ -1644,38 +1688,28 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       // Bug 3 mitigation: map-screen player names are small and overlaid on game visuals.
       // Full-image OCR often extracts garbled names (0% recall). Crop the player-list region
       // (bottom-left), upscale 3x, and run a dedicated OCR pass for much better accuracy.
-      if (imageBuffer) {
-        console.log('[OCR-Region] Running region-specific OCR for map teammate list');
-        const PLAYER_REGION = ocrRegions.mapScreen.players;
-        const regionResult = await cropRegionAndOCR(
-          imageBuffer,
-          PLAYER_REGION,
+      if (regionResult && regionResult.words.length > 0) {
+        // extractPlayerList expects words in full-image coordinates (already mapped by cropRegionAndOCR)
+        const regionPlayers = extractPlayerList(
+          regionResult.words,
           processed.originalWidth,
-          processed.originalHeight
+          processed.originalHeight,
+          ocrRegions.mapScreen
         );
-        if (regionResult && regionResult.words.length > 0) {
-          // extractPlayerList expects words in full-image coordinates (already mapped by cropRegionAndOCR)
-          const regionPlayers = extractPlayerList(
-            regionResult.words,
-            processed.originalWidth,
-            processed.originalHeight,
-            ocrRegions.mapScreen
-          );
-          const existingCount = (extractedData.teammates || []).length;
-          if (regionPlayers.length > 0) {
-            console.log(`[OCR-Region] Region OCR extracted ${regionPlayers.length} teammate(s) (full-image had ${existingCount}): ${regionPlayers.join(', ')}`);
-            // Prefer region results — they come from a higher-resolution, higher-contrast crop
-            extractedData.teammates = regionPlayers.map(name => ({
-              name,
-              confidence: 70,
-              isTeammate: true,
-            }));
-          } else {
-            console.log(`[OCR-Region] Region OCR found ${regionResult.words.length} words but no valid player names; keeping ${existingCount} from full-image`);
-          }
+        const existingCount = (extractedData.teammates || []).length;
+        if (regionPlayers.length > 0) {
+          console.log(`[OCR-Region] Region OCR extracted ${regionPlayers.length} teammate(s) (full-image had ${existingCount}): ${regionPlayers.join(', ')}`);
+          // Prefer region results — they come from a higher-resolution, higher-contrast crop
+          extractedData.teammates = regionPlayers.map(name => ({
+            name,
+            confidence: 70,
+            isTeammate: true,
+          }));
         } else {
-          console.log('[OCR-Region] Region OCR returned no results; keeping full-image extraction');
+          console.log(`[OCR-Region] Region OCR found ${regionResult.words.length} words but no valid player names; keeping ${existingCount} from full-image`);
         }
+      } else if (imageBuffer) {
+        console.log('[OCR-Region] Region OCR returned no results; keeping full-image extraction');
       }
 
     } else {

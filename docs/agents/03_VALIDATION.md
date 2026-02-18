@@ -1836,3 +1836,80 @@
   - Evidence:
     - full pipeline passed (`lint`, `test`, `typecheck`, `build`).
     - test suite passed (`50` files, `455` tests).
+
+---
+
+## Validation - 2026-02-18 - OCR-SYSTEM-IMPROVEMENTS-007
+- Command: `npm test -- src/utils/ocr/__tests__/ocrParser.test.ts src/store/slices/__tests__/createMappingSlice.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 2 test files passed.
+    - 90 tests passed.
+    - includes the new long-name fuzzy-match cap assertions for `AlexanderSmith` variants.
+
+- Command: `npx eslint electron/geminiService.cjs electron/ocrHandler.cjs src/utils/ocr/ocrParser.ts src/utils/ocr/__tests__/ocrParser.test.ts src/config/runtimeConfig.ts src/store/slices/createMappingSlice.ts src/store/slices/__tests__/createMappingSlice.test.ts src/store/useAppStore.ts src/store/slices/createSettingsSlice.ts`
+  - Result: PASS
+  - Evidence:
+    - no lint violations for all touched OCR/system implementation files.
+
+- Command: `npm run -s typecheck`
+  - Result: FAIL (pre-existing unrelated workspace errors)
+  - Evidence:
+    - `src/components/HistoryTable.tsx(506,42): Cannot find name 'shouldLimitAll'`
+    - `src/components/HistoryTable.tsx(555,18): Cannot find name 'shouldLimitAll'`
+
+- Command: `npm test`
+  - Result: FAIL (pre-existing unrelated suite failure)
+  - Evidence:
+    - 49 files passed, 1 failed.
+    - 442 tests passed, 14 failed.
+    - all failures are in `src/components/recording/ActionPanel.test.tsx`.
+    - failing root error: `useAppStore.getState is not a function` in ActionPanel test runtime mock path.
+
+- Runtime/code-path checks (manual)
+  - Result: PASS
+  - Evidence:
+    - `electron/geminiService.cjs` default model string is `gemini-2.0-flash-exp`.
+    - `electron/ocrHandler.cjs` now reads env-clamped OCR constants, filters low-confidence OCR words, supports optional per-job PSM, uses async dictionary-file existence check, and runs map extraction + region OCR in parallel.
+    - `src/store/slices/createSettingsSlice.ts` auto-calibration apply now gates on `ocrThresholdRecommendationMode === 'auto'`.
+
+- Runtime verification command: Gemini init default model log
+  - Command:
+    - `node -e "const svc=require('./electron/geminiService.cjs'); svc.initialize(process.argv[1]);" <temp-service-account-json>`
+  - Result: PASS
+  - Evidence:
+    - log emitted: `[GeminiService] Initialized (gemini-2.0-flash-exp, us-central1)`.
+
+- Runtime verification command: worker pool env override + PSM logs
+  - Command:
+    - `WILDGATE_OCR_WORKER_POOL_SIZE=2 npx electron <temp-runtime-check-script>`
+    - script called `processCapture(..., { screenTypeHint: 'crew_hub' })` and `processCapture(..., { screenTypeHint: 'map_screen' })`.
+  - Result: PASS
+  - Evidence:
+    - log emitted: `[OCR] Initializing Tesseract worker pool (2 workers, eng+chi_sim)`.
+    - log emitted: `[OCR] Running recognition (worker pool) PSM=4...` for crew-hub-hinted pass.
+    - log emitted: `[OCR] Running recognition (worker pool) PSM=11...` for map-screen-hinted pass.
+
+- Runtime verification command: low-confidence word filter effect
+  - Command:
+    - `WILDGATE_OCR_WORD_CONF_MIN=0 npx electron <temp-filter-compare-script> tmp-user-data/ocr-debug/raw_capture_2026-02-12T18-43-22-852Z.png`
+    - `WILDGATE_OCR_WORD_CONF_MIN=80 npx electron <temp-filter-compare-script> tmp-user-data/ocr-debug/raw_capture_2026-02-12T18-43-22-852Z.png`
+  - Result: PASS
+  - Evidence:
+    - threshold `0`: OCR extracted `52` words (`min confidence 25.3`, `max 96.6`).
+    - threshold `80`: OCR extracted `37` words (`min confidence 82.1`, `max 96.6`).
+    - confirms low-confidence tokens are filtered out before extraction output.
+
+---
+
+## Validation - 2026-02-18 - GEMINI-MODEL-DEFAULT-008
+- Command: `npx eslint electron/geminiService.cjs`
+  - Result: PASS
+  - Evidence:
+    - no lint violations after fallback model update.
+
+- Code-path check (manual)
+  - Result: PASS
+  - Evidence:
+    - `electron/geminiService.cjs` now sets:
+      - `this.model = process.env.WILDGATE_GEMINI_MODEL || 'gemini-3.0-flash';`

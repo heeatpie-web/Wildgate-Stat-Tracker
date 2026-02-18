@@ -479,3 +479,16 @@
 2. `COMPLETED` - Patch stale queue test expectation to match hidden raw-ID queue contract.
 3. `COMPLETED` - Run focused test and full `npm run -s ci:quality` release gates.
 4. `COMPLETED` - Update execution/validation/handoff/decision artifacts for continuation closeout.
+
+## Current Task Plan (OCR-SYSTEM-IMPROVEMENTS-007)
+1. `COMPLETED` - Apply baseline OCR config fixes: Gemini default model, fuzzy-match cap + tests, and renderer `runtimeConfig.ocr` section.
+2. `COMPLETED` - Update `electron/ocrHandler.cjs` with env-driven OCR constants, low-confidence word filtering, PSM-aware OCR calls, and async dictionary-file resolution.
+3. `COMPLETED` - Parallelize map-screen extraction region OCR path while preserving existing extraction mutation order.
+4. `COMPLETED` - Stop alias legacy dual-write in mapping slice and add hydration-time migration + compaction in `useAppStore.ts`.
+5. `COMPLETED` - Add calibration recommendation auto-apply action/trigger wiring in `createSettingsSlice.ts`.
+6. `COMPLETED` - Run targeted validation commands, document evidence in AGENTS logs, and release temporary locks.
+
+## Current Task Plan (GEMINI-MODEL-DEFAULT-008)
+1. `COMPLETED` - Locate current Gemini default-model assignment.
+2. `COMPLETED` - Update fallback model string to `gemini-3.0-flash` in `electron/geminiService.cjs`.
+3. `COMPLETED` - Run focused lint check and record evidence.

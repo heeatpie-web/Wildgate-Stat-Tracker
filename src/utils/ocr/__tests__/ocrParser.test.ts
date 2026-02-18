@@ -50,6 +50,13 @@ describe('fuzzyMatch', () => {
     const ships = ['Hunter (4 Player)', 'Privateer (4 Player)', 'Solo Outlaw'];
     expect(fuzzyMatch('Privateur (4 Player)', ships)).toBe('Privateer (4 Player)');
   });
+
+  it('caps long-name fuzzy matching to avoid high-edit false positives', () => {
+    const names = ['AlexanderSmith'];
+    expect(fuzzyMatch('AlexanderSmlth', names)).toBe('AlexanderSmith');
+    expect(fuzzyMatch('AlexanderXmXth', names)).toBe('AlexanderSmith');
+    expect(fuzzyMatch('AlexanderXmXXh', names)).toBeNull();
+  });
 });
 
 // ── isNoiseText ──

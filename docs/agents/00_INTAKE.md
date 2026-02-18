@@ -1912,3 +1912,58 @@
   - Risk Tier: T0
   - Execution Path: FAST_PATH
   - Reason: single-test expectation correction plus validation/docs updates; no runtime logic change.
+
+---
+
+## Intake - 2026-02-18 - OCR-SYSTEM-IMPROVEMENTS-007
+- Goal: implement the provided 11-item OCR-system improvement plan spanning Gemini default model, fuzzy matching tolerance, OCR runtime config/env wiring, OCR pipeline quality/perf fixes, alias-model migration behavior, and calibration auto-apply.
+- Intent confirmation block:
+  - Goal: apply exactly the requested OCR/store/runtime improvements with no extra feature scope.
+  - Constraints: keep changes bounded to listed files; preserve existing contracts and workflows unless explicitly changed by plan.
+  - Done: all 11 requested code changes are implemented, targeted validation is recorded, and AGENTS evidence files are updated.
+- Constraints:
+  - Execute in requested order dependencies (`9` before `10`; others can be grouped by file).
+  - Keep Electron main-process env overrides bounded with clamp ranges from plan.
+  - Keep migration logic safe to re-run and non-destructive.
+- In scope:
+  - `electron/geminiService.cjs` model default fix.
+  - `src/utils/ocr/ocrParser.ts` fuzzy match cap tightening + test additions.
+  - `src/config/runtimeConfig.ts` new `ocr` section.
+  - `electron/ocrHandler.cjs` env-driven constants, low-confidence word filtering, PSM support, async dictionary check, map-screen OCR parallelization.
+  - `src/store/slices/createMappingSlice.ts` stop legacy dual-write in alias correction action.
+  - `src/store/useAppStore.ts` hydration migration from legacy corrections + alias model auto-compaction.
+  - `src/store/slices/createSettingsSlice.ts` calibration recommendation auto-apply action + periodic trigger.
+- Out-of-scope:
+  - UI redesign or settings-layout work.
+  - New OCR provider integrations beyond existing local/cloud/Gemini pipeline.
+  - Schema-breaking migrations.
+- Done condition:
+  - Requested code updates are present in all listed files.
+  - Targeted OCR parser tests and project checks pass (or blockers are explicitly logged with evidence).
+  - Execution, validation, handoff, and decisions logs include this task.
+- AOM_V2:
+  - Risk Tier: T3
+  - Execution Path: FULL_PATH
+  - Reason: multi-file runtime behavior changes across Electron OCR pipeline, persisted-store hydration migration logic, and calibration threshold auto-application.
+
+---
+
+## Intake - 2026-02-18 - GEMINI-MODEL-DEFAULT-008
+- Goal: update default Gemini model from `gemini-2.0-flash-exp` to `gemini-3.0-flash`.
+- Intent confirmation block:
+  - Goal: switch only the fallback model string used when `WILDGATE_GEMINI_MODEL` is unset.
+  - Constraints: single-file, no OCR pipeline behavior changes outside default model name.
+  - Done: `electron/geminiService.cjs` default model string is `gemini-3.0-flash` and lint passes.
+- Constraints:
+  - Scope limited to `electron/geminiService.cjs`.
+  - Do not change initialization flow, auth logic, or request schema.
+- In scope:
+  - one-line default model string update.
+- Out-of-scope:
+  - broader OCR tuning, Gemini prompt changes, or fallback behavior changes.
+- Done condition:
+  - default value updated and validated via focused lint.
+- AOM_V2:
+  - Risk Tier: T0
+  - Execution Path: FAST_PATH
+  - Reason: single-file configuration-string change with no structural/runtime-flow refactor.

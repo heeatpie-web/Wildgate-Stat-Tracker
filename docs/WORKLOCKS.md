@@ -98,6 +98,12 @@ Use this row format when claiming:
 
 | File | Owner | Started (UTC) | Released (UTC) | Purpose |
 |---|---|---|---|---|
+| src/utils/ocr/ocrParser.ts | builder | 2026-02-18T16:40:00Z | 2026-02-18T16:58:00Z | OCR-SYSTEM-IMPROVEMENTS-007 lock released |
+| src/utils/ocr/__tests__/ocrParser.test.ts | verifier | 2026-02-18T16:40:00Z | 2026-02-18T16:58:00Z | OCR-SYSTEM-IMPROVEMENTS-007 lock released |
+| src/config/runtimeConfig.ts | builder | 2026-02-18T16:40:00Z | 2026-02-18T16:58:00Z | OCR-SYSTEM-IMPROVEMENTS-007 lock released |
+| src/store/slices/createMappingSlice.ts | builder | 2026-02-18T16:40:00Z | 2026-02-18T16:58:00Z | OCR-SYSTEM-IMPROVEMENTS-007 lock released |
+| src/store/slices/__tests__/createMappingSlice.test.ts | verifier | 2026-02-18T16:40:00Z | 2026-02-18T16:58:00Z | OCR-SYSTEM-IMPROVEMENTS-007 lock released |
+| src/store/slices/createSettingsSlice.ts | builder | 2026-02-18T16:40:00Z | 2026-02-18T16:58:00Z | OCR-SYSTEM-IMPROVEMENTS-007 lock released |
 | src/components/recording/SquadronPanel.tsx | builder | 2026-02-18T18:40:00Z | 2026-02-18T18:46:00Z | TELEMETRY-LOADOUT-INDICATORS-004 lock released |
 | src/hooks/__tests__/useLogMonitor.test.ts | builder | 2026-02-18T18:40:00Z | 2026-02-18T18:46:00Z | TELEMETRY-LOADOUT-INDICATORS-004 lock released |
 | src/components/recording/SquadronPanel.test.tsx | builder | 2026-02-18T18:40:00Z | 2026-02-18T18:46:00Z | TELEMETRY-LOADOUT-INDICATORS-004 lock released |

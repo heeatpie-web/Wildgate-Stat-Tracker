@@ -85,7 +85,7 @@ export function fuzzyMatch(
   for (const value of validValues) {
     const normalizedValue = value.toUpperCase();
     const dist = distance(normalizedInput, normalizedValue);
-    const scaledMax = Math.max(maxDistance, Math.floor(value.length / 4));
+    const scaledMax = Math.max(maxDistance, Math.min(3, Math.floor(value.length / 5)));
 
     if (dist < bestDistance && dist <= scaledMax) {
       bestDistance = dist;

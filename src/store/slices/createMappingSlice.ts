@@ -171,37 +171,6 @@ const calculateRole = (profile: PlayerProfile): PlayerRole => {
     return 'mixed';
 };
 
-const toLegacyCorrection = (
-    key: string,
-    correctedTo: string,
-    existing?: OcrCorrection,
-    source: OcrAliasSource = 'manual_correction',
-    confidenceWeight = 0.6,
-    context: OcrAliasContext = 'unknown'
-): OcrCorrection => {
-    const baseContexts: Record<OcrAliasContext, number> = {
-        lobby: 0,
-        tactical: 0,
-        social: 0,
-        matchstats: 0,
-        unknown: 0,
-        ...(existing?.contexts || {}),
-    };
-    const contexts: Record<OcrAliasContext, number> = {
-        ...baseContexts,
-        [context]: (baseContexts[context] || 0) + 1,
-    };
-    return {
-        ocrText: key,
-        correctedTo,
-        timestamp: Date.now(),
-        count: (existing?.count || 0) + 1,
-        source,
-        confidenceWeight,
-        contexts,
-    };
-};
-
 const capLearningEvents = (events: OcrLearningEvent[]) => {
     if (events.length <= 500) return events;
     const queuedOrRecent = events.filter((e) =>
@@ -349,7 +318,6 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
 
     recordOcrAliasCorrection: (ocrText, correctedTo, opts = {}) => {
         const raw = normalizeOcrName(ocrText);
-        const normalizedRaw = raw.toLowerCase();
         const target = normalizeOcrName(correctedTo);
         if (!raw || !target) return;
 
@@ -360,23 +328,6 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
             : 0.6;
 
         set((state) => {
-            const rawExisting = state.ocrCorrections[raw];
-            const normalizedExisting = state.ocrCorrections[normalizedRaw];
-            const nextLegacy: Record<string, OcrCorrection> = {
-                ...state.ocrCorrections,
-                [raw]: toLegacyCorrection(raw, target, rawExisting, source, confidenceWeight, context),
-            };
-            if (normalizedRaw !== raw) {
-                nextLegacy[normalizedRaw] = toLegacyCorrection(
-                    normalizedRaw,
-                    target,
-                    normalizedExisting,
-                    source,
-                    confidenceWeight,
-                    context
-                );
-            }
-
             const nextAliasModel = recordAliasCorrection(state.ocrAliasModel, {
                 ocrText: raw,
                 correctedTo: target,
@@ -388,7 +339,6 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
 
             Logger.info('MappingSlice', `OCR alias recorded: "${raw}" -> "${target}" (source: ${source}, context: ${context})`);
             return {
-                ocrCorrections: nextLegacy,
                 ocrAliasModel: nextAliasModel,
             };
         });

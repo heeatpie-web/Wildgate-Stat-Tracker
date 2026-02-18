@@ -2,7 +2,12 @@ import { StateCreator } from 'zustand';
 import { GameMode, ColorblindMode, Language, VisualMode } from '../../types';
 import type { OcrCalibration } from '../../utils/scan/types';
 import { normalizeOcrBatchThreshold } from '../../utils/ocrBatchActions';
-import { appendCalibrationSample, OCR_CALIBRATION_MAX_SAMPLES } from '../../utils/ocrCalibration';
+import {
+  appendCalibrationSample,
+  buildCalibrationBuckets,
+  OCR_CALIBRATION_MAX_SAMPLES,
+  recommendCalibrationThreshold,
+} from '../../utils/ocrCalibration';
 import type { CalibrationSample } from '../../utils/ocrCalibration';
 
 /** Visual style variant for the in-game overlay. */
@@ -18,7 +23,7 @@ export type ResultOcrFlowMode = 'prompt' | 'background';
 
 /** Telemetry monitoring profile: favors lower heat, balanced behavior, or faster updates. */
 export type TelemetryPerformanceProfile = 'low-power' | 'balanced' | 'high-accuracy';
-export type OcrThresholdRecommendationMode = 'manual' | 'assisted';
+export type OcrThresholdRecommendationMode = 'manual' | 'assisted' | 'auto';
 export type OcrLearningReviewMode = 'conservative' | 'balanced' | 'aggressive';
 export type DashboardPreloadView = 'analytics' | 'history' | 'smart-captures' | 'players' | 'dev-ocr';
 
@@ -178,6 +183,7 @@ export interface SettingsSlice {
   setOcrBestGuessThresholds: (update: Partial<OcrBestGuessThresholds>) => void;
   setOcrCalibration: (update: Partial<OcrCalibration>) => void;
   resetOcrCalibration: () => void;
+  applyCalibrationRecommendations: () => void;
   recordCalibrationSample: (sample: CalibrationSample) => void;
   clearOcrCalibrationSamples: () => void;
   setOcrBatchAcceptThreshold: (threshold: number) => void;
@@ -311,7 +317,11 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   }),
   resetDashboardPreloadStats: () => set({ dashboardPreloadStats: defaultPreloadStats() }),
   setOcrThresholdRecommendationMode: (mode) => set({
-    ocrThresholdRecommendationMode: mode === 'manual' ? 'manual' : 'assisted'
+    ocrThresholdRecommendationMode: mode === 'manual'
+      ? 'manual'
+      : mode === 'auto'
+        ? 'auto'
+        : 'assisted'
   }),
   pushOcrThresholdHistory: (entry) => set((state) => ({
     ocrThresholdHistory: [entry, ...(state.ocrThresholdHistory || [])].slice(0, 20)
@@ -345,13 +355,63 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
       luminanceMin: 30
     }
   }),
-  recordCalibrationSample: (sample) => set((state) => ({
-    ocrCalibrationSamples: appendCalibrationSample(
-      state.ocrCalibrationSamples || [],
-      sample,
-      OCR_CALIBRATION_MAX_SAMPLES
-    ),
-  })),
+  applyCalibrationRecommendations: () => set((state) => {
+    if (state.ocrThresholdRecommendationMode !== 'auto') {
+      return {};
+    }
+    const samples = state.ocrCalibrationSamples || [];
+    if (samples.length < 30) return {};
+
+    const buckets = buildCalibrationBuckets(samples);
+    const recommended = recommendCalibrationThreshold(buckets);
+    if (recommended === null) return {};
+
+    const mode = state.ocrMode || 'local';
+    const modeKey = (mode === 'both' || mode === 'hybrid-plus')
+      ? 'merged'
+      : mode === 'cloud'
+        ? 'cloud'
+        : 'local';
+
+    const nextThresholds: OcrBestGuessThresholds = {
+      ...state.ocrBestGuessThresholds,
+      [modeKey]: {
+        ...state.ocrBestGuessThresholds[modeKey],
+        player: recommended,
+      },
+    };
+
+    return {
+      ocrBestGuessThresholds: nextThresholds,
+      ocrThresholdHistory: [
+        {
+          timestamp: Date.now(),
+          source: `auto-calibration-${modeKey}:${recommended}`,
+          thresholds: {
+            cloud: { ...state.ocrBestGuessThresholds.cloud },
+            merged: { ...state.ocrBestGuessThresholds.merged },
+            local: { ...state.ocrBestGuessThresholds.local },
+            lowConfidenceBump: state.ocrBestGuessThresholds.lowConfidenceBump,
+          },
+        },
+        ...(state.ocrThresholdHistory || []),
+      ].slice(0, 50),
+    };
+  }),
+  recordCalibrationSample: (sample) => {
+    set((state) => {
+      const next = appendCalibrationSample(
+        state.ocrCalibrationSamples || [],
+        sample,
+        OCR_CALIBRATION_MAX_SAMPLES
+      );
+      return { ocrCalibrationSamples: next };
+    });
+    const samples = get().ocrCalibrationSamples || [];
+    if (samples.length > 0 && samples.length % 50 === 0) {
+      get().applyCalibrationRecommendations?.();
+    }
+  },
   clearOcrCalibrationSamples: () => set({ ocrCalibrationSamples: [] }),
   setOcrBatchAcceptThreshold: (threshold) => set({ ocrBatchAcceptThreshold: normalizeOcrBatchThreshold(threshold) }),
   setOcrRegions: (update) => set(state => ({

@@ -134,18 +134,20 @@ describe('createMappingSlice', () => {
   // ── OCR Corrections ──
 
   describe('ocrCorrections', () => {
-    it('records a new correction', () => {
+    it('writes alias-model entries without updating legacy correction map', () => {
       store.getState().recordOcrCorrection('Adrlan', 'Adrian');
       const correction = store.getState().getOcrCorrection('Adrlan');
-      expect(correction).toBeDefined();
-      expect(correction!.correctedTo).toBe('Adrian');
-      expect(correction!.count).toBe(1);
+      expect(correction).toBeUndefined();
+      const model = store.getState().ocrAliasModel;
+      expect(model.entries['adrlan']).toBeDefined();
+      expect(model.entries['adrlan'][0].targetName).toBe('Adrian');
     });
 
-    it('increments count on repeat correction', () => {
+    it('increments alias-model count on repeat correction', () => {
       store.getState().recordOcrCorrection('Adrlan', 'Adrian');
       store.getState().recordOcrCorrection('Adrlan', 'Adrian');
-      expect(store.getState().getOcrCorrection('Adrlan')!.count).toBe(2);
+      const model = store.getState().ocrAliasModel;
+      expect(model.entries['adrlan'][0].count).toBe(2);
     });
 
     it('returns undefined for unknown text', () => {

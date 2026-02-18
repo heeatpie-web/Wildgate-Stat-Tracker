@@ -25,6 +25,15 @@ export const runtimeConfig = {
     autoOcrBundleDelayMs: readEnvNumber('VITE_SMART_CAPTURE_AUTO_BUNDLE_DELAY_MS', 3_750, 500, 30_000),
     captureThrottleMs: readEnvNumber('VITE_SMART_CAPTURE_THROTTLE_MS', 650, 100, 10_000),
   },
+  ocr: {
+    cacheMaxEntries:      readEnvNumber('VITE_OCR_CACHE_MAX',           50,   10,  500),
+    workerPoolSize:       readEnvNumber('VITE_OCR_WORKER_POOL_SIZE',     3,    1,    8),
+    regionOcrScale:       readEnvNumber('VITE_OCR_REGION_SCALE',         3,    1,    6),
+    cloudTimeoutMs:       readEnvNumber('VITE_OCR_CLOUD_TIMEOUT_MS',  7000, 1000, 30000),
+    lowWordConfidence:    readEnvNumber('VITE_OCR_WORD_CONF_MIN',        25,    0,   80),
+    learningQueueMax:     readEnvNumber('VITE_OCR_LEARNING_QUEUE_MAX',  200,   50, 1000),
+    learningEventMax:     readEnvNumber('VITE_OCR_LEARNING_EVENT_MAX',  500,  100, 5000),
+  },
   app: {
     preloadIdleTimeoutMinMs: readEnvNumber('VITE_PRELOAD_IDLE_TIMEOUT_MIN_MS', 350, 100, 5_000),
     preloadIdleTimeoutMaxMs: readEnvNumber('VITE_PRELOAD_IDLE_TIMEOUT_MAX_MS', 1_600, 200, 10_000),

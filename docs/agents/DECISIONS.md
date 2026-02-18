@@ -1943,3 +1943,36 @@ Rule:
   - `src/components/smart-captures/QueueItemRichPreview.test.tsx`
 - Revisit trigger/expiry:
   - Revisit if product requirements later call for optional raw ID display in queue items.
+
+- Type: `scope`
+- Decision: for OCR-SYSTEM-IMPROVEMENTS-007 calibration wiring, keep existing threshold-history schema (`source` + full threshold snapshot) and apply recommendations only in `auto` mode.
+- Date: 2026-02-18
+- Options considered:
+  - Introduce new history entry shape (`mode` + `recommended`) for this increment.
+  - Preserve current history schema and record recommendation applications with source tags.
+- Rationale:
+  - Existing revert/history flows already depend on full-threshold snapshots.
+  - Scope requirement was to wire recommendation application, not redesign threshold-history contracts.
+  - Auto-only gating matches requested behavior while avoiding assisted-mode surprise writes.
+- Impacted files/artifacts:
+  - `src/store/slices/createSettingsSlice.ts`
+  - `docs/agents/03_VALIDATION.md`
+  - `docs/agents/04_HANDOFF.md`
+- Revisit trigger/expiry:
+  - Revisit if product requirements explicitly require separate recommendation telemetry/history objects distinct from threshold rollback history.
+
+- Type: `architecture`
+- Decision: apply OCR PSM selection from available pre-OCR screen-type hints and explicit map player-region override (`PSM=11`) rather than adding a second full-image OCR pass post-detection.
+- Date: 2026-02-18
+- Options considered:
+  - Re-run full OCR after detection solely to set ideal PSM per detected screen type.
+  - Use existing screen-type hints before OCR and preserve single-pass full-image recognition.
+- Rationale:
+  - Avoids adding a second heavy OCR pass and latency regression.
+  - Keeps behavior bounded while still enabling targeted PSM gains where hint/region context is known.
+- Impacted files/artifacts:
+  - `electron/ocrHandler.cjs`
+  - `docs/agents/03_VALIDATION.md`
+  - `docs/agents/04_HANDOFF.md`
+- Revisit trigger/expiry:
+  - Revisit if reliable pre-OCR screen-type classification is unavailable in production captures and PSM logs show persistent auto-mode fallback for known screen types.

@@ -2447,3 +2447,98 @@
 
 ## Remaining / Risks
 - No additional gate failures remain in this continuation increment.
+
+---
+
+## Handoff - 2026-02-18 - OCR-SYSTEM-IMPROVEMENTS-007
+## Status
+- Completed.
+
+## What Changed
+- Gemini model default fix:
+  - `electron/geminiService.cjs`
+    - default model changed to `gemini-2.0-flash-exp`.
+
+- OCR parser tolerance tightening:
+  - `src/utils/ocr/ocrParser.ts`
+    - long-name fuzzy threshold now caps at 3 edits.
+  - `src/utils/ocr/__tests__/ocrParser.test.ts`
+    - added long-name regression cases for `AlexanderSmith` variants.
+
+- Renderer runtime OCR config:
+  - `src/config/runtimeConfig.ts`
+    - added `ocr` config section with env-bounded values.
+
+- Electron OCR pipeline/runtime updates:
+  - `electron/ocrHandler.cjs`
+    - env-backed clamps for cache size, worker pool size, region scale, cloud timeout, and low-word-confidence threshold.
+    - low-confidence word filtering before extraction output.
+    - optional per-job PSM support in worker parameters and OCR calls.
+    - async dictionary file existence check via `fsPromises.access`.
+    - map-screen extract path now parallelizes full map extraction and player-region OCR.
+
+- Store/model migration changes:
+  - `src/store/slices/createMappingSlice.ts`
+    - removed legacy `ocrCorrections` write in `recordOcrAliasCorrection`.
+  - `src/store/useAppStore.ts`
+    - hydration migration from `ocrCorrections` to `ocrAliasModel` and hydration-time alias compaction.
+
+- Calibration auto-apply wiring:
+  - `src/store/slices/createSettingsSlice.ts`
+    - added `applyCalibrationRecommendations` action and 50-sample trigger in `recordCalibrationSample`.
+    - final alignment: auto-apply only runs when recommendation mode is `auto`.
+
+- Test alignment for write-target change:
+  - `src/store/slices/__tests__/createMappingSlice.test.ts`
+    - updated expectations to reflect alias-model-only write path.
+
+## What Was Verified
+- `npm test -- src/utils/ocr/__tests__/ocrParser.test.ts src/store/slices/__tests__/createMappingSlice.test.ts` passed (`90/90`).
+- `npx eslint ...` on all touched OCR/system files passed.
+- `npm run -s typecheck` fails due to pre-existing unrelated `HistoryTable` errors (`shouldLimitAll` missing).
+- `npm test` fails due to pre-existing unrelated `ActionPanel.test.tsx` mock/runtime issue (`useAppStore.getState is not a function`).
+
+## Remaining / Risks
+- Manual runtime checks for startup log lines (Gemini init model string, worker pool size env override, PSM-tagged OCR logs, noisy-image filtered-word count) still need interactive app run verification.
+- Legacy `ocrCorrections` remains persisted for compatibility, but new alias corrections now write only to `ocrAliasModel`.
+- Workspace contains an untracked `nul` entry that was not modified during this task.
+
+---
+
+## Handoff Addendum - 2026-02-18 - OCR-SYSTEM-IMPROVEMENTS-007 (Runtime Verification)
+## Status
+- Runtime verification completed.
+
+## Additional Verification Completed
+- Gemini startup/default-model log verified via direct service initialization:
+  - `[GeminiService] Initialized (gemini-2.0-flash-exp, us-central1)`.
+- OCR worker-pool env override verified:
+  - with `WILDGATE_OCR_WORKER_POOL_SIZE=2`, OCR startup logged 2 workers.
+- PSM routing verified from runtime logs:
+  - crew-hub-hinted pass logged `PSM=4`.
+  - map-screen-hinted pass logged `PSM=11`.
+- Low-confidence filtering verified on noisy OCR sample:
+  - threshold `0` produced `52` words (`min conf 25.3`).
+  - threshold `80` produced `37` words (`min conf 82.1`).
+
+## Remaining / Risks (Updated)
+- Manual runtime verification items from the original plan are now complete.
+- Pre-existing unrelated workspace failures remain:
+  - `npm run -s typecheck` (`HistoryTable.tsx` missing `shouldLimitAll`).
+  - `npm test` (`ActionPanel.test.tsx` mock/runtime path: `useAppStore.getState is not a function`).
+
+---
+
+## Handoff - 2026-02-18 - GEMINI-MODEL-DEFAULT-008
+## Status
+- Completed.
+
+## What Changed
+- `electron/geminiService.cjs`
+  - default fallback model updated from `gemini-2.0-flash-exp` to `gemini-3.0-flash`.
+
+## What Was Verified
+- `npx eslint electron/geminiService.cjs` passed.
+
+## Remaining / Risks
+- If `gemini-3.0-flash` is unavailable in the active Vertex region/project, runtime API calls will fail until overridden with `WILDGATE_GEMINI_MODEL`.
