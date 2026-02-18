@@ -786,7 +786,7 @@ const DevOCRPanel: React.FC = () => {
     );
 
     return (
-        <div className="flex flex-col h-full min-h-0 bg-md-sys-surface1 p-4 gap-4 overflow-hidden">
+        <div className="flex flex-col h-full min-h-0 bg-md-sys-surface1 p-4 gap-4 overflow-y-auto custom-scrollbar">
             {/* Header / Tabs */}
             <div className="flex gap-2 mb-1 shrink-0">
                 <button onClick={() => setTab('OCR')} className={`px-4 py-2 rounded-full font-bold ${tab === 'OCR' ? 'bg-md-sys-primary text-md-sys-on-primary' : 'bg-md-sys-surface3'}`}>OCR Lab</button>
@@ -1131,7 +1131,7 @@ const DevOCRPanel: React.FC = () => {
                     </div>
                 </div>
             ) : (
-                <div className="w-full max-w-6xl flex gap-4 h-full">
+                <div className="w-full max-w-6xl flex gap-4 h-full min-h-0">
                     {/* Main Content */}
                     <div className="flex-1 flex flex-col gap-4">
                         <div className="flex justify-between items-center">
@@ -1181,7 +1181,7 @@ const DevOCRPanel: React.FC = () => {
                             </div>
 
                             {/* Controls & Results */}
-                            <div className="w-80 flex flex-col gap-4 h-full overflow-hidden">
+                            <div className="w-80 flex flex-col gap-4 h-full min-h-0 overflow-y-auto custom-scrollbar pr-1">
                                 <button
                                     onClick={() => { void runOCR(false); }}
                                     disabled={loading || !imageSrc}

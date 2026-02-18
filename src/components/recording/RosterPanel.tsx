@@ -307,7 +307,7 @@ export const RosterPanel: React.FC = () => {
                         const teamColor = Object.entries(sessionTeams || {}).find(([_, members]) => (members as string[]).includes(p))?.[0];
 
                         return (
-                            <div key={p} className="group md3-surface rounded-control px-3 py-2.5 border border-md-sys-outline/5 flex items-center justify-between gap-2 min-w-0">
+                            <div key={p} className="roster-player-row group md3-surface rounded-control px-3 py-2.5 border border-md-sys-outline/12 hover:border-md-sys-primary/28 hover:bg-md-sys-on-surface/5 transition-colors flex items-center justify-between gap-2 min-w-0">
                                 <div className="flex items-center gap-2 overflow-hidden min-w-0">
                                     <button
                                         onClick={() => onToggleFavorite(p)}
@@ -325,13 +325,13 @@ export const RosterPanel: React.FC = () => {
                                     )}
                                     <button
                                         onClick={() => setDrillDownTarget({ name: p, type: 'Teammate' })}
-                                        className="text-label-sm font-medium text-left hover:text-md-sys-primary truncate"
+                                        className="roster-player-name text-label-sm font-semibold text-left truncate rounded-control px-1.5 py-0.5 border border-transparent hover:text-md-sys-primary hover:border-md-sys-primary/35 hover:bg-md-sys-primary/10 transition-colors"
                                         title={pilotNotes[p]}
                                     >
                                         {p}
                                     </button>
                                 </div>
-                                <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex items-center gap-1 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
                                     <button onClick={() => openEditModal(p)} className="md3-icon-btn md3-icon-btn--small w-7 h-7 min-w-7 hover:bg-md-sys-primary hover:text-md-sys-onPrimary" title="Edit" aria-label={`Edit ${p}`}>
                                         <Edit2 size={12} />
                                     </button>

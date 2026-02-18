@@ -80,8 +80,10 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
         </div>
     ) : null;
 
+    const leftShellChrome = isNarrow ? 'recording-left-shell rounded-2xl p-4' : '';
+
     const LeftPanel = (
-        <div className={`recording-left-shell min-h-0 ${!isNarrow ? 'h-full' : ''} flex flex-col gap-4 rounded-2xl p-4 ${shouldScrollLeftPanel ? 'overflow-y-auto custom-scrollbar pr-1' : 'overflow-hidden'}`}>
+        <div className={`min-h-0 ${!isNarrow ? 'h-full' : ''} flex flex-col gap-4 ${leftShellChrome} ${shouldScrollLeftPanel ? 'overflow-y-auto custom-scrollbar pr-1' : 'overflow-hidden'}`}>
             {LeftTabBar}
             {density === 'standard' ? (
                 <>

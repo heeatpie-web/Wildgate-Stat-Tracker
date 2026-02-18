@@ -615,15 +615,9 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     return (
         <div className={`flex flex-col ${isCompact ? 'gap-3' : 'gap-4'}`}>
             {/* Mission Section */}
-            <div data-recording-panel="match-recording" className={`md3-card flex flex-col overflow-visible mg-surface shadow-lg ${isCompact ? 'p-3 gap-3' : 'p-4 gap-4'}`}>
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className={`${isCompact ? 'w-8 h-8 rounded-control' : 'w-10 h-10 rounded-card'} bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer flex items-center justify-center`}>
-                            <Trophy size={isCompact ? 14 : 18} />
-                        </div>
-                        <h3 className="md3-title font-semibold text-md-sys-on-surface uppercase tracking-tight">Match Recording</h3>
-                    </div>
-                    {(capturedScreenshots.length > 0 || pendingOcrCountGlobal > 0) && (
+            <div data-recording-panel="match-recording" className={`md3-card recording-inside-panel flex flex-col overflow-visible mg-surface shadow-lg ${isCompact ? 'p-3 gap-3' : 'p-4 gap-4'}`}>
+                {(capturedScreenshots.length > 0 || pendingOcrCountGlobal > 0) && (
+                    <div className="flex justify-end">
                         <button
                             onClick={pendingData ? handleReviewBucket : handleProcessQueue}
                             disabled={isBusy}
@@ -634,8 +628,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                                 {pendingData ? capturedScreenshots.length : pendingOcrCountGlobal}
                             </span>
                         </button>
-                    )}
-                </div>
+                    </div>
+                )}
 
                 <div className={`mg-surface rounded-card border border-md-sys-outline/10 ${isCompact ? 'p-1.5' : 'p-2'}`}>
                     <SessionTimer

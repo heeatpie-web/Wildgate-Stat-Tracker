@@ -55,21 +55,6 @@ export const IdMapper: React.FC = () => {
         previousUnknownCountRef.current = unknownCount;
     }, [detectedUnknowns]);
 
-    useEffect(() => {
-        const unknownCount = Object.keys(detectedUnknowns || {}).length;
-        const knownCount = Object.keys(knownMappings || {}).length;
-        const relationshipCount = Object.keys(playerProfiles || {}).length;
-        if (activeTab === 'unknowns' && unknownCount === 0) {
-            if (knownCount > 0) {
-                setActiveTab('known');
-                return;
-            }
-            if (relationshipCount > 0) {
-                setActiveTab('relationships');
-            }
-        }
-    }, [activeTab, detectedUnknowns, knownMappings, playerProfiles]);
-
     const handleSave = (id: string) => {
         const name = nameInputs[id];
         if (name && name.trim()) {

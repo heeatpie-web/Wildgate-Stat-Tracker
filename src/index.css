@@ -178,6 +178,24 @@ body[data-mode='twilight'] .recording-inside-panel input[type='number'] {
   border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 80%);
 }
 
+/* Twilight: align Ship & Loadout block/button treatment with the other recording panels. */
+body[data-mode='twilight'] [data-recording-panel='ship-loadout'] .md3-chip {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 24%);
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 70%);
+  color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 26%);
+}
+
+body[data-mode='twilight'] [data-recording-panel='ship-loadout'] .md3-chip:hover {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 14%);
+}
+
+body[data-mode='twilight'] [data-recording-panel='ship-loadout'] .md3-chip--selected {
+  background: color-mix(in srgb, var(--md-sys-color-primary), transparent 84%);
+  border-color: color-mix(in srgb, var(--md-sys-color-primary), transparent 48%);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 58%);
+}
+
 /* Twilight click-target clarity improvements for dense list/action UIs. */
 body[data-mode='twilight'] .idmapper-click-target,
 body[data-mode='twilight'] .player-list-item {
@@ -189,6 +207,18 @@ body[data-mode='twilight'] .idmapper-click-target:hover,
 body[data-mode='twilight'] .player-list-item:hover {
   border-color: color-mix(in srgb, var(--md-sys-color-primary), transparent 55%);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 72%);
+}
+
+body[data-mode='twilight'] .roster-player-row {
+  border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 46%);
+}
+
+body[data-mode='twilight'] .roster-player-row:hover {
+  border-color: color-mix(in srgb, var(--md-sys-color-primary), transparent 50%);
+}
+
+body[data-mode='twilight'] .roster-player-name {
+  color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 12%);
 }
 
 body[data-mode='twilight'] .player-list-name {

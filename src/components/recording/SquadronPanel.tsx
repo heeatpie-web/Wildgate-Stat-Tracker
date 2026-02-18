@@ -56,7 +56,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
 
   if (density === 'compact') {
     return (
-      <div data-recording-panel="ship-loadout" className="md3-card recording-inside-panel p-4 flex flex-col gap-3 mg-surface shadow-lg">
+      <div data-recording-panel="ship-loadout" className="md3-card recording-inside-panel flex flex-col overflow-visible mg-surface shadow-lg p-4 gap-3">
         <div className="recording-panel-header">
           <div className="recording-panel-heading">
             <span className="recording-panel-heading-icon">
@@ -117,9 +117,9 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
               <button
                 key={s}
                 onClick={() => setActiveShip(s)}
-                className={`relative min-h-32px py-1.5 px-1.5 text-label-sm leading-tight text-center font-semibold transition-all whitespace-normal rounded-xl ${activeShip === s
-                  ? 'md3-chip md3-chip--selected ring-2 ring-md-sys-primary/60 bg-md-sys-primary/10'
-                  : 'md3-chip opacity-60 text-md-sys-on-surface/60 hover:opacity-100 hover:bg-md-sys-on-surface/5'
+                className={`relative min-h-32px py-1.5 px-1.5 text-label-sm leading-tight text-center font-semibold transition-all whitespace-normal rounded-xl border ${activeShip === s
+                  ? 'bg-md-sys-primary/14 border-md-sys-primary/45 text-md-sys-on-surface shadow-inner'
+                  : 'md3-surface border-md-sys-outline/20 text-md-sys-on-surface/78 hover:border-md-sys-primary/35 hover:bg-md-sys-on-surface/5'
                   }`}
               >
                 {s.split('(')[0].trim()}
@@ -139,9 +139,9 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
               <button
                 key={c}
                 onClick={() => setActiveHero(c)}
-                className={`relative min-h-28px py-1 px-1 text-label-sm leading-tight text-center font-semibold transition-all whitespace-normal rounded-xl ${activeHero === c
-                  ? 'md3-chip md3-chip--selected ring-2 ring-md-sys-primary/60 bg-md-sys-primary/10'
-                  : 'md3-chip opacity-60 text-md-sys-on-surface/60 hover:opacity-100 hover:bg-md-sys-on-surface/5'
+                className={`relative min-h-28px py-1 px-1 text-label-sm leading-tight text-center font-semibold transition-all whitespace-normal rounded-xl border ${activeHero === c
+                  ? 'bg-md-sys-primary/14 border-md-sys-primary/45 text-md-sys-on-surface shadow-inner'
+                  : 'md3-surface border-md-sys-outline/20 text-md-sys-on-surface/78 hover:border-md-sys-primary/35 hover:bg-md-sys-on-surface/5'
                   }`}
               >
                 {c}
@@ -159,7 +159,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
   return (
       <div
         data-recording-panel="ship-loadout"
-        className="md3-card recording-inside-panel p-4 flex flex-col gap-4 mg-surface shadow-lg"
+        className="md3-card recording-inside-panel flex flex-col overflow-visible mg-surface shadow-lg p-4 gap-4"
       >
       {/* Header */}
       <div className="recording-panel-header">
@@ -220,9 +220,9 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
           <button
             key={s}
             onClick={() => setActiveShip(s)}
-            className={`relative min-h-40px py-2 px-2 md3-label leading-tight text-center font-semibold transition-all whitespace-normal justify-center ${activeShip === s
-              ? 'md3-chip md3-chip--selected ring-2 ring-md-sys-primary/60 bg-md-sys-primary/10'
-              : 'md3-chip opacity-60 text-md-sys-on-surface/60 hover:opacity-100 hover:bg-md-sys-on-surface/5'
+            className={`relative min-h-40px py-2 px-2 md3-label leading-tight text-center font-semibold transition-all whitespace-normal justify-center rounded-control border ${activeShip === s
+              ? 'bg-md-sys-primary/14 border-md-sys-primary/45 text-md-sys-on-surface shadow-inner'
+              : 'md3-surface border-md-sys-outline/20 text-md-sys-on-surface/78 hover:border-md-sys-primary/35 hover:bg-md-sys-on-surface/5'
               }`}
           >
             {s.split('(')[0].trim()}
@@ -241,9 +241,9 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
             <button
               key={c}
               onClick={() => setActiveHero(c)}
-              className={`relative min-h-36px py-1.5 px-1 md3-label leading-tight text-center font-semibold transition-all whitespace-normal justify-center ${activeHero === c
-                ? 'md3-chip md3-chip--selected ring-2 ring-md-sys-primary/60 bg-md-sys-primary/10'
-                : 'md3-chip opacity-60 text-md-sys-on-surface/60 hover:opacity-100 hover:bg-md-sys-on-surface/5'
+              className={`relative min-h-36px py-1.5 px-1 md3-label leading-tight text-center font-semibold transition-all whitespace-normal justify-center rounded-control border ${activeHero === c
+                ? 'bg-md-sys-primary/14 border-md-sys-primary/45 text-md-sys-on-surface shadow-inner'
+                : 'md3-surface border-md-sys-outline/20 text-md-sys-on-surface/78 hover:border-md-sys-primary/35 hover:bg-md-sys-on-surface/5'
                 }`}
             >
               {c}

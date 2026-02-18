@@ -30,6 +30,28 @@ const {
   URL_ALLOWLIST_DISABLED,
 } = require('./security/ipcValidation.cjs');
 const isDev = !app.isPackaged;
+// Normalize app name before any path resolution so dev/prod use the same userData root.
+if (isDev && app.getName() !== 'Wildgate Stat Tracker') {
+  app.setName('Wildgate Stat Tracker');
+}
+
+// Keep Chromium cache/service-worker storage in a writable local path on Windows.
+const SESSION_DATA_ROOT = (() => {
+  const override = String(process.env.WILDGATE_SESSION_DATA_ROOT || '').trim();
+  if (override) return path.resolve(override);
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA || path.join(app.getPath('home'), 'AppData', 'Local');
+    return path.resolve(path.join(localAppData, app.getName(), 'SessionData'));
+  }
+  return path.resolve(path.join(app.getPath('userData'), 'SessionData'));
+})();
+try {
+  fs.mkdirSync(SESSION_DATA_ROOT, { recursive: true });
+  app.setPath('sessionData', SESSION_DATA_ROOT);
+} catch (e) {
+  console.warn('[Startup] Failed to set sessionData path:', e?.message || e);
+}
+
 const ALLOW_RUNTIME_DEVTOOLS = process.env.WILDGATE_ALLOW_DEVTOOLS === '1';
 const DEV_SERVER_URL = process.env.WILDGATE_DEV_SERVER_URL || 'http://localhost:5173';
 const USER_DATA_ROOT = path.resolve(app.getPath('userData'));
@@ -718,13 +740,6 @@ function buildCorpusSampleSignature({ teammates, opponentTeams, modifiers }) {
     modifiers: normalizedModifiers,
   });
   return crypto.createHash('sha1').update(signaturePayload).digest('hex');
-}
-
-// Force app name to match productName so app.getPath('userData') resolves
-// to the same directory in both dev and production (e.g. "Wildgate Stat Tracker").
-// Without this, dev mode uses the package "name" field which differs from productName.
-if (isDev) {
-  app.setName('Wildgate Stat Tracker');
 }
 
 const DEV_T0_MS = isDev ? Date.now() : 0;

@@ -8,6 +8,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useFocusTrap } from './hooks/useFocusTrap';
 import { Sidebar } from './components/Sidebar';
 import { RecordingView } from './components/RecordingView';
+import HistoryTable from './components/HistoryTable';
 import { Header } from './components/Header';
 import { WindowFrame } from './components/WindowFrame';
 import { OverlayView } from './components/OverlayView';
@@ -21,12 +22,11 @@ import { TelemetryPanel } from './components/TelemetryPanel';
 import { ReviewQueueModal } from './components/ReviewQueueModal';
 import Tutorial from './components/Tutorial';
 import { WindowResizer } from './components/WindowResizer';
-type LazyDashboardView = 'analytics' | 'history' | 'smart-captures' | 'players' | 'dev-ocr';
+type LazyDashboardView = 'analytics' | 'smart-captures' | 'players' | 'dev-ocr';
 type LazyDashboardModule = { default: React.ComponentType<object> };
-const DEFAULT_PRELOAD_QUEUE: LazyDashboardView[] = ['analytics', 'history', 'smart-captures', 'players', 'dev-ocr'];
+const DEFAULT_PRELOAD_QUEUE: LazyDashboardView[] = ['analytics', 'smart-captures', 'players', 'dev-ocr'];
 const lazyDashboardStatus: Record<LazyDashboardView, 'idle' | 'loading' | 'ready' | 'error'> = {
     analytics: 'idle',
-    history: 'idle',
     'smart-captures': 'idle',
     players: 'idle',
     'dev-ocr': 'idle',
@@ -34,14 +34,12 @@ const lazyDashboardStatus: Record<LazyDashboardView, 'idle' | 'loading' | 'ready
 const lazyDashboardPromises: Partial<Record<LazyDashboardView, Promise<LazyDashboardModule>>> = {};
 const lazyDashboardLoaders: Record<LazyDashboardView, () => Promise<LazyDashboardModule>> = {
     analytics: () => import('./components/AnalyticsPanel'),
-    history: () => import('./components/HistoryTable'),
     'smart-captures': () => import('./components/SmartCapturesPanel'),
     players: () => import('./components/PlayerHub'),
     'dev-ocr': () => import('./components/DevOCRPanel'),
 };
 const isLazyDashboardView = (view: string): view is LazyDashboardView =>
     view === 'analytics' ||
-    view === 'history' ||
     view === 'smart-captures' ||
     view === 'players' ||
     view === 'dev-ocr';
@@ -62,8 +60,6 @@ const loadDashboardChunk = (view: LazyDashboardView): Promise<LazyDashboardModul
 };
 const loadAnalyticsPanel = () => loadDashboardChunk('analytics');
 const AnalyticsPanel = React.lazy(loadAnalyticsPanel);
-const loadHistoryTable = () => loadDashboardChunk('history');
-const HistoryTable = React.lazy(loadHistoryTable);
 import { APP_VERSION, Match, MatchResult } from './types';
 import { CHANGELOG } from './utils/changelog';
 import { Toast } from './components/Toast';
@@ -208,7 +204,6 @@ const App: React.FC = () => {
     const welcomeBackToastShownRef = React.useRef(false);
     const [preloadedViews, setPreloadedViews] = useState<Record<LazyDashboardView, boolean>>({
         analytics: lazyDashboardStatus.analytics === 'ready',
-        history: lazyDashboardStatus.history === 'ready',
         'smart-captures': lazyDashboardStatus['smart-captures'] === 'ready',
         players: lazyDashboardStatus.players === 'ready',
         'dev-ocr': lazyDashboardStatus['dev-ocr'] === 'ready',
