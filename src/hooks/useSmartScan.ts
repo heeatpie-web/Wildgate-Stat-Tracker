@@ -330,7 +330,8 @@ export const useSmartScan = () => {
                                 }
 
                                 const screenW = (r as any)._screenW || 1;
-                                const isLeftSide = (r as any)._cx < screenW * 0.5;
+                                const cx = (r as any)._cx;
+                                const isLeftSide = typeof cx === 'number' ? cx < screenW * 0.5 : false;
                                 const hasKnownTeam = r.teamColor && r.teamColor !== 'Unknown';
                                 const isTeammate = res.mode === 'Social'
                                     ? true

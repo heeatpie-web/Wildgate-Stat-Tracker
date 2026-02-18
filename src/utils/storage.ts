@@ -477,14 +477,18 @@ export const StorageService = {
       saveTimeout = setTimeout(async () => {
         const snapshot = lastData;
         const snapshotVersion = pendingVersion;
-        const ok = snapshot ? await writeNow(snapshot) : true;
-        if (ok) {
-          lastPersistedVersion = Math.max(lastPersistedVersion, snapshotVersion);
-        }
         saveTimeout = null;
         const resolvers = pendingResolvers;
         pendingResolvers = [];
-        resolvers.forEach((resolver) => resolver(ok));
+        let ok = false;
+        try {
+          ok = snapshot ? await writeNow(snapshot) : true;
+          if (ok) {
+            lastPersistedVersion = Math.max(lastPersistedVersion, snapshotVersion);
+          }
+        } finally {
+          resolvers.forEach((resolver) => resolver(ok));
+        }
       }, runtimeConfig.storage.saveDebounceMs); // tighter debounce to reduce loss window
     });
   },

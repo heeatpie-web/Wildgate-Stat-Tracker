@@ -40,7 +40,8 @@ export const exportToCSV = (matches: Match[]) => {
       const teammates = m.teammates.join('|');
       const opponents = (m.opponents || []).join('|');
       // Use reachModifiers with fallback to hazards for old data
-      const modifiers = (m.reachModifiers || (m as any).hazards || []).join('|');
+      const legacyHazards = Array.isArray((m as Record<string, unknown>).hazards) ? (m as Record<string, unknown>).hazards as string[] : [];
+      const modifiers = (m.reachModifiers?.length ? m.reachModifiers : legacyHazards).join('|');
       
       const cleanNotes = '';
       
@@ -125,7 +126,8 @@ export const generateMatchImage = (match: Match) => {
   ctx.fillText(`Ship: ${shortShip} | Hero: ${match.hero}`, 40, y);
   y += 35;
 
-  const modifiers = (match.reachModifiers || (match as any).hazards || []);
+  const legacyHazards = Array.isArray((match as Record<string, unknown>).hazards) ? (match as Record<string, unknown>).hazards as string[] : [];
+  const modifiers = match.reachModifiers?.length ? match.reachModifiers : legacyHazards;
   const modText = modifiers.length > 0 ? modifiers.slice(0, 3).join(", ") + (modifiers.length > 3 ? "..." : "") : "No Modifiers";
   ctx.fillText(`Reach Mods: ${modText}`, 40, y);
   y += 35;
