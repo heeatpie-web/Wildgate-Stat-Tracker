@@ -338,32 +338,32 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     });
 
     // 5. Consolidate playerProfiles (from MappingSlice, accessible via combined store)
-    const fullState = get() as any;
-    const profiles = fullState.playerProfiles;
-    if (profiles) {
+    // get() returns DataSlice, but the combined store also includes MappingSlice fields at runtime.
+    const profiles = (get() as unknown as { playerProfiles?: Record<string, Record<string, unknown>> }).playerProfiles;
+    if (profiles && typeof profiles === 'object') {
       const srcProfile = profiles[sourceName];
       const tgtProfile = profiles[targetName];
       if (srcProfile && tgtProfile) {
         // Merge sighting counts and relationship data
         const merged = { ...tgtProfile };
-        merged.sightings = (tgtProfile.sightings || 0) + (srcProfile.sightings || 0);
-        merged.ocrSightings = (tgtProfile.ocrSightings || 0) + (srcProfile.ocrSightings || 0);
-        merged.manualSightings = (tgtProfile.manualSightings || 0) + (srcProfile.manualSightings || 0);
-        merged.firstSeen = Math.min(tgtProfile.firstSeen || Infinity, srcProfile.firstSeen || Infinity);
-        merged.lastSeen = Math.max(tgtProfile.lastSeen || 0, srcProfile.lastSeen || 0);
+        merged.sightings = ((tgtProfile.sightings as number) || 0) + ((srcProfile.sightings as number) || 0);
+        merged.ocrSightings = ((tgtProfile.ocrSightings as number) || 0) + ((srcProfile.ocrSightings as number) || 0);
+        merged.manualSightings = ((tgtProfile.manualSightings as number) || 0) + ((srcProfile.manualSightings as number) || 0);
+        merged.firstSeen = Math.min((tgtProfile.firstSeen as number) || Infinity, (srcProfile.firstSeen as number) || Infinity);
+        merged.lastSeen = Math.max((tgtProfile.lastSeen as number) || 0, (srcProfile.lastSeen as number) || 0);
         // Merge playedWith/playedAgainst
-        for (const [pid, count] of Object.entries(srcProfile.playedWith || {})) {
-          merged.playedWith = { ...merged.playedWith, [pid]: ((merged.playedWith || {})[pid] || 0) + (count as number) };
+        for (const [pid, count] of Object.entries((srcProfile.playedWith as Record<string, number>) || {})) {
+          merged.playedWith = { ...(merged.playedWith as Record<string, number>), [pid]: (((merged.playedWith as Record<string, number>) || {})[pid] || 0) + (count as number) };
         }
-        for (const [pid, count] of Object.entries(srcProfile.playedAgainst || {})) {
-          merged.playedAgainst = { ...merged.playedAgainst, [pid]: ((merged.playedAgainst || {})[pid] || 0) + (count as number) };
+        for (const [pid, count] of Object.entries((srcProfile.playedAgainst as Record<string, number>) || {})) {
+          merged.playedAgainst = { ...(merged.playedAgainst as Record<string, number>), [pid]: (((merged.playedAgainst as Record<string, number>) || {})[pid] || 0) + (count as number) };
         }
         // Merge observed teams/ships
-        for (const [key, count] of Object.entries(srcProfile.teamsObserved || {})) {
-          merged.teamsObserved = { ...merged.teamsObserved, [key]: ((merged.teamsObserved || {})[key] || 0) + (count as number) };
+        for (const [key, count] of Object.entries((srcProfile.teamsObserved as Record<string, number>) || {})) {
+          merged.teamsObserved = { ...(merged.teamsObserved as Record<string, number>), [key]: (((merged.teamsObserved as Record<string, number>) || {})[key] || 0) + (count as number) };
         }
-        for (const [key, count] of Object.entries(srcProfile.shipsObserved || {})) {
-          merged.shipsObserved = { ...merged.shipsObserved, [key]: ((merged.shipsObserved || {})[key] || 0) + (count as number) };
+        for (const [key, count] of Object.entries((srcProfile.shipsObserved as Record<string, number>) || {})) {
+          merged.shipsObserved = { ...(merged.shipsObserved as Record<string, number>), [key]: (((merged.shipsObserved as Record<string, number>) || {})[key] || 0) + (count as number) };
         }
         const newProfiles = { ...profiles, [targetName]: merged };
         delete newProfiles[sourceName];

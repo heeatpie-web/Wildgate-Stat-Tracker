@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, Suspense } from 'react';
+import React, { useEffect, useState, useCallback, useRef, Suspense } from 'react';
 import { useUIState } from './providers/UIStateProvider';
 import { useGameData } from './providers/GameDataProvider';
 import { useUserPreferences } from './providers/UserPreferencesProvider';
@@ -23,6 +23,7 @@ import Tutorial from './components/Tutorial';
 import { WindowResizer } from './components/WindowResizer';
 type LazyDashboardView = 'analytics' | 'history' | 'smart-captures' | 'players' | 'dev-ocr';
 type LazyDashboardModule = { default: React.ComponentType<object> };
+const DEFAULT_PRELOAD_QUEUE: LazyDashboardView[] = ['analytics', 'history', 'smart-captures', 'players', 'dev-ocr'];
 const lazyDashboardStatus: Record<LazyDashboardView, 'idle' | 'loading' | 'ready' | 'error'> = {
     analytics: 'idle',
     history: 'idle',
@@ -617,16 +618,24 @@ const App: React.FC = () => {
     }, [activeView, soundEnabled]);
 
     useEffect(() => {
+        let rafId: number | null = null;
         const onResize = () => {
-            const compact = window.innerWidth < 1024;
-            setIsCompactNav(compact);
-            if (!compact) {
-                setMobileNavOpen(false);
-            }
+            if (rafId !== null) return;
+            rafId = requestAnimationFrame(() => {
+                rafId = null;
+                const compact = window.innerWidth < 1024;
+                setIsCompactNav(compact);
+                if (!compact) {
+                    setMobileNavOpen(false);
+                }
+            });
         };
         window.addEventListener('resize', onResize);
         onResize();
-        return () => window.removeEventListener('resize', onResize);
+        return () => {
+            window.removeEventListener('resize', onResize);
+            if (rafId !== null) cancelAnimationFrame(rafId);
+        };
     }, []);
 
     useEffect(() => {
@@ -677,22 +686,21 @@ const App: React.FC = () => {
         preloadStartedRef.current = true;
 
         let cancelled = false;
-        const defaultQueue: LazyDashboardView[] = ['analytics', 'history', 'smart-captures', 'players', 'dev-ocr'];
         const canUseAdaptive = adaptivePreloadEnabled && ((navigator.hardwareConcurrency || 8) > 4);
         const viewStats = dashboardPreloadStats || {};
-        let queue: LazyDashboardView[] = [...defaultQueue];
+        let queue: LazyDashboardView[] = [...DEFAULT_PRELOAD_QUEUE];
 
         if (canUseAdaptive) {
-            const scores = defaultQueue.map((view) => {
+            const scores = DEFAULT_PRELOAD_QUEUE.map((view) => {
                 const stat = viewStats[view] || { openDurationsMs: [], switchCount: 0, lastVisitedAt: 0 };
-                const maxSwitch = Math.max(1, ...defaultQueue.map((v) => Number(viewStats[v]?.switchCount || 0)));
+                const maxSwitch = Math.max(1, ...DEFAULT_PRELOAD_QUEUE.map((v) => Number(viewStats[v]?.switchCount || 0)));
                 const p95 = (() => {
                     const arr = [...(stat.openDurationsMs || [])].sort((a, b) => a - b);
                     if (arr.length === 0) return 0;
                     const idx = Math.min(arr.length - 1, Math.floor(arr.length * 0.95));
                     return arr[idx] || 0;
                 })();
-                const p95All = defaultQueue.map((v) => {
+                const p95All = DEFAULT_PRELOAD_QUEUE.map((v) => {
                     const arr = [...((viewStats[v]?.openDurationsMs) || [])].sort((a, b) => a - b);
                     if (arr.length === 0) return 0;
                     const idx = Math.min(arr.length - 1, Math.floor(arr.length * 0.95));

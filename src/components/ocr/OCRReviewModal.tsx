@@ -236,7 +236,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
       ...prev,
       teammates: [
         ...prev.teammates,
-        { name: next, confidence: 100, rawText: next },
+        { name: next, confidence: 100 },
       ],
     }));
     setNewTeammateName('');

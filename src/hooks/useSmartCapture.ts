@@ -110,6 +110,16 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     pendingDataRef.current = pendingData;
   }, [pendingData]);
 
+  // Clear auto-OCR timer on unmount to prevent state updates after unmount.
+  useEffect(() => {
+    return () => {
+      if (autoOcrTimerRef.current) {
+        clearTimeout(autoOcrTimerRef.current);
+        autoOcrTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const normalizeMatchScope = useCallback((matchId?: string | number | null): string | null => {
     if (matchId === null || matchId === undefined || matchId === '') return null;
     const normalized = String(matchId).trim();
@@ -125,6 +135,9 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   // Instead, treat captures as a burst and OCR after a short quiet period.
   const autoOcrBundleDelayMs = runtimeConfig.smartCapture.autoOcrBundleDelayMs;
   const autoOcrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Keep a stable ref to processAllStored so scheduleAutoOcr's timer always
+  // calls the latest version even after ocrMode/ocrRegions change.
+  const processAllStoredRef = useRef<typeof processAllStored | null>(null);
 
   const applySmartScanResult = useCallback((res: SmartScanResult | null | undefined, activeUser?: string | null) => {
     if (!res) return;
@@ -881,12 +894,15 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     isProcessingQueueRef.current = false;
   }, [processSingleCapture, mergeIntoPending, playSuccess, playSoundError, setVisionStatus]);
 
+  // Keep ref in sync so timers always call the latest processAllStored.
+  processAllStoredRef.current = processAllStored;
+
   const scheduleAutoOcr = useCallback((activeUser?: string | null, matchId?: string | number | null) => {
     if (autoOcrTimerRef.current) clearTimeout(autoOcrTimerRef.current);
     autoOcrTimerRef.current = setTimeout(() => {
-      processAllStored(activeUser || null, matchId ?? null);
+      processAllStoredRef.current?.(activeUser || null, matchId ?? null);
     }, autoOcrBundleDelayMs);
-  }, [autoOcrBundleDelayMs, processAllStored]);
+  }, [autoOcrBundleDelayMs]);
 
   const capture = useCallback(async (activeUser?: string | null, matchId?: string | number | null) => {
     if (!isElectron()) {

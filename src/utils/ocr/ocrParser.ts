@@ -1,3 +1,25 @@
+import type {
+  OCRExtractedData,
+  ScreenshotType,
+  TeamColor,
+  ExtractedPlayer,
+  ExtractedModifier,
+  ExtractedOpponentTeam,
+  OCRLine,
+  OCRWord,
+} from './ocrTypes';
+import {
+  REACH_MODIFIER_MAP,
+  SHIP_MAP,
+  SHIP_KEYWORDS,
+  NOISE_WORDS,
+  HUD_PATTERNS,
+  VALID_MODIFIERS,
+  SCREENSHOT_TYPE_INDICATORS,
+  TEAM_COLOR_RANGES,
+} from './ocrMappings';
+import { capTeammatePlayers } from '../teamLimits';
+
 function distance(a: string, b: string): number {
   const matrix: number[][] = [];
   for (let i = 0; i <= b.length; i++) {
@@ -21,27 +43,6 @@ function distance(a: string, b: string): number {
   }
   return matrix[b.length][a.length];
 }
-import type {
-  OCRExtractedData,
-  ScreenshotType,
-  TeamColor,
-  ExtractedPlayer,
-  ExtractedModifier,
-  ExtractedOpponentTeam,
-  OCRLine,
-  OCRWord,
-} from './ocrTypes';
-import {
-  REACH_MODIFIER_MAP,
-  SHIP_MAP,
-  SHIP_KEYWORDS,
-  NOISE_WORDS,
-  HUD_PATTERNS,
-  VALID_MODIFIERS,
-  SCREENSHOT_TYPE_INDICATORS,
-  TEAM_COLOR_RANGES,
-} from './ocrMappings';
-import { capTeammatePlayers } from '../teamLimits';
 
 const MAX_OPPONENT_TEAMS = 4;
 const MAX_OPPONENT_PLAYERS_PER_TEAM = 4;
@@ -314,7 +315,7 @@ export function parsePlayersFromLines(
     const centerX = (line.bbox.x0 + line.bbox.x1) / 2;
     const isTeammate = isLeftSide !== undefined
       ? isLeftSide
-      : centerX < screenWidth * 0.45;
+      : (Number.isFinite(screenWidth) && screenWidth > 0) ? centerX < screenWidth * 0.45 : true;
     const avgConfidence = line.words.reduce((sum, w) => sum + w.confidence, 0) / line.words.length;
 
     players.push({

@@ -91,26 +91,20 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const { initiateSubmission: openResultWizard } = useMatchSubmission();
 
     const resolveSubmissionMatchId = React.useCallback((): string | number | null => {
-        type SubmissionSnapshot = {
-            pendingMatchData?: { id?: number | string | null } | null;
-            matches?: typeof matches;
-            sessionStartTime?: number;
-            activeUser?: string | null;
-        };
-        const stateGetter = (useAppStore as unknown as { getState?: () => SubmissionSnapshot }).getState;
-        const state = typeof stateGetter === 'function' ? stateGetter() : null;
-        const pendingId = Number(state?.pendingMatchData?.id || 0);
+        // Read fresh state at call time to avoid stale closure issues.
+        const state = useAppStore.getState();
+        const pendingId = Number(state.pendingMatchData?.id || 0);
         if (Number.isInteger(pendingId) && pendingId > 0) return pendingId;
 
-        const sourceMatches = Array.isArray(state?.matches) ? state.matches : matches;
-        const sourceSessionStart = typeof state?.sessionStartTime === 'number' ? state.sessionStartTime : sessionStartTime;
-        const sourceUser = (typeof state?.activeUser === 'string' ? state.activeUser : activeUser) || '';
+        const sourceMatches = Array.isArray(state.matches) ? state.matches : matches;
+        const sourceSessionStart = typeof state.sessionStartTime === 'number' ? state.sessionStartTime : sessionStartTime;
+        const sourceUser = state.activeUser || activeUser || '';
         const recentCutoff = (typeof sourceSessionStart === 'number' && sourceSessionStart > 0)
             ? (sourceSessionStart - 60_000)
             : (Date.now() - (6 * 60 * 60 * 1000));
         const unresolvedDraft = (sourceMatches || []).find((m) => {
             if (!m || m.subType !== 'Telemetry Draft') return false;
-            if (Number(m.timestamp || 0) < recentCutoff) return false;
+            if (!m.timestamp || Number(m.timestamp) < recentCutoff) return false;
             if (sourceUser && m.player && m.player !== sourceUser) return false;
             return true;
         });
