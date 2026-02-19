@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useMatchSubmission } from '../useMatchSubmission';
-import { bundleMatchArtifacts, getMatchArtifactsStructured } from '../../utils/artifactService';
+import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured } from '../../utils/artifactService';
 
 const setToast = vi.fn();
 const setShowWizard = vi.fn();
@@ -95,6 +95,7 @@ vi.mock('../../hooks/useSoundEffects', () => ({
 }));
 
 vi.mock('../../utils/artifactService', () => ({
+  applyArtifactRepair: vi.fn().mockResolvedValue({ summary: { mode: 'apply', matches: 0, candidatesScanned: 0, candidatesEligible: 0, plannedLinks: 0, appliedLinks: 0, updatedMatches: 0 }, candidates: [], applied: [] }),
   bundleMatchArtifacts: vi.fn().mockResolvedValue([]),
   getMatchArtifactsStructured: vi.fn().mockResolvedValue({ images: [], imageFiles: [], telemetry: [] }),
 }));
@@ -104,7 +105,7 @@ vi.mock('../../utils/storage', () => ({
 }));
 
 vi.mock('../../utils/logger', () => ({
-  default: { info: vi.fn(), error: vi.fn() },
+  default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 vi.mock('canvas-confetti', () => ({ default: vi.fn() }));
@@ -151,6 +152,8 @@ describe('useMatchSubmission', () => {
     });
     vi.mocked(bundleMatchArtifacts).mockReset();
     vi.mocked(bundleMatchArtifacts).mockResolvedValue([]);
+    vi.mocked(applyArtifactRepair).mockReset();
+    vi.mocked(applyArtifactRepair).mockResolvedValue({ summary: { mode: 'apply', matches: 0, candidatesScanned: 0, candidatesEligible: 0, plannedLinks: 0, appliedLinks: 0, updatedMatches: 0 }, candidates: [], applied: [] });
     vi.mocked(getMatchArtifactsStructured).mockReset();
     vi.mocked(getMatchArtifactsStructured).mockResolvedValue({ images: [], imageFiles: [], telemetry: [] });
   });

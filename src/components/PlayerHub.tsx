@@ -268,7 +268,7 @@ const PlayerHub: React.FC = () => {
     };
 
     return (
-        <div data-tour="view-players" className="h-full min-h-0 flex flex-col lg:grid lg:grid-cols-playerhub-lg xl:grid-cols-playerhub-xl gap-4 overflow-hidden players-shell-gradient rounded-2xl">
+        <div data-tour="view-players" className="w-full flex-1 h-full min-h-0 flex flex-col lg:grid lg:grid-cols-playerhub-lg xl:grid-cols-playerhub-xl gap-4 overflow-hidden players-shell-gradient rounded-2xl">
             {/* Column 1: Roster List */}
             <div className="w-full lg:w-340px shrink-0 flex flex-col gap-3 h-full min-h-0">
                 <div className="md3-card mg-surface shadow-lg p-4 flex flex-col gap-3 shrink-0">
@@ -441,14 +441,15 @@ const PlayerHub: React.FC = () => {
             </div>
 
             {/* Column 2: Player Detail */}
-            <div className="flex-1 min-w-0 h-full overflow-y-auto custom-scrollbar min-h-0">
+            <div className="flex-1 min-w-0 h-full min-h-0 flex flex-col overflow-hidden">
                 {!selected ? (
-                    <div className="h-full flex flex-col items-center justify-center text-md-sys-on-surface/40">
+                    <div className="flex-1 flex flex-col items-center justify-center text-md-sys-on-surface/40">
                         <Users size={48} className="mb-3 opacity-40" />
                         <span className="text-body font-semibold">Select a player to view details</span>
                         <span className="text-label-sm mt-1 opacity-60">{pilotRegistry.length} players in your roster</span>
                     </div>
                 ) : (
+                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1">
                     <div className="flex flex-col gap-4">
                         {/* Header Card */}
                         <div className="md3-card mg-surface shadow-lg p-5">
@@ -822,11 +823,12 @@ const PlayerHub: React.FC = () => {
                         </>
                         )}
                     </div>
+                    </div>
                 )}
             </div>
 
             {/* Column 3: Selected player summary */}
-            <div className="hidden lg:flex flex-col min-w-0 rounded-card md3-surface-high p-4 border border-md-sys-outline/10">
+            <div className="hidden lg:flex flex-col min-w-0 min-h-0 h-full rounded-card md3-surface-high p-4 border border-md-sys-outline/10">
                 {!selected ? (
                     <div className="flex flex-col items-center justify-center flex-1 text-md-sys-on-surface/40 py-8">
                         <Users size={24} className="mb-2 opacity-40" />

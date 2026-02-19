@@ -469,14 +469,14 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
     if (typeof document === 'undefined') return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-modal bg-scrim-70 backdrop-blur-sm flex items-center justify-center p-3" onClick={onClose}>
+        <div className="fixed inset-0 z-modal-top bg-scrim-70 backdrop-blur-sm flex items-stretch justify-center p-2 md:p-4" onClick={onClose}>
             <div
                 ref={focusTrapRef}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={dialogTitleId}
                 aria-describedby={dialogDescriptionId}
-                className="md3-dialog w-full max-w-7xl max-h-95vh h-full rounded-modal overflow-hidden flex flex-col"
+                className="md3-dialog w-full max-w-[min(98vw,1800px)] h-full max-h-[96vh] rounded-modal overflow-hidden flex flex-col"
                 onClick={(event) => event.stopPropagation()}
             >
                 <div className="flex items-center justify-between border-b border-md-sys-outline/10 px-4 py-3">
@@ -491,7 +491,7 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
                     </button>
                 </div>
 
-                <div className="flex-1 min-h-0 flex gap-3 p-3">
+                <div className="flex-1 min-h-0 flex flex-col xl:flex-row gap-3 p-3">
                     <div className="flex-1 min-w-0 min-h-0 md3-surface rounded-card border border-md-sys-outline/10 overflow-auto">
                         {imageSrc ? (
                             <div className="inline-block m-2 relative">
@@ -572,7 +572,7 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
                         )}
                     </div>
 
-                    <div className="w-320px shrink-0 md3-surface-high rounded-card border border-md-sys-outline/10 p-3 flex flex-col gap-3">
+                    <div className="w-full xl:w-360px xl:shrink-0 md3-surface-high rounded-card border border-md-sys-outline/10 p-3 flex flex-col gap-3 max-h-[40vh] xl:max-h-none">
                         <label className="md3-btn-tonal text-center cursor-pointer">
                             <span className="inline-flex items-center gap-2">
                                 <Upload size={14} />

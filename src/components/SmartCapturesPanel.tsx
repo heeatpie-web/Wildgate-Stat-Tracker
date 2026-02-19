@@ -890,13 +890,24 @@ const SmartCapturesPanel: React.FC = () => {
                                     {selectedIds.size > 0 && !queueCollapsed && (
                                         <div className="sticky top-0 z-10 mb-2 rounded-lg p-2 flex items-center justify-between gap-2" style={{ background: 'color-mix(in srgb, var(--md-sys-color-primary), transparent 90%)' }}>
                                             <span className="text-label-xs font-bold text-md-sys-primary">{selectedIds.size} selected</span>
-                                            <button
-                                                type="button"
-                                                className="text-label-xs font-bold text-md-sys-primary/60 hover:text-md-sys-primary transition-colors"
-                                                onClick={() => setSelectedIds(new Set())}
-                                            >
-                                                Clear
-                                            </button>
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    className="px-2 py-1 rounded-control text-label-xs font-bold bg-md-sys-primary text-md-sys-onPrimary disabled:opacity-disabled"
+                                                    onClick={bulkMergeSelected}
+                                                    disabled={bulkBusy || selectedIds.size < 2}
+                                                    title="Merge selected matches into one"
+                                                >
+                                                    Merge
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="text-label-xs font-bold text-md-sys-primary/60 hover:text-md-sys-primary transition-colors"
+                                                    onClick={() => setSelectedIds(new Set())}
+                                                >
+                                                    Clear
+                                                </button>
+                                            </div>
                                         </div>
                                     )}
                                     {visibleMatches.length === 0 ? (
@@ -1333,6 +1344,12 @@ const SmartMatchDetail: React.FC<{
         rerun: false,
     });
     const { setToast, setActiveView, setShowWizard } = useUIState();
+    const {
+        setSelectedTeammates,
+        setSelectedOpponents,
+        setSessionTeams,
+        setSessionShipTypes,
+    } = useGameData();
     const normalizeModifierName = useCallback((name: string) => {
         const match = UI_REACH_MODIFIERS.find(m => m.toLowerCase() === name.toLowerCase());
         return match || name;
@@ -1348,6 +1365,61 @@ const SmartMatchDetail: React.FC<{
         return fuzzy || normalized;
     }, [pilotRegistry]);
     const openWizardForMatch = useCallback(() => {
+        const dedupeNames = (names: string[]) => Array.from(new Set(
+            names
+                .map((name) => String(name || '').trim())
+                .filter(Boolean)
+        ));
+        const normalizedOpponentTeams: OpponentTeam[] = Array.isArray(match.opponentTeams) && match.opponentTeams.length > 0
+            ? match.opponentTeams
+            : (match.opponents || []).length > 0
+                ? [{
+                    teamName: 'Enemy Team',
+                    color: 'enemy',
+                    shipType: '',
+                    players: [...(match.opponents || [])],
+                }]
+                : [];
+
+        const friendlySeed = dedupeNames([activeUser || match.player || 'You', ...(match.teammates || [])]);
+        const friendlyTeamKey = `friendly:${activeUser || match.player || 'You'}`;
+        const seededSessionTeams: Record<string, string[]> = {};
+        const seededShipTypes: Record<string, string> = {};
+        if (friendlySeed.length > 0) {
+            seededSessionTeams[friendlyTeamKey] = friendlySeed;
+            if (match.ship) {
+                seededShipTypes[friendlyTeamKey] = match.ship;
+                seededShipTypes.friendly = match.ship;
+                friendlySeed.forEach((name) => {
+                    seededShipTypes[name] = match.ship || '';
+                });
+            }
+        }
+        normalizedOpponentTeams.forEach((team, index) => {
+            const teamColor = String(team.color || `enemy-${index + 1}`).trim() || `enemy-${index + 1}`;
+            const teamName = String(team.teamName || `Enemy Team ${index + 1}`).trim() || `Enemy Team ${index + 1}`;
+            const teamKey = `${teamColor}:${teamName}`;
+            const players = dedupeNames(team.players || []);
+            if (players.length > 0) {
+                seededSessionTeams[teamKey] = players;
+            }
+            if (team.shipType) {
+                seededShipTypes[teamKey] = team.shipType;
+                seededShipTypes[teamColor] = team.shipType;
+                players.forEach((name) => {
+                    seededShipTypes[name] = team.shipType || '';
+                });
+            }
+        });
+
+        setSelectedTeammates(dedupeNames(match.teammates || []));
+        const seededOpponents = normalizedOpponentTeams.length > 0
+            ? dedupeNames(normalizedOpponentTeams.flatMap((team) => team.players || []))
+            : dedupeNames(match.opponents || []);
+        setSelectedOpponents(seededOpponents);
+        setSessionTeams(seededSessionTeams);
+        setSessionShipTypes(seededShipTypes, 'manual');
+
         const wizardResult = (match.result === 'Win' || match.result === 'Loss' || match.result === 'Draw')
             ? match.result
             : 'Win';
@@ -1376,8 +1448,16 @@ const SmartMatchDetail: React.FC<{
             ocrDebug: match.ocrDebug || undefined,
         } as Partial<Match>);
         setShowWizard(wizardResult);
+        window.setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
+                detail: {
+                    source: 'smart-captures',
+                    matchId: match.id,
+                },
+            }));
+        }, 0);
         setToast({ message: 'Opened wizard for this match', type: 'info' });
-    }, [match, setShowWizard, setToast]);
+    }, [activeUser, match, setSelectedOpponents, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setShowWizard, setToast]);
 
     useEffect(() => {
         setArtifacts({ images: [], imageFiles: [], telemetry: [] });
@@ -1981,7 +2061,7 @@ const SmartMatchDetail: React.FC<{
                     <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-body font-bold text-md-sys-on-surface">Match #{displayNumber}</span>
+                                <span className="text-body font-bold text-md-sys-on-surface">{displayNumber}</span>
                                 <span className="text-label-xs text-md-sys-on-surface/48 font-mono">ID {match.id}</span>
                                 <span className="px-2 py-0.5 rounded-pill text-label-xs font-bold bg-info-soft text-info">
                                     {countImages(match.artifacts || [])} bundled

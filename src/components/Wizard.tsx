@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import confetti from 'canvas-confetti';
 import {
     Clock,
     HeartCrack,
@@ -9,8 +8,7 @@ import {
     Scan,
     X,
     Users,
-    ChevronDown,
-    ShieldAlert
+    ChevronDown
 } from 'lucide-react';
 import { Match, SHIPS } from '../types';
 import { useGameData } from '../providers/GameDataProvider';
@@ -19,19 +17,16 @@ import { useMatchSubmission } from '../hooks/useMatchSubmission';
 import { OcrCorrectionModal } from './OcrCorrectionModal';
 import { useAppStore } from '../store/useAppStore';
 import { getElectronAPI } from '../utils/electronAPI';
-import { EQUIPMENT_DB } from '../utils/equipmentDb';
 
 export const Wizard: React.FC = () => {
     const {
         pendingMatchData,
-        setPendingMatchData,
         pendingPlacement, setPendingPlacement,
         pendingArtifactType, setPendingArtifactType,
         pendingKilledBy, setPendingKilledBy,
         pendingKilledByShip, setPendingKilledByShip,
         selectedOpponents, setSelectedOpponents,
         sessionTeams, sessionShipTypes,
-        currentLoadout,
         timeMin, setTimeMin,
         timeSec, setTimeSec,
         damageTaken, setDamageTaken,
@@ -43,31 +38,40 @@ export const Wizard: React.FC = () => {
 
     const { showWizard, setShowWizard, isOverlayMode, activeMode, activeUser, setToast, requestSmartCapture } = useUIState();
     const { processFinalSubmission, submitting } = useMatchSubmission();
+    const [selectedWinType, setSelectedWinType] = useState<'Combat' | 'Artifact' | 'Objective'>('Combat');
+    const [showOcrReview, setShowOcrReview] = useState(false);
+    const [requestedOcrReviewMatchId, setRequestedOcrReviewMatchId] = useState<number | null | undefined>(undefined);
 
     React.useEffect(() => {
         if (showWizard && isOverlayMode) {
             getElectronAPI()?.send('set-ignore-mouse-events', false);
         }
     }, [showWizard, isOverlayMode]);
-
-    const [selectedWinType, setSelectedWinType] = useState<'Combat' | 'Artifact' | 'Objective'>('Combat');
-    const [showOcrReview, setShowOcrReview] = useState(false);
-    const weaponOptions = React.useMemo(() => (
-        Array.from(new Set(
-            EQUIPMENT_DB
-                .filter((item) => item.type === 'Weapon')
-                .map((item) => item.name)
-                .filter(Boolean)
-        )).sort((a, b) => a.localeCompare(b))
-    ), []);
-    const equipmentOptions = React.useMemo(() => (
-        Array.from(new Set(
-            EQUIPMENT_DB
-                .filter((item) => item.type === 'Utility' || item.type === 'System')
-                .map((item) => item.name)
-                .filter(Boolean)
-        )).sort((a, b) => a.localeCompare(b))
-    ), []);
+    React.useEffect(() => {
+        const onRequestOcrReview = (evt: Event) => {
+            const customEvt = evt as CustomEvent<{ matchId?: number }>;
+            const requestedMatchId = Number(customEvt?.detail?.matchId || 0);
+            if (Number.isInteger(requestedMatchId) && requestedMatchId > 0) {
+                setRequestedOcrReviewMatchId(requestedMatchId);
+                return;
+            }
+            setRequestedOcrReviewMatchId(null);
+        };
+        window.addEventListener('wizard:request-ocr-review', onRequestOcrReview as EventListener);
+        return () => window.removeEventListener('wizard:request-ocr-review', onRequestOcrReview as EventListener);
+    }, []);
+    React.useEffect(() => {
+        if (requestedOcrReviewMatchId === undefined) return;
+        if (!showWizard || !pendingMatchData) return;
+        const pendingMatchId = Number((pendingMatchData as Match | null)?.id || 0);
+        if (
+            requestedOcrReviewMatchId === null
+            || (Number.isInteger(pendingMatchId) && pendingMatchId > 0 && pendingMatchId === requestedOcrReviewMatchId)
+        ) {
+            setShowOcrReview(true);
+            setRequestedOcrReviewMatchId(undefined);
+        }
+    }, [pendingMatchData, requestedOcrReviewMatchId, showWizard]);
 
     const detectedPlayerCount = React.useMemo(() => {
         if (!sessionTeams) return 0;
@@ -83,18 +87,6 @@ export const Wizard: React.FC = () => {
             .filter((entry) => entry.startsWith('data:image/') || /\.(png|jpe?g|webp|bmp|gif)$/i.test(entry));
     }, [pendingMatchData?.artifacts]);
 
-    const loadoutDraft = React.useMemo(() => {
-        const base = pendingMatchData?.loadout || currentLoadout || null;
-        return {
-            hero: base?.hero || null,
-            ship: base?.ship || null,
-            weapons: [base?.weapons?.[0] || '', base?.weapons?.[1] || ''],
-            equipment: [base?.equipment?.[0] || '', base?.equipment?.[1] || ''],
-            characterWeapons: [base?.characterWeapons?.[0] || '', base?.characterWeapons?.[1] || ''],
-            characterEquipment: [base?.characterEquipment?.[0] || '', base?.characterEquipment?.[1] || ''],
-        };
-    }, [currentLoadout, pendingMatchData?.loadout]);
-
     if (!showWizard || !pendingMatchData) return null;
 
     const isDefeat = showWizard === 'Loss';
@@ -106,30 +98,6 @@ export const Wizard: React.FC = () => {
     const inputBaseClass = 'mg-surface-primary bg-md-sys-primary/5 font-bold outline-none text-center rounded-xl border border-md-sys-primary/10 transition-all focus:border-md-sys-primary/40 focus:bg-md-sys-primary/10';
 
     const showPlacement = isDefeat && activeMode === 'Artifact Brawl' && selectedWinType === 'Combat';
-    const updateLoadoutSlot = (kind: 'weapons' | 'equipment', slotIndex: number, value: string) => {
-        const nextWeapons = [...loadoutDraft.weapons];
-        const nextEquipment = [...loadoutDraft.equipment];
-        if (kind === 'weapons') {
-            nextWeapons[slotIndex] = value;
-        } else {
-            nextEquipment[slotIndex] = value;
-        }
-        const compact = (slots: string[]) => slots
-            .map((slot) => String(slot || '').trim())
-            .filter(Boolean)
-            .slice(0, 2);
-        setPendingMatchData({
-            ...pendingMatchData,
-            loadout: {
-                hero: loadoutDraft.hero,
-                ship: loadoutDraft.ship,
-                weapons: compact(nextWeapons),
-                equipment: compact(nextEquipment),
-                characterWeapons: compact(loadoutDraft.characterWeapons),
-                characterEquipment: compact(loadoutDraft.characterEquipment),
-            },
-        });
-    };
     const handleWizardSmartCapture = () => {
         const pendingMatchId = Number((pendingMatchData as Match | null)?.id || 0);
         const requestId = requestSmartCapture({
@@ -253,66 +221,6 @@ export const Wizard: React.FC = () => {
                                     </div>
                                 );
                             })}
-                        </div>
-                    </div>
-
-                    <div className={cardClass}>
-                        <div className="flex items-center justify-between mb-3">
-                            <span className={labelClass + ' mb-0'}>Ship Loadout</span>
-                            <ShieldAlert size={14} className="opacity-50" />
-                        </div>
-                        <p className="text-label-xs opacity-60 mb-3">
-                            Choose loadout slots from known tools. These selections are saved into the final match loadout.
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="space-y-2">
-                                <label className="text-label-xs font-bold uppercase tracking-widest opacity-60">Weapon 1</label>
-                                <select
-                                    value={loadoutDraft.weapons[0]}
-                                    onChange={(e) => updateLoadoutSlot('weapons', 0, e.target.value)}
-                                    className="w-full text-left px-3 py-2 rounded-xl mg-surface-high border border-md-sys-outline/10 text-label-sm font-semibold outline-none focus:border-md-sys-primary/40"
-                                >
-                                    <option value="">Select weapon</option>
-                                    {weaponOptions.map((name) => (
-                                        <option key={`w1-${name}`} value={name}>{name}</option>
-                                    ))}
-                                </select>
-                                <label className="text-label-xs font-bold uppercase tracking-widest opacity-60">Weapon 2</label>
-                                <select
-                                    value={loadoutDraft.weapons[1]}
-                                    onChange={(e) => updateLoadoutSlot('weapons', 1, e.target.value)}
-                                    className="w-full text-left px-3 py-2 rounded-xl mg-surface-high border border-md-sys-outline/10 text-label-sm font-semibold outline-none focus:border-md-sys-primary/40"
-                                >
-                                    <option value="">Select weapon</option>
-                                    {weaponOptions.map((name) => (
-                                        <option key={`w2-${name}`} value={name}>{name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-label-xs font-bold uppercase tracking-widest opacity-60">Equipment 1</label>
-                                <select
-                                    value={loadoutDraft.equipment[0]}
-                                    onChange={(e) => updateLoadoutSlot('equipment', 0, e.target.value)}
-                                    className="w-full text-left px-3 py-2 rounded-xl mg-surface-high border border-md-sys-outline/10 text-label-sm font-semibold outline-none focus:border-md-sys-primary/40"
-                                >
-                                    <option value="">Select equipment</option>
-                                    {equipmentOptions.map((name) => (
-                                        <option key={`e1-${name}`} value={name}>{name}</option>
-                                    ))}
-                                </select>
-                                <label className="text-label-xs font-bold uppercase tracking-widest opacity-60">Equipment 2</label>
-                                <select
-                                    value={loadoutDraft.equipment[1]}
-                                    onChange={(e) => updateLoadoutSlot('equipment', 1, e.target.value)}
-                                    className="w-full text-left px-3 py-2 rounded-xl mg-surface-high border border-md-sys-outline/10 text-label-sm font-semibold outline-none focus:border-md-sys-primary/40"
-                                >
-                                    <option value="">Select equipment</option>
-                                    {equipmentOptions.map((name) => (
-                                        <option key={`e2-${name}`} value={name}>{name}</option>
-                                    ))}
-                                </select>
-                            </div>
                         </div>
                     </div>
 

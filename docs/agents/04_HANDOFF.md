@@ -2599,3 +2599,61 @@
 ## Remaining / Risks
 - Existing stale active rows in `docs/WORKLOCKS.md` from older tasks remain noisy; this batch released only TELEMETRY-UI-BATCH-009 lock rows.
 - Telemetry ship/character detection still depends on known equipment/weapon catalogs; newly introduced game items may require catalog updates if names diverge from current dictionaries.
+
+---
+
+## Handoff - 2026-02-19 - SMARTCAPTURE-TELEMETRY-ROI-011
+## Status
+- Completed.
+
+## What Changed
+- Smart Captures queue/wizard UX:
+  - `src/components/smart-captures/QueueItemRichPreview.tsx`
+    - queue match label now displays numeric id only (no `Match #` prefix).
+  - `src/components/SmartCapturesPanel.tsx`
+    - added prominent sticky `Merge` action for selected queue entries.
+    - wizard action now seeds teammate/opponent/session-team context and requests OCR modal auto-open.
+    - detail header label now displays numeric id only.
+  - `src/components/Wizard.tsx`
+    - removed loadout editing block from result wizard.
+    - auto-opens OCR correction modal on `wizard:request-ocr-review` events when match context matches.
+
+- Telemetry semantics + dedupe:
+  - `src/hooks/useLogMonitor.ts`
+    - removed tertiary slot extraction keys.
+    - telemetry now maps prospector slots only (`characterWeapons`, `characterEquipment`).
+    - telemetry no longer auto-maps ship loadout slots.
+    - draft creation now reuses recent unresolved telemetry drafts to reduce duplicate records.
+  - `src/components/recording/ActionPanel.tsx`
+    - telemetry panel now shows `Prospector Weapons` / `Prospector Equipment` from character slot arrays.
+
+- Submission/artifact reliability:
+  - `src/hooks/useMatchSubmission.ts`
+    - finalization now reuses unresolved telemetry draft when pending id is absent.
+    - added scoped artifact repair run (current `matchId` + match window) before artifact reconciliation.
+  - `src/utils/artifactService.ts`
+    - added optional scope payload support for preview/apply artifact repair.
+  - `electron/handlers/artifactHandlers.cjs`
+    - repair handlers now accept/sanitize optional scope payload.
+  - `electron/helpers/artifactRelinker.cjs`
+    - repair planner now supports scoped matching by `matchId` and/or time window.
+
+- ROI/Players layout:
+  - `src/components/OcrRegionEditorModal.tsx`
+    - modal now uses top z-layer and near-full-viewport layout with responsive split for usable ROI editing.
+  - `src/components/PlayerHub.tsx`
+    - reinforced full-height flex/stretch behavior so Players internals fill available view.
+
+- Tests:
+  - updated queue, action panel, and submission tests for new contracts.
+  - added telemetry draft reuse regression coverage in `src/hooks/__tests__/useLogMonitor.test.ts`.
+
+## What Was Verified
+- `npx eslint ...` on all touched renderer/hook/test files passed.
+- `npx eslint electron/handlers/artifactHandlers.cjs electron/helpers/artifactRelinker.cjs` passed.
+- `npx vitest run src/hooks/__tests__/useLogMonitor.test.ts src/hooks/__tests__/useMatchSubmission.test.ts src/components/recording/ActionPanel.test.tsx src/components/Wizard.test.tsx src/components/smart-captures/QueueItemRichPreview.test.tsx` passed (`33/33` tests) after fixing initial wizard/action-panel regressions.
+- `npm run -s typecheck` passed after fixing one implicit-any in `ActionPanel`.
+
+## Remaining / Risks
+- No additional blockers found for this scope.
+- Large historical AGENTS docs/lock tables remain noisy from prior tasks; only SMARTCAPTURE-TELEMETRY-ROI-011 entries were updated in this pass.

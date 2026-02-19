@@ -114,7 +114,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
             ? 'bg-md-sys-primary/12 border-md-sys-primary text-md-sys-primary'
             : 'border-md-sys-outline/20 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/8'
         }`}
-        title={`Match #${displayNumber}`}
+        title={`Match ${displayNumber}`}
       >
         <span className={`inline-flex items-center justify-center w-4 h-4 sc-collapsed-glyph sc-collapsed-glyph--${tone}`}>{collapsedIcon}</span>
         <span className="text-label-xs font-bold leading-none">{displayNumber}</span>
@@ -131,7 +131,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
           : 'border-l-md-sys-outline/30 border border-md-sys-outline/10 hover:bg-md-sys-on-surface/8 p-3.5'
       } ${qs.key === 'Resolved' ? 'opacity-70' : ''}`}
       style={{ borderLeftColor: isSelected ? 'var(--md-sys-color-primary)' : BORDER_BY_TONE[tone] }}
-      title={`Match #${displayNumber}`}
+      title={`Match ${displayNumber}`}
     >
       {isSelected ? (
         <span className="absolute right-2 top-2 rounded-pill bg-md-sys-primary text-md-sys-onPrimary px-1.5 py-0.5 text-label-xs font-bold uppercase tracking-wide">
@@ -158,7 +158,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
         <div className="flex-1 min-w-0 space-y-2">
           <div className="flex items-start justify-between gap-2 min-w-0">
             <div className="min-w-0 space-y-0.5">
-              <div className="text-body font-bold text-md-sys-on-surface truncate">Match #{displayNumber}</div>
+              <div className="text-body font-bold text-md-sys-on-surface truncate">{displayNumber}</div>
               <div className={`text-label-sm truncate ${match.ship ? 'text-md-sys-on-surface/68' : 'text-md-sys-on-surface/40 italic'}`}>
                 {shipLabel}
               </div>

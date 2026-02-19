@@ -2002,3 +2002,31 @@
   - Risk Tier: T3
   - Execution Path: FULL_PATH
   - Reason: multi-file runtime telemetry behavior + persistence model adjustments + high-visibility UI interaction fixes across multiple screens.
+
+---
+
+## Intake - 2026-02-19 - SMARTCAPTURE-TELEMETRY-ROI-011
+- Goal: resolve user-reported regressions across Smart Captures queue UX, wizard/OCR flow, telemetry loadout semantics, duplicate telemetry drafts, artifact linking reliability, ROI editor sizing, and Players tab fill behavior.
+- Constraints:
+  - Keep scope targeted to reported defects.
+  - Preserve existing data model/IPC contracts unless non-breaking extension is required.
+  - Any UI-touching change must remain aligned with docs/agents/UI_MASTERPLAN.md.
+- In scope:
+  - Queue merge CTA visibility and queue match-number label cleanup.
+  - Smart Captures Wizard action auto-opening OCR correction modal with current context/screenshots.
+  - Remove wizard loadout slot editing block for match resolution flow.
+  - Telemetry loadout mapping policy: telemetry contributes prospector/character slots only; no tertiary slot mapping.
+  - Telemetry draft dedupe hardening to prevent duplicate draft/final records ( 0:00 orphan path).
+  - Scoped auto artifact repair on result/finalization path for current match window.
+  - ROI visual editor modal sizing/z-layer usability fix.
+  - Players view internal fill/stretch fix while preserving shell padding.
+- Out-of-scope:
+  - New OCR model training behavior.
+  - Broad dashboard redesign beyond reported regressions.
+- Done condition:
+  - Reported regressions are fixed in code and validated with focused checks.
+  - Agent artifacts ( 0- 4, decisions, locks) updated with evidence.
+- AOM_V2:
+  - Risk Tier: T3
+  - Execution Path: FULL_PATH
+  - Reason: multi-file runtime/UI behavior changes across telemetry, artifact linking, and wizard/capture flows.

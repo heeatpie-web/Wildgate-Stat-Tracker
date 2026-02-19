@@ -1955,3 +1955,36 @@
       - 22 tests passed.
   - Command: `npm run -s typecheck`
     - Result: PASS
+
+---
+
+## Validation - 2026-02-19 - SMARTCAPTURE-TELEMETRY-ROI-011
+- Command: `npx eslint src/hooks/useLogMonitor.ts src/hooks/useMatchSubmission.ts src/utils/artifactService.ts src/components/recording/ActionPanel.tsx src/components/recording/ActionPanel.test.tsx src/components/SmartCapturesPanel.tsx src/components/Wizard.tsx src/components/OcrRegionEditorModal.tsx src/components/PlayerHub.tsx src/components/smart-captures/QueueItemRichPreview.tsx src/components/smart-captures/QueueItemRichPreview.test.tsx src/hooks/__tests__/useLogMonitor.test.ts src/hooks/__tests__/useMatchSubmission.test.ts`
+  - Result: PASS
+  - Evidence:
+    - no lint violations across all touched renderer/hook/test files.
+
+- Command: `npx eslint electron/handlers/artifactHandlers.cjs electron/helpers/artifactRelinker.cjs`
+  - Result: PASS
+  - Evidence:
+    - no lint violations across touched main-process artifact repair files.
+
+- Command: `npx vitest run src/hooks/__tests__/useLogMonitor.test.ts src/hooks/__tests__/useMatchSubmission.test.ts src/components/recording/ActionPanel.test.tsx src/components/Wizard.test.tsx src/components/smart-captures/QueueItemRichPreview.test.tsx`
+  - Result: FAIL (initial), then PASS (post-fix)
+  - Evidence:
+    - initial failures:
+      - `Wizard.test.tsx`: `ReferenceError` from `requestedOcrReviewMatchId` TDZ (state declared below effect dependencies).
+      - `ActionPanel.test.tsx`: `useAppStore.getState is not a function` (mock path lacked `getState` fallback).
+    - fixes applied:
+      - moved wizard OCR-review state declarations above effects.
+      - guarded `useAppStore.getState` access in `ActionPanel` and updated one stale header assertion.
+    - post-fix rerun:
+      - 5 files passed.
+      - 33 tests passed.
+
+- Command: `npm run -s typecheck`
+  - Result: FAIL (initial), then PASS (post-fix)
+  - Evidence:
+    - initial failure: `src/components/recording/ActionPanel.tsx(108,61)` implicit `any` on unresolved-draft predicate argument.
+    - fix: annotated callback param (`m: any`) in fallback draft finder.
+    - post-fix rerun: TypeScript compile succeeded.

@@ -1,4 +1,4 @@
-﻿# Work Locks
+# Work Locks
 
 Use this file to temporarily claim high-conflict files while an agent is actively editing them.
 
@@ -79,6 +79,10 @@ Rules:
 | `electron/geminiService.cjs` | builder | 2026-02-13T15:35:00Z | builder role bound: OCR/structured refinement ownership (Lane C) |
 | `src/hooks/useSmartCapture.ts` | builder | 2026-02-13T15:35:00Z | builder role bound: smart capture flow ownership (Lane C) |
 | `src/components/recording/ActionPanel.tsx` | builder | 2026-02-13T15:35:00Z | builder role bound: recording/action panel ownership (Lane C) |
+| electron/helpers/artifactRelinker.cjs | builder | 2026-02-19T00:28:26Z | SMARTCAPTURE-TELEMETRY-ROI-011 lock released (2026-02-19T17:45:00Z) |
+| electron/handlers/artifactHandlers.cjs | builder | 2026-02-19T00:28:26Z | SMARTCAPTURE-TELEMETRY-ROI-011 lock released (2026-02-19T17:45:00Z) |
+| src/components/OcrRegionEditorModal.tsx | builder | 2026-02-19T00:28:26Z | SMARTCAPTURE-TELEMETRY-ROI-011 lock released (2026-02-19T17:45:00Z) |
+| src/components/smart-captures/QueueItemRichPreview.test.tsx | builder | 2026-02-19T00:28:26Z | SMARTCAPTURE-TELEMETRY-ROI-011 lock released (2026-02-19T17:45:00Z) |
 ## Copy-Paste Lock Entry
 
 Use this row format when claiming:
@@ -716,4 +720,5 @@ Lock Class:
 | src/components/analytics/PlacementDistView.tsx | builder | 2026-02-18T18:48:00Z | 2026-02-18T18:58:00Z | ANALYTICS-ARTIFACT-IDFLOW-005 placement histogram readability updates |
 | src/components/ReviewQueueModal.tsx | builder | 2026-02-18T18:48:00Z | 2026-02-18T18:58:00Z | ANALYTICS-ARTIFACT-IDFLOW-005 fuzzy review prioritization |
 | electron/helpers/artifactRelinker.cjs | builder | 2026-02-18T18:48:00Z | 2026-02-18T18:58:00Z | ANALYTICS-ARTIFACT-IDFLOW-005 historical artifact relink reliability hardening |
+
 

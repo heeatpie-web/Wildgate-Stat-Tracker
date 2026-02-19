@@ -5,7 +5,7 @@ import { useAppStore } from '../store/useAppStore';
 import { Match } from '../types';
 import confetti from 'canvas-confetti';
 import { useSoundEffects } from '../hooks/useSoundEffects';
-import { bundleMatchArtifacts, getMatchArtifactsStructured } from '../utils/artifactService';
+import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured } from '../utils/artifactService';
 import { StorageService } from '../utils/storage';
 import Logger from '../utils/logger';
 import { capTeammateNames } from '../utils/teamLimits';
@@ -193,7 +193,8 @@ export const useMatchSubmission = () => {
             selectedTeammates, selectedOpponents,
             kills, poiEasy, poiMedium, poiEpic,
             damageTaken, currentNote,
-            matches
+            matches,
+            sessionStartTime
         } = state;
 
         if (!pendingMatchData || submitting) return;
@@ -243,12 +244,28 @@ export const useMatchSubmission = () => {
             const finalNotes = currentNote || pendingMatchData.notes || '';
             const finalPlacement = pendingPlacement || (showWizard === 'Win' ? 1 : undefined);
             const pendingMatchId = Number(pendingMatchData.id || 0);
-            const existingMatch = Number.isInteger(pendingMatchId) && pendingMatchId > 0
+            const existingMatchByPendingId = Number.isInteger(pendingMatchId) && pendingMatchId > 0
                 ? (Array.isArray(matches) ? matches.find((m: Match) => m.id === pendingMatchId) : undefined)
                 : undefined;
+            const recentCutoff = (typeof sessionStartTime === 'number' && sessionStartTime > 0)
+                ? (sessionStartTime - 60_000)
+                : (Date.now() - (6 * 60 * 60 * 1000));
+            const fallbackTelemetryDraft = existingMatchByPendingId || !Array.isArray(matches)
+                ? undefined
+                : matches.find((m: Match) => {
+                    if (!m || m.subType !== 'Telemetry Draft') return false;
+                    if (!m.timestamp || Number(m.timestamp) < recentCutoff) return false;
+                    const expectedPlayer = pendingMatchData.player || activeUser || '';
+                    if (expectedPlayer && m.player && m.player !== expectedPlayer) return false;
+                    return true;
+                });
+            const existingMatch = existingMatchByPendingId || fallbackTelemetryDraft;
             const matchId = existingMatch?.id || Date.now();
             const matchTimestamp = existingMatch?.timestamp || pendingMatchData.timestamp || Date.now();
             const mergedLoadout = sanitizeLoadoutSlots(pendingMatchData.loadout || currentLoadout);
+            if (!existingMatchByPendingId && fallbackTelemetryDraft) {
+                Logger.info('Submission', `Reusing telemetry draft ${fallbackTelemetryDraft.id} for final submission`);
+            }
 
             const newMatch: Match = {
                 id: matchId,
@@ -305,6 +322,20 @@ export const useMatchSubmission = () => {
             }
 
             const bundledArtifacts = await bundleMatchArtifacts(newMatch.id, matchStart, matchEnd);
+            let scopedRepairAppliedLinks = 0;
+            try {
+                const repairResult = await applyArtifactRepair({
+                    matchId: newMatch.id,
+                    startTime: matchStart,
+                    endTime: matchEnd,
+                });
+                scopedRepairAppliedLinks = Number(repairResult?.summary?.appliedLinks || 0);
+                if (scopedRepairAppliedLinks > 0) {
+                    Logger.info('Submission', `Scoped artifact repair linked ${scopedRepairAppliedLinks} artifact(s) for match ${newMatch.id}`);
+                }
+            } catch (repairError) {
+                Logger.warn('Submission', `Scoped artifact repair failed for match ${newMatch.id}`, repairError);
+            }
             const structuredArtifacts = await getMatchArtifactsStructured(newMatch.id);
             const diskArtifacts = Array.isArray(structuredArtifacts.images) ? structuredArtifacts.images : [];
             const mergedArtifacts: string[] = [];
@@ -330,7 +361,7 @@ export const useMatchSubmission = () => {
                 updateMatch(updated);
                 await StorageService.flush();
             } else {
-                Logger.info('Submission', `No artifacts bundled for match ${newMatch.id}`);
+                Logger.info('Submission', `No artifact delta for match ${newMatch.id} (bundled=${bundledArtifacts.length}, disk=${diskArtifacts.length}, repairApplied=${scopedRepairAppliedLinks})`);
             }
             const myTeam = [activeUser, ...finalTeammates];
             const explicitOpponents = finalOpponents;

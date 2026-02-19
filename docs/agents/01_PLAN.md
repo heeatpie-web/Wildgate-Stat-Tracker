@@ -500,3 +500,11 @@
 4. `COMPLETED` - Add/adjust focused regression tests for touched telemetry/loadout/UI behavior.
 5. `COMPLETED` - Run focused validation (`eslint`, targeted `vitest`, `typecheck`) and log evidence.
 6. `COMPLETED` - Complete execution/decision/handoff documentation updates and release temporary locks.
+
+## Current Task Plan (SMARTCAPTURE-TELEMETRY-ROI-011)
+1. COMPLETED - Apply queue/wizard UX fixes (merge visibility, queue number label, Smart Captures -> Wizard -> OCR modal auto-open, wizard loadout block removal).
+2. COMPLETED - Apply telemetry behavior fixes (prospector-slot-only mapping, tertiary-key removal, action-panel labeling) and telemetry draft duplicate hardening.
+3. COMPLETED - Implement scoped auto artifact repair + post-repair artifact reconciliation in submission flow.
+4. COMPLETED - Apply ROI editor large-viewport/modal z-layer fix and Players internal fill/stretch fix.
+5. COMPLETED - Update targeted tests and run validation (eslint touched files, targeted vitest, typecheck).
+6. COMPLETED - Update execution/validation/handoff/decision artifacts and release temporary locks.

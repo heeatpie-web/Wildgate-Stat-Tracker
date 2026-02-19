@@ -92,7 +92,10 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
 
     const resolveSubmissionMatchId = React.useCallback((): string | number | null => {
         // Read fresh state at call time to avoid stale closure issues.
-        const state = useAppStore.getState();
+        const storeApi = useAppStore as unknown as { getState?: () => Record<string, unknown> };
+        const state = (typeof storeApi.getState === 'function'
+            ? storeApi.getState()
+            : {}) as any;
         const pendingId = Number(state.pendingMatchData?.id || 0);
         if (Number.isInteger(pendingId) && pendingId > 0) return pendingId;
 
@@ -102,7 +105,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         const recentCutoff = (typeof sourceSessionStart === 'number' && sourceSessionStart > 0)
             ? (sourceSessionStart - 60_000)
             : (Date.now() - (6 * 60 * 60 * 1000));
-        const unresolvedDraft = (sourceMatches || []).find((m) => {
+        const unresolvedDraft = (sourceMatches || []).find((m: any) => {
             if (!m || m.subType !== 'Telemetry Draft') return false;
             if (!m.timestamp || Number(m.timestamp) < recentCutoff) return false;
             if (sourceUser && m.player && m.player !== sourceUser) return false;
@@ -130,6 +133,18 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     };
 
     const isBusy = isScanning || isCapturing || isProcessing;
+    const telemetryProspectorWeapons = Array.isArray(currentLoadout?.characterWeapons)
+        ? currentLoadout.characterWeapons.filter(Boolean)
+        : [];
+    const telemetryProspectorEquipment = Array.isArray(currentLoadout?.characterEquipment)
+        ? currentLoadout.characterEquipment.filter(Boolean)
+        : [];
+    const hasTelemetryIndicators = Boolean(
+        telemetryDetectedShip
+        || telemetryDetectedHero
+        || telemetryProspectorWeapons.length > 0
+        || telemetryProspectorEquipment.length > 0
+    );
 
     // Dedicated mission timer display so match time remains visible at a glance.
     const [matchElapsed, setMatchElapsed] = React.useState('00:00');
@@ -562,7 +577,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                 )}
 
                 {/* Telemetry Detection Indicators */}
-                {(telemetryDetectedShip || telemetryDetectedHero || (currentLoadout?.weapons?.length || 0) > 0 || (currentLoadout?.equipment?.length || 0) > 0) && (
+                {hasTelemetryIndicators && (
                     <div className="mg-surface rounded-card p-2 border border-info/15 space-y-1">
                         {telemetryDetectedShip && (
                             <div className="flex items-center gap-2 text-label-sm">
@@ -584,21 +599,21 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                                 )}
                             </div>
                         )}
-                        {Array.isArray(currentLoadout?.weapons) && currentLoadout.weapons.length > 0 && (
+                        {telemetryProspectorWeapons.length > 0 && (
                             <div className="flex items-start gap-2 text-label-sm">
-                                <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
+                                <span className="font-bold uppercase tracking-wide text-info">Prospector Weapons</span>
                                 <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
                                 <span className="text-md-sys-on-surface/80 break-words">
-                                    {currentLoadout.weapons.join(', ')}
+                                    {telemetryProspectorWeapons.join(', ')}
                                 </span>
                             </div>
                         )}
-                        {Array.isArray(currentLoadout?.equipment) && currentLoadout.equipment.length > 0 && (
+                        {telemetryProspectorEquipment.length > 0 && (
                             <div className="flex items-start gap-2 text-label-sm">
-                                <span className="font-bold uppercase tracking-wide text-info">Equipment</span>
+                                <span className="font-bold uppercase tracking-wide text-info">Prospector Equipment</span>
                                 <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
                                 <span className="text-md-sys-on-surface/80 break-words">
-                                    {currentLoadout.equipment.join(', ')}
+                                    {telemetryProspectorEquipment.join(', ')}
                                 </span>
                             </div>
                         )}
@@ -735,7 +750,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                 )}
 
                 {/* Telemetry Detection Indicators */}
-                {(telemetryDetectedShip || telemetryDetectedHero || (currentLoadout?.weapons?.length || 0) > 0 || (currentLoadout?.equipment?.length || 0) > 0) && (
+                {hasTelemetryIndicators && (
                     <div className="mg-surface rounded-card p-2 border border-info/15 space-y-1">
                         {telemetryDetectedShip && (
                             <div className="flex items-center gap-2 text-label-sm">
@@ -757,21 +772,21 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                                 )}
                             </div>
                         )}
-                        {Array.isArray(currentLoadout?.weapons) && currentLoadout.weapons.length > 0 && (
+                        {telemetryProspectorWeapons.length > 0 && (
                             <div className="flex items-start gap-2 text-label-sm">
-                                <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
+                                <span className="font-bold uppercase tracking-wide text-info">Prospector Weapons</span>
                                 <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
                                 <span className="text-md-sys-on-surface/80 break-words">
-                                    {currentLoadout.weapons.join(', ')}
+                                    {telemetryProspectorWeapons.join(', ')}
                                 </span>
                             </div>
                         )}
-                        {Array.isArray(currentLoadout?.equipment) && currentLoadout.equipment.length > 0 && (
+                        {telemetryProspectorEquipment.length > 0 && (
                             <div className="flex items-start gap-2 text-label-sm">
-                                <span className="font-bold uppercase tracking-wide text-info">Equipment</span>
+                                <span className="font-bold uppercase tracking-wide text-info">Prospector Equipment</span>
                                 <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
                                 <span className="text-md-sys-on-surface/80 break-words">
-                                    {currentLoadout.equipment.join(', ')}
+                                    {telemetryProspectorEquipment.join(', ')}
                                 </span>
                             </div>
                         )}

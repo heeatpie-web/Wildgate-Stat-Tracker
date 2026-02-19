@@ -2011,3 +2011,49 @@ Rule:
   - `src/App.tsx`
 - Revisit trigger/expiry:
   - Revisit if retention model changes to separate banners for age and size policies.
+
+- Type: smartcapture-merge-action-visibility
+- Decision: place primary merge action directly in Smart Captures queue sticky selection controls (next to `Clear`) instead of relying only on tools panel actions.
+- Date: 2026-02-19
+- Options considered:
+  - Keep merge only in right-side tools panel.
+  - Add an in-context merge CTA in queue selection controls.
+- Rationale:
+  - User-reported discoverability issue; selected-item context is where merge intent is formed.
+  - Keeps action hierarchy clear without adding new behavior.
+- Impacted files/artifacts:
+  - `src/components/SmartCapturesPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit if queue toolbar architecture is consolidated into a single command surface.
+
+- Type: telemetry-prospector-slot-policy
+- Decision: telemetry loadout parsing is constrained to prospector character slots only and removes tertiary-key extraction from telemetry mapping.
+- Date: 2026-02-19
+- Options considered:
+  - Continue broad ship + character + tertiary extraction.
+  - Restrict telemetry mapping to prospector character slots and ignore tertiary keys.
+- Rationale:
+  - Addresses repeated false-positive telemetry labels (for example ship slot names surfaced as player loadout terms).
+  - Aligns with requested semantics: ship identity + prospector slots, no tertiary slot concept.
+- Impacted files/artifacts:
+  - `src/hooks/useLogMonitor.ts`
+  - `src/components/recording/ActionPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit if telemetry schema introduces explicit, reliable prospector-slot contracts requiring broader key support.
+
+- Type: scoped-artifact-repair-on-finalize
+- Decision: run artifact repair automatically on final submission with match-scoped payload (`matchId` + match time window), then reconcile disk artifacts.
+- Date: 2026-02-19
+- Options considered:
+  - Keep manual/global repair only.
+  - Trigger scoped repair automatically on finalize and keep global repair for manual maintenance.
+- Rationale:
+  - Fixes intermittent artifact unlink/misalignment without broad cross-match relink side effects.
+  - Preserves manual repair tool while improving default reliability at submission time.
+- Impacted files/artifacts:
+  - `src/hooks/useMatchSubmission.ts`
+  - `src/utils/artifactService.ts`
+  - `electron/handlers/artifactHandlers.cjs`
+  - `electron/helpers/artifactRelinker.cjs`
+- Revisit trigger/expiry:
+  - Revisit if artifact ingestion path is fully deterministic and scoped repair becomes redundant.

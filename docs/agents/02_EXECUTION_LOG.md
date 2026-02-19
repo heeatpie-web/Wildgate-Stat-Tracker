@@ -4443,3 +4443,95 @@
   - Review ask: approve closure of TELEMETRY-UI-BATCH-009.
 - `PM Response` | `APPROVED`
   - Reason: scoped telemetry/runtime and UI defects are addressed with targeted regression and compile validation evidence.
+
+---
+
+## 2026-02-19 - SMARTCAPTURE-TELEMETRY-ROI-011 (Implementation Closeout)
+- Scope: resolve reported Smart Captures/wizard visibility regressions, telemetry loadout semantics and duplicate-draft behavior, scoped artifact relink reliability, ROI modal usability, and Players stretch fill.
+
+### Lateral Communication / Request Lifecycle
+- `REQ-011-001` | Sender: `builder` | Receiver: `builder` | Status: `OPEN`
+  - Goal: execute SMARTCAPTURE-TELEMETRY-ROI-011 scoped fixes across queue UX, telemetry semantics/dedupe, artifact linking reliability, and ROI/Players layout regressions.
+- `REQ-011-001` | Sender: `builder` | Receiver: `builder` | Status: `ACK`
+  - Work accepted; implementation proceeding per `docs/agents/01_PLAN.md`.
+- `REQ-011-001` | Sender: `builder` | Receiver: `builder` | Status: `IN_PROGRESS`
+  - Active implementation across renderer hooks/components and artifact repair IPC/planner paths.
+- `REQ-011-001` | Sender: `builder` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/components/smart-captures/QueueItemRichPreview.tsx`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/components/Wizard.tsx`
+    - `src/hooks/useLogMonitor.ts`
+    - `src/hooks/useMatchSubmission.ts`
+    - `src/utils/artifactService.ts`
+    - `electron/handlers/artifactHandlers.cjs`
+    - `electron/helpers/artifactRelinker.cjs`
+    - `src/components/OcrRegionEditorModal.tsx`
+    - `src/components/PlayerHub.tsx`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-011-001` | Sender: `builder` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md` and touched files above.
+
+### Work Entries
+- `src/components/smart-captures/QueueItemRichPreview.tsx`
+  - queue tile title now shows numeric match id only (removed `Match #` prefix from visible title and tooltip).
+- `src/components/smart-captures/QueueItemRichPreview.test.tsx`
+  - updated queue label assertion to numeric-only title contract.
+- `src/components/SmartCapturesPanel.tsx`
+  - added `Merge` CTA to sticky selected-row controls for clear merge discoverability.
+  - wizard launch now seeds session team/opponent context and dispatches `wizard:request-ocr-review` event.
+  - detail header label now shows numeric id only (removed `Match #` prefix).
+- `src/components/Wizard.tsx`
+  - removed loadout editing block from result wizard flow.
+  - listens for `wizard:request-ocr-review` and auto-opens OCR correction modal when wizard context matches.
+  - fixed hook order by moving OCR-review state declarations above effect dependencies.
+- `src/hooks/useLogMonitor.ts`
+  - telemetry loadout extraction now ignores tertiary keys and maps prospector slots only (character weapon/equipment paths).
+  - telemetry no longer auto-populates ship loadout slots from telemetry payload.
+  - draft creation now reuses recent unresolved telemetry draft records to avoid duplicate telemetry entries.
+- `src/components/recording/ActionPanel.tsx`
+  - telemetry indicators now display prospector slots (`characterWeapons` / `characterEquipment`) with explicit labels.
+  - guarded `useAppStore.getState` access for test/runtime compatibility.
+- `src/hooks/useMatchSubmission.ts`
+  - final submission now reuses unresolved telemetry draft when pending id is absent.
+  - added scoped artifact repair invocation (`matchId` + current match time window) before artifact reconciliation.
+  - enhanced artifact sync logging with repair-applied counts.
+- `src/utils/artifactService.ts`
+  - added optional scoped payload support for preview/apply artifact repair invocations.
+- `electron/handlers/artifactHandlers.cjs`
+  - artifact repair IPC handlers now accept and sanitize optional scope payloads.
+- `electron/helpers/artifactRelinker.cjs`
+  - added optional scope normalization and scoped relink planning (match id and/or time window filters).
+- `src/components/OcrRegionEditorModal.tsx`
+  - increased modal z-layer and viewport footprint; made content responsive to use nearly full app window area.
+- `src/components/PlayerHub.tsx`
+  - reinforced full-height/flex stretch layout so players view internals fill available viewport while preserving padding.
+- `src/hooks/__tests__/useLogMonitor.test.ts`
+  - added regression test verifying existing unresolved telemetry draft is reused.
+- `src/hooks/__tests__/useMatchSubmission.test.ts`
+  - updated artifact service mocks for scoped repair call path.
+- `src/components/recording/ActionPanel.test.tsx`
+  - updated telemetry indicator expectation to prospector labels.
+  - switched header-presence assertion to panel data-attribute contract.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `SMARTCAPTURE-TELEMETRY-ROI-011#1/#2/#3/#4/#5/#6` | Owner: `builder`
+  - Delta:
+    - completed queue/wizard UX fixes, telemetry prospector-only parsing and draft dedupe hardening,
+    - implemented scoped artifact-repair pipeline on finalization,
+    - fixed ROI modal usability and Players fill behavior,
+    - completed targeted lint/tests/typecheck validation and lock/doc closeout.
+  - Evidence pointers:
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/components/Wizard.tsx`
+    - `src/hooks/useLogMonitor.ts`
+    - `src/hooks/useMatchSubmission.ts`
+    - `src/utils/artifactService.ts`
+    - `electron/handlers/artifactHandlers.cjs`
+    - `electron/helpers/artifactRelinker.cjs`
+    - `src/components/OcrRegionEditorModal.tsx`
+    - `src/components/PlayerHub.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of SMARTCAPTURE-TELEMETRY-ROI-011.
+- `PM Response` | `APPROVED`
+  - Reason: all scoped regressions were resolved with focused regression coverage and successful lint/typecheck evidence.

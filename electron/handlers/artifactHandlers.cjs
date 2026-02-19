@@ -36,6 +36,19 @@ function recordSecurityBlock(channel, code, message) {
 
 const getArtifactScope = (webContentsId, matchId) => `artifact:${String(webContentsId)}:${String(matchId)}`;
 
+function sanitizeRepairScope(scopePayload) {
+  if (!scopePayload || typeof scopePayload !== 'object') return undefined;
+  const normalized = {};
+  const matchId = Number(scopePayload.matchId || 0);
+  if (Number.isInteger(matchId) && matchId > 0) normalized.matchId = matchId;
+  const startTime = Number(scopePayload.startTime || 0);
+  if (Number.isFinite(startTime) && startTime > 0) normalized.startTime = startTime;
+  const endTime = Number(scopePayload.endTime || 0);
+  if (Number.isFinite(endTime) && endTime > 0) normalized.endTime = endTime;
+  if (!normalized.matchId && !normalized.startTime && !normalized.endTime) return undefined;
+  return normalized;
+}
+
 function getValidatedMatchDir(app, artifactHelpers, matchId) {
   const idCheck = validatePositiveInt(matchId, 'matchId');
   if (!idCheck.success) return idCheck;
@@ -162,11 +175,12 @@ function registerArtifactHandlers(ipcMain, ctx) {
     }
   });
 
-  ipcMain.handle('artifact-repair-preview', async () => {
+  ipcMain.handle('artifact-repair-preview', async (event, scopePayload) => {
     try {
       const userData = app.getPath('userData');
       const dbPath = path.join(userData, 'wildgate_db.json');
-      return artifactRelinker.previewArtifactRepair({ dbPath, userData });
+      const scope = sanitizeRepairScope(scopePayload);
+      return artifactRelinker.previewArtifactRepair({ dbPath, userData, scope });
     } catch (e) {
       return {
         summary: { mode: 'preview', matches: 0, candidatesScanned: 0, candidatesEligible: 0, plannedLinks: 0 },
@@ -176,11 +190,12 @@ function registerArtifactHandlers(ipcMain, ctx) {
     }
   });
 
-  ipcMain.handle('artifact-repair-apply', async () => {
+  ipcMain.handle('artifact-repair-apply', async (event, scopePayload) => {
     try {
       const userData = app.getPath('userData');
       const dbPath = path.join(userData, 'wildgate_db.json');
-      return artifactRelinker.applyArtifactRepair({ dbPath, userData });
+      const scope = sanitizeRepairScope(scopePayload);
+      return artifactRelinker.applyArtifactRepair({ dbPath, userData, scope });
     } catch (e) {
       return {
         summary: { mode: 'apply', matches: 0, candidatesScanned: 0, candidatesEligible: 0, plannedLinks: 0, appliedLinks: 0, updatedMatches: 0 },

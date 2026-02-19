@@ -138,9 +138,9 @@ describe('ActionPanel', () => {
   it('shows match recording header without redundant capture guidance', async () => {
     const { ActionPanel } = await import('./ActionPanel');
 
-    render(<ActionPanel />);
+    const { container } = render(<ActionPanel />);
 
-    expect(screen.getByText(/match recording/i)).toBeInTheDocument();
+    expect(container.querySelector('[data-recording-panel="match-recording"]')).toBeInTheDocument();
     expect(screen.queryByText(/primary capture lives in the top header/i)).not.toBeInTheDocument();
   }, 10000);
 
@@ -372,19 +372,21 @@ describe('ActionPanel', () => {
     expect(uiState.setToast).toHaveBeenCalledWith({ message: 'Processing OCR...', type: 'info' });
   });
 
-  it('labels telemetry-detected weapons and equipment as auto-selected', async () => {
+  it('labels telemetry-detected prospector slots as auto-selected', async () => {
     const { ActionPanel } = await import('./ActionPanel');
     gameData.currentLoadout = {
       hero: 'Adrian',
       ship: 'Hunter',
-      weapons: ['Bolt Rifle'],
-      equipment: ['Shield Matrix'],
+      weapons: [],
+      equipment: [],
+      characterWeapons: ['Bolt Rifle'],
+      characterEquipment: ['Shield Matrix'],
     };
 
     render(<ActionPanel />);
 
-    expect(screen.getByText('Weapons')).toBeInTheDocument();
-    expect(screen.getByText('Equipment')).toBeInTheDocument();
+    expect(screen.getByText('Prospector Weapons')).toBeInTheDocument();
+    expect(screen.getByText('Prospector Equipment')).toBeInTheDocument();
     expect(screen.getAllByText('(auto)')).toHaveLength(2);
   });
 

@@ -105,6 +105,12 @@ export interface ArtifactRepairResult {
     applied?: Array<{ matchId: number; addedPaths: string[] }>;
 }
 
+export interface ArtifactRepairScope {
+    matchId?: number | null;
+    startTime?: number | null;
+    endTime?: number | null;
+}
+
 interface MatchArtifactsPayload {
     images?: string[];
     imageFiles?: ArtifactFile[];
@@ -217,14 +223,29 @@ export const addMatchArtifact = async (matchId: number): Promise<{ success: bool
         : { success: true, added: result.data?.added || [] };
 };
 
-export const previewArtifactRepair = async (): Promise<ArtifactRepairResult> => {
-    const api = getElectronAPI();
-    if (!api) return { summary: { mode: 'preview', matches: 0, candidatesScanned: 0, candidatesEligible: 0, plannedLinks: 0 }, candidates: [] };
-    return await api.invoke('artifact-repair-preview');
+const normalizeArtifactRepairScope = (scope?: ArtifactRepairScope | null): ArtifactRepairScope | undefined => {
+    if (!scope) return undefined;
+    const normalized: ArtifactRepairScope = {};
+    const matchId = Number(scope.matchId || 0);
+    if (Number.isInteger(matchId) && matchId > 0) normalized.matchId = matchId;
+    const startTime = Number(scope.startTime || 0);
+    if (Number.isFinite(startTime) && startTime > 0) normalized.startTime = startTime;
+    const endTime = Number(scope.endTime || 0);
+    if (Number.isFinite(endTime) && endTime > 0) normalized.endTime = endTime;
+    if (!normalized.matchId && !normalized.startTime && !normalized.endTime) return undefined;
+    return normalized;
 };
 
-export const applyArtifactRepair = async (): Promise<ArtifactRepairResult> => {
+export const previewArtifactRepair = async (scope?: ArtifactRepairScope | null): Promise<ArtifactRepairResult> => {
+    const api = getElectronAPI();
+    if (!api) return { summary: { mode: 'preview', matches: 0, candidatesScanned: 0, candidatesEligible: 0, plannedLinks: 0 }, candidates: [] };
+    const payload = normalizeArtifactRepairScope(scope);
+    return await api.invoke('artifact-repair-preview', payload);
+};
+
+export const applyArtifactRepair = async (scope?: ArtifactRepairScope | null): Promise<ArtifactRepairResult> => {
     const api = getElectronAPI();
     if (!api) return { summary: { mode: 'apply', matches: 0, candidatesScanned: 0, candidatesEligible: 0, plannedLinks: 0, appliedLinks: 0, updatedMatches: 0 }, candidates: [], applied: [] };
-    return await api.invoke('artifact-repair-apply');
+    const payload = normalizeArtifactRepairScope(scope);
+    return await api.invoke('artifact-repair-apply', payload);
 };

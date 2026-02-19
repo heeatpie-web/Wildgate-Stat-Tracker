@@ -71,36 +71,22 @@ const toStringOrEmpty = (value: unknown): string => {
     return '';
 };
 
-const SHIP_WEAPON_NAMES = EQUIPMENT_DB
-    .filter((item) => item.type === 'Weapon')
-    .map((item) => item.name)
-    .filter(Boolean);
 const CHARACTER_WEAPON_NAMES = EQUIPMENT_DB
     .filter((item) => item.type === 'CharacterWeapon')
-    .map((item) => item.name)
-    .filter(Boolean);
-const SHIP_EQUIPMENT_NAMES = EQUIPMENT_DB
-    .filter((item) => item.type === 'Utility' || item.type === 'System')
     .map((item) => item.name)
     .filter(Boolean);
 const CHARACTER_EQUIPMENT_NAMES = EQUIPMENT_DB
     .filter((item) => item.type === 'CharacterEquipment')
     .map((item) => item.name)
     .filter(Boolean);
-const SHIP_WEAPON_SET = new Set(SHIP_WEAPON_NAMES);
-const CHARACTER_WEAPON_SET = new Set(CHARACTER_WEAPON_NAMES);
-const SHIP_EQUIPMENT_SET = new Set([...SHIP_EQUIPMENT_NAMES, ...Object.values(EQUIPMENT_GUIDS)]);
-const CHARACTER_EQUIPMENT_SET = new Set(CHARACTER_EQUIPMENT_NAMES);
+const PROSPECTOR_WEAPON_SET = new Set(CHARACTER_WEAPON_NAMES);
+const PROSPECTOR_EQUIPMENT_SET = new Set(CHARACTER_EQUIPMENT_NAMES);
 
-const TELEMETRY_ANY_WEAPON_NAMES = Array.from(new Set([
-    ...Object.values(WEAPON_GUIDS),
-    ...SHIP_WEAPON_NAMES,
+const TELEMETRY_PROSPECTOR_WEAPON_NAMES = Array.from(new Set([
     ...CHARACTER_WEAPON_NAMES,
 ]));
 
-const TELEMETRY_ANY_EQUIPMENT_NAMES = Array.from(new Set([
-    ...Object.values(EQUIPMENT_GUIDS),
-    ...SHIP_EQUIPMENT_NAMES,
+const TELEMETRY_PROSPECTOR_EQUIPMENT_NAMES = Array.from(new Set([
     ...CHARACTER_EQUIPMENT_NAMES,
 ]));
 
@@ -232,7 +218,36 @@ export const useLogMonitor = (activeUser?: string) => {
     });
 
     const createTelemetryDraftIfNeeded = (gameTime: number, loadout?: Loadout | null) => {
-        if (telemetryDraftMatchIdRef.current) return telemetryDraftMatchIdRef.current;
+        const existingRefId = telemetryDraftMatchIdRef.current;
+        if (existingRefId) {
+            const stillExists = useAppStore.getState().matches.some((m: Match) => m.id === existingRefId && m.subType === 'Telemetry Draft');
+            if (stillExists) return existingRefId;
+            telemetryDraftMatchIdRef.current = null;
+            telemetryDraftStartedAtRef.current = null;
+            telemetryDraftLoadoutSignatureRef.current = '';
+        }
+        const activePlayer = String(activeUserRef.current || '').trim().toLowerCase();
+        const recentCutoff = (typeof sessionStartTimeRef.current === 'number' && sessionStartTimeRef.current > 0)
+            ? (sessionStartTimeRef.current - 60_000)
+            : (Date.now() - (6 * 60 * 60 * 1000));
+        const existingDraft = useAppStore.getState().matches
+            .filter((m: Match) => {
+                if (!m || m.subType !== 'Telemetry Draft') return false;
+                const ts = Number(m.timestamp || 0);
+                if (!Number.isFinite(ts) || ts < recentCutoff) return false;
+                const draftPlayer = String(m.player || '').trim().toLowerCase();
+                if (activePlayer && draftPlayer && draftPlayer !== activePlayer) return false;
+                return true;
+            })
+            .sort((a: Match, b: Match) => Number(b.timestamp || 0) - Number(a.timestamp || 0))[0];
+        if (existingDraft) {
+            telemetryDraftMatchIdRef.current = existingDraft.id;
+            telemetryDraftStartedAtRef.current = Number(existingDraft.timestamp || gameTime) || gameTime;
+            telemetryDraftLoadoutSignatureRef.current = makeLoadoutSignature(existingDraft.loadout || loadout || currentLoadoutRef.current || null);
+            scheduleTelemetryDraftCapturePrompt(existingDraft.id);
+            Logger.info('LogMonitor', `Reused existing telemetry draft (matchId=${existingDraft.id})`);
+            return existingDraft.id;
+        }
         const matchId = Date.now() + Math.floor(Math.random() * 1000);
         const baselineLoadout = loadout || currentLoadoutRef.current || null;
         const draft = buildTelemetryDraft(matchId, gameTime, baselineLoadout);
@@ -508,7 +523,6 @@ export const useLogMonitor = (activeUser?: string) => {
                             'guidship', 'shipguid', 'ship', 'shipname',
                             'guidweaponprimary', 'guidweaponsecondary', 'weaponprimary', 'weaponnameprimary',
                             'guidequipmentprimary', 'guidequipmentsecondary', 'equipmentprimary', 'equipmentnameprimary',
-                            'weapontertiary', 'equipmenttertiary',
                             'weapons', 'equipment', 'characterweapons', 'charweapons', 'charactergear', 'characterequipment',
                             'weaponguids', 'equipmentguids',
                             'weaponids', 'equipmentids',
@@ -696,32 +710,39 @@ export const useLogMonitor = (activeUser?: string) => {
                             return name;
                         };
                         const weaponGuidCandidates = extractByKeys(loadoutData, [
-                            'guidWeaponPrimary', 'guidWeaponSecondary', 'guidWeaponTertiary',
-                            'weaponGuidPrimary', 'weaponGuidSecondary', 'weaponGuidTertiary',
-                            'guidWeapon1', 'guidWeapon2', 'guidWeapon3',
-                            'weaponGuid1', 'weaponGuid2', 'weaponGuid3',
-                            'primaryWeaponGuid', 'secondaryWeaponGuid', 'tertiaryWeaponGuid',
-                            'weapon_guid_primary', 'weapon_guid_secondary', 'weapon_guid_tertiary',
-                            'guid_weapon_primary', 'guid_weapon_secondary', 'guid_weapon_tertiary',
+                            'guidWeaponPrimary', 'guidWeaponSecondary',
+                            'weaponGuidPrimary', 'weaponGuidSecondary',
+                            'guidWeapon1', 'guidWeapon2',
+                            'weaponGuid1', 'weaponGuid2',
+                            'primaryWeaponGuid', 'secondaryWeaponGuid',
+                            'weapon_guid_primary', 'weapon_guid_secondary',
+                            'guid_weapon_primary', 'guid_weapon_secondary',
+                            'characterWeapons', 'characterWeapon', 'characterWeaponSlots', 'characterWeaponLoadout',
+                            'charWeapons', 'charWeapon', 'charWeaponSlots', 'charWeaponLoadout',
+                            'crewWeapons', 'crewWeaponSlots',
+                            'loadoutCharacterWeapons', 'loadoutCharWeapons',
                             'weapons', 'weaponGuids', 'weaponIds', 'weaponSlots', 'weaponSlotData', 'weaponLoadout',
                         ]);
                         const equipmentGuidCandidates = extractByKeys(loadoutData, [
-                            'guidEquipmentPrimary', 'guidEquipmentSecondary', 'guidEquipmentTertiary',
-                            'equipmentGuidPrimary', 'equipmentGuidSecondary', 'equipmentGuidTertiary',
-                            'guidEquipment1', 'guidEquipment2', 'guidEquipment3',
-                            'equipmentGuid1', 'equipmentGuid2', 'equipmentGuid3',
-                            'primaryEquipmentGuid', 'secondaryEquipmentGuid', 'tertiaryEquipmentGuid',
-                            'equipment_guid_primary', 'equipment_guid_secondary', 'equipment_guid_tertiary',
-                            'guid_equipment_primary', 'guid_equipment_secondary', 'guid_equipment_tertiary',
+                            'guidEquipmentPrimary', 'guidEquipmentSecondary',
+                            'equipmentGuidPrimary', 'equipmentGuidSecondary',
+                            'guidEquipment1', 'guidEquipment2',
+                            'equipmentGuid1', 'equipmentGuid2',
+                            'primaryEquipmentGuid', 'secondaryEquipmentGuid',
+                            'equipment_guid_primary', 'equipment_guid_secondary',
+                            'guid_equipment_primary', 'guid_equipment_secondary',
+                            'characterEquipment', 'characterEquipments', 'characterGear', 'characterEquipmentSlots', 'characterEquipmentLoadout',
+                            'charEquipment', 'charEquipments', 'charGear', 'charEquipmentSlots', 'charEquipmentLoadout',
+                            'crewEquipment', 'crewGear', 'loadoutCharacterEquipment', 'loadoutCharEquipment',
                             'equipment', 'equipmentGuids', 'equipmentIds', 'equipmentSlots', 'equipmentSlotData', 'equipmentLoadout',
                         ]);
                         const weaponNameCandidates = extractByKeys(loadoutData, [
                             'weapons', 'weaponSlots', 'weaponSlotData', 'weaponLoadout',
-                            'weaponPrimary', 'weaponSecondary', 'weaponTertiary',
-                            'weaponOne', 'weaponTwo', 'weaponThree',
-                            'primaryWeapon', 'secondaryWeapon', 'tertiaryWeapon',
-                            'weaponNamePrimary', 'weaponNameSecondary', 'weaponNameTertiary',
-                            'weapon_name_primary', 'weapon_name_secondary', 'weapon_name_tertiary',
+                            'weaponPrimary', 'weaponSecondary',
+                            'weaponOne', 'weaponTwo',
+                            'primaryWeapon', 'secondaryWeapon',
+                            'weaponNamePrimary', 'weaponNameSecondary',
+                            'weapon_name_primary', 'weapon_name_secondary',
                             'weaponNames', 'weaponDisplayNames', 'loadoutWeapons', 'loadoutWeaponNames',
                         ]);
                         const characterWeaponNameCandidates = extractByKeys(loadoutData, [
@@ -732,11 +753,11 @@ export const useLogMonitor = (activeUser?: string) => {
                         ]);
                         const equipmentNameCandidates = extractByKeys(loadoutData, [
                             'equipment', 'equipmentSlots', 'equipmentSlotData', 'equipmentLoadout',
-                            'equipmentPrimary', 'equipmentSecondary', 'equipmentTertiary',
-                            'equipmentOne', 'equipmentTwo', 'equipmentThree',
-                            'primaryEquipment', 'secondaryEquipment', 'tertiaryEquipment',
-                            'equipmentNamePrimary', 'equipmentNameSecondary', 'equipmentNameTertiary',
-                            'equipment_name_primary', 'equipment_name_secondary', 'equipment_name_tertiary',
+                            'equipmentPrimary', 'equipmentSecondary',
+                            'equipmentOne', 'equipmentTwo',
+                            'primaryEquipment', 'secondaryEquipment',
+                            'equipmentNamePrimary', 'equipmentNameSecondary',
+                            'equipment_name_primary', 'equipment_name_secondary',
                             'equipmentNames', 'equipmentDisplayNames', 'loadoutEquipment', 'loadoutEquipmentNames',
                         ]);
                         const characterEquipmentNameCandidates = extractByKeys(loadoutData, [
@@ -756,46 +777,37 @@ export const useLogMonitor = (activeUser?: string) => {
                             ...weaponNameCandidates,
                             ...characterWeaponNameCandidates,
                         ]
-                            .map((n) => fuzzyMatchList(n, TELEMETRY_ANY_WEAPON_NAMES))
+                            .map((n) => fuzzyMatchList(n, TELEMETRY_PROSPECTOR_WEAPON_NAMES))
                             .filter(Boolean) as string[]));
                         const matchedEquipmentNames = Array.from(new Set([
                             ...equipmentNameCandidates,
                             ...characterEquipmentNameCandidates,
                         ]
-                            .map((n) => fuzzyMatchList(n, TELEMETRY_ANY_EQUIPMENT_NAMES))
+                            .map((n) => fuzzyMatchList(n, TELEMETRY_PROSPECTOR_EQUIPMENT_NAMES))
                             .filter(Boolean) as string[]));
 
-                        const resolvedWeapons = Array.from(new Set([
-                            ...resolvedGuidWeapons,
-                            ...matchedWeaponNames.filter((name) => SHIP_WEAPON_SET.has(name)),
-                        ]));
-                        const resolvedCharacterWeapons = Array.from(new Set(
-                            matchedWeaponNames.filter((name) => CHARACTER_WEAPON_SET.has(name))
-                        ));
-                        const resolvedEquipment = Array.from(new Set([
-                            ...resolvedGuidEquipment,
-                            ...matchedEquipmentNames.filter((name) => SHIP_EQUIPMENT_SET.has(name)),
-                        ]));
-                        const resolvedCharacterEquipment = Array.from(new Set(
-                            matchedEquipmentNames.filter((name) => CHARACTER_EQUIPMENT_SET.has(name))
-                        ));
+                        const resolvedProspectorWeapons = Array.from(new Set([
+                            ...resolvedGuidWeapons.filter((name) => PROSPECTOR_WEAPON_SET.has(name)),
+                            ...matchedWeaponNames.filter((name) => PROSPECTOR_WEAPON_SET.has(name)),
+                        ])).slice(0, 2);
+                        const resolvedProspectorEquipment = Array.from(new Set([
+                            ...resolvedGuidEquipment.filter((name) => PROSPECTOR_EQUIPMENT_SET.has(name)),
+                            ...matchedEquipmentNames.filter((name) => PROSPECTOR_EQUIPMENT_SET.has(name)),
+                        ])).slice(0, 2);
                         const finalHero = (heroName && !heroName.startsWith('Unknown')) ? heroName : currentLoadoutRef.current?.hero;
                         const finalShip = (shipName && !shipName.startsWith('Unknown')) ? shipName : currentLoadoutRef.current?.ship;
 
                         const nextLoadout: Loadout = {
                             hero: finalHero || heroName || currentLoadoutRef.current?.hero || null,
                             ship: finalShip || shipName || currentLoadoutRef.current?.ship || null,
-                            weapons: resolvedWeapons.length > 0
-                                ? resolvedWeapons
-                                : (currentLoadoutRef.current?.weapons || []),
-                            equipment: resolvedEquipment.length > 0
-                                ? resolvedEquipment
-                                : (currentLoadoutRef.current?.equipment || []),
-                            characterWeapons: resolvedCharacterWeapons.length > 0
-                                ? resolvedCharacterWeapons
+                            // Telemetry should not auto-map ship loadout slots.
+                            weapons: (currentLoadoutRef.current?.weapons || []),
+                            equipment: (currentLoadoutRef.current?.equipment || []),
+                            characterWeapons: resolvedProspectorWeapons.length > 0
+                                ? resolvedProspectorWeapons
                                 : (currentLoadoutRef.current?.characterWeapons || []),
-                            characterEquipment: resolvedCharacterEquipment.length > 0
-                                ? resolvedCharacterEquipment
+                            characterEquipment: resolvedProspectorEquipment.length > 0
+                                ? resolvedProspectorEquipment
                                 : (currentLoadoutRef.current?.characterEquipment || []),
                         };
                         const previousLoadoutNames = new Set([

@@ -63,6 +63,24 @@ function parseMatchTimestampMs(match) {
   return Number.isFinite(parsedDate) ? parsedDate : 0;
 }
 
+function normalizeRepairScope(scope) {
+  if (!scope || typeof scope !== 'object') return null;
+  const normalized = {};
+  const matchId = Number(scope.matchId || 0);
+  if (Number.isInteger(matchId) && matchId > 0) normalized.matchId = matchId;
+  const startTime = normalizeEpochMs(scope.startTime);
+  if (startTime > 0) normalized.startTimeMs = startTime;
+  const endTime = normalizeEpochMs(scope.endTime);
+  if (endTime > 0) normalized.endTimeMs = endTime;
+  if (normalized.startTimeMs && normalized.endTimeMs && normalized.endTimeMs < normalized.startTimeMs) {
+    const nextStart = normalized.endTimeMs;
+    normalized.endTimeMs = normalized.startTimeMs;
+    normalized.startTimeMs = nextStart;
+  }
+  if (!normalized.matchId && !normalized.startTimeMs && !normalized.endTimeMs) return null;
+  return normalized;
+}
+
 function getMatchCount(db) {
   if (!db || typeof db !== 'object') return 0;
   if (Array.isArray(db.matches)) return db.matches.length;
@@ -266,7 +284,8 @@ function scoreCandidate(sourceKind, reason, deltaMs) {
   return score;
 }
 
-function buildRepairPlan(db, userData) {
+function buildRepairPlan(db, userData, scopeOptions) {
+  const scope = normalizeRepairScope(scopeOptions);
   const matches = Array.isArray(db?.matches) ? db.matches : [];
   const { byId, sorted } = buildMatchMaps(matches);
   const { globalPaths, perMatch } = buildExistingArtifactSets(matches);
@@ -276,12 +295,20 @@ function buildRepairPlan(db, userData) {
   const fallbackMaxDeltaMs = Number.isFinite(DEFAULT_FALLBACK_MAX_DELTA_MS) && DEFAULT_FALLBACK_MAX_DELTA_MS > 0
     ? DEFAULT_FALLBACK_MAX_DELTA_MS
     : (12 * 60 * 60 * 1000);
-  const matchWindows = buildMatchWindows(sorted, fallbackMaxDeltaMs);
+  const targetMatches = scope?.matchId
+    ? sorted.filter((match) => Number(match.id) === Number(scope.matchId))
+    : sorted;
+  const matchWindows = buildMatchWindows(targetMatches, fallbackMaxDeltaMs);
 
   const candidates = collectCandidates(userData);
   const plansByKey = new Map();
 
   for (const candidate of candidates) {
+    if (scope?.startTimeMs || scope?.endTimeMs) {
+      if (!Number.isFinite(candidate.timestampMs)) continue;
+      if (scope.startTimeMs && Number(candidate.timestampMs) < scope.startTimeMs) continue;
+      if (scope.endTimeMs && Number(candidate.timestampMs) > scope.endTimeMs) continue;
+    }
     const sourceKey = toPathKey(candidate.sourcePath);
     if (globalPaths.has(sourceKey)) continue;
 
@@ -296,7 +323,7 @@ function buildRepairPlan(db, userData) {
         deltaMs = Math.abs(parseMatchTimestampMs(byId.get(candidate.sourceMatchId)) - Number(candidate.timestampMs));
       }
     } else if (Number.isFinite(candidate.timestampMs)) {
-      const nearest = findNearestMatch(sorted, candidate.timestampMs, maxDeltaMs);
+      const nearest = findNearestMatch(targetMatches, candidate.timestampMs, maxDeltaMs);
       if (nearest) {
         target = { id: nearest.id };
         deltaMs = nearest.deltaMs;
@@ -310,6 +337,7 @@ function buildRepairPlan(db, userData) {
     }
 
     if (!target || !byId.has(target.id)) continue;
+    if (scope?.matchId && Number(target.id) !== Number(scope.matchId)) continue;
 
     const targetDir = path.join(userData, 'match_artifacts', String(target.id));
     const targetPath = chooseTargetPath(targetDir, candidate.filename, candidate.sourcePath, candidate.size, globalPaths);
@@ -354,6 +382,9 @@ function buildRepairPlan(db, userData) {
       candidatesScanned: candidates.length,
       candidatesEligible: plans.length,
       plannedLinks: plans.length,
+      scopeMatchId: scope?.matchId || null,
+      scopeStartTime: scope?.startTimeMs || null,
+      scopeEndTime: scope?.endTimeMs || null,
     },
   };
 }
@@ -365,10 +396,10 @@ function createBackup(dbPath) {
   return backupPath;
 }
 
-function previewArtifactRepair({ dbPath, userData } = {}) {
+function previewArtifactRepair({ dbPath, userData, scope } = {}) {
   try {
     const db = readJsonSafe(dbPath);
-    const plan = buildRepairPlan(db, userData);
+    const plan = buildRepairPlan(db, userData, scope);
     return {
       summary: {
         mode: 'preview',
@@ -376,6 +407,9 @@ function previewArtifactRepair({ dbPath, userData } = {}) {
         candidatesScanned: plan.summary.candidatesScanned,
         candidatesEligible: plan.summary.candidatesEligible,
         plannedLinks: plan.summary.plannedLinks,
+        scopeMatchId: plan.summary.scopeMatchId,
+        scopeStartTime: plan.summary.scopeStartTime,
+        scopeEndTime: plan.summary.scopeEndTime,
       },
       candidates: plan.candidatesOut,
     };
@@ -394,10 +428,10 @@ function previewArtifactRepair({ dbPath, userData } = {}) {
   }
 }
 
-function applyArtifactRepair({ dbPath, userData } = {}) {
+function applyArtifactRepair({ dbPath, userData, scope } = {}) {
   try {
     const db = readJsonSafe(dbPath);
-    const plan = buildRepairPlan(db, userData);
+    const plan = buildRepairPlan(db, userData, scope);
     if (plan.plans.length === 0) {
       return {
         summary: {
@@ -408,6 +442,9 @@ function applyArtifactRepair({ dbPath, userData } = {}) {
           plannedLinks: 0,
           appliedLinks: 0,
           updatedMatches: 0,
+          scopeMatchId: plan.summary.scopeMatchId,
+          scopeStartTime: plan.summary.scopeStartTime,
+          scopeEndTime: plan.summary.scopeEndTime,
         },
         candidates: plan.candidatesOut,
         applied: [],
@@ -499,6 +536,9 @@ function applyArtifactRepair({ dbPath, userData } = {}) {
         updatedMatches: applied.length,
         failedLinks: failures.length,
         backupPath,
+        scopeMatchId: plan.summary.scopeMatchId,
+        scopeStartTime: plan.summary.scopeStartTime,
+        scopeEndTime: plan.summary.scopeEndTime,
       },
       candidates: plan.candidatesOut,
       applied,
