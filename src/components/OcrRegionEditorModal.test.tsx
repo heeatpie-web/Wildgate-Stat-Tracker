@@ -58,11 +58,15 @@ describe('OcrRegionEditorModal', () => {
         expect(inputClickSpy).toHaveBeenCalled();
     });
 
-    it('uses electron picker and previews returned image data', async () => {
+    it('uses electron picker and previews returned image data via blob URL', async () => {
+        // Stub atob so the base64 decode path doesn't need a real image payload
+        const atobSpy = vi.spyOn(globalThis, 'atob').mockReturnValue('fake-binary');
+
         const invoke = vi.fn().mockResolvedValue({
             success: true,
             data: {
                 canceled: false,
+                filename: 'capture.png',
                 dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB',
             },
         });
@@ -80,10 +84,13 @@ describe('OcrRegionEditorModal', () => {
 
         await waitFor(() => expect(invoke).toHaveBeenCalledWith('pick-roi-image'));
         expect(inputClickSpy).not.toHaveBeenCalled();
-        expect(screen.getByAltText('ROI editing target')).toHaveAttribute(
-            'src',
-            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB'
-        );
+
+        // The data URL is decoded via atob, converted to a Blob, then beginImageLoad creates a blob: URL
+        await waitFor(() => expect(atobSpy).toHaveBeenCalled());
+        const preview = screen.getByAltText('ROI editing target');
+        expect(preview).toHaveAttribute('src', 'blob:roi-preview');
+
+        atobSpy.mockRestore();
     });
 
     it('shows restart guidance when picker channel is blocked by stale preload', async () => {

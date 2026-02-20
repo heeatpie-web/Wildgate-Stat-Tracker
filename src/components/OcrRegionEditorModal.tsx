@@ -544,10 +544,29 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
                 return;
             }
 
-            selectedFileRef.current = null;
-            attemptedDataUrlFallbackRef.current = false;
             setImageLoadError(null);
-            setPreviewSource(payload.dataUrl);
+            attemptedDataUrlFallbackRef.current = false;
+
+            // Convert data URL to Blob so beginImageLoad() can use an efficient
+            // blob: URL (avoids Chromium data-URL size limits for <img> src).
+            // Use atob() instead of fetch() to avoid CSP connect-src restrictions.
+            try {
+                const comma = payload.dataUrl.indexOf(',');
+                const meta = payload.dataUrl.slice(0, comma);
+                const mime = meta.split(':')[1]?.split(';')[0] ?? 'image/png';
+                const binary = atob(payload.dataUrl.slice(comma + 1));
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                const blob = new Blob([bytes], { type: mime });
+                const file = new File([blob], payload.filename || 'screenshot.png', { type: mime });
+                beginImageLoad(file);
+            } catch {
+                // Direct data URL fallback if blob conversion fails
+                selectedFileRef.current = null;
+                setPreviewSource(payload.dataUrl);
+            }
         } catch (error) {
             const rawMessage = error instanceof Error ? error.message : '';
             const lowerMessage = rawMessage.toLowerCase();
