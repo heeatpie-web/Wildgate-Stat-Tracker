@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { AnalyticsView, AnalyticsTimeRange, DrillDownTarget } from '../../types';
 import { Activity, ArrowLeft, Download, LayoutGrid, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
@@ -59,6 +59,17 @@ const CATEGORY_SUBVIEWS: Record<AnalyticsCategory, AnalyticsView[]> = {
     narrative: ['essay', 'session', 'period', 'timePatterns'],
 };
 
+type ProCategory = 'all' | 'core' | 'timeline' | 'team' | 'environment' | 'detailed';
+
+const PRO_CATEGORY_OPTIONS: Array<{ value: ProCategory; label: string }> = [
+    { value: 'all', label: 'All' },
+    { value: 'core', label: 'Core' },
+    { value: 'timeline', label: 'Timeline' },
+    { value: 'team', label: 'Team' },
+    { value: 'environment', label: 'Environment' },
+    { value: 'detailed', label: 'Detailed' },
+];
+
 export const AnalyticsShell: React.FC = () => {
     const { setDrillDownTarget } = useGameData();
     const { activeMode: currentMode, activeUser: currentUser } = useUIState();
@@ -70,6 +81,7 @@ export const AnalyticsShell: React.FC = () => {
     const [lastN] = useState(20);
     const [exporting, setExporting] = useState(false);
     const [isProMode, setIsProMode] = useState(false);
+    const [proCategory, setProCategory] = useState<ProCategory>('core');
     const contentRef = useRef<HTMLDivElement>(null);
 
     const data = useAnalyticsData(timeRange, lastN, currentView);
@@ -178,6 +190,132 @@ export const AnalyticsShell: React.FC = () => {
     };
 
     const modeBadge = currentMode === 'Artifact Brawl' ? 'bg-warning-soft text-warning border-warning-soft' : 'bg-info-soft text-info border-info-soft';
+    const proTiles = useMemo(() => ([
+        {
+            view: 'momentum' as AnalyticsView,
+            label: 'Momentum',
+            category: 'core' as ProCategory,
+            content: <MomentumView data={data.momentum} visualMode={visualMode} />,
+        },
+        {
+            view: 'killEfficiency' as AnalyticsView,
+            label: 'Kill Efficiency',
+            category: 'core' as ProCategory,
+            content: <KillEfficiencyView data={data.killEfficiency} visualMode={visualMode} />,
+        },
+        {
+            view: 'placement' as AnalyticsView,
+            label: 'Placement Distribution',
+            category: 'core' as ProCategory,
+            content: <PlacementDistView data={data.placementData} visualMode={visualMode} />,
+        },
+        {
+            view: 'streaks' as AnalyticsView,
+            label: 'Streak Timeline',
+            category: 'core' as ProCategory,
+            content: <StreakTimelineView data={data.streakHistory} visualMode={visualMode} />,
+        },
+        {
+            view: 'timePatterns' as AnalyticsView,
+            label: 'Time Patterns',
+            category: 'timeline' as ProCategory,
+            content: <TimePatternView data={data.timePatterns} visualMode={visualMode} />,
+        },
+        {
+            view: 'period' as AnalyticsView,
+            label: 'Period Comparison',
+            category: 'timeline' as ProCategory,
+            content: <PeriodComparisonView data={data.periodComparison} visualMode={visualMode} />,
+        },
+        {
+            view: 'session' as AnalyticsView,
+            label: 'Session Summary',
+            category: 'timeline' as ProCategory,
+            content: <SessionSummaryView data={data.sessionSummary} visualMode={visualMode} />,
+        },
+        {
+            view: 'synergy' as AnalyticsView,
+            label: 'Synergy Matrix',
+            category: 'team' as ProCategory,
+            content: <SynergyView synergyMatrix={data.synergyMatrix} visualMode={visualMode} />,
+        },
+        {
+            view: 'social' as AnalyticsView,
+            label: 'Social',
+            category: 'team' as ProCategory,
+            content: (
+                <SocialView
+                    socialData={data.socialData}
+                    filteredMatches={data.filteredMatches}
+                    currentUser={currentUser}
+                    playerProfiles={data.playerProfiles}
+                    onDrillDown={onDrillDown}
+                    visualMode={visualMode}
+                />
+            ),
+        },
+        {
+            view: 'insights' as AnalyticsView,
+            label: 'Insights',
+            category: 'team' as ProCategory,
+            content: (
+                <InsightsView
+                    insights={data.insights}
+                    relationshipInsights={data.relationshipInsights}
+                    filteredMatches={data.filteredMatches}
+                    onDrillDown={onDrillDown}
+                    visualMode={visualMode}
+                />
+            ),
+        },
+        {
+            view: 'environment' as AnalyticsView,
+            label: 'Hazard Analysis',
+            category: 'environment' as ProCategory,
+            content: <EnvironmentView matches={data.filteredMatches} visualMode={visualMode} />,
+        },
+        {
+            view: 'pro' as AnalyticsView,
+            label: 'Detailed Analysis',
+            category: 'detailed' as ProCategory,
+            content: <ProView matches={data.filteredMatches} visualMode={visualMode} />,
+        },
+    ]), [
+        data.momentum,
+        data.killEfficiency,
+        data.placementData,
+        data.streakHistory,
+        data.timePatterns,
+        data.periodComparison,
+        data.sessionSummary,
+        data.synergyMatrix,
+        data.socialData,
+        data.playerProfiles,
+        data.insights,
+        data.relationshipInsights,
+        data.filteredMatches,
+        visualMode,
+        currentUser,
+        onDrillDown,
+    ]);
+    const proCategoryCounts = useMemo(() => {
+        const counts: Record<ProCategory, number> = {
+            all: proTiles.length,
+            core: 0,
+            timeline: 0,
+            team: 0,
+            environment: 0,
+            detailed: 0,
+        };
+        for (const tile of proTiles) {
+            counts[tile.category] += 1;
+        }
+        return counts;
+    }, [proTiles]);
+    const visibleProTiles = useMemo(() => {
+        if (proCategory === 'all') return proTiles;
+        return proTiles.filter((tile) => tile.category === proCategory);
+    }, [proCategory, proTiles]);
 
     return (
         <div className="h-full flex flex-col gap-3 overflow-hidden rounded-modal analytics-shell-gradient shadow-lg">
@@ -263,40 +401,29 @@ export const AnalyticsShell: React.FC = () => {
                     <div className="space-y-4">
                         <ControlPanelView timeRange={timeRange} lastN={lastN} />
 
+                        <div className="md3-card rounded-card p-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                                {PRO_CATEGORY_OPTIONS.map((option) => (
+                                    <button
+                                        key={option.value}
+                                        onClick={() => setProCategory(option.value)}
+                                        className={`px-3 py-1.5 rounded-control text-label-sm font-bold uppercase tracking-wide transition-all border ${proCategory === option.value
+                                            ? 'bg-md-sys-primary text-md-sys-onPrimary border-md-sys-primary'
+                                            : 'bg-md-sys-surfaceContainerHigh text-md-sys-on-surface/60 border-transparent hover:bg-md-sys-surfaceContainerHighest'
+                                            }`}
+                                    >
+                                        {option.label} ({proCategoryCounts[option.value]})
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                            {renderProDrillTile('momentum', 'Momentum', <MomentumView data={data.momentum} visualMode={visualMode} />)}
-                            {renderProDrillTile('killEfficiency', 'Kill Efficiency', <KillEfficiencyView data={data.killEfficiency} visualMode={visualMode} />)}
-                            {renderProDrillTile('placement', 'Placement Distribution', <PlacementDistView data={data.placementData} visualMode={visualMode} />)}
-                            {renderProDrillTile('streaks', 'Streak Timeline', <StreakTimelineView data={data.streakHistory} visualMode={visualMode} />)}
-                            {renderProDrillTile('timePatterns', 'Time Patterns', <TimePatternView data={data.timePatterns} visualMode={visualMode} />)}
-                            {renderProDrillTile('period', 'Period Comparison', <PeriodComparisonView data={data.periodComparison} visualMode={visualMode} />)}
-                            {renderProDrillTile('session', 'Session Summary', <SessionSummaryView data={data.sessionSummary} visualMode={visualMode} />)}
-                            {renderProDrillTile('synergy', 'Synergy Matrix', <SynergyView synergyMatrix={data.synergyMatrix} visualMode={visualMode} />)}
-                            {renderProDrillTile('environment', 'Hazard Analysis', <EnvironmentView matches={data.filteredMatches} visualMode={visualMode} />)}
-                            {renderProDrillTile(
-                                'social',
-                                'Social',
-                                <SocialView
-                                    socialData={data.socialData}
-                                    filteredMatches={data.filteredMatches}
-                                    currentUser={currentUser}
-                                    playerProfiles={data.playerProfiles}
-                                    onDrillDown={onDrillDown}
-                                    visualMode={visualMode}
-                                />,
-                            )}
-                            {renderProDrillTile(
-                                'insights',
-                                'Insights',
-                                <InsightsView
-                                    insights={data.insights}
-                                    relationshipInsights={data.relationshipInsights}
-                                    filteredMatches={data.filteredMatches}
-                                    onDrillDown={onDrillDown}
-                                    visualMode={visualMode}
-                                />,
-                            )}
-                            {renderProDrillTile('pro', 'Detailed Analysis', <ProView matches={data.filteredMatches} visualMode={visualMode} />)}
+                            {visibleProTiles.map((tile) => (
+                                <React.Fragment key={tile.view}>
+                                    {renderProDrillTile(tile.view, tile.label, tile.content)}
+                                </React.Fragment>
+                            ))}
                         </div>
                     </div>
                 </div>

@@ -2633,6 +2633,14 @@ body[data-mode='light'] select.md3-textfield--outlined {
   box-shadow: none !important;
 }
 
+.recharts-default-tooltip .recharts-tooltip-label,
+.recharts-default-tooltip .recharts-tooltip-item,
+.recharts-default-tooltip .recharts-tooltip-item-name,
+.recharts-default-tooltip .recharts-tooltip-item-separator,
+.recharts-default-tooltip .recharts-tooltip-item-value {
+  color: var(--md-sys-color-on-surface) !important;
+}
+
 
 /* Legacy typography utilities removed — use Tailwind text-label-xs / text-label-sm / text-body / text-title / text-heading */
 
