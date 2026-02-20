@@ -544,10 +544,21 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
                 return;
             }
 
-            selectedFileRef.current = null;
-            attemptedDataUrlFallbackRef.current = false;
             setImageLoadError(null);
-            setPreviewSource(payload.dataUrl);
+            attemptedDataUrlFallbackRef.current = false;
+
+            // Convert data URL to Blob so beginImageLoad() can use an efficient
+            // blob: URL (avoids Chromium data-URL size limits for <img> src).
+            try {
+                const response = await fetch(payload.dataUrl);
+                const blob = await response.blob();
+                const file = new File([blob], payload.filename || 'screenshot.png', { type: blob.type });
+                beginImageLoad(file);
+            } catch {
+                // Direct data URL fallback if blob conversion fails
+                selectedFileRef.current = null;
+                setPreviewSource(payload.dataUrl);
+            }
         } catch (error) {
             const rawMessage = error instanceof Error ? error.message : '';
             const lowerMessage = rawMessage.toLowerCase();

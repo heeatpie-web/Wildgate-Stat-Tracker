@@ -58,11 +58,17 @@ describe('OcrRegionEditorModal', () => {
         expect(inputClickSpy).toHaveBeenCalled();
     });
 
-    it('uses electron picker and previews returned image data', async () => {
+    it('uses electron picker and previews returned image data via blob URL', async () => {
+        const fakeBlob = new Blob(['img'], { type: 'image/png' });
+        const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+            new Response(fakeBlob, { headers: { 'Content-Type': 'image/png' } }),
+        );
+
         const invoke = vi.fn().mockResolvedValue({
             success: true,
             data: {
                 canceled: false,
+                filename: 'capture.png',
                 dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB',
             },
         });
@@ -80,10 +86,15 @@ describe('OcrRegionEditorModal', () => {
 
         await waitFor(() => expect(invoke).toHaveBeenCalledWith('pick-roi-image'));
         expect(inputClickSpy).not.toHaveBeenCalled();
-        expect(screen.getByAltText('ROI editing target')).toHaveAttribute(
-            'src',
-            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB'
-        );
+
+        // The data URL is converted to a Blob, then beginImageLoad creates a blob: URL
+        await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith(
+            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB',
+        ));
+        const preview = screen.getByAltText('ROI editing target');
+        expect(preview).toHaveAttribute('src', 'blob:roi-preview');
+
+        fetchSpy.mockRestore();
     });
 
     it('shows restart guidance when picker channel is blocked by stale preload', async () => {
