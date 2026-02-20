@@ -386,22 +386,14 @@ describe('ActionPanel', () => {
     expect(uiState.setToast).toHaveBeenCalledWith({ message: 'Processing OCR...', type: 'info' });
   });
 
-  it('labels telemetry-detected prospector slots as auto-selected', async () => {
+  it('keeps prospector weapon/equipment telemetry labels out of ActionPanel', async () => {
     const { ActionPanel } = await import('./ActionPanel');
-    gameData.currentLoadout = {
-      hero: 'Adrian',
-      ship: 'Hunter',
-      weapons: [],
-      equipment: [],
-      characterWeapons: ['Bolt Rifle'],
-      characterEquipment: ['Shield Matrix'],
-    };
 
     render(<ActionPanel />);
 
-    expect(screen.getByText('Prospector Weapons')).toBeInTheDocument();
-    expect(screen.getByText('Prospector Equipment')).toBeInTheDocument();
-    expect(screen.getAllByText('(auto)')).toHaveLength(2);
+    expect(screen.queryByText('Prospector Weapons')).not.toBeInTheDocument();
+    expect(screen.queryByText('Prospector Equipment')).not.toBeInTheDocument();
+    expect(screen.queryByText('(auto)')).not.toBeInTheDocument();
   });
 
 });

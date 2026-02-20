@@ -3,9 +3,21 @@ import { Save, Trash2, Download, Upload, Users, UserMinus, UserCheck, Eye, Chevr
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
 import { PlayerRole } from '../store/slices/createMappingSlice';
+import { SHIPS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT } from '../types';
 import Logger from '../utils/logger';
 
 type MappingDomain = 'players' | 'ships' | 'weapons' | 'equipment';
+type MappingTag = 'prospector' | 'ship' | 'weapon' | 'equipment' | 'player';
+
+const normalizeLabel = (value: unknown) => String(value || '').trim().toLowerCase();
+
+const SHIP_SET = new Set((SHIPS || []).map((name) => normalizeLabel(name)));
+const PROSPECTOR_SET = new Set((CHARACTERS || []).map((name) => normalizeLabel(name)));
+const WEAPON_SET = new Set([
+    ...(WEAPONS || []),
+    ...(CHARACTER_WEAPONS || []),
+].map((name) => normalizeLabel(name)));
+const EQUIPMENT_SET = new Set((CHARACTER_EQUIPMENT || []).map((name) => normalizeLabel(name)));
 
 // Role badge component
 const RoleBadge: React.FC<{ role: PlayerRole }> = ({ role }) => {
@@ -77,6 +89,60 @@ export const IdMapper: React.FC = () => {
             return;
         }
         setUidMapping(domain, id, name);
+    };
+
+    const getTagFromUnknownType = (rawType?: string): MappingTag | null => {
+        const normalizedType = normalizeLabel(rawType);
+        if (normalizedType.includes('hero')) return 'prospector';
+        if (normalizedType.includes('ship')) return 'ship';
+        if (normalizedType.includes('weapon')) return 'weapon';
+        if (normalizedType.includes('equipment') || normalizedType.includes('gear') || normalizedType.includes('utility')) return 'equipment';
+        return null;
+    };
+
+    const inferMappingTag = (entry: { id: string; name: string; domain: MappingDomain }): MappingTag => {
+        if (entry.domain === 'ships') return 'ship';
+        if (entry.domain === 'weapons') return 'weapon';
+        if (entry.domain === 'equipment') return 'equipment';
+
+        const unknownTypeTag = getTagFromUnknownType(detectedUnknowns?.[entry.id]?.type);
+        if (unknownTypeTag) return unknownTypeTag;
+
+        const normalizedId = normalizeLabel(entry.id);
+        if (normalizedId.startsWith('ship')) return 'ship';
+        if (normalizedId.startsWith('wpn') || normalizedId.startsWith('weapon') || normalizedId.startsWith('cw')) return 'weapon';
+        if (normalizedId.startsWith('equip') || normalizedId.startsWith('gear') || normalizedId.startsWith('ce')) return 'equipment';
+
+        const normalizedName = normalizeLabel(entry.name);
+        if (SHIP_SET.has(normalizedName)) return 'ship';
+        if (PROSPECTOR_SET.has(normalizedName)) return 'prospector';
+        if (WEAPON_SET.has(normalizedName)) return 'weapon';
+        if (EQUIPMENT_SET.has(normalizedName)) return 'equipment';
+
+        return 'player';
+    };
+
+    const mappingTagStyle: Record<MappingTag, { label: string; className: string }> = {
+        prospector: {
+            label: 'PROSPECTOR',
+            className: 'bg-info/15 text-info',
+        },
+        ship: {
+            label: 'SHIP',
+            className: 'bg-md-sys-primary/15 text-md-sys-primary',
+        },
+        weapon: {
+            label: 'WEAPON',
+            className: 'bg-warning-soft text-warning',
+        },
+        equipment: {
+            label: 'EQUIPMENT',
+            className: 'bg-success-soft text-success',
+        },
+        player: {
+            label: 'PLAYER',
+            className: 'md3-surface-high text-md-sys-on-surface/50',
+        },
     };
 
     // Computed relationship data
@@ -356,6 +422,8 @@ export const IdMapper: React.FC = () => {
                                 .map((entry) => {
                                     const profile = playerProfiles[entry.id];
                                     const role = getPlayerRole(entry.id);
+                                    const mappingTag = inferMappingTag(entry);
+                                    const tagStyle = mappingTagStyle[mappingTag];
                                     const isEditing = editingKnownKey === entry.key;
                                     const editValue = nameInputs[entry.key] ?? '';
                                     return (
@@ -385,11 +453,9 @@ export const IdMapper: React.FC = () => {
                                                     <span className="font-bold text-md-sys-primary truncate">{entry.name}</span>
                                                 )}
                                                 {entry.domain === 'players' && role !== 'unknown' && <RoleBadge role={role} />}
-                                                {entry.domain !== 'players' && (
-                                                    <span className="px-1.5 py-0.5 rounded text-label-xs font-bold uppercase md3-surface-high text-md-sys-on-surface/50">
-                                                        {entry.domain}
-                                                    </span>
-                                                )}
+                                                <span className={`px-1.5 py-0.5 rounded text-label-xs font-bold uppercase ${tagStyle.className}`}>
+                                                    {tagStyle.label}
+                                                </span>
                                                 {entry.domain === 'players' && profile && (
                                                     <>
                                                         <span className="text-label-sm opacity-40">{profile.sightings}x seen</span>

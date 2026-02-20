@@ -28,7 +28,8 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
         poiEasy, setPoiEasy, poiMedium, setPoiMedium, poiEpic, setPoiEpic,
         selectedReachModifiers, modifiersSource, toggleReachModifier, setSelectedReachModifiers,
         currentNote, setCurrentNote,
-        activeWeapons: weapons, setActiveWeapons: setWeapons
+        activeWeapons: weapons, setActiveWeapons: setWeapons,
+        currentLoadout
     } = useGameData();
 
     const { showArtifactSelect, setShowArtifactSelect } = useUIState();
@@ -53,6 +54,13 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
         if (!accordionMode) return true; // Always expanded in normal mode
         return expandedSection === section;
     };
+
+    const telemetryProspectorWeapons = Array.isArray(currentLoadout?.characterWeapons)
+        ? currentLoadout.characterWeapons.filter(Boolean)
+        : [];
+    const telemetryProspectorEquipment = Array.isArray(currentLoadout?.characterEquipment)
+        ? currentLoadout.characterEquipment.filter(Boolean)
+        : [];
 
     const handleAutoScan = async () => {
         setIsScanning(true);
@@ -92,13 +100,17 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
         icon: React.ReactNode;
         title: string;
         badge?: string;
-    }> = ({ id, icon, title, badge }) => {
+        indicator?: React.ReactNode;
+    }> = ({ id, icon, title, badge, indicator }) => {
         if (!accordionMode) {
             // Normal header without collapse controls
             return (
-                <span className="text-label-sm font-semibold text-md-sys-on-surface/60 flex items-center gap-1.5">
-                    {icon} {title} {badge && <span className="text-label-sm opacity-60">{badge}</span>}
-                </span>
+                <div className="flex items-center justify-between gap-2">
+                    <span className="text-label-sm font-semibold text-md-sys-on-surface/60 flex items-center gap-1.5 min-w-0">
+                        {icon} {title} {badge && <span className="text-label-sm opacity-60">{badge}</span>}
+                    </span>
+                    {indicator ? <div className="min-w-0 flex items-center gap-1">{indicator}</div> : null}
+                </div>
             );
         }
 
@@ -113,8 +125,9 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                         : 'md3-surface text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
                     }`}
             >
-                <span className="text-label-sm font-semibold flex items-center gap-1.5">
+                <span className="text-label-sm font-semibold flex items-center gap-1.5 min-w-0">
                     {icon} {title} {badge && <span className="text-label-sm opacity-60">{badge}</span>}
+                    {indicator ? <span className="min-w-0 flex items-center gap-1">{indicator}</span> : null}
                 </span>
                 {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
@@ -269,10 +282,31 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                     // Calculate total weapons selected
                     const totalWeapons = CHARACTER_WEAPONS.reduce((sum, w) => sum + (weapons?.[w] || 0), 0);
                     const MAX_WEAPONS = 2;
+                    const selectedCharacterWeapons = CHARACTER_WEAPONS.filter((w) => (weapons?.[w] || 0) > 0);
+                    const selectedCharacterWeaponsLabel = selectedCharacterWeapons.length > 0
+                        ? selectedCharacterWeapons.join(', ')
+                        : 'None';
 
                     return (
                         <div className="flex flex-col gap-2">
-                            <SectionHeader id="charWeapons" icon={<Crosshair size={12} />} title="Char Weapons" badge={`${totalWeapons}/${MAX_WEAPONS}`} />
+                            <SectionHeader
+                                id="charWeapons"
+                                icon={<Crosshair size={12} />}
+                                title="Char Weapons"
+                                badge={`${totalWeapons}/${MAX_WEAPONS}`}
+                                indicator={(
+                                    <>
+                                        <span className="text-label-xs font-semibold text-md-sys-on-surface/60 truncate max-w-180px">
+                                            {selectedCharacterWeaponsLabel}
+                                        </span>
+                                        {telemetryProspectorWeapons.length > 0 && (
+                                            <span className="px-1.5 py-0.5 rounded-pill text-label-xs font-bold uppercase tracking-wide bg-info/15 text-info">
+                                                Auto
+                                            </span>
+                                        )}
+                                    </>
+                                )}
+                            />
                             {isSectionExpanded('charWeapons') && (
                                 <div className="grid grid-cols-2 gap-2">
                                     {CHARACTER_WEAPONS.map(w => {
@@ -323,10 +357,31 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                     // Calculate total equipment selected
                     const totalEquipment = CHARACTER_EQUIPMENT.reduce((sum, w) => sum + (weapons?.[w] || 0), 0);
                     const MAX_EQUIPMENT = 2;
+                    const selectedCharacterEquipment = CHARACTER_EQUIPMENT.filter((w) => (weapons?.[w] || 0) > 0);
+                    const selectedCharacterEquipmentLabel = selectedCharacterEquipment.length > 0
+                        ? selectedCharacterEquipment.join(', ')
+                        : 'None';
 
                     return (
                         <div className="flex flex-col gap-2">
-                            <SectionHeader id="equipment" icon={<Zap size={12} />} title="Equipment" badge={`${totalEquipment}/${MAX_EQUIPMENT}`} />
+                            <SectionHeader
+                                id="equipment"
+                                icon={<Zap size={12} />}
+                                title="Equipment"
+                                badge={`${totalEquipment}/${MAX_EQUIPMENT}`}
+                                indicator={(
+                                    <>
+                                        <span className="text-label-xs font-semibold text-md-sys-on-surface/60 truncate max-w-180px">
+                                            {selectedCharacterEquipmentLabel}
+                                        </span>
+                                        {telemetryProspectorEquipment.length > 0 && (
+                                            <span className="px-1.5 py-0.5 rounded-pill text-label-xs font-bold uppercase tracking-wide bg-info/15 text-info">
+                                                Auto
+                                            </span>
+                                        )}
+                                    </>
+                                )}
+                            />
                             {isSectionExpanded('equipment') && (
                                 <div className="grid grid-cols-2 gap-2">
                                     {CHARACTER_EQUIPMENT.map(w => {

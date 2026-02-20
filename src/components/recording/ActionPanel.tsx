@@ -40,7 +40,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         setMatchStartTime, setIsMatchInProgress,
         activeShip, shipSource, telemetryDetectedShip,
         activeHero, heroSource, telemetryDetectedHero,
-        currentLoadout,
         pendingReviews,
         detectedUnknowns
     } = useGameData();
@@ -133,17 +132,9 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     };
 
     const isBusy = isScanning || isCapturing || isProcessing;
-    const telemetryProspectorWeapons = Array.isArray(currentLoadout?.characterWeapons)
-        ? currentLoadout.characterWeapons.filter(Boolean)
-        : [];
-    const telemetryProspectorEquipment = Array.isArray(currentLoadout?.characterEquipment)
-        ? currentLoadout.characterEquipment.filter(Boolean)
-        : [];
     const hasTelemetryIndicators = Boolean(
         telemetryDetectedShip
         || telemetryDetectedHero
-        || telemetryProspectorWeapons.length > 0
-        || telemetryProspectorEquipment.length > 0
     );
 
     // Dedicated mission timer display so match time remains visible at a glance.
@@ -602,24 +593,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                                 )}
                             </div>
                         )}
-                        {telemetryProspectorWeapons.length > 0 && (
-                            <div className="flex items-start gap-2 text-label-sm">
-                                <span className="font-bold uppercase tracking-wide text-info">Prospector Weapons</span>
-                                <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
-                                <span className="text-md-sys-on-surface/80 break-words">
-                                    {telemetryProspectorWeapons.join(', ')}
-                                </span>
-                            </div>
-                        )}
-                        {telemetryProspectorEquipment.length > 0 && (
-                            <div className="flex items-start gap-2 text-label-sm">
-                                <span className="font-bold uppercase tracking-wide text-info">Prospector Equipment</span>
-                                <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
-                                <span className="text-md-sys-on-surface/80 break-words">
-                                    {telemetryProspectorEquipment.join(', ')}
-                                </span>
-                            </div>
-                        )}
                     </div>
                 )}
 
@@ -776,24 +749,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                                 {activeHero && telemetryDetectedHero !== activeHero && (
                                     <span className="opacity-60 text-label-xs">(overridden)</span>
                                 )}
-                            </div>
-                        )}
-                        {telemetryProspectorWeapons.length > 0 && (
-                            <div className="flex items-start gap-2 text-label-sm">
-                                <span className="font-bold uppercase tracking-wide text-info">Prospector Weapons</span>
-                                <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
-                                <span className="text-md-sys-on-surface/80 break-words">
-                                    {telemetryProspectorWeapons.join(', ')}
-                                </span>
-                            </div>
-                        )}
-                        {telemetryProspectorEquipment.length > 0 && (
-                            <div className="flex items-start gap-2 text-label-sm">
-                                <span className="font-bold uppercase tracking-wide text-info">Prospector Equipment</span>
-                                <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
-                                <span className="text-md-sys-on-surface/80 break-words">
-                                    {telemetryProspectorEquipment.join(', ')}
-                                </span>
                             </div>
                         )}
                     </div>
