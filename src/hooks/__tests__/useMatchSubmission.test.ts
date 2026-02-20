@@ -232,6 +232,127 @@ describe('useMatchSubmission', () => {
     nowSpy.mockRestore();
   });
 
+  it('warns when entered teammate count mismatches telemetry expectation', () => {
+    const now = 1_700_000_100_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.selectedTeammates = ['Wing1'];
+    mockStoreState.matches = [{
+      id: 1111,
+      timestamp: now - 10_000,
+      date: '1/1/2024',
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: ['Wing1'],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      time: '10:00',
+      telemetryConsistency: {
+        expectedTeammateCount: 3,
+        expectedMode: 'Artifact Brawl',
+        telemetryDurationSeconds: 600,
+      },
+    }];
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    act(() => {
+      result.current.initiateSubmission('Win');
+    });
+
+    expect(setToast.mock.calls.some(([toast]) =>
+      typeof toast?.message === 'string' && toast.message.includes('team count mismatch')
+    )).toBe(true);
+    nowSpy.mockRestore();
+  });
+
+  it('warns when entered duration mismatches telemetry duration', () => {
+    const now = 1_700_000_200_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.timeMin = '04';
+    mockStoreState.timeSec = '00';
+    mockStoreState.selectedTeammates = ['Wing1'];
+    mockStoreState.matches = [{
+      id: 2222,
+      timestamp: now - 10_000,
+      date: '1/1/2024',
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: ['Wing1'],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      time: '04:00',
+      telemetryConsistency: {
+        expectedTeammateCount: 1,
+        expectedMode: 'Artifact Brawl',
+        telemetryDurationSeconds: 600,
+        durationToleranceSeconds: 45,
+      },
+    }];
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    act(() => {
+      result.current.initiateSubmission('Win');
+    });
+
+    expect(setToast.mock.calls.some(([toast]) =>
+      typeof toast?.message === 'string' && toast.message.includes('duration off by')
+    )).toBe(true);
+    nowSpy.mockRestore();
+  });
+
+  it('warns when entered mode mismatches telemetry-inferred mode', () => {
+    const now = 1_700_000_300_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.activeMode = 'Artifact Brawl';
+    mockStoreState.selectedTeammates = ['Wing1'];
+    mockStoreState.matches = [{
+      id: 3333,
+      timestamp: now - 10_000,
+      date: '1/1/2024',
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: ['Wing1'],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      time: '08:00',
+      telemetryConsistency: {
+        expectedTeammateCount: 1,
+        expectedMode: 'Fleet Battle',
+        telemetryDurationSeconds: 480,
+      },
+    }];
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    act(() => {
+      result.current.initiateSubmission('Win');
+    });
+
+    expect(setToast.mock.calls.some(([toast]) =>
+      typeof toast?.message === 'string' && toast.message.includes('mode mismatch')
+    )).toBe(true);
+    nowSpy.mockRestore();
+  });
+
   it('processFinalSubmission with no pendingMatchData does not call addMatch', async () => {
     mockStoreState.pendingMatchData = null;
     mockStoreState.showWizard = 'Win';
@@ -243,6 +364,43 @@ describe('useMatchSubmission', () => {
     });
 
     expect(addMatch).not.toHaveBeenCalled();
+  });
+
+  it('persists evaluated telemetry consistency checks on final submission payload', async () => {
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.selectedTeammates = ['Wing1'];
+    mockStoreState.timeMin = '04';
+    mockStoreState.timeSec = '00';
+    mockStoreState.pendingMatchData = {
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: ['Wing1'],
+      opponents: [],
+      kills: {},
+      reachModifiers: [],
+      telemetryConsistency: {
+        expectedTeammateCount: 3,
+        expectedMode: 'Fleet Battle',
+        telemetryDurationSeconds: 600,
+        durationToleranceSeconds: 45,
+      },
+    };
+    mockStoreState.showWizard = 'Win';
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    await act(async () => {
+      await result.current.processFinalSubmission('Combat');
+    });
+
+    expect(addMatch).toHaveBeenCalled();
+    const [submitted] = addMatch.mock.calls[0];
+    expect(submitted.telemetryConsistency?.checks).toEqual({
+      teammateCount: 'warn',
+      mode: 'warn',
+      duration: 'warn',
+    });
+    expect(submitted.telemetryConsistency?.durationDeltaSeconds).toBe(360);
   });
 
   it('uses a 10-minute fallback artifact window when timer context is missing', async () => {

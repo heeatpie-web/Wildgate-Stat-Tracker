@@ -60,6 +60,15 @@ const OCR_CORPUS_REPORTS_DIR = path.join(OCR_CORPUS_DIR, 'reports');
 const REPO_OCR_CORPUS_DIR = path.resolve(app.getAppPath(), 'dataset', 'ocr-corpus');
 const AUTO_SYNC_CORPUS_TO_REPO = process.env.WILDGATE_AUTO_SYNC_CORPUS_TO_REPO !== '0';
 const ALLOWED_FILE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.webp', '.gif']);
+const ROI_PICKER_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.webp', '.gif']);
+const ROI_MIME_BY_EXT = Object.freeze({
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.bmp': 'image/bmp',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+});
 const ALLOWED_HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const DEFAULT_EPIC_REQUEST_HOSTS = [
   'api.accelbyte.io',
@@ -84,8 +93,8 @@ const telemetryArchiveTokenRegistry = createScopedTokenRegistry({
   ttlMs: Number(process.env.WILDGATE_ARCHIVE_TOKEN_TTL_MS || (5 * 60 * 1000)),
   maxEntriesPerScope: Number(process.env.WILDGATE_ARCHIVE_TOKEN_MAX || 5000),
 });
-const TELEMETRY_RETENTION_MAX_BYTES = Number(process.env.WILDGATE_TELEMETRY_MAX_BYTES || (100 * 1024 * 1024));
-const TELEMETRY_RETENTION_MAX_AGE_MS = Number(process.env.WILDGATE_TELEMETRY_MAX_AGE_MS || (14 * 24 * 60 * 60 * 1000));
+const TELEMETRY_RETENTION_MAX_BYTES = Number(process.env.WILDGATE_TELEMETRY_MAX_BYTES || (500 * 1024 * 1024));
+const TELEMETRY_RETENTION_MAX_AGE_MS = Number(process.env.WILDGATE_TELEMETRY_MAX_AGE_MS || (90 * 24 * 60 * 60 * 1000));
 const TELEMETRY_RETENTION_PROMPT_DISABLED = process.env.WILDGATE_TELEMETRY_DISABLE_RETENTION_PROMPT === '1';
 const TELEMETRY_HISTORY_NDJSON_PATH = path.join(USER_DATA_ROOT, 'telemetry_permanent_history.ndjson');
 const TELEMETRY_HISTORY_LEGACY_PATH = path.join(USER_DATA_ROOT, 'telemetry_permanent_history.json');
@@ -299,15 +308,15 @@ function buildUsableTelemetryEvent(evt) {
 
   const hasAnyUsefulContent = Boolean(
     eventName
-      || timestampMs
-      || matchId
-      || sessionId
-      || collector.playerIds.size
-      || collector.heroIds.size
-      || collector.shipIds.size
-      || collector.weaponIds.size
-      || collector.equipmentIds.size
-      || outcome
+    || timestampMs
+    || matchId
+    || sessionId
+    || collector.playerIds.size
+    || collector.heroIds.size
+    || collector.shipIds.size
+    || collector.weaponIds.size
+    || collector.equipmentIds.size
+    || outcome
   );
   if (!hasAnyUsefulContent) return null;
 
@@ -2453,6 +2462,54 @@ ipcMain.handle('telemetry-prune-apply', async () => {
 });
 
 // Utility IPC handlers for contextIsolation (replaces direct fs/shell access in renderer)
+ipcMain.handle('pick-roi-image', async (event) => {
+  try {
+    const { dialog } = require('electron');
+    const artifactPaths = artifactHelpers.getArtifactPaths(app);
+    const defaultPath = artifactPaths.matchArtifactsRoot;
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+    const dialogParent = senderWindow && !senderWindow.isDestroyed()
+      ? senderWindow
+      : (win && !win.isDestroyed() ? win : undefined);
+    try {
+      await fsPromises.mkdir(defaultPath, { recursive: true });
+    } catch {
+      // Fall through if directory creation fails; dialog can still open.
+    }
+
+    const picked = await dialog.showOpenDialog(dialogParent || undefined, {
+      title: 'Load ROI Screenshot',
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'bmp', 'webp', 'gif'] }],
+      defaultPath,
+      properties: ['openFile'],
+    });
+    if (picked.canceled || picked.filePaths.length === 0) {
+      return ok({ canceled: true });
+    }
+
+    const selectedPath = picked.filePaths[0];
+    const extCheck = validateAllowedExtension(selectedPath, ROI_PICKER_EXTENSIONS, 'roi image');
+    if (!extCheck.success) {
+      recordSecurityBlock('pick-roi-image', extCheck.code, extCheck.message);
+      return extCheck;
+    }
+
+    const ext = path.extname(selectedPath).toLowerCase();
+    const mime = ROI_MIME_BY_EXT[ext] || 'application/octet-stream';
+    const imageBuffer = await fsPromises.readFile(selectedPath);
+    const dataUrl = `data:${mime};base64,${imageBuffer.toString('base64')}`;
+    return ok({
+      canceled: false,
+      filename: path.basename(selectedPath),
+      sourcePath: selectedPath,
+      dataUrl,
+    });
+  } catch (e) {
+    console.error('[ROI] pick-roi-image error:', e?.message || e);
+    return internal('Failed to open ROI image');
+  }
+});
+
 ipcMain.handle('read-file-base64', async (event, filePath) => {
   try {
     if (!isAllowedRendererPath(filePath)) return null;
@@ -2848,9 +2905,9 @@ ipcMain.handle('ocr-corpus-run-pipeline', async (event, opts = {}) => {
           teammates: normalizeStringList((data.teammates || []).map(t => (typeof t === 'string' ? t : t?.name))),
           opponentTeams: Array.isArray(data.opponentTeams)
             ? data.opponentTeams.map(team => ({
-                teamName: String(team?.teamName || '').trim(),
-                players: normalizeStringList((team?.players || []).map(p => (typeof p === 'string' ? p : p?.name)))
-              }))
+              teamName: String(team?.teamName || '').trim(),
+              players: normalizeStringList((team?.players || []).map(p => (typeof p === 'string' ? p : p?.name)))
+            }))
             : [],
           modifiers: normalizeStringList((data.reachModifiers || []).map(m => (typeof m === 'string' ? m : m?.name)))
         });

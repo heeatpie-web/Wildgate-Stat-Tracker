@@ -1988,3 +1988,371 @@
     - initial failure: `src/components/recording/ActionPanel.tsx(108,61)` implicit `any` on unresolved-draft predicate argument.
     - fix: annotated callback param (`m: any`) in fallback draft finder.
     - post-fix rerun: TypeScript compile succeeded.
+
+---
+
+## Validation - 2026-02-19 - SMARTCAPTURE-DETAIL-LAYOUT-012
+- Command: `npx eslint src/components/SmartCapturesPanel.tsx`
+  - Result: FAIL (initial), then PASS (post-fix)
+  - Evidence:
+    - initial failure: JSX parse error (`'}' expected`) after first-pass block rewrite.
+    - fix: restored truncated screenshot quick-action JSX and rewrapped conditional sections (`rerun`, `ocr metadata`, `telemetry`).
+    - post-fix rerun: no lint violations.
+
+- Command: `npm run -s typecheck`
+  - Result: FAIL (initial), then PASS (post-fix)
+  - Evidence:
+    - initial failure: `SmartCapturesPanel.tsx` malformed JSX (`no corresponding closing tag`, `unexpected token`) from truncated block.
+    - fix: repaired malformed quick-action card and balanced JSX conditional wrappers.
+    - post-fix rerun: TypeScript compile succeeded with no errors.
+
+---
+
+## Validation - 2026-02-19 - SMARTCAPTURE-DETAIL-ICONS-013
+- Command: `npx eslint src/components/SmartCapturesPanel.tsx src/index.css`
+  - Result: PASS (with non-blocking warning for css file ignore)
+  - Evidence:
+    - `SmartCapturesPanel.tsx` has no lint violations.
+    - eslint warns that `src/index.css` is ignored by current eslint config.
+
+- Command: `npx eslint src/components/SmartCapturesPanel.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations after queue/detail bar iconography and sizing updates.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded with no errors after summary/action/result and queue-strip styling updates.
+
+---
+
+## Validation - 2026-02-19 - SMARTCAPTURE-HEADER-THEME-DAYFILTER-014
+- Command: `npx eslint src/components/SmartCapturesPanel.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations after Smart Captures day-filter wiring and detail-header hierarchy refactor.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded with no errors after Smart Captures and token updates.
+
+---
+
+## Validation - 2026-02-19 - SMARTCAPTURE-STATUS-COHERENCE-016
+- Command: `npx eslint src/components/smart-captures/QueueItemRichPreview.tsx src/components/smart-captures/QueueItemRichPreview.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in touched queue renderer/test files.
+
+- Command: `npx vitest run src/components/smart-captures/QueueItemRichPreview.test.tsx`
+  - Result: FAIL (initial), then PASS (post-fix)
+  - Evidence:
+    - initial failures were stale assertions in test file (legacy matcher expecting bare `73` text and unique `Resolved` element).
+    - post-fix rerun: 1 file passed, 3 tests passed.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after queue-footer label mapping change.
+
+---
+
+## Validation - 2026-02-19 - MASTERPLAN-REMAINING-017
+- Command: `npx eslint src/hooks/useLogMonitor.ts src/components/recording/SquadronPanel.tsx src/App.tsx src/hooks/__tests__/useLogMonitor.test.ts src/components/recording/SquadronPanel.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations after telemetry/runtime residual fixes.
+
+- Command: `npx vitest run src/hooks/__tests__/useLogMonitor.test.ts src/components/recording/SquadronPanel.test.tsx`
+  - Result: FAIL (initial), then PASS (post-fix)
+  - Evidence:
+    - initial failure: stale expectation in nested telemetry loadout test after clear-state guard change.
+    - fix: adjusted runtime logic to apply resolved character loadout from generic payload keys while preserving explicit empty-slot clear behavior.
+    - post-fix rerun: 2 files passed, 9 tests passed.
+
+- Command: `npm run -s typecheck`
+  - Result: FAIL (initial), then PASS (post-fix)
+  - Evidence:
+    - initial failure: `SquadronPanel.tsx` nullability mismatch in `sameShip(...)` args (`string | null` vs `string | undefined`).
+    - fix: widened comparator input types to `string | null | undefined`.
+    - post-fix rerun: TypeScript compile succeeded.
+
+- Command: `npx eslint src/components/IdMapper.tsx src/store/slices/createMappingSlice.ts src/store/slices/__tests__/createMappingSlice.test.ts`
+  - Result: PASS
+  - Evidence:
+    - no lint violations after mapper-domain routing and `setUidMapping` consistency fixes.
+
+- Command: `npx vitest run src/store/slices/__tests__/createMappingSlice.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 1 file passed, 35 tests passed.
+    - includes new assertions for unknown-clearing + player-profile sync in `setUidMapping`.
+
+- Command: `npx eslint src/components/SmartCapturesPanel.tsx src/components/smart-captures/QueueItemRichPreview.tsx src/components/smart-captures/QueueItemRichPreview.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations after Smart Captures menu/queue polish and team-lock control removal.
+
+- Command: `npx vitest run src/components/smart-captures/QueueItemRichPreview.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 1 file passed, 3 tests passed after compact queue-line assertion update.
+
+- Command: `npx eslint src/hooks/useLogMonitor.ts src/components/recording/SquadronPanel.tsx src/App.tsx src/hooks/__tests__/useLogMonitor.test.ts src/components/recording/SquadronPanel.test.tsx src/components/IdMapper.tsx src/store/slices/createMappingSlice.ts src/store/slices/__tests__/createMappingSlice.test.ts src/components/SmartCapturesPanel.tsx src/components/smart-captures/QueueItemRichPreview.tsx src/components/smart-captures/QueueItemRichPreview.test.tsx src/components/analytics/AnalyticsDashboard.tsx src/components/DevOCRPanel.tsx src/components/PlayerHub.tsx src/utils/equipmentDb.ts`
+  - Result: PASS
+  - Evidence:
+    - no lint violations across all touched implementation files.
+
+- Command: `npx vitest run src/hooks/__tests__/useLogMonitor.test.ts src/components/recording/SquadronPanel.test.tsx src/store/slices/__tests__/createMappingSlice.test.ts src/components/smart-captures/QueueItemRichPreview.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 4 files passed, 47 tests passed.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after all MASTERPLAN-REMAINING-017 changes.
+
+---
+
+## Validation - 2026-02-19 - GEMINI-INTEGRITY-AUDIT-018
+- Command: `git diff --stat`
+  - Result: PASS
+  - Evidence:
+    - workspace currently has 32 modified files with both runtime and documentation deltas; audit proceeded as verification-only.
+
+- Command: `git diff --check`
+  - Result: WARN
+  - Evidence:
+    - non-runtime formatting issues only:
+      - `docs/agents/00_INTAKE.md:2250` trailing whitespace.
+      - `src/components/SmartCapturesPanel.tsx:3073` blank line at EOF.
+
+- Command: `rg -n "^(<<<<<<<|=======|>>>>>>>)" docs src electron`
+  - Result: PASS
+  - Evidence:
+    - no merge-conflict markers found.
+
+- Command: `npm run -s ci:quality`
+  - Result: PASS
+  - Evidence:
+    - lint passed.
+    - tests passed: 50 files, 462 tests.
+    - typecheck passed.
+    - production build passed.
+
+- Command: `git diff -- src/components/Sidebar.tsx src/App.tsx electron/main.cjs`
+  - Result: REVIEWED
+  - Evidence:
+    - behavior delta 1: `dev-ocr` navigation/rendering now gated by `devMode`.
+    - behavior delta 2: telemetry retention defaults increased to `500MB` and `90 days`.
+
+- Command: `git diff --check` (post-audit-doc update rerun)
+  - Result: WARN
+  - Evidence:
+    - formatting-only deltas reported:
+      - `docs/agents/00_INTAKE.md:2250` trailing whitespace.
+      - `docs/agents/00_INTAKE.md:2251` new blank line at EOF.
+      - `docs/agents/01_PLAN.md:560` new blank line at EOF.
+      - `src/components/SmartCapturesPanel.tsx:3073` blank line at EOF.
+
+---
+
+## Validation - 2026-02-19 - OCR-DEBUG-GATE-REMOVE-019
+- Command: `rg -n "\bdevMode\b|dev-ocr" src/App.tsx src/components/Sidebar.tsx`
+  - Result: PASS
+  - Evidence:
+    - `dev-ocr` remains present as a routable view/nav target.
+    - `devMode` gate references removed from `Sidebar`/`App` OCR Debug access paths.
+
+- Command: `npx eslint src/App.tsx src/components/Sidebar.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in touched files.
+
+- Command: `npx vitest run src/App.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 1 file passed, 4 tests passed.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after gate-removal patch.
+
+- Command: `rg -n "TELEMETRY_RETENTION_MAX_BYTES|TELEMETRY_RETENTION_MAX_AGE_MS" electron/main.cjs`
+  - Result: PASS
+  - Evidence:
+    - `TELEMETRY_RETENTION_MAX_BYTES` remains `500 * 1024 * 1024`.
+    - `TELEMETRY_RETENTION_MAX_AGE_MS` remains `90 * 24 * 60 * 60 * 1000`.
+
+---
+
+## Validation - 2026-02-19 - SMARTCAPTURE-SELECTION-TONE-020
+- Command: `npx eslint src/components/smart-captures/QueueItemRichPreview.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in touched queue preview component.
+
+- Command: `npx vitest run src/components/smart-captures/QueueItemRichPreview.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 1 file passed, 3 tests passed.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after selected-state class calibration.
+
+---
+
+## Validation - 2026-02-19 - SMARTCAPTURE-TELEMETRY-LABEL-DEDUPE-021
+- Command: `npx eslint src/components/SmartCapturesPanel.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations after telemetry chip dedupe logic update.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded.
+
+- Command: `rg -n "showTelemetryChip|isTelemetryDraft|normalizedSubType|Telemetry draft|Telemetry attached" src/components/SmartCapturesPanel.tsx`
+  - Result: PASS
+  - Evidence:
+    - telemetry-draft specific dedupe conditions and labels are present in summary chip render logic.
+
+---
+
+## Validation - 2026-02-19 - HISTORY-SCROLL-OWNER-FIX-022
+- Command: `npx eslint src/App.tsx src/components/HistoryTable.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations in touched layout components.
+
+- Command: `npx vitest run src/App.test.tsx src/components/RecordingView.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 2 files passed, 7 tests passed.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after scroll-owner layout update.
+
+- Command: `rg -n "case 'history'|view-history|overflow-y-scroll|overflow-y-auto" src/App.tsx src/components/HistoryTable.tsx`
+  - Result: PASS
+  - Evidence:
+    - App History wrapper now owns vertical scroll.
+    - HistoryTable root no longer uses nested `overflow-y-auto`.
+
+---
+
+## Validation - 2026-02-19 - SMARTCAPTURE-OCR-BOX-TOOLS-023
+- Command: `npx eslint src/components/SmartCapturesPanel.tsx`
+  - Result: PASS
+  - Evidence:
+    - no lint violations after tools-card and ROI editor wiring updates.
+
+- Command: `npx vitest run src/App.test.tsx src/components/smart-captures/QueueItemRichPreview.test.tsx`
+  - Result: PASS
+  - Evidence:
+    - 2 files passed, 7 tests passed.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence:
+    - TypeScript compile succeeded after Smart Captures tools updates.
+
+- Command: `rg -n "OCR Tools|Adjust OCR Boxes|Open OCR Debug|OcrRegionEditorModal|showRoiEditor" src/components/SmartCapturesPanel.tsx`
+  - Result: PASS
+  - Evidence:
+    - Smart Captures Tools now exposes direct ROI action and OCR debug entry.
+
+## Validation - 2026-02-19 - TELEMETRY-CONSISTENCY-LOADOUT-020
+- Command: `npx vitest run src/hooks/__tests__/useLogMonitor.test.ts src/hooks/__tests__/useMatchSubmission.test.ts src/components/smart-captures/smartCaptureUtils.test.ts`
+  - Result: PASS
+  - Evidence:
+    - 3 test files passed.
+    - 40 tests passed.
+    - Includes new scenarios: mismatch warning detection, `NebLoadoutSaved` queue update, stale-loadout regression guard.
+
+- Command: `npm run -s typecheck`
+  - Result: PASS
+  - Evidence: `tsc --noEmit -p tsconfig.typecheck.json` completed with no errors.
+
+- Command: `npx eslint src/types.ts src/utils/telemetryArchive.ts src/utils/telemetryConsistency.ts src/utils/guids.ts src/hooks/useLogMonitor.ts src/hooks/useMatchSubmission.ts src/components/SmartCapturesPanel.tsx src/components/smart-captures/QueueItemRichPreview.tsx src/components/smart-captures/smartCaptureUtils.ts src/hooks/__tests__/useLogMonitor.test.ts src/hooks/__tests__/useMatchSubmission.test.ts src/components/smart-captures/smartCaptureUtils.test.ts`
+  - Result: PASS
+  - Evidence: no lint violations for touched implementation and focused regression files.
+
+- Logic checks (manual code-path verification)
+  - Result: PASS
+  - Evidence:
+    - Matchmaker `playerIds` and `ticketMatchPool` now populate telemetry consistency expectations in draft flow.
+    - Submission path now emits non-blocking health warnings for team-count/mode/duration mismatches.
+    - Smart Captures queue/detail now surfaces compact mismatch chips and bundled telemetry consistency summary.
+    - `NebLoadoutSaved` now applies newest-only timestamp ordering and records in-game/lobby save snapshots.
+## TEST-HARDEN-SMOKE-024 - Validation (2026-02-20)
+- `npx vitest run src/utils/__tests__/telemetryArchive.test.ts src/utils/__tests__/telemetryConsistency.test.ts src/utils/__tests__/guids.test.ts src/hooks/__tests__/useLogMonitor.test.ts src/hooks/__tests__/useMatchSubmission.test.ts`
+  - PASS (5 files, 42 tests)
+- `npx eslint src/utils/__tests__/telemetryArchive.test.ts src/utils/__tests__/telemetryConsistency.test.ts src/utils/__tests__/guids.test.ts src/hooks/__tests__/useLogMonitor.test.ts src/hooks/__tests__/useMatchSubmission.test.ts`
+  - PASS
+- `npm run -s typecheck`
+  - PASS
+- `npm run dev:qa`
+  - PASS
+  - `snap:views` report updated (`.visual/report.md`), mismatch summary:
+    - recording 10.73%
+    - analytics 7.78%
+    - smart-captures 16.97%
+    - players 5.40%
+    - history 9.03%
+  - `ci:quality` PASS (`lint`, `test`, `typecheck`, `build`)
+  - Full test suite PASS (53 files, 489 tests)
+- `npm run snap:views:real`
+  - PASS
+  - real-data mismatch summary:
+    - recording 11.81%
+    - analytics 8.15%
+    - smart-captures 16.84%
+    - players 5.82%
+    - history 9.46%
+- Notes:
+  - Expected non-failing stderr remains from negative-path artifact test (`IPC error` assertion path).
+  - Non-failing Vite chunk-size warning remains in build output.
+## ROI-FULLWIDTH-025 - Validation (2026-02-20)
+- `npx eslint src/components/OcrRegionEditorModal.tsx`
+  - PASS
+- `npm run -s typecheck`
+  - PASS
+- Note:
+  - `src/index.css` lint invocation is intentionally skipped because current eslint config does not include CSS parser rules for this repo (`File ignored because no matching configuration was supplied`).
+
+## ROI-IMAGE-PREVIEW-026 - Validation (2026-02-20)
+- `npx vitest run src/components/OcrRegionEditorModal.test.tsx`
+  - PASS (1 file, 3 tests)
+- `npx eslint src/components/OcrRegionEditorModal.tsx src/components/OcrRegionEditorModal.test.tsx`
+  - PASS
+- `npm run -s typecheck`
+  - PASS
+
+## ROI-ARTIFACT-DIALOG-027 - Validation (2026-02-20)
+- `npx vitest run src/components/OcrRegionEditorModal.test.tsx`
+  - PASS (1 file, 4 tests)
+- `npx eslint src/components/OcrRegionEditorModal.tsx src/components/OcrRegionEditorModal.test.tsx electron/preload.cjs electron/main.cjs scripts/security_negative_tests.cjs`
+  - PASS
+- `npm run -s typecheck`
+  - PASS
+- `node scripts/security_negative_tests.cjs`
+  - PASS (113/113)
+- Addendum:
+  - `npx vitest run src/components/OcrRegionEditorModal.test.tsx` now PASS (1 file, 5 tests) after blocked-channel guidance patch.
+  - `npx eslint src/components/OcrRegionEditorModal.tsx src/components/OcrRegionEditorModal.test.tsx` PASS.
+  - `npm run -s typecheck` PASS.
+- Addendum 2:
+  - Revalidated after sender-window + fallback-button patch:
+    - `npx vitest run src/components/OcrRegionEditorModal.test.tsx` PASS (1 file, 5 tests)
+    - `npx eslint src/components/OcrRegionEditorModal.tsx src/components/OcrRegionEditorModal.test.tsx electron/main.cjs electron/preload.cjs` PASS
+    - `npm run -s typecheck` PASS

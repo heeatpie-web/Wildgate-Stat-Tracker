@@ -2657,3 +2657,369 @@
 ## Remaining / Risks
 - No additional blockers found for this scope.
 - Large historical AGENTS docs/lock tables remain noisy from prior tasks; only SMARTCAPTURE-TELEMETRY-ROI-011 entries were updated in this pass.
+
+---
+
+## Handoff - 2026-02-19 - SMARTCAPTURE-DETAIL-LAYOUT-012
+- Task: rework Smart Captures detail panel layout so the panel reads clearly and is easier to operate.
+
+- What changed:
+  - `src/components/SmartCapturesPanel.tsx`
+    - reorganized detail content into a cleaner two-lane hierarchy:
+      - left lane (`Match Editor`) now contains all editable match sections in one continuous flow,
+      - right lane (`Capture Intelligence`) now contains screenshots/re-run/OCR metadata/telemetry in one rail.
+    - preserved existing controls and section behavior while removing fragmented alternating lane flow.
+  - `src/index.css`
+    - updated detail-grid spacing/alignment and rail sticky offset to support the reworked composition.
+
+- Validation:
+  - `npx eslint src/components/SmartCapturesPanel.tsx` -> PASS (after fixing an initial JSX truncation issue).
+  - `npm run -s typecheck` -> PASS (after fixing the same JSX issue).
+  - detailed evidence: `docs/agents/03_VALIDATION.md` (`SMARTCAPTURE-DETAIL-LAYOUT-012` section).
+
+- Residual risks / notes:
+  - This pass was layout-only; no telemetry/OCR/runtime behavior changes were made.
+  - No dedicated component test exists for the Smart Captures detail composition, so coverage is compile/lint + manual structure review.
+
+---
+
+## Handoff - 2026-02-19 - SMARTCAPTURE-DETAIL-ICONS-013
+- Task: iconography/readability pass for queue/detail bars in Smart Captures.
+
+- What changed:
+  - `src/components/SmartCapturesPanel.tsx`
+    - queue selected sticky strip now uses a stronger surfaced style and larger controls so `selected` no longer visually collides with underlying queue status badges.
+    - detail summary area is reorganized into clearer groups:
+      - top: match identity + status chips (`bundled`, `resolved`, `telemetry active`, mode/subtype),
+      - middle: larger icon-led action buttons (`Review`, `Re-run`, `Correct`, `History`, `Wizard`, `Delete`),
+      - bottom: larger `Win/Loss/Draw` selector and queue navigation controls.
+    - lane labels now include icons (`Match Editor`, `Capture Intelligence`) and improved sizing.
+  - `src/index.css`
+    - added queue selection strip class (`.sc-queue-selection-bar`).
+    - added detail summary/action/result styling classes for readable spacing/sizing/chip hierarchy.
+    - adjusted lane-kicker typography and spacing.
+
+- Validation:
+  - `npx eslint src/components/SmartCapturesPanel.tsx` -> PASS.
+  - `npm run -s typecheck` -> PASS.
+  - additional lint run with css path shows expected non-blocking ignore warning for css file.
+
+- Residual risks / notes:
+  - This pass intentionally preserved all existing actions/behavior and changed presentation only.
+  - CSS lint is not configured in current eslint setup, so style validation remains visual/manual.
+
+---
+
+## Handoff - 2026-02-19 - SMARTCAPTURE-HEADER-THEME-DAYFILTER-014
+- Task: reduce Smart Captures header clutter, scope left queue to a selected day with day-switch control, and soften theme accents to lower-key pastel behavior across color themes.
+
+- What changed:
+  - `src/components/SmartCapturesPanel.tsx`
+    - added date-scope filtering for queue/visible matches using local day keys.
+    - added left-pane `Match day` selector (with per-day counts) and day-aware queue header status text.
+    - improved selected-match alignment when day/search/queue filters change.
+    - refactored detail summary hierarchy:
+      - top row: match identity + queue status,
+      - supporting metadata chips de-emphasized,
+      - action row with one clear primary action (`Correct OCR` or `Review Shots`),
+      - queue navigation separated into a dedicated lower strip.
+  - `src/index.css`
+    - reduced saturation/vibrance for light/dark/twilight theme tokens.
+    - made semantic accent/status colors (`success/info/warning/accent/danger`) theme-adaptive.
+    - softened theme swatch values (`ocean`, `emerald`, `terracotta`, `amber`, `amethyst`, `cyan`) to pastel-like tones.
+    - reduced header glow/primary shadow punch and tied glow colors to theme tokens.
+    - added supporting Smart Capture summary layout classes for the new hierarchy.
+
+- What was verified:
+  - `npx eslint src/components/SmartCapturesPanel.tsx` passed.
+  - `npm run -s typecheck` passed.
+  - validation evidence recorded in `docs/agents/03_VALIDATION.md` under `SMARTCAPTURE-HEADER-THEME-DAYFILTER-014`.
+
+- Remaining / risks:
+  - CSS lint remains outside current eslint configuration; visual style regressions rely on manual UI verification.
+  - Day filtering currently uses local calendar boundaries; if future requirements need timezone-explicit server alignment, filter normalization rules may need extension.
+
+---
+
+## Handoff - 2026-02-19 - SMARTCAPTURE-STATUS-COHERENCE-016
+- Task: fix contradictory Smart Captures queue footer state where some rows could show `Pending` despite resolved status affordance.
+
+- What changed:
+  - `src/components/smart-captures/QueueItemRichPreview.tsx`
+    - queue footer fallback text now uses canonical `statusMeta.label` from `getStatusMeta(qs.key)`.
+    - this removes the hard-coded `Pending` fallback that could drift from resolved state cues.
+  - `src/components/smart-captures/QueueItemRichPreview.test.tsx`
+    - added regression test for `ocrState: 'saved'` + missing confidence to ensure `Pending` is not rendered.
+    - updated stale assertions to reflect current queue title and duplicate `Resolved` label rendering in top+footer areas.
+
+- What was verified:
+  - `npx eslint src/components/smart-captures/QueueItemRichPreview.tsx src/components/smart-captures/QueueItemRichPreview.test.tsx` passed.
+  - `npx vitest run src/components/smart-captures/QueueItemRichPreview.test.tsx` passed (`3/3` tests) after updating stale assertions.
+  - `npm run -s typecheck` passed.
+
+- Remaining / risks:
+  - No blockers in this scoped fix.
+  - Queue footer and top chip now intentionally both show resolved wording for saved/no-confidence rows; this is expected consistency behavior.
+
+---
+
+## Handoff - 2026-02-19 - MASTERPLAN-REMAINING-017
+- Task: implement all remaining unresolved user-reported items from the Smart Capture/UI/telemetry master checklist.
+
+- What changed:
+  - `src/hooks/useLogMonitor.ts`
+    - fixed telemetry loadout clear-state behavior (explicit empty character slots now clear stale selections).
+    - preserved generic-key extraction so character loadout still resolves from nested/non-slot payload shapes.
+  - `src/components/recording/SquadronPanel.tsx`
+    - ship selection now uses normalized label matching (`sameShip`) so telemetry-selected ship outlines match prospector parity.
+    - telemetry indicators now read `Ship telemetry` and `Prospector telemetry` for cleaner panel integration.
+  - `src/App.tsx`
+    - OCR apply path now merges `reachModifiers` and `hazards` into canonical modifiers and writes them to pending match/session state.
+  - `src/components/IdMapper.tsx`
+    - added robust unknown-type/domain routing and unified save logic.
+    - made known mapping edit controls always visible.
+  - `src/store/slices/createMappingSlice.ts`
+    - `setUidMapping` now clears corresponding unknown entries and updates player profile names for player-domain mappings.
+  - `src/components/SmartCapturesPanel.tsx`
+    - removed Team Lock control from Smart Captures panel and removed team-lock gating from OCR apply merge path.
+  - `src/components/smart-captures/QueueItemRichPreview.tsx`
+    - compacted queue summary line and widened left status rail.
+  - `src/index.css`
+    - added missing styles for Smart Captures overflow menu to prevent text overlap/intersection.
+    - increased Smart Captures gradient visibility and tuned palette from over-desaturated to richer-but-still-subdued pastel.
+    - increased status-chip visibility/contrast.
+  - `src/components/analytics/AnalyticsDashboard.tsx`
+    - added `TiltMeter` to the main dashboard.
+  - `src/components/DevOCRPanel.tsx`
+    - added `Open ROI Visual Editor` action and wired `OcrRegionEditorModal` apply flow into stored OCR regions.
+  - `src/components/PlayerHub.tsx`
+    - removed pagination so player list fills the tab and scrolls continuously to the bottom.
+  - `src/utils/equipmentDb.ts`
+    - added `Resonator` as a character weapon.
+
+- Tests and verification:
+  - Lint:
+    - `npx eslint` on all touched files passed.
+  - Focused tests:
+    - `npx vitest run src/hooks/__tests__/useLogMonitor.test.ts src/components/recording/SquadronPanel.test.tsx src/store/slices/__tests__/createMappingSlice.test.ts src/components/smart-captures/QueueItemRichPreview.test.tsx` passed (`47/47`).
+  - Typecheck:
+    - `npm run -s typecheck` passed.
+
+- Residual risks / notes:
+  - No blocker remained in scoped implementation.
+  - Visual tuning in `src/index.css` was calibrated to be richer than previous pastel pass while preserving subdued tone; final exact appearance remains theme/mode dependent and should be quickly spot-checked in-app.
+
+---
+
+## Handoff - 2026-02-19 - GEMINI-INTEGRITY-AUDIT-018
+- Task: verify whether recent uncommitted changes introduced regressions or breakages.
+
+- What changed:
+  - verification-only task; no product/runtime code modifications were made in this audit.
+  - appended AGENTS intake/plan/execution/validation/handoff/decision entries for traceability.
+
+- What was verified:
+  - `npm run -s ci:quality` passed (`eslint`, `vitest`, `typecheck`, `build`).
+  - test summary: 50 files passed, 462 tests passed.
+  - no merge-conflict markers were present.
+
+- Findings requiring user confirmation:
+  - `src/components/Sidebar.tsx` + `src/App.tsx` now gate `dev-ocr` access behind `devMode`; if non-dev users were expected to open OCR Debug, this is a behavioral regression.
+  - `electron/main.cjs` increases telemetry retention defaults from `100MB/14d` to `500MB/90d`; this can raise disk usage significantly.
+
+- Residual risks:
+  - no failing checks were found, but the two behavior deltas above are policy/product expectation questions rather than compile/test failures.
+
+---
+
+## Handoff - 2026-02-19 - OCR-DEBUG-GATE-REMOVE-019
+- Task: remove `devMode` gating from OCR Debug access and keep telemetry retention settings unchanged.
+
+- What changed:
+  - `src/components/Sidebar.tsx`
+    - OCR Debug nav item is no longer conditional on `devMode`.
+  - `src/App.tsx`
+    - removed `devMode`-filtered preload queue logic for `dev-ocr`.
+    - removed `devMode` redirect effect out of `dev-ocr`.
+    - removed `devMode` guard fallback in `dev-ocr` render case.
+
+- What was verified:
+  - lint passed on touched files.
+  - targeted App tests passed (`4/4`).
+  - typecheck passed.
+  - telemetry retention defaults in `electron/main.cjs` remain `500MB` / `90 days`.
+
+- Remaining / risks:
+  - no blockers in scoped fix.
+  - broader dirty worktree remains from prior tasks (not modified by this scoped change except AGENTS docs).
+
+---
+
+## Handoff - 2026-02-19 - SMARTCAPTURE-SELECTION-TONE-020
+- Task: reduce overly intense selected-match color in Smart Captures queue.
+
+- What changed:
+  - `src/components/smart-captures/QueueItemRichPreview.tsx`
+    - compact selected chip/button now uses a tinted primary background (`/14`) with softer ring/shadow.
+    - full selected queue rows now use tinted primary background (`/14`) + softer border/ring/shadow instead of solid primary fill.
+    - selected left rail color uses `primary` rather than bright `on-primary` for lower intensity.
+
+- What was verified:
+  - eslint on touched component passed.
+  - targeted queue preview tests passed (`3/3`).
+  - typecheck passed.
+
+- Remaining / risks:
+  - no blockers; this is visual calibration only.
+  - final feel is theme-dependent; quick in-app visual spot-check is recommended.
+
+---
+
+## Handoff - 2026-02-19 - SMARTCAPTURE-TELEMETRY-LABEL-DEDUPE-021
+- Task: stop Smart Captures from showing both `Telemetry attached` and `Telemetry Draft` on the same match.
+
+- What changed:
+  - `src/components/SmartCapturesPanel.tsx`
+    - added subtype normalization and telemetry-draft detection.
+    - telemetry chip now shows a single canonical label (`Telemetry draft` for draft subtype, otherwise `Telemetry attached`).
+    - telemetry-draft subtype chip is suppressed to prevent duplicate labeling.
+
+- What was verified:
+  - eslint passed on touched file.
+  - typecheck passed.
+  - render-condition grep confirms dedupe logic path.
+
+- Remaining / risks:
+  - no blockers; scoped display-only fix.
+
+---
+
+## Handoff - 2026-02-19 - HISTORY-SCROLL-OWNER-FIX-022
+- Task: fix non-working scrollbar behavior in Match History.
+
+- What changed:
+  - `src/App.tsx`
+    - history case wrapper now uses `overflow-y-scroll custom-scrollbar`.
+  - `src/components/HistoryTable.tsx`
+    - root container removed nested y-scroll ownership (`overflow-y-auto` + `h-full`) and now uses `min-h-full`.
+
+- What was verified:
+  - eslint on touched files passed.
+  - targeted tests passed (`7/7`).
+  - typecheck passed.
+
+- Remaining / risks:
+  - no blockers; this is a scoped layout/scroll ownership correction.
+
+---
+
+## Handoff - 2026-02-19 - SMARTCAPTURE-OCR-BOX-TOOLS-023
+- Task: expose OCR capture-box adjustment in Smart Captures Tools.
+
+- What changed:
+  - `src/components/SmartCapturesPanel.tsx`
+    - added direct ROI editor wiring via `OcrRegionEditorModal`.
+    - replaced dev-only `OCR Debug` card with always-visible `OCR Tools` card.
+    - added `Adjust OCR Boxes` button (opens ROI editor) and kept `Open OCR Debug`.
+
+- What was verified:
+  - eslint on touched file passed.
+  - targeted tests passed (`7/7`).
+  - typecheck passed.
+
+- Remaining / risks:
+  - no blockers; this is a scoped tools-surface access fix.
+
+## Handoff - 2026-02-19 - TELEMETRY-CONSISTENCY-LOADOUT-020
+## Status
+- Completed.
+
+## What Changed
+- Added additive telemetry consistency model to matches:
+  - `src/types.ts` adds optional `telemetryConsistency` metadata/checks.
+- Added deterministic telemetry consistency utility:
+  - `src/utils/telemetryConsistency.ts` derives expected teammate count/mode/duration/loadout-save metadata and evaluates mismatch checks.
+- Extended shared telemetry archive helpers:
+  - `src/utils/telemetryArchive.ts` now exposes normalized event-name and payload helpers.
+- Hardened loadout GUID reliability:
+  - `src/utils/guids.ts` now includes case-alias mapping for GUID keys.
+- Integrated live telemetry consistency and loadout-save hardening:
+  - `src/hooks/useLogMonitor.ts` now captures matchmaker team/mode expectations and enforces newest-only `NebLoadoutSaved` application.
+- Integrated submission mismatch warnings:
+  - `src/hooks/useMatchSubmission.ts` now surfaces team count/mode/duration mismatch warnings as additive health checks.
+- Surfaced mismatch chips in Smart Captures:
+  - `src/components/smart-captures/smartCaptureUtils.ts` adds warning-chip derivation.
+  - `src/components/smart-captures/QueueItemRichPreview.tsx` shows compact mismatch chips.
+  - `src/components/SmartCapturesPanel.tsx` adds consistency chips in summary and a bundled-telemetry consistency summary block.
+
+## What Was Verified
+- Targeted tests passed (`useLogMonitor`, `useMatchSubmission`, `smartCaptureUtils`).
+- Typecheck passed.
+- Touched-file eslint passed.
+
+## Remaining / Risks
+- GUID inventory is still partially dependent on runtime unknown-ID capture and user mapping resolution; case aliasing removes a common lookup miss but does not replace full canonical GUID coverage.
+- Mode fallback heuristics are intentionally conservative and should be revisited if authoritative pool-name inventory expands.
+## TEST-HARDEN-SMOKE-024 - Handoff (2026-02-20)
+- Completed:
+  - Added missing utility regression test files for telemetry consistency/archive/GUID alias handling.
+  - Added hook-level assertions for telemetry consistency propagation and cloud-save loadout snapshot filtering.
+  - Re-ran targeted checks and full smoke/debug gates.
+- Verification status:
+  - Targeted tests: PASS
+  - Touched-file eslint: PASS
+  - Typecheck: PASS
+  - `dev:qa`: PASS
+  - `snap:views:real`: PASS
+- Remaining work:
+  - None in this scoped test-hardening request.
+- Residual risk:
+  - Pixel-diff mismatches in visual reports remain informational and should be reviewed against intentional UI changes when preparing release baselines.
+## ROI-FULLWIDTH-025 - Handoff (2026-02-20)
+- Completed:
+  - Fixed ROI visual editor dialog width constraints by introducing a dedicated full-viewport dialog variant.
+- Files changed:
+  - `src/components/OcrRegionEditorModal.tsx`
+  - `src/index.css`
+- Verification:
+  - eslint (TSX) PASS
+  - typecheck PASS
+- Remaining:
+  - User UI confirmation in-app (open ROI editor from Settings/Smart Captures/Dev OCR) to verify expected full-width behavior on current display.
+
+## ROI-IMAGE-PREVIEW-026 - Handoff (2026-02-20)
+- Completed:
+  - Fixed ROI modal upload flow so selecting an image reliably produces a preview.
+  - Added explicit inline error messaging for unsupported/failed image loads.
+  - Added dedicated component regression tests for picker and preview behavior.
+- Files changed:
+  - `src/components/OcrRegionEditorModal.tsx`
+  - `src/components/OcrRegionEditorModal.test.tsx`
+- Verification:
+  - targeted vitest PASS
+  - touched-file eslint PASS
+  - typecheck PASS
+- Remaining:
+  - In-app spot check after reload to confirm the end-user flow on your machine.
+
+## ROI-ARTIFACT-DIALOG-027 - Handoff (2026-02-20)
+- Completed:
+  - `Load Screenshot` now uses native Electron dialog defaulted to artifacts directory.
+  - Selected file is returned as data URL and displayed immediately in ROI preview.
+  - Existing non-Electron/fallback input path is still supported.
+- Files changed:
+  - `electron/preload.cjs`
+  - `electron/main.cjs`
+  - `src/components/OcrRegionEditorModal.tsx`
+  - `src/components/OcrRegionEditorModal.test.tsx`
+  - `scripts/security_negative_tests.cjs`
+- Verification:
+  - targeted vitest PASS
+  - touched-file eslint PASS
+  - typecheck PASS
+- Remaining:
+  - Full app restart is required once so updated preload IPC allowlist is active.
+- Addendum:
+  - ROI modal now surfaces explicit restart instruction when picker IPC is blocked by stale preload.
+- Addendum 2:
+  - Native ROI picker now binds to the invoking window; modal exposes explicit browser-picker fallback control when native path is unavailable.

@@ -23,8 +23,8 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
 
   const shipTelemetryActive = Boolean(telemetryDetectedShip || shipSource === 'telemetry');
   const prospectorTelemetryActive = Boolean(telemetryDetectedHero || heroSource === 'telemetry');
-  const toShipKey = (value: string | undefined) => (value || '').split('(')[0].trim().toLowerCase();
-  const sameShip = (a: string | undefined, b: string | undefined) => toShipKey(a) && toShipKey(a) === toShipKey(b);
+  const toShipKey = (value: string | null | undefined) => (value || '').split('(')[0].trim().toLowerCase();
+  const sameShip = (a: string | null | undefined, b: string | null | undefined) => toShipKey(a) && toShipKey(a) === toShipKey(b);
   const hasShipManualOverride = Boolean(telemetryDetectedShip && activeShip && !sameShip(telemetryDetectedShip, activeShip));
   const hasHeroManualOverride = Boolean(telemetryDetectedHero && activeHero && telemetryDetectedHero !== activeHero);
   const hasAutoWeapons = Array.isArray(currentLoadout?.weapons) && currentLoadout.weapons.length > 0;
@@ -44,13 +44,13 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
     );
   };
 
-  const TelemetryIndicator: React.FC<{ active: boolean; title: string }> = ({ active, title }) => (
+  const TelemetryIndicator: React.FC<{ active: boolean; title: string; label: string }> = ({ active, title, label }) => (
     <span
       className={`recording-telemetry-indicator ${active ? 'is-active' : ''} ${(active && isMatchInProgress) ? 'is-recording' : ''}`}
       title={title}
     >
       <span className="recording-telemetry-dot" />
-      <span>Telemetry Active</span>
+      <span>{label}</span>
     </span>
   );
 
@@ -65,8 +65,8 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
             <h3 className="recording-panel-heading-title">Ship and Loadout</h3>
           </div>
           <div className="recording-panel-heading-meta">
-            <TelemetryIndicator active={shipTelemetryActive} title="Ship telemetry active" />
-            <TelemetryIndicator active={prospectorTelemetryActive} title="Prospector telemetry active" />
+            <TelemetryIndicator active={shipTelemetryActive} title="Ship telemetry active" label="Ship telemetry" />
+            <TelemetryIndicator active={prospectorTelemetryActive} title="Prospector telemetry active" label="Prospector telemetry" />
             {sourceChip('Ship', shipSource)}
             {sourceChip('Prospector', heroSource)}
           </div>
@@ -117,7 +117,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
               <button
                 key={s}
                 onClick={() => setActiveShip(s)}
-                className={`relative min-h-32px py-1.5 px-1.5 text-label-sm leading-tight text-center font-semibold transition-all whitespace-normal rounded-xl border ${activeShip === s
+                className={`relative min-h-32px py-1.5 px-1.5 text-label-sm leading-tight text-center font-semibold transition-all whitespace-normal rounded-xl border ${sameShip(activeShip, s)
                   ? 'bg-md-sys-primary/14 border-md-sys-primary/45 text-md-sys-on-surface shadow-inner'
                   : 'md3-surface border-md-sys-outline/20 text-md-sys-on-surface/78 hover:border-md-sys-primary/35 hover:bg-md-sys-on-surface/5'
                   }`}
@@ -170,8 +170,8 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
           <h3 className="recording-panel-heading-title">Ship and Loadout</h3>
         </div>
         <div className="recording-panel-heading-meta">
-          <TelemetryIndicator active={shipTelemetryActive} title="Ship telemetry active" />
-          <TelemetryIndicator active={prospectorTelemetryActive} title="Prospector telemetry active" />
+          <TelemetryIndicator active={shipTelemetryActive} title="Ship telemetry active" label="Ship telemetry" />
+          <TelemetryIndicator active={prospectorTelemetryActive} title="Prospector telemetry active" label="Prospector telemetry" />
           {sourceChip('Ship', shipSource)}
           {sourceChip('Prospector', heroSource)}
         </div>
@@ -220,7 +220,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
           <button
             key={s}
             onClick={() => setActiveShip(s)}
-            className={`relative min-h-40px py-2 px-2 md3-label leading-tight text-center font-semibold transition-all whitespace-normal justify-center rounded-control border ${activeShip === s
+            className={`relative min-h-40px py-2 px-2 md3-label leading-tight text-center font-semibold transition-all whitespace-normal justify-center rounded-control border ${sameShip(activeShip, s)
               ? 'bg-md-sys-primary/14 border-md-sys-primary/45 text-md-sys-on-surface shadow-inner'
               : 'md3-surface border-md-sys-outline/20 text-md-sys-on-surface/78 hover:border-md-sys-primary/35 hover:bg-md-sys-on-surface/5'
               }`}

@@ -34,6 +34,7 @@ export const EQUIPMENT_DB: EquipmentItem[] = [
     { id: 'cw8', name: 'Painter', type: 'CharacterWeapon', compatibleChars: ['All'], description: "Goo Gun | Dmg: 16 | Ramping Fire Rate" },
     { id: 'cw9', name: 'Double Whammy', type: 'CharacterWeapon', compatibleChars: ['All'], defaultAmmo: 4, description: "Anti-Ship | Burst: 100" },
     { id: 'cw10', name: 'Ancient Starlance', type: 'CharacterWeapon', compatibleChars: ['All'], description: "Long Range | Shield Break" },
+    { id: 'cw11', name: 'Resonator', type: 'CharacterWeapon', compatibleChars: ['All'], description: "Pulse weapon | Resonance burst" },
 
     // Character Equipment
     { id: 'ce1', name: 'Teleport Reloader', type: 'CharacterEquipment', compatibleChars: ['All'], description: "Passive | Reload on Teleport" },

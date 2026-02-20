@@ -42,6 +42,32 @@ export interface Loadout {
   characterEquipment?: string[];
 }
 
+export type TelemetryConsistencyStatus = 'pass' | 'warn' | 'unknown';
+
+export interface TelemetryConsistencyChecks {
+  teammateCount: TelemetryConsistencyStatus;
+  mode: TelemetryConsistencyStatus;
+  duration: TelemetryConsistencyStatus;
+}
+
+export interface TelemetryLoadoutSaveSnapshot {
+  timestamp: number;
+  inGame: boolean;
+  source: 'NebLoadoutSaved' | 'NebCloudSaveRecordSize';
+}
+
+export interface TelemetryConsistency {
+  expectedTeammateCount?: number;
+  expectedMode?: GameMode;
+  expectedModeSource?: 'pool-map' | 'pool-heuristic';
+  telemetryDurationSeconds?: number;
+  durationToleranceSeconds?: number;
+  durationDeltaSeconds?: number;
+  checks?: TelemetryConsistencyChecks;
+  loadoutSaves?: TelemetryLoadoutSaveSnapshot[];
+  latestLoadoutSaveAt?: number;
+}
+
 /** Structured opponent team data preserving team name, ship type, color, and player names. */
 export interface OpponentTeam {
   teamName: string;
@@ -96,6 +122,8 @@ export interface Match {
   ocrState?: OcrState;
   /** Marks OCR review "work queue" completion for this match (Smart Captures). */
   ocrReviewedAt?: number;
+  /** Optional telemetry-derived consistency metadata/checks. */
+  telemetryConsistency?: TelemetryConsistency;
 }
 
 /** Returns crew capacity (1-4) based on the ship display name. */

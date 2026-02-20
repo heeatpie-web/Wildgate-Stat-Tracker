@@ -19,6 +19,13 @@ Rules:
 
 | File | Owner | Started (UTC) | Purpose |
 |---|---|---|---|
+| docs/agents/00_INTAKE.md | project-manager | 2026-02-19T03:44:01Z | SMARTCAPTURE-ACTION-COMPRESSION-QUEUE-CLEANUP-015 intake normalization and addendum |
+| docs/agents/01_PLAN.md | project-manager | 2026-02-19T03:44:01Z | SMARTCAPTURE-ACTION-COMPRESSION-QUEUE-CLEANUP-015 plan/status tracking |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-19T03:44:01Z | SMARTCAPTURE-ACTION-COMPRESSION-QUEUE-CLEANUP-015 execution lifecycle and PM feedback entries |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-19T03:44:01Z | SMARTCAPTURE-ACTION-COMPRESSION-QUEUE-CLEANUP-015 validation evidence logging |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-19T03:44:01Z | SMARTCAPTURE-ACTION-COMPRESSION-QUEUE-CLEANUP-015 handoff summary assembly |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-19T03:44:01Z | SMARTCAPTURE-ACTION-COMPRESSION-QUEUE-CLEANUP-015 implementation decisions and rationale |
+| docs/WORKLOCKS.md | debugger | 2026-02-19T03:44:01Z | SMARTCAPTURE-ACTION-COMPRESSION-QUEUE-CLEANUP-015 lock maintenance for active/released rows |
 | electron/main.cjs | builder | 2026-02-18T03:05:00Z | RECOVERY-CONTINUATION-001 log-monitor idempotency, DB rename retry fallback, icon wiring, startup onboarding/session restore alignment |
 | electron/ocrHandler.cjs | builder | 2026-02-18T03:05:00Z | RECOVERY-CONTINUATION-001 cloud OCR failure fallback to local with surfaced metadata |
 | src/components/SettingsModal.tsx | builder | 2026-02-18T03:05:00Z | RECOVERY-CONTINUATION-001 fix settings hook-order crash and cloud-status UX clarity |
@@ -102,6 +109,28 @@ Use this row format when claiming:
 
 | File | Owner | Started (UTC) | Released (UTC) | Purpose |
 |---|---|---|---|---|
+| src/components/smart-captures/smartCaptureUtils.test.ts | verifier | 2026-02-19T17:14:00Z | 2026-02-19T17:31:00Z | TELEMETRY-CONSISTENCY-LOADOUT-020 lock released |
+| src/components/smart-captures/smartCaptureUtils.ts | builder | 2026-02-19T17:14:00Z | 2026-02-19T17:31:00Z | TELEMETRY-CONSISTENCY-LOADOUT-020 lock released |
+| src/utils/guids.ts | builder | 2026-02-19T17:14:00Z | 2026-02-19T17:31:00Z | TELEMETRY-CONSISTENCY-LOADOUT-020 lock released |
+| src/utils/telemetryConsistency.ts | builder | 2026-02-19T17:14:00Z | 2026-02-19T17:31:00Z | TELEMETRY-CONSISTENCY-LOADOUT-020 lock released |
+| src/types.ts | builder | 2026-02-19T17:14:00Z | 2026-02-19T17:31:00Z | TELEMETRY-CONSISTENCY-LOADOUT-020 lock released |
+| src/components/recording/SquadronPanel.test.tsx | verifier | 2026-02-19T06:33:51Z | 2026-02-19T06:53:03Z | MASTERPLAN-REMAINING-017 lock released |
+| src/hooks/__tests__/useLogMonitor.test.ts | verifier | 2026-02-19T06:33:51Z | 2026-02-19T06:53:03Z | MASTERPLAN-REMAINING-017 lock released |
+| src/utils/equipmentDb.ts | builder | 2026-02-19T06:33:51Z | 2026-02-19T06:53:03Z | MASTERPLAN-REMAINING-017 lock released |
+| src/components/recording/SquadronPanel.tsx | builder | 2026-02-19T06:33:51Z | 2026-02-19T06:53:03Z | MASTERPLAN-REMAINING-017 lock released |
+| src/components/analytics/AnalyticsDashboard.tsx | builder | 2026-02-19T06:33:51Z | 2026-02-19T06:53:03Z | MASTERPLAN-REMAINING-017 lock released |
+| src/index.css | builder | 2026-02-19T03:44:01Z | 2026-02-19T06:53:03Z | SMARTCAPTURE-ACTION-COMPRESSION-QUEUE-CLEANUP-015 lock released |
+| src/components/smart-captures/QueueItemRichPreview.tsx | builder | 2026-02-19T03:44:01Z | 2026-02-19T06:53:03Z | SMARTCAPTURE-ACTION-COMPRESSION-QUEUE-CLEANUP-015 lock released |
+| src/components/SmartCapturesPanel.tsx | builder | 2026-02-19T03:44:01Z | 2026-02-19T06:53:03Z | SMARTCAPTURE-ACTION-COMPRESSION-QUEUE-CLEANUP-015 lock released |
+| docs/WORKLOCKS.md | debugger | 2026-02-19T01:42:39Z | 2026-02-19T01:52:00Z | SMARTCAPTURE-HEADER-THEME-DAYFILTER-014 lock released |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-19T01:42:39Z | 2026-02-19T01:52:00Z | SMARTCAPTURE-HEADER-THEME-DAYFILTER-014 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-19T01:42:39Z | 2026-02-19T01:52:00Z | SMARTCAPTURE-HEADER-THEME-DAYFILTER-014 lock released |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-19T01:42:39Z | 2026-02-19T01:52:00Z | SMARTCAPTURE-HEADER-THEME-DAYFILTER-014 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-19T01:42:39Z | 2026-02-19T01:52:00Z | SMARTCAPTURE-HEADER-THEME-DAYFILTER-014 lock released |
+| docs/agents/01_PLAN.md | project-manager | 2026-02-19T01:42:39Z | 2026-02-19T01:52:00Z | SMARTCAPTURE-HEADER-THEME-DAYFILTER-014 lock released |
+| docs/agents/00_INTAKE.md | project-manager | 2026-02-19T01:42:39Z | 2026-02-19T01:52:00Z | SMARTCAPTURE-HEADER-THEME-DAYFILTER-014 lock released |
+| src/index.css | builder | 2026-02-19T01:42:39Z | 2026-02-19T01:52:00Z | SMARTCAPTURE-HEADER-THEME-DAYFILTER-014 lock released |
+| src/components/SmartCapturesPanel.tsx | builder | 2026-02-19T01:42:39Z | 2026-02-19T01:52:00Z | SMARTCAPTURE-HEADER-THEME-DAYFILTER-014 lock released |
 | src/components/OcrRegionEditorModal.tsx | builder | 2026-02-18T15:45:13Z | 2026-02-18T23:01:31Z | TELEMETRY-UI-BATCH-009 lock released |
 | src/components/recording/RosterPanel.tsx | builder | 2026-02-18T15:45:13Z | 2026-02-18T23:01:31Z | TELEMETRY-UI-BATCH-009 lock released |
 | src/components/HistoryTable.tsx | builder | 2026-02-18T15:45:13Z | 2026-02-18T23:01:31Z | TELEMETRY-UI-BATCH-009 lock released |
@@ -720,5 +749,101 @@ Lock Class:
 | src/components/analytics/PlacementDistView.tsx | builder | 2026-02-18T18:48:00Z | 2026-02-18T18:58:00Z | ANALYTICS-ARTIFACT-IDFLOW-005 placement histogram readability updates |
 | src/components/ReviewQueueModal.tsx | builder | 2026-02-18T18:48:00Z | 2026-02-18T18:58:00Z | ANALYTICS-ARTIFACT-IDFLOW-005 fuzzy review prioritization |
 | electron/helpers/artifactRelinker.cjs | builder | 2026-02-18T18:48:00Z | 2026-02-18T18:58:00Z | ANALYTICS-ARTIFACT-IDFLOW-005 historical artifact relink reliability hardening |
+| src/components/SmartCapturesPanel.tsx | builder | 2026-02-19T18:05:00Z | 2026-02-19T18:42:00Z | SMARTCAPTURE-DETAIL-LAYOUT-012 lock released |
+| src/index.css | builder | 2026-02-19T18:05:00Z | 2026-02-19T18:42:00Z | SMARTCAPTURE-DETAIL-LAYOUT-012 lock released |
+| src/components/SmartCapturesPanel.tsx | builder | 2026-02-19T19:05:00Z | 2026-02-19T19:42:00Z | SMARTCAPTURE-DETAIL-ICONS-013 lock released |
+| src/index.css | builder | 2026-02-19T19:05:00Z | 2026-02-19T19:42:00Z | SMARTCAPTURE-DETAIL-ICONS-013 lock released |
 
 
+| docs/agents/00_INTAKE.md | project-manager | 2026-02-19T21:14:00Z | 2026-02-19T21:20:00Z | GEMINI-INTEGRITY-AUDIT-018 lock released |
+| docs/agents/01_PLAN.md | project-manager | 2026-02-19T21:14:00Z | 2026-02-19T21:20:00Z | GEMINI-INTEGRITY-AUDIT-018 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-19T21:14:00Z | 2026-02-19T21:20:00Z | GEMINI-INTEGRITY-AUDIT-018 lock released |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-19T21:14:00Z | 2026-02-19T21:20:00Z | GEMINI-INTEGRITY-AUDIT-018 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-19T21:14:00Z | 2026-02-19T21:20:00Z | GEMINI-INTEGRITY-AUDIT-018 lock released |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-19T21:14:00Z | 2026-02-19T21:20:00Z | GEMINI-INTEGRITY-AUDIT-018 lock released |
+| docs/WORKLOCKS.md | debugger | 2026-02-19T21:14:00Z | 2026-02-19T21:20:00Z | GEMINI-INTEGRITY-AUDIT-018 lock released |
+| src/components/Sidebar.tsx | builder | 2026-02-19T21:24:00Z | 2026-02-19T21:33:00Z | OCR-DEBUG-GATE-REMOVE-019 lock released |
+| src/App.tsx | builder | 2026-02-19T21:24:00Z | 2026-02-19T21:33:00Z | OCR-DEBUG-GATE-REMOVE-019 lock released |
+| docs/agents/00_INTAKE.md | project-manager | 2026-02-19T21:24:00Z | 2026-02-19T21:33:00Z | OCR-DEBUG-GATE-REMOVE-019 lock released |
+| docs/agents/01_PLAN.md | project-manager | 2026-02-19T21:24:00Z | 2026-02-19T21:33:00Z | OCR-DEBUG-GATE-REMOVE-019 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-19T21:24:00Z | 2026-02-19T21:33:00Z | OCR-DEBUG-GATE-REMOVE-019 lock released |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-19T21:24:00Z | 2026-02-19T21:33:00Z | OCR-DEBUG-GATE-REMOVE-019 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-19T21:24:00Z | 2026-02-19T21:33:00Z | OCR-DEBUG-GATE-REMOVE-019 lock released |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-19T21:24:00Z | 2026-02-19T21:33:00Z | OCR-DEBUG-GATE-REMOVE-019 lock released |
+| docs/WORKLOCKS.md | debugger | 2026-02-19T21:24:00Z | 2026-02-19T21:33:00Z | OCR-DEBUG-GATE-REMOVE-019 lock released |
+| src/components/smart-captures/QueueItemRichPreview.tsx | ui-designer | 2026-02-19T22:08:00Z | 2026-02-19T22:14:00Z | SMARTCAPTURE-SELECTION-TONE-020 lock released |
+| docs/agents/00_INTAKE.md | project-manager | 2026-02-19T22:08:00Z | 2026-02-19T22:14:00Z | SMARTCAPTURE-SELECTION-TONE-020 lock released |
+| docs/agents/01_PLAN.md | project-manager | 2026-02-19T22:08:00Z | 2026-02-19T22:14:00Z | SMARTCAPTURE-SELECTION-TONE-020 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-19T22:08:00Z | 2026-02-19T22:14:00Z | SMARTCAPTURE-SELECTION-TONE-020 lock released |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-19T22:08:00Z | 2026-02-19T22:14:00Z | SMARTCAPTURE-SELECTION-TONE-020 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-19T22:08:00Z | 2026-02-19T22:14:00Z | SMARTCAPTURE-SELECTION-TONE-020 lock released |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-19T22:08:00Z | 2026-02-19T22:14:00Z | SMARTCAPTURE-SELECTION-TONE-020 lock released |
+| docs/WORKLOCKS.md | debugger | 2026-02-19T22:08:00Z | 2026-02-19T22:14:00Z | SMARTCAPTURE-SELECTION-TONE-020 lock released |
+| src/components/SmartCapturesPanel.tsx | builder | 2026-02-19T22:20:00Z | 2026-02-19T22:27:00Z | SMARTCAPTURE-TELEMETRY-LABEL-DEDUPE-021 lock released |
+| src/App.tsx | builder | 2026-02-19T22:28:00Z | 2026-02-19T22:36:00Z | HISTORY-SCROLL-OWNER-FIX-022 lock released |
+| src/components/HistoryTable.tsx | builder | 2026-02-19T22:28:00Z | 2026-02-19T22:36:00Z | HISTORY-SCROLL-OWNER-FIX-022 lock released |
+| docs/agents/00_INTAKE.md | project-manager | 2026-02-19T22:20:00Z | 2026-02-19T22:36:00Z | SMARTCAPTURE-TELEMETRY-LABEL-DEDUPE-021 + HISTORY-SCROLL-OWNER-FIX-022 lock released |
+| docs/agents/01_PLAN.md | project-manager | 2026-02-19T22:20:00Z | 2026-02-19T22:36:00Z | SMARTCAPTURE-TELEMETRY-LABEL-DEDUPE-021 + HISTORY-SCROLL-OWNER-FIX-022 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-19T22:20:00Z | 2026-02-19T22:36:00Z | SMARTCAPTURE-TELEMETRY-LABEL-DEDUPE-021 + HISTORY-SCROLL-OWNER-FIX-022 lock released |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-19T22:20:00Z | 2026-02-19T22:36:00Z | SMARTCAPTURE-TELEMETRY-LABEL-DEDUPE-021 + HISTORY-SCROLL-OWNER-FIX-022 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-19T22:20:00Z | 2026-02-19T22:36:00Z | SMARTCAPTURE-TELEMETRY-LABEL-DEDUPE-021 + HISTORY-SCROLL-OWNER-FIX-022 lock released |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-19T22:20:00Z | 2026-02-19T22:36:00Z | SMARTCAPTURE-TELEMETRY-LABEL-DEDUPE-021 + HISTORY-SCROLL-OWNER-FIX-022 lock released |
+| docs/WORKLOCKS.md | debugger | 2026-02-19T22:20:00Z | 2026-02-19T22:36:00Z | SMARTCAPTURE-TELEMETRY-LABEL-DEDUPE-021 + HISTORY-SCROLL-OWNER-FIX-022 lock released |
+| src/components/SmartCapturesPanel.tsx | builder | 2026-02-19T16:21:00Z | 2026-02-19T16:26:00Z | SMARTCAPTURE-OCR-BOX-TOOLS-023 lock released |
+| docs/agents/00_INTAKE.md | project-manager | 2026-02-19T16:21:00Z | 2026-02-19T16:26:00Z | SMARTCAPTURE-OCR-BOX-TOOLS-023 lock released |
+| docs/agents/01_PLAN.md | project-manager | 2026-02-19T16:21:00Z | 2026-02-19T16:26:00Z | SMARTCAPTURE-OCR-BOX-TOOLS-023 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-19T16:21:00Z | 2026-02-19T16:26:00Z | SMARTCAPTURE-OCR-BOX-TOOLS-023 lock released |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-19T16:21:00Z | 2026-02-19T16:26:00Z | SMARTCAPTURE-OCR-BOX-TOOLS-023 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-19T16:21:00Z | 2026-02-19T16:26:00Z | SMARTCAPTURE-OCR-BOX-TOOLS-023 lock released |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-19T16:21:00Z | 2026-02-19T16:26:00Z | SMARTCAPTURE-OCR-BOX-TOOLS-023 lock released |
+| docs/WORKLOCKS.md | debugger | 2026-02-19T16:21:00Z | 2026-02-19T16:26:00Z | SMARTCAPTURE-OCR-BOX-TOOLS-023 lock released |
+| src/utils/__tests__/telemetryArchive.test.ts | verifier | 2026-02-20T00:34:00Z | 2026-02-20T00:43:32Z | TEST-HARDEN-SMOKE-024 lock released |
+| src/utils/__tests__/telemetryConsistency.test.ts | verifier | 2026-02-20T00:34:00Z | 2026-02-20T00:43:32Z | TEST-HARDEN-SMOKE-024 lock released |
+| src/utils/__tests__/guids.test.ts | verifier | 2026-02-20T00:34:00Z | 2026-02-20T00:43:32Z | TEST-HARDEN-SMOKE-024 lock released |
+| src/hooks/__tests__/useLogMonitor.test.ts | verifier | 2026-02-20T00:34:00Z | 2026-02-20T00:43:32Z | TEST-HARDEN-SMOKE-024 lock released |
+| src/hooks/__tests__/useMatchSubmission.test.ts | verifier | 2026-02-20T00:34:00Z | 2026-02-20T00:43:32Z | TEST-HARDEN-SMOKE-024 lock released |
+| docs/agents/00_INTAKE.md | project-manager | 2026-02-20T00:41:00Z | 2026-02-20T00:43:32Z | TEST-HARDEN-SMOKE-024 lock released |
+| docs/agents/01_PLAN.md | project-manager | 2026-02-20T00:41:00Z | 2026-02-20T00:43:32Z | TEST-HARDEN-SMOKE-024 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-20T00:41:00Z | 2026-02-20T00:43:32Z | TEST-HARDEN-SMOKE-024 lock released |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-20T00:41:00Z | 2026-02-20T00:43:32Z | TEST-HARDEN-SMOKE-024 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-20T00:41:00Z | 2026-02-20T00:43:32Z | TEST-HARDEN-SMOKE-024 lock released |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-20T00:41:00Z | 2026-02-20T00:43:32Z | TEST-HARDEN-SMOKE-024 lock released |
+| docs/WORKLOCKS.md | debugger | 2026-02-20T00:41:00Z | 2026-02-20T00:43:32Z | TEST-HARDEN-SMOKE-024 lock released |
+| src/components/OcrRegionEditorModal.tsx | builder | 2026-02-20T00:48:00Z | 2026-02-20T00:49:36Z | ROI-FULLWIDTH-025 lock released |
+| src/index.css | builder | 2026-02-20T00:48:00Z | 2026-02-20T00:49:36Z | ROI-FULLWIDTH-025 lock released |
+| docs/agents/00_INTAKE.md | project-manager | 2026-02-20T00:52:00Z | 2026-02-20T00:49:36Z | ROI-FULLWIDTH-025 lock released |
+| docs/agents/01_PLAN.md | project-manager | 2026-02-20T00:52:00Z | 2026-02-20T00:49:36Z | ROI-FULLWIDTH-025 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-20T00:52:00Z | 2026-02-20T00:49:36Z | ROI-FULLWIDTH-025 lock released |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-20T00:52:00Z | 2026-02-20T00:49:36Z | ROI-FULLWIDTH-025 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-20T00:52:00Z | 2026-02-20T00:49:36Z | ROI-FULLWIDTH-025 lock released |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-20T00:52:00Z | 2026-02-20T00:49:36Z | ROI-FULLWIDTH-025 lock released |
+| docs/WORKLOCKS.md | debugger | 2026-02-20T00:52:00Z | 2026-02-20T00:49:36Z | ROI-FULLWIDTH-025 lock released |
+| src/components/OcrRegionEditorModal.tsx | builder | 2026-02-20T17:52:00Z | 2026-02-20T17:57:00Z | ROI-IMAGE-PREVIEW-026 lock released |
+| src/components/OcrRegionEditorModal.test.tsx | verifier | 2026-02-20T17:53:00Z | 2026-02-20T17:57:00Z | ROI-IMAGE-PREVIEW-026 lock released |
+| docs/agents/00_INTAKE.md | project-manager | 2026-02-20T17:57:00Z | 2026-02-20T17:58:00Z | ROI-IMAGE-PREVIEW-026 lock released |
+| docs/agents/01_PLAN.md | project-manager | 2026-02-20T17:57:00Z | 2026-02-20T17:58:00Z | ROI-IMAGE-PREVIEW-026 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-20T17:57:00Z | 2026-02-20T17:58:00Z | ROI-IMAGE-PREVIEW-026 lock released |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-20T17:57:00Z | 2026-02-20T17:58:00Z | ROI-IMAGE-PREVIEW-026 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-20T17:57:00Z | 2026-02-20T17:58:00Z | ROI-IMAGE-PREVIEW-026 lock released |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-20T17:57:00Z | 2026-02-20T17:58:00Z | ROI-IMAGE-PREVIEW-026 lock released |
+| docs/WORKLOCKS.md | debugger | 2026-02-20T17:57:00Z | 2026-02-20T17:58:00Z | ROI-IMAGE-PREVIEW-026 lock released |
+| electron/preload.cjs | builder | 2026-02-20T18:00:00Z | 2026-02-20T18:07:00Z | ROI-ARTIFACT-DIALOG-027 lock released |
+| electron/main.cjs | builder | 2026-02-20T18:00:00Z | 2026-02-20T18:07:00Z | ROI-ARTIFACT-DIALOG-027 lock released |
+| src/components/OcrRegionEditorModal.tsx | builder | 2026-02-20T18:01:00Z | 2026-02-20T18:07:00Z | ROI-ARTIFACT-DIALOG-027 lock released |
+| src/components/OcrRegionEditorModal.test.tsx | verifier | 2026-02-20T18:01:00Z | 2026-02-20T18:07:00Z | ROI-ARTIFACT-DIALOG-027 lock released |
+| scripts/security_negative_tests.cjs | verifier | 2026-02-20T18:02:00Z | 2026-02-20T18:07:00Z | ROI-ARTIFACT-DIALOG-027 lock released |
+| docs/agents/00_INTAKE.md | project-manager | 2026-02-20T18:07:00Z | 2026-02-20T18:08:00Z | ROI-ARTIFACT-DIALOG-027 lock released |
+| docs/agents/01_PLAN.md | project-manager | 2026-02-20T18:07:00Z | 2026-02-20T18:08:00Z | ROI-ARTIFACT-DIALOG-027 lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-20T18:07:00Z | 2026-02-20T18:08:00Z | ROI-ARTIFACT-DIALOG-027 lock released |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-20T18:07:00Z | 2026-02-20T18:08:00Z | ROI-ARTIFACT-DIALOG-027 lock released |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-20T18:07:00Z | 2026-02-20T18:08:00Z | ROI-ARTIFACT-DIALOG-027 lock released |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-20T18:07:00Z | 2026-02-20T18:08:00Z | ROI-ARTIFACT-DIALOG-027 lock released |
+| docs/WORKLOCKS.md | debugger | 2026-02-20T18:07:00Z | 2026-02-20T18:08:00Z | ROI-ARTIFACT-DIALOG-027 lock released |
+| electron/main.cjs | builder | 2026-02-20T18:08:00Z | 2026-02-20T18:12:00Z | ROI-ARTIFACT-DIALOG-027 addendum lock released |
+| src/components/OcrRegionEditorModal.tsx | builder | 2026-02-20T18:08:00Z | 2026-02-20T18:12:00Z | ROI-ARTIFACT-DIALOG-027 addendum lock released |
+| src/components/OcrRegionEditorModal.test.tsx | verifier | 2026-02-20T18:09:00Z | 2026-02-20T18:12:00Z | ROI-ARTIFACT-DIALOG-027 addendum lock released |
+| docs/agents/02_EXECUTION_LOG.md | debugger | 2026-02-20T18:12:00Z | 2026-02-20T18:13:00Z | ROI-ARTIFACT-DIALOG-027 addendum lock released |
+| docs/agents/03_VALIDATION.md | verifier | 2026-02-20T18:12:00Z | 2026-02-20T18:13:00Z | ROI-ARTIFACT-DIALOG-027 addendum lock released |
+| docs/agents/04_HANDOFF.md | release-manager | 2026-02-20T18:12:00Z | 2026-02-20T18:13:00Z | ROI-ARTIFACT-DIALOG-027 addendum lock released |
+| docs/agents/DECISIONS.md | project-manager | 2026-02-20T18:12:00Z | 2026-02-20T18:13:00Z | ROI-ARTIFACT-DIALOG-027 addendum lock released |
+| docs/WORKLOCKS.md | debugger | 2026-02-20T18:12:00Z | 2026-02-20T18:13:00Z | ROI-ARTIFACT-DIALOG-027 addendum lock released |

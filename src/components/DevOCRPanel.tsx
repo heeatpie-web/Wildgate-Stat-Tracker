@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ocrProcessCapture } from '../utils/electronBridge';
 import type { OCRExtractedData } from '../utils/ocr/ocrTypes';
 import OcrBoundingBoxOverlay from './OcrBoundingBoxOverlay';
+import OcrRegionEditorModal from './OcrRegionEditorModal';
 
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
@@ -126,6 +127,7 @@ const DevOCRPanel: React.FC = () => {
     const { activeUser } = useUIState();
     const ocrMode = useAppStore(s => s.ocrMode);
     const ocrRegions = useAppStore(s => s.ocrRegions);
+    const setOcrRegions = useAppStore(s => s.setOcrRegions);
     const ocrCalibrationSamples = useAppStore(s => s.ocrCalibrationSamples);
     const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
     const [tab, setTab] = useState<'OCR' | 'Utils' | 'Corpus'>('OCR');
@@ -155,6 +157,7 @@ const DevOCRPanel: React.FC = () => {
     const [ocrPreprocessingBenchmark, setOcrPreprocessingBenchmark] = useState<OcrPreprocessingBenchmark | null>(null);
     const [benchmarkBusy, setBenchmarkBusy] = useState(false);
     const [ocrBoundingOverlay, setOcrBoundingOverlay] = useState<OcrBoundingOverlayData | null>(null);
+    const [showRegionEditor, setShowRegionEditor] = useState(false);
     const [a11yIssues, setA11yIssues] = useState<AccessibilityIssue[]>([]);
     const [a11yLastRunAt, setA11yLastRunAt] = useState<number | null>(null);
 
@@ -1196,6 +1199,12 @@ const DevOCRPanel: React.FC = () => {
                                 >
                                     {loading ? 'Processing...' : 'Capture with Bounding Boxes'}
                                 </button>
+                                <button
+                                    onClick={() => setShowRegionEditor(true)}
+                                    className="px-3 py-2 rounded-control bg-md-sys-primary/12 text-md-sys-primary border border-md-sys-primary/28 font-bold text-label-sm hover:bg-md-sys-primary/18 transition-all"
+                                >
+                                    Open ROI Visual Editor
+                                </button>
 
                                 <div className="md3-card md3-surface-high rounded-xl border border-md-sys-outline/10 p-3">
                                     <div className="text-label-sm font-bold uppercase opacity-60">Fast OCR Improvement Loop</div>
@@ -1540,6 +1549,20 @@ const DevOCRPanel: React.FC = () => {
                     </button>
                 </div>
             )}
+
+            <OcrRegionEditorModal
+                isOpen={showRegionEditor}
+                initialRegions={ocrRegions}
+                onApply={(regions) => {
+                    setOcrRegions({
+                        crewHub: regions.crewHub,
+                        mapScreen: regions.mapScreen,
+                    });
+                    setShowRegionEditor(false);
+                    setStatus('ROI regions updated from visual editor');
+                }}
+                onClose={() => setShowRegionEditor(false)}
+            />
         </div>
     );
 };

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { RotateCcw, Upload, X } from 'lucide-react';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { getElectronAPI } from '../utils/electronAPI';
 import {
     createDefaultOcrRegions,
     type OcrRegionBounds,
@@ -233,6 +234,11 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
     const focusTrapRef = useFocusTrap<HTMLDivElement>(isOpen);
     const svgRef = useRef<SVGSVGElement | null>(null);
     const interactionRef = useRef<InteractionState | null>(null);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const objectUrlRef = useRef<string | null>(null);
+    const selectedFileRef = useRef<File | null>(null);
+    const attemptedDataUrlFallbackRef = useRef(false);
+    const [imageLoadError, setImageLoadError] = useState<string | null>(null);
 
     useKeyboardShortcuts([
         { key: 'Escape', handler: () => onClose() },
@@ -243,6 +249,7 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
         setDraftRegions(cloneRegions(initialRegions));
         setScreen('crewHub');
         setActiveRegionKey('leftPanel');
+        setImageLoadError(null);
     }, [initialRegions, isOpen]);
 
     useEffect(() => {
@@ -281,6 +288,73 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
     const clearInteraction = () => {
         interactionRef.current = null;
     };
+
+    const clearObjectUrl = () => {
+        if (!objectUrlRef.current) return;
+        if (typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+            URL.revokeObjectURL(objectUrlRef.current);
+        }
+        objectUrlRef.current = null;
+    };
+
+    const setPreviewSource = (source: string | null, fromObjectUrl = false) => {
+        clearObjectUrl();
+        if (source && fromObjectUrl) {
+            objectUrlRef.current = source;
+        }
+        setImageSrc(source);
+        setImageSize(null);
+    };
+
+    const readFileAsDataUrl = (file: File) => {
+        const reader = new FileReader();
+        reader.onload = (loadEvent) => {
+            const dataUrl = typeof loadEvent.target?.result === 'string' ? loadEvent.target.result : null;
+            if (!dataUrl) {
+                setPreviewSource(null);
+                setImageLoadError('Unable to load the selected image.');
+                return;
+            }
+            setPreviewSource(dataUrl);
+        };
+        reader.onerror = () => {
+            setPreviewSource(null);
+            setImageLoadError('Unable to load the selected image.');
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const beginImageLoad = (file: File) => {
+        if (!file.type.startsWith('image/')) {
+            setPreviewSource(null);
+            setImageLoadError('Selected file is not a supported image.');
+            return;
+        }
+
+        selectedFileRef.current = file;
+        attemptedDataUrlFallbackRef.current = false;
+        setImageLoadError(null);
+
+        if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+            try {
+                const previewUrl = URL.createObjectURL(file);
+                setPreviewSource(previewUrl, true);
+                return;
+            } catch {
+                // Fallback to FileReader below if object URL creation fails.
+            }
+        }
+
+        readFileAsDataUrl(file);
+    };
+
+    useEffect(() => () => {
+        if (!objectUrlRef.current) return;
+        if (typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+            URL.revokeObjectURL(objectUrlRef.current);
+        }
+        objectUrlRef.current = null;
+    }, []);
 
     const handleCanvasPointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
         if (event.button !== 0 || !imageSize) return;
@@ -440,14 +514,51 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
     const handleImageFile = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (loadEvent) => {
-            const dataUrl = typeof loadEvent.target?.result === 'string' ? loadEvent.target.result : null;
-            setImageSrc(dataUrl);
-            setImageSize(null);
-        };
-        reader.readAsDataURL(file);
+        beginImageLoad(file);
         event.target.value = '';
+    };
+
+    const openImagePicker = async () => {
+        const electronAPI = getElectronAPI();
+        if (!electronAPI) {
+            fileInputRef.current?.click();
+            return;
+        }
+
+        try {
+            const result = await electronAPI.invoke('pick-roi-image');
+            if (!result?.success) {
+                setImageLoadError(
+                    typeof result?.message === 'string'
+                        ? result.message
+                        : 'Unable to open screenshot picker.'
+                );
+                fileInputRef.current?.click();
+                return;
+            }
+
+            const payload = result.data;
+            if (payload?.canceled) return;
+            if (typeof payload?.dataUrl !== 'string' || !payload.dataUrl) {
+                setImageLoadError('Unable to load the selected image.');
+                return;
+            }
+
+            selectedFileRef.current = null;
+            attemptedDataUrlFallbackRef.current = false;
+            setImageLoadError(null);
+            setPreviewSource(payload.dataUrl);
+        } catch (error) {
+            const rawMessage = error instanceof Error ? error.message : '';
+            const lowerMessage = rawMessage.toLowerCase();
+            if (lowerMessage.includes('ipc invoke blocked')) {
+                setImageLoadError('Screenshot picker is unavailable. Restart the app, then try again.');
+                fileInputRef.current?.click();
+                return;
+            }
+            setImageLoadError('Unable to open screenshot picker.');
+            fileInputRef.current?.click();
+        }
     };
 
     const selectedRect = imageSize ? boundsToRectPx(activeBounds, imageSize) : null;
@@ -469,14 +580,14 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
     if (typeof document === 'undefined') return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-modal-top bg-scrim-70 backdrop-blur-sm flex items-stretch justify-center p-2 md:p-4" onClick={onClose}>
+        <div className="fixed inset-0 z-modal-top bg-scrim-70 backdrop-blur-sm flex items-stretch justify-center p-1 sm:p-2" onClick={onClose}>
             <div
                 ref={focusTrapRef}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={dialogTitleId}
                 aria-describedby={dialogDescriptionId}
-                className="md3-dialog w-full max-w-[min(98vw,1800px)] h-full max-h-[96vh] rounded-modal overflow-hidden flex flex-col"
+                className="md3-dialog md3-dialog--roi-editor rounded-modal overflow-hidden flex flex-col"
                 onClick={(event) => event.stopPropagation()}
             >
                 <div className="flex items-center justify-between border-b border-md-sys-outline/10 px-4 py-3">
@@ -506,6 +617,21 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
                                             width: target.naturalWidth,
                                             height: target.naturalHeight,
                                         });
+                                        setImageLoadError(null);
+                                    }}
+                                    onError={() => {
+                                        const fallbackFile = selectedFileRef.current;
+                                        if (
+                                            !attemptedDataUrlFallbackRef.current
+                                            && fallbackFile
+                                            && imageSrc?.startsWith('blob:')
+                                        ) {
+                                            attemptedDataUrlFallbackRef.current = true;
+                                            readFileAsDataUrl(fallbackFile);
+                                            return;
+                                        }
+                                        setPreviewSource(null);
+                                        setImageLoadError('Unable to preview this image. Try PNG or JPEG.');
                                     }}
                                 />
                                 {imageSize && (
@@ -573,13 +699,39 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
                     </div>
 
                     <div className="w-full xl:w-360px xl:shrink-0 md3-surface-high rounded-card border border-md-sys-outline/10 p-3 flex flex-col gap-3 max-h-[40vh] xl:max-h-none">
-                        <label className="md3-btn-tonal text-center cursor-pointer">
-                            <span className="inline-flex items-center gap-2">
-                                <Upload size={14} />
-                                Load Screenshot
-                            </span>
-                            <input type="file" accept="image/*" className="hidden" onChange={handleImageFile} />
-                        </label>
+                        <button
+                            type="button"
+                            onClick={openImagePicker}
+                            className="md3-btn-tonal w-full inline-flex items-center justify-center gap-2 text-center"
+                        >
+                            <Upload size={14} />
+                            Load Screenshot
+                        </button>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleImageFile}
+                            aria-label="Load screenshot file"
+                        />
+                        {imageLoadError && (
+                            <div
+                                role="alert"
+                                className="rounded-control border border-danger-soft bg-danger-soft px-2 py-1.5 text-label-xs text-danger"
+                            >
+                                {imageLoadError}
+                            </div>
+                        )}
+                        {imageLoadError && (
+                            <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                className="md3-btn-text w-full text-label-xs"
+                            >
+                                Use Browser Picker
+                            </button>
+                        )}
 
                         <div className="grid grid-cols-2 gap-2">
                             <button

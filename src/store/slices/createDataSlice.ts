@@ -28,12 +28,19 @@ export const getPriority = (source: DataSource = 'manual'): number => {
 
 const sanitizeLoadoutSlots = (loadout: Loadout | null): Loadout | null => {
   if (!loadout) return null;
+  const sanitizeSlotList = (entries?: string[]) => (
+    (entries || [])
+      .map((entry) => String(entry || '').trim())
+      .filter(Boolean)
+      .filter((entry) => !/tertiary\s+(weapon|equipment)/i.test(entry))
+      .slice(0, 2)
+  );
   return {
     ...loadout,
-    weapons: (loadout.weapons || []).filter(Boolean).slice(0, 2),
-    equipment: (loadout.equipment || []).filter(Boolean).slice(0, 2),
-    characterWeapons: (loadout.characterWeapons || []).filter(Boolean).slice(0, 2),
-    characterEquipment: (loadout.characterEquipment || []).filter(Boolean).slice(0, 2),
+    weapons: sanitizeSlotList(loadout.weapons),
+    equipment: sanitizeSlotList(loadout.equipment),
+    characterWeapons: sanitizeSlotList(loadout.characterWeapons),
+    characterEquipment: sanitizeSlotList(loadout.characterEquipment),
   };
 };
 

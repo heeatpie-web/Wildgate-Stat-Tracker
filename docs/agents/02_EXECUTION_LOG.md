@@ -4535,3 +4535,686 @@
   - Review ask: approve closure of SMARTCAPTURE-TELEMETRY-ROI-011.
 - `PM Response` | `APPROVED`
   - Reason: all scoped regressions were resolved with focused regression coverage and successful lint/typecheck evidence.
+
+---
+
+## 2026-02-19 - SMARTCAPTURE-DETAIL-LAYOUT-012 (Implementation Closeout)
+- Scope: rework Smart Captures detail panel visual hierarchy/layout for better scanability and editing flow without changing underlying feature behavior.
+
+### Lateral Communication / Request Lifecycle
+- `REQ-012-001` | Sender: `builder` | Receiver: `builder` | Status: `OPEN`
+  - Goal: execute SMARTCAPTURE-DETAIL-LAYOUT-012 scoped detail-panel layout redesign.
+- `REQ-012-001` | Sender: `builder` | Receiver: `builder` | Status: `ACK`
+  - Work accepted; implementation proceeding per `docs/agents/01_PLAN.md`.
+- `REQ-012-001` | Sender: `builder` | Receiver: `builder` | Status: `IN_PROGRESS`
+  - Active implementation on `SmartCapturesPanel` detail composition and supporting CSS.
+- `REQ-012-001` | Sender: `builder` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/index.css`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-012-001` | Sender: `builder` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md` and touched files above.
+
+### Work Entries
+- `src/components/SmartCapturesPanel.tsx`
+  - refactored detail body into a clearer two-lane structure:
+    - left lane: all match editing sections (`stats`, `players`, `modifiers`, `loadout`, `poi`, `kills`, `details`),
+    - right rail: capture intelligence (`screenshots`, `re-run`, `ocr metadata`, `bundled telemetry`).
+  - updated lane labels to clearer hierarchy (`Match Editor`, `Capture Intelligence`).
+  - preserved existing section controls and behavior while removing alternating lane fragmentation.
+- `src/index.css`
+  - tuned detail grid spacing and alignment for the new two-lane composition.
+  - adjusted rail sticky offset and desktop gutter spacing for improved readability.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `SMARTCAPTURE-DETAIL-LAYOUT-012#1/#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - consolidated Smart Captures detail UI into an intentional editor + intelligence-rail layout,
+    - retained all existing controls while improving visual flow and section discoverability,
+    - completed focused lint/typecheck validation.
+  - Evidence pointers:
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/index.css`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of SMARTCAPTURE-DETAIL-LAYOUT-012.
+- `PM Response` | `APPROVED`
+  - Reason: layout goals met with scoped UI-only changes and passing validation evidence.
+
+---
+
+## 2026-02-19 - SMARTCAPTURE-DETAIL-ICONS-013 (Implementation Closeout)
+- Scope: improve queue/detail top-bar readability by fixing queue selection overlap and reformatting detail chips/actions/results with clearer icon-supported hierarchy.
+
+### Lateral Communication / Request Lifecycle
+- `REQ-013-001` | Sender: `builder` | Receiver: `builder` | Status: `OPEN`
+  - Goal: execute SMARTCAPTURE-DETAIL-ICONS-013 queue/detail bar visual clarity pass.
+- `REQ-013-001` | Sender: `builder` | Receiver: `builder` | Status: `ACK`
+  - Work accepted; implementation proceeding per `docs/agents/01_PLAN.md`.
+- `REQ-013-001` | Sender: `builder` | Receiver: `builder` | Status: `IN_PROGRESS`
+  - Active implementation in Smart Captures queue strip + detail summary/action/result bar.
+- `REQ-013-001` | Sender: `builder` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/index.css`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-013-001` | Sender: `builder` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md` and touched files above.
+
+### Work Entries
+- `src/components/SmartCapturesPanel.tsx`
+  - queue selected sticky bar now uses a dedicated surfaced style class with stronger backdrop/border and larger controls to prevent visual overlap against queue item status text.
+  - detail summary header reorganized into clearer sections:
+    - top row: match identity + status/meta chips,
+    - middle row: larger icon-led action buttons (`Review`, `Re-run`, `Correct`, `History`, `Wizard`, `Delete`),
+    - bottom row: larger `Win/Loss/Draw` selector and queue navigation controls.
+  - lane labels now include icons for faster scan (`Match Editor`, `Capture Intelligence`).
+- `src/index.css`
+  - added dedicated styles for queue selected strip (`.sc-queue-selection-bar`).
+  - added summary/action/result UI classes for readability and spacing:
+    - `.sc-detail-summary-top`, `.sc-detail-summary-bottom`,
+    - `.sc-detail-chip*`, `.sc-detail-action-btn*`, `.sc-detail-result-btn*`,
+    - adjusted lane kicker sizing/spacing.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `SMARTCAPTURE-DETAIL-ICONS-013#1/#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - resolved queue sticky-selection overlap readability issue,
+    - reformatted detail header chips/actions/results into larger icon-supported groups,
+    - preserved existing action behavior while improving visual hierarchy.
+  - Evidence pointers:
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/index.css`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of SMARTCAPTURE-DETAIL-ICONS-013.
+- `PM Response` | `APPROVED`
+  - Reason: scoped UI readability objectives met with focused validation evidence.
+
+---
+
+## 2026-02-19 - SMARTCAPTURE-HEADER-THEME-DAYFILTER-014 (Implementation Closeout)
+- Scope: simplify Smart Captures header hierarchy, add day-scoped queue filtering with day selection, and soften theme-adaptive accent colors.
+
+### Lateral Communication / Request Lifecycle
+- `REQ-014-001` | Sender: `builder` | Receiver: `builder` | Status: `OPEN`
+  - Goal: execute SMARTCAPTURE-HEADER-THEME-DAYFILTER-014 with scoped Smart Captures + token updates only.
+- `REQ-014-001` | Sender: `builder` | Receiver: `builder` | Status: `ACK`
+  - Work accepted and started from current AGENTS intake/plan.
+- `REQ-014-001` | Sender: `builder` | Receiver: `builder` | Status: `IN_PROGRESS`
+  - Active implementation in `src/components/SmartCapturesPanel.tsx` and `src/index.css`.
+- `REQ-014-001` | Sender: `builder` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/index.css`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-014-001` | Sender: `builder` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md`.
+
+### Work Entries
+- `src/components/SmartCapturesPanel.tsx`
+  - added day-filter utilities/state (`toLocalDateKey`, `formatQueueDayLabel`, `queueDayFilter`, available-day computation, fallback behavior).
+  - queue filtering now scopes visible matches to selected day before queue/search rendering.
+  - added day selector in left-pane controls and surfaced selected day in queue header status line.
+  - refined detail summary hierarchy:
+    - primary identity + status at top,
+    - secondary metadata chips de-emphasized,
+    - one clear primary action (`Correct OCR` or `Review Shots`) with secondary actions separated,
+    - queue nav controls moved to a dedicated lower strip.
+- `src/index.css`
+  - softened light/dark/twilight token saturation for primary/secondary/tertiary accents.
+  - made semantic accent/status colors theme-adaptive via tokenized color-mix formulas.
+  - updated theme swatch tokens (`--theme-ocean`, `--theme-amethyst`, etc.) to lower-key pastel values.
+  - reduced header glow/button shadow intensity and switched header glow accents to theme tokens.
+  - added supporting Smart Capture summary classes (`.sc-detail-title-block`, `.sc-detail-meta-line`, `.sc-detail-nav-strip`) for the new hierarchy.
+- `docs/agents/00_INTAKE.md` / `docs/agents/01_PLAN.md` / `docs/agents/DECISIONS.md` / `docs/WORKLOCKS.md`
+  - recorded scope, plan progression, day-filter default decision, and temporary lock claims.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `SMARTCAPTURE-HEADER-THEME-DAYFILTER-014#2/#3/#4/#5` | Owner: `builder`
+  - Delta:
+    - reduced Smart Capture detail-header clutter by restructuring identity/status/actions hierarchy.
+    - added day-scoped left queue filtering with switchable day selector.
+    - tuned theme tokens to pastel/low-key, theme-adaptive accent behavior.
+    - completed focused validation (`eslint` + `typecheck`).
+  - Evidence pointers:
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/index.css`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of SMARTCAPTURE-HEADER-THEME-DAYFILTER-014.
+- `PM Response` | `APPROVED`
+  - Reason: requested Smart Captures hierarchy/date-filter/theme refinements were delivered in-scope with passing validation evidence.
+
+---
+
+## 2026-02-19 - SMARTCAPTURE-STATUS-COHERENCE-016 (Implementation Closeout)
+- Scope: resolve contradictory queue-footer state text/icon combinations in Smart Captures panel rows.
+
+### Lateral Communication / Request Lifecycle
+- `REQ-016-001` | Sender: `builder` | Receiver: `builder` | Status: `OPEN`
+  - Goal: patch queue-row footer status label mapping and add focused regression coverage.
+- `REQ-016-001` | Sender: `builder` | Receiver: `builder` | Status: `ACK`
+  - Work accepted; proceeding with scoped queue-row changes only.
+- `REQ-016-001` | Sender: `builder` | Receiver: `builder` | Status: `IN_PROGRESS`
+  - Active implementation in queue-row renderer and matching test file.
+- `REQ-016-001` | Sender: `builder` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/components/smart-captures/QueueItemRichPreview.tsx`
+    - `src/components/smart-captures/QueueItemRichPreview.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-016-001` | Sender: `builder` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md`.
+
+### Work Entries
+- `src/components/smart-captures/QueueItemRichPreview.tsx`
+  - replaced hard-coded footer fallback (`Resolved`/`Pending`) with canonical `statusMeta.label` so text matches queue status source-of-truth.
+- `src/components/smart-captures/QueueItemRichPreview.test.tsx`
+  - added regression test ensuring saved/no-confidence rows never render `Pending`.
+  - updated stale assertions to current queue title contract (`Match {n} | ...`) and duplicate resolved-label rendering behavior.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `SMARTCAPTURE-STATUS-COHERENCE-016#1/#2/#3/#4` | Owner: `builder`
+  - Delta:
+    - queue footer labels now align with canonical queue status metadata,
+    - contradiction case (`Pending` + resolved indicator) removed,
+    - focused test added for saved/no-confidence rows.
+  - Evidence pointers:
+    - `src/components/smart-captures/QueueItemRichPreview.tsx`
+    - `src/components/smart-captures/QueueItemRichPreview.test.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of SMARTCAPTURE-STATUS-COHERENCE-016.
+- `PM Response` | `APPROVED`
+  - Reason: scoped mismatch resolved with targeted regression coverage and passing validation.
+
+---
+
+## 2026-02-19 - MASTERPLAN-REMAINING-017 (Implementation Closeout)
+- Scope: execute remaining master checklist items across telemetry/runtime coherence, ID mapping reliability, Smart Captures polish, and final UI feature gaps.
+
+### Lateral Communication / Request Lifecycle
+- `REQ-017-001` | Sender: `builder` | Receiver: `builder` | Status: `OPEN`
+  - Goal: close all unresolved user-reported items listed under `MASTERPLAN-REMAINING-017` in `docs/agents/01_PLAN.md`.
+- `REQ-017-001` | Sender: `builder` | Receiver: `builder` | Status: `ACK`
+  - Work accepted; proceeding in-plan step order (runtime -> mapper -> Smart Captures -> feature gaps -> validation/docs).
+- `REQ-017-001` | Sender: `builder` | Receiver: `builder` | Status: `IN_PROGRESS`
+  - Active implementation across scoped files only; no schema-breaking changes.
+- `REQ-017-001` | Sender: `builder` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/hooks/useLogMonitor.ts`
+    - `src/components/recording/SquadronPanel.tsx`
+    - `src/App.tsx`
+    - `src/components/IdMapper.tsx`
+    - `src/store/slices/createMappingSlice.ts`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/components/smart-captures/QueueItemRichPreview.tsx`
+    - `src/index.css`
+    - `src/components/analytics/AnalyticsDashboard.tsx`
+    - `src/components/DevOCRPanel.tsx`
+    - `src/components/PlayerHub.tsx`
+    - `src/utils/equipmentDb.ts`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-017-001` | Sender: `builder` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md`.
+
+### Work Entries
+- `src/hooks/useLogMonitor.ts`
+  - fixed telemetry loadout clear-state behavior so explicit empty character-slot payloads clear stale selections.
+  - preserved detection from generic payload keys while still honoring explicit clear signals.
+  - always reconciles active-weapon map deltas (including empty next-loadout).
+- `src/components/recording/SquadronPanel.tsx`
+  - normalized ship-selection comparison (`sameShip`) for visual selected-outline parity with telemetry-detected labels.
+  - improved telemetry indicator labels (`Ship telemetry`, `Prospector telemetry`) for panel integration clarity.
+- `src/App.tsx`
+  - `onApply` OCR flow now merges `reachModifiers` + `hazards` into canonical modifier list, updates session modifiers, and writes merged modifiers into pending match payload.
+- `src/components/IdMapper.tsx`
+  - added resilient unknown-type -> mapping-domain resolver and unified domain apply function.
+  - made known-row edit controls always visible for reliable edit affordance.
+- `src/store/slices/createMappingSlice.ts`
+  - `setUidMapping` now clears matching unknown IDs and updates player profile names for `players` domain mappings.
+- `src/components/SmartCapturesPanel.tsx`
+  - removed `Team Lock` control from Smart Captures panel.
+  - removed `lockOcrTeams` gating from OCR apply path so team assignment always merges deterministically.
+- `src/components/smart-captures/QueueItemRichPreview.tsx`
+  - compressed queue row summary into a shorter single-line identity/timestamp line.
+  - widened left status rail for stronger current-status visibility.
+- `src/index.css`
+  - added missing Smart Captures overflow-menu styles (`.sc-detail-action-menu*`) to fix menu text overlap/intersection.
+  - increased Smart Capture gradient visibility and strengthened status-chip contrast.
+  - tuned theme/semantic color tokens to be less desaturated while remaining subdued/pastel.
+- `src/components/analytics/AnalyticsDashboard.tsx`
+  - added `TiltMeter` onto the main dashboard surface.
+- `src/components/DevOCRPanel.tsx`
+  - added `Open ROI Visual Editor` action to OCR tools and wired `OcrRegionEditorModal` apply path back into stored OCR regions.
+- `src/components/PlayerHub.tsx`
+  - removed player-list pagination so the list fills available tab height/scroll region continuously.
+- `src/utils/equipmentDb.ts`
+  - added `Resonator` to character weapon catalog.
+- Tests
+  - `src/hooks/__tests__/useLogMonitor.test.ts`: added regression test for explicit telemetry clear-state behavior.
+  - `src/components/recording/SquadronPanel.test.tsx`: added regression coverage for normalized ship-outline selection.
+  - `src/store/slices/__tests__/createMappingSlice.test.ts`: added unknown-clear + player-profile sync checks for `setUidMapping`.
+  - `src/components/smart-captures/QueueItemRichPreview.test.tsx`: updated title assertion for compacted queue line.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `MASTERPLAN-REMAINING-017#1/#2/#3/#4/#5/#6` | Owner: `builder`
+  - Delta:
+    - all remaining checklist items implemented across telemetry/runtime, ID mapper, Smart Captures UI polish, and remaining feature gaps.
+    - focused lint/tests/typecheck completed with passing results.
+  - Evidence pointers:
+    - `src/hooks/useLogMonitor.ts`
+    - `src/components/recording/SquadronPanel.tsx`
+    - `src/App.tsx`
+    - `src/components/IdMapper.tsx`
+    - `src/store/slices/createMappingSlice.ts`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/components/smart-captures/QueueItemRichPreview.tsx`
+    - `src/index.css`
+    - `src/components/analytics/AnalyticsDashboard.tsx`
+    - `src/components/DevOCRPanel.tsx`
+    - `src/components/PlayerHub.tsx`
+    - `src/utils/equipmentDb.ts`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of MASTERPLAN-REMAINING-017.
+- `PM Response` | `APPROVED`
+  - Reason: all scoped backlog items were implemented with targeted regression coverage and passing validation evidence.
+
+---
+
+## 2026-02-19 - GEMINI-INTEGRITY-AUDIT-018 (Verification Audit)
+- Scope: verify that current uncommitted changes are not broken/regressive; no product-code edits in this task.
+
+### Lateral Communication / Request Lifecycle
+- `REQ-018-001` | Sender: `debugger` | Receiver: `verifier` | Status: `OPEN`
+  - Goal: run quality gates and diff-focused integrity checks against the current dirty worktree.
+- `REQ-018-001` | Sender: `debugger` | Receiver: `verifier` | Status: `ACK`
+  - Work accepted; proceeding with command-backed verification.
+- `REQ-018-001` | Sender: `debugger` | Receiver: `verifier` | Status: `IN_PROGRESS`
+  - Running validation commands and high-risk diff review.
+
+### Work Entries
+- Captured baseline workspace state (`git status --short --branch`, `git diff --stat`, modified-file inventory).
+- Established verification-only scope to avoid mutating active user changes.
+- `REQ-018-001` | Sender: `debugger` | Receiver: `verifier` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `docs/agents/03_VALIDATION.md`
+    - `electron/main.cjs`
+    - `src/components/Sidebar.tsx`
+    - `src/App.tsx`
+- `REQ-018-001` | Sender: `debugger` | Receiver: `verifier` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md`.
+
+### Work Entries
+- Quick integrity scans:
+  - `git diff --check` reported only formatting hygiene deltas (trailing whitespace in AGENTS intake, blank EOF line in `SmartCapturesPanel`).
+  - merge-conflict marker scan returned no matches.
+- Full quality gate:
+  - `npm run -s ci:quality` passed end-to-end (`eslint`, `vitest`, `typecheck`, `vite build`).
+  - test evidence: 50 test files passed, 462 tests passed.
+- Manual high-risk spot-check:
+  - identified two behavior deltas worth explicit user confirmation:
+    - `dev-ocr` view/nav is now gated by `devMode`.
+    - telemetry retention defaults changed from `100MB/14d` to `500MB/90d`.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `GEMINI-INTEGRITY-AUDIT-018#1/#2/#3/#4/#5` | Owner: `debugger`
+  - Delta:
+    - completed verification-only audit with passing quality gates and targeted diff review.
+    - surfaced two behavior changes for user confirmation despite green test/build status.
+  - Evidence pointers:
+    - `docs/agents/03_VALIDATION.md`
+    - `electron/main.cjs`
+    - `src/components/Sidebar.tsx`
+    - `src/App.tsx`
+  - Review ask: approve closure of GEMINI-INTEGRITY-AUDIT-018.
+- `PM Response` | `APPROVED`
+  - Reason: objective quality gates passed and residual behavior deltas were documented for explicit follow-up.
+
+---
+
+## 2026-02-19 - OCR-DEBUG-GATE-REMOVE-019 (Scoped Runtime Fix)
+- Scope: remove OCR Debug `devMode` gating only; keep telemetry retention defaults unchanged.
+
+### Lateral Communication / Request Lifecycle
+- `REQ-019-001` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+  - Goal: un-gate `dev-ocr` access in sidebar/app routing without touching retention constants.
+- `REQ-019-001` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+  - Work accepted; implementing minimal patch in scoped files.
+- `REQ-019-001` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+  - Applying gate-removal changes and running focused validations.
+- `REQ-019-001` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/components/Sidebar.tsx`
+    - `src/App.tsx`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-019-001` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md`.
+
+### Work Entries
+- `src/components/Sidebar.tsx`
+  - removed `devMode` destructure dependency.
+  - restored unconditional OCR Debug nav button rendering.
+- `src/App.tsx`
+  - removed `devMode`-based preload queue filtering (`dev-ocr` preload path restored).
+  - removed redirect effect that forced `dev-ocr` back to `recording` when `devMode` was false.
+  - removed `devMode` guard branch in `renderActiveView` for `dev-ocr`.
+- Retention preservation check
+  - confirmed no edits to `electron/main.cjs`; defaults remain `500MB` and `90 days`.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `OCR-DEBUG-GATE-REMOVE-019#1/#2/#3/#4` | Owner: `debugger`
+  - Delta:
+    - OCR Debug access gate removed from nav/render/preload paths.
+    - telemetry retention constants intentionally unchanged.
+  - Evidence pointers:
+    - `src/components/Sidebar.tsx`
+    - `src/App.tsx`
+    - `electron/main.cjs`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of OCR-DEBUG-GATE-REMOVE-019.
+- `PM Response` | `APPROVED`
+  - Reason: requested gate removal completed with focused validation and retention defaults preserved.
+
+---
+
+## 2026-02-19 - SMARTCAPTURE-SELECTION-TONE-020 (UI Intensity Calibration)
+- Scope: reduce selected-match color intensity in Smart Captures queue rows without behavior changes.
+
+### Lateral Communication / Request Lifecycle
+- `REQ-020-001` | Sender: `debugger` | Receiver: `ui-designer` | Status: `OPEN`
+  - Goal: soften selected row visual treatment while preserving clear selection affordance.
+- `REQ-020-001` | Sender: `debugger` | Receiver: `ui-designer` | Status: `ACK`
+  - Work accepted; implementing scoped class-token update.
+- `REQ-020-001` | Sender: `debugger` | Receiver: `ui-designer` | Status: `IN_PROGRESS`
+  - Applying selected-state token adjustments and running focused checks.
+- `REQ-020-001` | Sender: `debugger` | Receiver: `ui-designer` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/components/smart-captures/QueueItemRichPreview.tsx`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-020-001` | Sender: `debugger` | Receiver: `ui-designer` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md`.
+
+### Work Entries
+- `src/components/smart-captures/QueueItemRichPreview.tsx`
+  - compact selected rows switched from full-primary fill to a low-intensity primary tint with softer ring/shadow.
+  - full selected rows switched from full-primary fill to tinted-primary background with softened border/ring/shadow.
+  - selected left status rail now uses `primary` instead of `on-primary` for calmer contrast.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `SMARTCAPTURE-SELECTION-TONE-020#1/#2/#3/#4` | Owner: `debugger`
+  - Delta:
+    - selected Smart Captures queue row intensity reduced while preserving clear selected affordance.
+    - no runtime behavior changes beyond visual treatment.
+  - Evidence pointers:
+    - `src/components/smart-captures/QueueItemRichPreview.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of SMARTCAPTURE-SELECTION-TONE-020.
+- `PM Response` | `APPROVED`
+  - Reason: scoped visual calibration completed with passing focused validation.
+
+---
+
+## 2026-02-19 - SMARTCAPTURE-TELEMETRY-LABEL-DEDUPE-021 (UI Label Consistency)
+- Scope: eliminate duplicate telemetry labeling in Smart Captures match summary chips.
+
+### Lateral Communication / Request Lifecycle
+- `REQ-021-001` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+  - Goal: ensure telemetry draft matches do not display both telemetry attachment and subtype draft labels.
+- `REQ-021-001` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+  - Work accepted; applying scoped render-condition fix.
+- `REQ-021-001` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+  - Implementing telemetry chip dedupe and running focused checks.
+
+---
+
+## 2026-02-19 - HISTORY-SCROLL-OWNER-FIX-022 (Layout Interaction Fix)
+- Scope: restore Match History scrolling by removing nested conflicting vertical scroll ownership.
+
+### Lateral Communication / Request Lifecycle
+- `REQ-022-001` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+  - Goal: fix non-working History scrollbar by consolidating scroll ownership.
+- `REQ-022-001` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+  - Work accepted; applying minimal wrapper/root class update.
+- `REQ-022-001` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+  - Implementing scroll-owner patch and running focused checks.
+- `REQ-021-001` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/components/SmartCapturesPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-021-001` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md`.
+
+### Work Entries
+- `src/components/SmartCapturesPanel.tsx`
+  - added subtype normalization helpers (`normalizedSubType`, `isTelemetryDraft`, `showTelemetryChip`).
+  - telemetry chip now renders once and uses `Telemetry draft` label for draft subtype.
+  - subtype chip is suppressed for telemetry draft to avoid duplicate label with telemetry chip.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `SMARTCAPTURE-TELEMETRY-LABEL-DEDUPE-021#1/#2/#3/#4` | Owner: `debugger`
+  - Delta:
+    - removed duplicate telemetry labeling for telemetry-draft matches in Smart Captures summary.
+    - no data/behavior changes beyond display logic.
+  - Evidence pointers:
+    - `src/components/SmartCapturesPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of SMARTCAPTURE-TELEMETRY-LABEL-DEDUPE-021.
+- `PM Response` | `APPROVED`
+  - Reason: duplicate label issue resolved with minimal scoped UI logic patch and passing validation.
+- `REQ-022-001` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/App.tsx`
+    - `src/components/HistoryTable.tsx`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-022-001` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md`.
+
+### Work Entries
+- `src/App.tsx`
+  - history view wrapper changed to `overflow-y-scroll custom-scrollbar` so wrapper owns vertical scroll.
+- `src/components/HistoryTable.tsx`
+  - root container removed nested vertical scroll ownership (`overflow-y-auto` + `h-full`), now uses `min-h-full` and normal flow.
+  - this avoids conflicting nested scroll containers that caused non-responsive History scrolling.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `HISTORY-SCROLL-OWNER-FIX-022#1/#2/#3/#4` | Owner: `debugger`
+  - Delta:
+    - consolidated History vertical scroll ownership to App wrapper and removed nested table-level y-scroll.
+  - Evidence pointers:
+    - `src/App.tsx`
+    - `src/components/HistoryTable.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of HISTORY-SCROLL-OWNER-FIX-022.
+- `PM Response` | `APPROVED`
+  - Reason: scoped layout fix restores expected scrolling behavior and passes focused validations.
+
+---
+
+## 2026-02-19 - SMARTCAPTURE-OCR-BOX-TOOLS-023 (Tools Access Fix)
+- Scope: make OCR capture-box adjustment available directly in Smart Captures Tools and remove leftover dev-only gating in that panel.
+
+### Lateral Communication / Request Lifecycle
+- `REQ-023-001` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+  - Goal: expose OCR ROI box adjustment where users are working in Smart Captures Tools.
+- `REQ-023-001` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+  - Work accepted; implementing scoped tools-panel wiring.
+- `REQ-023-001` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+  - Adding direct ROI editor action and removing `devMode` gate from OCR tools card.
+- `REQ-023-001` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence pointers:
+    - `src/components/SmartCapturesPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+- `REQ-023-001` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer: `docs/agents/03_VALIDATION.md`.
+
+### Work Entries
+- `src/components/SmartCapturesPanel.tsx`
+  - added `OcrRegionEditorModal` wiring (`showRoiEditor`, `applyVisualRoiRegions`, `setOcrRegions`) at Smart Captures panel level.
+  - replaced dev-only OCR Debug card with always-visible `OCR Tools` card.
+  - added direct `Adjust OCR Boxes` action in Tools and retained `Open OCR Debug` navigation action.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `SMARTCAPTURE-OCR-BOX-TOOLS-023#1/#2/#3/#4` | Owner: `debugger`
+  - Delta:
+    - Smart Captures Tools now includes direct OCR capture-box adjustment.
+    - OCR tools in this panel are no longer hidden by `devMode`.
+  - Evidence pointers:
+    - `src/components/SmartCapturesPanel.tsx`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve closure of SMARTCAPTURE-OCR-BOX-TOOLS-023.
+- `PM Response` | `APPROVED`
+  - Reason: requested tools-surface access fix completed with focused validation.
+
+## 2026-02-19 - TELEMETRY-CONSISTENCY-LOADOUT-020
+- Scope: additive telemetry consistency model, submission cross-check warnings, Smart Captures mismatch chips, and `NebLoadoutSaved` newest-only digestion.
+
+### Dependency Requests (AOM_V2 Lifecycle)
+- `REQ-TCL-020-001` | Sender: `debugger` | Receiver: `builder` | Status: `OPEN`
+  - Request: implement telemetry consistency derivation + hook/UI integration + targeted tests.
+  - Evidence target: `src/utils/telemetryConsistency.ts`, `src/hooks/useLogMonitor.ts`, `src/hooks/useMatchSubmission.ts`, `src/components/SmartCapturesPanel.tsx`, `src/components/smart-captures/*`, focused tests.
+- `REQ-TCL-020-001` | Sender: `debugger` | Receiver: `builder` | Status: `ACK`
+  - Response: accepted for this lane.
+- `REQ-TCL-020-001` | Sender: `debugger` | Receiver: `builder` | Status: `IN_PROGRESS`
+  - Workstream active.
+
+### Work Entries
+- 17:14Z
+  - Intake/plan defaults locked from approved plan:
+    - Duration tolerance: 45s.
+    - Pool->mode inference: strict map + heuristic fallback.
+    - Team expectation priority: `playerIds` first, mode fallback only when no playerIds.
+  - Started implementation in utility/types layer.
+- 17:24Z
+  - Completed utility/model layer:
+    - Added optional `Match.telemetryConsistency` model in `src/types.ts`.
+    - Added deterministic telemetry derivation/evaluation helpers in new `src/utils/telemetryConsistency.ts`.
+    - Extended `src/utils/telemetryArchive.ts` with shared event-name/payload helpers.
+
+- 17:26Z
+  - Completed runtime integration in `src/hooks/useLogMonitor.ts`:
+    - Added matchmaker-derived teammate/mode consistency metadata capture.
+    - Added `NebLoadoutSaved` newest-only timestamp guard to prevent stale regression.
+    - Added dedicated `NebLoadoutSaved` save-snapshot metadata on telemetry draft.
+    - Added duration consistency metadata on telemetry draft finalization.
+    - Added GUID lookup hardening with case-insensitive fallback.
+
+- 17:28Z
+  - Completed submission + Smart Captures integration:
+    - `src/hooks/useMatchSubmission.ts` now evaluates and surfaces team count/mode/duration mismatch warnings.
+    - `src/components/smart-captures/smartCaptureUtils.ts` adds reusable consistency warning chips.
+    - `src/components/smart-captures/QueueItemRichPreview.tsx` shows mismatch chips in queue cards.
+    - `src/components/SmartCapturesPanel.tsx` shows mismatch chips and derived telemetry consistency summary in bundled telemetry section.
+
+- 17:30Z
+  - Added focused regressions:
+    - `src/hooks/__tests__/useLogMonitor.test.ts` for `NebLoadoutSaved` queue update and stale event regression guard.
+    - `src/hooks/__tests__/useMatchSubmission.test.ts` for teammate/mode/duration mismatch warning detection.
+    - `src/components/smart-captures/smartCaptureUtils.test.ts` for consistency chip derivation.
+
+## PM Feedback Cycle
+- `PM-FEEDBACK-REQ` | Step: `TELEMETRY-CONSISTENCY-LOADOUT-020#1-#7` | Owner: `debugger`
+  - Delta: implemented additive telemetry consistency model + loadout-save hardening + submission/Smart Captures mismatch surfaces + targeted regressions.
+  - Evidence pointers:
+    - `src/types.ts`
+    - `src/utils/telemetryArchive.ts`
+    - `src/utils/telemetryConsistency.ts`
+    - `src/utils/guids.ts`
+    - `src/hooks/useLogMonitor.ts`
+    - `src/hooks/useMatchSubmission.ts`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/components/smart-captures/smartCaptureUtils.ts`
+    - `src/components/smart-captures/QueueItemRichPreview.tsx`
+    - `src/hooks/__tests__/useLogMonitor.test.ts`
+    - `src/hooks/__tests__/useMatchSubmission.test.ts`
+    - `src/components/smart-captures/smartCaptureUtils.test.ts`
+    - `docs/agents/03_VALIDATION.md`
+  - Review ask: approve additive warning/chip behavior and newest-only loadout-save guard as scoped implementation.
+- `PM Response` | `APPROVED`
+  - Reason: scope aligned to intake; focused validation and regression evidence present; no destructive behavior changes.
+
+- `REQ-TCL-020-001` | Sender: `debugger` | Receiver: `builder` | Status: `READY_FOR_REVIEW`
+  - Evidence prepared in `docs/agents/03_VALIDATION.md`.
+- `REQ-TCL-020-001` | Sender: `debugger` | Receiver: `builder` | Status: `CLOSED`
+  - Evidence pointer:
+    - `src/utils/telemetryConsistency.ts`
+    - `src/hooks/useLogMonitor.ts`
+    - `src/hooks/useMatchSubmission.ts`
+    - `src/components/SmartCapturesPanel.tsx`
+    - `src/components/smart-captures/smartCaptureUtils.ts`
+    - `src/components/smart-captures/QueueItemRichPreview.tsx`
+    - `src/hooks/__tests__/useLogMonitor.test.ts`
+    - `src/hooks/__tests__/useMatchSubmission.test.ts`
+    - `src/components/smart-captures/smartCaptureUtils.test.ts`
+    - `docs/agents/03_VALIDATION.md`
+## TEST-HARDEN-SMOKE-024 - Execution Log (2026-02-20)
+- REQUEST-ID: THS024-REQ-001 | OPEN -> ACK -> IN_PROGRESS -> READY_FOR_REVIEW -> CLOSED
+- Scope enforced: test-only hardening; no production/runtime behavior edits.
+- Added files:
+  - `src/utils/__tests__/telemetryArchive.test.ts`
+  - `src/utils/__tests__/telemetryConsistency.test.ts`
+  - `src/utils/__tests__/guids.test.ts`
+- Updated files:
+  - `src/hooks/__tests__/useLogMonitor.test.ts` (added matchmaker consistency + cloud-save snapshot assertions)
+  - `src/hooks/__tests__/useMatchSubmission.test.ts` (added final-submission telemetry-consistency persistence assertion)
+- PM-FEEDBACK-REQ:
+  - Step IDs: THS024-2, THS024-3, THS024-5
+  - Delta summary: added direct utility coverage + strengthened hook assertions + completed full smoke/debug rerun
+  - Evidence pointers: `docs/agents/03_VALIDATION.md` (TEST-HARDEN-SMOKE-024 section)
+  - Review ask: confirm test-only scope and gate completeness
+- PM RESPONSE: APPROVED
+## ROI-FULLWIDTH-025 - Execution Log (2026-02-20)
+- Scope: modal sizing-only patch.
+- Updated files:
+  - `src/components/OcrRegionEditorModal.tsx`
+    - switched root dialog class to `md3-dialog--roi-editor`
+    - reduced outer overlay padding to maximize usable viewport area
+  - `src/index.css`
+    - added `.md3-dialog--roi-editor` override (`max-width: none`, full width/height, zero inherited padding/gap)
+- PM-FEEDBACK-REQ: step ROI-FULLWIDTH-025 complete; verify full-width behavior and no side effects.
+- PM RESPONSE: APPROVED
+
+## ROI-IMAGE-PREVIEW-026 - Execution Log (2026-02-20)
+- REQUEST-ID: RIP026-REQ-001 | OPEN -> ACK -> IN_PROGRESS -> READY_FOR_REVIEW -> CLOSED
+- Scope enforced: ROI modal upload/preview reliability + targeted test coverage only.
+- Updated files:
+  - `src/components/OcrRegionEditorModal.tsx`
+    - replaced label-wrapped hidden input trigger with explicit button -> input ref click path.
+    - added object-URL-first image loading path with FileReader fallback.
+    - added visible inline error state for unsupported file/read/decode failures.
+    - added blob-preview decode fallback attempt to data URL.
+  - `src/components/OcrRegionEditorModal.test.tsx` (new)
+    - added regression tests for picker trigger, successful preview render, and failed decode+fallback error message.
+- PM-FEEDBACK-REQ:
+  - Step IDs: RIP026-2, RIP026-3, RIP026-4
+  - Delta summary: hardened ROI image loading path and added direct component regression coverage.
+  - Evidence pointers: `docs/agents/03_VALIDATION.md` (ROI-IMAGE-PREVIEW-026 section)
+  - Review ask: confirm closure of ROI image preview regression scope.
+- PM RESPONSE: APPROVED
+
+## ROI-ARTIFACT-DIALOG-027 - Execution Log (2026-02-20)
+- REQUEST-ID: RAD027-REQ-001 | OPEN -> ACK -> IN_PROGRESS -> READY_FOR_REVIEW -> CLOSED
+- Scope enforced: ROI file-picker path only (IPC + modal + tests).
+- Updated files:
+  - `electron/preload.cjs`
+    - added `pick-roi-image` to invoke allowlist.
+  - `electron/main.cjs`
+    - added `pick-roi-image` IPC handler.
+    - handler opens native dialog with `defaultPath` set to `artifactHelpers.getArtifactPaths(app).matchArtifactsRoot`.
+    - validates extension, reads selected file, returns data URL payload for immediate preview.
+  - `src/components/OcrRegionEditorModal.tsx`
+    - `Load Screenshot` now calls electron `pick-roi-image` when bridge exists.
+    - preserves fallback hidden input picker when bridge is unavailable/fails.
+  - `src/components/OcrRegionEditorModal.test.tsx`
+    - added electron picker regression case asserting invoke call + preview render.
+  - `scripts/security_negative_tests.cjs`
+    - added channel in mirrored invoke allowlist for parity.
+- PM-FEEDBACK-REQ:
+  - Step IDs: RAD027-2, RAD027-3, RAD027-4
+  - Delta summary: native ROI picker path now defaults to artifacts root and preview remains functional.
+  - Evidence pointers: `docs/agents/03_VALIDATION.md` (ROI-ARTIFACT-DIALOG-027 section)
+  - Review ask: approve closure of artifacts-default picker request.
+- PM RESPONSE: APPROVED
+- Addendum:
+  - Added stale-preload blocked-channel handling in ROI modal (`IPC invoke blocked`) to show explicit restart guidance instead of silent no-op.
+  - Extended ROI modal test coverage with blocked-channel regression assertion.
+- Addendum 2:
+  - Updated `pick-roi-image` dialog parent to use sender webContents window to avoid opening against wrong/inactive window.
+  - Added blocked-channel fallback click attempt and explicit `Use Browser Picker` button in ROI modal.

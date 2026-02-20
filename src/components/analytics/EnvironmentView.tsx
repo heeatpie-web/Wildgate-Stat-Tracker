@@ -47,7 +47,7 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
                     {data.slice(0, 6).map(d => (
                         <div key={d.name} className={`md3-card rounded-xl ${dense ? 'p-2' : 'p-3'} text-center`}>
                             <div className="text-label-xs font-black uppercase opacity-40 truncate mb-1">{d.name}</div>
-                            <div className={`text-body font-black flex items-center justify-center gap-1 ${d.impact >= 0 ? 'text-success' : 'text-danger'}`}>
+                            <div className={`text-body font-black flex items-center justify-center gap-1 ${d.impact >= 0 ? 'text-md-sys-primary' : 'text-md-sys-on-surface/60'}`}>
                                 {d.impact >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                                 {d.impact >= 0 ? '+' : ''}{d.impact}%
                             </div>
@@ -74,7 +74,7 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
                             <YAxis dataKey="name" type="category" width={90} tick={{ fontSize: 9, fontWeight: 'bold', fill: 'var(--md-sys-color-on-surface-variant)' }} axisLine={false} tickLine={false} />
                             <Tooltip cursor={{ fill: 'var(--md-sys-color-surface3)', opacity: 0.4 }} contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }} />
                             <Bar dataKey="winRate" name="Win Rate %" radius={[0, 4, 4, 0]}>
-                                {data.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.winRate >= 50 ? 'var(--color-success)' : 'var(--color-danger)'} />))}
+                                {data.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.winRate >= 50 ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-surface-variant)'} />))}
                                 <LabelList dataKey="winRate" position="right" formatter={(v: number) => `${v}%`} style={{ fontSize: 9, fontWeight: 'bold', fill: 'var(--md-sys-color-on-surface)' }} />
                             </Bar>
                         </BarChart>
@@ -88,8 +88,8 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
                             <XAxis type="number" hide />
                             <YAxis dataKey="name" type="category" width={90} tick={{ fontSize: 9, fontWeight: 'bold', fill: 'var(--md-sys-color-on-surface-variant)' }} axisLine={false} tickLine={false} />
                             <Tooltip contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }} />
-                            <Bar dataKey="wins" name="Wins" stackId="wl" fill="var(--color-success)" radius={[0, 0, 0, 0]} />
-                            <Bar dataKey="losses" name="Losses" stackId="wl" fill="var(--color-danger)" radius={[0, 4, 4, 0]} />
+                            <Bar dataKey="wins" name="Wins" stackId="wl" fill="var(--md-sys-color-primary)" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="losses" name="Losses" stackId="wl" fill="var(--md-sys-color-surface-variant)" radius={[0, 4, 4, 0]} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>

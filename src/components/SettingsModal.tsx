@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useState } from 'react';
-import { Palette, FileJson, Save, Download, RefreshCw, X, Cloud, Monitor, Merge, Check, Sparkles } from 'lucide-react';
+import { Palette, FileJson, Save, Download, RefreshCw, X, Cloud, Monitor, Merge, Check, Sparkles, Search } from 'lucide-react';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
@@ -83,8 +83,6 @@ const SettingsModalContent: React.FC = () => {
     const setTelemetryPerformanceProfile = useAppStore(s => s.setTelemetryPerformanceProfile);
     const startupSmartPreloadEnabled = useAppStore(s => s.startupSmartPreloadEnabled);
     const setStartupSmartPreloadEnabled = useAppStore(s => s.setStartupSmartPreloadEnabled);
-    const lockOcrTeams = useAppStore(s => s.lockOcrTeams);
-    const setLockOcrTeams = useAppStore(s => s.setLockOcrTeams);
     const ocrLearningEnabled = useAppStore(s => s.ocrLearningEnabled);
     const setOcrLearningEnabled = useAppStore(s => s.setOcrLearningEnabled);
     const ocrAutoApplyMinScore = useAppStore(s => s.ocrAutoApplyMinScore);
@@ -192,11 +190,13 @@ const SettingsModalContent: React.FC = () => {
             getGCloudStatus().then(status => setGcloudStatus(status));
         } else {
             setShowRoiEditor(false);
+            setSettingsSearch('');
         }
     }, [showSettings]);
 
     const [saved, setSaved] = useState(false);
     const [activeTab, setActiveTab] = useState<SettingsTabId>('interface');
+    const [settingsSearch, setSettingsSearch] = useState('');
     const dialogTitleId = useId();
     const dialogDescriptionId = useId();
     const focusTrapRef = useFocusTrap<HTMLDivElement>(showSettings);
@@ -300,21 +300,69 @@ const SettingsModalContent: React.FC = () => {
 
     const settingsTabs: Array<{ id: SettingsTabId; label: string }> = isOverlayMode
         ? [
-            { id: 'identity', label: 'Identity' },
             { id: 'interface', label: 'Interface' },
+            { id: 'identity', label: 'Identity' },
             { id: 'ocr-capture', label: 'OCR/Capture' },
         ]
         : [
-            { id: 'identity', label: 'Identity' },
             { id: 'interface', label: 'Interface' },
+            { id: 'identity', label: 'Identity' },
             { id: 'ocr-capture', label: 'OCR/Capture' },
             { id: 'data', label: 'Data' },
         ];
+    const settingsSearchEntries: Array<{ id: string; tab: SettingsTabId; label: string; keywords: string[] }> = [
+        { id: 'theme-accent', tab: 'interface', label: 'Theme Accent', keywords: ['theme', 'accent', 'color', 'appearance', 'hue'] },
+        { id: 'appearance-mode', tab: 'interface', label: 'Appearance Mode', keywords: ['dark', 'light', 'twilight', 'system'] },
+        { id: 'telemetry-performance', tab: 'interface', label: 'Telemetry Performance', keywords: ['telemetry', 'performance', 'polling', 'load'] },
+        { id: 'header-smart-capture', tab: 'interface', label: 'Header Smart Capture', keywords: ['header', 'capture', 'quick capture'] },
+        { id: 'alias-authority', tab: 'identity', label: 'Alias & Authority', keywords: ['alias', 'authority', 'name', 'canonical'] },
+        { id: 'ocr-engine', tab: 'ocr-capture', label: 'OCR Engine', keywords: ['ocr', 'cloud', 'local', 'gemini', 'hybrid'] },
+        { id: 'capture-flow', tab: 'ocr-capture', label: 'Capture Mode', keywords: ['capture', 'deferred', 'auto', 'workflow'] },
+        { id: 'ocr-roi', tab: 'ocr-capture', label: 'OCR Scan Regions (ROI)', keywords: ['roi', 'region', 'hazard', 'players', 'map'] },
+        { id: 'backup-db', tab: 'data', label: 'Backup Database', keywords: ['backup', 'db', 'export'] },
+        { id: 'updates', tab: 'data', label: 'App Updates', keywords: ['update', 'version', 'download', 'restart'] },
+    ];
+    const normalizedSettingsSearch = settingsSearch.trim().toLowerCase();
+    const settingsSearchResults = normalizedSettingsSearch.length === 0
+        ? []
+        : settingsSearchEntries
+            .filter((entry) => (
+                entry.label.toLowerCase().includes(normalizedSettingsSearch) ||
+                entry.keywords.some((keyword) => keyword.includes(normalizedSettingsSearch))
+            ))
+            .filter((entry) => !isOverlayMode || entry.tab !== 'data')
+            .slice(0, 8);
 
-    const learnedAliases = Object.values(ocrAliasModel.entries || {})
-        .flat()
+    const rawLearnedAliases = Object.values(ocrAliasModel.entries || {}).flat();
+    const learnedAliasGroups = Object.values(
+        rawLearnedAliases.reduce<Record<string, { targetName: string; totalCount: number; lastUpdatedAt: number; variants: typeof rawLearnedAliases }>>((acc, entry) => {
+            const key = normalizeOcrName(entry.targetName).toLowerCase();
+            if (!key) return acc;
+            if (!acc[key]) {
+                acc[key] = {
+                    targetName: entry.targetName,
+                    totalCount: 0,
+                    lastUpdatedAt: 0,
+                    variants: [],
+                };
+            }
+            acc[key].variants.push(entry);
+            acc[key].totalCount += Number(entry.count || 0);
+            acc[key].lastUpdatedAt = Math.max(acc[key].lastUpdatedAt, Number(entry.lastUpdatedAt || 0));
+            return acc;
+        }, {})
+    )
+        .map((group) => ({
+            ...group,
+            variants: group.variants
+                .slice()
+                .sort((a, b) => {
+                    if (b.count !== a.count) return b.count - a.count;
+                    return b.lastUpdatedAt - a.lastUpdatedAt;
+                }),
+        }))
         .sort((a, b) => {
-            if (b.count !== a.count) return b.count - a.count;
+            if (b.totalCount !== a.totalCount) return b.totalCount - a.totalCount;
             return b.lastUpdatedAt - a.lastUpdatedAt;
         })
         .slice(0, 30);
@@ -449,6 +497,50 @@ const SettingsModalContent: React.FC = () => {
                             </button>
                         ))}
                     </div>
+                    <div className="mt-3">
+                        <div className="md3-surface-high rounded-control border border-md-sys-outline/10 h-10 px-3 flex items-center gap-2">
+                            <Search size={14} className="opacity-50" />
+                            <input
+                                type="text"
+                                value={settingsSearch}
+                                onChange={(event) => setSettingsSearch(event.target.value)}
+                                placeholder="Search settings..."
+                                className="flex-1 bg-transparent text-label-sm outline-none placeholder:opacity-40"
+                            />
+                            {settingsSearch && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSettingsSearch('')}
+                                    className="opacity-60 hover:opacity-100"
+                                    aria-label="Clear settings search"
+                                >
+                                    <X size={12} />
+                                </button>
+                            )}
+                        </div>
+                        {normalizedSettingsSearch && (
+                            <div className="mt-2 md3-surface rounded-control border border-md-sys-outline/10 p-2 max-h-28 overflow-y-auto custom-scrollbar space-y-1">
+                                {settingsSearchResults.length > 0 ? (
+                                    settingsSearchResults.map((entry) => (
+                                        <button
+                                            key={entry.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setActiveTab(entry.tab);
+                                                setSettingsSearch('');
+                                            }}
+                                            className="w-full text-left px-2 py-1.5 rounded-control text-label-sm hover:bg-md-sys-on-surface/10 transition-colors"
+                                        >
+                                            <span className="font-semibold">{entry.label}</span>
+                                            <span className="ml-2 opacity-55 uppercase text-label-xs">{entry.tab}</span>
+                                        </button>
+                                    ))
+                                ) : (
+                                    <div className="px-2 py-1.5 text-label-sm opacity-60">No matching setting sections.</div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Modal Content - Scrollable */}
@@ -501,44 +593,57 @@ const SettingsModalContent: React.FC = () => {
                         >
                             Add Alias
                         </Button>
-                        <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-1">
-                            {learnedAliases.map((c, idx) => {
-                                const blocked = !!ocrAliasModel.blocklist?.[c.normalizedKey];
-                                return (
-                                    <div key={`${c.normalizedKey}-${c.targetName}-${idx}`} className="md3-surface rounded-lg px-2 py-1.5 text-label-sm flex items-center justify-between gap-2">
-                                        <span className="truncate opacity-60">{c.rawKey}</span>
-                                        <span className="mx-1 opacity-40">-&gt;</span>
-                                        <span className="truncate font-bold text-md-sys-primary">{c.targetName}</span>
-                                        <span className="ml-1 opacity-40">x{c.count}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                if (blocked) unblockOcrAlias(c.normalizedKey);
-                                                else blockOcrAlias(c.normalizedKey, 'settings-blocklist');
-                                            }}
-                                            className={`px-2 py-1 rounded-control text-label-xs font-bold uppercase ${blocked ? 'md3-btn-tonal text-warning' : 'md3-btn-outlined'}`}
-                                        >
-                                            {blocked ? 'Unblock' : 'Block'}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const removed = removeOcrAliasCorrection(c.rawKey, c.targetName);
-                                                if (removed) {
-                                                    setToast({
-                                                        message: `Removed alias ${c.rawKey} -> ${c.targetName}`,
-                                                        type: 'success',
-                                                    });
-                                                }
-                                            }}
-                                            className="px-2 py-1 rounded-control text-label-xs font-bold uppercase md3-btn-outlined text-md-sys-error"
-                                        >
-                                            Remove
-                                        </button>
+                        <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-2">
+                            {learnedAliasGroups.map((group) => (
+                                <div key={group.targetName} className="md3-surface rounded-lg px-2 py-1.5">
+                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                        <span className="truncate font-bold text-md-sys-primary">{group.targetName}</span>
+                                        <span className="text-label-xs opacity-50">
+                                            {group.variants.length} alias{group.variants.length === 1 ? '' : 'es'} | x{group.totalCount}
+                                        </span>
                                     </div>
-                                );
-                            })}
-                            {learnedAliases.length === 0 && (
+                                    <div className="space-y-1">
+                                        {group.variants.slice(0, 4).map((variant, idx) => {
+                                            const blocked = !!ocrAliasModel.blocklist?.[variant.normalizedKey];
+                                            return (
+                                                <div key={`${variant.normalizedKey}-${idx}`} className="text-label-sm flex items-center justify-between gap-2">
+                                                    <span className="truncate opacity-60">{variant.rawKey}</span>
+                                                    <span className="ml-1 opacity-40 shrink-0">x{variant.count}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (blocked) unblockOcrAlias(variant.normalizedKey);
+                                                            else blockOcrAlias(variant.normalizedKey, 'settings-blocklist');
+                                                        }}
+                                                        className={`px-2 py-1 rounded-control text-label-xs font-bold uppercase ${blocked ? 'md3-btn-tonal text-warning' : 'md3-btn-outlined'}`}
+                                                    >
+                                                        {blocked ? 'Unblock' : 'Block'}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const removed = removeOcrAliasCorrection(variant.rawKey, variant.targetName);
+                                                            if (removed) {
+                                                                setToast({
+                                                                    message: `Removed alias ${variant.rawKey} -> ${variant.targetName}`,
+                                                                    type: 'success',
+                                                                });
+                                                            }
+                                                        }}
+                                                        className="px-2 py-1 rounded-control text-label-xs font-bold uppercase md3-btn-outlined text-md-sys-error"
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                        {group.variants.length > 4 && (
+                                            <div className="text-label-xs opacity-45">+{group.variants.length - 4} more variants</div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                            {learnedAliasGroups.length === 0 && (
                                 <div className="text-label-sm opacity-60">No learned aliases yet.</div>
                             )}
                         </div>
@@ -868,18 +973,6 @@ const SettingsModalContent: React.FC = () => {
                                 CJK is weighted toward Cloud Vision. Hybrid+ adds Gemini structured refinement.
                             </div>
                         )}
-                        <div className="mt-3 flex items-center justify-between p-3 md3-surface rounded-card border border-md-sys-outline/10">
-                            <div>
-                                <div className="text-label-sm font-semibold">Lock OCR Teams Per Session</div>
-                                <div className="text-label-sm opacity-60">Stabilize team names/colors across repeated captures</div>
-                            </div>
-                            <button
-                                onClick={() => setLockOcrTeams(!lockOcrTeams)}
-                                className={`w-11 h-6 rounded-full transition-colors ${lockOcrTeams ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
-                            >
-                                <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${lockOcrTeams ? 'translate-x-5' : ''}`} />
-                            </button>
-                        </div>
                         <div className="mt-3 p-3 md3-surface rounded-card border border-md-sys-outline/10 space-y-3">
                             <div className="flex items-center justify-between">
                                 <div>

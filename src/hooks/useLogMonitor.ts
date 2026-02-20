@@ -4,11 +4,16 @@ import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
 import { useSoundEffects } from '../hooks/useSoundEffects';
 import { HERO_GUIDS, SHIP_GUIDS, WEAPON_GUIDS, EQUIPMENT_GUIDS } from '../utils/guids';
-import { SHIPS, CHARACTERS, UNNAMED_PLAYER_PREFIX, Match, Loadout } from '../types';
+import { SHIPS, CHARACTERS, UNNAMED_PLAYER_PREFIX, Match, Loadout, TelemetryConsistency } from '../types';
 import { EQUIPMENT_DB } from '../utils/equipmentDb';
 import { processTelemetryEvent, TelemetryActions, TelemetryContext } from '../utils/telemetryProcessor';
 import Logger from '../utils/logger';
 import { getElectronAPI } from '../utils/electronAPI';
+import {
+    DEFAULT_DURATION_TOLERANCE_SECONDS,
+    getExpectedTeammateCountFromMode,
+    inferModeFromMatchPool,
+} from '../utils/telemetryConsistency';
 
 const ipcRenderer = getElectronAPI();
 type TelemetryStatusPatch = {
@@ -69,6 +74,19 @@ const toStringOrEmpty = (value: unknown): string => {
     if (typeof value === 'string') return value;
     if (typeof value === 'number') return String(value);
     return '';
+};
+
+const extractTelemetryStringList = (value: unknown, depth = 0): string[] => {
+    if (value == null || depth > 3) return [];
+    if (typeof value === 'string' || typeof value === 'number') {
+        const text = String(value).trim();
+        return text ? [text] : [];
+    }
+    if (Array.isArray(value)) {
+        return value.flatMap((entry) => extractTelemetryStringList(entry, depth + 1));
+    }
+    if (!isRecord(value)) return [];
+    return Object.values(value).flatMap((entry) => extractTelemetryStringList(entry, depth + 1));
 };
 
 const CHARACTER_WEAPON_NAMES = EQUIPMENT_DB
@@ -147,6 +165,10 @@ export const useLogMonitor = (activeUser?: string) => {
     const telemetryDraftLoadoutSignatureRef = useRef<string>('');
     const telemetryDraftCapturePromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const telemetryLifecycleActiveRef = useRef(isMatchInProgress);
+    const latestNebLoadoutSavedTimestampRef = useRef<number>(0);
+    const pendingTelemetryConsistencyRef = useRef<Partial<TelemetryConsistency>>({
+        durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
+    });
 
     const clearTelemetryDraftCapturePromptTimer = () => {
         if (telemetryDraftCapturePromptTimerRef.current) {
@@ -215,6 +237,10 @@ export const useLogMonitor = (activeUser?: string) => {
         timelineEvents: [],
         artifacts: [],
         ocrState: 'queued',
+        telemetryConsistency: {
+            durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
+            ...(pendingTelemetryConsistencyRef.current || {}),
+        },
     });
 
     const createTelemetryDraftIfNeeded = (gameTime: number, loadout?: Loadout | null) => {
@@ -245,6 +271,9 @@ export const useLogMonitor = (activeUser?: string) => {
             telemetryDraftStartedAtRef.current = Number(existingDraft.timestamp || gameTime) || gameTime;
             telemetryDraftLoadoutSignatureRef.current = makeLoadoutSignature(existingDraft.loadout || loadout || currentLoadoutRef.current || null);
             scheduleTelemetryDraftCapturePrompt(existingDraft.id);
+            if (Object.keys(pendingTelemetryConsistencyRef.current || {}).length > 0) {
+                updateTelemetryDraftConsistency(pendingTelemetryConsistencyRef.current, gameTime);
+            }
             Logger.info('LogMonitor', `Reused existing telemetry draft (matchId=${existingDraft.id})`);
             return existingDraft.id;
         }
@@ -288,6 +317,89 @@ export const useLogMonitor = (activeUser?: string) => {
         });
     };
 
+    const updatePendingTelemetryConsistency = (patch: Partial<TelemetryConsistency>) => {
+        pendingTelemetryConsistencyRef.current = {
+            ...(pendingTelemetryConsistencyRef.current || {}),
+            ...patch,
+            durationToleranceSeconds:
+                patch.durationToleranceSeconds
+                ?? pendingTelemetryConsistencyRef.current.durationToleranceSeconds
+                ?? DEFAULT_DURATION_TOLERANCE_SECONDS,
+        };
+    };
+
+    const updateTelemetryDraftConsistency = (patch: Partial<TelemetryConsistency>, gameTime: number) => {
+        if (!patch || Object.keys(patch).length === 0) return;
+        updatePendingTelemetryConsistency(patch);
+        const draftId = telemetryDraftMatchIdRef.current;
+        if (!draftId) return;
+        const match = useAppStore.getState().matches.find((m: Match) => m.id === draftId);
+        if (!match) return;
+        const nextConsistency: TelemetryConsistency = {
+            durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
+            ...(match.telemetryConsistency || {}),
+            ...patch,
+        };
+        updateMatch({
+            ...match,
+            timestamp: match.timestamp || gameTime,
+            telemetryConsistency: nextConsistency,
+        });
+    };
+
+    const appendTelemetryLoadoutSave = (
+        source: 'NebLoadoutSaved' | 'NebCloudSaveRecordSize',
+        gameTime: number,
+        inGame: boolean,
+    ) => {
+        if (!Number.isFinite(gameTime) || gameTime <= 0) return;
+        const patchBase: Partial<TelemetryConsistency> = {
+            durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
+            latestLoadoutSaveAt: gameTime,
+        };
+
+        const draftId = telemetryDraftMatchIdRef.current;
+        if (!draftId) {
+            const pendingSnapshots = [...(pendingTelemetryConsistencyRef.current.loadoutSaves || [])];
+            const pendingLast = pendingSnapshots[pendingSnapshots.length - 1];
+            if (!pendingLast || pendingLast.timestamp !== gameTime || pendingLast.source !== source) {
+                pendingSnapshots.push({ timestamp: gameTime, inGame, source });
+            }
+            updatePendingTelemetryConsistency({ ...patchBase, loadoutSaves: pendingSnapshots });
+            return;
+        }
+        const match = useAppStore.getState().matches.find((m: Match) => m.id === draftId);
+        if (!match) {
+            const pendingSnapshots = [...(pendingTelemetryConsistencyRef.current.loadoutSaves || [])];
+            const pendingLast = pendingSnapshots[pendingSnapshots.length - 1];
+            if (!pendingLast || pendingLast.timestamp !== gameTime || pendingLast.source !== source) {
+                pendingSnapshots.push({ timestamp: gameTime, inGame, source });
+            }
+            updatePendingTelemetryConsistency({ ...patchBase, loadoutSaves: pendingSnapshots });
+            return;
+        }
+        const snapshots = [...(match.telemetryConsistency?.loadoutSaves || [])];
+        const last = snapshots[snapshots.length - 1];
+        if (!last || last.timestamp !== gameTime || last.source !== source) {
+            snapshots.push({ timestamp: gameTime, inGame, source });
+        }
+        const nextConsistency: TelemetryConsistency = {
+            durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
+            ...(match.telemetryConsistency || {}),
+            latestLoadoutSaveAt: gameTime,
+            loadoutSaves: snapshots,
+        };
+        updateMatch({
+            ...match,
+            timestamp: match.timestamp || gameTime,
+            telemetryConsistency: nextConsistency,
+        });
+        updatePendingTelemetryConsistency({
+            latestLoadoutSaveAt: gameTime,
+            loadoutSaves: snapshots,
+        });
+    };
+
     const finalizeTelemetryDraft = (gameTime: number) => {
         const draftId = telemetryDraftMatchIdRef.current;
         if (!draftId) return;
@@ -297,11 +409,17 @@ export const useLogMonitor = (activeUser?: string) => {
         if (match) {
             const totalSeconds = Math.max(0, Math.floor((gameTime - startedAt) / 1000));
             const duration = toClock(totalSeconds);
+            const nextConsistency: TelemetryConsistency = {
+                durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
+                ...(match.telemetryConsistency || {}),
+                telemetryDurationSeconds: totalSeconds,
+            };
             updateMatch({
                 ...match,
                 timestamp: startedAt,
                 time: duration,
                 notes: `${match.notes || ''}\nTelemetry detected mission end. Choose result or run Smart Capture.`.trim(),
+                telemetryConsistency: nextConsistency,
             });
             window.dispatchEvent(new CustomEvent('telemetry:draft-ready', {
                 detail: { matchId: draftId, duration },
@@ -315,6 +433,10 @@ export const useLogMonitor = (activeUser?: string) => {
         telemetryDraftMatchIdRef.current = null;
         telemetryDraftStartedAtRef.current = null;
         telemetryDraftLoadoutSignatureRef.current = '';
+        latestNebLoadoutSavedTimestampRef.current = 0;
+        pendingTelemetryConsistencyRef.current = {
+            durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
+        };
     };
 
     useEffect(() => { playerIdMapRef.current = playerIdMap; }, [playerIdMap]);
@@ -416,6 +538,82 @@ export const useLogMonitor = (activeUser?: string) => {
                     const ageSeconds = Math.floor((Date.now() - gameTime) / 1000);
                     const payloadKeys = Object.keys(payload).join(',');
                     Logger.debug('LogMonitor', `EVENT: ${name} | Age: ${ageSeconds}s | Keys: ${payloadKeys}`);
+
+                    if (name === 'NebClientMatchmakerStateChange') {
+                        const matchmakerPlayerIds = Array.from(new Set(
+                            extractTelemetryStringList(
+                                payload.playerIds
+                                || payload.player_ids
+                                || payload.players
+                                || payload.playerList
+                                || payload.ticketPlayerIds
+                            ).map((value) => String(value || '').trim()).filter(Boolean)
+                        ));
+                        const inferredMode = inferModeFromMatchPool(
+                            payload.ticketMatchPool
+                            || payload.ticket_match_pool
+                            || payload.matchPool
+                            || payload.match_pool
+                        );
+                        const patch: Partial<TelemetryConsistency> = {
+                            durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
+                        };
+                        if (matchmakerPlayerIds.length > 0) {
+                            patch.expectedTeammateCount = Math.max(0, matchmakerPlayerIds.length - 1);
+                        } else {
+                            const fallbackExpected = getExpectedTeammateCountFromMode(inferredMode?.mode);
+                            if (typeof fallbackExpected === 'number') {
+                                patch.expectedTeammateCount = fallbackExpected;
+                            }
+                        }
+                        if (inferredMode) {
+                            patch.expectedMode = inferredMode.mode;
+                            patch.expectedModeSource = inferredMode.source;
+                        }
+                        updateTelemetryDraftConsistency(patch, gameTime);
+                    }
+
+                    const payloadEnvelope = asRecord(e.Payload);
+                    const payloadEnvelopeEvent = asRecord(payloadEnvelope.event);
+                    const isNebLoadoutSavedEvent = name === 'NebLoadoutSaved';
+                    const nebLoadoutSavedPayloadRaw = payloadEnvelopeEvent.loadout;
+                    let isStaleNebLoadoutSaved = false;
+                    if (isNebLoadoutSavedEvent) {
+                        if (
+                            latestNebLoadoutSavedTimestampRef.current > 0
+                            && gameTime < latestNebLoadoutSavedTimestampRef.current
+                        ) {
+                            isStaleNebLoadoutSaved = true;
+                            Logger.info('LogMonitor', `Ignored stale NebLoadoutSaved event (${gameTime} < ${latestNebLoadoutSavedTimestampRef.current})`);
+                        } else {
+                            latestNebLoadoutSavedTimestampRef.current = gameTime;
+                            const wasSavedInGame = Boolean(
+                                payload.bWasSavedInGame === true
+                                || payload.wasSavedInGame === true
+                                || payload.savedInGame === true
+                                || payload.inGame === true
+                                || payloadEnvelopeEvent.bWasSavedInGame === true
+                                || payloadEnvelopeEvent.wasSavedInGame === true
+                                || payloadEnvelopeEvent.savedInGame === true
+                                || payloadEnvelopeEvent.inGame === true
+                            );
+                            if (!telemetryDraftMatchIdRef.current && telemetryLifecycleActiveRef.current) {
+                                createTelemetryDraftIfNeeded(gameTime, currentLoadoutRef.current || null);
+                            }
+                            appendTelemetryLoadoutSave('NebLoadoutSaved', gameTime, wasSavedInGame);
+                        }
+                    }
+
+                    if (name === 'NebCloudSaveRecordSize') {
+                        const recordKey = String(payload.recordKey || payload.record_key || payload.key || '').trim();
+                        if (recordKey && /(loadout|shipselection|gamemodeshipselection|characterloadout)/i.test(recordKey)) {
+                            if (!telemetryDraftMatchIdRef.current && telemetryLifecycleActiveRef.current) {
+                                createTelemetryDraftIfNeeded(gameTime, currentLoadoutRef.current || null);
+                            }
+                            appendTelemetryLoadoutSave('NebCloudSaveRecordSize', gameTime, false);
+                        }
+                    }
+
                     const potentialId = toStringOrEmpty(payload.accountId || payload.userId || payload.playerId || payload.player_id);
                     const potentialName = payload.displayName || payload.playerName || payload.name || payload.playerNameString || payload.callsign;
 
@@ -511,7 +709,14 @@ export const useLogMonitor = (activeUser?: string) => {
                     if (!shouldApplyLoadout && loadoutMarkedLocal) {
                         shouldApplyLoadout = true;
                     }
-                    let loadout: unknown = payload.loadout || payload.Loadout || payload.loadOut || payload.LoadOut ||
+                    if (isStaleNebLoadoutSaved) {
+                        shouldApplyLoadout = false;
+                    }
+                    let loadout: unknown = (
+                        isNebLoadoutSavedEvent && isRecord(nebLoadoutSavedPayloadRaw)
+                            ? nebLoadoutSavedPayloadRaw
+                            : undefined
+                    ) || payload.loadout || payload.Loadout || payload.loadOut || payload.LoadOut ||
                         payload.characterLoadout || payload.character_loadout || payload.playerLoadout || payload.player_loadout ||
                         payload.currentLoadout || payload.current_loadout || payload.loadoutData;
                     if (Array.isArray(loadout)) loadout = loadout[0];
@@ -562,7 +767,7 @@ export const useLogMonitor = (activeUser?: string) => {
                             const raw = String(value).trim();
                             if (!raw) return '';
                             const afterColon = raw.includes(':') ? (raw.split(':').pop() || '') : raw;
-                            return afterColon.replace(/[{}-]/g, '').trim();
+                            return afterColon.replace(/[{}-]/g, '').trim().toUpperCase();
                         };
                         const isStableGuid = (value: string): boolean => /^[A-F0-9]{32}$/i.test(value);
                         const getLoadoutField = (obj: Record<string, unknown>, keys: string[]) => {
@@ -585,7 +790,18 @@ export const useLogMonitor = (activeUser?: string) => {
                             ? (heroRawValue.split(':').pop() || heroRawValue)
                             : heroRawValue;
                         if (heroGuid) {
-                            heroName = uidMappings.players[heroGuid] || knownMappings[heroGuid] || HERO_GUIDS[heroGuid];
+                            const heroGuidUpper = heroGuid.toUpperCase();
+                            const heroGuidLower = heroGuid.toLowerCase();
+                            heroName =
+                                uidMappings.players[heroGuid]
+                                || uidMappings.players[heroGuidUpper]
+                                || uidMappings.players[heroGuidLower]
+                                || knownMappings[heroGuid]
+                                || knownMappings[heroGuidUpper]
+                                || knownMappings[heroGuidLower]
+                                || HERO_GUIDS[heroGuid]
+                                || HERO_GUIDS[heroGuidUpper]
+                                || HERO_GUIDS[heroGuidLower];
 
                             if (!heroName) {
                                 if (heroNameHint) {
@@ -624,7 +840,18 @@ export const useLogMonitor = (activeUser?: string) => {
                         const guidCandidate = normalizeGuid(rawShipGuid || rawShipId);
                         const shipGuid = isStableGuid(guidCandidate) ? guidCandidate : undefined;
                         if (shipGuid) {
-                            shipName = uidMappings.ships[shipGuid] || knownMappings[shipGuid] || SHIP_GUIDS[shipGuid];
+                            const shipGuidUpper = shipGuid.toUpperCase();
+                            const shipGuidLower = shipGuid.toLowerCase();
+                            shipName =
+                                uidMappings.ships[shipGuid]
+                                || uidMappings.ships[shipGuidUpper]
+                                || uidMappings.ships[shipGuidLower]
+                                || knownMappings[shipGuid]
+                                || knownMappings[shipGuidUpper]
+                                || knownMappings[shipGuidLower]
+                                || SHIP_GUIDS[shipGuid]
+                                || SHIP_GUIDS[shipGuidUpper]
+                                || SHIP_GUIDS[shipGuidLower];
 
                             if (!shipName) {
                                 if (shipNameHint) {
@@ -700,10 +927,21 @@ export const useLogMonitor = (activeUser?: string) => {
                             const clean = normalizeGuid(guid);
                             if (!clean) return null;
                             const domain = type === 'Weapon' ? 'weapons' : 'equipment';
-                            const name = uidMappings[domain][clean] || knownMappings[clean] || db[clean];
+                            const cleanUpper = clean.toUpperCase();
+                            const cleanLower = clean.toLowerCase();
+                            const name =
+                                uidMappings[domain][clean]
+                                || uidMappings[domain][cleanUpper]
+                                || uidMappings[domain][cleanLower]
+                                || knownMappings[clean]
+                                || knownMappings[cleanUpper]
+                                || knownMappings[cleanLower]
+                                || db[clean]
+                                || db[cleanUpper]
+                                || db[cleanLower];
                             if (!name) {
                                 if (isStableGuid(clean)) {
-                                    registerUnknownId(clean, type);
+                                    registerUnknownId(cleanUpper, type);
                                 }
                                 return null;
                             }
@@ -765,6 +1003,17 @@ export const useLogMonitor = (activeUser?: string) => {
                             'charEquipment', 'charEquipments', 'charGear', 'charEquipmentSlots', 'charEquipmentLoadout',
                             'crewEquipment', 'crewGear', 'loadoutCharacterEquipment', 'loadoutCharEquipment',
                         ]);
+                        const hasCharacterWeaponSignal = [
+                            'characterWeapons', 'characterWeapon', 'characterWeaponSlots', 'characterWeaponLoadout',
+                            'charWeapons', 'charWeapon', 'charWeaponSlots', 'charWeaponLoadout',
+                            'crewWeapons', 'crewWeaponSlots',
+                            'loadoutCharacterWeapons', 'loadoutCharWeapons',
+                        ].some((key) => getLoadoutField(loadoutData, [key]) !== undefined);
+                        const hasCharacterEquipmentSignal = [
+                            'characterEquipment', 'characterEquipments', 'characterGear', 'characterEquipmentSlots', 'characterEquipmentLoadout',
+                            'charEquipment', 'charEquipments', 'charGear', 'charEquipmentSlots', 'charEquipmentLoadout',
+                            'crewEquipment', 'crewGear', 'loadoutCharacterEquipment', 'loadoutCharEquipment',
+                        ].some((key) => getLoadoutField(loadoutData, [key]) !== undefined);
 
                         const resolvedGuidWeapons = weaponGuidCandidates
                             .map((g) => resolveGuid(g, WEAPON_GUIDS, 'Weapon'))
@@ -794,6 +1043,8 @@ export const useLogMonitor = (activeUser?: string) => {
                             ...resolvedGuidEquipment.filter((name) => PROSPECTOR_EQUIPMENT_SET.has(name)),
                             ...matchedEquipmentNames.filter((name) => PROSPECTOR_EQUIPMENT_SET.has(name)),
                         ])).slice(0, 2);
+                        const shouldApplyCharacterWeapons = hasCharacterWeaponSignal || resolvedProspectorWeapons.length > 0;
+                        const shouldApplyCharacterEquipment = hasCharacterEquipmentSignal || resolvedProspectorEquipment.length > 0;
                         const finalHero = (heroName && !heroName.startsWith('Unknown')) ? heroName : currentLoadoutRef.current?.hero;
                         const finalShip = (shipName && !shipName.startsWith('Unknown')) ? shipName : currentLoadoutRef.current?.ship;
 
@@ -803,10 +1054,10 @@ export const useLogMonitor = (activeUser?: string) => {
                             // Telemetry should not auto-map ship loadout slots.
                             weapons: (currentLoadoutRef.current?.weapons || []),
                             equipment: (currentLoadoutRef.current?.equipment || []),
-                            characterWeapons: resolvedProspectorWeapons.length > 0
+                            characterWeapons: shouldApplyCharacterWeapons
                                 ? resolvedProspectorWeapons
                                 : (currentLoadoutRef.current?.characterWeapons || []),
-                            characterEquipment: resolvedProspectorEquipment.length > 0
+                            characterEquipment: shouldApplyCharacterEquipment
                                 ? resolvedProspectorEquipment
                                 : (currentLoadoutRef.current?.characterEquipment || []),
                         };
@@ -823,21 +1074,19 @@ export const useLogMonitor = (activeUser?: string) => {
                             ...(nextLoadout.characterEquipment || []),
                         ].filter(Boolean));
                         setCurrentLoadout(nextLoadout);
-                        if (nextLoadoutNames.size > 0) {
-                            const existingWeapons = useAppStore.getState().activeWeapons || {};
-                            const nextActiveWeapons: Record<string, number> = { ...existingWeapons };
-                            previousLoadoutNames.forEach((name) => {
-                                if (nextLoadoutNames.has(name)) return;
-                                if ((nextActiveWeapons[name] || 0) <= 1) {
-                                    delete nextActiveWeapons[name];
-                                }
-                            });
-                            nextLoadoutNames.forEach((name) => {
-                                const existingCount = Number(nextActiveWeapons[name] || 0);
-                                nextActiveWeapons[name] = Math.max(1, existingCount);
-                            });
-                            setActiveWeapons(nextActiveWeapons);
-                        }
+                        const existingWeapons = useAppStore.getState().activeWeapons || {};
+                        const nextActiveWeapons: Record<string, number> = { ...existingWeapons };
+                        previousLoadoutNames.forEach((name) => {
+                            if (nextLoadoutNames.has(name)) return;
+                            if ((nextActiveWeapons[name] || 0) <= 1) {
+                                delete nextActiveWeapons[name];
+                            }
+                        });
+                        nextLoadoutNames.forEach((name) => {
+                            const existingCount = Number(nextActiveWeapons[name] || 0);
+                            nextActiveWeapons[name] = Math.max(1, existingCount);
+                        });
+                        setActiveWeapons(nextActiveWeapons);
                         if (!telemetryDraftMatchIdRef.current && telemetryLifecycleActiveRef.current) {
                             createTelemetryDraftIfNeeded(gameTime, nextLoadout);
                         }

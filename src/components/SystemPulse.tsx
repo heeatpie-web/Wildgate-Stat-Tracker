@@ -97,24 +97,6 @@ const SystemPulse: React.FC = () => {
                 : 'Data: unavailable',
         },
         {
-            id: 'vision',
-            label: pendingReviewCount > 0 ? `${pendingReviewCount}` : '',
-            icon: <ScanEye size={12} />,
-            active: pendingReviewCount > 0,
-            color: pendingReviewCount > 0 ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
-            dot: pendingReviewCount > 0 ? 'bg-md-sys-tertiary animate-pulse' : 'bg-md-sys-outline/40',
-            tooltip: `OCR: ${pendingReviewCount > 0 ? `${pendingReviewCount} pending review` : 'Idle'}\nCaptures waiting to be reviewed.`,
-        },
-        {
-            id: 'mission',
-            label: isMatchInProgress ? 'Live' : '',
-            icon: <Timer size={12} />,
-            active: isMatchInProgress,
-            color: isMatchInProgress ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
-            dot: isMatchInProgress ? 'bg-success animate-pulse' : 'bg-md-sys-outline/40',
-            tooltip: `Match: ${isMatchInProgress ? 'In Progress' : 'Idle'}`,
-        },
-        {
             id: 'updates',
             label: updateActivity !== 'idle' ? (updateStatus === 'available' ? 'New' : updateStatus === 'downloaded' ? 'Ready' : '') : '',
             icon: <RefreshCw size={12} className={updateActivity === 'checking' ? 'animate-spin' : ''} />,
@@ -133,12 +115,30 @@ const SystemPulse: React.FC = () => {
                 icon: <Terminal size={12} />,
                 active: connected,
                 color: connected ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
-                dot: connected ? (receiving ? 'bg-success animate-pulse' : 'bg-success') : 'bg-md-sys-outline/40',
+                dot: connected ? (receiving ? 'bg-md-sys-primary animate-pulse' : 'bg-md-sys-primary') : 'bg-md-sys-outline/40',
                 tooltip: connected
                     ? `Session: ${receiving ? 'receiving telemetry' : 'connected'}`
                     : 'Session: not connected',
             };
         })(),
+        {
+            id: 'vision',
+            label: pendingReviewCount > 0 ? `${pendingReviewCount}` : '',
+            icon: <ScanEye size={12} />,
+            active: pendingReviewCount > 0,
+            color: pendingReviewCount > 0 ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
+            dot: pendingReviewCount > 0 ? 'bg-md-sys-tertiary' : 'bg-md-sys-outline/40',
+            tooltip: pendingReviewCount > 0 ? `${pendingReviewCount} pending OCR reviews` : 'Vision: no pending reviews',
+        },
+        {
+            id: 'mission',
+            label: '',
+            icon: <Timer size={12} />,
+            active: isMatchInProgress,
+            color: isMatchInProgress ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
+            dot: isMatchInProgress ? 'bg-md-sys-primary animate-pulse' : 'bg-md-sys-outline/40',
+            tooltip: isMatchInProgress ? 'Mission: match in progress' : 'Mission: no match in progress',
+        },
     ] as const;
 
     return (

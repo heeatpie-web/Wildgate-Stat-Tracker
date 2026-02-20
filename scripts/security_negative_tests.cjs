@@ -102,6 +102,7 @@ const INVOKE_CHANNELS = [
   'capture-game-window', 'ocr-process-capture',
   'gcloud-ocr-scan', 'sync-training-sample',
   'save-screenshot',
+  'pick-roi-image',
   'bundle-artifacts', 'get-match-artifacts', 'rerun-ocr-on-artifact',
   'list-match-artifacts',
   'remove-match-artifact', 'add-match-artifact',

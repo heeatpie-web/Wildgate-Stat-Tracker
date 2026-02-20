@@ -14,6 +14,10 @@ export interface TelemetryArchiveEvent extends Record<string, unknown> {
   EventName?: string;
   eventName?: string;
   type?: string;
+  Payload?: unknown;
+  payload?: unknown;
+  Event?: unknown;
+  event?: unknown;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -62,4 +66,24 @@ export const getTelemetryEventTimestamp = (event: TelemetryArchiveEvent): number
   const value = event.ClientTimestamp ?? event.timestamp ?? event.EventTimestamp;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
+export const getTelemetryEventName = (event: TelemetryArchiveEvent): string => {
+  const name = event.EventName ?? event.eventName ?? event.type;
+  return typeof name === 'string' ? name : '';
+};
+
+export const getTelemetryEventPayload = (event: TelemetryArchiveEvent): Record<string, unknown> => {
+  const candidates: unknown[] = [];
+  if (isRecord(event.Payload)) {
+    candidates.push(event.Payload.event, event.Payload.Event, event.Payload);
+  }
+  if (isRecord(event.payload)) {
+    candidates.push(event.payload.event, event.payload.Event, event.payload);
+  }
+  candidates.push(event.event, event.Event);
+  for (const candidate of candidates) {
+    if (isRecord(candidate)) return candidate;
+  }
+  return {};
 };

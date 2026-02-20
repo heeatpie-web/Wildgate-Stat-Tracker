@@ -1,9 +1,11 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Save, Trash2, Download, Upload, Users, UserMinus, UserCheck, Eye, ChevronDown, FileJson, X } from 'lucide-react';
+import { Save, Trash2, Download, Upload, Users, UserMinus, UserCheck, Eye, ChevronDown, FileJson, X, Pencil } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
 import { PlayerRole } from '../store/slices/createMappingSlice';
 import Logger from '../utils/logger';
+
+type MappingDomain = 'players' | 'ships' | 'weapons' | 'equipment';
 
 // Role badge component
 const RoleBadge: React.FC<{ role: PlayerRole }> = ({ role }) => {
@@ -25,10 +27,12 @@ export const IdMapper: React.FC = () => {
     const {
         detectedUnknowns,
         knownMappings,
+        uidMappings,
         playerProfiles,
         addMapping,
         setUidMapping,
         removeMapping,
+        removeUidMapping,
         importMappings,
         getPlayerRole,
         getMostFrequentOpponents,
@@ -36,6 +40,7 @@ export const IdMapper: React.FC = () => {
     } = useAppStore();
     const { setToast } = useUIState();
     const [nameInputs, setNameInputs] = useState<Record<string, string>>({});
+    const [editingKnownKey, setEditingKnownKey] = useState<string | null>(null);
     const [jsonInput, setJsonInput] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState<'unknowns' | 'known' | 'relationships'>(() => (
@@ -43,9 +48,61 @@ export const IdMapper: React.FC = () => {
     ));
     const previousUnknownCountRef = useRef(Object.keys(detectedUnknowns || {}).length);
 
+    const resolveUnknownDomain = (id: string, rawType?: string): MappingDomain => {
+        const normalizedType = String(rawType || '').trim().toLowerCase();
+        if (normalizedType.includes('hero') || normalizedType.includes('player') || normalizedType.includes('pilot')) {
+            return 'players';
+        }
+        if (normalizedType.includes('ship')) {
+            return 'ships';
+        }
+        if (normalizedType.includes('weapon') || normalizedType.includes('tertiary')) {
+            return 'weapons';
+        }
+        if (normalizedType.includes('equipment') || normalizedType.includes('gear') || normalizedType.includes('utility')) {
+            return 'equipment';
+        }
+
+        const normalizedId = String(id || '').trim().toLowerCase();
+        if (normalizedId.startsWith('ship')) return 'ships';
+        if (normalizedId.startsWith('wpn') || normalizedId.startsWith('weapon') || normalizedId.startsWith('cw')) return 'weapons';
+        if (normalizedId.startsWith('equip') || normalizedId.startsWith('gear') || normalizedId.startsWith('ce')) return 'equipment';
+
+        return 'players';
+    };
+
+    const applyMappingByDomain = (domain: MappingDomain, id: string, name: string) => {
+        if (domain === 'players') {
+            addMapping(id, name);
+            return;
+        }
+        setUidMapping(domain, id, name);
+    };
+
     // Computed relationship data
     const topOpponents = useMemo(() => getMostFrequentOpponents(5), [playerProfiles]);
     const topTeammates = useMemo(() => getMostFrequentTeammates(5), [playerProfiles]);
+    const knownEntries = useMemo(() => {
+        const entries: Array<{ key: string; id: string; name: string; domain: 'players' | 'ships' | 'weapons' | 'equipment' }> = [];
+        const pushDomain = (domain: 'players' | 'ships' | 'weapons' | 'equipment', mappings: Record<string, string>) => {
+            Object.entries(mappings || {}).forEach(([id, name]) => {
+                if (!name) return;
+                entries.push({ key: `${domain}:${id}`, id, name, domain });
+            });
+        };
+        pushDomain('players', uidMappings?.players || {});
+        pushDomain('ships', uidMappings?.ships || {});
+        pushDomain('weapons', uidMappings?.weapons || {});
+        pushDomain('equipment', uidMappings?.equipment || {});
+
+        // Preserve legacy knownMappings player entries not represented in uidMappings.players.
+        Object.entries(knownMappings || {}).forEach(([id, name]) => {
+            if (!name) return;
+            if ((uidMappings?.players || {})[id]) return;
+            entries.push({ key: `players:${id}`, id, name, domain: 'players' });
+        });
+        return entries;
+    }, [knownMappings, uidMappings]);
 
     useEffect(() => {
         const unknownCount = Object.keys(detectedUnknowns || {}).length;
@@ -59,24 +116,28 @@ export const IdMapper: React.FC = () => {
         const name = nameInputs[id];
         if (name && name.trim()) {
             const trimmed = name.trim();
-            const unknownType = detectedUnknowns[id]?.type;
-            if (unknownType === 'Hero') {
-                setUidMapping('players', id, trimmed);
-            } else if (unknownType === 'Ship') {
-                setUidMapping('ships', id, trimmed);
-            } else if (unknownType === 'Weapon') {
-                setUidMapping('weapons', id, trimmed);
-            } else if (unknownType === 'Equipment') {
-                setUidMapping('equipment', id, trimmed);
-            } else {
-                addMapping(id, trimmed);
-            }
+            const domain = resolveUnknownDomain(id, detectedUnknowns[id]?.type);
+            applyMappingByDomain(domain, id, trimmed);
             const newInputs = { ...nameInputs };
             delete newInputs[id];
             setNameInputs(newInputs);
             setToast({ message: "Mapping Saved", type: 'success' });
-            Logger.info('IdMapper', `Saved mapping: ${id} -> ${trimmed}`);
+            Logger.info('IdMapper', `Saved mapping: ${domain}:${id} -> ${trimmed}`);
         }
+    };
+
+    const handleKnownSave = (entry: { key: string; id: string; name: string; domain: 'players' | 'ships' | 'weapons' | 'equipment' }) => {
+        const nextName = (nameInputs[entry.key] || '').trim();
+        if (!nextName) return;
+        applyMappingByDomain(entry.domain, entry.id, nextName);
+        setNameInputs((prev) => {
+            const updated = { ...prev };
+            delete updated[entry.key];
+            return updated;
+        });
+        setEditingKnownKey(null);
+        setToast({ message: "Mapping Updated", type: 'success' });
+        Logger.info('IdMapper', `Updated mapping: ${entry.domain}:${entry.id} -> ${nextName}`);
     };
 
     const handleExport = () => {
@@ -117,12 +178,26 @@ export const IdMapper: React.FC = () => {
     };
 
     const formatLastSeen = (timestamp: number) => {
+        if (!Number.isFinite(timestamp) || timestamp <= 0) return 'Unknown';
         const diff = Date.now() - timestamp;
+        if (diff < 0) return '0s ago';
+        const seconds = Math.floor(diff / 1000);
+        if (seconds < 60) return `${seconds}s ago`;
         const mins = Math.floor(diff / 60000);
-        if (mins < 60) return `${mins}m ago`;
+        const secRemainder = Math.floor((diff % 60000) / 1000);
+        if (mins < 60) return `${mins}m ${secRemainder}s ago`;
         const hours = Math.floor(mins / 60);
-        if (hours < 24) return `${hours}h ago`;
-        return new Date(timestamp).toLocaleDateString();
+        if (hours < 24) {
+            const minRemainder = mins % 60;
+            return `${hours}h ${minRemainder}m ${secRemainder}s ago`;
+        }
+        return new Date(timestamp).toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            second: '2-digit'
+        });
     };
 
     return (
@@ -169,7 +244,7 @@ export const IdMapper: React.FC = () => {
             <div className="flex gap-1 md3-surface-high p-1 rounded-lg">
                 {[
                     { id: 'unknowns', label: 'Unknowns', count: Object.keys(detectedUnknowns).length },
-                    { id: 'known', label: 'Known', count: Object.keys(knownMappings).length },
+                    { id: 'known', label: 'Known', count: knownEntries.length },
                     { id: 'relationships', label: 'Relationships', count: Object.keys(playerProfiles).length }
                 ].map(tab => (
                     <button
@@ -263,41 +338,119 @@ export const IdMapper: React.FC = () => {
                 {/* Known Tab */}
                 {activeTab === 'known' && (
                     <div className="md3-card rounded-lg p-2 max-h-60 overflow-y-auto space-y-1">
-                        {Object.entries(knownMappings)
-                            .filter(([id, name]) =>
+                        {knownEntries
+                            .filter((entry) =>
                                 !searchTerm ||
-                                name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                id.toLowerCase().includes(searchTerm.toLowerCase())
+                                entry.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                entry.id.toLowerCase().includes(searchTerm.toLowerCase())
                             )
                             .length === 0 ? (
                             <div className="text-center p-8 text-label-sm opacity-40">No mappings match '{searchTerm}'</div>
                         ) : (
-                            Object.entries(knownMappings)
-                                .filter(([id, name]) =>
+                            knownEntries
+                                .filter((entry) =>
                                     !searchTerm ||
-                                    name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                    id.toLowerCase().includes(searchTerm.toLowerCase())
+                                    entry.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                    entry.id.toLowerCase().includes(searchTerm.toLowerCase())
                                 )
-                                .map(([id, name]) => {
-                                    const profile = playerProfiles[id];
-                                    const role = getPlayerRole(id);
+                                .map((entry) => {
+                                    const profile = playerProfiles[entry.id];
+                                    const role = getPlayerRole(entry.id);
+                                    const isEditing = editingKnownKey === entry.key;
+                                    const editValue = nameInputs[entry.key] ?? '';
                                     return (
-                                        <div key={id} className="flex items-center justify-between md3-surface-high/50 px-3 py-2 rounded text-label-sm group">
-                                            <div className="flex items-center gap-3 overflow-hidden">
-                                                <span className="font-bold text-md-sys-primary truncate">{name}</span>
-                                                {role !== 'unknown' && <RoleBadge role={role} />}
-                                                {profile && (
-                                                    <span className="text-label-sm opacity-40">
-                                                        {profile.sightings}x seen
+                                        <div key={entry.key} className="flex items-center justify-between gap-2 md3-surface-high/50 px-3 py-2 rounded text-label-sm group">
+                                            <div className="flex items-center gap-3 overflow-hidden min-w-0">
+                                                {isEditing ? (
+                                                    <input
+                                                        type="text"
+                                                        value={editValue}
+                                                        onChange={(e) => setNameInputs((prev) => ({ ...prev, [entry.key]: e.target.value }))}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') handleKnownSave(entry);
+                                                            if (e.key === 'Escape') {
+                                                                setEditingKnownKey(null);
+                                                                setNameInputs((prev) => {
+                                                                    const updated = { ...prev };
+                                                                    delete updated[entry.key];
+                                                                    return updated;
+                                                                });
+                                                            }
+                                                        }}
+                                                        autoFocus
+                                                        className="md3-textfield md3-textfield--outlined w-44 text-label-sm"
+                                                        aria-label={`Edit mapping name for ${entry.id}`}
+                                                    />
+                                                ) : (
+                                                    <span className="font-bold text-md-sys-primary truncate">{entry.name}</span>
+                                                )}
+                                                {entry.domain === 'players' && role !== 'unknown' && <RoleBadge role={role} />}
+                                                {entry.domain !== 'players' && (
+                                                    <span className="px-1.5 py-0.5 rounded text-label-xs font-bold uppercase md3-surface-high text-md-sys-on-surface/50">
+                                                        {entry.domain}
                                                     </span>
                                                 )}
+                                                {entry.domain === 'players' && profile && (
+                                                    <>
+                                                        <span className="text-label-sm opacity-40">{profile.sightings}x seen</span>
+                                                        <span className="text-label-sm opacity-35">{formatLastSeen(profile.lastSeen)}</span>
+                                                    </>
+                                                )}
                                             </div>
-                                            <button
-                                                onClick={() => removeMapping(id)}
-                                                className="opacity-0 group-hover:opacity-100 p-1 text-danger hover:bg-danger/10 rounded transition-all"
-                                            >
-                                                <Trash2 size={12} />
-                                            </button>
+                                            <div className="flex items-center gap-1 opacity-100">
+                                                {isEditing ? (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleKnownSave(entry)}
+                                                            disabled={!editValue.trim() || editValue.trim() === entry.name}
+                                                            className="p-1 text-success hover:bg-success/10 rounded disabled:opacity-disabled"
+                                                            aria-label={`Save mapping for ${entry.id}`}
+                                                        >
+                                                            <Save size={12} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingKnownKey(null);
+                                                                setNameInputs((prev) => {
+                                                                    const updated = { ...prev };
+                                                                    delete updated[entry.key];
+                                                                    return updated;
+                                                                });
+                                                            }}
+                                                            className="p-1 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/10 rounded"
+                                                            aria-label={`Cancel editing mapping for ${entry.id}`}
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingKnownKey(entry.key);
+                                                                setNameInputs((prev) => ({ ...prev, [entry.key]: entry.name }));
+                                                            }}
+                                                            className="p-1 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/10 rounded transition-colors"
+                                                            aria-label={`Edit mapping for ${entry.id}`}
+                                                        >
+                                                            <Pencil size={12} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (entry.domain === 'players') {
+                                                                    removeMapping(entry.id);
+                                                                    return;
+                                                                }
+                                                                removeUidMapping(entry.domain, entry.id);
+                                                            }}
+                                                            className="p-1 text-danger hover:bg-danger/10 rounded transition-colors"
+                                                            aria-label={`Delete mapping for ${entry.id}`}
+                                                        >
+                                                            <Trash2 size={12} />
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })

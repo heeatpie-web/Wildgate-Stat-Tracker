@@ -29,6 +29,12 @@ vi.mock('../../providers/GameDataProvider', () => ({
 describe('SquadronPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    gameData.activeShip = 'Hunter';
+    gameData.shipSource = 'telemetry';
+    gameData.telemetryDetectedShip = 'Hunter (2 Player)';
+    gameData.activeHero = 'Adrian';
+    gameData.heroSource = 'telemetry';
+    gameData.telemetryDetectedHero = 'Adrian';
   });
 
   it('shows auto-selected weapon and equipment indicators in standard mode', () => {
@@ -47,5 +53,12 @@ describe('SquadronPanel', () => {
     expect(screen.getByText('Weapons')).toBeInTheDocument();
     expect(screen.getByText('Equipment')).toBeInTheDocument();
     expect(screen.getAllByText('(auto)')).toHaveLength(2);
+  });
+
+  it('highlights ship selection when telemetry and active ship use equivalent labels', () => {
+    render(<SquadronPanel />);
+
+    const hunterButton = screen.getByRole('button', { name: 'Hunter' });
+    expect(hunterButton.className).toContain('border-md-sys-primary/45');
   });
 });

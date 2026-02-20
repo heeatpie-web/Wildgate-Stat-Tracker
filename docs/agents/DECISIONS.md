@@ -2057,3 +2057,380 @@ Rule:
   - `electron/helpers/artifactRelinker.cjs`
 - Revisit trigger/expiry:
   - Revisit if artifact ingestion path is fully deterministic and scoped repair becomes redundant.
+
+- Type: smartcapture-detail-two-lane-layout
+- Decision: recompose Smart Captures detail panel into a single continuous editor lane and a dedicated capture-intelligence rail.
+- Date: 2026-02-19
+- Options considered:
+  - Keep alternating multi-block left/right layout.
+  - Consolidate editing sections into one lane and screenshots/OCR/telemetry into one rail.
+- Rationale:
+  - The alternating layout fragmented user flow and made detail editing harder to scan.
+  - A two-lane hierarchy aligns with UI masterplan guidance on obvious next action and fast scanning under pressure.
+- Impacted files/artifacts:
+  - `src/components/SmartCapturesPanel.tsx`
+  - `src/index.css`
+- Revisit trigger/expiry:
+  - Revisit if Smart Captures detail gains new workflow phases requiring a third lane or explicit tab partitioning.
+
+- Type: smartcapture-summary-icon-readability
+- Decision: reformat Smart Captures queue/detail top bars to use larger icon-led chips/actions and clearer grouped hierarchy, while keeping action behavior unchanged.
+- Date: 2026-02-19
+- Options considered:
+  - Keep compact text-heavy controls and minimal sticky strip styling.
+  - Increase visual affordance with grouped chips/buttons and dedicated surfaced queue-selection strip.
+- Rationale:
+  - Reported overlap and tiny-control density reduced scanability and increased operator friction.
+  - Grouped iconography clarifies intent for key controls (`Re-run`, `History`, `Wizard`, `Delete`, `Win/Loss/Draw`) under time pressure.
+- Impacted files/artifacts:
+  - `src/components/SmartCapturesPanel.tsx`
+  - `src/index.css`
+- Revisit trigger/expiry:
+  - Revisit if summary bar accumulates additional controls and requires tabbed/action-menu compression.
+
+- Type: smartcapture-day-scope-default
+- Decision: default Smart Captures left queue to a single selected day using a date selector; choose today's date when available, otherwise automatically fall back to the most recent available match day.
+- Date: 2026-02-19
+- Options considered:
+  - Always force "today", even when empty.
+  - Always force latest day with data.
+  - Prefer today, fallback to latest available day.
+- Rationale:
+  - Matches user request for day-limited queue behavior.
+  - Avoids a blank-first-load experience when no matches exist for the current day.
+  - Keeps behavior deterministic and easy to understand.
+- Impacted files/artifacts:
+  - `src/components/SmartCapturesPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit if product requirements add explicit date-range presets or calendar-based filtering.
+
+- Type: smartcapture-footer-status-canonicalization
+- Decision: drive queue footer fallback status text from `getStatusMeta(qs.key).label` instead of hard-coded pending/resolved branching.
+- Date: 2026-02-19
+- Options considered:
+  - Keep hard-coded `Resolved`/`Pending` footer fallback labels.
+  - Reuse canonical queue-status metadata labels for footer fallback text.
+- Rationale:
+  - Hard-coded pending fallback could drift from resolved UI affordances and create contradictory row state cues.
+  - Canonical status metadata ensures one source-of-truth label mapping across chip + footer surfaces.
+- Impacted files/artifacts:
+  - `src/components/smart-captures/QueueItemRichPreview.tsx`
+  - `src/components/smart-captures/QueueItemRichPreview.test.tsx`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit if queue footer is redesigned to remove status text duplication entirely.
+
+- Type: telemetry-loadout-clear-signal-priority
+- Decision: treat explicit telemetry character-slot fields (including empty arrays/null) as authoritative clear signals while still allowing generic payload keys to populate character loadout when resolved names exist.
+- Date: 2026-02-19
+- Options considered:
+  - Preserve previous fallback-to-last-loadout behavior for empty slot payloads.
+  - Always overwrite character loadout from telemetry candidates regardless of slot-key presence.
+  - Use slot-key presence as clear signal and resolved generic candidates as populate signal.
+- Rationale:
+  - Fixes stale telemetry-selected weapon/equipment counts that could exceed available slots.
+  - Avoids regression where nested generic telemetry payloads stop populating character loadout.
+- Impacted files/artifacts:
+  - `src/hooks/useLogMonitor.ts`
+  - `src/hooks/__tests__/useLogMonitor.test.ts`
+- Revisit trigger/expiry:
+  - Revisit if telemetry schema introduces explicit per-slot validity markers beyond key presence.
+
+- Type: id-mapper-domain-routing-and-unknown-clear
+- Decision: route unknown saves via resilient type/domain inference and ensure `setUidMapping` removes matching unknown entries and syncs player profile names for player-domain mappings.
+- Date: 2026-02-19
+- Options considered:
+  - Keep strict type-string branching in `IdMapper` with legacy fallback to `addMapping` only.
+  - Add tolerant type/domain resolver and store-level unknown cleanup on UID mapping writes.
+- Rationale:
+  - Addresses intermittent "saved but not appearing/clearing consistently" mapper behavior.
+  - Reduces mapping-domain drift when unknown type labels vary by case/wording.
+- Impacted files/artifacts:
+  - `src/components/IdMapper.tsx`
+  - `src/store/slices/createMappingSlice.ts`
+  - `src/store/slices/__tests__/createMappingSlice.test.ts`
+- Revisit trigger/expiry:
+  - Revisit if unknown ID records gain an explicit persisted domain field that makes inference unnecessary.
+
+- Type: smartcapture-team-lock-removal
+- Decision: remove Team Lock control and associated OCR-team merge gating from Smart Captures panel flow.
+- Date: 2026-02-19
+- Options considered:
+  - Keep lock toggle hidden but still honor persisted lock behavior.
+  - Remove UI toggle and lock gating from Smart Captures OCR apply path.
+- Rationale:
+  - User explicitly requested lock option removal and unbundled locked behavior was causing inconsistent merge expectations.
+  - Simplifies OCR team application to a single deterministic merge path.
+- Impacted files/artifacts:
+  - `src/components/SmartCapturesPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit only if team-color locking returns as a validated product requirement with clearer defaults and UX framing.
+
+- Type: smartcapture-color-and-menu-visibility-calibration
+- Decision: increase Smart Captures gradient/chip visibility and theme saturation modestly, and add explicit overflow-menu popover styles to prevent menu-item text overlap.
+- Date: 2026-02-19
+- Options considered:
+  - Keep current low-saturation token and implicit popover styling.
+  - Return to high-vibrance token set.
+  - Apply moderate saturation/contrast increase with explicit menu-popover CSS.
+- Rationale:
+  - Resolves reported over-desaturation and weak glass gradients while avoiding a full return to punchy colors.
+  - Fixes concrete "More menu text intersects itself" defect by defining missing layout styles.
+- Impacted files/artifacts:
+  - `src/index.css`
+  - `src/components/smart-captures/QueueItemRichPreview.tsx`
+  - `src/components/smart-captures/QueueItemRichPreview.test.tsx`
+- Revisit trigger/expiry:
+  - Revisit if upcoming theme-system refactor introduces centralized token scaling controls.
+
+- Type: gemini-integrity-audit-scope
+- Decision: interpret "make sure Gemini did not mess anything up" as a verification-only integrity audit (no feature/code rewrites unless a hard blocker is discovered).
+- Date: 2026-02-19
+- Options considered:
+  - Run checks + report findings only.
+  - Start proactively modifying suspicious code paths before validation evidence.
+- Rationale:
+  - User asked for assurance, not new implementation.
+  - Verification-first minimizes risk of introducing additional drift in an already dirty worktree.
+- Impacted files/artifacts:
+  - `docs/agents/00_INTAKE.md`
+  - `docs/agents/01_PLAN.md`
+  - `docs/agents/02_EXECUTION_LOG.md`
+  - `docs/agents/03_VALIDATION.md`
+  - `docs/agents/04_HANDOFF.md`
+  - `docs/agents/DECISIONS.md`
+- Revisit trigger/expiry:
+  - Revisit only if validation uncovers a deterministic breakage requiring a surgical fix.
+
+- Type: ocr-debug-gate-removal
+- Decision: remove `devMode` guard from OCR Debug navigation/render/preload paths while keeping telemetry retention policy unchanged.
+- Date: 2026-02-19
+- Options considered:
+  - Remove both gate and retention changes.
+  - Remove gate only and preserve retention constants.
+- Rationale:
+  - User explicitly requested gate removal and retention preservation.
+  - Minimal patch avoids introducing unrelated behavior churn.
+- Impacted files/artifacts:
+  - `src/components/Sidebar.tsx`
+  - `src/App.tsx`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit only if OCR Debug access should be role/permission-gated again by product policy.
+
+- Type: smartcapture-selected-intensity-calibration
+- Decision: replace full-primary selected queue row fills with lower-intensity primary tints and lighter ring/shadow treatment.
+- Date: 2026-02-19
+- Options considered:
+  - Keep full-primary selected fill.
+  - Remove most selected styling.
+  - Keep selection indicators but reduce saturation/contrast using tinted backgrounds and softer rings.
+- Rationale:
+  - User reported selected state as overly intense.
+  - Tinted selection preserves scanability while reducing visual fatigue.
+- Impacted files/artifacts:
+  - `src/components/smart-captures/QueueItemRichPreview.tsx`
+- Revisit trigger/expiry:
+  - Revisit if contrast/accessibility checks indicate insufficient selected-state differentiation.
+
+- Type: smartcapture-telemetry-chip-dedupe
+- Decision: treat `Telemetry Draft` subtype as the canonical telemetry chip label and suppress duplicate subtype chip display for that case.
+- Date: 2026-02-19
+- Options considered:
+  - Keep both chips (`Telemetry attached` + subtype).
+  - Hide telemetry chip for draft subtype.
+  - Use one telemetry chip for draft matches and keep subtype chips for all other non-combat subtypes.
+- Rationale:
+  - User-reported duplication creates noisy/contradictory labeling.
+  - Single canonical chip preserves context while reducing visual clutter.
+- Impacted files/artifacts:
+  - `src/components/SmartCapturesPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit if subtype taxonomy changes or telemetry chip semantics are redesigned.
+
+- Type: history-single-scroll-owner
+- Decision: assign vertical scroll ownership to the App History view wrapper and remove vertical overflow handling from `HistoryTable` root.
+- Date: 2026-02-19
+- Options considered:
+  - Keep nested scroll containers.
+  - Make `HistoryTable` root sole scroll owner.
+  - Make App History wrapper sole scroll owner.
+- Rationale:
+  - Nested scroll ownership can produce non-responsive scrollbar/wheel interactions.
+  - Aligns History with other views that scroll at wrapper level.
+- Impacted files/artifacts:
+  - `src/App.tsx`
+  - `src/components/HistoryTable.tsx`
+- Revisit trigger/expiry:
+  - Revisit if future virtualized-history implementation requires table-level scroll ownership.
+
+- Type: smartcapture-ocr-box-tool-surface
+- Decision: expose OCR ROI box adjustment directly in Smart Captures Tools and remove `devMode` gating for the panelâ€™s OCR tools card.
+- Date: 2026-02-19
+- Options considered:
+  - Keep ROI adjustment only in Settings/OCR Debug.
+  - Keep OCR tools in Smart Captures but gated by `devMode`.
+  - Surface direct ROI action in Smart Captures Tools for all users.
+- Rationale:
+  - User workflow expectation is to tune OCR capture boxes from the Smart Captures tools context.
+  - Existing dev-only gating in this panel created an inconsistent access path after broader gate removal.
+- Impacted files/artifacts:
+  - `src/components/SmartCapturesPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit if OCR tooling access is later re-scoped behind explicit role/permission controls.
+
+- Date: 2026-02-19
+- Type: architecture
+- Decision: TELEMETRY-CONSISTENCY-LOADOUT-020 uses additive `Match.telemetryConsistency` metadata (optional fields only) and preserves all existing match/submission contracts.
+- Options considered:
+  - Replace existing match fields with telemetry-derived authoritative values.
+  - Add optional metadata/checks and keep existing fields authoritative.
+- Rationale: user requested non-destructive warning/chip behavior and no silent overwrites.
+- Impacted files/artifacts:
+  - `src/types.ts`
+  - `src/utils/telemetryConsistency.ts`
+  - `src/hooks/useMatchSubmission.ts`
+  - `src/components/SmartCapturesPanel.tsx`
+- Revisit trigger/expiry:
+  - Revisit only if user explicitly requests auto-correct mode.
+
+- Date: 2026-02-19
+- Type: risk
+- Decision: Duration mismatch tolerance default is fixed to 45 seconds.
+- Options considered:
+  - 30 seconds (strict)
+  - 45 seconds (balanced)
+  - 60 seconds (loose)
+- Rationale: balanced signal/noise for telemetry vs manual duration entry drift.
+- Impacted files/artifacts:
+  - `src/utils/telemetryConsistency.ts`
+  - `src/hooks/useMatchSubmission.ts`
+- Revisit trigger/expiry:
+  - Revisit if mismatch false-positive reports increase in post-release smoke.
+
+- Date: 2026-02-19
+- Type: architecture
+- Decision: Match pool mode inference is hybrid (strict known-map first, heuristic keyword fallback with source tagging).
+- Options considered:
+  - Strict map only.
+  - Heuristic only.
+  - Hybrid strict+heuristic.
+- Rationale: maximize mode detection recall without losing explicit mapping determinism.
+- Impacted files/artifacts:
+  - `src/utils/telemetryConsistency.ts`
+  - `src/hooks/useLogMonitor.ts`
+- Revisit trigger/expiry:
+  - Revisit when authoritative pool-name inventory is available.
+
+- Date: 2026-02-19
+- Type: scope
+- Decision: Teammate expectation derives from `playerIds` first; mode default is fallback only when `playerIds` are unavailable.
+- Options considered:
+  - Mode-only expectation.
+  - Require mode/playerIds agreement.
+  - Prefer playerIds then fallback.
+- Rationale: `playerIds` is the most concrete telemetry signal; mode fallback should be secondary.
+- Impacted files/artifacts:
+  - `src/utils/telemetryConsistency.ts`
+  - `src/hooks/useLogMonitor.ts`
+  - `src/hooks/useMatchSubmission.ts`
+- Revisit trigger/expiry:
+  - Revisit if matchmaker payload schema changes.
+## TEST-HARDEN-SMOKE-024 - Decisions (2026-02-20)
+- Decision: add dedicated utility test files instead of relying only on hook/component indirect coverage.
+  - Rationale: `telemetryConsistency` and `telemetryArchive` contain deterministic parsing logic with multiple branch conditions that are safer to validate directly.
+- Decision: include one focused `useLogMonitor` and one focused `useMatchSubmission` regression extension beyond utility tests.
+  - Rationale: utility-only coverage would miss integration handoff points where consistency metadata is attached to draft/final match objects.
+- Decision: keep scope strictly test-only.
+  - Rationale: user requested “add all necessary test files and rerun” with zero behavior drift tolerance.
+## ROI-FULLWIDTH-025 - Decisions (2026-02-20)
+- Decision: override ROI modal sizing via dedicated `.md3-dialog--roi-editor` class instead of ad-hoc inline styles.
+  - Rationale: keeps behavior explicit/reusable and avoids relying on utility precedence against base `.md3-dialog`.
+- Decision: keep patch scoped to modal shell/padding only.
+  - Rationale: user issue is width constraint, so avoid touching OCR/editor interaction logic.
+
+- Type: roi-image-preview-reliability
+- Decision: switch ROI upload trigger to explicit button + input-ref click and prefer object URL preview with FileReader fallback.
+- Date: 2026-02-20
+- Options considered:
+  - keep hidden input inside label with FileReader-only path.
+  - use explicit trigger and objectURL-first preview with fallback.
+- Rationale:
+  - hidden-input/label flows can fail silently in overlay/modal contexts.
+  - object URL preview is lower-latency and avoids large base64 conversion; fallback keeps compatibility.
+- Impacted files/artifacts:
+  - `src/components/OcrRegionEditorModal.tsx`
+  - `src/components/OcrRegionEditorModal.test.tsx`
+  - `docs/agents/03_VALIDATION.md`
+- Revisit trigger/expiry:
+  - Revisit only if platform-specific image decode behavior shows blob/data-url incompatibility beyond current fallback.
+
+- Type: roi-image-preview-error-visibility
+- Decision: surface inline ROI upload error text instead of silently failing when file read/decode fails.
+- Date: 2026-02-20
+- Options considered:
+  - keep silent failure and rely on console errors.
+  - show inline alert in ROI controls.
+- Rationale:
+  - user-facing failure without feedback blocks ROI configuration and obscures recovery path.
+- Impacted files/artifacts:
+  - `src/components/OcrRegionEditorModal.tsx`
+  - `src/components/OcrRegionEditorModal.test.tsx`
+- Revisit trigger/expiry:
+  - Revisit if unified global error/banner treatment is introduced for modal-local upload failures.
+
+- Type: roi-picker-default-artifacts-path
+- Decision: implement dedicated `pick-roi-image` IPC to open native dialog at artifacts root instead of relying on browser file input.
+- Date: 2026-02-20
+- Options considered:
+  - keep browser file input only.
+  - add native picker IPC with default artifacts path and keep file-input fallback.
+- Rationale:
+  - browser input cannot force initial directory; native dialog can.
+  - fallback keeps behavior functional in non-electron test/web contexts.
+- Impacted files/artifacts:
+  - `electron/preload.cjs`
+  - `electron/main.cjs`
+  - `src/components/OcrRegionEditorModal.tsx`
+  - `src/components/OcrRegionEditorModal.test.tsx`
+- Revisit trigger/expiry:
+  - Revisit if ROI image selection needs multi-file import or path-only return semantics.
+
+- Type: roi-picker-ipc-allowlist-parity
+- Decision: add `pick-roi-image` to `scripts/security_negative_tests.cjs` invoke list mirror.
+- Date: 2026-02-20
+- Options considered:
+  - leave security test mirror stale.
+  - keep mirrored list aligned with preload channel list.
+- Rationale:
+  - prevents drift between allowlist source and security regression fixture.
+- Impacted files/artifacts:
+  - `scripts/security_negative_tests.cjs`
+- Revisit trigger/expiry:
+  - Revisit if security test harness changes to read channel list dynamically from preload.
+- Type: roi-picker-parent-window-binding
+- Decision: bind `pick-roi-image` dialog to `BrowserWindow.fromWebContents(event.sender)` with global fallback.
+- Date: 2026-02-20
+- Options considered:
+  - always use global `win`.
+  - bind to sender window first.
+- Rationale:
+  - prevents dialog appearing on wrong/inactive window in multi-window states.
+- Impacted files/artifacts:
+  - `electron/main.cjs`
+- Revisit trigger/expiry:
+  - Revisit if window ownership model changes and dialog routing is centralized.
+
+- Type: roi-picker-explicit-browser-fallback
+- Decision: add explicit `Use Browser Picker` control when ROI picker errors are present.
+- Date: 2026-02-20
+- Options considered:
+  - keep implicit async fallback click only.
+  - expose direct user-triggered fallback button.
+- Rationale:
+  - guarantees a synchronous, user-gesture fallback path even when native picker path is blocked/unavailable.
+- Impacted files/artifacts:
+  - `src/components/OcrRegionEditorModal.tsx`
+  - `src/components/OcrRegionEditorModal.test.tsx`
+- Revisit trigger/expiry:
+  - Revisit if native picker reliability is fully deterministic across all runtime modes and fallback can be simplified.

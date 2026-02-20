@@ -508,3 +508,126 @@
 4. COMPLETED - Apply ROI editor large-viewport/modal z-layer fix and Players internal fill/stretch fix.
 5. COMPLETED - Update targeted tests and run validation (eslint touched files, targeted vitest, typecheck).
 6. COMPLETED - Update execution/validation/handoff/decision artifacts and release temporary locks.
+
+## Current Task Plan (SMARTCAPTURE-DETAIL-LAYOUT-012)
+1. COMPLETED - Audit current Smart Captures detail hierarchy and isolate layout flow issues causing poor scanability.
+2. COMPLETED - Refactor detail panel JSX into a clear two-lane structure (editor lane + media/intelligence rail) without behavior changes.
+3. COMPLETED - Adjust Smart Captures detail CSS/layout classes for cleaner spacing/sticky behavior and responsive consistency.
+4. COMPLETED - Run focused validation (`eslint` touched UI files + `typecheck`) and fix any regressions.
+5. COMPLETED - Update execution/validation/handoff/decisions logs and release temporary locks.
+
+## Current Task Plan (SMARTCAPTURE-DETAIL-ICONS-013)
+1. COMPLETED - Patch queue sticky selected strip styling to remove overlap with queue status badges.
+2. COMPLETED - Reformat Smart Captures detail summary bar metadata chips and action controls into larger icon-led groups.
+3. COMPLETED - Reformat result selector (`Win/Loss/Draw`) and lane label visuals for readability.
+4. COMPLETED - Run focused validation (`eslint` touched files + `typecheck`) and resolve regressions.
+5. COMPLETED - Update execution/validation/handoff/decisions artifacts and release temporary locks.
+
+## Current Task Plan (SMARTCAPTURE-HEADER-THEME-DAYFILTER-014)
+1. COMPLETED - Record intake/plan updates and claim temporary locks for Smart Captures header/date-filter/theme pass.
+2. COMPLETED - Refactor Smart Captures detail header hierarchy in `src/components/SmartCapturesPanel.tsx` to prioritize status + primary actions and de-emphasize secondary metadata.
+3. COMPLETED - Add day-scoped queue filtering and day selector control in the left Smart Captures pane.
+4. COMPLETED - Tune `src/index.css` color tokens to softer theme-adaptive accents (including Smart Captures/header supporting styles).
+5. COMPLETED - Run focused validation (`eslint` touched TSX + `typecheck`) and update execution/validation/handoff/decision/lock artifacts.
+
+## Current Task Plan (SMARTCAPTURE-ACTION-COMPRESSION-QUEUE-CLEANUP-015)
+1. IN_PROGRESS - Record intake/plan updates and claim temporary locks for compact-actions + queue-cleanup follow-up.
+2. PENDING - Compress Smart Captures detail secondary actions into a compact overflow menu while preserving all existing actions.
+3. PENDING - Reduce queue visual clutter in `QueueItemRichPreview` + related styles while keeping key status cues.
+4. PENDING - Slightly reduce over-pastel token calibration (keep subdued palette but add modest saturation/contrast back).
+5. PENDING - Run focused validation (`eslint` touched TSX files + `typecheck`) and update AGENTS execution/validation/handoff/decision/lock artifacts.
+
+## Current Task Plan (SMARTCAPTURE-STATUS-COHERENCE-016)
+1. COMPLETED - Record intake and scope boundaries for the pending/checkmark mismatch in queue rows.
+2. COMPLETED - Update queue footer status label mapping to canonical `getStatusMeta(...)` output.
+3. COMPLETED - Add focused regression coverage for saved rows without OCR confidence data.
+4. COMPLETED - Run focused validation (`eslint`, targeted `vitest`, `typecheck`) and record evidence.
+
+## Current Task Plan (MASTERPLAN-REMAINING-017)
+1. COMPLETED - Patch telemetry/runtime residuals (`useLogMonitor`, `SquadronPanel`, `App`) for selection coherence, ship-outline parity, and hazard carry-through.
+2. COMPLETED - Patch ID Mapper residuals (`IdMapper`) for reliable unknown-save domain routing and known-tab edit/save consistency.
+3. COMPLETED - Patch Smart Captures residuals (`SmartCapturesPanel`, `QueueItemRichPreview`, `index.css`) for menu overlap, queue-line compression, wider status rails, removal of team-lock clutter, and richer-but-subdued gradients/colors.
+4. COMPLETED - Patch remaining UI feature gaps (`AnalyticsDashboard` tilt meter, `DevOCRPanel` ROI visual-editor access, `PlayerHub` full-height list behavior, `equipmentDb` Resonator weapon).
+5. COMPLETED - Run focused validation (`eslint` touched files, targeted `vitest`, `typecheck`) and record evidence in `03_VALIDATION`.
+6. COMPLETED - Complete AGENTS closeout updates (`02_EXECUTION_LOG`, `04_HANDOFF`, `DECISIONS`, lock release updates).
+
+## Current Task Plan (GEMINI-INTEGRITY-AUDIT-018)
+1. COMPLETED - Record intake/plan scope boundaries for a verification-only Gemini integrity audit.
+2. COMPLETED - Run objective validation commands (`vitest`, `typecheck`, and targeted static scans for obvious breakage markers).
+3. COMPLETED - Review high-risk diffs for runtime regressions and summarize findings with severity/file pointers.
+4. COMPLETED - Log validation evidence and PM feedback cycle in AGENTS artifacts.
+5. COMPLETED - Publish handoff summary and close lock/history entries.
+
+
+## Current Task Plan (OCR-DEBUG-GATE-REMOVE-019)
+1. COMPLETED - Record intake/plan for scoped `devMode` gate removal while preserving telemetry retention defaults.
+2. COMPLETED - Remove OCR Debug nav/view/preload gating in `src/components/Sidebar.tsx` and `src/App.tsx`.
+3. COMPLETED - Run focused validation (`eslint`, `vitest` on App, `typecheck`) and verify retention constants remain unchanged.
+4. COMPLETED - Update AGENTS execution/validation/handoff/decision artifacts and release lock history rows.
+
+## Current Task Plan (SMARTCAPTURE-SELECTION-TONE-020)
+1. COMPLETED - Record intake/plan and scope selected-row intensity fix to queue item styling only.
+2. COMPLETED - Tone down selected-state classes in `QueueItemRichPreview` for compact + full row modes.
+3. COMPLETED - Run focused validation (`eslint`, targeted test, `typecheck`).
+4. COMPLETED - Update AGENTS execution/validation/handoff/decision artifacts and release lock rows.
+
+
+## Current Task Plan (SMARTCAPTURE-TELEMETRY-LABEL-DEDUPE-021)
+1. COMPLETED - Record intake/plan and isolate duplicate telemetry chip render path.
+2. COMPLETED - Patch summary chip conditions so telemetry draft matches render a single telemetry label.
+3. COMPLETED - Run focused validation (`eslint` touched file + `typecheck`).
+4. COMPLETED - Update AGENTS execution/validation/handoff/decision artifacts and release lock rows.
+
+## Current Task Plan (HISTORY-SCROLL-OWNER-FIX-022)
+1. COMPLETED - Record intake/plan and confirm current nested scroll ownership in History view.
+2. COMPLETED - Patch App/HistoryTable to use a single vertical scroll owner for History.
+3. COMPLETED - Run focused validation (`eslint` touched files, targeted `vitest`, `typecheck`).
+4. COMPLETED - Update AGENTS execution/validation/handoff/decision artifacts and release lock rows.
+
+## Current Task Plan (SMARTCAPTURE-OCR-BOX-TOOLS-023)
+1. COMPLETED - Record intake/plan for missing OCR capture-box action in Smart Captures Tools.
+2. COMPLETED - Patch `SmartCapturesPanel` tools section to expose OCR tools without `devMode` gate and add direct ROI editor action.
+3. COMPLETED - Run focused validation (`eslint`, targeted `vitest`, `typecheck`).
+4. COMPLETED - Update AGENTS execution/validation/handoff/decision artifacts.
+
+
+## Current Task Plan (TELEMETRY-CONSISTENCY-LOADOUT-020)
+1. `IN_PROGRESS` - Add telemetry consistency type/model and derivation utilities (`types`, `telemetryArchive`, new `telemetryConsistency`).
+2. `PENDING` - Integrate live telemetry consistency + dedicated newest-only `NebLoadoutSaved` ingestion in `useLogMonitor`.
+3. `PENDING` - Integrate teammate/mode/duration cross-check warnings into `useMatchSubmission`.
+4. `PENDING` - Surface mismatch chips and bundled telemetry consistency summary in Smart Captures queue/detail.
+5. `PENDING` - Harden GUID/fallback handling in loadout digestion paths.
+6. `PENDING` - Add targeted regressions in `useLogMonitor`, `useMatchSubmission`, and `smartCaptureUtils` tests.
+7. `PENDING` - Run validation gates (targeted vitest, typecheck, touched-file eslint) and record handoff/docs.
+
+## Current Task Plan Status (TELEMETRY-CONSISTENCY-LOADOUT-020)
+1. `COMPLETED` - Add telemetry consistency type/model and derivation utilities (`types`, `telemetryArchive`, new `telemetryConsistency`).
+2. `COMPLETED` - Integrate live telemetry consistency + dedicated newest-only `NebLoadoutSaved` ingestion in `useLogMonitor`.
+3. `COMPLETED` - Integrate teammate/mode/duration cross-check warnings into `useMatchSubmission`.
+4. `COMPLETED` - Surface mismatch chips and bundled telemetry consistency summary in Smart Captures queue/detail.
+5. `COMPLETED` - Harden GUID/fallback handling in loadout digestion paths.
+6. `COMPLETED` - Add targeted regressions in `useLogMonitor`, `useMatchSubmission`, and `smartCaptureUtils` tests.
+7. `COMPLETED` - Run validation gates (targeted vitest, typecheck, touched-file eslint) and record handoff/docs.
+## Current Task Plan (TEST-HARDEN-SMOKE-024)
+1. `COMPLETED` - Identify untested branches introduced by telemetry consistency/loadout hardening work.
+2. `COMPLETED` - Add missing utility regression files (`telemetryConsistency`, `telemetryArchive`, `guids`).
+3. `COMPLETED` - Add focused hook assertions for matchmaker consistency propagation and cloud-save snapshot filtering.
+4. `COMPLETED` - Run targeted tests + touched-file eslint + typecheck.
+5. `COMPLETED` - Run full smoke/debug gates (`dev:qa`, `snap:views:real`) and record evidence.
+## Current Task Plan (ROI-FULLWIDTH-025)
+1. `COMPLETED` - Inspect ROI modal and identify width constraint source.
+2. `COMPLETED` - Patch ROI dialog to use dedicated full-viewport sizing variant.
+3. `COMPLETED` - Add CSS override variant to neutralize base dialog max-width/padding/gap constraints.
+4. `COMPLETED` - Run focused lint/typecheck and record evidence.
+
+## Current Task Plan (ROI-IMAGE-PREVIEW-026)
+1. `COMPLETED` - Inspect ROI modal upload/render path and identify silent-failure points.
+2. `COMPLETED` - Harden picker/upload behavior with explicit trigger and preview error handling.
+3. `COMPLETED` - Add focused regression tests for picker trigger, preview render, and failed-preview fallback messaging.
+4. `COMPLETED` - Run focused validation (`vitest`, touched-file `eslint`, `typecheck`) and record evidence.
+
+## Current Task Plan (ROI-ARTIFACT-DIALOG-027)
+1. `COMPLETED` - Inspect ROI picker flow and identify integration point for default artifacts path.
+2. `COMPLETED` - Add `pick-roi-image` invoke channel to preload/main with default path set to artifacts root.
+3. `COMPLETED` - Wire ROI modal `Load Screenshot` to use native picker response first, while retaining fallback input behavior.
+4. `COMPLETED` - Extend ROI modal tests for electron picker path and run focused validation.

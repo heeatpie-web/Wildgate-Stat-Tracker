@@ -735,9 +735,22 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
 
     setUidMapping: (domain, id, name) => set((state) => {
         const nextDomain = { ...state.uidMappings[domain], [id]: name };
-        return {
+        const base: Partial<MappingSlice> = {
             uidMappings: { ...state.uidMappings, [domain]: nextDomain },
-            ...(domain === 'players' ? { knownMappings: { ...state.knownMappings, [id]: name } } : {})
+            detectedUnknowns: Object.fromEntries(
+                Object.entries(state.detectedUnknowns).filter(([k]) => k !== id)
+            )
+        };
+        if (domain === 'players') {
+            const existing = state.playerProfiles[id] || createEmptyProfile(id);
+            return {
+                ...base,
+                knownMappings: { ...state.knownMappings, [id]: name },
+                playerProfiles: { ...state.playerProfiles, [id]: { ...existing, name } }
+            };
+        }
+        return {
+            ...base
         } as Partial<MappingSlice>;
     }),
 

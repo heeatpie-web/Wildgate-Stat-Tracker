@@ -379,6 +379,20 @@ describe('createMappingSlice', () => {
       expect(store.getState().knownMappings['p1']).toBe('Alice');
     });
 
+    it('clears unknown entries when a UID mapping is saved', () => {
+      store.getState().registerUnknownId('ship1', 'Ship');
+      expect(store.getState().detectedUnknowns['ship1']).toBeDefined();
+      store.getState().setUidMapping('ships', 'ship1', 'Hunter');
+      expect(store.getState().detectedUnknowns['ship1']).toBeUndefined();
+      expect(store.getState().uidMappings.ships['ship1']).toBe('Hunter');
+    });
+
+    it('updates player profile name when saving player UID mapping', () => {
+      store.getState().registerUnknownId('p1', 'Hero');
+      store.getState().setUidMapping('players', 'p1', 'Alice');
+      expect(store.getState().playerProfiles['p1'].name).toBe('Alice');
+    });
+
     it('imports partial UID mappings', () => {
       store.getState().importUidMappings({
         players: { 'p1': 'Alice' },

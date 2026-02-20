@@ -9,6 +9,7 @@ import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured 
 import { StorageService } from '../utils/storage';
 import Logger from '../utils/logger';
 import { capTeammateNames } from '../utils/teamLimits';
+import { evaluateTelemetryConsistencyChecks, formatDurationOffset } from '../utils/telemetryConsistency';
 
 const DEFAULT_ARTIFACT_LOOKBACK_MS = 10 * 60 * 1000;
 const parseDurationSecs = (value: string | undefined): number => {
@@ -20,12 +21,19 @@ const parseDurationSecs = (value: string | undefined): number => {
 
 const sanitizeLoadoutSlots = (loadout: Match['loadout'] | null) => {
     if (!loadout) return undefined;
+    const sanitizeSlotList = (entries?: string[]) => (
+        (entries || [])
+            .map((entry) => String(entry || '').trim())
+            .filter(Boolean)
+            .filter((entry) => !/tertiary\s+(weapon|equipment)/i.test(entry))
+            .slice(0, 2)
+    );
     return {
         ...loadout,
-        weapons: (loadout.weapons || []).filter(Boolean).slice(0, 2),
-        equipment: (loadout.equipment || []).filter(Boolean).slice(0, 2),
-        characterWeapons: (loadout.characterWeapons || []).filter(Boolean).slice(0, 2),
-        characterEquipment: (loadout.characterEquipment || []).filter(Boolean).slice(0, 2),
+        weapons: sanitizeSlotList(loadout.weapons),
+        equipment: sanitizeSlotList(loadout.equipment),
+        characterWeapons: sanitizeSlotList(loadout.characterWeapons),
+        characterEquipment: sanitizeSlotList(loadout.characterEquipment),
     };
 };
 
@@ -165,12 +173,43 @@ export const useMatchSubmission = () => {
             setToast({ message: 'Telemetry draft loaded for this submission.', type: 'info' });
         }
 
+        const baseTelemetryConsistency = unresolvedDraft?.telemetryConsistency;
+        if (baseTelemetryConsistency) {
+            const evaluated = evaluateTelemetryConsistencyChecks(baseTelemetryConsistency, {
+                teammateCount: data.teammates?.length || 0,
+                mode: data.mode,
+                durationSeconds: parseDurationSecs(data.time),
+            });
+            data.telemetryConsistency = {
+                ...baseTelemetryConsistency,
+                checks: evaluated.checks,
+                durationDeltaSeconds: evaluated.durationDeltaSeconds,
+                durationToleranceSeconds: evaluated.durationToleranceSeconds,
+            };
+        }
+
         const healthWarnings: string[] = [];
         if (!data.ship) healthWarnings.push('missing ship');
         if (!data.hero) healthWarnings.push('missing hero');
         if (!data.time) healthWarnings.push('missing duration');
         if ((data.teammates?.length || 0) === 0 && (data.opponents?.length || 0) === 0) {
             healthWarnings.push('no players detected');
+        }
+        if (data.telemetryConsistency?.checks?.teammateCount === 'warn') {
+            const expected = data.telemetryConsistency.expectedTeammateCount;
+            const actual = data.teammates?.length || 0;
+            if (typeof expected === 'number') {
+                healthWarnings.push(`team count mismatch (entered ${actual}, expected ${expected})`);
+            } else {
+                healthWarnings.push('team count mismatch');
+            }
+        }
+        if (data.telemetryConsistency?.checks?.mode === 'warn') {
+            healthWarnings.push(`mode mismatch (entered ${data.mode || 'Unknown'}, telemetry ${data.telemetryConsistency.expectedMode || 'Unknown'})`);
+        }
+        if (data.telemetryConsistency?.checks?.duration === 'warn') {
+            const delta = Number(data.telemetryConsistency.durationDeltaSeconds || 0);
+            healthWarnings.push(`duration off by ${formatDurationOffset(delta)}`);
         }
         if (healthWarnings.length > 0) {
             setToast({ message: `Health check: ${healthWarnings.join(', ')}`, type: 'warning' });
@@ -263,6 +302,22 @@ export const useMatchSubmission = () => {
             const matchId = existingMatch?.id || Date.now();
             const matchTimestamp = existingMatch?.timestamp || pendingMatchData.timestamp || Date.now();
             const mergedLoadout = sanitizeLoadoutSlots(pendingMatchData.loadout || currentLoadout);
+            const baseTelemetryConsistency = pendingMatchData.telemetryConsistency || existingMatch?.telemetryConsistency;
+            const finalTelemetryConsistency = baseTelemetryConsistency
+                ? (() => {
+                    const evaluated = evaluateTelemetryConsistencyChecks(baseTelemetryConsistency, {
+                        teammateCount: finalTeammates.length,
+                        mode: pendingMatchData.mode || activeMode,
+                        durationSeconds: parseDurationSecs(finalTime),
+                    });
+                    return {
+                        ...baseTelemetryConsistency,
+                        checks: evaluated.checks,
+                        durationDeltaSeconds: evaluated.durationDeltaSeconds,
+                        durationToleranceSeconds: evaluated.durationToleranceSeconds,
+                    };
+                })()
+                : undefined;
             if (!existingMatchByPendingId && fallbackTelemetryDraft) {
                 Logger.info('Submission', `Reusing telemetry draft ${fallbackTelemetryDraft.id} for final submission`);
             }
@@ -295,7 +350,8 @@ export const useMatchSubmission = () => {
                 artifacts: [...(existingMatch?.artifacts || pendingMatchData.artifacts || [])],
                 ocrDebug: pendingMatchData?.ocrDebug || undefined,
                 opponentTeams: pendingMatchData?.opponentTeams || undefined,
-                ocrState: pendingMatchData?.ocrState || existingMatch?.ocrState
+                ocrState: pendingMatchData?.ocrState || existingMatch?.ocrState,
+                telemetryConsistency: finalTelemetryConsistency,
             };
             const submittedResult = newMatch.result;
             if (existingMatch) {

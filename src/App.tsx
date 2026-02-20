@@ -1339,10 +1339,28 @@ const App: React.FC = () => {
             setActiveShip(data.playerShip.shipType, 'ocr');
         }
 
-        if (data.reachModifiers.length > 0) {
-            const newModifiers = data.reachModifiers.map(m => m.name);
-            const combined = [...new Set([...selectedReachModifiers, ...newModifiers])];
-            setSelectedReachModifiers(combined, 'ocr');
+        const extractedModifierNames = (data.reachModifiers || [])
+            .map((modifier) => String(modifier?.name || '').trim())
+            .filter(Boolean);
+        const hazardNames = (data.hazards || [])
+            .map((hazard) => String(hazard || '').trim())
+            .filter(Boolean);
+        const combinedModifierMap = new Map<string, string>();
+        [...extractedModifierNames, ...hazardNames].forEach((name) => {
+            const key = normalizeOcrName(name).toLowerCase();
+            if (!key || combinedModifierMap.has(key)) return;
+            combinedModifierMap.set(key, name);
+        });
+        const canonicalModifierNames = Array.from(combinedModifierMap.values());
+
+        if (canonicalModifierNames.length > 0) {
+            const sessionModifierMap = new Map<string, string>();
+            [...selectedReachModifiers, ...canonicalModifierNames].forEach((name) => {
+                const key = normalizeOcrName(name).toLowerCase();
+                if (!key || sessionModifierMap.has(key)) return;
+                sessionModifierMap.set(key, name);
+            });
+            setSelectedReachModifiers(Array.from(sessionModifierMap.values()), 'ocr');
         }
 
         const shipForCapacity = data.playerShip?.shipType || useAppStore.getState().activeShip || activeShip;
@@ -1458,8 +1476,21 @@ const App: React.FC = () => {
         setSessionShipTypes(newShipTypes, 'ocr');
 
         const pendingMatch = useAppStore.getState().pendingMatchData || {};
+        const pendingModifierMap = new Map<string, string>();
+        (pendingMatch.reachModifiers || []).forEach((name) => {
+            const clean = String(name || '').trim();
+            const key = normalizeOcrName(clean).toLowerCase();
+            if (!key || pendingModifierMap.has(key)) return;
+            pendingModifierMap.set(key, clean);
+        });
+        canonicalModifierNames.forEach((name) => {
+            const key = normalizeOcrName(name).toLowerCase();
+            if (!key || pendingModifierMap.has(key)) return;
+            pendingModifierMap.set(key, name);
+        });
         useAppStore.getState().setPendingMatchData({
             ...pendingMatch,
+            reachModifiers: Array.from(pendingModifierMap.values()),
             opponentTeams: structuredTeams,
             ocrDebug: {
                 rawText: data.rawText?.substring(0, 2000),
@@ -1478,7 +1509,7 @@ const App: React.FC = () => {
         const teammateCountLabel = rawTeammateCount > autoAppliedTeammates.length
             ? `${autoAppliedTeammates.length}/${rawTeammateCount}`
             : String(autoAppliedTeammates.length);
-        setToast({ message: `Applied OCR data: ${teammateCountLabel} teammates, ${data.reachModifiers.length} modifiers`, type: 'success' });
+        setToast({ message: `Applied OCR data: ${teammateCountLabel} teammates, ${canonicalModifierNames.length} modifiers`, type: 'success' });
         if (ocrGateOutcome) {
             setShowWizard(ocrGateOutcome);
             setOcrGateOutcome(null);
@@ -1555,7 +1586,7 @@ const App: React.FC = () => {
                 );
             case 'history':
                 return (
-                    <div className="h-full min-h-0 overflow-hidden p-3">
+                    <div className="h-full min-h-0 overflow-y-scroll custom-scrollbar p-3">
                         <HistoryTable />
                     </div>
                 );

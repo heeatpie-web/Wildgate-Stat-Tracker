@@ -9,8 +9,8 @@ interface MomentumViewProps { data: MomentumData; visualMode: VisualMode; }
 export const MomentumView: React.FC<MomentumViewProps> = ({ data, visualMode }) => {
     const dense = visualMode === 'dense';
     const TrendIcon = data.trend === 'rising' ? TrendingUp : data.trend === 'falling' ? TrendingDown : Minus;
-    const trendColor = data.trend === 'rising' ? 'text-success' : data.trend === 'falling' ? 'text-danger' : 'text-md-sys-on-surface/60';
-    const scoreColor = data.currentMomentum >= 60 ? 'var(--color-success)' : data.currentMomentum >= 40 ? 'var(--color-warning)' : 'var(--color-danger)';
+    const trendColor = data.trend === 'rising' ? 'text-md-sys-primary' : data.trend === 'falling' ? 'text-danger' : 'text-md-sys-on-surface/60';
+    const scoreColor = 'var(--md-sys-color-primary)';
 
     return (
         <div className="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar animate-fade-in p-1">

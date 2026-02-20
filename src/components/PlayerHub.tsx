@@ -62,8 +62,6 @@ const PlayerHub: React.FC = () => {
     const [mergeKeepName, setMergeKeepName] = useState<string | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
     const [showFullProfile, setShowFullProfile] = useState(false);
-    const PLAYERS_PAGE_SIZE = 10;
-    const [playersPage, setPlayersPage] = useState(1);
 
     const socialData = useMemo(() => calculateSocialData(matches), [matches]);
     const pendingRosterCandidates = useMemo(() => {
@@ -140,16 +138,6 @@ const PlayerHub: React.FC = () => {
         });
         return list;
     }, [enrichedPilots, searchTerm, sortMode]);
-
-    const totalPlayerPages = Math.max(1, Math.ceil(filtered.length / PLAYERS_PAGE_SIZE));
-    const paginatedPlayers = useMemo(() => {
-        const start = (playersPage - 1) * PLAYERS_PAGE_SIZE;
-        return filtered.slice(start, start + PLAYERS_PAGE_SIZE);
-    }, [filtered, playersPage]);
-
-    useEffect(() => {
-        setPlayersPage(1);
-    }, [searchTerm, sortMode]);
 
     useEffect(() => {
         setShowFullProfile(false);
@@ -374,9 +362,9 @@ const PlayerHub: React.FC = () => {
                     </div>
                 )}
 
-                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1 flex flex-col">
+                <div className="flex-1 min-h-0 flex flex-col">
                     {filtered.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-md-sys-on-surface/40">
+                        <div className="flex-1 flex flex-col items-center justify-center py-12 text-md-sys-on-surface/40">
                             <Users size={32} className="mb-2 opacity-40" />
                             <span className="text-label-sm font-semibold">
                                 {searchTerm ? 'No players match your search' : 'No players registered yet'}
@@ -384,8 +372,9 @@ const PlayerHub: React.FC = () => {
                         </div>
                     ) : (
                         <>
+                        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1">
                         <div className="grid grid-cols-2 gap-1.5 content-start">
-                            {paginatedPlayers.map(pilot => (
+                            {filtered.map(pilot => (
                             <button
                                 key={pilot.name}
                                 onClick={() => {
@@ -416,24 +405,6 @@ const PlayerHub: React.FC = () => {
                             </button>
                             ))}
                         </div>
-                        <div className="mt-3 pt-2 border-t border-md-sys-outline/10 flex items-center justify-between gap-2 shrink-0">
-                            <button
-                                type="button"
-                                onClick={() => setPlayersPage(p => Math.max(1, p - 1))}
-                                disabled={playersPage <= 1}
-                                className="rounded-control px-2.5 py-1.5 text-label-sm font-bold bg-md-sys-surface-container-high text-md-sys-on-surface disabled:opacity-disabled hover:bg-md-sys-surface-container-highest"
-                            >
-                                Previous
-                            </button>
-                            <span className="text-label-sm text-md-sys-on-surface/60">Page {playersPage} of {totalPlayerPages}</span>
-                            <button
-                                type="button"
-                                onClick={() => setPlayersPage(p => Math.min(totalPlayerPages, p + 1))}
-                                disabled={playersPage >= totalPlayerPages}
-                                className="rounded-control px-2.5 py-1.5 text-label-sm font-bold bg-md-sys-surface-container-high text-md-sys-on-surface disabled:opacity-disabled hover:bg-md-sys-surface-container-highest"
-                            >
-                                Next
-                            </button>
                         </div>
                         </>
                     )}

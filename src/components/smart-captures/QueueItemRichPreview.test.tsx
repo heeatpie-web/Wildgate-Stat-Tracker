@@ -37,7 +37,7 @@ describe('QueueItemRichPreview', () => {
       />,
     );
 
-    expect(screen.getByText(/^73$/)).toBeInTheDocument();
+    expect(screen.getByText(/Match 73/)).toBeInTheDocument();
     expect(screen.queryByText(/ID 12345/)).toBeNull();
     expect(screen.getByText('Win')).toBeInTheDocument();
     expect(screen.getByText('85%')).toBeInTheDocument();
@@ -58,5 +58,26 @@ describe('QueueItemRichPreview', () => {
 
     expect(screen.getByRole('button', { name: /7/ })).toBeInTheDocument();
     expect(screen.getByText('7')).toBeInTheDocument();
+  });
+
+  it('does not show pending label when match is saved without confidence', () => {
+    const savedNoConfidence: Match = {
+      ...baseMatch,
+      ocrState: 'saved',
+      ocrDebug: undefined,
+    };
+
+    render(
+      <QueueItemRichPreview
+        match={savedNoConfidence}
+        displayNumber={12}
+        rawMatchId={savedNoConfidence.id}
+        isSelected={false}
+        onClick={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText('Resolved').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Pending')).toBeNull();
   });
 });

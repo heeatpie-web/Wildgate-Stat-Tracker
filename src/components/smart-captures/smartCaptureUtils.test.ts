@@ -9,6 +9,7 @@ import {
   getQueueDisplayNumber,
   getQueueStatus,
   getStatusMeta,
+  getTelemetryConsistencyWarningChips,
   getSemanticStatusTone,
   OCR_STATE_META,
   RESULT_COLORS
@@ -134,6 +135,41 @@ describe('smartCaptureUtils', () => {
     expect(missing.label).toBe('Missing data');
     expect(missing.tone).toBe('danger');
     expect(missing.icon).toBe('alert');
+  });
+
+  it('derives telemetry consistency mismatch chips when expectations conflict', () => {
+    const chips = getTelemetryConsistencyWarningChips(makeMatch({
+      mode: 'Artifact Brawl',
+      teammates: ['Wingmate'],
+      time: '05:00',
+      telemetryConsistency: {
+        expectedTeammateCount: 3,
+        expectedMode: 'Fleet Battle',
+        telemetryDurationSeconds: 420,
+        durationToleranceSeconds: 45,
+      },
+    }));
+
+    const labels = chips.map((chip) => chip.label);
+    expect(labels).toContain('Team Count Mismatch');
+    expect(labels).toContain('Mode Mismatch');
+    expect(labels.some((label) => label.startsWith('Duration Off by'))).toBe(true);
+  });
+
+  it('does not emit telemetry consistency chips when checks pass', () => {
+    const chips = getTelemetryConsistencyWarningChips(makeMatch({
+      mode: 'Artifact Brawl',
+      teammates: ['A', 'B', 'C'],
+      time: '07:00',
+      telemetryConsistency: {
+        expectedTeammateCount: 3,
+        expectedMode: 'Artifact Brawl',
+        telemetryDurationSeconds: 420,
+        durationToleranceSeconds: 45,
+      },
+    }));
+
+    expect(chips).toHaveLength(0);
   });
 
   it('chooses collapsed glyph by outcome and status', () => {

@@ -1,4 +1,9 @@
 import type { Match, OcrState } from '../../types';
+import {
+    evaluateTelemetryConsistencyChecks,
+    formatDurationOffset,
+    parseClockDurationSeconds,
+} from '../../utils/telemetryConsistency';
 
 export type ModeFilter = 'all' | 'Artifact Brawl' | 'Fleet Battle';
 
@@ -102,6 +107,13 @@ export interface StatusMeta {
     icon: StatusIconKey;
 }
 
+export interface TelemetryConsistencyChip {
+    key: 'team-count-mismatch' | 'duration-mismatch' | 'mode-mismatch';
+    label: string;
+    description: string;
+    tone: QueueSemanticTone;
+}
+
 export const getQueueDisplayNumber = (matchId: number, orderedIds: number[]): number => {
     const idx = orderedIds.indexOf(matchId);
     return idx >= 0 ? idx + 1 : orderedIds.length + 1;
@@ -153,6 +165,52 @@ export const getStatusMeta = (statusKey: QueueStatusKey): StatusMeta => {
         default:
             return { label: 'Queued', description: 'Queued for processing.', tone: 'neutral', icon: 'clock' };
     }
+};
+
+export const getTelemetryConsistencyWarningChips = (match: Match): TelemetryConsistencyChip[] => {
+    if (!match.telemetryConsistency) return [];
+    const consistency = match.telemetryConsistency;
+    const evaluated = evaluateTelemetryConsistencyChecks(consistency, {
+        teammateCount: (match.teammates || []).length,
+        mode: match.mode,
+        durationSeconds: parseClockDurationSeconds(match.time),
+    });
+    const checks = consistency.checks || evaluated.checks;
+    const durationDeltaSeconds = typeof consistency.durationDeltaSeconds === 'number'
+        ? consistency.durationDeltaSeconds
+        : evaluated.durationDeltaSeconds;
+
+    const chips: TelemetryConsistencyChip[] = [];
+    if (checks.teammateCount === 'warn') {
+        const expected = consistency.expectedTeammateCount;
+        const actual = (match.teammates || []).length;
+        chips.push({
+            key: 'team-count-mismatch',
+            label: 'Team Count Mismatch',
+            description: typeof expected === 'number'
+                ? `Entered ${actual} teammate(s); telemetry expected ${expected}.`
+                : 'Entered teammate count does not match telemetry expectation.',
+            tone: 'warning',
+        });
+    }
+    if (checks.duration === 'warn') {
+        const delta = Math.max(0, Math.floor(Number(durationDeltaSeconds || 0)));
+        chips.push({
+            key: 'duration-mismatch',
+            label: `Duration Off by ${formatDurationOffset(delta)}`,
+            description: 'Entered duration differs from telemetry-derived map transition duration.',
+            tone: 'warning',
+        });
+    }
+    if (checks.mode === 'warn') {
+        chips.push({
+            key: 'mode-mismatch',
+            label: 'Mode Mismatch',
+            description: `Entered mode ${match.mode || 'Unknown'} differs from telemetry-inferred mode ${consistency.expectedMode || 'Unknown'}.`,
+            tone: 'warning',
+        });
+    }
+    return chips;
 };
 
 export const getCollapsedQueueGlyph = (match: Match): CollapsedQueueGlyph => {

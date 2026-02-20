@@ -302,7 +302,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
     const totalPages = itemsPerPage === 'Infinity' ? 1 : Math.ceil(sortedMatches.length / (itemsPerPage as number)) || 1;
 
     return (
-        <div data-tour="view-history" className="w-full h-full min-h-0 overflow-y-auto custom-scrollbar pr-1 flex flex-col gap-4 animate-slide-up">
+        <div data-tour="view-history" className="w-full min-h-full pr-1 flex flex-col gap-4 animate-slide-up">
             {/* ── Stats Summary Strip ── */}
             {filteredMatches.length > 0 && (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -886,11 +886,11 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
 
                                 {selectedMatchForDetails.loadout && (
                                     <div className="flex flex-col gap-2 mt-2">
-                                        {selectedMatchForDetails.loadout.weapons.slice(0, 2).length > 0 && (
+                                        {selectedMatchForDetails.loadout.weapons.filter((weapon) => !/tertiary\s+(weapon|equipment)/i.test(String(weapon || ''))).slice(0, 2).length > 0 && (
                                             <div>
                                                 <div className="text-label-xs uppercase opacity-40 font-bold">Weapons</div>
                                                 <div className="flex flex-wrap gap-1">
-                                                    {selectedMatchForDetails.loadout.weapons.slice(0, 2).map((w, i) => (
+                                                    {selectedMatchForDetails.loadout.weapons.filter((weapon) => !/tertiary\s+(weapon|equipment)/i.test(String(weapon || ''))).slice(0, 2).map((w, i) => (
                                                         <span key={i} className="px-2 py-1 md3-surface-high rounded-lg text-label-sm font-bold uppercase border border-md-sys-outline/10 text-md-sys-primary">
                                                             {w}
                                                         </span>
@@ -898,11 +898,11 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                                 </div>
                                             </div>
                                         )}
-                                        {selectedMatchForDetails.loadout.equipment.slice(0, 2).length > 0 && (
+                                        {selectedMatchForDetails.loadout.equipment.filter((equipment) => !/tertiary\s+(weapon|equipment)/i.test(String(equipment || ''))).slice(0, 2).length > 0 && (
                                             <div>
                                                 <div className="text-label-xs uppercase opacity-40 font-bold">Equipment</div>
                                                 <div className="flex flex-wrap gap-1">
-                                                    {selectedMatchForDetails.loadout.equipment.slice(0, 2).map((e, i) => (
+                                                    {selectedMatchForDetails.loadout.equipment.filter((equipment) => !/tertiary\s+(weapon|equipment)/i.test(String(equipment || ''))).slice(0, 2).map((e, i) => (
                                                         <span key={i} className="px-2 py-1 md3-surface-high rounded-lg text-label-sm font-bold uppercase border border-md-sys-outline/5 opacity-60">
                                                             {e}
                                                         </span>

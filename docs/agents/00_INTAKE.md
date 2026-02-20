@@ -2030,3 +2030,464 @@
   - Risk Tier: T3
   - Execution Path: FULL_PATH
   - Reason: multi-file runtime/UI behavior changes across telemetry, artifact linking, and wizard/capture flows.
+
+---
+
+## Intake - 2026-02-19 - SMARTCAPTURE-DETAIL-LAYOUT-012
+- Goal: rework Smart Captures detail panel layout to improve scanability and editing flow.
+- Intent confirmation block:
+  - Goal: improve the detail panel structure/hierarchy without changing Smart Capture feature behavior.
+  - Constraints: keep scope to detail-panel UX/layout and existing component patterns from `docs/agents/UI_MASTERPLAN.md`.
+  - Done: detail panel is refactored into a clearer structure, validations pass, and AGENTS evidence files are updated.
+- Constraints:
+  - No telemetry/runtime behavior changes in this task.
+  - Preserve existing section content/actions while improving layout and hierarchy.
+  - Keep styling token-based (no ad-hoc hardcoded palette additions).
+- In scope:
+  - `src/components/SmartCapturesPanel.tsx` detail-panel structure/order/hierarchy.
+  - `src/index.css` supporting Smart Captures detail layout styling tweaks.
+  - AGENTS lifecycle docs for this task.
+- Out-of-scope:
+  - Queue data model changes.
+  - OCR extraction/telemetry parsing logic changes.
+  - New features beyond layout/visual hierarchy improvements.
+- Done condition:
+  - Smart Captures detail panel uses an intentional two-lane editor/intelligence structure.
+  - Existing editing/review controls remain available and functional.
+  - Focused lint/typecheck validation is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: T2
+  - Execution Path: FULL_PATH
+  - Reason: visual-impact UI layout refactor in a high-use workflow surface with potential regression risk.
+
+---
+
+## Intake - 2026-02-19 - SMARTCAPTURE-DETAIL-ICONS-013
+- Goal: improve Smart Captures queue/detail top-bar clarity by fixing queue selection overlap and reformatting dense detail chips/actions/result controls.
+- Intent confirmation block:
+  - Goal: visual hierarchy/iconography polish for queue and detail bars only.
+  - Constraints: keep behavior unchanged; improve readability and control sizing/grouping.
+  - Done: overlap is removed, summary chips/actions are readable, and validation/docs are updated.
+- Constraints:
+  - No telemetry/OCR logic changes.
+  - Keep existing actions/labels available (`rerun`, `history`, `wizard`, `delete`, `win/loss/draw`).
+  - Stay aligned with `docs/agents/UI_MASTERPLAN.md` token/surface rules.
+- In scope:
+  - `src/components/SmartCapturesPanel.tsx` queue sticky selected strip + detail summary/action/result UI grouping.
+  - `src/index.css` style classes for queue strip and detail summary/action/result controls.
+  - AGENTS lifecycle docs.
+- Out-of-scope:
+  - Queue item data-model changes.
+  - Smart Capture extraction/review behavior changes.
+  - Broad redesign outside queue/detail bar surfaces.
+- Done condition:
+  - Queue selection strip no longer visually overlaps first queue item status badges.
+  - Detail summary chips/actions/result controls are larger, icon-supported, and easier to scan.
+  - Focused lint/typecheck validation is recorded.
+- AOM_V2:
+  - Risk Tier: T2
+  - Execution Path: FULL_PATH
+  - Reason: high-visibility UI composition changes across two key Smart Captures surfaces.
+
+---
+
+## Intake - 2026-02-19 - SMARTCAPTURE-HEADER-THEME-DAYFILTER-014
+- Goal: reduce Smart Captures header clutter by improving hierarchy, add day-scoped queue filtering with an explicit day selector, and soften/theme-link app accent colors so palettes feel less punchy.
+- Intent confirmation block:
+  - Goal: make Smart Captures easier to scan and less visually noisy while preserving all existing functionality.
+  - Constraints: keep scope to Smart Captures UI composition and token-level color behavior; no telemetry/OCR/business-logic changes.
+  - Done: Smart Captures header presents a clearer priority order, left queue is scoped to one selected day with day-switch control, and theme colors are less vibrant and shift consistently across blue/purple/etc themes.
+- Constraints:
+  - Keep behavior changes bounded to Smart Captures filtering/presentation only.
+  - Preserve existing actions (`Re-run`, `History`, `Wizard`, `Delete`, `Win/Loss/Draw`, queue nav).
+  - Keep styling token-driven in `src/index.css` (no hardcoded per-component ad hoc palettes).
+- In scope:
+  - `src/components/SmartCapturesPanel.tsx`:
+    - detail header hierarchy cleanup,
+    - left-pane day filter state + selector,
+    - date-scoped queue filtering.
+  - `src/index.css`:
+    - softer, theme-adaptive accent/status token tuning,
+    - Smart Captures/header supporting style updates.
+  - AGENTS lifecycle docs (`01_PLAN`, `02_EXECUTION_LOG`, `03_VALIDATION`, `04_HANDOFF`, `DECISIONS`, `WORKLOCKS`).
+- Out-of-scope:
+  - Telemetry parsing changes.
+  - OCR extraction/model behavior changes.
+  - Broad redesign outside Smart Captures and color-token tuning.
+- Done condition:
+  - Smart Captures detail header has clear visual hierarchy (primary status/action first).
+  - Left queue defaults to a single-day slice and includes a day selector.
+  - Theme accent/status surfaces are lower-key and adapt across color themes.
+  - Validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: T2
+  - Execution Path: FULL_PATH
+  - Reason: multi-file, user-visible UI behavior and design-token changes in a high-use workflow.
+
+---
+
+## Intake - 2026-02-19 - SMARTCAPTURE-ACTION-COMPRESSION-QUEUE-CLEANUP-015
+- Goal: compress Smart Captures detail header controls and clean up queue visual density/readability.
+- Intent confirmation block:
+  - Goal: reduce visual clutter while preserving existing Smart Captures actions and flow.
+  - Constraints: keep scope to Smart Captures renderer UI composition and styling; no telemetry/OCR/business-logic changes.
+  - Done: secondary detail actions are compacted behind a lightweight menu, and queue rows are cleaner/less noisy while maintaining key status cues.
+- Constraints:
+  - Preserve existing action capability (`Re-run`, `History`, `Wizard`, `Delete`) even if regrouped.
+  - Keep one obvious primary action in detail header context.
+  - Keep queue functionality (selection, status, numbering, click behavior) unchanged.
+- In scope:
+  - `src/components/SmartCapturesPanel.tsx`:
+    - add compact secondary action grouping/menu in detail summary.
+  - `src/components/smart-captures/QueueItemRichPreview.tsx`:
+    - simplify queue row visual hierarchy.
+  - `src/index.css`:
+    - support compact action menu and queue cleanup styles.
+  - AGENTS lifecycle docs (`01_PLAN`, `02_EXECUTION_LOG`, `03_VALIDATION`, `04_HANDOFF`, `DECISIONS`, `WORKLOCKS`).
+- Out-of-scope:
+  - Data-model changes.
+  - OCR/telemetry behavior changes.
+  - Broad redesign outside Smart Captures queue/detail header.
+- Done condition:
+  - Detail header has fewer always-visible controls via compact secondary actions.
+  - Queue reads cleaner with clearer primary/secondary information hierarchy.
+  - Focused validation evidence is recorded in `docs/agents/03_VALIDATION.md`.
+- AOM_V2:
+  - Risk Tier: T2
+  - Execution Path: FULL_PATH
+  - Reason: user-visible multi-file UI composition/styling changes in a core workflow surface.
+
+### Follow-up Addendum - 2026-02-19
+- User calibration request: slightly reduce the previous pastel shift and keep colors a bit richer while still less punchy than pre-014.
+- Safest minimal interpretation:
+  - apply small token-level saturation/contrast increase only (no return to original vivid palette).
+
+---
+
+## Intake - 2026-02-19 - SMARTCAPTURE-STATUS-COHERENCE-016
+- Goal: fix Smart Captures queue rows that can display contradictory footer state (`Pending` text with resolved checkmark affordance).
+- Intent confirmation block:
+  - Goal: align queue footer status text with canonical queue status metadata.
+  - Constraints: keep scope to queue-row rendering logic/tests only; no OCR/telemetry/data-model changes.
+  - Done: resolved rows never show `Pending` in footer, and a focused regression test covers saved/no-confidence rows.
+- Constraints:
+  - Do not change queue ordering/filtering behavior.
+  - Preserve existing top status chip semantics/icons.
+- In scope:
+  - `src/components/smart-captures/QueueItemRichPreview.tsx` footer status label source.
+  - `src/components/smart-captures/QueueItemRichPreview.test.tsx` focused regression coverage and stale assertion alignment.
+- Out-of-scope:
+  - Smart Captures detail-panel layout changes.
+  - Theme/token adjustments.
+  - OCR pipeline behavior.
+- Done condition:
+  - Queue footer label uses canonical status metadata instead of hard-coded pending fallback.
+  - Focused lint/test/typecheck validation evidence is recorded.
+- AOM_V2:
+  - Risk Tier: T1
+  - Execution Path: FULL_PATH
+  - Reason: runtime UI state-label mapping change with user-visible behavior impact.
+
+---
+
+## Intake - 2026-02-19 - MASTERPLAN-REMAINING-017
+- Goal: implement the remaining unresolved user-reported UI/telemetry/ID-mapping items from the master checklist in one focused pass.
+- Intent confirmation block:
+  - Goal: close the residual defects the user called out after prior Smart Capture iterations.
+  - Constraints: keep scope to listed unresolved items only; no unrelated refactors or schema-breaking changes.
+  - Done: telemetry selection/state bugs, ID mapping reliability/editability, queue/menu styling bugs, ROI tooling access, dashboard tilt meter, and color/visual calibration updates are implemented and validated.
+- Constraints:
+  - Preserve existing workflows and contracts unless non-breaking behavior hardening is required.
+  - Keep UI token-driven and aligned with `docs/agents/UI_MASTERPLAN.md`.
+  - Do not revert unrelated dirty-worktree changes.
+- In scope:
+  - `src/hooks/useLogMonitor.ts`: telemetry loadout clear/canonical behavior fix for stale character selections.
+  - `src/components/recording/SquadronPanel.tsx`: telemetry ship outline parity and indicator/readability integration.
+  - `src/components/IdMapper.tsx`: unknown-save domain routing reliability + known-tab edit/save consistency.
+  - `src/components/SmartCapturesPanel.tsx` and `src/index.css`: remove stale team-lock control, fix “More” menu overlap styles, strengthen queue status rail visibility, and tune Smart Capture gradients/colors.
+  - `src/components/smart-captures/QueueItemRichPreview.tsx`: shorter queue title line and wider status rail.
+  - `src/components/analytics/AnalyticsDashboard.tsx`: add main-dashboard tilt meter.
+  - `src/components/DevOCRPanel.tsx`: add direct ROI visual editor launcher/tools in OCR tab.
+  - `src/components/PlayerHub.tsx`: ensure player list fully uses tab height (no short paged list behavior).
+  - `src/utils/equipmentDb.ts`: add `Resonator` as character weapon.
+  - `src/App.tsx`: ensure OCR apply path folds hazards into session modifiers.
+- Out-of-scope:
+  - New OCR provider/model changes.
+  - Broad settings IA redesign beyond already-shipped tab/search updates.
+  - New backend services or persistence migrations.
+- Done condition:
+  - Listed residual issues are patched with focused lint/typecheck/tests.
+  - AGENTS evidence files are updated (`02_EXECUTION_LOG`, `03_VALIDATION`, `04_HANDOFF`, `DECISIONS`).
+- AOM_V2:
+  - Risk Tier: T3
+  - Execution Path: FULL_PATH
+  - Reason: multi-file runtime/UI behavior updates across telemetry, Smart Captures, ID mapping, dashboard analytics, and OCR tooling surfaces.
+
+---
+
+## Intake - 2026-02-19 - GEMINI-INTEGRITY-AUDIT-018
+- Goal: verify the current uncommitted workspace changes did not introduce breakages or high-risk regressions.
+- Intent confirmation block:
+  - Goal: audit existing changes and report concrete failures only.
+  - Constraints: verification-only pass; do not refactor/rewrite feature code during this task.
+  - Done: produce command-backed validation evidence and a concise findings summary.
+- Constraints:
+  - Do not revert or mutate existing user/Gemini edits.
+  - Use objective checks first (tests/typecheck/lint) before subjective review notes.
+- In scope:
+  - Git diff inspection of modified files.
+  - Runtime quality gates (`test`, `typecheck`, targeted lint/scan if needed).
+  - AGENTS evidence updates for this audit.
+- Out-of-scope:
+  - New feature work or UI restyling.
+  - Git history rewriting or cleanup operations.
+- Done condition:
+  - Confirmed regressions (if any) are listed with severity and file references.
+  - If no regressions are confirmed, explicitly state that and list any residual risk.
+- AOM_V2:
+  - Risk Tier: T2
+  - Execution Path: FULL_PATH
+  - Reason: release-impacting integrity verification across many modified runtime/UI files.
+
+
+
+---
+
+## Intake - 2026-02-19 - OCR-DEBUG-GATE-REMOVE-019
+- Goal: remove the `devMode` gate from OCR Debug access while keeping telemetry retention defaults unchanged.
+- Intent confirmation block:
+  - Goal: restore always-available OCR Debug navigation/view routing.
+  - Constraints: no telemetry retention edits.
+  - Done: OCR Debug nav and render path no longer conditional on `devMode`; retention constants remain as-is.
+- Constraints:
+  - Keep scope to `src/components/Sidebar.tsx` and `src/App.tsx` access gating logic.
+  - Do not modify `electron/main.cjs` retention constants.
+- In scope:
+  - OCR Debug nav visibility in sidebar.
+  - OCR Debug route/render/preload gating in App view logic.
+  - Focused validation (eslint, targeted test, typecheck).
+- Out-of-scope:
+  - Any telemetry retention policy/value change.
+  - UI restyling unrelated to the gate.
+- Done condition:
+  - `dev-ocr` is reachable without `devMode`.
+  - `electron/main.cjs` retains `500MB`/`90d` defaults.
+  - Validation evidence recorded.
+- AOM_V2:
+  - Risk Tier: T1
+  - Execution Path: FULL_PATH
+  - Reason: runtime UI routing behavior update with direct user-facing impact.
+
+---
+
+## Intake - 2026-02-19 - SMARTCAPTURE-SELECTION-TONE-020
+- Goal: reduce Smart Captures selected-match visual intensity.
+- Intent confirmation block:
+  - Goal: keep selected match clearly identifiable while toning down color intensity.
+  - Constraints: scoped styling-only update to selected queue row states.
+  - Done: selected queue rows no longer use full-intensity primary fill.
+- Constraints:
+  - Do not alter queue behavior, ordering, or selection logic.
+  - Keep selected affordance visible and accessible in all themes.
+- In scope:
+  - `src/components/smart-captures/QueueItemRichPreview.tsx` selected-state class tokens (compact + rich rows).
+  - Validation for touched UI file.
+- Out-of-scope:
+  - Broad Smart Captures redesign.
+  - Theme-token system retuning.
+- Done condition:
+  - Selected row is visibly highlighted but less intense than current full-primary treatment.
+  - Focused lint/typecheck/test evidence recorded.
+- AOM_V2:
+  - Risk Tier: T1
+  - Execution Path: FULL_PATH
+  - Reason: user-visible runtime UI styling change in active workflow surface.
+
+---
+
+## Intake - 2026-02-19 - SMARTCAPTURE-TELEMETRY-LABEL-DEDUPE-021
+- Goal: prevent Smart Captures summary from showing both `Telemetry attached` and `Telemetry Draft` for the same match.
+- Intent confirmation block:
+  - Goal: remove duplicate/conflicting telemetry labels for draft matches.
+  - Constraints: UI labeling-only fix in Smart Captures summary chips.
+  - Done: telemetry draft matches show a single telemetry status chip.
+- Constraints:
+  - No match data model or telemetry processing changes.
+  - Keep other subtype chip behavior unchanged.
+- In scope:
+  - `src/components/SmartCapturesPanel.tsx` summary chip render conditions.
+  - Focused validation.
+- Out-of-scope:
+  - Queue ordering/status logic changes.
+  - OCR/telemetry runtime pipeline changes.
+- Done condition:
+  - Draft match no longer shows both `Telemetry attached` and `Telemetry Draft` simultaneously.
+  - Validation evidence recorded.
+- AOM_V2:
+  - Risk Tier: T1
+  - Execution Path: FULL_PATH
+  - Reason: user-visible runtime labeling correction in a core UI summary.
+
+---
+
+## Intake - 2026-02-19 - HISTORY-SCROLL-OWNER-FIX-022
+- Goal: fix non-working scrollbar behavior in Match History.
+- Intent confirmation block:
+  - Goal: restore reliable vertical scrolling in History view.
+  - Constraints: minimal layout-only fix; no history data/filters behavior changes.
+  - Done: History scroll is owned by one container and responds normally.
+- Constraints:
+  - Keep scope to view/container overflow classes.
+  - No changes to sorting/filter/pagination logic.
+- In scope:
+  - `src/App.tsx` history view wrapper overflow classes.
+  - `src/components/HistoryTable.tsx` root container overflow/height classes.
+  - Focused validation.
+- Out-of-scope:
+  - Table redesign.
+  - Modal behavior changes.
+- Done condition:
+  - Match History vertical scrolling works consistently.
+  - Validation evidence recorded.
+- AOM_V2:
+  - Risk Tier: T1
+  - Execution Path: FULL_PATH
+  - Reason: user-visible UI layout/interaction fix in core history surface.
+
+---
+
+## Intake - 2026-02-19 - SMARTCAPTURE-OCR-BOX-TOOLS-023
+- Goal: expose OCR capture-box (ROI) adjustment directly in Smart Captures Tools.
+- Intent confirmation block:
+  - Goal: provide a direct `Adjust OCR Boxes` action inside Smart Captures Tools.
+  - Constraints: scoped to Smart Captures tools surface and ROI modal wiring only.
+  - Done: Tools section shows OCR box adjustment action and no longer hides OCR tools behind `devMode`.
+- Constraints:
+  - No telemetry retention policy changes.
+  - No OCR parser/runtime logic changes.
+- In scope:
+  - `src/components/SmartCapturesPanel.tsx` tools panel controls.
+  - Reuse existing `OcrRegionEditorModal` wiring pattern for ROI updates.
+  - Focused validation (`eslint`, targeted `vitest`, `typecheck`).
+- Out-of-scope:
+  - OCR extraction behavior retuning.
+  - Settings modal redesign.
+- Done condition:
+  - Smart Captures Tools includes `Adjust OCR Boxes`.
+  - OCR tools are visible without `devMode`.
+  - Validation evidence recorded.
+- AOM_V2:
+  - Risk Tier: T1
+  - Execution Path: FULL_PATH
+  - Reason: user-visible workflow access fix in Smart Captures tools.
+
+## Intake - 2026-02-19 - TELEMETRY-CONSISTENCY-LOADOUT-020
+- Goal: implement additive telemetry-derived consistency checks and loadout-save hardening across submission and Smart Captures.
+- Constraints:
+  - Additive only; do not remove existing telemetry/submission behavior.
+  - Warning/chip UX only (no auto-overwrite of entered values).
+  - Exclude reliability scoring (`NebError`, dropped-session events) and queue funnel dashboards.
+- In scope:
+  - New optional telemetry consistency model/type + derivation utility.
+  - Matchmaker/team-count, mode-from-pool, and duration consistency checks.
+  - Smart Captures summary/detail/queue mismatch chips.
+  - `NebLoadoutSaved` newest-only loadout application and telemetry draft updates.
+  - GUID/fallback hardening for loadout digestion.
+  - Focused regression tests for new checks/loadout behavior.
+- Out-of-scope:
+  - Reliability scoring from error/drop events.
+  - Auto-correction behavior changes.
+  - Destructive schema/contract changes.
+- Done condition:
+  - Consistency warnings are visible/actionable in submission and Smart Captures.
+  - Loadout saves before/during queue update draft/current loadout without stale regressions.
+  - Targeted tests + typecheck + touched-file eslint evidence is logged.
+- AOM_V2:
+  - Risk Tier: `T3`
+  - Execution Path: `FULL_PATH`
+  - Reason: runtime logic + UI surface + telemetry parsing changes across hooks/components with regression risk.
+## Intake - 2026-02-20 - TEST-HARDEN-SMOKE-024
+- Goal: add missing regression test files around telemetry consistency/archive/GUID alias handling and rerun smoke/debug gates.
+- Intent confirmation block:
+  - Goal: maximize defect detection confidence by adding direct utility/unit coverage for newly added telemetry logic.
+  - Constraints: test-only scope; no runtime behavior changes.
+  - Done: new tests are in place and all quality/smoke/debug gates pass.
+- In scope:
+  - New tests for `src/utils/telemetryConsistency.ts`, `src/utils/telemetryArchive.ts`, and `src/utils/guids.ts`.
+  - Targeted additions in hook tests for telemetry consistency propagation and cloud-save snapshot filtering.
+  - Full rerun of smoke/debug gates.
+- Out-of-scope:
+  - Runtime feature refactors.
+  - UI behavior changes.
+- Done condition:
+  - New regression files exist and pass.
+  - `npm run dev:qa` and `npm run snap:views:real` pass after test additions.
+- AOM_V2:
+  - Risk Tier: `T1`
+  - Execution Path: `FULL_PATH`
+  - Reason: multi-file test additions with full release/smoke gate rerun.
+## Intake - 2026-02-20 - ROI-FULLWIDTH-025
+- Goal: fix ROI visual editor modal so it opens full width/full available viewport instead of constrained dialog width.
+- Constraints:
+  - Scope to ROI modal sizing classes/styles only.
+  - No OCR extraction behavior changes.
+- In scope:
+  - `src/components/OcrRegionEditorModal.tsx`
+  - `src/index.css`
+- Out-of-scope:
+  - OCR logic/pipeline changes.
+  - Smart Captures workflow changes.
+- Done condition:
+  - ROI editor opens using full viewport-available width/height.
+  - Targeted lint + typecheck pass.
+- AOM_V2:
+  - Risk Tier: `T1`
+  - Execution Path: `FULL_PATH`
+  - Reason: user-visible modal layout behavior fix.
+
+## Intake - 2026-02-20 - ROI-IMAGE-PREVIEW-026
+- Goal: fix ROI editor image selection where a chosen screenshot does not render in the preview canvas.
+- Intent confirmation block:
+  - Goal: make image selection reliably show a preview in ROI editor.
+  - Constraints: scope to ROI modal upload/preview path and tests only; no OCR extraction behavior changes.
+  - Done: selecting a supported image shows preview, failures surface explicit error text, and regression checks pass.
+- In scope:
+  - `src/components/OcrRegionEditorModal.tsx`
+  - `src/components/OcrRegionEditorModal.test.tsx`
+- Out-of-scope:
+  - OCR region geometry/edit behavior.
+  - Smart Captures or telemetry behavior.
+- Done condition:
+  - Load button reliably opens file picker.
+  - Selected screenshot renders in ROI preview.
+  - Decode/read failures show actionable inline error text.
+  - Targeted `vitest`, touched-file `eslint`, and `typecheck` pass.
+- AOM_V2:
+  - Risk Tier: `T1`
+  - Execution Path: `FULL_PATH`
+  - Reason: user-visible UI behavior fix plus new regression coverage.
+
+## Intake - 2026-02-20 - ROI-ARTIFACT-DIALOG-027
+- Goal: make ROI `Load Screenshot` open the native file picker in the artifacts directory by default.
+- Intent confirmation block:
+  - Goal: ensure clicking load immediately opens a usable picker rooted at artifacts.
+  - Constraints: keep scope to ROI picker wiring and supporting IPC only; preserve existing ROI drawing behavior.
+  - Done: ROI load button opens native dialog defaulted to `match_artifacts`, selected image previews normally, and checks pass.
+- In scope:
+  - `electron/preload.cjs`
+  - `electron/main.cjs`
+  - `src/components/OcrRegionEditorModal.tsx`
+  - `src/components/OcrRegionEditorModal.test.tsx`
+  - `scripts/security_negative_tests.cjs` (allowlist parity)
+- Out-of-scope:
+  - OCR extraction logic.
+  - Telemetry/submission behavior.
+- Done condition:
+  - Electron path uses native picker with artifacts default path.
+  - ROI preview still works after selection.
+  - Fallback file input behavior remains available when electron bridge is unavailable.
+  - Focused `vitest`, touched-file `eslint`, and `typecheck` pass.
+- AOM_V2:
+  - Risk Tier: `T1`
+  - Execution Path: `FULL_PATH`
+  - Reason: user-visible file-picker behavior change with small IPC surface addition.

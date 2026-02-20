@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { AnalyticsView, VisualMode, DrillDownTarget, Insight } from '../../types';
 import { AnalyticsCard } from './AnalyticsCard';
 import { SparklineWidget } from './SparklineWidget';
+import { TiltMeter } from '../TiltMeter';
 import { RelationshipInsight } from '../../utils/analytics';
 import { synthesizeNarrative } from '../../utils/analyticsEditorial';
 import {
@@ -63,7 +64,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
     filteredMatches,
 }) => {
     const dense = visualMode === 'dense';
-    const scoreColor = momentum.currentMomentum >= 60 ? 'var(--color-success)' : momentum.currentMomentum >= 40 ? 'var(--color-warning)' : 'var(--color-danger)';
+    const scoreColor = 'var(--md-sys-color-primary)';
 
     const winRateSparkline = useMemo(() => {
         let winCount = 0;
@@ -154,19 +155,19 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
     return (
         <div className="flex-1 overflow-y-auto custom-scrollbar animate-fade-in p-2 pb-8">
             <div className={`grid gap-4 ${dense ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-6'}`}>
-                
+
                 {/* Row 1: Hero */}
                 <AnalyticsCard
                     title="Win Rate"
                     icon={<Trophy size={dense ? 12 : 14} />}
                     visualMode={visualMode}
                     className={dense ? 'col-span-2 lg:col-span-2' : 'md:col-span-2'}
-                    accentColor={winRate >= 50 ? 'bg-success' : 'bg-danger'}
+                    accentColor="bg-md-sys-primary"
                     onExpand={() => onNavigate('session')}
                 >
                     <div className="flex items-center justify-between gap-4">
                         <div className="flex-shrink-0">
-                            <div className={`font-bold tracking-tighter leading-none ${winRate >= 50 ? 'text-success' : 'text-danger'} ${dense ? 'text-4xl' : 'text-6xl'}`}>
+                            <div className={`font-bold tracking-tighter leading-none text-md-sys-primary ${dense ? 'text-4xl' : 'text-6xl'}`}>
                                 {winRate}<span className="text-half-em text-md-sys-on-surface/60 ml-1">%</span>
                             </div>
                             <div className={`mt-1 font-semibold text-md-sys-on-surface/60 uppercase tracking-widest ${dense ? 'text-label-xs' : 'text-label-sm'}`}>
@@ -174,7 +175,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                             </div>
                         </div>
                         <div className="flex-1 h-14">
-                            <SparklineWidget data={winRateSparkline} color={winRate >= 50 ? 'var(--color-success)' : 'var(--color-danger)'} height={dense ? 38 : 56} />
+                            <SparklineWidget data={winRateSparkline} color="var(--md-sys-color-primary)" height={dense ? 38 : 56} />
                         </div>
                     </div>
                 </AnalyticsCard>
@@ -184,17 +185,21 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                     icon={<Flame size={12} />}
                     visualMode={visualMode}
                     className={dense ? '' : 'md:col-span-1'}
-                    accentColor="bg-warning"
+                    accentColor="bg-md-sys-secondary"
                     onExpand={() => onNavigate('streaks')}
                 >
                     <div className="flex flex-col h-full justify-between">
-                        <div className={`font-bold text-warning leading-none ${dense ? 'text-2xl' : 'text-4xl'}`}>{currentStreak}</div>
+                        <div className={`font-bold text-md-sys-primary leading-none ${dense ? 'text-2xl' : 'text-4xl'}`}>{currentStreak}</div>
                         <div className="text-right text-label-sm font-semibold uppercase tracking-wide">
-                            <div className="text-success">Best {streakHistory.longestWinStreak}W</div>
-                            <div className="text-danger">Worst {streakHistory.longestLossStreak}L</div>
+                            <div className="text-md-sys-primary">Best {streakHistory.longestWinStreak}W</div>
+                            <div className="text-md-sys-on-surface/60">Worst {streakHistory.longestLossStreak}L</div>
                         </div>
                     </div>
                 </AnalyticsCard>
+
+                <div className={dense ? 'col-span-2 lg:col-span-2' : 'md:col-span-3'}>
+                    <TiltMeter recentMatches={(filteredMatches as any[]).slice(-5)} />
+                </div>
 
                 {/* Narrative Insight */}
                 {!dense && editorial && (
@@ -237,7 +242,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                         icon={<Clock3 size={12} />}
                         visualMode={visualMode}
                         className="md:col-span-3"
-                        accentColor="bg-info"
+                        accentColor="bg-md-sys-tertiary"
                         onExpand={() => onNavigate('timePatterns')}
                     >
                         <div className="grid grid-cols-3 gap-3">
@@ -248,7 +253,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                             </div>
                             <div className="rounded-control bg-md-sys-on-surface/6 p-2.5">
                                 <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/40">Weekly Delta</div>
-                                <div className={`text-title font-bold ${pulseSummary.weekDelta >= 0 ? 'text-success' : 'text-danger'}`}>
+                                <div className={`text-title font-bold ${pulseSummary.weekDelta >= 0 ? 'text-md-sys-primary' : 'text-md-sys-on-surface/60'}`}>
                                     {pulseSummary.weekDelta >= 0 ? '+' : ''}{pulseSummary.weekDelta}pp
                                 </div>
                                 <div className="text-label-sm text-md-sys-on-surface/55">Win-rate trend</div>
@@ -268,7 +273,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                         icon={<Lightbulb size={12} />}
                         visualMode={visualMode}
                         className="md:col-span-3"
-                        accentColor="bg-accent"
+                        accentColor="bg-md-sys-secondary"
                         onExpand={() => onNavigate('insights')}
                     >
                         <div className="space-y-2">
@@ -291,7 +296,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                     icon={<Gauge size={12} />}
                     visualMode={visualMode}
                     className={dense ? '' : 'md:col-span-3'}
-                    accentColor="bg-accent"
+                    accentColor="bg-md-sys-primary"
                     onExpand={() => onNavigate('momentum')}
                 >
                     <div className="flex items-end justify-between">
@@ -310,18 +315,18 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                     icon={<Crosshair size={12} />}
                     visualMode={visualMode}
                     className={dense ? '' : 'md:col-span-3'}
-                    accentColor="bg-danger"
+                    accentColor="bg-md-sys-secondary"
                     onExpand={() => onNavigate('killEfficiency')}
                 >
                     <div className="flex items-end justify-between">
                         <div>
-                            <div className={`font-bold text-warning leading-none ${dense ? 'text-2xl' : 'text-4xl'}`}>{killEfficiency.overallAvgKills}</div>
-                            <div className={`mt-1 text-label-sm font-semibold uppercase ${killEfficiency.trendDirection === 'up' ? 'text-success' : 'text-danger'}`}>
+                            <div className={`font-bold text-md-sys-primary leading-none ${dense ? 'text-2xl' : 'text-4xl'}`}>{killEfficiency.overallAvgKills}</div>
+                            <div className={`mt-1 text-label-sm font-semibold uppercase ${killEfficiency.trendDirection === 'up' ? 'text-md-sys-primary' : 'text-md-sys-on-surface/60'}`}>
                                 {killEfficiency.trendDirection === 'up' ? 'Improving' : 'Declining'}
                             </div>
                         </div>
                         <div className="flex-1 h-8 ml-4 text-md-sys-on-surface/60">
-                            <SparklineWidget data={killSparkline} color="var(--color-warning)" height={32} />
+                            <SparklineWidget data={killSparkline} color="var(--md-sys-color-primary)" height={32} />
                         </div>
                     </div>
                 </AnalyticsCard>
@@ -333,7 +338,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                     onExpand={() => onNavigate('social')}
                     visualMode={visualMode}
                     className={dense ? 'col-span-2' : 'md:col-span-2'}
-                    accentColor="bg-success"
+                    accentColor="bg-md-sys-secondary"
                 >
                     <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -342,7 +347,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                                 {socialData.opponents.slice(0, 3).map(([name, stat]: any) => (
                                     <button key={name} onClick={(e) => { e.stopPropagation(); onDrillDown(name, 'Opponent'); }} className="w-full flex justify-between items-center text-label-sm text-left hover:bg-md-sys-surfaceContainerHigh/60 rounded-lg px-1.5 py-1 transition-colors">
                                         <span className="font-semibold truncate max-w-70p">{name}</span>
-                                        <span className="font-mono text-label-sm bg-danger/10 text-danger px-1.5 py-0.5 rounded">{Math.round((stat.wins / stat.total) * 100)}%</span>
+                                        <span className="font-mono text-label-sm bg-md-sys-on-surface/10 text-md-sys-on-surface/60 px-1.5 py-0.5 rounded">{Math.round((stat.wins / stat.total) * 100)}%</span>
                                     </button>
                                 ))}
                             </div>
@@ -353,7 +358,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                                 {socialData.teammates.slice(0, 3).map(([name, stat]: any) => (
                                     <button key={name} onClick={(e) => { e.stopPropagation(); onDrillDown(name, 'Teammate'); }} className="w-full flex justify-between items-center text-label-sm text-left hover:bg-md-sys-surfaceContainerHigh/60 rounded-lg px-1.5 py-1 transition-colors">
                                         <span className="font-semibold truncate max-w-70p">{name}</span>
-                                        <span className="font-mono text-label-sm bg-success/10 text-success px-1.5 py-0.5 rounded">{Math.round((stat.wins / stat.total) * 100)}%</span>
+                                        <span className="font-mono text-label-sm bg-md-sys-primary/10 text-md-sys-primary px-1.5 py-0.5 rounded">{Math.round((stat.wins / stat.total) * 100)}%</span>
                                     </button>
                                 ))}
                             </div>
@@ -367,7 +372,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                     onExpand={() => onNavigate('placement')}
                     visualMode={visualMode}
                     className={dense ? '' : 'md:col-span-2'}
-                    accentColor="bg-warning"
+                    accentColor="bg-md-sys-primary"
                 >
                     <div className="flex items-center justify-between gap-3">
                         <div>
@@ -384,15 +389,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                             {placementBuckets.rows.map((b) => (
                                 <div key={b.placement} className="flex flex-col items-center justify-end gap-1">
                                     <div
-                                        className={`w-full rounded-sm ${
-                                            b.placement <= 3
-                                                ? 'bg-success'
-                                                : b.placement <= 6
-                                                    ? 'bg-info'
-                                                    : b.placement <= 10
-                                                        ? 'bg-warning'
-                                                        : 'bg-danger'
-                                        }`}
+                                        className={`w-full rounded-sm ${b.placement <= 3
+                                            ? 'bg-md-sys-primary'
+                                            : b.placement <= 6
+                                                ? 'bg-md-sys-secondary'
+                                                : b.placement <= 10
+                                                    ? 'bg-md-sys-secondaryContainer'
+                                                    : 'bg-md-sys-on-surface/10'
+                                            }`}
                                         style={{ height: `${Math.max(6, Math.round((b.count / placementBuckets.maxCount) * 40))}px` }}
                                         title={`Place ${b.placement}: ${b.count}`}
                                     />
@@ -409,7 +413,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                     onExpand={() => onNavigate('environment')}
                     visualMode={visualMode}
                     className={dense ? 'col-span-2' : 'md:col-span-2'}
-                    accentColor="bg-info"
+                    accentColor="bg-md-sys-tertiary"
                 >
                     {hazardSummary.rows.length > 0 ? (
                         <div className="space-y-2">
@@ -426,13 +430,13 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                                             </div>
                                             <div className="mt-1 h-2 rounded-full bg-md-sys-on-surface/8 overflow-hidden">
                                                 <div
-                                                    className={`${r.winRate >= 50 ? 'bg-success' : 'bg-danger'} h-full`}
+                                                    className={`${r.winRate >= 50 ? 'bg-md-sys-primary' : 'bg-md-sys-on-surface/20'} h-full`}
                                                     style={{ width: `${Math.max(2, Math.min(100, r.winRate))}%` }}
                                                     title={`${r.winRate}% WR (${r.impact >= 0 ? '+' : ''}${r.impact}pp)`}
                                                 />
                                             </div>
                                         </div>
-                                        <div className={`text-label-sm font-bold ${r.impact >= 0 ? 'text-success' : 'text-danger'}`} title="Impact vs average win rate">
+                                        <div className={`text-label-sm font-bold ${r.impact >= 0 ? 'text-md-sys-primary' : 'text-md-sys-on-surface/60'}`} title="Impact vs average win rate">
                                             {r.impact >= 0 ? '+' : ''}{r.impact}pp
                                         </div>
                                     </div>

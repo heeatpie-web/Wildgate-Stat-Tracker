@@ -115,9 +115,16 @@ describe('useLogMonitor', () => {
     appStoreState.setPlayerName.mockClear();
     ipcMock.send.mockClear();
     ipcMock.on.mockClear();
+    gameDataState.setCurrentLoadout.mockClear();
+    gameDataState.setActiveWeapons.mockClear();
+    gameDataState.setActiveHero.mockClear();
+    gameDataState.setActiveShip.mockClear();
+    gameDataState.updatePlayerIdMapping.mockClear();
     gameDataState.sessionStartTime = Date.now() - 5_000;
     gameDataState.isMatchInProgress = false;
+    gameDataState.currentLoadout = null;
     appStoreState.matches = [];
+    appStoreState.activeWeapons = {};
     Object.keys(ipcCallbacks).forEach((key) => {
       delete ipcCallbacks[key];
     });
@@ -264,5 +271,268 @@ describe('useLogMonitor', () => {
     expect(latestLoadout?.weapons || []).toHaveLength(0);
     expect(latestLoadout?.characterWeapons).toEqual(expect.arrayContaining(['Double Whammy', 'The Doctor']));
     expect(latestLoadout?.characterEquipment).toEqual(expect.arrayContaining(['Repair Drone']));
+  });
+
+  it('clears stale telemetry character loadout selections when payload explicitly sends empty slots', async () => {
+    gameDataState.currentLoadout = {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: [],
+      equipment: [],
+      characterWeapons: ['Double Whammy', 'The Doctor'],
+      characterEquipment: ['Repair Drone'],
+    };
+    appStoreState.activeWeapons = {
+      'Double Whammy': 1,
+      'The Doctor': 1,
+      'Repair Drone': 1,
+    };
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'CharacterLoadoutChanged',
+          Payload: {
+            isLocalPlayer: true,
+            hero: 'Adrian',
+            ship: 'Hunter',
+            characterWeapons: [],
+            characterEquipment: [],
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      characterWeapons?: string[];
+      characterEquipment?: string[];
+    };
+    expect(latestLoadout?.characterWeapons || []).toEqual([]);
+    expect(latestLoadout?.characterEquipment || []).toEqual([]);
+
+    const latestActiveWeapons = gameDataState.setActiveWeapons.mock.calls.at(-1)?.[0] as Record<string, number>;
+    expect(latestActiveWeapons['Double Whammy']).toBeUndefined();
+    expect(latestActiveWeapons['The Doctor']).toBeUndefined();
+    expect(latestActiveWeapons['Repair Drone']).toBeUndefined();
+  });
+
+  it('applies NebLoadoutSaved payloads to telemetry draft loadout while queue is active', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    const createdDraft = addMatch.mock.calls[0]?.[0];
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = [createdDraft];
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadoutSaved',
+          Payload: {
+            event: {
+              isLocalPlayer: true,
+              bWasSavedInGame: false,
+              loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                characterWeapons: ['Double Whammy'],
+                characterEquipment: ['Repair Drone'],
+              },
+            },
+          },
+          ClientTimestamp: nowSec + 1,
+        },
+      ]);
+    });
+
+    expect(gameDataState.setCurrentLoadout).toHaveBeenCalled();
+    const updatedDraftWithSave = updateMatch.mock.calls
+      .map(([match]) => match as {
+        telemetryConsistency?: { loadoutSaves?: Array<{ source?: string }> };
+      })
+      .find((match) => Array.isArray(match?.telemetryConsistency?.loadoutSaves) && match.telemetryConsistency.loadoutSaves.length > 0);
+    expect(updatedDraftWithSave?.telemetryConsistency?.loadoutSaves?.[0]?.source).toBe('NebLoadoutSaved');
+  });
+
+  it('captures matchmaker teammate and mode expectations into telemetry consistency', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    const createdDraft = addMatch.mock.calls[0]?.[0];
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = [createdDraft];
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: {
+            event: {
+              playerIds: ['pilot-id', 'wing-1', 'wing-2', 'wing-3'],
+              ticketMatchPool: 'ArtifactBrawl',
+            },
+          },
+          ClientTimestamp: nowSec + 1,
+        },
+      ]);
+    });
+
+    const withConsistency = updateMatch.mock.calls
+      .map(([match]) => match as {
+        telemetryConsistency?: { expectedTeammateCount?: number; expectedMode?: string };
+      })
+      .find((match) => typeof match?.telemetryConsistency?.expectedTeammateCount === 'number');
+
+    expect(withConsistency?.telemetryConsistency?.expectedTeammateCount).toBe(3);
+    expect(withConsistency?.telemetryConsistency?.expectedMode).toBe('Artifact Brawl');
+  });
+
+  it('records loadout-related NebCloudSaveRecordSize snapshots and ignores unrelated keys', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    const createdDraft = addMatch.mock.calls[0]?.[0];
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = [createdDraft];
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebCloudSaveRecordSize',
+          Payload: { event: { recordKey: 'UnrelatedStatsBlob' } },
+          ClientTimestamp: nowSec + 1,
+        },
+      ]);
+    });
+
+    const beforeLoadoutEventCount = updateMatch.mock.calls.length;
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebCloudSaveRecordSize',
+          Payload: { event: { recordKey: 'CharacterLoadout_v2' } },
+          ClientTimestamp: nowSec + 2,
+        },
+      ]);
+    });
+
+    expect(updateMatch.mock.calls.length).toBeGreaterThan(beforeLoadoutEventCount);
+    const withSnapshot = updateMatch.mock.calls
+      .map(([match]) => match as {
+        telemetryConsistency?: { loadoutSaves?: Array<{ source?: string }> };
+      })
+      .find((match) => Array.isArray(match?.telemetryConsistency?.loadoutSaves)
+        && match.telemetryConsistency.loadoutSaves.some((entry) => entry.source === 'NebCloudSaveRecordSize'));
+
+    expect(withSnapshot).toBeTruthy();
+  });
+
+  it('ignores stale older NebLoadoutSaved events so newer loadout is not regressed', async () => {
+    const baseSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: baseSec,
+        },
+      ]);
+    });
+
+    const createdDraft = addMatch.mock.calls[0]?.[0];
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = [createdDraft];
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadoutSaved',
+          Payload: {
+            event: {
+              isLocalPlayer: true,
+              bWasSavedInGame: true,
+              loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                characterWeapons: ['Double Whammy'],
+              },
+            },
+          },
+          ClientTimestamp: baseSec + 5,
+        },
+      ]);
+    });
+
+    const callsAfterFreshSave = gameDataState.setCurrentLoadout.mock.calls.length;
+    expect(callsAfterFreshSave).toBeGreaterThan(0);
+    const latestAfterFresh = gameDataState.setCurrentLoadout.mock.calls[callsAfterFreshSave - 1]?.[0] as Record<string, unknown>;
+    expect(latestAfterFresh?.hero).toBe('Adrian');
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadoutSaved',
+          Payload: {
+            event: {
+              isLocalPlayer: true,
+              bWasSavedInGame: false,
+              loadout: {
+                hero: 'Venture',
+                ship: 'Hunter',
+                characterWeapons: ['The Doctor'],
+              },
+            },
+          },
+          ClientTimestamp: baseSec + 2,
+        },
+      ]);
+    });
+
+    expect(gameDataState.setCurrentLoadout.mock.calls.length).toBe(callsAfterFreshSave);
+    const staleApplyAttempt = gameDataState.setCurrentLoadout.mock.calls
+      .map(([loadout]) => loadout as Record<string, unknown>)
+      .find((loadout) => loadout?.hero === 'Venture');
+    expect(staleApplyAttempt).toBeUndefined();
   });
 });
