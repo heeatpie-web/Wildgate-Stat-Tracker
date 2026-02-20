@@ -4,6 +4,17 @@ import { useSmartCapture } from '../useSmartCapture';
 import { captureGameWindow, saveScreenshot, isElectron } from '../../utils/electronBridge';
 import { rerunOCROnArtifact } from '../../utils/artifactService';
 
+const mockStoreState: Record<string, unknown> = {
+  ocrMode: 'both',
+  captureMode: 'auto',
+  performanceMode: false,
+  lockOcrTeams: false,
+  pilotRegistry: [],
+  ocrCorrections: {},
+  ocrAliasModel: null,
+  playerProfiles: {},
+};
+
 vi.mock('../../utils/electronBridge', () => ({
   captureGameWindow: vi.fn().mockResolvedValue(undefined),
   ocrProcessCapture: vi.fn().mockResolvedValue({}),
@@ -22,15 +33,7 @@ vi.mock('../../utils/ocr/ocrParser', () => ({
 
 vi.mock('../../store/useAppStore', () => ({
   useAppStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({
-      ocrMode: 'both',
-      captureMode: 'manual',
-      lockOcrTeams: false,
-      pilotRegistry: [],
-      ocrCorrections: {},
-      ocrAliasModel: null,
-      playerProfiles: {},
-    }),
+    selector(mockStoreState),
 }));
 
 vi.mock('../../hooks/useSoundEffects', () => ({
@@ -74,6 +77,14 @@ vi.mock('../../utils/scanService', () => ({
 describe('useSmartCapture', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockStoreState.ocrMode = 'both';
+    mockStoreState.captureMode = 'auto';
+    mockStoreState.performanceMode = false;
+    mockStoreState.lockOcrTeams = false;
+    mockStoreState.pilotRegistry = [];
+    mockStoreState.ocrCorrections = {};
+    mockStoreState.ocrAliasModel = null;
+    mockStoreState.playerProfiles = {};
     vi.mocked(isElectron).mockReturnValue(false);
     vi.mocked(captureGameWindow).mockResolvedValue({ success: false, error: 'not-mocked' });
     vi.mocked(saveScreenshot).mockResolvedValue({ success: true, filePath: '', filename: '' });
@@ -188,5 +199,73 @@ describe('useSmartCapture', () => {
 
     expect(result.current[0].savedCaptures[0]?.ocrProcessed).toBe(true);
     expect(actions.getPendingData('match-42')).not.toBeNull();
+  });
+
+  it('processAllStored runs one OCR job at a time in performance mode', async () => {
+    mockStoreState.performanceMode = true;
+    mockStoreState.ocrMode = 'cloud';
+
+    vi.mocked(isElectron).mockReturnValue(true);
+    vi.mocked(captureGameWindow).mockResolvedValue({
+      success: true,
+      imageBase64: 'ZmFrZQ==',
+    });
+    let saveIndex = 0;
+    vi.mocked(saveScreenshot).mockImplementation(async () => {
+      saveIndex += 1;
+      return {
+        success: true,
+        filePath: `C:\\captures\\cap-${saveIndex}.png`,
+        filename: `cap-${saveIndex}.png`,
+      };
+    });
+
+    const makeOcrData = () => ({
+      screenshotType: 'crew_hub' as const,
+      playerShip: { shipType: 'Hunter (4 Player)', confidence: 90, rawText: 'Hunter' },
+      playerTeamName: '',
+      reachModifiers: [],
+      enemyShips: [],
+      teammates: [{ name: 'Wingman', confidence: 88, isTeammate: true, rawText: 'Wingman' }],
+      opponentTeams: [],
+      overallConfidence: 88,
+      captureTimestamp: Date.now(),
+    });
+
+    const resolvers: Array<() => void> = [];
+    vi.mocked(rerunOCROnArtifact).mockImplementation(() =>
+      new Promise((resolve) => {
+        resolvers.push(() => resolve({ success: true, data: makeOcrData() }));
+      })
+    );
+
+    const { result } = renderHook(() => useSmartCapture());
+    const [, actions] = result.current;
+
+    await act(async () => {
+      await actions.captureOnly('match-42');
+      await actions.captureOnly('match-42');
+    });
+
+    let batchPromise: Promise<void> | null = null;
+    await act(async () => {
+      batchPromise = actions.processAllStored('Pilot', 'match-42');
+      await Promise.resolve();
+    });
+
+    expect(vi.mocked(rerunOCROnArtifact)).toHaveBeenCalledTimes(1);
+
+    resolvers.shift()?.();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    expect(vi.mocked(rerunOCROnArtifact)).toHaveBeenCalledTimes(2);
+
+    resolvers.shift()?.();
+    await act(async () => {
+      await batchPromise;
+    });
+
+    expect(result.current[0].savedCaptures.every((capture) => capture.ocrProcessed)).toBe(true);
   });
 });

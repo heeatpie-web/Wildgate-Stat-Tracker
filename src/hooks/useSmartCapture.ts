@@ -68,6 +68,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const ocrMode = useAppStore(s => s.ocrMode);
   const ocrRegions = useAppStore(s => s.ocrRegions);
   const captureMode = useAppStore(s => s.captureMode);
+  const performanceMode = useAppStore(s => s.performanceMode);
   const lockOcrTeams = useAppStore(s => s.lockOcrTeams);
   const pilotRegistry = useAppStore(s => s.pilotRegistry);
   const ocrCorrections = useAppStore(s => s.ocrCorrections);
@@ -816,19 +817,33 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     setProcessingProgress({ current: 0, total: unprocessed.length });
 
     try {
-      const concurrency = 2;
+      const normalizedMode = ocrMode === 'hybrid-plus' ? 'both' : ocrMode;
+      const concurrency = performanceMode ? 1 : (normalizedMode === 'cloud' ? 2 : 1);
+      const interJobDelayMs = performanceMode ? 250 : (normalizedMode === 'cloud' ? 60 : 120);
+      const yieldEvery = performanceMode ? 2 : 4;
+      const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
       const results: Array<{ filePath: string; result: RerunOcrResult }> = [];
       const queue = [...unprocessed];
       let completed = 0;
 
       const runNext = async () => {
-        const next = queue.shift();
-        if (!next) return;
-        const result = await rerunOCROnArtifact(next.filePath, activeUser || '', ocrMode, ocrRegions);
-        completed += 1;
-        setProcessingProgress({ current: completed, total: unprocessed.length });
-        results.push({ filePath: next.filePath, result });
-        await runNext();
+        let processedByWorker = 0;
+        while (queue.length > 0) {
+          const next = queue.shift();
+          if (!next) break;
+          const result = await rerunOCROnArtifact(next.filePath, activeUser || '', ocrMode, ocrRegions);
+          completed += 1;
+          processedByWorker += 1;
+          setProcessingProgress({ current: completed, total: unprocessed.length });
+          results.push({ filePath: next.filePath, result });
+
+          if (queue.length > 0 && interJobDelayMs > 0) {
+            await delay(interJobDelayMs);
+          }
+          if (processedByWorker % yieldEvery === 0) {
+            await delay(0);
+          }
+        }
       };
 
       const workers = Array.from({ length: Math.min(concurrency, queue.length) }, () => runNext());
@@ -861,7 +876,17 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       setVisionStatus('idle');
       setProcessingProgress(null);
     }
-  }, [ocrMode, ocrRegions, mergeIntoPending, playSuccess, playSoundError, setVisionStatus, refineQualityFromOcr, normalizeMatchScope]);
+  }, [
+    ocrMode,
+    ocrRegions,
+    performanceMode,
+    mergeIntoPending,
+    playSuccess,
+    playSoundError,
+    setVisionStatus,
+    refineQualityFromOcr,
+    normalizeMatchScope,
+  ]);
 
   const processQueue = useCallback(async () => {
     if (isProcessingQueueRef.current) return;
