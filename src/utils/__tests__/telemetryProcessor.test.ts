@@ -135,6 +135,34 @@ describe('processTelemetryEvent', () => {
       expect(actions.setTimeMin).toHaveBeenCalledWith('02', 'telemetry');
       expect(actions.setTimeSec).toHaveBeenCalledWith('05', 'telemetry');
     });
+
+    it('keeps a 60-minute duration as valid telemetry time', () => {
+      context.isMatchInProgress = true;
+      context.matchStartTime = Date.now() - (60 * 60 * 1000);
+      const event = {
+        EventName: 'NebLoadingScreen',
+        Payload: { event: { loadedMap: 'Frontend_MainMenu' } },
+        ClientTimestamp: Date.now() / 1000,
+      };
+      processTelemetryEvent(event, actions, context);
+
+      expect(actions.setTimeMin).toHaveBeenCalledWith('60', 'telemetry');
+      expect(actions.setTimeSec).toHaveBeenCalledWith('00', 'telemetry');
+    });
+
+    it('resets impossible frontend-map duration values above 90 minutes', () => {
+      context.isMatchInProgress = true;
+      context.matchStartTime = Date.now() - (121 * 60 * 1000);
+      const event = {
+        EventName: 'NebLoadingScreen',
+        Payload: { event: { loadedMap: 'Frontend_MainMenu' } },
+        ClientTimestamp: Date.now() / 1000,
+      };
+      processTelemetryEvent(event, actions, context);
+
+      expect(actions.setTimeMin).toHaveBeenCalledWith('00', 'telemetry');
+      expect(actions.setTimeSec).toHaveBeenCalledWith('00', 'telemetry');
+    });
   });
 
   // ── ID Discovery ──
@@ -208,6 +236,22 @@ describe('processTelemetryEvent', () => {
       };
       processTelemetryEvent(event, actions, context);
       expect(actions.setLastMatchSessionId).toHaveBeenCalledWith('new-session');
+    });
+
+    it('resets impossible session-clear duration values above 90 minutes', () => {
+      context.isMatchInProgress = true;
+      context.matchStartTime = Date.now() - (121 * 60 * 1000);
+      context.lastMatchSessionId = 'session-abc';
+      const event = {
+        EventName: 'SomeEvent',
+        Payload: {},
+        context: { matchSessionId: '' },
+        ClientTimestamp: Date.now() / 1000,
+      };
+      processTelemetryEvent(event, actions, context);
+
+      expect(actions.setTimeMin).toHaveBeenCalledWith('00', 'telemetry');
+      expect(actions.setTimeSec).toHaveBeenCalledWith('00', 'telemetry');
     });
   });
 

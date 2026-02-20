@@ -9,6 +9,30 @@ import Logger from './logger';
 import type { DataSource } from '../store/slices/createDataSlice';
 import { UNNAMED_PLAYER_PREFIX } from './constants';
 
+const MAX_TELEMETRY_MATCH_DURATION_SECONDS = 90 * 60;
+
+const isTrustedTelemetryDuration = (seconds: number) =>
+    Number.isFinite(seconds) && seconds > 0 && seconds <= MAX_TELEMETRY_MATCH_DURATION_SECONDS;
+
+const applyTelemetryDuration = (
+    totalSeconds: number,
+    actions: Pick<TelemetryActions, 'setTimeMin' | 'setTimeSec'>,
+) => {
+    if (isTrustedTelemetryDuration(totalSeconds)) {
+        actions.setTimeMin(Math.floor(totalSeconds / 60).toString().padStart(2, '0'), 'telemetry');
+        actions.setTimeSec((totalSeconds % 60).toString().padStart(2, '0'), 'telemetry');
+        return;
+    }
+    if (totalSeconds > MAX_TELEMETRY_MATCH_DURATION_SECONDS) {
+        Logger.warn(
+            'TelemetryProcessor',
+            `Ignored impossible telemetry duration (${totalSeconds}s > ${MAX_TELEMETRY_MATCH_DURATION_SECONDS}s)`,
+        );
+        actions.setTimeMin('00', 'telemetry');
+        actions.setTimeSec('00', 'telemetry');
+    }
+};
+
 /** Store actions injected into the processor by useLogMonitor. */
 export interface TelemetryActions {
     setTimeMin: (v: string, source?: DataSource) => void;
@@ -74,10 +98,7 @@ export const processTelemetryEvent = (
             const durationMs = gameTime - context.matchStartTime;
             totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
         }
-        if (totalSeconds > 0) {
-            actions.setTimeMin(Math.floor(totalSeconds / 60).toString().padStart(2, '0'), 'telemetry');
-            actions.setTimeSec((totalSeconds % 60).toString().padStart(2, '0'), 'telemetry');
-        }
+        applyTelemetryDuration(totalSeconds, actions);
 
         actions.setIsMatchInProgress(false);
         actions.setMatchStartTime(null);
@@ -108,17 +129,15 @@ export const processTelemetryEvent = (
     const mapName = payload.loadedMap || payload.loadingMap;
     if (name === 'NebLoadingScreen' && mapName?.includes('Frontend') && context.isMatchInProgress) {
         let totalSeconds = 0;
-        if (payload.matchDuration) {
-            totalSeconds = Math.floor(payload.matchDuration);
+        const payloadDurationSeconds = Number(payload.matchDuration);
+        if (Number.isFinite(payloadDurationSeconds) && payloadDurationSeconds > 0) {
+            totalSeconds = Math.floor(payloadDurationSeconds);
         } else if (context.matchStartTime) {
             const durationMs = gameTime - context.matchStartTime;
             totalSeconds = Math.floor(durationMs / 1000);
         }
 
-        if (totalSeconds > 0) {
-            actions.setTimeMin(Math.floor(totalSeconds / 60).toString().padStart(2, '0'), 'telemetry');
-            actions.setTimeSec((totalSeconds % 60).toString().padStart(2, '0'), 'telemetry');
-        }
+        applyTelemetryDuration(totalSeconds, actions);
 
         actions.setIsMatchInProgress(false);
         actions.setMatchStartTime(null);

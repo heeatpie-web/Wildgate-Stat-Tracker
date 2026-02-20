@@ -120,6 +120,7 @@ describe('useLogMonitor', () => {
     gameDataState.setActiveHero.mockClear();
     gameDataState.setActiveShip.mockClear();
     gameDataState.updatePlayerIdMapping.mockClear();
+    uiState.setToast.mockClear();
     gameDataState.sessionStartTime = Date.now() - 5_000;
     gameDataState.isMatchInProgress = false;
     gameDataState.currentLoadout = null;
@@ -185,6 +186,24 @@ describe('useLogMonitor', () => {
       subType: 'Telemetry Draft',
       ocrState: 'queued',
     });
+  });
+
+  it('does not create telemetry draft from session-id start without map start', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'TelemetryPing',
+          Payload: { event: { some: 'payload' } },
+          context: { matchSessionId: 'session-only-start' },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(addMatch).not.toHaveBeenCalled();
   });
 
   it('passes not-in-progress lifecycle context to telemetry processor on initial map start', async () => {
@@ -528,6 +547,49 @@ describe('useLogMonitor', () => {
         && match.telemetryConsistency.loadoutSaves.some((entry) => entry.source === 'NebCloudSaveRecordSize'));
 
     expect(withSnapshot).toBeTruthy();
+  });
+
+  it('resets telemetry draft duration when mission length exceeds 90 minutes', async () => {
+    const baseSec = Math.floor(Date.now() / 1000);
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: baseSec,
+        },
+      ]);
+    });
+
+    const createdDraft = addMatch.mock.calls[0]?.[0];
+    expect(createdDraft).toBeTruthy();
+    appStoreState.matches = [createdDraft];
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'Frontend_MainMenu' },
+          ClientTimestamp: baseSec + (121 * 60),
+        },
+      ]);
+    });
+
+    const finalizedDraft = updateMatch.mock.calls
+      .map(([match]) => match as {
+        notes?: string;
+        time?: string;
+        telemetryConsistency?: { telemetryDurationSeconds?: number };
+      })
+      .find((match) => typeof match.notes === 'string' && match.notes.includes('Telemetry detected mission end'));
+
+    expect(finalizedDraft).toBeTruthy();
+    expect(finalizedDraft?.time).toBe('00:00');
+    expect(finalizedDraft?.telemetryConsistency?.telemetryDurationSeconds).toBeUndefined();
+    expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({ type: 'warning' }));
   });
 
   it('ignores stale older NebLoadoutSaved events so newer loadout is not regressed', async () => {

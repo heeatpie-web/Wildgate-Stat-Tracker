@@ -16,6 +16,11 @@ import {
 } from '../utils/telemetryConsistency';
 
 const ipcRenderer = getElectronAPI();
+const MAX_TELEMETRY_MATCH_DURATION_SECONDS = 90 * 60;
+
+const isTrustedTelemetryDuration = (seconds: number) =>
+    Number.isFinite(seconds) && seconds >= 0 && seconds <= MAX_TELEMETRY_MATCH_DURATION_SECONDS;
+
 type TelemetryStatusPatch = {
     exists?: boolean;
     size?: number;
@@ -408,25 +413,41 @@ export const useLogMonitor = (activeUser?: string) => {
         const startedAt = telemetryDraftStartedAtRef.current || match?.timestamp || gameTime;
         if (match) {
             const totalSeconds = Math.max(0, Math.floor((gameTime - startedAt) / 1000));
-            const duration = toClock(totalSeconds);
+            const hasTrustedDuration = isTrustedTelemetryDuration(totalSeconds);
+            const rawDuration = toClock(totalSeconds);
+            const duration = hasTrustedDuration ? toClock(totalSeconds) : '00:00';
+            const maxDurationClock = toClock(MAX_TELEMETRY_MATCH_DURATION_SECONDS);
             const nextConsistency: TelemetryConsistency = {
                 durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
                 ...(match.telemetryConsistency || {}),
-                telemetryDurationSeconds: totalSeconds,
             };
+            if (hasTrustedDuration) {
+                nextConsistency.telemetryDurationSeconds = totalSeconds;
+            } else {
+                delete nextConsistency.telemetryDurationSeconds;
+                Logger.warn(
+                    'LogMonitor',
+                    `Telemetry draft duration exceeded limit (${rawDuration} raw, max ${maxDurationClock}). Resetting to 00:00.`,
+                );
+            }
+            const completionNote = hasTrustedDuration
+                ? 'Telemetry detected mission end. Choose result or run Smart Capture.'
+                : `Telemetry detected mission end. Duration exceeded ${maxDurationClock} and was reset. Set match time manually if needed.`;
             updateMatch({
                 ...match,
                 timestamp: startedAt,
                 time: duration,
-                notes: `${match.notes || ''}\nTelemetry detected mission end. Choose result or run Smart Capture.`.trim(),
+                notes: `${match.notes || ''}\n${completionNote}`.trim(),
                 telemetryConsistency: nextConsistency,
             });
             window.dispatchEvent(new CustomEvent('telemetry:draft-ready', {
                 detail: { matchId: draftId, duration },
             }));
             setToast({
-                message: `Telemetry draft ready (${duration}). Choose result or run Smart Capture.`,
-                type: 'success',
+                message: hasTrustedDuration
+                    ? `Telemetry draft ready (${duration}). Choose result or run Smart Capture.`
+                    : `Telemetry draft ready. Duration reset (over ${maxDurationClock}).`,
+                type: hasTrustedDuration ? 'success' : 'warning',
             });
             Logger.info('LogMonitor', `Telemetry draft finalized (matchId=${draftId}, duration=${duration})`);
         }
@@ -524,9 +545,9 @@ export const useLogMonitor = (activeUser?: string) => {
                         : (typeof payload.loadingMap === 'string' ? payload.loadingMap : '');
                     const mapStartSignal = name === 'NebLoadingScreen' && !!loadingMapName && !loadingMapName.includes('Frontend');
                     const mapEndSignal = name === 'NebLoadingScreen' && loadingMapName.includes('Frontend');
-                    const sessionStartSignal = !!currentMatchSessionId && !previousMatchSessionId;
                     const sessionEndSignal = !currentMatchSessionId && !!previousMatchSessionId;
-                    const startLifecycleSignal = mapStartSignal || sessionStartSignal;
+                    // Keep start strict to map transitions. Session ID clear remains an emergency end signal.
+                    const startLifecycleSignal = mapStartSignal;
                     const endLifecycleSignal = mapEndSignal || sessionEndSignal;
                     if (startLifecycleSignal && !telemetryDraftMatchIdRef.current) {
                         createTelemetryDraftIfNeeded(gameTime);
