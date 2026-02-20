@@ -1,4 +1,10 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v2.17.2": [
+    "Fix: Reduced OCR batch CPU spikes by lowering smart-capture OCR concurrency in local/merged modes and adding pacing between jobs.",
+    "Fix: Analytics tooltips now force theme-aware text colors so dark and twilight hover labels stay readable.",
+    "Improvement: Pro Analytics now has category filters (Core, Timeline, Team, Environment, Detailed) to reduce detailed-view clutter.",
+    "Fix: ID Mapper now correctly classifies ship names like Hunter and Privateer as ships instead of player labels."
+  ],
   "v2.17.1": [
     "Fix: OCR Visual Editor 'Load Screenshot' now renders images correctly — Electron file picker was returning a base64 data URL that bypassed blob URL creation, causing large screenshots to silently fail in the preview.",
     "Fix: ROI image loading works in dev mode — switched from fetch() to atob() for data URL decoding to avoid CSP connect-src restrictions.",
@@ -146,4 +152,3 @@ export const CHANGELOG: Record<string, string[]> = {
     "Fix: Solved layout jitter on startup and improved overall responsiveness."
   ]
 };
-
