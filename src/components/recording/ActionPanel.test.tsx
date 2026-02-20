@@ -144,6 +144,16 @@ describe('ActionPanel', () => {
     expect(screen.queryByText(/primary capture lives in the top header/i)).not.toBeInTheDocument();
   }, 10000);
 
+  it('shows a clear stop match timer button while a mission is in progress', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    gameData.isMatchInProgress = true;
+    gameData.matchStartTime = Date.now() - 30_000;
+
+    render(<ActionPanel />);
+
+    expect(screen.getByRole('button', { name: /stop match timer/i })).toBeInTheDocument();
+  });
+
   it('falls back to smart scan when smart capture callback is not provided', async () => {
     const { ActionPanel } = await import('./ActionPanel');
 

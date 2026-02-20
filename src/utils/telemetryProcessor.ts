@@ -9,7 +9,7 @@ import Logger from './logger';
 import type { DataSource } from '../store/slices/createDataSlice';
 import { UNNAMED_PLAYER_PREFIX } from './constants';
 
-const MAX_TELEMETRY_MATCH_DURATION_SECONDS = 90 * 60;
+const MAX_TELEMETRY_MATCH_DURATION_SECONDS = 60 * 60;
 
 const isTrustedTelemetryDuration = (seconds: number) =>
     Number.isFinite(seconds) && seconds > 0 && seconds <= MAX_TELEMETRY_MATCH_DURATION_SECONDS;

@@ -536,10 +536,13 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                             <span className="font-mono font-bold text-body text-md-sys-primary">{matchElapsed}</span>
                             <button
                                 onClick={() => { setIsMatchInProgress(false); setMatchStartTime(null); }}
-                                className="text-label-xs px-1.5 py-0.5 bg-md-sys-errorContainer/40 text-md-sys-error rounded hover:bg-md-sys-error/20 font-bold uppercase"
-                                title="Stop timer"
+                                className="inline-flex items-center gap-1 text-label-xs px-2 py-1 bg-md-sys-errorContainer/40 text-md-sys-error rounded hover:bg-md-sys-error/20 font-bold uppercase"
+                                title="Stop match timer"
                                 aria-label="Stop match timer"
-                            >x</button>
+                            >
+                                <X size={10} />
+                                <span>Stop Match Timer</span>
+                            </button>
                         </div>
                     </div>
                 ) : (
@@ -698,10 +701,13 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                             <span className="font-mono font-bold text-body text-md-sys-primary">{matchElapsed}</span>
                             <button
                                 onClick={() => { setIsMatchInProgress(false); setMatchStartTime(null); }}
-                                className="text-label-xs px-1.5 py-0.5 bg-md-sys-errorContainer/40 text-md-sys-error rounded hover:bg-md-sys-error/20 font-bold uppercase"
-                                title="Stop timer"
+                                className="inline-flex items-center gap-1 text-label-xs px-2 py-1 bg-md-sys-errorContainer/40 text-md-sys-error rounded hover:bg-md-sys-error/20 font-bold uppercase"
+                                title="Stop match timer"
                                 aria-label="Stop match timer"
-                            >x</button>
+                            >
+                                <X size={10} />
+                                <span>Stop Match Timer</span>
+                            </button>
                         </div>
                     </div>
                 ) : (

@@ -549,7 +549,7 @@ describe('useLogMonitor', () => {
     expect(withSnapshot).toBeTruthy();
   });
 
-  it('resets telemetry draft duration when mission length exceeds 90 minutes', async () => {
+  it('resets telemetry draft duration when mission length exceeds 60 minutes', async () => {
     const baseSec = Math.floor(Date.now() / 1000);
     const { useLogMonitor } = await import('../useLogMonitor');
     renderHook(() => useLogMonitor('Pilot'));
@@ -573,7 +573,7 @@ describe('useLogMonitor', () => {
         {
           EventName: 'NebLoadingScreen',
           Payload: { loadingMap: 'Frontend_MainMenu' },
-          ClientTimestamp: baseSec + (121 * 60),
+          ClientTimestamp: baseSec + (74 * 60),
         },
       ]);
     });

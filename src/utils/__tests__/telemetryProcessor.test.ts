@@ -150,9 +150,9 @@ describe('processTelemetryEvent', () => {
       expect(actions.setTimeSec).toHaveBeenCalledWith('00', 'telemetry');
     });
 
-    it('resets impossible frontend-map duration values above 90 minutes', () => {
+    it('resets impossible frontend-map duration values above 60 minutes', () => {
       context.isMatchInProgress = true;
-      context.matchStartTime = Date.now() - (121 * 60 * 1000);
+      context.matchStartTime = Date.now() - (74 * 60 * 1000);
       const event = {
         EventName: 'NebLoadingScreen',
         Payload: { event: { loadedMap: 'Frontend_MainMenu' } },
@@ -238,9 +238,9 @@ describe('processTelemetryEvent', () => {
       expect(actions.setLastMatchSessionId).toHaveBeenCalledWith('new-session');
     });
 
-    it('resets impossible session-clear duration values above 90 minutes', () => {
+    it('resets impossible session-clear duration values above 60 minutes', () => {
       context.isMatchInProgress = true;
-      context.matchStartTime = Date.now() - (121 * 60 * 1000);
+      context.matchStartTime = Date.now() - (74 * 60 * 1000);
       context.lastMatchSessionId = 'session-abc';
       const event = {
         EventName: 'SomeEvent',
