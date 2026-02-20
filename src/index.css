@@ -2545,6 +2545,26 @@ body.perf-lite .shadow-2xl {
   box-shadow: none;
 }
 
+/* Ensure select elements styled with md3-textfield classes render legible text.
+   Native <option> elements cannot inherit CSS color, so we set color-scheme to
+   match the app theme so the OS/browser popup renders with appropriate contrast. */
+select.md3-textfield,
+select.md3-textfield--outlined {
+  color: var(--md-sys-color-on-surface);
+}
+
+body[data-mode='dark'] select.md3-textfield,
+body[data-mode='dark'] select.md3-textfield--outlined,
+body[data-mode='twilight'] select.md3-textfield,
+body[data-mode='twilight'] select.md3-textfield--outlined {
+  color-scheme: dark;
+}
+
+body[data-mode='light'] select.md3-textfield,
+body[data-mode='light'] select.md3-textfield--outlined {
+  color-scheme: light;
+}
+
 :where(button, .md3-icon-btn, .md3-chip, .md3-btn-outlined, .premium-nav-item, .md3-nav-item):focus-visible {
   outline: none;
   box-shadow: none;
