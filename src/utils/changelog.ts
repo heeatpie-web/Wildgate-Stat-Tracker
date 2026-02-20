@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v2.17.1": [
+    "Fix: OCR Visual Editor 'Load Screenshot' now renders images correctly — Electron file picker was returning a base64 data URL that bypassed blob URL creation, causing large screenshots to silently fail in the preview.",
+    "Fix: ROI image loading works in dev mode — switched from fetch() to atob() for data URL decoding to avoid CSP connect-src restrictions.",
+    "Fix: Ship type dropdowns in the OCR team assignment wizard no longer show white-on-white text in dark/twilight mode."
+  ],
   "v2.17": [
     "Fix: Settings hook-order crash path stabilized to prevent render-hook mismatch when opening Settings.",
     "Fix: Recording view now keeps Loadout + Match Recording stacked by default and switches to tab mode only at tighter heights.",
