@@ -25,8 +25,26 @@ const LAYOUT = {
   ENEMY_SHIPS: {
     xMin: 0.60,
     xMax: 1.0,
-    yMin: 0,
-    yMax: 0.35,
+    yMin: 0.00,
+    yMax: 0.10,
+  },
+  ENEMY_SHIPS2: {
+    xMin: 0.60,
+    xMax: 1.0,
+    yMin: 0.10,
+    yMax: 0.20,
+  },
+  ENEMY_SHIPS3: {
+    xMin: 0.60,
+    xMax: 1.0,
+    yMin: 0.20,
+    yMax: 0.30,
+  },
+  ENEMY_SHIPS4: {
+    xMin: 0.60,
+    xMax: 1.0,
+    yMin: 0.30,
+    yMax: 0.40,
   },
   // HAZARDS region (right side, middle)
   HAZARDS: {
@@ -74,6 +92,9 @@ function resolveMapLayout(layoutOverrides) {
   return {
     YOUR_SHIP: sanitizeBounds(source.yourShip, LAYOUT.YOUR_SHIP),
     ENEMY_SHIPS: sanitizeBounds(source.enemyShips, LAYOUT.ENEMY_SHIPS),
+    ENEMY_SHIPS2: sanitizeBounds(source.enemyShips2, LAYOUT.ENEMY_SHIPS2),
+    ENEMY_SHIPS3: sanitizeBounds(source.enemyShips3, LAYOUT.ENEMY_SHIPS3),
+    ENEMY_SHIPS4: sanitizeBounds(source.enemyShips4, LAYOUT.ENEMY_SHIPS4),
     HAZARDS: sanitizeBounds(source.hazards, LAYOUT.HAZARDS),
     PLAYERS: sanitizeBounds(source.players, LAYOUT.PLAYERS),
   };
@@ -291,22 +312,28 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
   console.log('[MapScreen] Extracting ENEMY SHIPS');
 
   const enemyShips = [];
-
-  // Define region bounds
-  const bounds = {
-    xMin: imageWidth * layout.ENEMY_SHIPS.xMin,
-    xMax: imageWidth * layout.ENEMY_SHIPS.xMax,
-    yMin: imageHeight * layout.ENEMY_SHIPS.yMin,
-    yMax: imageHeight * layout.ENEMY_SHIPS.yMax,
-  };
+  const enemyRegions = [
+    layout.ENEMY_SHIPS,
+    layout.ENEMY_SHIPS2,
+    layout.ENEMY_SHIPS3,
+    layout.ENEMY_SHIPS4,
+  ].filter(Boolean);
+  const boundsList = enemyRegions.map((region) => ({
+    xMin: imageWidth * region.xMin,
+    xMax: imageWidth * region.xMax,
+    yMin: imageHeight * region.yMin,
+    yMax: imageHeight * region.yMax,
+  }));
 
   // Filter words in ENEMY SHIPS region
   const regionWords = words.filter(w => {
     if (!w.bbox) return false;
     const centerX = (w.bbox.x0 + w.bbox.x1) / 2;
     const centerY = (w.bbox.y0 + w.bbox.y1) / 2;
-    return centerX >= bounds.xMin && centerX <= bounds.xMax &&
-           centerY >= bounds.yMin && centerY <= bounds.yMax;
+    return boundsList.some((bounds) => (
+      centerX >= bounds.xMin && centerX <= bounds.xMax &&
+      centerY >= bounds.yMin && centerY <= bounds.yMax
+    ));
   });
 
   // Group into lines and sort by Y

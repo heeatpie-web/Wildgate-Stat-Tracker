@@ -159,7 +159,10 @@ describe('artifactService', () => {
         },
         mapScreen: {
           yourShip: { xMin: 0, xMax: 0.3, yMin: 0, yMax: 0.25 },
-          enemyShips: { xMin: 0.6, xMax: 1, yMin: 0, yMax: 0.35 },
+          enemyShips: { xMin: 0.6, xMax: 1, yMin: 0.00, yMax: 0.10 },
+          enemyShips2: { xMin: 0.6, xMax: 1, yMin: 0.10, yMax: 0.20 },
+          enemyShips3: { xMin: 0.6, xMax: 1, yMin: 0.20, yMax: 0.30 },
+          enemyShips4: { xMin: 0.6, xMax: 1, yMin: 0.30, yMax: 0.40 },
           hazards: { xMin: 0.6, xMax: 1, yMin: 0.3, yMax: 0.7 },
           players: { xMin: 0, xMax: 0.4, yMin: 0.7, yMax: 1 },
         },

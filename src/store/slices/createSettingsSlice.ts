@@ -62,6 +62,9 @@ export interface OcrRegionSettings {
   mapScreen: {
     yourShip: OcrRegionBounds;
     enemyShips: OcrRegionBounds;
+    enemyShips2: OcrRegionBounds;
+    enemyShips3: OcrRegionBounds;
+    enemyShips4: OcrRegionBounds;
     hazards: OcrRegionBounds;
     players: OcrRegionBounds;
   };
@@ -92,7 +95,10 @@ export const createDefaultOcrRegions = (): OcrRegionSettings => ({
   },
   mapScreen: {
     yourShip: { xMin: 0.0, xMax: 0.30, yMin: 0.0, yMax: 0.25 },
-    enemyShips: { xMin: 0.60, xMax: 1.0, yMin: 0.0, yMax: 0.35 },
+    enemyShips: { xMin: 0.60, xMax: 1.0, yMin: 0.00, yMax: 0.10 },
+    enemyShips2: { xMin: 0.60, xMax: 1.0, yMin: 0.10, yMax: 0.20 },
+    enemyShips3: { xMin: 0.60, xMax: 1.0, yMin: 0.20, yMax: 0.30 },
+    enemyShips4: { xMin: 0.60, xMax: 1.0, yMin: 0.30, yMax: 0.40 },
     hazards: { xMin: 0.60, xMax: 1.0, yMin: 0.30, yMax: 0.70 },
     players: { xMin: 0.0, xMax: 0.40, yMin: 0.70, yMax: 1.0 },
   },
@@ -428,6 +434,9 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
         ...(update.mapScreen || {}),
         yourShip: { ...state.ocrRegions.mapScreen.yourShip, ...(update.mapScreen?.yourShip || {}) },
         enemyShips: { ...state.ocrRegions.mapScreen.enemyShips, ...(update.mapScreen?.enemyShips || {}) },
+        enemyShips2: { ...state.ocrRegions.mapScreen.enemyShips2, ...(update.mapScreen?.enemyShips2 || {}) },
+        enemyShips3: { ...state.ocrRegions.mapScreen.enemyShips3, ...(update.mapScreen?.enemyShips3 || {}) },
+        enemyShips4: { ...state.ocrRegions.mapScreen.enemyShips4, ...(update.mapScreen?.enemyShips4 || {}) },
         hazards: { ...state.ocrRegions.mapScreen.hazards, ...(update.mapScreen?.hazards || {}) },
         players: { ...state.ocrRegions.mapScreen.players, ...(update.mapScreen?.players || {}) },
       },

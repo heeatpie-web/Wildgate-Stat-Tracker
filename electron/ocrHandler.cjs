@@ -14,6 +14,7 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const crypto = require('crypto');
+const os = require('os');
 
 // Import new extraction modules
 const { detectScreenType, detectScreenTypeFromLines, SCREEN_TYPES } = require('./screenDetector.cjs');
@@ -52,7 +53,13 @@ function ensureCorpusArchiveDir() {
 // ─── OCR Result Cache (LRU, max 50 entries) ───
 const OCR_CACHE_MAX = Math.min(500, Math.max(10, parseInt(process.env.WILDGATE_OCR_CACHE_MAX || '50', 10) || 50));
 const LOW_WORD_CONFIDENCE_THRESHOLD = Math.min(80, Math.max(0, parseInt(process.env.WILDGATE_OCR_WORD_CONF_MIN || '25', 10) || 25));
+const CPU_COUNT = Math.max(1, Number.isFinite(os.cpus()?.length) ? os.cpus().length : 1);
+const OCR_MAX_CONCURRENT = Math.min(4, Math.max(1, parseInt(process.env.WILDGATE_OCR_MAX_CONCURRENT || '1', 10) || 1));
+const DEFAULT_SHARP_CONCURRENCY = CPU_COUNT <= 4 ? 1 : 2;
+const OCR_SHARP_CONCURRENCY = Math.min(4, Math.max(1, parseInt(process.env.WILDGATE_OCR_SHARP_CONCURRENCY || String(DEFAULT_SHARP_CONCURRENCY), 10) || DEFAULT_SHARP_CONCURRENCY));
 const ocrResultCache = new Map(); // hash → { result, timestamp }
+const ocrConcurrencyQueue = [];
+let activeOcrJobs = 0;
 const cacheStats = {
   hits: 0,
   misses: 0,
@@ -97,6 +104,28 @@ function recordCacheMissDuration(durationMs) {
   cacheStats.missTimingSamples += 1;
 }
 
+function releaseOcrSlot() {
+  activeOcrJobs = Math.max(0, activeOcrJobs - 1);
+  const next = ocrConcurrencyQueue.shift();
+  if (typeof next === 'function') {
+    next();
+  }
+}
+
+async function acquireOcrSlot(tag = 'unspecified') {
+  const waitStart = Date.now();
+  while (activeOcrJobs >= OCR_MAX_CONCURRENT) {
+    await new Promise((resolve) => {
+      ocrConcurrencyQueue.push(resolve);
+    });
+  }
+  activeOcrJobs += 1;
+  const waitMs = Date.now() - waitStart;
+  if (waitMs > 0) {
+    console.log(`[OCR] Queue delay ${waitMs}ms for ${tag} (maxConcurrent=${OCR_MAX_CONCURRENT})`);
+  }
+}
+
 function createDefaultOcrRegions() {
   return {
     crewHub: {
@@ -106,7 +135,10 @@ function createDefaultOcrRegions() {
     },
     mapScreen: {
       yourShip: { xMin: 0.0, xMax: 0.30, yMin: 0.0, yMax: 0.25 },
-      enemyShips: { xMin: 0.60, xMax: 1.0, yMin: 0.0, yMax: 0.35 },
+      enemyShips: { xMin: 0.60, xMax: 1.0, yMin: 0.00, yMax: 0.10 },
+      enemyShips2: { xMin: 0.60, xMax: 1.0, yMin: 0.10, yMax: 0.20 },
+      enemyShips3: { xMin: 0.60, xMax: 1.0, yMin: 0.20, yMax: 0.30 },
+      enemyShips4: { xMin: 0.60, xMax: 1.0, yMin: 0.30, yMax: 0.40 },
       hazards: { xMin: 0.60, xMax: 1.0, yMin: 0.30, yMax: 0.70 },
       players: { xMin: 0.0, xMax: 0.40, yMin: 0.70, yMax: 1.0 },
     },
@@ -154,6 +186,9 @@ function sanitizeOcrRegions(input) {
     mapScreen: {
       yourShip: sanitizeRegionBounds(mapScreen.yourShip, defaults.mapScreen.yourShip),
       enemyShips: sanitizeRegionBounds(mapScreen.enemyShips, defaults.mapScreen.enemyShips),
+      enemyShips2: sanitizeRegionBounds(mapScreen.enemyShips2, defaults.mapScreen.enemyShips2),
+      enemyShips3: sanitizeRegionBounds(mapScreen.enemyShips3, defaults.mapScreen.enemyShips3),
+      enemyShips4: sanitizeRegionBounds(mapScreen.enemyShips4, defaults.mapScreen.enemyShips4),
       hazards: sanitizeRegionBounds(mapScreen.hazards, defaults.mapScreen.hazards),
       players: sanitizeRegionBounds(mapScreen.players, defaults.mapScreen.players),
     },
@@ -352,7 +387,8 @@ async function applyDictionaryToWorkers(userWordsFile) {
 }
 
 // Tesseract worker pool (scheduler + multiple workers)
-const WORKER_POOL_SIZE = Math.min(8, Math.max(1, parseInt(process.env.WILDGATE_OCR_WORKER_POOL_SIZE || '3', 10) || 3));
+const DEFAULT_WORKER_POOL_SIZE = CPU_COUNT >= 8 ? 2 : 1;
+const WORKER_POOL_SIZE = Math.min(4, Math.max(1, parseInt(process.env.WILDGATE_OCR_WORKER_POOL_SIZE || String(DEFAULT_WORKER_POOL_SIZE), 10) || DEFAULT_WORKER_POOL_SIZE));
 let tesseractScheduler = null;
 let tesseractWorkers = [];
 let schedulerReady = null; // Promise that resolves when pool is initialized
@@ -380,24 +416,20 @@ async function getTesseractScheduler() {
   }
   tesseractScheduler = Tesseract.createScheduler();
 
-  const workerPromises = [];
   for (let i = 0; i < WORKER_POOL_SIZE; i++) {
-    workerPromises.push((async () => {
-      const worker = await Tesseract.createWorker('eng+chi_sim', 1, {
-        logger: m => {
-          if (m.status && m.progress === 1) {
-            console.log(`[OCR] Worker ${i}: ${m.status}`);
-          }
-        },
-        cacheMethod: 'readOnly',
-      });
-      await worker.setParameters(buildTesseractWorkerParameters(activeUserWordsFile));
-      tesseractScheduler.addWorker(worker);
-      tesseractWorkers.push(worker);
-      console.log(`[OCR] Worker ${i} ready`);
-    })());
+    const worker = await Tesseract.createWorker('eng+chi_sim', 1, {
+      logger: m => {
+        if (m.status && m.progress === 1) {
+          console.log(`[OCR] Worker ${i}: ${m.status}`);
+        }
+      },
+      cacheMethod: 'readOnly',
+    });
+    await worker.setParameters(buildTesseractWorkerParameters(activeUserWordsFile));
+    tesseractScheduler.addWorker(worker);
+    tesseractWorkers.push(worker);
+    console.log(`[OCR] Worker ${i + 1}/${WORKER_POOL_SIZE} ready`);
   }
-  await Promise.all(workerPromises);
 
   console.log(`[OCR] Worker pool ready (${WORKER_POOL_SIZE} workers)`);
   return tesseractScheduler;
@@ -461,6 +493,10 @@ async function preprocessImage(imageBuffer) {
       console.log('[OCR] Loading sharp module...');
       try {
         sharp = require('sharp');
+        if (typeof sharp.concurrency === 'function') {
+          sharp.concurrency(OCR_SHARP_CONCURRENCY);
+          console.log(`[OCR] sharp concurrency set to ${OCR_SHARP_CONCURRENCY}`);
+        }
         console.log('[OCR] Sharp module loaded successfully');
       } catch (sharpError) {
         console.warn('[OCR] Sharp module not available, skipping preprocessing:', sharpError.message);
@@ -590,6 +626,9 @@ function resolveBenchmarkRegions(ocrRegions, fullWidth, fullHeight) {
     { key: 'mapScreen.players', region: ocrRegions.mapScreen.players },
     { key: 'mapScreen.yourShip', region: ocrRegions.mapScreen.yourShip },
     { key: 'mapScreen.enemyShips', region: ocrRegions.mapScreen.enemyShips },
+    { key: 'mapScreen.enemyShips2', region: ocrRegions.mapScreen.enemyShips2 },
+    { key: 'mapScreen.enemyShips3', region: ocrRegions.mapScreen.enemyShips3 },
+    { key: 'mapScreen.enemyShips4', region: ocrRegions.mapScreen.enemyShips4 },
     { key: 'mapScreen.hazards', region: ocrRegions.mapScreen.hazards },
   ];
 
@@ -1377,6 +1416,7 @@ function mergeGeminiRefinement(extractedData, geminiData) {
  * @returns {Object} Processed OCR result
  */
 async function processCapture(imageBase64, activeUser = null, existingData = null, ocrMode = 'both', options = {}) {
+  await acquireOcrSlot(`processCapture:${ocrMode}`);
   const captureStart = Date.now();
   let tempOcrPath = null;
   try {
@@ -1463,7 +1503,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     } else if (skipDebugSave && needsFilePath) {
       // Write a temp file for cloud OCR only — don't save to ocr-debug/ folder
       try {
-        const tmpDir = require('os').tmpdir();
+        const tmpDir = os.tmpdir();
         const tmpPath = path.join(tmpDir, `wg_ocr_${Date.now()}.png`);
         await fsPromises.writeFile(tmpPath, imageBuffer);
         tempOcrPath = tmpPath;
@@ -1857,6 +1897,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         console.warn('[OCR] Temp OCR image cleanup failed:', cleanupErr.message);
       }
     }
+    releaseOcrSlot();
   }
 }
 

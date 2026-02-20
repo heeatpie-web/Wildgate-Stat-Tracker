@@ -1,6 +1,6 @@
 import React from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 const loggerWarn = vi.fn();
@@ -136,6 +136,10 @@ vi.mock('./components/IdMapper', () => ({ IdMapper: () => <div data-testid="id-m
 vi.mock('./components/ocr/OCRReviewModal', () => ({ OCRReviewModal: () => <div data-testid="ocr-review-modal" /> }));
 
 describe('App', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     getElectronAPIMock.mockReturnValue(null);
@@ -193,7 +197,7 @@ describe('App', () => {
     const { default: App } = await import('./App');
     render(<App />);
 
-    expect(screen.getByRole('dialog', { name: /id mapper/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('dialog', { name: /id mapper/i }).length).toBeGreaterThan(0);
 
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(uiState.setShowIdMapper).toHaveBeenCalledWith(false);

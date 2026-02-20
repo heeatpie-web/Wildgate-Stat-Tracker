@@ -40,16 +40,32 @@ describe('OcrRegionEditorModal', () => {
         vi.restoreAllMocks();
     });
 
-    const renderModal = () => render(
+    const renderModal = (overrides: Partial<{
+        isOpen: boolean;
+        onApply: (...args: unknown[]) => void;
+        onClose: () => void;
+    }> = {}) => render(
         <OcrRegionEditorModal
-            isOpen
+            isOpen={overrides.isOpen ?? true}
             initialRegions={createDefaultOcrRegions()}
-            onApply={vi.fn()}
-            onClose={vi.fn()}
+            onApply={overrides.onApply ?? vi.fn()}
+            onClose={overrides.onClose ?? vi.fn()}
         />
     );
 
-    it('opens the file picker from the load button when electron bridge is unavailable', () => {
+    it('does not close when clicking the backdrop', () => {
+        const onClose = vi.fn();
+        renderModal({ onClose });
+        const dialog = screen.getByRole('dialog');
+        const backdrop = dialog.parentElement;
+        expect(backdrop).toBeTruthy();
+
+        fireEvent.click(backdrop as HTMLElement);
+
+        expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('opens the file picker from the load button', () => {
         renderModal();
         const inputClickSpy = vi.spyOn(HTMLInputElement.prototype, 'click');
 
@@ -58,57 +74,13 @@ describe('OcrRegionEditorModal', () => {
         expect(inputClickSpy).toHaveBeenCalled();
     });
 
-    it('uses electron picker and previews returned image data via blob URL', async () => {
-        // Stub atob so the base64 decode path doesn't need a real image payload
-        const atobSpy = vi.spyOn(globalThis, 'atob').mockReturnValue('fake-binary');
+    it('closes with Escape', () => {
+        const onClose = vi.fn();
+        renderModal({ onClose });
 
-        const invoke = vi.fn().mockResolvedValue({
-            success: true,
-            data: {
-                canceled: false,
-                filename: 'capture.png',
-                dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB',
-            },
-        });
-        window.electronAPI = {
-            invoke,
-            send: vi.fn(),
-            on: vi.fn(() => () => {}),
-            removeAllListeners: vi.fn(),
-        };
+        fireEvent.keyDown(window, { key: 'Escape' });
 
-        renderModal();
-        const inputClickSpy = vi.spyOn(HTMLInputElement.prototype, 'click');
-
-        fireEvent.click(screen.getByRole('button', { name: /load screenshot/i }));
-
-        await waitFor(() => expect(invoke).toHaveBeenCalledWith('pick-roi-image'));
-        expect(inputClickSpy).not.toHaveBeenCalled();
-
-        // The data URL is decoded via atob, converted to a Blob, then beginImageLoad creates a blob: URL
-        await waitFor(() => expect(atobSpy).toHaveBeenCalled());
-        const preview = screen.getByAltText('ROI editing target');
-        expect(preview).toHaveAttribute('src', 'blob:roi-preview');
-
-        atobSpy.mockRestore();
-    });
-
-    it('shows restart guidance when picker channel is blocked by stale preload', async () => {
-        const invoke = vi.fn().mockRejectedValue(new Error('IPC invoke blocked: pick-roi-image'));
-        window.electronAPI = {
-            invoke,
-            send: vi.fn(),
-            on: vi.fn(() => () => {}),
-            removeAllListeners: vi.fn(),
-        };
-
-        renderModal();
-        const inputClickSpy = vi.spyOn(HTMLInputElement.prototype, 'click');
-        fireEvent.click(screen.getByRole('button', { name: /load screenshot/i }));
-
-        await waitFor(() => expect(invoke).toHaveBeenCalledWith('pick-roi-image'));
-        expect(inputClickSpy).toHaveBeenCalled();
-        expect(screen.getByRole('alert')).toHaveTextContent('Screenshot picker is unavailable. Restart the app, then try again.');
+        expect(onClose).toHaveBeenCalledTimes(1);
     });
 
     it('renders an image preview after selecting a file', () => {

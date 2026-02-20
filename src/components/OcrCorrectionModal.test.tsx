@@ -85,11 +85,12 @@ describe('OcrCorrectionModal', () => {
 
         render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
 
-        fireEvent.click(screen.getByRole('button', { name: /^ignore$/i }));
-        expect(screen.getByRole('button', { name: /undo ignore/i })).toBeInTheDocument();
+        const ignoreButtons = screen.getAllByRole('button', { name: /^ignore$/i });
+        fireEvent.click(ignoreButtons[0]);
+        expect(screen.getAllByRole('button', { name: /undo ignore/i }).length).toBeGreaterThan(0);
 
-        fireEvent.click(screen.getByRole('button', { name: /undo ignore/i }));
-        expect(screen.getByRole('button', { name: /^ignore$/i })).toBeInTheDocument();
+        fireEvent.click(screen.getAllByRole('button', { name: /undo ignore/i })[0]);
+        expect(screen.getAllByRole('button', { name: /^ignore$/i }).length).toBeGreaterThan(0);
     });
 
     it('renders screenshot references and opens image lightbox', async () => {

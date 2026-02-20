@@ -51,6 +51,12 @@ interface PlainOpponentTeamDraft {
     players: string;
 }
 
+interface PlainDraggedPlayer {
+    teamIndex: number;
+    playerIndex: number;
+    name: string;
+}
+
 interface OcrDebugFile {
     name: string;
     path: string;
@@ -146,6 +152,9 @@ const DevOCRPanel: React.FC = () => {
     const [corpusIndex, setCorpusIndex] = useState('');
     const [corpusStatus, setCorpusStatus] = useState('');
     const [corpusBusy, setCorpusBusy] = useState(false);
+    const [corpusDropActive, setCorpusDropActive] = useState(false);
+    const [plainDraggedPlayer, setPlainDraggedPlayer] = useState<PlainDraggedPlayer | null>(null);
+    const [plainDragHoverTeamIndex, setPlainDragHoverTeamIndex] = useState<number | null>(null);
     const [plainTeammates, setPlainTeammates] = useState('');
     const [plainModifiers, setPlainModifiers] = useState('');
     const [plainOpponentTeams, setPlainOpponentTeams] = useState<PlainOpponentTeamDraft[]>(
@@ -525,6 +534,78 @@ const DevOCRPanel: React.FC = () => {
         }
     };
 
+    const importCorpusImagesFromPaths = async (filePaths: string[]) => {
+        if (!Array.isArray(filePaths) || filePaths.length === 0) {
+            setCorpusStatus('Drop failed: no image files were detected.');
+            return;
+        }
+        try {
+            const api = getElectronAPI();
+            if (!api) throw new Error('IPC not available');
+            setCorpusBusy(true);
+            setCorpusStatus(`Importing ${filePaths.length} dropped image(s) into corpus...`);
+            const res = await api.invoke('ocr-corpus-import-images-from-paths', filePaths);
+            if (!res?.success) throw new Error(res?.error || 'Import failed');
+            setCorpusStatus(`Imported ${res.imported} image(s), skipped ${res.skipped}`);
+            await loadCorpusFiles();
+            await refreshCorpusImages();
+        } catch (error: unknown) {
+            setCorpusStatus(`Import failed: ${friendlyError(toErrorMessage(error, 'Import failed'))}`);
+        } finally {
+            setCorpusBusy(false);
+        }
+    };
+
+    const collectDroppedImagePaths = (event: React.DragEvent<HTMLElement>): string[] => {
+        const filePaths: string[] = [];
+        const files = Array.from(event.dataTransfer?.files || []);
+        files.forEach((file) => {
+            const candidate = (file as File & { path?: unknown }).path;
+            if (typeof candidate === 'string' && candidate.trim().length > 0) {
+                filePaths.push(candidate.trim());
+            }
+        });
+        return Array.from(new Set(filePaths));
+    };
+
+    const handleCorpusDropZoneEnter = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!corpusBusy) {
+            setCorpusDropActive(true);
+        }
+    };
+
+    const handleCorpusDropZoneOver = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = 'copy';
+        if (!corpusBusy) {
+            setCorpusDropActive(true);
+        }
+    };
+
+    const handleCorpusDropZoneLeave = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const related = event.relatedTarget as Node | null;
+        if (!event.currentTarget.contains(related)) {
+            setCorpusDropActive(false);
+        }
+    };
+
+    const handleCorpusDropZoneDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setCorpusDropActive(false);
+        if (corpusBusy) {
+            setCorpusStatus('Please wait for the current corpus task to finish.');
+            return;
+        }
+        const droppedPaths = collectDroppedImagePaths(event);
+        await importCorpusImagesFromPaths(droppedPaths);
+    };
+
     const runCorpusPipeline = async () => {
         try {
             const api = getElectronAPI();
@@ -653,10 +734,63 @@ const DevOCRPanel: React.FC = () => {
 
     const parsePlainList = (raw: string): string[] =>
         raw.split(/[\n,]/).map(s => s.trim()).filter(Boolean);
+    const formatPlainList = (items: string[]): string =>
+        items.filter(Boolean).join('\n');
     const updatePlainOpponentTeam = (index: number, patch: Partial<PlainOpponentTeamDraft>) => {
         setPlainOpponentTeams((prev) => prev.map((team, idx) => (
             idx === index ? { ...team, ...patch } : team
         )));
+    };
+
+    const movePlainOpponentPlayer = (fromTeamIndex: number, fromPlayerIndex: number, toTeamIndex: number) => {
+        if (fromTeamIndex === toTeamIndex) return;
+        const targetCurrentCount = parsePlainList(plainOpponentTeams[toTeamIndex]?.players || '').length;
+        if (targetCurrentCount >= 4) {
+            setCorpusStatus(`Opponent Team ${toTeamIndex + 1} already has 4 players.`);
+            return;
+        }
+
+        setPlainOpponentTeams((prev) => {
+            const sourceTeam = prev[fromTeamIndex];
+            const targetTeam = prev[toTeamIndex];
+            if (!sourceTeam || !targetTeam) return prev;
+
+            const sourcePlayers = parsePlainList(sourceTeam.players || '');
+            const targetPlayers = parsePlainList(targetTeam.players || '');
+            const moved = sourcePlayers[fromPlayerIndex];
+            if (!moved) return prev;
+
+            sourcePlayers.splice(fromPlayerIndex, 1);
+            if (!targetPlayers.some((name) => name.toLowerCase() === moved.toLowerCase())) {
+                targetPlayers.push(moved);
+            }
+
+            return prev.map((team, idx) => {
+                if (idx === fromTeamIndex) {
+                    return { ...team, players: formatPlainList(sourcePlayers) };
+                }
+                if (idx === toTeamIndex) {
+                    return { ...team, players: formatPlainList(targetPlayers) };
+                }
+                return team;
+            });
+        });
+    };
+
+    const allowPlainOpponentDrop = (event: React.DragEvent<HTMLElement>, teamIndex: number) => {
+        if (!plainDraggedPlayer || corpusBusy) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        setPlainDragHoverTeamIndex(teamIndex);
+    };
+
+    const dropPlainOpponentPlayer = (event: React.DragEvent<HTMLElement>, teamIndex: number) => {
+        if (!plainDraggedPlayer || corpusBusy) return;
+        event.preventDefault();
+        event.stopPropagation();
+        movePlainOpponentPlayer(plainDraggedPlayer.teamIndex, plainDraggedPlayer.playerIndex, teamIndex);
+        setPlainDraggedPlayer(null);
+        setPlainDragHoverTeamIndex(null);
     };
 
     const handlePlainTruthSubmit = () => {
@@ -999,6 +1133,20 @@ const DevOCRPanel: React.FC = () => {
                             <button onClick={exportCorrectionCorpus} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-accent-soft text-accent border border-accent-soft-strong font-bold text-label-sm disabled:opacity-disabled">Export Training Data</button>
                             <button onClick={regenerateOcrDictionary} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-info-soft text-info border border-info-soft-strong font-bold text-label-sm disabled:opacity-disabled">Regenerate OCR Dictionary</button>
                         </div>
+                        <div
+                            onDragEnter={handleCorpusDropZoneEnter}
+                            onDragOver={handleCorpusDropZoneOver}
+                            onDragLeave={handleCorpusDropZoneLeave}
+                            onDrop={handleCorpusDropZoneDrop}
+                            className={`mt-3 rounded-control border-2 border-dashed p-4 text-center text-label-sm transition-colors ${corpusDropActive
+                                ? 'border-md-sys-primary bg-md-sys-primary/10 text-md-sys-primary'
+                                : 'border-md-sys-outline/25 text-md-sys-on-surface/65'
+                                }`}
+                        >
+                            {corpusDropActive
+                                ? 'Drop images now to import into OCR Corpus.'
+                                : 'Drag and drop image files here to import into OCR Corpus.'}
+                        </div>
                         <p className="text-label-sm opacity-secondary mt-3">
                             Workflow: 1) Import images 2) curate ground truth 3) run corpus OCR 4) run eval 5) promote baseline.
                         </p>
@@ -1020,44 +1168,77 @@ const DevOCRPanel: React.FC = () => {
                             </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                            {plainOpponentTeams.map((team, index) => (
-                                <div key={`plain-team-${index}`} className="rounded-control border border-md-sys-outline/15 p-3 bg-md-sys-surface-container-low space-y-2">
-                                    <div className="text-label-xs font-bold uppercase opacity-60">Opponent Team {index + 1}</div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {plainOpponentTeams.map((team, index) => {
+                                const parsedPlayers = parsePlainList(team.players || '').slice(0, 4);
+                                return (
+                                    <div
+                                        key={`plain-team-${index}`}
+                                        className={`rounded-control border p-3 bg-md-sys-surface-container-low space-y-2 ${plainDragHoverTeamIndex === index ? 'border-md-sys-primary ring-1 ring-md-sys-primary/35' : 'border-md-sys-outline/15'}`}
+                                        onDragOver={(event) => allowPlainOpponentDrop(event, index)}
+                                        onDragLeave={() => setPlainDragHoverTeamIndex(null)}
+                                        onDrop={(event) => dropPlainOpponentPlayer(event, index)}
+                                    >
+                                        <div className="text-label-xs font-bold uppercase opacity-60">Opponent Team {index + 1}</div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            <input
+                                                value={team.teamName}
+                                                onChange={(e) => updatePlainOpponentTeam(index, { teamName: e.target.value })}
+                                                className="w-full h-9 md3-surface-low rounded-control px-3 text-label-sm outline-none border border-md-sys-outline/20"
+                                                placeholder="Team name"
+                                            />
+                                            <select
+                                                value={team.color}
+                                                onChange={(e) => updatePlainOpponentTeam(index, { color: e.target.value })}
+                                                className="w-full h-9 md3-surface-low rounded-control px-3 text-label-sm outline-none border border-md-sys-outline/20"
+                                            >
+                                                <option value="red">Red</option>
+                                                <option value="orange">Orange</option>
+                                                <option value="yellow">Yellow</option>
+                                                <option value="green">Green</option>
+                                                <option value="blue">Blue</option>
+                                                <option value="purple">Purple</option>
+                                                <option value="unknown">Unknown</option>
+                                            </select>
+                                        </div>
                                         <input
-                                            value={team.teamName}
-                                            onChange={(e) => updatePlainOpponentTeam(index, { teamName: e.target.value })}
+                                            value={team.shipType}
+                                            onChange={(e) => updatePlainOpponentTeam(index, { shipType: e.target.value })}
                                             className="w-full h-9 md3-surface-low rounded-control px-3 text-label-sm outline-none border border-md-sys-outline/20"
-                                            placeholder="Team name"
+                                            placeholder="Ship type (optional)"
                                         />
-                                        <select
-                                            value={team.color}
-                                            onChange={(e) => updatePlainOpponentTeam(index, { color: e.target.value })}
-                                            className="w-full h-9 md3-surface-low rounded-control px-3 text-label-sm outline-none border border-md-sys-outline/20"
-                                        >
-                                            <option value="red">Red</option>
-                                            <option value="orange">Orange</option>
-                                            <option value="yellow">Yellow</option>
-                                            <option value="green">Green</option>
-                                            <option value="blue">Blue</option>
-                                            <option value="purple">Purple</option>
-                                            <option value="unknown">Unknown</option>
-                                        </select>
+                                        <textarea
+                                            value={team.players}
+                                            onChange={(e) => updatePlainOpponentTeam(index, { players: e.target.value })}
+                                            className="w-full min-h-70px md3-surface-low rounded-control p-2 text-label-sm outline-none border border-md-sys-outline/20"
+                                            placeholder="Players (one per line or comma, up to 4)"
+                                        />
+                                        <div className="text-label-xs opacity-55">Drag player rows between teams to move them.</div>
+                                        <div className="space-y-1">
+                                            {parsedPlayers.length === 0 ? (
+                                                <div className="text-label-xs opacity-45">No players yet.</div>
+                                            ) : (
+                                                parsedPlayers.map((playerName, playerIndex) => (
+                                                    <div
+                                                        key={`${index}-${playerIndex}-${playerName}`}
+                                                        className={`rounded-control border border-md-sys-outline/15 bg-md-sys-surface px-2 py-1 text-label-sm cursor-grab ${plainDraggedPlayer?.teamIndex === index && plainDraggedPlayer?.playerIndex === playerIndex ? 'opacity-60' : ''}`}
+                                                        draggable={!corpusBusy}
+                                                        onDragStart={(event) => {
+                                                            event.dataTransfer.effectAllowed = 'move';
+                                                            setPlainDraggedPlayer({ teamIndex: index, playerIndex, name: playerName });
+                                                        }}
+                                                        onDragEnd={() => {
+                                                            setPlainDraggedPlayer(null);
+                                                            setPlainDragHoverTeamIndex(null);
+                                                        }}
+                                                    >
+                                                        {playerName}
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
                                     </div>
-                                    <input
-                                        value={team.shipType}
-                                        onChange={(e) => updatePlainOpponentTeam(index, { shipType: e.target.value })}
-                                        className="w-full h-9 md3-surface-low rounded-control px-3 text-label-sm outline-none border border-md-sys-outline/20"
-                                        placeholder="Ship type (optional)"
-                                    />
-                                    <textarea
-                                        value={team.players}
-                                        onChange={(e) => updatePlainOpponentTeam(index, { players: e.target.value })}
-                                        className="w-full min-h-70px md3-surface-low rounded-control p-2 text-label-sm outline-none border border-md-sys-outline/20"
-                                        placeholder="Players (one per line or comma, up to 4)"
-                                    />
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                         <button onClick={handlePlainTruthSubmit} disabled={corpusBusy} className="rounded-control md3-btn-filled px-4 py-2 text-label-sm font-bold disabled:opacity-disabled">
                             Update ground truth

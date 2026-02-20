@@ -58,6 +58,9 @@ const mergeOcrRegions = (value: unknown) => {
     mapScreen: {
       yourShip: mergeNumberRecord(defaults.mapScreen.yourShip, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.yourShip : undefined),
       enemyShips: mergeNumberRecord(defaults.mapScreen.enemyShips, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.enemyShips : undefined),
+      enemyShips2: mergeNumberRecord(defaults.mapScreen.enemyShips2, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.enemyShips2 : undefined),
+      enemyShips3: mergeNumberRecord(defaults.mapScreen.enemyShips3, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.enemyShips3 : undefined),
+      enemyShips4: mergeNumberRecord(defaults.mapScreen.enemyShips4, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.enemyShips4 : undefined),
       hazards: mergeNumberRecord(defaults.mapScreen.hazards, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.hazards : undefined),
       players: mergeNumberRecord(defaults.mapScreen.players, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.players : undefined),
     },

@@ -56,6 +56,9 @@ export interface OcrRegionSettings {
     mapScreen: {
         yourShip: OcrRegionBounds;
         enemyShips: OcrRegionBounds;
+        enemyShips2: OcrRegionBounds;
+        enemyShips3: OcrRegionBounds;
+        enemyShips4: OcrRegionBounds;
         hazards: OcrRegionBounds;
         players: OcrRegionBounds;
     };

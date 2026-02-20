@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { RotateCcw, Upload, X } from 'lucide-react';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
-import { getElectronAPI } from '../utils/electronAPI';
 import {
     createDefaultOcrRegions,
     type OcrRegionBounds,
@@ -67,14 +66,25 @@ interface ImageSize {
 }
 
 const CREW_REGION_KEYS: CrewRegionKey[] = ['leftPanel', 'rightPanel', 'teamHeader'];
-const MAP_REGION_KEYS: MapRegionKey[] = ['yourShip', 'enemyShips', 'hazards', 'players'];
+const MAP_REGION_KEYS: MapRegionKey[] = [
+    'yourShip',
+    'enemyShips',
+    'enemyShips2',
+    'enemyShips3',
+    'enemyShips4',
+    'hazards',
+    'players',
+];
 
 const REGION_LABELS: Record<RegionKey, string> = {
     leftPanel: 'Crew Left Panel',
     rightPanel: 'Crew Right Panel',
     teamHeader: 'Crew Team Header',
     yourShip: 'Map Your Ship',
-    enemyShips: 'Map Enemy Ships',
+    enemyShips: 'Map Enemy Ships #1',
+    enemyShips2: 'Map Enemy Ships #2',
+    enemyShips3: 'Map Enemy Ships #3',
+    enemyShips4: 'Map Enemy Ships #4',
     hazards: 'Map Hazards',
     players: 'Map Players',
 };
@@ -85,12 +95,16 @@ const REGION_COLORS: Record<RegionKey, string> = {
     teamHeader: '#38BDF8',
     yourShip: '#34D399',
     enemyShips: '#F59E0B',
+    enemyShips2: '#FB923C',
+    enemyShips3: '#FDBA74',
+    enemyShips4: '#FCD34D',
     hazards: '#EF4444',
     players: '#6366F1',
 };
 
 const MIN_NORMALIZED_SIZE = 0.005;
 const MIN_PIXEL_SIZE = 8;
+const IMAGE_EXTENSION_PATTERN = /\.(png|jpg|jpeg|bmp|webp|gif)$/i;
 
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 
@@ -103,6 +117,9 @@ const cloneRegions = (regions: OcrRegionSettings): OcrRegionSettings => ({
     mapScreen: {
         yourShip: { ...regions.mapScreen.yourShip },
         enemyShips: { ...regions.mapScreen.enemyShips },
+        enemyShips2: { ...regions.mapScreen.enemyShips2 },
+        enemyShips3: { ...regions.mapScreen.enemyShips3 },
+        enemyShips4: { ...regions.mapScreen.enemyShips4 },
         hazards: { ...regions.mapScreen.hazards },
         players: { ...regions.mapScreen.players },
     },
@@ -233,12 +250,15 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
     const dialogDescriptionId = useId();
     const focusTrapRef = useFocusTrap<HTMLDivElement>(isOpen);
     const svgRef = useRef<SVGSVGElement | null>(null);
+    const canvasViewportRef = useRef<HTMLDivElement | null>(null);
     const interactionRef = useRef<InteractionState | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const objectUrlRef = useRef<string | null>(null);
     const selectedFileRef = useRef<File | null>(null);
     const attemptedDataUrlFallbackRef = useRef(false);
+    const attemptedFileUrlFallbackRef = useRef(false);
     const [imageLoadError, setImageLoadError] = useState<string | null>(null);
+    const [imageLoadStatus, setImageLoadStatus] = useState<string>('No screenshot selected.');
 
     useKeyboardShortcuts([
         { key: 'Escape', handler: () => onClose() },
@@ -250,6 +270,7 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
         setScreen('crewHub');
         setActiveRegionKey('leftPanel');
         setImageLoadError(null);
+        setImageLoadStatus('No screenshot selected.');
     }, [initialRegions, isOpen]);
 
     useEffect(() => {
@@ -279,9 +300,11 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
         if (!svgRef.current || !imageSize) return null;
         const rect = svgRef.current.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0) return null;
+        const xScale = imageSize.width / rect.width;
+        const yScale = imageSize.height / rect.height;
         return {
-            x: clamp(clientX - rect.left, 0, imageSize.width),
-            y: clamp(clientY - rect.top, 0, imageSize.height),
+            x: clamp((clientX - rect.left) * xScale, 0, imageSize.width),
+            y: clamp((clientY - rect.top) * yScale, 0, imageSize.height),
         };
     };
 
@@ -313,32 +336,58 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
             if (!dataUrl) {
                 setPreviewSource(null);
                 setImageLoadError('Unable to load the selected image.');
+                setImageLoadStatus('Failed reading selected file as data URL.');
                 return;
             }
             setPreviewSource(dataUrl);
+            setImageLoadStatus('Preview source: data URL');
         };
         reader.onerror = () => {
+            const fallbackSrc = getElectronFileUrl(file);
+            if (!attemptedFileUrlFallbackRef.current && fallbackSrc) {
+                attemptedFileUrlFallbackRef.current = true;
+                setPreviewSource(fallbackSrc);
+                setImageLoadStatus('Preview source: file URL fallback');
+                return;
+            }
             setPreviewSource(null);
             setImageLoadError('Unable to load the selected image.');
+            setImageLoadStatus('Failed to read selected file.');
         };
         reader.readAsDataURL(file);
     };
 
+    const getElectronFileUrl = (file: File): string | null => {
+        const candidate = (file as File & { path?: unknown }).path;
+        if (typeof candidate !== 'string' || candidate.trim().length === 0) return null;
+        const normalized = candidate.replace(/\\/g, '/');
+        if (/^[A-Za-z]:\//.test(normalized)) {
+            return `file:///${encodeURI(normalized)}`;
+        }
+        return `file://${encodeURI(normalized)}`;
+    };
+
     const beginImageLoad = (file: File) => {
-        if (!file.type.startsWith('image/')) {
+        const hasImageMime = typeof file.type === 'string' && file.type.startsWith('image/');
+        const hasImageExtension = IMAGE_EXTENSION_PATTERN.test(file.name || '');
+        if (!hasImageMime && !hasImageExtension) {
             setPreviewSource(null);
             setImageLoadError('Selected file is not a supported image.');
+            setImageLoadStatus(`Rejected file: ${file.name || 'unknown'} (unsupported type)`);
             return;
         }
 
         selectedFileRef.current = file;
         attemptedDataUrlFallbackRef.current = false;
+        attemptedFileUrlFallbackRef.current = false;
         setImageLoadError(null);
+        setImageLoadStatus(`Selected: ${file.name || 'unknown'} (${file.type || 'unknown type'})`);
 
         if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
             try {
                 const previewUrl = URL.createObjectURL(file);
                 setPreviewSource(previewUrl, true);
+                setImageLoadStatus('Preview source: blob URL');
                 return;
             } catch {
                 // Fallback to FileReader below if object URL creation fails.
@@ -518,66 +567,9 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
         event.target.value = '';
     };
 
-    const openImagePicker = async () => {
-        const electronAPI = getElectronAPI();
-        if (!electronAPI) {
-            fileInputRef.current?.click();
-            return;
-        }
-
-        try {
-            const result = await electronAPI.invoke('pick-roi-image');
-            if (!result?.success) {
-                setImageLoadError(
-                    typeof result?.message === 'string'
-                        ? result.message
-                        : 'Unable to open screenshot picker.'
-                );
-                fileInputRef.current?.click();
-                return;
-            }
-
-            const payload = result.data;
-            if (payload?.canceled) return;
-            if (typeof payload?.dataUrl !== 'string' || !payload.dataUrl) {
-                setImageLoadError('Unable to load the selected image.');
-                return;
-            }
-
-            setImageLoadError(null);
-            attemptedDataUrlFallbackRef.current = false;
-
-            // Convert data URL to Blob so beginImageLoad() can use an efficient
-            // blob: URL (avoids Chromium data-URL size limits for <img> src).
-            // Use atob() instead of fetch() to avoid CSP connect-src restrictions.
-            try {
-                const comma = payload.dataUrl.indexOf(',');
-                const meta = payload.dataUrl.slice(0, comma);
-                const mime = meta.split(':')[1]?.split(';')[0] ?? 'image/png';
-                const binary = atob(payload.dataUrl.slice(comma + 1));
-                const bytes = new Uint8Array(binary.length);
-                for (let i = 0; i < binary.length; i++) {
-                    bytes[i] = binary.charCodeAt(i);
-                }
-                const blob = new Blob([bytes], { type: mime });
-                const file = new File([blob], payload.filename || 'screenshot.png', { type: mime });
-                beginImageLoad(file);
-            } catch {
-                // Direct data URL fallback if blob conversion fails
-                selectedFileRef.current = null;
-                setPreviewSource(payload.dataUrl);
-            }
-        } catch (error) {
-            const rawMessage = error instanceof Error ? error.message : '';
-            const lowerMessage = rawMessage.toLowerCase();
-            if (lowerMessage.includes('ipc invoke blocked')) {
-                setImageLoadError('Screenshot picker is unavailable. Restart the app, then try again.');
-                fileInputRef.current?.click();
-                return;
-            }
-            setImageLoadError('Unable to open screenshot picker.');
-            fileInputRef.current?.click();
-        }
+    const openImagePicker = () => {
+        setImageLoadError(null);
+        fileInputRef.current?.click();
     };
 
     const selectedRect = imageSize ? boundsToRectPx(activeBounds, imageSize) : null;
@@ -599,7 +591,7 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
     if (typeof document === 'undefined') return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-modal-top bg-scrim-70 backdrop-blur-sm flex items-stretch justify-center p-1 sm:p-2" onClick={onClose}>
+        <div className="fixed inset-0 z-modal-top bg-scrim-70 backdrop-blur-sm flex items-stretch justify-center p-1 sm:p-2">
             <div
                 ref={focusTrapRef}
                 role="dialog"
@@ -622,21 +614,35 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
                 </div>
 
                 <div className="flex-1 min-h-0 flex flex-col xl:flex-row gap-3 p-3">
-                    <div className="flex-1 min-w-0 min-h-0 md3-surface rounded-card border border-md-sys-outline/10 overflow-auto">
+                    <div
+                        ref={canvasViewportRef}
+                        className="roi-canvas-viewport flex-1 min-w-0 min-h-0 md3-surface rounded-card border border-md-sys-outline/10 overflow-auto"
+                    >
                         {imageSrc ? (
-                            <div className="inline-block m-2 relative">
+                            <div className="roi-canvas-stage">
                                 <img
                                     src={imageSrc}
                                     alt="ROI editing target"
-                                    className="block max-w-none select-none"
+                                    className="roi-canvas-image block max-w-full h-auto select-none"
                                     draggable={false}
                                     onLoad={(event) => {
                                         const target = event.currentTarget;
+                                        const naturalWidth = target.naturalWidth;
+                                        const naturalHeight = target.naturalHeight;
+                                        const renderedWidth = Math.round(target.getBoundingClientRect().width);
+                                        const renderedHeight = Math.round(target.getBoundingClientRect().height);
                                         setImageSize({
-                                            width: target.naturalWidth,
-                                            height: target.naturalHeight,
+                                            width: naturalWidth,
+                                            height: naturalHeight,
                                         });
+                                        if (canvasViewportRef.current) {
+                                            canvasViewportRef.current.scrollTop = 0;
+                                            canvasViewportRef.current.scrollLeft = 0;
+                                        }
                                         setImageLoadError(null);
+                                        setImageLoadStatus(
+                                            `Image loaded: ${naturalWidth} x ${naturalHeight} (shown ${renderedWidth} x ${renderedHeight})`
+                                        );
                                     }}
                                     onError={() => {
                                         const fallbackFile = selectedFileRef.current;
@@ -646,19 +652,33 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
                                             && imageSrc?.startsWith('blob:')
                                         ) {
                                             attemptedDataUrlFallbackRef.current = true;
+                                            setImageLoadStatus('Blob URL failed. Trying data URL fallback...');
                                             readFileAsDataUrl(fallbackFile);
                                             return;
                                         }
+                                        if (
+                                            !attemptedFileUrlFallbackRef.current
+                                            && fallbackFile
+                                        ) {
+                                            const fileUrl = getElectronFileUrl(fallbackFile);
+                                            if (fileUrl) {
+                                                attemptedFileUrlFallbackRef.current = true;
+                                                setPreviewSource(fileUrl);
+                                                setImageLoadStatus('Data/blob failed. Trying file URL fallback...');
+                                                return;
+                                            }
+                                        }
                                         setPreviewSource(null);
                                         setImageLoadError('Unable to preview this image. Try PNG or JPEG.');
+                                        setImageLoadStatus('Preview failed after all fallbacks.');
                                     }}
                                 />
                                 {imageSize && (
                                     <svg
                                         ref={svgRef}
-                                        className="absolute inset-0"
-                                        width={imageSize.width}
-                                        height={imageSize.height}
+                                        className="roi-canvas-overlay absolute inset-0"
+                                        width="100%"
+                                        height="100%"
                                         viewBox={`0 0 ${imageSize.width} ${imageSize.height}`}
                                         onPointerDown={handleCanvasPointerDown}
                                         onPointerMove={handleCanvasPointerMove}
@@ -717,7 +737,7 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
                         )}
                     </div>
 
-                    <div className="w-full xl:w-360px xl:shrink-0 md3-surface-high rounded-card border border-md-sys-outline/10 p-3 flex flex-col gap-3 max-h-[40vh] xl:max-h-none">
+                    <div className="w-full xl:w-[360px] xl:shrink-0 md3-surface-high rounded-card border border-md-sys-outline/10 p-3 flex flex-col gap-3 max-h-[40vh] xl:max-h-none">
                         <button
                             type="button"
                             onClick={openImagePicker}
@@ -734,6 +754,9 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
                             onChange={handleImageFile}
                             aria-label="Load screenshot file"
                         />
+                        <div className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface p-2 text-label-xs opacity-80 break-words">
+                            {imageLoadStatus}
+                        </div>
                         {imageLoadError && (
                             <div
                                 role="alert"
@@ -770,7 +793,7 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
                         </div>
 
                         <div className="text-label-sm font-bold uppercase opacity-60">Regions</div>
-                        <div className="space-y-1 max-h-220px overflow-y-auto custom-scrollbar pr-1">
+                        <div className="space-y-1 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
                             {activeKeys.map((regionKey) => (
                                 <button
                                     key={regionKey}

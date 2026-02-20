@@ -187,6 +187,25 @@ describe('useLogMonitor', () => {
     });
   });
 
+  it('passes not-in-progress lifecycle context to telemetry processor on initial map start', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { event: { loadedMap: 'DesolationReach' } },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(processTelemetryEvent).toHaveBeenCalled();
+    const context = processTelemetryEvent.mock.calls[0]?.[2] as { isMatchInProgress?: boolean } | undefined;
+    expect(context?.isMatchInProgress).toBe(false);
+  });
+
   it('reuses a recent unresolved telemetry draft instead of creating a duplicate', async () => {
     const now = Date.now();
     appStoreState.matches = [{
@@ -367,6 +386,52 @@ describe('useLogMonitor', () => {
       })
       .find((match) => Array.isArray(match?.telemetryConsistency?.loadoutSaves) && match.telemetryConsistency.loadoutSaves.length > 0);
     expect(updatedDraftWithSave?.telemetryConsistency?.loadoutSaves?.[0]?.source).toBe('NebLoadoutSaved');
+  });
+
+  it('applies local loadout when telemetry only provides platform-account identity variants', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const platformAccountCompact = '1234567890abcdef1234567890abcdef';
+    const platformAccountHyphenated = '12345678-90ab-cdef-1234-567890abcdef';
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadoutSaved',
+          context: {
+            client: {
+              platformAccountId: platformAccountCompact,
+            },
+          },
+          Payload: {
+            event: {
+              actorId: platformAccountHyphenated,
+              loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                characterWeapons: ['Double Whammy'],
+                characterEquipment: ['Repair Drone'],
+              },
+            },
+          },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    expect(gameDataState.setCurrentLoadout).toHaveBeenCalled();
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      hero?: string | null;
+      ship?: string | null;
+      characterWeapons?: string[];
+      characterEquipment?: string[];
+    };
+    expect(latestLoadout?.hero).toBe('Adrian');
+    expect(String(latestLoadout?.ship || '')).toContain('Hunter');
+    expect(latestLoadout?.characterWeapons).toEqual(expect.arrayContaining(['Double Whammy']));
+    expect(latestLoadout?.characterEquipment).toEqual(expect.arrayContaining(['Repair Drone']));
   });
 
   it('captures matchmaker teammate and mode expectations into telemetry consistency', async () => {

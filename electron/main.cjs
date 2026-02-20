@@ -700,6 +700,82 @@ function sampleIdFromPath(filePath) {
   return base.replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
+async function importCorpusImageFiles(sourcePaths = []) {
+  const corpusImagesDir = path.join(OCR_CORPUS_DIR, 'images');
+  await fsPromises.mkdir(corpusImagesDir, { recursive: true });
+
+  const truthPath = path.join(OCR_CORPUS_DIR, 'ground-truth.json');
+  let truth;
+  try {
+    truth = JSON.parse(await fsPromises.readFile(truthPath, 'utf8'));
+  } catch {
+    truth = { version: 1, samples: [] };
+  }
+
+  const samples = Array.isArray(truth.samples) ? truth.samples : [];
+  const existingIds = new Set(samples.map(s => s.sampleId));
+
+  let imported = 0;
+  let skipped = 0;
+  const uniquePaths = Array.from(new Set(
+    (Array.isArray(sourcePaths) ? sourcePaths : [])
+      .filter((p) => typeof p === 'string')
+      .map((p) => p.trim())
+      .filter(Boolean)
+  ));
+
+  for (const rawPath of uniquePaths) {
+    try {
+      const src = path.resolve(rawPath);
+      const stat = await fsPromises.stat(src);
+      if (!stat.isFile()) {
+        skipped += 1;
+        continue;
+      }
+
+      const ext = path.extname(src).toLowerCase();
+      if (!ALLOWED_FILE_EXTENSIONS.has(ext)) {
+        skipped += 1;
+        continue;
+      }
+
+      const baseId = sampleIdFromPath(src);
+      let sampleId = baseId;
+      let counter = 1;
+      while (existingIds.has(sampleId)) {
+        sampleId = `${baseId}_${counter}`;
+        counter += 1;
+      }
+
+      const targetName = `${sampleId}${ext}`;
+      const targetPath = path.join(corpusImagesDir, targetName);
+      if (path.resolve(src) !== path.resolve(targetPath)) {
+        await fsPromises.copyFile(src, targetPath);
+      }
+
+      const relPath = path.relative(OCR_CORPUS_DIR, targetPath).replace(/\\/g, '/');
+      samples.push({
+        sampleId,
+        imagePath: relPath,
+        teammates: [],
+        opponentTeams: [],
+        modifiers: []
+      });
+      existingIds.add(sampleId);
+      imported += 1;
+    } catch {
+      skipped += 1;
+    }
+  }
+
+  const nextTruth = {
+    version: typeof truth.version === 'number' ? truth.version : 1,
+    samples
+  };
+  await fsPromises.writeFile(truthPath, JSON.stringify(nextTruth, null, 2), 'utf8');
+  return { imported, skipped };
+}
+
 function normalizeStringList(list) {
   if (!Array.isArray(list)) return [];
   return list.map(v => String(v || '').trim()).filter(Boolean);
@@ -2497,12 +2573,13 @@ ipcMain.handle('pick-roi-image', async (event) => {
     const ext = path.extname(selectedPath).toLowerCase();
     const mime = ROI_MIME_BY_EXT[ext] || 'application/octet-stream';
     const imageBuffer = await fsPromises.readFile(selectedPath);
-    const dataUrl = `data:${mime};base64,${imageBuffer.toString('base64')}`;
     return ok({
       canceled: false,
       filename: path.basename(selectedPath),
       sourcePath: selectedPath,
-      dataUrl,
+      mime,
+      byteLength: imageBuffer.length,
+      fileBytes: imageBuffer,
     });
   } catch (e) {
     console.error('[ROI] pick-roi-image error:', e?.message || e);
@@ -2705,7 +2782,6 @@ ipcMain.handle('ocr-corpus-import-images', async () => {
     await ensureCorpusDefaults();
     const { dialog } = require('electron');
     const corpusImagesDir = path.join(OCR_CORPUS_DIR, 'images');
-    await fsPromises.mkdir(corpusImagesDir, { recursive: true });
     const picked = await dialog.showOpenDialog(win, {
       title: 'Import OCR Corpus Images',
       filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'bmp', 'webp'] }],
@@ -2715,56 +2791,23 @@ ipcMain.handle('ocr-corpus-import-images', async () => {
     if (picked.canceled || picked.filePaths.length === 0) {
       return { success: true, imported: 0, skipped: 0, canceled: true };
     }
-
-    const truthPath = path.join(OCR_CORPUS_DIR, 'ground-truth.json');
-    let truth;
-    try {
-      truth = JSON.parse(await fsPromises.readFile(truthPath, 'utf8'));
-    } catch {
-      truth = { version: 1, samples: [] };
-    }
-    const samples = Array.isArray(truth.samples) ? truth.samples : [];
-    const existingIds = new Set(samples.map(s => s.sampleId));
-
-    let imported = 0;
-    let skipped = 0;
-
-    for (const src of picked.filePaths) {
-      const ext = path.extname(src).toLowerCase();
-      if (!ALLOWED_FILE_EXTENSIONS.has(ext)) {
-        skipped += 1;
-        continue;
-      }
-      const baseId = sampleIdFromPath(src);
-      let sampleId = baseId;
-      let counter = 1;
-      while (existingIds.has(sampleId)) {
-        sampleId = `${baseId}_${counter}`;
-        counter += 1;
-      }
-
-      const targetName = `${sampleId}${ext}`;
-      const targetPath = path.join(corpusImagesDir, targetName);
-      await fsPromises.copyFile(src, targetPath);
-      const relPath = path.relative(OCR_CORPUS_DIR, targetPath).replace(/\\/g, '/');
-
-      samples.push({
-        sampleId,
-        imagePath: relPath,
-        teammates: [],
-        opponentTeams: [],
-        modifiers: []
-      });
-      existingIds.add(sampleId);
-      imported += 1;
-    }
-
-    const nextTruth = {
-      version: typeof truth.version === 'number' ? truth.version : 1,
-      samples
-    };
-    await fsPromises.writeFile(truthPath, JSON.stringify(nextTruth, null, 2), 'utf8');
+    const { imported, skipped } = await importCorpusImageFiles(picked.filePaths);
     await syncCorpusToRepo('import-images');
+    return { success: true, imported, skipped, canceled: false };
+  } catch (e) {
+    return { success: false, error: e.message || String(e) };
+  }
+});
+
+ipcMain.handle('ocr-corpus-import-images-from-paths', async (event, filePaths = []) => {
+  try {
+    await ensureCorpusDefaults();
+    const paths = Array.isArray(filePaths) ? filePaths : [];
+    if (paths.length === 0) {
+      return { success: false, error: 'No image files were provided.' };
+    }
+    const { imported, skipped } = await importCorpusImageFiles(paths);
+    await syncCorpusToRepo('import-images-drop');
     return { success: true, imported, skipped, canceled: false };
   } catch (e) {
     return { success: false, error: e.message || String(e) };

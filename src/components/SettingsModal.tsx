@@ -394,7 +394,10 @@ const SettingsModalContent: React.FC = () => {
         rightPanel: 'Right Panel',
         teamHeader: 'Team Header',
         yourShip: 'Your Ship',
-        enemyShips: 'Enemy Ships',
+        enemyShips: 'Enemy Ships #1',
+        enemyShips2: 'Enemy Ships #2',
+        enemyShips3: 'Enemy Ships #3',
+        enemyShips4: 'Enemy Ships #4',
         hazards: 'Hazards',
         players: 'Players',
     };
@@ -445,7 +448,15 @@ const SettingsModalContent: React.FC = () => {
         });
     };
     const crewHubRegionKeys: CrewRegionKey[] = ['leftPanel', 'rightPanel', 'teamHeader'];
-    const mapRegionKeys: MapRegionKey[] = ['yourShip', 'enemyShips', 'hazards', 'players'];
+    const mapRegionKeys: MapRegionKey[] = [
+        'yourShip',
+        'enemyShips',
+        'enemyShips2',
+        'enemyShips3',
+        'enemyShips4',
+        'hazards',
+        'players',
+    ];
     const applyVisualRoiRegions = useCallback((nextRegions: OcrRegionSettings) => {
         setOcrRegions({
             crewHub: { ...nextRegions.crewHub },

@@ -148,7 +148,11 @@ describe('ActionPanel', () => {
     const { ActionPanel } = await import('./ActionPanel');
 
     render(<ActionPanel variant="transparent" />);
-    fireEvent.click(screen.getByRole('button', { name: /smart capture/i }));
+    const smartCaptureButtons = screen.getAllByRole('button', { name: /smart capture/i });
+    const primarySmartCaptureButton = smartCaptureButtons.find((button) => (
+      button.getAttribute('title')?.toLowerCase().includes('capture screenshot') ?? false
+    )) ?? smartCaptureButtons[0];
+    fireEvent.click(primarySmartCaptureButton);
 
     expect(smartScan.handleSmartScan).toHaveBeenCalledTimes(1);
     expect(smartCaptureActions.capture).not.toHaveBeenCalled();

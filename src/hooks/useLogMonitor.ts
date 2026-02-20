@@ -528,9 +528,6 @@ export const useLogMonitor = (activeUser?: string) => {
                     const sessionEndSignal = !currentMatchSessionId && !!previousMatchSessionId;
                     const startLifecycleSignal = mapStartSignal || sessionStartSignal;
                     const endLifecycleSignal = mapEndSignal || sessionEndSignal;
-                    if (startLifecycleSignal && !telemetryLifecycleActiveRef.current) {
-                        telemetryLifecycleActiveRef.current = true;
-                    }
                     if (startLifecycleSignal && !telemetryDraftMatchIdRef.current) {
                         createTelemetryDraftIfNeeded(gameTime);
                     }
@@ -614,7 +611,14 @@ export const useLogMonitor = (activeUser?: string) => {
                         }
                     }
 
-                    const potentialId = toStringOrEmpty(payload.accountId || payload.userId || payload.playerId || payload.player_id);
+                    const potentialId = toStringOrEmpty(
+                        payload.accountId
+                        || payload.userId
+                        || payload.playerId
+                        || payload.player_id
+                        || payload.platformAccountId
+                        || payload.platform_account_id
+                    );
                     const potentialName = payload.displayName || payload.playerName || payload.name || payload.playerNameString || payload.callsign;
 
                     if (potentialId) {
@@ -634,13 +638,23 @@ export const useLogMonitor = (activeUser?: string) => {
                     }
                     const localId = toStringOrEmpty(
                         asRecord(eventContext.client).accountId ||
+                        asRecord(eventContext.client).platformAccountId ||
                         asRecord(payloadContext.client).accountId ||
-                        asRecord(payloadContextAlt.client).accountId
+                        asRecord(payloadContext.client).platformAccountId ||
+                        asRecord(payloadContextAlt.client).accountId ||
+                        asRecord(payloadContextAlt.client).platformAccountId
                     );
                     if (localId && activeUserRef.current && !playerIdMapRef.current[localId]) {
                         updatePlayerIdMapping(localId, activeUserRef.current);
                     }
                     const normalizeName = (value: unknown) => String(value || '').trim().toLowerCase();
+                    const normalizeTelemetryId = (value: unknown) => {
+                        const raw = String(value || '').trim();
+                        if (!raw) return '';
+                        const afterPipe = raw.includes('|') ? (raw.split('|').pop() || raw) : raw;
+                        const afterColon = afterPipe.includes(':') ? (afterPipe.split(':').pop() || afterPipe) : afterPipe;
+                        return afterColon.replace(/[{}-]/g, '').trim().toLowerCase();
+                    };
                     const collectIds = (...values: unknown[]) => Array.from(new Set(
                         values
                             .flat()
@@ -653,6 +667,25 @@ export const useLogMonitor = (activeUser?: string) => {
                             .map((v) => normalizeName(v))
                             .filter(Boolean)
                     ));
+                    const idsMatch = (left: string, right: string) => {
+                        if (left === right) return true;
+                        const leftNormalized = normalizeTelemetryId(left);
+                        const rightNormalized = normalizeTelemetryId(right);
+                        return !!leftNormalized && leftNormalized === rightNormalized;
+                    };
+                    const resolveMappedNameForId = (id: string) => {
+                        const direct =
+                            playerIdMapRef.current[id]
+                            || playerIdMapRef.current[id.toLowerCase()]
+                            || playerIdMapRef.current[id.toUpperCase()];
+                        if (typeof direct === 'string' && direct.trim()) return direct;
+                        const normalized = normalizeTelemetryId(id);
+                        if (!normalized) return '';
+                        const normalizedEntry = Object.entries(playerIdMapRef.current).find(([mappedId]) => (
+                            normalizeTelemetryId(mappedId) === normalized
+                        ));
+                        return typeof normalizedEntry?.[1] === 'string' ? normalizedEntry[1] : '';
+                    };
                     const actorIds = collectIds(
                         payload.accountId,
                         payload.account_id,
@@ -660,6 +693,8 @@ export const useLogMonitor = (activeUser?: string) => {
                         payload.user_id,
                         payload.playerId,
                         payload.player_id,
+                        payload.platformAccountId,
+                        payload.platform_account_id,
                         payload.actorId,
                         payload.actor_id,
                         payload.clientAccountId,
@@ -681,20 +716,24 @@ export const useLogMonitor = (activeUser?: string) => {
                     const localIds = collectIds(
                         localId,
                         asRecord(payloadContext.client).accountId,
+                        asRecord(payloadContext.client).platformAccountId,
                         asRecord(payloadContextAlt.client).accountId,
+                        asRecord(payloadContextAlt.client).platformAccountId,
                     );
                     const localNames = collectNames(
                         activeUserRef.current,
-                        ...localIds.map((id) => playerIdMapRef.current[id]),
+                        ...localIds.map((id) => resolveMappedNameForId(id)),
                     );
                     let shouldApplyLoadout = true;
                     if (localIds.length > 0 && actorIds.length > 0) {
-                        shouldApplyLoadout = actorIds.some((id) => localIds.includes(id));
+                        shouldApplyLoadout = actorIds.some((id) => (
+                            localIds.some((localCandidate) => idsMatch(id, localCandidate))
+                        ));
                     } else if (localNames.length > 0 && actorNames.length > 0) {
                         shouldApplyLoadout = actorNames.some((name) => localNames.includes(name));
                     } else if (actorIds.length > 0 && localNames.length > 0) {
                         shouldApplyLoadout = actorIds.some((id) => {
-                            const mapped = normalizeName(playerIdMapRef.current[id]);
+                            const mapped = normalizeName(resolveMappedNameForId(id));
                             return !!mapped && localNames.includes(mapped);
                         });
                     }
@@ -1114,6 +1153,9 @@ export const useLogMonitor = (activeUser?: string) => {
                     };
                     if (isRelevantToSession || devModeRef.current) {
                         processTelemetryEvent(e, actions, context);
+                        if (startLifecycleSignal && !telemetryLifecycleActiveRef.current) {
+                            telemetryLifecycleActiveRef.current = true;
+                        }
                     } else {
                         Logger.debug('LogMonitor', `Skipping old event: ${name} (age: ${ageSeconds}s, before session start)`);
                     }
