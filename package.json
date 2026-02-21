@@ -94,7 +94,7 @@
   "build": {
     "appId": "com.wildgate.tracker",
     "productName": "Wildgate Stat Tracker",
-    "icon": "public/favicon.ico",
+    "icon": "electron/assets/icon.ico",
     "compression": "maximum",
     "npmRebuild": false,
     "directories": {
@@ -113,8 +113,18 @@
     "asarUnpack": [
       "node_modules/screenshot-desktop/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "electron/assets/icon.ico",
+        "to": "icon.ico"
+      },
+      {
+        "from": "public/favicon.png",
+        "to": "favicon.png"
+      }
+    ],
     "win": {
-      "icon": "public/favicon.ico",
+      "icon": "electron/assets/icon.ico",
       "target": "nsis",
       "forceCodeSigning": false,
       "artifactName": "Wildgate-Stat-Tracker-Setup-${version}.${ext}"

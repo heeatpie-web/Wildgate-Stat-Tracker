@@ -838,6 +838,9 @@ let win;
 let tray = null;
 function resolveAppIconPath() {
   const candidates = [
+    path.join(process.resourcesPath || '', 'icon.ico'),
+    path.join(process.resourcesPath || '', 'favicon.png'),
+    path.join(__dirname, 'assets/icon.ico'),
     path.join(__dirname, '../public/favicon.ico'),
     path.join(__dirname, '../public/favicon.png'),
   ];
