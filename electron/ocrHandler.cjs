@@ -132,6 +132,10 @@ function createDefaultOcrRegions() {
       leftPanel: { xMin: 0.0, xMax: 0.36, yMin: 0.10, yMax: 0.80 },
       rightPanel: { xMin: 0.45, xMax: 1.0, yMin: 0.10, yMax: 0.90 },
       teamHeader: { xMin: 0.0, xMax: 0.45, yMin: 0.05, yMax: 0.20 },
+      leftTeamHeader: { xMin: 0.0, xMax: 0.36, yMin: 0.10, yMax: 0.22 },
+      leftTeamPlayers: { xMin: 0.0, xMax: 0.36, yMin: 0.22, yMax: 0.80 },
+      rightTeamHeader: { xMin: 0.45, xMax: 1.0, yMin: 0.10, yMax: 0.22 },
+      rightTeamPlayers: { xMin: 0.45, xMax: 1.0, yMin: 0.22, yMax: 0.90 },
     },
     mapScreen: {
       yourShip: { xMin: 0.0, xMax: 0.30, yMin: 0.0, yMax: 0.25 },
@@ -141,6 +145,8 @@ function createDefaultOcrRegions() {
       enemyShips4: { xMin: 0.60, xMax: 1.0, yMin: 0.30, yMax: 0.40 },
       hazards: { xMin: 0.60, xMax: 1.0, yMin: 0.30, yMax: 0.70 },
       players: { xMin: 0.0, xMax: 0.40, yMin: 0.70, yMax: 1.0 },
+      alliedShips: { xMin: 0.0, xMax: 0.40, yMin: 0.00, yMax: 0.40 },
+      scoreOrTimer: { xMin: 0.35, xMax: 0.65, yMin: 0.00, yMax: 0.10 },
     },
   };
 }
@@ -182,6 +188,10 @@ function sanitizeOcrRegions(input) {
       leftPanel: sanitizeRegionBounds(crewHub.leftPanel, defaults.crewHub.leftPanel),
       rightPanel: sanitizeRegionBounds(crewHub.rightPanel, defaults.crewHub.rightPanel),
       teamHeader: sanitizeRegionBounds(crewHub.teamHeader, defaults.crewHub.teamHeader),
+      leftTeamHeader: sanitizeRegionBounds(crewHub.leftTeamHeader, defaults.crewHub.leftTeamHeader),
+      leftTeamPlayers: sanitizeRegionBounds(crewHub.leftTeamPlayers, defaults.crewHub.leftTeamPlayers),
+      rightTeamHeader: sanitizeRegionBounds(crewHub.rightTeamHeader, defaults.crewHub.rightTeamHeader),
+      rightTeamPlayers: sanitizeRegionBounds(crewHub.rightTeamPlayers, defaults.crewHub.rightTeamPlayers),
     },
     mapScreen: {
       yourShip: sanitizeRegionBounds(mapScreen.yourShip, defaults.mapScreen.yourShip),
@@ -191,6 +201,8 @@ function sanitizeOcrRegions(input) {
       enemyShips4: sanitizeRegionBounds(mapScreen.enemyShips4, defaults.mapScreen.enemyShips4),
       hazards: sanitizeRegionBounds(mapScreen.hazards, defaults.mapScreen.hazards),
       players: sanitizeRegionBounds(mapScreen.players, defaults.mapScreen.players),
+      alliedShips: sanitizeRegionBounds(mapScreen.alliedShips, defaults.mapScreen.alliedShips),
+      scoreOrTimer: sanitizeRegionBounds(mapScreen.scoreOrTimer, defaults.mapScreen.scoreOrTimer),
     },
   };
 }
@@ -2025,7 +2037,7 @@ function registerOCRHandlers(mainWindow) {
     try {
       if (wasVisible) {
         mainWindow.hide();
-        await new Promise(r => setTimeout(r, 300)); // Wait for OS to finish hiding
+        await new Promise(r => setTimeout(r, 500)); // Wait for OS to finish hiding
       }
       return await captureGameWindow();
     } finally {

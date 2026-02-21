@@ -65,7 +65,10 @@ interface ImageSize {
     height: number;
 }
 
-const CREW_REGION_KEYS: CrewRegionKey[] = ['leftPanel', 'rightPanel', 'teamHeader'];
+const CREW_REGION_KEYS: CrewRegionKey[] = [
+    'leftPanel', 'rightPanel', 'teamHeader',
+    'leftTeamHeader', 'leftTeamPlayers', 'rightTeamHeader', 'rightTeamPlayers',
+];
 const MAP_REGION_KEYS: MapRegionKey[] = [
     'yourShip',
     'enemyShips',
@@ -74,12 +77,18 @@ const MAP_REGION_KEYS: MapRegionKey[] = [
     'enemyShips4',
     'hazards',
     'players',
+    'alliedShips',
+    'scoreOrTimer',
 ];
 
 const REGION_LABELS: Record<RegionKey, string> = {
     leftPanel: 'Crew Left Panel',
     rightPanel: 'Crew Right Panel',
     teamHeader: 'Crew Team Header',
+    leftTeamHeader: 'Crew Left Team Header',
+    leftTeamPlayers: 'Crew Left Team Players',
+    rightTeamHeader: 'Crew Right Team Header',
+    rightTeamPlayers: 'Crew Right Team Players',
     yourShip: 'Map Your Ship',
     enemyShips: 'Map Enemy Ships #1',
     enemyShips2: 'Map Enemy Ships #2',
@@ -87,12 +96,18 @@ const REGION_LABELS: Record<RegionKey, string> = {
     enemyShips4: 'Map Enemy Ships #4',
     hazards: 'Map Hazards',
     players: 'Map Players',
+    alliedShips: 'Map Allied Ships',
+    scoreOrTimer: 'Map Score / Timer',
 };
 
 const REGION_COLORS: Record<RegionKey, string> = {
     leftPanel: '#34D399',
     rightPanel: '#F59E0B',
     teamHeader: '#38BDF8',
+    leftTeamHeader: '#6EE7B7',
+    leftTeamPlayers: '#10B981',
+    rightTeamHeader: '#FCD34D',
+    rightTeamPlayers: '#D97706',
     yourShip: '#34D399',
     enemyShips: '#F59E0B',
     enemyShips2: '#FB923C',
@@ -100,6 +115,8 @@ const REGION_COLORS: Record<RegionKey, string> = {
     enemyShips4: '#FCD34D',
     hazards: '#EF4444',
     players: '#6366F1',
+    alliedShips: '#22D3EE',
+    scoreOrTimer: '#E879F9',
 };
 
 const MIN_NORMALIZED_SIZE = 0.005;
@@ -113,6 +130,10 @@ const cloneRegions = (regions: OcrRegionSettings): OcrRegionSettings => ({
         leftPanel: { ...regions.crewHub.leftPanel },
         rightPanel: { ...regions.crewHub.rightPanel },
         teamHeader: { ...regions.crewHub.teamHeader },
+        leftTeamHeader: { ...regions.crewHub.leftTeamHeader },
+        leftTeamPlayers: { ...regions.crewHub.leftTeamPlayers },
+        rightTeamHeader: { ...regions.crewHub.rightTeamHeader },
+        rightTeamPlayers: { ...regions.crewHub.rightTeamPlayers },
     },
     mapScreen: {
         yourShip: { ...regions.mapScreen.yourShip },
@@ -122,6 +143,8 @@ const cloneRegions = (regions: OcrRegionSettings): OcrRegionSettings => ({
         enemyShips4: { ...regions.mapScreen.enemyShips4 },
         hazards: { ...regions.mapScreen.hazards },
         players: { ...regions.mapScreen.players },
+        alliedShips: { ...regions.mapScreen.alliedShips },
+        scoreOrTimer: { ...regions.mapScreen.scoreOrTimer },
     },
 });
 

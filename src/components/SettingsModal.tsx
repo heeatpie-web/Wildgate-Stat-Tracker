@@ -393,6 +393,10 @@ const SettingsModalContent: React.FC = () => {
         leftPanel: 'Left Panel',
         rightPanel: 'Right Panel',
         teamHeader: 'Team Header',
+        leftTeamHeader: 'Left Team Header',
+        leftTeamPlayers: 'Left Team Players',
+        rightTeamHeader: 'Right Team Header',
+        rightTeamPlayers: 'Right Team Players',
         yourShip: 'Your Ship',
         enemyShips: 'Enemy Ships #1',
         enemyShips2: 'Enemy Ships #2',
@@ -400,6 +404,8 @@ const SettingsModalContent: React.FC = () => {
         enemyShips4: 'Enemy Ships #4',
         hazards: 'Hazards',
         players: 'Players',
+        alliedShips: 'Allied Ships',
+        scoreOrTimer: 'Score / Timer',
     };
     const regionFields: Array<keyof OcrRegionBounds> = ['xMin', 'xMax', 'yMin', 'yMax'];
     const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
@@ -447,7 +453,10 @@ const SettingsModalContent: React.FC = () => {
             } as Partial<OcrRegionSettings['mapScreen']>,
         });
     };
-    const crewHubRegionKeys: CrewRegionKey[] = ['leftPanel', 'rightPanel', 'teamHeader'];
+    const crewHubRegionKeys: CrewRegionKey[] = [
+        'leftPanel', 'rightPanel', 'teamHeader',
+        'leftTeamHeader', 'leftTeamPlayers', 'rightTeamHeader', 'rightTeamPlayers',
+    ];
     const mapRegionKeys: MapRegionKey[] = [
         'yourShip',
         'enemyShips',
@@ -456,6 +465,8 @@ const SettingsModalContent: React.FC = () => {
         'enemyShips4',
         'hazards',
         'players',
+        'alliedShips',
+        'scoreOrTimer',
     ];
     const applyVisualRoiRegions = useCallback((nextRegions: OcrRegionSettings) => {
         setOcrRegions({

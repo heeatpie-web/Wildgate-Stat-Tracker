@@ -73,6 +73,7 @@ export interface FormSlice {
     setPendingPlacement: (placement: number | null) => void;
     setPendingArtifactType: (type: string) => void;
     setShowWizard: (result: 'Win' | 'Loss' | 'Draw' | null) => void;
+    clearTelemetryDetected: () => void;
 
     resetForm: () => void;
 }
@@ -201,6 +202,7 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
     setPendingPlacement: (placement) => set({ pendingPlacement: placement }),
     setPendingArtifactType: (type) => set({ pendingArtifactType: type }),
     setShowWizard: (result) => set({ showWizard: result }),
+    clearTelemetryDetected: () => set({ telemetryDetectedHero: undefined, telemetryDetectedShip: undefined }),
 
     resetForm: () => set((state) => ({
         poiEasy: 0,

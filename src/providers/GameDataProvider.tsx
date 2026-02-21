@@ -133,6 +133,7 @@ interface GameDataContextType {
     addMapping: (id: string, name: string) => void;
     setOverlayPhase: (phase: 'Setup' | 'Live' | 'Result') => void;
     playerProfiles: Record<string, PlayerProfile>;
+    clearTelemetryDetected: () => void;
 }
 
 const GameDataContext = createContext<GameDataContextType | null>(null);
@@ -206,6 +207,7 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         detectedUnknowns: s.detectedUnknowns, addMapping: s.addMapping,
         setOverlayPhase: s.setOverlayPhase,
         playerProfiles: s.playerProfiles,
+        clearTelemetryDetected: s.clearTelemetryDetected,
     })));
 
     useEffect(() => {

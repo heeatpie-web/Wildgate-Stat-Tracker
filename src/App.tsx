@@ -960,7 +960,7 @@ const App: React.FC = () => {
 
     const handleTelemetryDraftSmartCapture = useCallback(() => {
         if (!telemetryDraftPrompt) return;
-        const maxMidmatchCaptures = 3;
+        const maxMidmatchCaptures = 4;
         const requestId = requestSmartCapture({
             activeUser: activeUser || null,
             source: 'telemetry-draft-prompt',
@@ -981,7 +981,7 @@ const App: React.FC = () => {
             if (clicks >= maxMidmatchCaptures) {
                 dismissedTelemetryDraftMidmatchPromptIdsRef.current.add(telemetryDraftPrompt.matchId);
                 setTelemetryDraftPrompt(null);
-                setToast({ message: 'Smart Capture started (3/3). Prompt dismissed for this match.', type: 'info' });
+                setToast({ message: `Smart Capture started (${maxMidmatchCaptures}/${maxMidmatchCaptures}). Prompt dismissed for this match.`, type: 'info' });
                 return;
             }
             setToast({ message: `Smart Capture started (${clicks}/${maxMidmatchCaptures}). You can capture again from this prompt.`, type: 'info' });
@@ -1079,7 +1079,7 @@ const App: React.FC = () => {
             if (!Number.isInteger(matchId) || matchId <= 0) return;
             if (dismissedTelemetryDraftMidmatchPromptIdsRef.current.has(matchId)) return;
             const clickCount = telemetryDraftCaptureClicksRef.current.get(matchId) || 0;
-            if (clickCount >= 3) {
+            if (clickCount >= 4) {
                 dismissedTelemetryDraftMidmatchPromptIdsRef.current.add(matchId);
                 return;
             }

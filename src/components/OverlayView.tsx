@@ -61,6 +61,7 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
      * This ref prevents stale closures from causing the stuck state.
      */
     const isHoveringRef = React.useRef(false);
+    const [captureInProgress, setCaptureInProgress] = React.useState(false);
 
     // Notify main process of overlay style for click-through behavior
     useEffect(() => {
@@ -99,6 +100,17 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
         if (!isTransparent) return;
         getElectronAPI()?.send('set-ignore-mouse-events', false);
     }, [isTransparent, showWizard]);
+
+    // Hide the HUD panel while a smart capture is in progress so the overlay doesn't appear in the screenshot
+    useEffect(() => {
+        if (!isTransparent) return;
+        const handleCaptureStart = () => {
+            setCaptureInProgress(true);
+            setTimeout(() => setCaptureInProgress(false), 800);
+        };
+        window.addEventListener('smart-capture-request', handleCaptureStart);
+        return () => window.removeEventListener('smart-capture-request', handleCaptureStart);
+    }, [isTransparent]);
 
     const OverlayTabRail = (
         <div className="grid grid-cols-3 gap-1 md3-surface rounded-control p-1 border border-md-sys-outline/10">
@@ -311,6 +323,7 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
             <div className="flex-1 flex flex-col items-center p-2 pointer-events-none relative z-10">
                 <div
                     className="pointer-events-auto mt-2 w-full min-w-300px max-w-2xl flex flex-col mg-surface-high backdrop-blur-md border border-md-sys-outline/20 rounded-card shadow-2xl overflow-hidden"
+                    style={{ opacity: captureInProgress ? 0 : 1, transition: 'opacity 0.1s' }}
                     onMouseEnter={enableInteraction}
                     onMouseLeave={disableInteraction}
                     onPointerEnter={enableInteraction}

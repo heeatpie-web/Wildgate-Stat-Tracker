@@ -134,7 +134,8 @@ export const useLogMonitor = (activeUser?: string) => {
         setSelectedTeammates,
         setCurrentLoadout,
         currentLoadout,
-        sessionStartTime
+        sessionStartTime,
+        clearTelemetryDetected,
     } = useGameData();
 
     const {
@@ -514,6 +515,10 @@ export const useLogMonitor = (activeUser?: string) => {
         const onStatus = (status: unknown) => {
             if (!isRecord(status)) return;
             setTelemetryStatus(status as TelemetryStatusPatch);
+            // When the game log file no longer exists, the game has closed — clear telemetry detected state
+            if (status.exists === false) {
+                clearTelemetryDetected();
+            }
         };
         const onLogData = (data: unknown) => {
             if (data) {
@@ -1203,7 +1208,7 @@ export const useLogMonitor = (activeUser?: string) => {
             unsubStatus();
             unsubData();
         };
-    }, [updatePlayerIdMapping, setToast, setLastActivity, setTimeMin, setTimeSec, setIsMatchInProgress, setMatchStartTime, setOverlayPhase, setShowWizard, setActiveHero, setActiveShip, setCurrentLoadout, setTelemetryStatus]);
+    }, [updatePlayerIdMapping, setToast, setLastActivity, setTimeMin, setTimeSec, setIsMatchInProgress, setMatchStartTime, setOverlayPhase, setShowWizard, setActiveHero, setActiveShip, setCurrentLoadout, setTelemetryStatus, clearTelemetryDetected]);
 
     return { logFeed, logStatus: telemetryStatus };
 };
