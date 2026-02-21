@@ -28,6 +28,7 @@ interface OcrCorrectionModalProps {
     onClose: () => void;
     onAcceptAll: () => void;
     screenshots?: string[];
+    embedded?: boolean;
 }
 
 interface DetectedPlayer {
@@ -123,6 +124,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     onClose,
     onAcceptAll,
     screenshots,
+    embedded = false,
 }) => {
     const {
         sessionTeams,
@@ -558,8 +560,10 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     return (
         <>
         <div
-            className="fixed inset-0 md3-dialog-scrim z-top-second flex items-start justify-center p-4 overflow-y-auto animate-fade-in"
-            onClick={onClose}
+            className={embedded
+                ? 'w-full h-full flex flex-col min-h-0'
+                : 'fixed inset-0 md3-dialog-scrim z-top-second flex items-start justify-center p-4 overflow-y-auto animate-fade-in'}
+            onClick={embedded ? undefined : onClose}
         >
             <div
                 ref={focusTrapRef}
@@ -567,7 +571,9 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 aria-modal="true"
                 aria-labelledby={dialogTitleId}
                 aria-describedby={dialogDescriptionId}
-                className="md3-dialog rounded-modal w-full max-w-2xl max-h-85vh my-2 flex flex-col animate-scale-in"
+                className={embedded
+                    ? 'w-full h-full min-h-0 flex flex-col rounded-2xl border border-md-sys-outline/10 bg-md-sys-surface-container'
+                    : 'md3-dialog rounded-modal w-full max-w-2xl max-h-85vh my-2 flex flex-col animate-scale-in'}
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
@@ -993,11 +999,8 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
 
                 {/* Footer */}
                 <div className="md3-dialog-actions w-full justify-between">
-                    <button
-                        onClick={onClose}
-                        className="md3-btn-text"
-                    >
-                        Close for Now
+                    <button onClick={onClose} className="md3-btn-text">
+                        {embedded ? 'Back to Result' : 'Close for Now'}
                     </button>
 
                     <div className="flex items-center gap-2">

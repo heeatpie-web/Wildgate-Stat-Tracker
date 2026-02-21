@@ -96,6 +96,30 @@ describe('OcrRegionEditorModal', () => {
         expect(URL.createObjectURL).toHaveBeenCalledWith(screenshot);
     });
 
+    it('supports loading and selecting multiple screenshots', async () => {
+        const createObjectUrlMock = URL.createObjectURL as unknown as ReturnType<typeof vi.fn>;
+        createObjectUrlMock
+            .mockReturnValueOnce('blob:first')
+            .mockReturnValueOnce('blob:second');
+
+        renderModal();
+        const input = document.body.querySelector('input[type="file"][aria-label="Load screenshot file"]');
+        expect(input).toBeTruthy();
+
+        const first = new File(['a'], 'top.png', { type: 'image/png' });
+        const second = new File(['b'], 'bottom.png', { type: 'image/png' });
+        fireEvent.change(input as HTMLInputElement, { target: { files: [first, second] } });
+
+        expect(screen.getByText(/Loaded \(2\)/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /2\. bottom\.png/i })).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /2\. bottom\.png/i }));
+
+        await waitFor(() => {
+            expect(createObjectUrlMock).toHaveBeenCalledWith(second);
+        });
+    });
+
     it('shows a visible error when preview decode and fallback read fail', () => {
         class BrokenFileReaderMock {
             public onload: ((event: ProgressEvent<FileReader>) => void) | null = null;

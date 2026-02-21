@@ -56,6 +56,84 @@ const capOpponentPlayers = (players: ExtractedPlayer[] = []): ExtractedPlayer[] 
   return ranked.slice(0, MAX_OPPONENT_PLAYERS_PER_TEAM);
 };
 
+const isUnknownTeamColor = (value?: TeamColor | string): boolean => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return !normalized || normalized === 'unknown';
+};
+
+const isPlaceholderTeamName = (value?: string): boolean => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return true;
+  if (/^team\s*\d*$/.test(normalized)) return true;
+  if (/^enemy\s*team\s*\d*$/.test(normalized)) return true;
+  if (/^unknown(\s*team)?$/.test(normalized)) return true;
+  return false;
+};
+
+const normalizedTeamName = (value?: string): string => normalizeKey(String(value || ''));
+
+const sameOrNearTeamName = (a?: string, b?: string): boolean => {
+  if (!a || !b) return false;
+  if (isPlaceholderTeamName(a) || isPlaceholderTeamName(b)) return false;
+  const aNorm = normalizedTeamName(a);
+  const bNorm = normalizedTeamName(b);
+  if (!aNorm || !bNorm) return false;
+  if (aNorm === bNorm) return true;
+  if (aNorm.length >= 4 && bNorm.length >= 4 && (aNorm.includes(bNorm) || bNorm.includes(aNorm))) return true;
+  const threshold = Math.max(1, Math.min(2, Math.floor(Math.min(aNorm.length, bNorm.length) / 5)));
+  return distance(aNorm, bNorm) <= threshold;
+};
+
+const teamRosterOverlapRatio = (a: ExtractedOpponentTeam, b: ExtractedOpponentTeam): number => {
+  const aPlayers = new Set((a.players || []).map((p) => normalizeKey(p.name)).filter(Boolean));
+  const bPlayers = new Set((b.players || []).map((p) => normalizeKey(p.name)).filter(Boolean));
+  if (aPlayers.size === 0 || bPlayers.size === 0) return 0;
+  let overlap = 0;
+  aPlayers.forEach((key) => {
+    if (bPlayers.has(key)) overlap++;
+  });
+  return overlap / Math.min(aPlayers.size, bPlayers.size);
+};
+
+const findBestOpponentTeamMatchIndex = (
+  existingArr: ExtractedOpponentTeam[],
+  newTeam: ExtractedOpponentTeam
+): number => {
+  let bestIndex = -1;
+  let bestScore = 0;
+
+  for (let i = 0; i < existingArr.length; i++) {
+    const existing = existingArr[i];
+    const hasStrongNameMatch = sameOrNearTeamName(existing.teamName, newTeam.teamName);
+    const bothHaveNamedTeam = !isPlaceholderTeamName(existing.teamName) && !isPlaceholderTeamName(newTeam.teamName);
+    const colorMatch = !isUnknownTeamColor(existing.color) && existing.color === newTeam.color;
+    const rosterOverlap = teamRosterOverlapRatio(existing, newTeam);
+
+    // Guardrail: if both teams have strong, different names and no roster/color evidence, do not merge.
+    if (bothHaveNamedTeam && !hasStrongNameMatch && rosterOverlap <= 0 && !colorMatch) {
+      continue;
+    }
+
+    let score = 0;
+    if (hasStrongNameMatch) score += 100;
+    if (colorMatch) score += 24;
+    if (rosterOverlap > 0) score += 40 * rosterOverlap;
+
+    // Require enough evidence for fallback matches when names are weak/missing.
+    const fallbackAcceptable = hasStrongNameMatch
+      || (colorMatch && rosterOverlap > 0)
+      || rosterOverlap >= 0.5;
+
+    if (!fallbackAcceptable) continue;
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = i;
+    }
+  }
+
+  return bestIndex;
+};
+
 function normalizeKey(input: string): string {
   return input.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -167,12 +245,12 @@ export function extractShipType(text: string): string | null {
   }
   for (const keyword of SHIP_KEYWORDS) {
     if (upper.includes(keyword)) {
-      if (upper.includes('HUNTER')) return 'Hunter (4 Player)';
-      if (upper.includes('BASTION')) return 'Bastion (4 Player)';
-      if (upper.includes('PRIVATEER')) return 'Privateer (4 Player)';
-      if (upper.includes('SCOUT')) return 'Scout (3 Player)';
+      if (upper.includes('HUNTER')) return 'Hunter';
+      if (upper.includes('BASTION')) return 'Bastion';
+      if (upper.includes('PRIVATEER')) return 'Privateer';
+      if (upper.includes('SCOUT')) return 'Scout';
       if (upper.includes('SOLO') && upper.includes('OUTLAW')) return 'Solo Outlaw';
-      if (upper.includes('OUTLAW')) return 'Outlaw (2 Player)';
+      if (upper.includes('OUTLAW')) return 'Outlaw';
     }
   }
 
@@ -374,15 +452,7 @@ export function mergeOCRData(
     const existingArr = [...(merged.opponentTeams || [])];
 
     for (const newTeam of newData.opponentTeams) {
-      let matchIdx = -1;
-      if (newTeam.color && newTeam.color !== 'unknown') {
-        matchIdx = existingArr.findIndex(t => t.color === newTeam.color);
-      }
-      if (matchIdx < 0 && newTeam.teamName) {
-        matchIdx = existingArr.findIndex(
-          t => t.teamName.toLowerCase() === newTeam.teamName.toLowerCase()
-        );
-      }
+      const matchIdx = findBestOpponentTeamMatchIndex(existingArr, newTeam);
 
       if (matchIdx >= 0) {
         const existing = existingArr[matchIdx];

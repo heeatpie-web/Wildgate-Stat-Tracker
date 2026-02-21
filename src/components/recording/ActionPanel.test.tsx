@@ -203,7 +203,7 @@ describe('ActionPanel', () => {
     const onSmartCaptureData = vi.fn();
     const pendingPayload = { teammates: [{ name: 'Pilot' }] };
     smartCaptureState.pendingData = pendingPayload;
-    smartCaptureState.capturedScreenshots = [{ id: '1' }];
+    smartCaptureState.savedCaptures = [{ matchId: null, ocrProcessed: false }];
 
     render(<ActionPanel onSmartCaptureData={onSmartCaptureData} />);
     fireEvent.click(screen.getByRole('button', { name: /review/i }));

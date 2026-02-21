@@ -101,6 +101,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
   const bundledCount = countImages(match.artifacts || []);
   const tone = getSemanticStatusTone(qs.key);
   const statusMeta = getStatusMeta(qs.key);
+  const displayTone = qs.key === 'Resolved' && !isSelected ? 'neutral' : tone;
   const consistencyChips = getTelemetryConsistencyWarningChips(match);
   const statusIcon = (() => {
     switch (statusMeta.icon) {
@@ -135,14 +136,14 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
       <button
         type="button"
         onClick={onClick}
-        className={`w-full h-11 rounded-control border transition-colors inline-flex items-center justify-center gap-1.5 ${isSelected
+        className={`w-full h-12 rounded-control border transition-colors inline-flex items-center justify-center gap-2 ${isSelected
           ? 'bg-md-sys-primary/14 border-md-sys-primary/38 text-md-sys-on-surface ring-1 ring-md-sys-primary/26 shadow-sm font-bold'
           : 'border-md-sys-outline/20 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/8'
           }`}
         title={`Match ${displayNumber}`}
       >
-        <span className={`inline-flex items-center justify-center w-4 h-4 sc-collapsed-glyph sc-collapsed-glyph--${tone}`}>{collapsedIcon}</span>
-        <span className="text-label-xs font-bold leading-none">{displayNumber}</span>
+        <span className={`inline-flex items-center justify-center w-5 h-5 sc-collapsed-glyph sc-collapsed-glyph--${tone}`}>{collapsedIcon}</span>
+        <span className="text-label-sm font-black leading-none">{displayNumber}</span>
       </button>
     );
   }
@@ -153,8 +154,8 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
       className={`group sc-queue-item sc-queue-item--rich w-full text-left rounded-card border-l-[11px] transition-all relative min-h-[102px] overflow-hidden ${isSelected
         ? 'bg-md-sys-primary/14 text-md-sys-on-surface border-l-md-sys-primary border border-md-sys-primary/34 p-2.5 ring-1 ring-md-sys-primary/24 shadow-sm font-semibold'
         : 'bg-md-sys-surface/40 border-l-md-sys-outline/30 border border-md-sys-outline/10 hover:bg-md-sys-on-surface/8 p-2.5'
-        } ${qs.key === 'Resolved' && !isSelected ? 'opacity-70' : ''}`}
-      style={{ borderLeftColor: isSelected ? 'var(--md-sys-color-primary)' : BORDER_BY_TONE[tone] }}
+        }`}
+      style={{ borderLeftColor: isSelected ? 'var(--md-sys-color-primary)' : BORDER_BY_TONE[displayTone] }}
       title={`Match ${displayNumber}`}
     >
       <div className="flex items-start gap-2">
@@ -182,7 +183,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
                 <span className={hasIdentity ? '' : 'italic'}>{identityLabel}</span>
               </div>
             </div>
-            <span className={`text-label-xs px-1.5 py-0.5 rounded-pill font-bold sc-status-chip sc-status-chip--${tone} inline-flex items-center gap-1`} title={statusMeta.description}>
+            <span className={`text-label-xs px-1.5 py-0.5 rounded-pill font-bold sc-status-chip sc-status-chip--${displayTone} inline-flex items-center gap-1`} title={statusMeta.description}>
               {statusIcon}
               {statusMeta.label}
             </span>
@@ -202,7 +203,9 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
               {hasConfidence ? (
                 <ConfidenceBadge percent={confidence} />
               ) : null}
-              {qs.key === 'Resolved' ? <Check size={12} className="text-success/80" /> : <ChevronRight size={12} className="text-md-sys-on-surface/40" />}
+              {qs.key === 'Resolved'
+                ? <Check size={11} className="text-success/50" />
+                : <ChevronRight size={12} className="text-md-sys-on-surface/40" />}
             </div>
           </div>
 
@@ -212,13 +215,25 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
           {consistencyChips.length > 0 ? (
             <div className="flex flex-wrap gap-1">
               {consistencyChips.slice(0, 2).map((chip) => (
-                <span
-                  key={chip.key}
-                  className="inline-flex items-center px-1.5 py-0.5 rounded-pill bg-warning-soft text-warning text-label-xs font-semibold"
-                  title={chip.description}
-                >
-                  {chip.label}
-                </span>
+                chip.key === 'duration-mismatch' ? (
+                  <span
+                    key={chip.key}
+                    className="inline-flex items-center justify-center w-5 h-5 rounded-pill bg-warning-soft text-warning"
+                    title={chip.description}
+                    role="img"
+                    aria-label="Duration mismatch"
+                  >
+                    <AlertTriangle size={11} />
+                  </span>
+                ) : (
+                  <span
+                    key={chip.key}
+                    className="inline-flex items-center px-1.5 py-0.5 rounded-pill bg-warning-soft text-warning text-label-xs font-semibold"
+                    title={chip.description}
+                  >
+                    {chip.label}
+                  </span>
+                )
               ))}
             </div>
           ) : null}

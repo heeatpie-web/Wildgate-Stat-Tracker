@@ -5,7 +5,7 @@ import { UI_REACH_MODIFIERS } from '../../utils/constants';
 
 export const Section: React.FC<{
     title: string;
-    icon: React.ReactNode;
+    icon?: React.ReactNode;
     children: React.ReactNode;
     collapsible?: boolean;
     collapsed?: boolean;
@@ -18,9 +18,11 @@ export const Section: React.FC<{
             className={`w-full flex items-center justify-between gap-2 ${collapsible ? 'cursor-pointer' : 'cursor-default'} ${collapsed ? '' : 'mb-3'}`}
         >
             <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-2xl bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer flex items-center justify-center sc-bordered sc-editor-section-icon">
-                    {icon}
-                </div>
+                {icon ? (
+                    <div className="w-8 h-8 rounded-2xl bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer flex items-center justify-center sc-bordered sc-editor-section-icon">
+                        {icon}
+                    </div>
+                ) : null}
                 <span className="text-label-sm font-black text-md-sys-on-surface/65 tracking-wide-22 uppercase sc-editor-section-title">{title}</span>
             </div>
             {collapsible && (

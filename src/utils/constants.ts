@@ -6,7 +6,7 @@
  */
 import { EQUIPMENT_DB } from './equipmentDb';
 
-export const APP_VERSION = "v2.17.2";
+export const APP_VERSION = "v2.17.3";
 
 /** Prefix used for unnamed players discovered via telemetry (e.g. "Member 1"). */
 export const UNNAMED_PLAYER_PREFIX = 'Member ';
@@ -23,13 +23,34 @@ export const CHARACTERS = [
 ];
 
 export const SHIPS = [
-  "Hunter (4 Player)",
-  "Bastion (4 Player)",
-  "Privateer (4 Player)",
-  "Scout (3 Player)",
-  "Outlaw (2 Player)",
+  "Hunter",
+  "Bastion",
+  "Privateer",
+  "Scout",
+  "Outlaw",
   "Solo Outlaw"
 ];
+
+export const SHIP_CAPACITY: Record<string, number> = {
+  Hunter: 4,
+  Bastion: 4,
+  Privateer: 4,
+  Scout: 3,
+  Outlaw: 2,
+  "Solo Outlaw": 1,
+};
+
+// Legacy aliases kept for migration/compat with older persisted values and OCR variants.
+export const SHIP_NAME_ALIASES: Record<string, string> = {
+  "Hunter (4 Player)": "Hunter",
+  "Hunter (2 Player)": "Hunter",
+  "Bastion (4 Player)": "Bastion",
+  "Privateer (4 Player)": "Privateer",
+  "Scout (3 Player)": "Scout",
+  "Outlaw (2 Player)": "Outlaw",
+  "Scout (Solo Outlaw)": "Solo Outlaw",
+  "Solo Outlaw": "Solo Outlaw",
+};
 
 export const WEAPONS = EQUIPMENT_DB.filter(i => i.type === 'Weapon').map(i => i.name);
 export const CHARACTER_WEAPONS = EQUIPMENT_DB.filter(i => i.type === 'CharacterWeapon').map(i => i.name);

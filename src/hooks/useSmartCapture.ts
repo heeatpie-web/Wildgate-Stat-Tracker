@@ -56,7 +56,7 @@ export interface SmartCaptureActions {
   dismissPendingData: () => void;
   getPendingData: (matchId?: string | number | null) => OCRExtractedData | null;
   getMergedData: () => OCRExtractedData | null;
-  reanalyzeCaptures: () => void;
+  reanalyzeCaptures: (matchId?: string | number | null) => void;
   resetCaptureSession: () => void;
 }
 
@@ -995,13 +995,31 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     return pendingDataRef.current;
   }, [normalizeMatchScope]);
 
-  const reanalyzeCaptures = useCallback(() => {
-    const mergedResult = buildMergedData(capturedScreenshots);
+  const reanalyzeCaptures = useCallback((matchId?: string | number | null) => {
+    const scope = normalizeMatchScope(matchId);
+    const scopedSavedCaptures = scope
+      ? savedCaptures.filter((capture) => normalizeMatchScope(capture.matchId) === scope)
+      : savedCaptures;
+    const scopedOcrData = scopedSavedCaptures
+      .map((capture) => capture.ocrData)
+      .filter((data): data is OCRExtractedData => Boolean(data));
+    const synthesizedScreenshots = scopedOcrData.map((data, index) => ({
+      type: data.screenshotType,
+      data,
+      timestamp: Number(data.captureTimestamp || Date.now() + index),
+    }));
+    const mergedResult = synthesizedScreenshots.length > 0
+      ? buildMergedData(synthesizedScreenshots)
+      : buildMergedData(capturedScreenshots);
     if (mergedResult) {
-      pendingDataByScopeRef.current.unscoped = mergedResult;
+      if (scope) {
+        pendingDataByScopeRef.current[scope] = mergedResult;
+      } else {
+        pendingDataByScopeRef.current.unscoped = mergedResult;
+      }
       setPendingData(mergedResult);
     }
-  }, [capturedScreenshots, buildMergedData]);
+  }, [buildMergedData, capturedScreenshots, normalizeMatchScope, savedCaptures]);
 
   const resetCaptureSession = useCallback(() => {
     setCapturedScreenshots([]);

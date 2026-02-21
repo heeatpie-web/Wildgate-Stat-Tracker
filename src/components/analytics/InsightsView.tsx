@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Match, Insight, DrillDownTarget, VisualMode } from '../../types';
 import { RelationshipInsight } from '../../utils/analytics';
 import { Skull, Handshake, Ghost, Swords, Users, Rocket, Lightbulb, Crown, Flame, Zap, User, Target, AlertTriangle } from 'lucide-react';
@@ -33,6 +33,15 @@ interface InsightsViewProps {
 export const InsightsView: React.FC<InsightsViewProps> = ({ insights, relationshipInsights, filteredMatches, onDrillDown, visualMode }) => {
     const dense = visualMode === 'dense';
     const enrichedInsights = insights.map(insight => ({ ...insight, icon: getIconComponent(insight.iconType) }));
+    const todayStart = useMemo(() => {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d.getTime();
+    }, []);
+    const todayTiltMatches = useMemo(
+        () => filteredMatches.filter((m) => Number(m?.timestamp) >= todayStart),
+        [filteredMatches, todayStart]
+    );
 
     return (
         <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -87,7 +96,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ insights, relationsh
                 )}
             </div>
             <div className="md3-card rounded-2xl p-6">
-                <TiltMeter recentMatches={filteredMatches.slice(-5)} />
+                <TiltMeter recentMatches={todayTiltMatches.slice(-5)} />
             </div>
         </div>
     );

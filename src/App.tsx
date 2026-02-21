@@ -71,7 +71,6 @@ const SmartCapturesPanel = React.lazy(loadSmartCapturesPanel);
 const loadPlayerHub = () => loadDashboardChunk('players');
 const PlayerHub = React.lazy(loadPlayerHub);
 const MatchRecordingPage = React.lazy(() => import('./components/MatchRecordingPage').then(m => ({ default: m.MatchRecordingPage })));
-import { OCRReviewModal } from './components/ocr/OCRReviewModal';
 import type { OCRExtractedData } from './utils/ocr/ocrTypes';
 import { useAppStore } from './store/useAppStore';
 import { getElectronAPI } from './utils/electronAPI';
@@ -141,6 +140,7 @@ interface RestoreSessionSnapshot {
 
 const RESTORE_SESSION_STORAGE_KEY = 'wg_restore_session_v1';
 const RESTORE_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const UNKNOWN_PLAYER_LABELS = new Set(['unknown', 'unknown player', 'n/a', 'na', '?']);
 
 interface WindowWithIdleCallbacks {
     requestIdleCallback?: (callback: IdleRequestCallback, opts?: { timeout: number }) => number;
@@ -175,8 +175,6 @@ const formatBytes = (bytes: number): string => {
 };
 
 const App: React.FC = () => {
-    const [ocrReviewData, setOcrReviewData] = useState<OCRExtractedData | null>(null);
-    const [ocrGateOutcome, setOcrGateOutcome] = useState<FinalMatchResult | null>(null);
     const [telemetryPruneStatus, setTelemetryPruneStatus] = useState<TelemetryRetentionStatus | null>(null);
     const [telemetryPruneBusy, setTelemetryPruneBusy] = useState(false);
     const [telemetryDraftPrompt, setTelemetryDraftPrompt] = useState<TelemetryDraftPromptState | null>(null);
@@ -219,6 +217,7 @@ const App: React.FC = () => {
         showChangelog, setShowChangelog,
         showWizard, setShowWizard,
         activeUser,
+        setActiveUser,
         activeMode,
         activeView,
         setActiveView,
@@ -241,6 +240,7 @@ const App: React.FC = () => {
 
     const {
         matches,
+        setMatches,
         players,
         sessionStartTime,
         setPendingMatchData,
@@ -341,8 +341,51 @@ const App: React.FC = () => {
 
         onboardingPromptedRef.current = true;
         setRenameValue('');
-        setRenameModal({ type: 'new' });
+        setRenameModal({ type: 'new', blocking: true });
     }, [activeUser, isStoreLoading, players, renameModal, setRenameModal, setRenameValue]);
+
+    useEffect(() => {
+        if (isStoreLoading) return;
+
+        const normalizeName = (value: string) => String(value || '').trim().toLowerCase();
+        const isUnknownLabel = (value: string) => UNKNOWN_PLAYER_LABELS.has(normalizeName(value));
+
+        const withSelfBackfill = matches.map((match) => {
+            const matchPlayer = String(match.player || '').trim();
+            const activePlayer = String(activeUser || '').trim();
+            const canonicalPlayer = !isUnknownLabel(matchPlayer)
+                ? matchPlayer
+                : (!isUnknownLabel(activePlayer) ? activePlayer : '');
+            if (!canonicalPlayer) return match;
+            const teammatesRaw = Array.isArray(match.teammates) ? [...match.teammates] : [];
+            const teammates = teammatesRaw
+                .map((name) => String(name || '').trim())
+                .filter((name) => !!name && !(isUnknownLabel(matchPlayer) && isUnknownLabel(name)));
+            const canonicalKey = normalizeName(canonicalPlayer);
+            const hasSelf = teammates.some((name) => normalizeName(name) === canonicalKey);
+            const needsPlayerRepair = !matchPlayer || isUnknownLabel(matchPlayer);
+            if (hasSelf) {
+                if (teammates.length === teammatesRaw.length && !needsPlayerRepair) return match;
+                return {
+                    ...match,
+                    player: needsPlayerRepair ? canonicalPlayer : match.player,
+                    teammates,
+                };
+            }
+            return {
+                ...match,
+                player: needsPlayerRepair ? canonicalPlayer : match.player,
+                teammates: [...teammates, canonicalPlayer],
+            };
+        });
+
+        const changed = withSelfBackfill.some((match, idx) => match !== matches[idx]);
+
+        if (changed) {
+            setMatches(withSelfBackfill);
+            return;
+        }
+    }, [activeUser, isStoreLoading, matches, setMatches]);
 
     const clearRestoreSessionSnapshot = useCallback(() => {
         try {
@@ -1154,7 +1197,7 @@ const App: React.FC = () => {
         setToast({ message: `Queued roster candidate: ${normalized}`, type: 'info' });
     }, [addPendingReview, pendingReviews, pilotRegistry, setToast]);
 
-    const handleApplyOCRData = useCallback((data: OCRExtractedData) => {
+    const handleApplyOCRData = useCallback((data: OCRExtractedData, gateResult?: FinalMatchResult | null) => {
         const resolvePlayerName = (ocrName: string, existingList: string[]): string => {
             if (!ocrName || ocrName.length < 2) return ocrName;
             const normalized = normalizeOcrName(ocrName);
@@ -1508,17 +1551,27 @@ const App: React.FC = () => {
             }
         });
 
-        setOcrReviewData(null);
         const rawTeammateCount = Array.isArray(data.teammates) ? data.teammates.length : 0;
         const teammateCountLabel = rawTeammateCount > autoAppliedTeammates.length
             ? `${autoAppliedTeammates.length}/${rawTeammateCount}`
             : String(autoAppliedTeammates.length);
         setToast({ message: `Applied OCR data: ${teammateCountLabel} teammates, ${canonicalModifierNames.length} modifiers`, type: 'success' });
-        if (ocrGateOutcome) {
-            setShowWizard(ocrGateOutcome);
-            setOcrGateOutcome(null);
+        const targetResult = gateResult || showWizard;
+        if (targetResult) {
+            if (gateResult) {
+                setShowWizard(gateResult);
+            }
+            window.setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
+                    detail: { source: 'app-ocr-gate' },
+                }));
+            }, 0);
         }
-    }, [pilotRegistry, activeShip, setSelectedTeammates, selectedOpponents, setSelectedOpponents, setActiveShip, selectedReachModifiers, setSelectedReachModifiers, setToast, addPendingReview, pendingReviews, sessionTeams, setSessionTeams, setSessionShipTypes, ocrGateOutcome, setShowWizard]);
+    }, [pilotRegistry, activeShip, setSelectedTeammates, selectedOpponents, setSelectedOpponents, setActiveShip, selectedReachModifiers, setSelectedReachModifiers, setToast, addPendingReview, pendingReviews, sessionTeams, setSessionTeams, setSessionShipTypes, showWizard, setShowWizard]);
+
+    const handleSmartCaptureData = useCallback((data: OCRExtractedData) => {
+        handleApplyOCRData(data, null);
+    }, [handleApplyOCRData]);
 
     useEffect(() => {
         const lastSeen = localStorage.getItem('wg_last_seen_version');
@@ -1571,17 +1624,16 @@ const App: React.FC = () => {
             const result = customEvt?.detail?.result;
             const data = customEvt?.detail?.data;
             if (!result || !data) return;
-            setOcrGateOutcome(result);
-            setOcrReviewData(data);
+            handleApplyOCRData(data, result);
         };
         window.addEventListener('submission:ocr-gate', onOcrGateRequest as EventListener);
         return () => window.removeEventListener('submission:ocr-gate', onOcrGateRequest as EventListener);
-    }, []);
+    }, [handleApplyOCRData]);
 
     const renderActiveView = () => {
         switch (activeView) {
             case 'recording':
-                return <RecordingView onSmartCaptureData={setOcrReviewData} />;
+                return <RecordingView onSmartCaptureData={handleSmartCaptureData} />;
             case 'analytics':
                 return (
                     <div className="h-full min-h-0 overflow-y-scroll custom-scrollbar p-3">
@@ -1613,7 +1665,7 @@ const App: React.FC = () => {
                     </div>
                 );
             default:
-                return <RecordingView onSmartCaptureData={setOcrReviewData} />;
+                return <RecordingView onSmartCaptureData={handleSmartCaptureData} />;
         }
     };
 
@@ -1632,7 +1684,7 @@ const App: React.FC = () => {
 
             {isOverlayMode ? (
                 /* Compact Overlay Mode */
-                <OverlayView onSmartCaptureData={setOcrReviewData} />
+                <OverlayView onSmartCaptureData={handleSmartCaptureData} />
             ) : (
                 /* Full Dashboard Mode */
                 <>
@@ -1978,26 +2030,6 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {ocrReviewData && (
-                <OCRReviewModal
-                    data={ocrReviewData}
-                    onApply={handleApplyOCRData}
-                    onCancel={() => {
-                        setOcrReviewData(null);
-                        setOcrGateOutcome(null);
-                    }}
-                    onSkip={ocrGateOutcome ? () => {
-                        useAppStore.getState().setPendingMatchData(useAppStore.getState().pendingMatchData || {});
-                        setOcrReviewData(null);
-                        setShowWizard(ocrGateOutcome);
-                        setToast({ message: 'Skipped OCR review. Captures remain queued for later review.', type: 'info' });
-                        setOcrGateOutcome(null);
-                    } : undefined}
-                    stepLabel={ocrGateOutcome ? 'Step 1 of 2' : undefined}
-                    pilotRegistry={pilotRegistry}
-                    onQueueRosterCandidate={queueRosterCandidate}
-                />
-            )}
         </div>
     );
 };

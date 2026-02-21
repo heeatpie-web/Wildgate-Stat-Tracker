@@ -45,15 +45,15 @@ export const REACH_MODIFIER_MAP: Record<string, string> = {
  * Maps OCR ship text to SHIPS constants
  */
 export const SHIP_MAP: Record<string, string> = {
-  "HUNTER": "Hunter (4 Player)",
-  "BASTION": "Bastion (4 Player)",
-  "PRIVATEER": "Privateer (4 Player)",
-  "SCOUT": "Scout (3 Player)",
-  "OUTLAW": "Outlaw (2 Player)",
+  "HUNTER": "Hunter",
+  "BASTION": "Bastion",
+  "PRIVATEER": "Privateer",
+  "SCOUT": "Scout",
+  "OUTLAW": "Outlaw",
   "SOLO OUTLAW": "Solo Outlaw",
   // Common OCR misreads
-  "BUNTER": "Hunter (4 Player)",
-  "BAST1ON": "Bastion (4 Player)",
+  "BUNTER": "Hunter",
+  "BAST1ON": "Bastion",
 };
 
 /**

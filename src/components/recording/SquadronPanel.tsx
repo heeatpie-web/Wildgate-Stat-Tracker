@@ -91,7 +91,10 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
             {hasAutoWeapons && (
               <div className="flex items-start gap-2 text-label-sm">
                 <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
-                <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
+                <span className="inline-flex items-center gap-1 text-label-xs font-bold uppercase tracking-wide text-success">
+                  <span className="recording-telemetry-dot" />
+                  Telemetry
+                </span>
                 <span className="text-md-sys-on-surface/80 break-words">
                   {currentLoadout?.weapons?.join(', ')}
                 </span>
@@ -100,7 +103,10 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
             {hasAutoEquipment && (
               <div className="flex items-start gap-2 text-label-sm">
                 <span className="font-bold uppercase tracking-wide text-info">Equipment</span>
-                <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
+                <span className="inline-flex items-center gap-1 text-label-xs font-bold uppercase tracking-wide text-success">
+                  <span className="recording-telemetry-dot" />
+                  Telemetry
+                </span>
                 <span className="text-md-sys-on-surface/80 break-words">
                   {currentLoadout?.equipment?.join(', ')}
                 </span>
@@ -196,7 +202,10 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
           {hasAutoWeapons && (
             <div className="flex items-start gap-2 text-label-sm">
               <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
-              <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
+              <span className="inline-flex items-center gap-1 text-label-xs font-bold uppercase tracking-wide text-success">
+                <span className="recording-telemetry-dot" />
+                Telemetry
+              </span>
               <span className="text-md-sys-on-surface/80 break-words">
                 {currentLoadout?.weapons?.join(', ')}
               </span>
@@ -205,7 +214,10 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
           {hasAutoEquipment && (
             <div className="flex items-start gap-2 text-label-sm">
               <span className="font-bold uppercase tracking-wide text-info">Equipment</span>
-              <span className="text-label-xs font-bold uppercase tracking-wide text-info/70">(auto)</span>
+              <span className="inline-flex items-center gap-1 text-label-xs font-bold uppercase tracking-wide text-success">
+                <span className="recording-telemetry-dot" />
+                Telemetry
+              </span>
               <span className="text-md-sys-on-surface/80 break-words">
                 {currentLoadout?.equipment?.join(', ')}
               </span>

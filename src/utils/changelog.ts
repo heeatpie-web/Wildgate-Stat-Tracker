@@ -1,4 +1,13 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v2.17.3": [
+    "Fix: Smart Captures telemetry consistency now re-evaluates from live match values so mismatch chips clear immediately after edits.",
+    "Fix: Smart Captures teammate editor now blocks removing your own profile name and shows a validation error toast.",
+    "Fix: Queue rows now show duration mismatch as a subtle warning indicator (tooltip details) instead of verbose inline text.",
+    "Improvement: Queue 'Resolved' visual treatment is now more subtle to reduce noise while keeping status readable.",
+    "Improvement: Smart Captures detail header has been decluttered by removing duplicated chips/actions and keeping key workflow controls.",
+    "Improvement: OCR ROI visual editor now supports loading and switching between multiple screenshots for scroll-state calibration.",
+    "Reliability: OCR opponent-team merging is now name-first with color/roster fallback guardrails to avoid false merges on shared colors."
+  ],
   "v2.17.2": [
     "Fix: Reduced OCR batch CPU spikes by lowering smart-capture OCR concurrency in local/merged modes and adding pacing between jobs.",
     "Fix: Analytics tooltips now force theme-aware text colors so dark and twilight hover labels stay readable.",

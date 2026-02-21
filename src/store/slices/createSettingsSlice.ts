@@ -58,10 +58,14 @@ export interface OcrRegionSettings {
     leftPanel: OcrRegionBounds;
     rightPanel: OcrRegionBounds;
     teamHeader: OcrRegionBounds;
-    leftTeamHeader: OcrRegionBounds;
-    leftTeamPlayers: OcrRegionBounds;
-    rightTeamHeader: OcrRegionBounds;
-    rightTeamPlayers: OcrRegionBounds;
+    enemyRow1TeamName: OcrRegionBounds;
+    enemyRow1Players: OcrRegionBounds;
+    enemyRow2TeamName: OcrRegionBounds;
+    enemyRow2Players: OcrRegionBounds;
+    enemyRow3TeamName: OcrRegionBounds;
+    enemyRow3Players: OcrRegionBounds;
+    enemyRow4TeamName: OcrRegionBounds;
+    enemyRow4Players: OcrRegionBounds;
   };
   mapScreen: {
     yourShip: OcrRegionBounds;
@@ -71,8 +75,6 @@ export interface OcrRegionSettings {
     enemyShips4: OcrRegionBounds;
     hazards: OcrRegionBounds;
     players: OcrRegionBounds;
-    alliedShips: OcrRegionBounds;
-    scoreOrTimer: OcrRegionBounds;
   };
 }
 
@@ -98,10 +100,14 @@ export const createDefaultOcrRegions = (): OcrRegionSettings => ({
     leftPanel: { xMin: 0.0, xMax: 0.36, yMin: 0.10, yMax: 0.80 },
     rightPanel: { xMin: 0.45, xMax: 1.0, yMin: 0.10, yMax: 0.90 },
     teamHeader: { xMin: 0.0, xMax: 0.45, yMin: 0.05, yMax: 0.20 },
-    leftTeamHeader: { xMin: 0.0, xMax: 0.36, yMin: 0.10, yMax: 0.22 },
-    leftTeamPlayers: { xMin: 0.0, xMax: 0.36, yMin: 0.22, yMax: 0.80 },
-    rightTeamHeader: { xMin: 0.45, xMax: 1.0, yMin: 0.10, yMax: 0.22 },
-    rightTeamPlayers: { xMin: 0.45, xMax: 1.0, yMin: 0.22, yMax: 0.90 },
+    enemyRow1TeamName: { xMin: 0.52, xMax: 0.74, yMin: 0.16, yMax: 0.23 },
+    enemyRow1Players: { xMin: 0.74, xMax: 0.98, yMin: 0.16, yMax: 0.23 },
+    enemyRow2TeamName: { xMin: 0.52, xMax: 0.74, yMin: 0.27, yMax: 0.34 },
+    enemyRow2Players: { xMin: 0.74, xMax: 0.98, yMin: 0.27, yMax: 0.34 },
+    enemyRow3TeamName: { xMin: 0.52, xMax: 0.74, yMin: 0.38, yMax: 0.45 },
+    enemyRow3Players: { xMin: 0.74, xMax: 0.98, yMin: 0.38, yMax: 0.45 },
+    enemyRow4TeamName: { xMin: 0.52, xMax: 0.74, yMin: 0.49, yMax: 0.56 },
+    enemyRow4Players: { xMin: 0.74, xMax: 0.98, yMin: 0.49, yMax: 0.56 },
   },
   mapScreen: {
     yourShip: { xMin: 0.0, xMax: 0.30, yMin: 0.0, yMax: 0.25 },
@@ -111,8 +117,6 @@ export const createDefaultOcrRegions = (): OcrRegionSettings => ({
     enemyShips4: { xMin: 0.60, xMax: 1.0, yMin: 0.30, yMax: 0.40 },
     hazards: { xMin: 0.60, xMax: 1.0, yMin: 0.30, yMax: 0.70 },
     players: { xMin: 0.0, xMax: 0.40, yMin: 0.70, yMax: 1.0 },
-    alliedShips: { xMin: 0.0, xMax: 0.40, yMin: 0.00, yMax: 0.40 },
-    scoreOrTimer: { xMin: 0.35, xMax: 0.65, yMin: 0.00, yMax: 0.10 },
   },
 });
 
@@ -440,10 +444,14 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
         leftPanel: { ...state.ocrRegions.crewHub.leftPanel, ...(update.crewHub?.leftPanel || {}) },
         rightPanel: { ...state.ocrRegions.crewHub.rightPanel, ...(update.crewHub?.rightPanel || {}) },
         teamHeader: { ...state.ocrRegions.crewHub.teamHeader, ...(update.crewHub?.teamHeader || {}) },
-        leftTeamHeader: { ...state.ocrRegions.crewHub.leftTeamHeader, ...(update.crewHub?.leftTeamHeader || {}) },
-        leftTeamPlayers: { ...state.ocrRegions.crewHub.leftTeamPlayers, ...(update.crewHub?.leftTeamPlayers || {}) },
-        rightTeamHeader: { ...state.ocrRegions.crewHub.rightTeamHeader, ...(update.crewHub?.rightTeamHeader || {}) },
-        rightTeamPlayers: { ...state.ocrRegions.crewHub.rightTeamPlayers, ...(update.crewHub?.rightTeamPlayers || {}) },
+        enemyRow1TeamName: { ...state.ocrRegions.crewHub.enemyRow1TeamName, ...(update.crewHub?.enemyRow1TeamName || {}) },
+        enemyRow1Players: { ...state.ocrRegions.crewHub.enemyRow1Players, ...(update.crewHub?.enemyRow1Players || {}) },
+        enemyRow2TeamName: { ...state.ocrRegions.crewHub.enemyRow2TeamName, ...(update.crewHub?.enemyRow2TeamName || {}) },
+        enemyRow2Players: { ...state.ocrRegions.crewHub.enemyRow2Players, ...(update.crewHub?.enemyRow2Players || {}) },
+        enemyRow3TeamName: { ...state.ocrRegions.crewHub.enemyRow3TeamName, ...(update.crewHub?.enemyRow3TeamName || {}) },
+        enemyRow3Players: { ...state.ocrRegions.crewHub.enemyRow3Players, ...(update.crewHub?.enemyRow3Players || {}) },
+        enemyRow4TeamName: { ...state.ocrRegions.crewHub.enemyRow4TeamName, ...(update.crewHub?.enemyRow4TeamName || {}) },
+        enemyRow4Players: { ...state.ocrRegions.crewHub.enemyRow4Players, ...(update.crewHub?.enemyRow4Players || {}) },
       },
       mapScreen: {
         ...state.ocrRegions.mapScreen,
@@ -455,8 +463,6 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
         enemyShips4: { ...state.ocrRegions.mapScreen.enemyShips4, ...(update.mapScreen?.enemyShips4 || {}) },
         hazards: { ...state.ocrRegions.mapScreen.hazards, ...(update.mapScreen?.hazards || {}) },
         players: { ...state.ocrRegions.mapScreen.players, ...(update.mapScreen?.players || {}) },
-        alliedShips: { ...state.ocrRegions.mapScreen.alliedShips, ...(update.mapScreen?.alliedShips || {}) },
-        scoreOrTimer: { ...state.ocrRegions.mapScreen.scoreOrTimer, ...(update.mapScreen?.scoreOrTimer || {}) },
       },
     }
   })),

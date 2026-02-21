@@ -19,6 +19,7 @@ interface ToastData {
 interface RenameModalState {
     type: 'new' | 'rename' | 'share_code';
     oldName?: string;
+    blocking?: boolean;
 }
 
 interface SmartCaptureRequest {

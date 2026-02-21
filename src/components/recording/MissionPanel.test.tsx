@@ -61,17 +61,16 @@ vi.mock('../../utils/scanService', () => ({
 }));
 
 describe('MissionPanel', () => {
-  it('shows selected character loadout and auto telemetry indicator on section headers', async () => {
+  it('shows selected character loadout and telemetry indicator on section headers', async () => {
     const { MissionPanel } = await import('./MissionPanel');
     render(<MissionPanel accordionMode />);
 
     const charWeaponsHeader = screen.getByRole('button', { name: /char weapons/i });
     expect(within(charWeaponsHeader).getByText(selectedCharacterWeapon)).toBeInTheDocument();
-    expect(within(charWeaponsHeader).getByText('Auto')).toBeInTheDocument();
+    expect(within(charWeaponsHeader).getByText('Telemetry')).toBeInTheDocument();
 
     const equipmentHeader = screen.getByRole('button', { name: /equipment/i });
     expect(within(equipmentHeader).getByText(selectedCharacterEquipment)).toBeInTheDocument();
-    expect(within(equipmentHeader).getByText('Auto')).toBeInTheDocument();
+    expect(within(equipmentHeader).getByText('Telemetry')).toBeInTheDocument();
   });
 });
-

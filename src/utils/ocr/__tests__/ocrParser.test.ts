@@ -114,14 +114,14 @@ describe('cleanPlayerName', () => {
 
 describe('extractShipType', () => {
   it('detects ship types from keywords', () => {
-    expect(extractShipType('This is a HUNTER ship')).toBe('Hunter (4 Player)');
-    expect(extractShipType('BASTION class vessel')).toBe('Bastion (4 Player)');
-    expect(extractShipType('SCOUT patrol')).toBe('Scout (3 Player)');
+    expect(extractShipType('This is a HUNTER ship')).toBe('Hunter');
+    expect(extractShipType('BASTION class vessel')).toBe('Bastion');
+    expect(extractShipType('SCOUT patrol')).toBe('Scout');
   });
 
   it('detects Outlaw from text containing OUTLAW', () => {
     // Note: SHIP_MAP matches "OUTLAW" before "SOLO OUTLAW" due to iteration order
-    expect(extractShipType('SOLO OUTLAW mode')).toBe('Outlaw (2 Player)');
+    expect(extractShipType('SOLO OUTLAW mode')).toBe('Outlaw');
   });
 
   it('returns null for no match', () => {
@@ -356,7 +356,7 @@ describe('mergeOCRData (parser)', () => {
     expect(merged.playerShip!.shipType).toBe('Scout');
   });
 
-  it('merges opponent teams by color', () => {
+  it('merges opponent teams by fuzzy team name plus color/roster evidence', () => {
     const existing: Partial<OCRExtractedData> = {
       opponentTeams: [{
         teamName: 'RedTeam',
@@ -381,6 +381,29 @@ describe('mergeOCRData (parser)', () => {
     expect(merged.opponentTeams![0].players).toHaveLength(2);
     // Longer team name preferred
     expect(merged.opponentTeams![0].teamName).toBe('RedTeamExtended');
+  });
+
+  it('does not merge unrelated teams by color only when names and roster differ', () => {
+    const existing: Partial<OCRExtractedData> = {
+      opponentTeams: [{
+        teamName: 'Crimson Raiders',
+        shipType: 'Hunter',
+        color: 'red' as const,
+        players: [{ name: 'E1', confidence: 80, isTeammate: false }],
+        confidence: 70,
+      }],
+    };
+    const newData: Partial<OCRExtractedData> = {
+      opponentTeams: [{
+        teamName: 'Ruby Wolves',
+        shipType: 'Scout',
+        color: 'red' as const,
+        players: [{ name: 'E9', confidence: 85, isTeammate: false }],
+        confidence: 80,
+      }],
+    };
+    const merged = mergeOCRData(existing, newData);
+    expect(merged.opponentTeams).toHaveLength(2);
   });
 
   it('deduplicates hazards', () => {

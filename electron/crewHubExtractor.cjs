@@ -39,6 +39,14 @@ const LAYOUT = {
     yMin: 0.05,
     yMax: 0.20,
   },
+  ENEMY_ROW_1_TEAM: { xMin: 0.52, xMax: 0.74, yMin: 0.16, yMax: 0.23 },
+  ENEMY_ROW_1_PLAYERS: { xMin: 0.74, xMax: 0.98, yMin: 0.16, yMax: 0.23 },
+  ENEMY_ROW_2_TEAM: { xMin: 0.52, xMax: 0.74, yMin: 0.27, yMax: 0.34 },
+  ENEMY_ROW_2_PLAYERS: { xMin: 0.74, xMax: 0.98, yMin: 0.27, yMax: 0.34 },
+  ENEMY_ROW_3_TEAM: { xMin: 0.52, xMax: 0.74, yMin: 0.38, yMax: 0.45 },
+  ENEMY_ROW_3_PLAYERS: { xMin: 0.74, xMax: 0.98, yMin: 0.38, yMax: 0.45 },
+  ENEMY_ROW_4_TEAM: { xMin: 0.52, xMax: 0.74, yMin: 0.49, yMax: 0.56 },
+  ENEMY_ROW_4_PLAYERS: { xMin: 0.74, xMax: 0.98, yMin: 0.49, yMax: 0.56 },
 };
 
 function clamp01(value, fallback) {
@@ -72,6 +80,14 @@ function resolveCrewHubLayout(layoutOverrides) {
     LEFT_PANEL: sanitizeBounds(source.leftPanel, LAYOUT.LEFT_PANEL),
     RIGHT_PANEL: sanitizeBounds(source.rightPanel, LAYOUT.RIGHT_PANEL),
     TEAM_HEADER: sanitizeBounds(source.teamHeader, LAYOUT.TEAM_HEADER),
+    ENEMY_ROW_1_TEAM: sanitizeBounds(source.enemyRow1TeamName, LAYOUT.ENEMY_ROW_1_TEAM),
+    ENEMY_ROW_1_PLAYERS: sanitizeBounds(source.enemyRow1Players, LAYOUT.ENEMY_ROW_1_PLAYERS),
+    ENEMY_ROW_2_TEAM: sanitizeBounds(source.enemyRow2TeamName, LAYOUT.ENEMY_ROW_2_TEAM),
+    ENEMY_ROW_2_PLAYERS: sanitizeBounds(source.enemyRow2Players, LAYOUT.ENEMY_ROW_2_PLAYERS),
+    ENEMY_ROW_3_TEAM: sanitizeBounds(source.enemyRow3TeamName, LAYOUT.ENEMY_ROW_3_TEAM),
+    ENEMY_ROW_3_PLAYERS: sanitizeBounds(source.enemyRow3Players, LAYOUT.ENEMY_ROW_3_PLAYERS),
+    ENEMY_ROW_4_TEAM: sanitizeBounds(source.enemyRow4TeamName, LAYOUT.ENEMY_ROW_4_TEAM),
+    ENEMY_ROW_4_PLAYERS: sanitizeBounds(source.enemyRow4Players, LAYOUT.ENEMY_ROW_4_PLAYERS),
   };
 }
 

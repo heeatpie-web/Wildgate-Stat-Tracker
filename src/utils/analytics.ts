@@ -382,26 +382,52 @@ export const calculatePoiCorrelation = (matches: Match[]): Insight[] => {
  */
 export const calculateLoadoutAnalytics = (matches: Match[]): {
     weaponStats: Record<string, { wins: number; total: number; avgDamage: number }>;
+    comboStats: Record<string, { wins: number; total: number; winRate: number; hero: string; ship: string }>;
     bestWeapon: string | null;
     worstWeapon: string | null;
     insights: Insight[];
 } => {
     const weaponStats: Record<string, { wins: number; total: number; avgDamage: number; totalDamage: number }> = {};
-    const validMatches = matches.filter(m => isCompletedMatch(m) && m.loadout?.weapons && Object.keys(m.loadout.weapons).length > 0);
+    const comboStatsRaw: Record<string, { wins: number; total: number; hero: string; ship: string }> = {};
+    const validMatches = matches.filter((m) => {
+        if (!isCompletedMatch(m) || !m.loadout) return false;
+        const hasAnyLoadout = (m.loadout.weapons?.length || 0) > 0
+            || (m.loadout.equipment?.length || 0) > 0
+            || (m.loadout.characterWeapons?.length || 0) > 0
+            || (m.loadout.characterEquipment?.length || 0) > 0;
+        return hasAnyLoadout;
+    });
 
     validMatches.forEach(m => {
-        const weapons = m.loadout?.weapons || {};
+        const loadout = m.loadout || { weapons: [], equipment: [], characterWeapons: [], characterEquipment: [] };
+        const loadoutEntries = Array.from(new Set([
+            ...(loadout.weapons || []),
+            ...(loadout.characterWeapons || []),
+            ...(loadout.equipment || []),
+            ...(loadout.characterEquipment || []),
+        ].map((entry) => String(entry || '').trim()).filter(Boolean)));
         const isWin = m.result === 'Win';
         const damage = Number(m.damageTaken) || 0;
 
-        Object.keys(weapons).forEach(weapon => {
-            if (!weaponStats[weapon]) {
-                weaponStats[weapon] = { wins: 0, total: 0, avgDamage: 0, totalDamage: 0 };
+        loadoutEntries.forEach((entry) => {
+            if (!weaponStats[entry]) {
+                weaponStats[entry] = { wins: 0, total: 0, avgDamage: 0, totalDamage: 0 };
             }
-            weaponStats[weapon].total++;
-            weaponStats[weapon].totalDamage += damage;
-            if (isWin) weaponStats[weapon].wins++;
+            weaponStats[entry].total++;
+            weaponStats[entry].totalDamage += damage;
+            if (isWin) weaponStats[entry].wins++;
         });
+
+        const hero = String(m.hero || 'Unknown').trim() || 'Unknown';
+        const ship = String((m.ship || 'Unknown')).split('(')[0].trim() || 'Unknown';
+        const comboWeapons = (loadout.characterWeapons || loadout.weapons || []).map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 2);
+        const comboEquipment = (loadout.characterEquipment || loadout.equipment || []).map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 2);
+        const comboKey = `${hero}|${ship}|W:${comboWeapons.join(',') || '--'}|E:${comboEquipment.join(',') || '--'}`;
+        if (!comboStatsRaw[comboKey]) {
+            comboStatsRaw[comboKey] = { wins: 0, total: 0, hero, ship };
+        }
+        comboStatsRaw[comboKey].total++;
+        if (isWin) comboStatsRaw[comboKey].wins++;
     });
 
     // Calculate averages
@@ -450,9 +476,64 @@ export const calculateLoadoutAnalytics = (matches: Match[]): {
         });
     }
 
+    const rankedCombos = Object.entries(comboStatsRaw)
+        .filter(([, stats]) => stats.total >= 3)
+        .map(([combo, stats]) => ({
+            combo,
+            ...stats,
+            winRate: stats.total > 0 ? Math.round((stats.wins / stats.total) * 100) : 0,
+        }))
+        .sort((a, b) => {
+            if (b.winRate !== a.winRate) return b.winRate - a.winRate;
+            return b.total - a.total;
+        });
+    const topCombo = rankedCombos[0];
+    if (topCombo) {
+        insights.push({
+            title: 'Best Combo',
+            subtitle: `${topCombo.hero} on ${topCombo.ship}`,
+            value: topCombo.combo.split('|').slice(2).join(' '),
+            subValue: `${topCombo.winRate}% WR (${topCombo.total} matches)`,
+            tone: 'success',
+            iconType: 'Target',
+            priority: 52
+        });
+    }
+
+    const byHeroBest = Object.values(
+        rankedCombos.reduce<Record<string, (typeof rankedCombos)[number]>>((acc, combo) => {
+            const current = acc[combo.hero];
+            if (!current || combo.winRate > current.winRate || (combo.winRate === current.winRate && combo.total > current.total)) {
+                acc[combo.hero] = combo;
+            }
+            return acc;
+        }, {})
+    );
+    const topHeroCombo = byHeroBest.sort((a, b) => b.winRate - a.winRate)[0];
+    if (topHeroCombo && topHeroCombo.total >= 4) {
+        insights.push({
+            title: 'Prospector Signature',
+            subtitle: `${topHeroCombo.hero}`,
+            value: topHeroCombo.combo.split('|').slice(2).join(' '),
+            subValue: `${topHeroCombo.winRate}% WR`,
+            tone: 'info',
+            iconType: 'Users',
+            priority: 49
+        });
+    }
+
     return {
         weaponStats: Object.fromEntries(
             Object.entries(weaponStats).map(([k, v]) => [k, { wins: v.wins, total: v.total, avgDamage: v.avgDamage }])
+        ),
+        comboStats: Object.fromEntries(
+            Object.entries(comboStatsRaw).map(([combo, stats]) => [combo, {
+                wins: stats.wins,
+                total: stats.total,
+                winRate: stats.total > 0 ? Math.round((stats.wins / stats.total) * 100) : 0,
+                hero: stats.hero,
+                ship: stats.ship,
+            }])
         ),
         bestWeapon,
         worstWeapon,

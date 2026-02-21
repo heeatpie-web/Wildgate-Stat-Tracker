@@ -175,7 +175,7 @@ export const getTelemetryConsistencyWarningChips = (match: Match): TelemetryCons
         mode: match.mode,
         durationSeconds: parseClockDurationSeconds(match.time),
     });
-    const checks = consistency.checks || evaluated.checks;
+    const checks = evaluated.checks;
     const durationDeltaSeconds = typeof consistency.durationDeltaSeconds === 'number'
         ? consistency.durationDeltaSeconds
         : evaluated.durationDeltaSeconds;

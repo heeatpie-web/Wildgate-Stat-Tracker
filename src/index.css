@@ -104,6 +104,16 @@
   --mg-opacity-light: 0.8;
   --mg-opacity-dark: 0.7;
   --mg-surface: color-mix(in srgb, var(--md-sys-color-surface), transparent calc(100% - (var(--mg-opacity-light) * 100%)));
+
+  /* Header indicator tokens (theme-accent driven) */
+  --indicator-idle: color-mix(in srgb, var(--md-sys-color-outline), transparent 35%);
+  --indicator-data: var(--md-sys-color-primary);
+  --indicator-data-warning: var(--md-sys-color-secondary);
+  --indicator-data-error: var(--md-sys-color-danger);
+  --indicator-updates: var(--md-sys-color-tertiary);
+  --indicator-session: var(--md-sys-color-primary);
+  --indicator-vision: color-mix(in srgb, var(--md-sys-color-tertiary), var(--md-sys-color-primary) 26%);
+  --indicator-mission: var(--md-sys-color-primary);
 }
 
 body {
@@ -723,6 +733,8 @@ body[data-mode='twilight'] .sc-bordered {
 .sc-collapsed-glyph {
   background: transparent;
   border: none;
+  font-size: 14px;
+  line-height: 1;
 }
 
 .sc-collapsed-glyph--success {

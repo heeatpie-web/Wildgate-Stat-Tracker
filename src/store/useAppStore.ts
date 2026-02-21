@@ -23,7 +23,7 @@ import {
 } from '../utils/ocrAliasEngine';
 import { normalizeOcrBatchThreshold } from '../utils/ocrBatchActions';
 import { sanitizeCalibrationSamples } from '../utils/ocrCalibration';
-import type { Match } from '../types';
+import { normalizeShipName, type Match } from '../types';
 
 export type AppState = DataSlice & SettingsSlice & UISlice & SmartCapturesUIState & FormSlice & MappingSlice;
 
@@ -54,6 +54,14 @@ const mergeOcrRegions = (value: unknown) => {
       leftPanel: mergeNumberRecord(defaults.crewHub.leftPanel, value.crewHub && isRecord(value.crewHub) ? value.crewHub.leftPanel : undefined),
       rightPanel: mergeNumberRecord(defaults.crewHub.rightPanel, value.crewHub && isRecord(value.crewHub) ? value.crewHub.rightPanel : undefined),
       teamHeader: mergeNumberRecord(defaults.crewHub.teamHeader, value.crewHub && isRecord(value.crewHub) ? value.crewHub.teamHeader : undefined),
+      enemyRow1TeamName: mergeNumberRecord(defaults.crewHub.enemyRow1TeamName, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyRow1TeamName : undefined),
+      enemyRow1Players: mergeNumberRecord(defaults.crewHub.enemyRow1Players, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyRow1Players : undefined),
+      enemyRow2TeamName: mergeNumberRecord(defaults.crewHub.enemyRow2TeamName, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyRow2TeamName : undefined),
+      enemyRow2Players: mergeNumberRecord(defaults.crewHub.enemyRow2Players, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyRow2Players : undefined),
+      enemyRow3TeamName: mergeNumberRecord(defaults.crewHub.enemyRow3TeamName, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyRow3TeamName : undefined),
+      enemyRow3Players: mergeNumberRecord(defaults.crewHub.enemyRow3Players, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyRow3Players : undefined),
+      enemyRow4TeamName: mergeNumberRecord(defaults.crewHub.enemyRow4TeamName, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyRow4TeamName : undefined),
+      enemyRow4Players: mergeNumberRecord(defaults.crewHub.enemyRow4Players, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyRow4Players : undefined),
     },
     mapScreen: {
       yourShip: mergeNumberRecord(defaults.mapScreen.yourShip, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.yourShip : undefined),
@@ -64,6 +72,41 @@ const mergeOcrRegions = (value: unknown) => {
       hazards: mergeNumberRecord(defaults.mapScreen.hazards, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.hazards : undefined),
       players: mergeNumberRecord(defaults.mapScreen.players, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.players : undefined),
     },
+  };
+};
+
+const normalizeShipKillMap = (kills: unknown): Record<string, number> => {
+  if (!isRecord(kills)) return {};
+  const normalized: Record<string, number> = {};
+  Object.entries(kills).forEach(([shipName, value]) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= 0) return;
+    const normalizedShip = normalizeShipName(shipName);
+    if (!normalizedShip) return;
+    normalized[normalizedShip] = (normalized[normalizedShip] || 0) + numeric;
+  });
+  return normalized;
+};
+
+const normalizeMatchShips = (match: Match): Match => {
+  const normalizedShip = normalizeShipName(match.ship);
+  const normalizedLoadoutShip = normalizeShipName(match.loadout?.ship || '');
+  const normalizedOpponentTeams = Array.isArray(match.opponentTeams)
+    ? match.opponentTeams.map((team) => ({
+      ...team,
+      shipType: normalizeShipName(team.shipType || '') || team.shipType,
+    }))
+    : match.opponentTeams;
+
+  return {
+    ...match,
+    ship: normalizedShip || match.ship,
+    loadout: match.loadout ? {
+      ...match.loadout,
+      ship: normalizedLoadoutShip || match.loadout.ship,
+    } : match.loadout,
+    kills: normalizeShipKillMap(match.kills),
+    opponentTeams: normalizedOpponentTeams,
   };
 };
 
@@ -97,10 +140,11 @@ const customStorage: PersistStorage<AppState> = {
         .filter(isMatchRecord)
         .map((match) => {
         const recovered = match.ocrState === 'processing' ? { ...match, ocrState: 'queued' as const } : match;
+        const withNormalizedShips = normalizeMatchShips(recovered);
         if (recovered.subType === 'Telemetry Draft' && !recovered.result) {
-          return { ...recovered, result: 'Ongoing' };
+          return { ...withNormalizedShips, result: 'Ongoing' };
         }
-        return recovered;
+        return withNormalizedShips;
       });
 
       return {

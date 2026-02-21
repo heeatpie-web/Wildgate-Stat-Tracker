@@ -172,6 +172,27 @@ describe('smartCaptureUtils', () => {
     expect(chips).toHaveLength(0);
   });
 
+  it('ignores stale persisted checks and re-evaluates mismatch state from live values', () => {
+    const chips = getTelemetryConsistencyWarningChips(makeMatch({
+      mode: 'Artifact Brawl',
+      teammates: ['A', 'B', 'C'],
+      time: '07:00',
+      telemetryConsistency: {
+        expectedTeammateCount: 3,
+        expectedMode: 'Artifact Brawl',
+        telemetryDurationSeconds: 420,
+        durationToleranceSeconds: 45,
+        checks: {
+          teammateCount: 'warn',
+          mode: 'warn',
+          duration: 'warn',
+        },
+      },
+    }));
+
+    expect(chips).toHaveLength(0);
+  });
+
   it('chooses collapsed glyph by outcome and status', () => {
     expect(getCollapsedQueueGlyph(makeMatch({ result: 'Win' }))).toBe('win');
     expect(getCollapsedQueueGlyph(makeMatch({ result: 'Loss' }))).toBe('loss');

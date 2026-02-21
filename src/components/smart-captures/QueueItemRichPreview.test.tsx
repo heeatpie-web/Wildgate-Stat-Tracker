@@ -80,4 +80,28 @@ describe('QueueItemRichPreview', () => {
     expect(screen.getAllByText('Resolved').length).toBeGreaterThan(0);
     expect(screen.queryByText('Pending')).toBeNull();
   });
+
+  it('renders duration mismatch as indicator-only in queue rows', () => {
+    const durationMismatch: Match = {
+      ...baseMatch,
+      time: '05:00',
+      telemetryConsistency: {
+        telemetryDurationSeconds: 420,
+        durationToleranceSeconds: 45,
+      },
+    };
+
+    render(
+      <QueueItemRichPreview
+        match={durationMismatch}
+        displayNumber={18}
+        rawMatchId={durationMismatch.id}
+        isSelected={false}
+        onClick={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText(/Duration Off by/i)).toBeNull();
+    expect(screen.getByLabelText('Duration mismatch')).toBeInTheDocument();
+  });
 });

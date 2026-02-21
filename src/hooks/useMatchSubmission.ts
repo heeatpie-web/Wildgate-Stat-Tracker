@@ -39,6 +39,24 @@ const sanitizeLoadoutSlots = (loadout: Match['loadout'] | null) => {
 
 const toArtifactKey = (value: string) => value.replace(/[\\/]+/g, '\\').toLowerCase();
 
+const normalizeNameKey = (value: string | null | undefined): string =>
+    String(value || '').trim().toLowerCase();
+
+const ensureSelfInTeam = (teammates: string[] | null | undefined, playerName: string | null | undefined): string[] => {
+    const cleanedPlayer = String(playerName || '').trim();
+    const next = Array.isArray(teammates) ? [...teammates] : [];
+    if (!cleanedPlayer) return next;
+    const hasSelf = next.some((name) => normalizeNameKey(name) === normalizeNameKey(cleanedPlayer));
+    return hasSelf ? next : [...next, cleanedPlayer];
+};
+
+const countComparableTeammates = (teammates: string[] | null | undefined, playerName: string | null | undefined): number => {
+    const key = normalizeNameKey(playerName);
+    if (!Array.isArray(teammates)) return 0;
+    if (!key) return teammates.length;
+    return teammates.filter((name) => normalizeNameKey(name) !== key).length;
+};
+
 export const useMatchSubmission = () => {
     const {
         addMatch,
@@ -145,13 +163,14 @@ export const useMatchSubmission = () => {
             unresolvedDraft?.ship
         );
         const cappedResolvedTeammates = capTeammateNames(resolvedTeammates, teammateShipForCap);
+        const teamWithSelf = ensureSelfInTeam(cappedResolvedTeammates, unresolvedDraft?.player || activeUser);
 
         const data: Partial<Match> = {
             id: unresolvedDraft?.id,
             timestamp: unresolvedDraft?.timestamp,
             mode: unresolvedDraft?.mode || activeMode,
             player: unresolvedDraft?.player || activeUser,
-            teammates: cappedResolvedTeammates,
+            teammates: teamWithSelf,
             opponents: resolvedOpponents,
             hero: pickFirstKnown(activeHero, currentLoadout?.hero, unresolvedDraft?.loadout?.hero, unresolvedDraft?.hero) || undefined,
             ship: pickFirstKnown(activeShip, currentLoadout?.ship, unresolvedDraft?.loadout?.ship, unresolvedDraft?.ship) || undefined,
@@ -176,7 +195,7 @@ export const useMatchSubmission = () => {
         const baseTelemetryConsistency = unresolvedDraft?.telemetryConsistency;
         if (baseTelemetryConsistency) {
             const evaluated = evaluateTelemetryConsistencyChecks(baseTelemetryConsistency, {
-                teammateCount: data.teammates?.length || 0,
+                teammateCount: countComparableTeammates(data.teammates, data.player),
                 mode: data.mode,
                 durationSeconds: parseDurationSecs(data.time),
             });
@@ -197,7 +216,7 @@ export const useMatchSubmission = () => {
         }
         if (data.telemetryConsistency?.checks?.teammateCount === 'warn') {
             const expected = data.telemetryConsistency.expectedTeammateCount;
-            const actual = data.teammates?.length || 0;
+            const actual = countComparableTeammates(data.teammates, data.player);
             if (typeof expected === 'number') {
                 healthWarnings.push(`team count mismatch (entered ${actual}, expected ${expected})`);
             } else {
@@ -262,7 +281,7 @@ export const useMatchSubmission = () => {
             const finalTeammatesRaw = (selectedTeammates && selectedTeammates.length > 0)
                 ? selectedTeammates
                 : (pendingMatchData.teammates || []);
-            const finalTeammates = capTeammateNames(finalTeammatesRaw, resolvedShip);
+            const finalTeammates = ensureSelfInTeam(capTeammateNames(finalTeammatesRaw, resolvedShip), pendingMatchData.player || activeUser);
             const finalOpponents = (selectedOpponents && selectedOpponents.length > 0)
                 ? selectedOpponents
                 : (pendingMatchData.opponents || []);
@@ -306,7 +325,7 @@ export const useMatchSubmission = () => {
             const finalTelemetryConsistency = baseTelemetryConsistency
                 ? (() => {
                     const evaluated = evaluateTelemetryConsistencyChecks(baseTelemetryConsistency, {
-                        teammateCount: finalTeammates.length,
+                        teammateCount: countComparableTeammates(finalTeammates, pendingMatchData.player || activeUser),
                         mode: pendingMatchData.mode || activeMode,
                         durationSeconds: parseDurationSecs(finalTime),
                     });

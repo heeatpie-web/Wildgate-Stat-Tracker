@@ -44,11 +44,11 @@ const VIEW_LABELS: Record<AnalyticsView, string> = {
 };
 
 const TIME_RANGE_OPTIONS: { value: AnalyticsTimeRange; label: string }[] = [
-    { value: 'all', label: 'All Time' },
-    { value: 'month', label: 'Month' },
-    { value: 'week', label: 'Week' },
     { value: 'today', label: 'Today' },
     { value: 'lastN', label: 'Last 20' },
+    { value: 'week', label: 'Week' },
+    { value: 'month', label: 'Month' },
+    { value: 'all', label: 'All Time' },
 ];
 
 const CATEGORY_SUBVIEWS: Record<AnalyticsCategory, AnalyticsView[]> = {

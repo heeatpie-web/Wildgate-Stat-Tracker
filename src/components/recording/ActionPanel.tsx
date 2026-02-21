@@ -90,6 +90,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const { handleSmartScan, isScanning, scanProgress, scanLogs } = useSmartScan();
     const ocrMode = useAppStore(s => s.ocrMode);
     const resultOcrFlowMode = useAppStore(s => s.resultOcrFlowMode);
+    const selectedSmartCapturesMatchId = useAppStore(s => s.selectedMatchId);
     const ocrModeLabel = ocrMode === 'hybrid-plus'
         ? 'Hybrid+'
         : ocrMode === 'both'
@@ -145,21 +146,25 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     }, [activeUser, matches, sessionStartTime]);
 
     const submissionMatchId = resolveSubmissionMatchId();
+    const queueScopeMatchId = selectedSmartCapturesMatchId ?? submissionMatchId;
     const pendingOcrCountGlobal = savedCaptures.filter(c => !c.ocrProcessed).length;
+    const queuedCaptureCountForScope = queueScopeMatchId == null
+        ? savedCaptures.length
+        : savedCaptures.filter(c => String(c.matchId ?? '') === String(queueScopeMatchId)).length;
     const pendingOcrCountForSubmission = submissionMatchId == null
         ? pendingOcrCountGlobal
         : savedCaptures.filter(c => !c.ocrProcessed && String(c.matchId ?? '') === String(submissionMatchId)).length;
+    const pendingDataForQueueScope = queueScopeMatchId != null ? getPendingData(queueScopeMatchId) : pendingData;
 
     const handleReviewBucket = () => {
-        const scopedPending = submissionMatchId != null ? getPendingData(submissionMatchId) : pendingData;
-        if (scopedPending && onSmartCaptureData) {
-            onSmartCaptureData(scopedPending);
+        if (pendingDataForQueueScope && onSmartCaptureData) {
+            onSmartCaptureData(pendingDataForQueueScope);
             dismissPendingData();
         }
     };
 
     const handleProcessQueue = async () => {
-        await processAllStored(activeUser || null);
+        await processAllStored(activeUser || null, queueScopeMatchId ?? null);
     };
 
     const isBusy = isScanning || isCapturing || isProcessing;
@@ -532,19 +537,27 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     </div>
                 )}
 
-                {(capturedScreenshots.length > 0 || pendingOcrCountGlobal > 0) && (
+                {queuedCaptureCountForScope > 0 && (
                     <div className="flex gap-2 animate-in slide-in-from-top-1">
                         <button
-                            onClick={pendingData ? handleReviewBucket : handleProcessQueue}
+                            onClick={pendingDataForQueueScope ? handleReviewBucket : handleProcessQueue}
                             disabled={isBusy}
                             className="flex-1 bg-md-sys-primary/10 hover:bg-md-sys-primary/20 text-md-sys-primary border border-md-sys-primary/20 text-label-sm uppercase font-bold py-2.5 rounded-control transition-all disabled:opacity-disabled flex items-center justify-center gap-2"
                         >
                             <span className="px-1.5 py-0.5 bg-md-sys-primary text-md-sys-onPrimary text-label-xs font-bold rounded-full">
-                                {pendingData ? capturedScreenshots.length : pendingOcrCountGlobal}
+                                {queuedCaptureCountForScope}
                             </span>
-                            {pendingData ? 'Review & Apply' : 'Process Queue'}
+                            {pendingDataForQueueScope ? 'Review & Apply' : 'Process Queue'}
                         </button>
-                        <button onClick={reanalyzeCaptures} disabled={isBusy} className="md3-icon-btn mg-surface" title="Re-merge" aria-label="Re-merge queued captures"><RefreshCw size={14} /></button>
+                        <button
+                            onClick={() => reanalyzeCaptures(queueScopeMatchId)}
+                            disabled={isBusy || queuedCaptureCountForScope === 0}
+                            className="md3-icon-btn mg-surface"
+                            title={`Re-analyze ${queuedCaptureCountForScope} screenshots`}
+                            aria-label={`Re-analyze ${queuedCaptureCountForScope} screenshots`}
+                        >
+                            <RefreshCw size={14} />
+                        </button>
                     </div>
                 )}
 
@@ -621,16 +634,16 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         <div className={`flex flex-col ${isCompact ? 'gap-3' : 'gap-4'}`}>
             {/* Mission Section */}
             <div data-recording-panel="match-recording" className={`md3-card recording-inside-panel flex flex-col overflow-visible mg-surface shadow-lg ${isCompact ? 'p-3 gap-3' : 'p-4 gap-4'}`}>
-                {(capturedScreenshots.length > 0 || pendingOcrCountGlobal > 0) && (
+                {queuedCaptureCountForScope > 0 && (
                     <div className="flex justify-end">
                         <button
-                            onClick={pendingData ? handleReviewBucket : handleProcessQueue}
+                            onClick={pendingDataForQueueScope ? handleReviewBucket : handleProcessQueue}
                             disabled={isBusy}
                             className={`bg-md-sys-secondaryContainer text-md-sys-onSecondaryContainer rounded-control font-bold text-label-sm uppercase tracking-widest relative overflow-visible ${isCompact ? 'h-36px px-2.5' : 'h-36px px-3'}`}
                         >
-                            {pendingData ? 'Review' : `Process ${pendingOcrCountGlobal}`}
+                            {pendingDataForQueueScope ? 'Review' : `Process ${queuedCaptureCountForScope}`}
                             <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-md-sys-primary text-md-sys-onPrimary rounded-full text-label-xs flex items-center justify-center shadow-md animate-in zoom-in-50">
-                                {pendingData ? capturedScreenshots.length : pendingOcrCountGlobal}
+                                {queuedCaptureCountForScope}
                             </span>
                         </button>
                     </div>

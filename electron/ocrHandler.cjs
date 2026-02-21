@@ -132,10 +132,14 @@ function createDefaultOcrRegions() {
       leftPanel: { xMin: 0.0, xMax: 0.36, yMin: 0.10, yMax: 0.80 },
       rightPanel: { xMin: 0.45, xMax: 1.0, yMin: 0.10, yMax: 0.90 },
       teamHeader: { xMin: 0.0, xMax: 0.45, yMin: 0.05, yMax: 0.20 },
-      leftTeamHeader: { xMin: 0.0, xMax: 0.36, yMin: 0.10, yMax: 0.22 },
-      leftTeamPlayers: { xMin: 0.0, xMax: 0.36, yMin: 0.22, yMax: 0.80 },
-      rightTeamHeader: { xMin: 0.45, xMax: 1.0, yMin: 0.10, yMax: 0.22 },
-      rightTeamPlayers: { xMin: 0.45, xMax: 1.0, yMin: 0.22, yMax: 0.90 },
+      enemyRow1TeamName: { xMin: 0.52, xMax: 0.74, yMin: 0.16, yMax: 0.23 },
+      enemyRow1Players: { xMin: 0.74, xMax: 0.98, yMin: 0.16, yMax: 0.23 },
+      enemyRow2TeamName: { xMin: 0.52, xMax: 0.74, yMin: 0.27, yMax: 0.34 },
+      enemyRow2Players: { xMin: 0.74, xMax: 0.98, yMin: 0.27, yMax: 0.34 },
+      enemyRow3TeamName: { xMin: 0.52, xMax: 0.74, yMin: 0.38, yMax: 0.45 },
+      enemyRow3Players: { xMin: 0.74, xMax: 0.98, yMin: 0.38, yMax: 0.45 },
+      enemyRow4TeamName: { xMin: 0.52, xMax: 0.74, yMin: 0.49, yMax: 0.56 },
+      enemyRow4Players: { xMin: 0.74, xMax: 0.98, yMin: 0.49, yMax: 0.56 },
     },
     mapScreen: {
       yourShip: { xMin: 0.0, xMax: 0.30, yMin: 0.0, yMax: 0.25 },
@@ -145,8 +149,6 @@ function createDefaultOcrRegions() {
       enemyShips4: { xMin: 0.60, xMax: 1.0, yMin: 0.30, yMax: 0.40 },
       hazards: { xMin: 0.60, xMax: 1.0, yMin: 0.30, yMax: 0.70 },
       players: { xMin: 0.0, xMax: 0.40, yMin: 0.70, yMax: 1.0 },
-      alliedShips: { xMin: 0.0, xMax: 0.40, yMin: 0.00, yMax: 0.40 },
-      scoreOrTimer: { xMin: 0.35, xMax: 0.65, yMin: 0.00, yMax: 0.10 },
     },
   };
 }
@@ -188,10 +190,14 @@ function sanitizeOcrRegions(input) {
       leftPanel: sanitizeRegionBounds(crewHub.leftPanel, defaults.crewHub.leftPanel),
       rightPanel: sanitizeRegionBounds(crewHub.rightPanel, defaults.crewHub.rightPanel),
       teamHeader: sanitizeRegionBounds(crewHub.teamHeader, defaults.crewHub.teamHeader),
-      leftTeamHeader: sanitizeRegionBounds(crewHub.leftTeamHeader, defaults.crewHub.leftTeamHeader),
-      leftTeamPlayers: sanitizeRegionBounds(crewHub.leftTeamPlayers, defaults.crewHub.leftTeamPlayers),
-      rightTeamHeader: sanitizeRegionBounds(crewHub.rightTeamHeader, defaults.crewHub.rightTeamHeader),
-      rightTeamPlayers: sanitizeRegionBounds(crewHub.rightTeamPlayers, defaults.crewHub.rightTeamPlayers),
+      enemyRow1TeamName: sanitizeRegionBounds(crewHub.enemyRow1TeamName, defaults.crewHub.enemyRow1TeamName),
+      enemyRow1Players: sanitizeRegionBounds(crewHub.enemyRow1Players, defaults.crewHub.enemyRow1Players),
+      enemyRow2TeamName: sanitizeRegionBounds(crewHub.enemyRow2TeamName, defaults.crewHub.enemyRow2TeamName),
+      enemyRow2Players: sanitizeRegionBounds(crewHub.enemyRow2Players, defaults.crewHub.enemyRow2Players),
+      enemyRow3TeamName: sanitizeRegionBounds(crewHub.enemyRow3TeamName, defaults.crewHub.enemyRow3TeamName),
+      enemyRow3Players: sanitizeRegionBounds(crewHub.enemyRow3Players, defaults.crewHub.enemyRow3Players),
+      enemyRow4TeamName: sanitizeRegionBounds(crewHub.enemyRow4TeamName, defaults.crewHub.enemyRow4TeamName),
+      enemyRow4Players: sanitizeRegionBounds(crewHub.enemyRow4Players, defaults.crewHub.enemyRow4Players),
     },
     mapScreen: {
       yourShip: sanitizeRegionBounds(mapScreen.yourShip, defaults.mapScreen.yourShip),
@@ -201,8 +207,6 @@ function sanitizeOcrRegions(input) {
       enemyShips4: sanitizeRegionBounds(mapScreen.enemyShips4, defaults.mapScreen.enemyShips4),
       hazards: sanitizeRegionBounds(mapScreen.hazards, defaults.mapScreen.hazards),
       players: sanitizeRegionBounds(mapScreen.players, defaults.mapScreen.players),
-      alliedShips: sanitizeRegionBounds(mapScreen.alliedShips, defaults.mapScreen.alliedShips),
-      scoreOrTimer: sanitizeRegionBounds(mapScreen.scoreOrTimer, defaults.mapScreen.scoreOrTimer),
     },
   };
 }
@@ -2037,7 +2041,7 @@ function registerOCRHandlers(mainWindow) {
     try {
       if (wasVisible) {
         mainWindow.hide();
-        await new Promise(r => setTimeout(r, 500)); // Wait for OS to finish hiding
+        await new Promise(r => setTimeout(r, 300)); // Wait for OS to finish hiding
       }
       return await captureGameWindow();
     } finally {

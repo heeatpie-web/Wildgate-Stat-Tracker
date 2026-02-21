@@ -37,22 +37,22 @@ describe('SquadronPanel', () => {
     gameData.telemetryDetectedHero = 'Adrian';
   });
 
-  it('shows auto-selected weapon and equipment indicators in standard mode', () => {
+  it('shows telemetry-selected weapon and equipment indicators in standard mode', () => {
     render(<SquadronPanel />);
 
     expect(screen.getByText('Weapons')).toBeInTheDocument();
     expect(screen.getByText('Equipment')).toBeInTheDocument();
-    expect(screen.getAllByText('(auto)')).toHaveLength(2);
+    expect(screen.getAllByText('Telemetry')).toHaveLength(2);
     expect(screen.getByText('Double Whammy')).toBeInTheDocument();
     expect(screen.getByText('Repair Drone')).toBeInTheDocument();
   });
 
-  it('shows auto-selected weapon and equipment indicators in compact mode', () => {
+  it('shows telemetry-selected weapon and equipment indicators in compact mode', () => {
     render(<SquadronPanel density="compact" />);
 
     expect(screen.getByText('Weapons')).toBeInTheDocument();
     expect(screen.getByText('Equipment')).toBeInTheDocument();
-    expect(screen.getAllByText('(auto)')).toHaveLength(2);
+    expect(screen.getAllByText('Telemetry')).toHaveLength(2);
   });
 
   it('highlights ship selection when telemetry and active ship use equivalent labels', () => {

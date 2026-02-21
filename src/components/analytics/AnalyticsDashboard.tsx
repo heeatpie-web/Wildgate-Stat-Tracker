@@ -65,6 +65,15 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
 }) => {
     const dense = visualMode === 'dense';
     const scoreColor = 'var(--md-sys-color-primary)';
+    const todayStart = useMemo(() => {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d.getTime();
+    }, []);
+    const todayTiltMatches = useMemo(
+        () => (filteredMatches as any[]).filter((m) => Number(m?.timestamp) >= todayStart),
+        [filteredMatches, todayStart]
+    );
 
     const winRateSparkline = useMemo(() => {
         let winCount = 0;
@@ -136,6 +145,31 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         () => [...(insights || [])].sort((a, b) => b.priority - a.priority).slice(0, dense ? 2 : 3),
         [insights, dense]
     );
+    const insightsRow = useMemo(
+        () => [...(insights || [])].sort((a, b) => b.priority - a.priority).slice(0, dense ? 4 : 6),
+        [insights, dense]
+    );
+    const getInsightToneClasses = (tone: Insight['tone']) => {
+        switch (tone) {
+            case 'success':
+                return 'bg-success/10 border-success/25 text-success';
+            case 'danger':
+                return 'bg-danger/10 border-danger/25 text-danger';
+            case 'warning':
+                return 'bg-warning-soft border-warning-soft text-warning';
+            case 'info':
+                return 'bg-info-soft border-info-soft text-info';
+            case 'accent':
+                return 'bg-accent-soft border-accent-soft text-accent';
+            case 'primary':
+                return 'bg-md-sys-primary/10 border-md-sys-primary/25 text-md-sys-primary';
+            case 'secondary':
+                return 'bg-md-sys-secondary/10 border-md-sys-secondary/25 text-md-sys-secondary';
+            case 'neutral':
+            default:
+                return 'bg-md-sys-on-surface/6 border-md-sys-outline/20 text-md-sys-on-surface';
+        }
+    };
 
     const editorial = useMemo(() => {
         return synthesizeNarrative({
@@ -198,7 +232,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 </AnalyticsCard>
 
                 <div className={dense ? 'col-span-2 lg:col-span-2' : 'md:col-span-3'}>
-                    <TiltMeter recentMatches={(filteredMatches as any[]).slice(-5)} />
+                    <TiltMeter recentMatches={todayTiltMatches.slice(-5)} />
                 </div>
 
                 {/* Narrative Insight */}
@@ -329,6 +363,34 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                             <SparklineWidget data={killSparkline} color="var(--md-sys-color-primary)" height={32} />
                         </div>
                     </div>
+                </AnalyticsCard>
+
+                <AnalyticsCard
+                    title="Insights"
+                    icon={<Lightbulb size={12} />}
+                    visualMode={visualMode}
+                    className={dense ? 'col-span-2 lg:col-span-4' : 'md:col-span-6'}
+                    accentColor="bg-md-sys-secondary"
+                    onExpand={() => onNavigate('insights')}
+                >
+                    {insightsRow.length > 0 ? (
+                        <div className={`grid gap-2 ${dense ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-3 lg:grid-cols-6'}`}>
+                            {insightsRow.map((insight) => (
+                                <div
+                                    key={`${insight.title}_${insight.value}_${insight.subtitle}`}
+                                    className={`rounded-control border p-2.5 min-w-0 transition-all hover:scale-101 ${getInsightToneClasses(insight.tone)}`}
+                                >
+                                    <div className="text-label-xs font-bold uppercase tracking-widest opacity-70 truncate">{insight.subtitle || insight.title}</div>
+                                    <div className="text-body font-black truncate mt-1">{insight.value}</div>
+                                    <div className="text-label-sm opacity-75 truncate mt-1">{insight.subValue || insight.title}</div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="rounded-control bg-md-sys-on-surface/6 p-3 text-label-sm text-md-sys-on-surface/60">
+                            No insights available yet for this filter range.
+                        </div>
+                    )}
                 </AnalyticsCard>
 
                 {/* Row 3: Context */}

@@ -3,11 +3,11 @@ import { createPortal } from 'react-dom';
 import { Users, Star, Filter, Search, Edit2, Plus, X, Trash2, Check, Undo2 } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
-import { useAppStore } from '../../store/useAppStore';
 import { getShipColor } from '../../types';
 import { normalizeOcrName, similarityScore } from '../../utils/stringUtils';
 
 export const RosterPanel: React.FC = () => {
+    const { activeUser } = useUIState();
     const {
         pilotRegistry,
         favorites,
@@ -32,11 +32,10 @@ export const RosterPanel: React.FC = () => {
         sessionShipTypes,
         addPendingReview,
         pendingReviews,
-        isMatchInProgress
+        isMatchInProgress,
+        telemetryDetectedShip,
+        telemetryDetectedHero
     } = useGameData();
-
-    const { setToast } = useUIState();
-    const setActiveView = useAppStore(s => s.setActiveView);
 
     const [searchTerm, setSearchTerm] = useState("");
     const [sortMode, setSortMode] = useState<'pinned' | 'alpha'>('pinned');
@@ -48,12 +47,25 @@ export const RosterPanel: React.FC = () => {
     const [mergeTarget, setMergeTarget] = useState("");
     const [mergeSearch, setMergeSearch] = useState("");
     const [mergeKeepName, setMergeKeepName] = useState<string | null>(null);
+    const displayName = (name: string) => {
+        const normalized = String(name || '').trim().toLowerCase();
+        const me = String(activeUser || '').trim().toLowerCase();
+        if (!normalized || !me) return name;
+        return normalized === me ? 'You' : name;
+    };
 
     // Manual lobby scan UI removed; Smart Capture auto-detects and applies roster/modifiers.
 
     const hasTeammates = selectedTeammates.length > 0;
     const hasOpponents = selectedOpponents.length > 0;
-    const rosterTelemetryActive = Object.values(sessionTeams || {}).some(team => (team?.length || 0) > 0);
+    const hasTelemetryRosterData = Object.values(sessionTeams || {}).some(team => (team?.length || 0) > 0);
+    const rosterTelemetryActive = Boolean(
+        isMatchInProgress && (
+            hasTelemetryRosterData
+            || telemetryDetectedShip
+            || telemetryDetectedHero
+        )
+    );
 
     const filtered = Array.from(new Set(pilotRegistry))
         .filter((p: string) => !selectedTeammates.includes(p) && !selectedOpponents.includes(p))
@@ -101,14 +113,8 @@ export const RosterPanel: React.FC = () => {
 
     const handleAddNewPilot = () => {
         if (newPilotName.trim()) {
-            const name = newPilotName.trim();
-            onAddPilot(name);
+            onAddPilot(newPilotName.trim());
             setNewPilotName("");
-            setToast({
-                message: `${name} added to registry`,
-                type: 'success',
-                action: { label: 'View Players', onClick: () => setActiveView('players') }
-            });
         }
     };
 
@@ -123,12 +129,11 @@ export const RosterPanel: React.FC = () => {
                         <Users size={12} />
                     </span>
                     <h3 className="recording-panel-heading-title">Roster Manager</h3>
-                    <span className={`recording-telemetry-indicator ${rosterTelemetryActive ? 'is-active' : ''} ${(rosterTelemetryActive && isMatchInProgress) ? 'is-recording' : ''}`} title="Roster telemetry active">
+                    <span className={`recording-telemetry-indicator ${rosterTelemetryActive ? 'is-active' : ''} ${rosterTelemetryActive ? 'is-recording' : ''}`} title="Roster telemetry active">
                         <span className="recording-telemetry-dot" />
                         <span>Telemetry Active</span>
                     </span>
                 </div>
-                <div className="recording-panel-heading-meta" />
             </div>
 
             {mergeHistory && mergeHistory.length > 0 && (() => {
@@ -151,20 +156,20 @@ export const RosterPanel: React.FC = () => {
             })()}
 
             <div className="grid grid-cols-2 gap-3">
-                <div className="mg-surface rounded-card p-3 border border-md-sys-outline/10 flex flex-col gap-2 min-h-104px">
+                <div className="mg-surface rounded-card p-3 border border-md-sys-outline/10 flex flex-col gap-2 min-h-128px">
                     <div className="flex items-center justify-between">
                         <span className={`text-label-sm font-bold ${hasTeammates ? 'text-md-sys-primary' : 'text-md-sys-on-surface/60'}`}>Teammates</span>
                         <span className="text-label-sm px-1.5 py-0.5 rounded-full md3-surface">{selectedTeammates.length}</span>
                     </div>
                     {hasTeammates ? (
-                        <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto custom-scrollbar pr-1">
+                        <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto custom-scrollbar pr-1">
                             {selectedTeammates.map((p: string) => (
                                 <button
                                     key={p}
                                     onClick={() => toggleTeammate(p)}
                                     className="md3-chip md3-chip--selected roster-teammate-chip px-2 py-1 text-label-xs font-semibold"
                                 >
-                                    {p}
+                                    {displayName(p)}
                                 </button>
                             ))}
                         </div>

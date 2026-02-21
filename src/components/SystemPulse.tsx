@@ -78,10 +78,10 @@ const SystemPulse: React.FC = () => {
     };
 
     const safetyState = (() => {
-        if (!safety) return { color: 'bg-md-sys-outline/40', label: 'No data' };
-        if (!safety.ok) return { color: 'bg-danger', label: 'Error' };
-        if (safety.walExists) return { color: 'bg-warning', label: 'Recovery queued' };
-        return { color: 'bg-success', label: 'Protected' };
+        if (!safety) return { colorVar: '--indicator-idle', label: 'No data' };
+        if (!safety.ok) return { colorVar: '--indicator-data-error', label: 'Error' };
+        if (safety.walExists) return { colorVar: '--indicator-data-warning', label: 'Recovery queued' };
+        return { colorVar: '--indicator-data', label: 'Protected' };
     })();
 
     const indicators = [
@@ -91,7 +91,8 @@ const SystemPulse: React.FC = () => {
             icon: <ShieldCheck size={12} />,
             active: enableAutoLogRecording,
             color: enableAutoLogRecording ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
-            dot: safetyState.color,
+            dotVar: safetyState.colorVar,
+            pulse: false,
             tooltip: safety
                 ? `Data: ${safetyState.label}\nLast Save: ${fmtTs(safety.dbMtime)}\nWAL Pending: ${safety.walExists ? 'Yes' : 'No'}\nWAL Time: ${fmtTs(safety.walMtime)}\nPrevious Snapshot: ${fmtTs(safety.prevMtime)}\nLast Backup: ${fmtTs(safety.lastBackupMtime)}${safety.error ? `\nError: ${safety.error}` : ''}`
                 : 'Data: unavailable',
@@ -102,7 +103,8 @@ const SystemPulse: React.FC = () => {
             icon: <RefreshCw size={12} className={updateActivity === 'checking' ? 'animate-spin' : ''} />,
             active: updateActivity !== 'idle',
             color: updateActivity !== 'idle' ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
-            dot: updateActivity !== 'idle' ? 'bg-md-sys-secondary animate-pulse' : 'bg-md-sys-outline/40',
+            dotVar: updateActivity !== 'idle' ? '--indicator-updates' : '--indicator-idle',
+            pulse: updateActivity !== 'idle',
             tooltip: `Updates: ${updateStatus === 'available' ? 'New version available' : updateStatus === 'downloaded' ? 'Restart to apply' : updateStatus === 'checking' ? 'Checking...' : 'Up to date'}`,
         },
         (() => {
@@ -115,7 +117,8 @@ const SystemPulse: React.FC = () => {
                 icon: <Terminal size={12} />,
                 active: connected,
                 color: connected ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
-                dot: connected ? (receiving ? 'bg-md-sys-primary animate-pulse' : 'bg-md-sys-primary') : 'bg-md-sys-outline/40',
+                dotVar: connected ? '--indicator-session' : '--indicator-idle',
+                pulse: connected ? receiving : false,
                 tooltip: connected
                     ? `Session: ${receiving ? 'receiving telemetry' : 'connected'}`
                     : 'Session: not connected',
@@ -127,7 +130,8 @@ const SystemPulse: React.FC = () => {
             icon: <ScanEye size={12} />,
             active: pendingReviewCount > 0,
             color: pendingReviewCount > 0 ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
-            dot: pendingReviewCount > 0 ? 'bg-md-sys-tertiary' : 'bg-md-sys-outline/40',
+            dotVar: pendingReviewCount > 0 ? '--indicator-vision' : '--indicator-idle',
+            pulse: false,
             tooltip: pendingReviewCount > 0 ? `${pendingReviewCount} pending OCR reviews` : 'Vision: no pending reviews',
         },
         {
@@ -136,7 +140,8 @@ const SystemPulse: React.FC = () => {
             icon: <Timer size={12} />,
             active: isMatchInProgress,
             color: isMatchInProgress ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
-            dot: isMatchInProgress ? 'bg-md-sys-primary animate-pulse' : 'bg-md-sys-outline/40',
+            dotVar: isMatchInProgress ? '--indicator-mission' : '--indicator-idle',
+            pulse: isMatchInProgress,
             tooltip: isMatchInProgress ? 'Mission: match in progress' : 'Mission: no match in progress',
         },
     ] as const;
@@ -158,7 +163,10 @@ const SystemPulse: React.FC = () => {
                 >
                     <span className={indicator.color}>{indicator.icon}</span>
                     {indicator.label && <span>{indicator.label}</span>}
-                    <span className={`w-1.5 h-1.5 rounded-full ${indicator.dot}`} />
+                    <span
+                        className={`w-1.5 h-1.5 rounded-full ${indicator.pulse ? 'animate-pulse' : ''}`}
+                        style={{ backgroundColor: `var(${indicator.dotVar})` }}
+                    />
                 </div>
             ))}
         </div>

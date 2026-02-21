@@ -66,8 +66,17 @@ interface ImageSize {
 }
 
 const CREW_REGION_KEYS: CrewRegionKey[] = [
-    'leftPanel', 'rightPanel', 'teamHeader',
-    'leftTeamHeader', 'leftTeamPlayers', 'rightTeamHeader', 'rightTeamPlayers',
+    'leftPanel',
+    'rightPanel',
+    'teamHeader',
+    'enemyRow1TeamName',
+    'enemyRow1Players',
+    'enemyRow2TeamName',
+    'enemyRow2Players',
+    'enemyRow3TeamName',
+    'enemyRow3Players',
+    'enemyRow4TeamName',
+    'enemyRow4Players',
 ];
 const MAP_REGION_KEYS: MapRegionKey[] = [
     'yourShip',
@@ -77,18 +86,20 @@ const MAP_REGION_KEYS: MapRegionKey[] = [
     'enemyShips4',
     'hazards',
     'players',
-    'alliedShips',
-    'scoreOrTimer',
 ];
 
 const REGION_LABELS: Record<RegionKey, string> = {
     leftPanel: 'Crew Left Panel',
     rightPanel: 'Crew Right Panel',
     teamHeader: 'Crew Team Header',
-    leftTeamHeader: 'Crew Left Team Header',
-    leftTeamPlayers: 'Crew Left Team Players',
-    rightTeamHeader: 'Crew Right Team Header',
-    rightTeamPlayers: 'Crew Right Team Players',
+    enemyRow1TeamName: 'Enemy Row 1 Team',
+    enemyRow1Players: 'Enemy Row 1 Players',
+    enemyRow2TeamName: 'Enemy Row 2 Team',
+    enemyRow2Players: 'Enemy Row 2 Players',
+    enemyRow3TeamName: 'Enemy Row 3 Team',
+    enemyRow3Players: 'Enemy Row 3 Players',
+    enemyRow4TeamName: 'Enemy Row 4 Team',
+    enemyRow4Players: 'Enemy Row 4 Players',
     yourShip: 'Map Your Ship',
     enemyShips: 'Map Enemy Ships #1',
     enemyShips2: 'Map Enemy Ships #2',
@@ -96,18 +107,20 @@ const REGION_LABELS: Record<RegionKey, string> = {
     enemyShips4: 'Map Enemy Ships #4',
     hazards: 'Map Hazards',
     players: 'Map Players',
-    alliedShips: 'Map Allied Ships',
-    scoreOrTimer: 'Map Score / Timer',
 };
 
 const REGION_COLORS: Record<RegionKey, string> = {
     leftPanel: '#34D399',
     rightPanel: '#F59E0B',
     teamHeader: '#38BDF8',
-    leftTeamHeader: '#6EE7B7',
-    leftTeamPlayers: '#10B981',
-    rightTeamHeader: '#FCD34D',
-    rightTeamPlayers: '#D97706',
+    enemyRow1TeamName: '#F59E0B',
+    enemyRow1Players: '#F97316',
+    enemyRow2TeamName: '#FB923C',
+    enemyRow2Players: '#FDBA74',
+    enemyRow3TeamName: '#EF4444',
+    enemyRow3Players: '#DC2626',
+    enemyRow4TeamName: '#8B5CF6',
+    enemyRow4Players: '#6366F1',
     yourShip: '#34D399',
     enemyShips: '#F59E0B',
     enemyShips2: '#FB923C',
@@ -115,8 +128,6 @@ const REGION_COLORS: Record<RegionKey, string> = {
     enemyShips4: '#FCD34D',
     hazards: '#EF4444',
     players: '#6366F1',
-    alliedShips: '#22D3EE',
-    scoreOrTimer: '#E879F9',
 };
 
 const MIN_NORMALIZED_SIZE = 0.005;
@@ -125,28 +136,35 @@ const IMAGE_EXTENSION_PATTERN = /\.(png|jpg|jpeg|bmp|webp|gif)$/i;
 
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 
-const cloneRegions = (regions: OcrRegionSettings): OcrRegionSettings => ({
-    crewHub: {
-        leftPanel: { ...regions.crewHub.leftPanel },
-        rightPanel: { ...regions.crewHub.rightPanel },
-        teamHeader: { ...regions.crewHub.teamHeader },
-        leftTeamHeader: { ...regions.crewHub.leftTeamHeader },
-        leftTeamPlayers: { ...regions.crewHub.leftTeamPlayers },
-        rightTeamHeader: { ...regions.crewHub.rightTeamHeader },
-        rightTeamPlayers: { ...regions.crewHub.rightTeamPlayers },
-    },
-    mapScreen: {
-        yourShip: { ...regions.mapScreen.yourShip },
-        enemyShips: { ...regions.mapScreen.enemyShips },
-        enemyShips2: { ...regions.mapScreen.enemyShips2 },
-        enemyShips3: { ...regions.mapScreen.enemyShips3 },
-        enemyShips4: { ...regions.mapScreen.enemyShips4 },
-        hazards: { ...regions.mapScreen.hazards },
-        players: { ...regions.mapScreen.players },
-        alliedShips: { ...regions.mapScreen.alliedShips },
-        scoreOrTimer: { ...regions.mapScreen.scoreOrTimer },
-    },
-});
+const cloneRegions = (regions: OcrRegionSettings): OcrRegionSettings => {
+    const defaults = createDefaultOcrRegions();
+    const crewHub = regions?.crewHub || defaults.crewHub;
+    const mapScreen = regions?.mapScreen || defaults.mapScreen;
+    return ({
+        crewHub: {
+            leftPanel: { ...(crewHub.leftPanel || defaults.crewHub.leftPanel) },
+            rightPanel: { ...(crewHub.rightPanel || defaults.crewHub.rightPanel) },
+            teamHeader: { ...(crewHub.teamHeader || defaults.crewHub.teamHeader) },
+            enemyRow1TeamName: { ...(crewHub.enemyRow1TeamName || defaults.crewHub.enemyRow1TeamName) },
+            enemyRow1Players: { ...(crewHub.enemyRow1Players || defaults.crewHub.enemyRow1Players) },
+            enemyRow2TeamName: { ...(crewHub.enemyRow2TeamName || defaults.crewHub.enemyRow2TeamName) },
+            enemyRow2Players: { ...(crewHub.enemyRow2Players || defaults.crewHub.enemyRow2Players) },
+            enemyRow3TeamName: { ...(crewHub.enemyRow3TeamName || defaults.crewHub.enemyRow3TeamName) },
+            enemyRow3Players: { ...(crewHub.enemyRow3Players || defaults.crewHub.enemyRow3Players) },
+            enemyRow4TeamName: { ...(crewHub.enemyRow4TeamName || defaults.crewHub.enemyRow4TeamName) },
+            enemyRow4Players: { ...(crewHub.enemyRow4Players || defaults.crewHub.enemyRow4Players) },
+        },
+        mapScreen: {
+            yourShip: { ...(mapScreen.yourShip || defaults.mapScreen.yourShip) },
+            enemyShips: { ...(mapScreen.enemyShips || defaults.mapScreen.enemyShips) },
+            enemyShips2: { ...(mapScreen.enemyShips2 || defaults.mapScreen.enemyShips2) },
+            enemyShips3: { ...(mapScreen.enemyShips3 || defaults.mapScreen.enemyShips3) },
+            enemyShips4: { ...(mapScreen.enemyShips4 || defaults.mapScreen.enemyShips4) },
+            hazards: { ...(mapScreen.hazards || defaults.mapScreen.hazards) },
+            players: { ...(mapScreen.players || defaults.mapScreen.players) },
+        },
+    });
+};
 
 const normalizeBounds = (bounds: OcrRegionBounds): OcrRegionBounds => {
     let xMin = clamp(bounds.xMin, 0, 1);
@@ -269,6 +287,8 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
     const [activeRegionKey, setActiveRegionKey] = useState<RegionKey>('leftPanel');
     const [imageSrc, setImageSrc] = useState<string | null>(null);
     const [imageSize, setImageSize] = useState<ImageSize | null>(null);
+    const [loadedScreenshots, setLoadedScreenshots] = useState<File[]>([]);
+    const [activeScreenshotIndex, setActiveScreenshotIndex] = useState<number>(-1);
     const dialogTitleId = useId();
     const dialogDescriptionId = useId();
     const focusTrapRef = useFocusTrap<HTMLDivElement>(isOpen);
@@ -292,6 +312,14 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
         setDraftRegions(cloneRegions(initialRegions));
         setScreen('crewHub');
         setActiveRegionKey('leftPanel');
+        setLoadedScreenshots([]);
+        setActiveScreenshotIndex(-1);
+        if (objectUrlRef.current && typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') {
+            URL.revokeObjectURL(objectUrlRef.current);
+            objectUrlRef.current = null;
+        }
+        setImageSrc(null);
+        setImageSize(null);
         setImageLoadError(null);
         setImageLoadStatus('No screenshot selected.');
     }, [initialRegions, isOpen]);
@@ -583,10 +611,36 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
         onClose();
     };
 
-    const handleImageFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
+    const selectScreenshotAtIndex = (index: number) => {
+        const file = loadedScreenshots[index];
         if (!file) return;
+        setActiveScreenshotIndex(index);
         beginImageLoad(file);
+    };
+
+    const removeScreenshotAtIndex = (index: number) => {
+        if (index < 0 || index >= loadedScreenshots.length) return;
+        const next = loadedScreenshots.filter((_, i) => i !== index);
+        setLoadedScreenshots(next);
+        if (next.length === 0) {
+            setActiveScreenshotIndex(-1);
+            setPreviewSource(null);
+            setImageLoadStatus('No screenshot selected.');
+            return;
+        }
+        const nextIndex = Math.min(index, next.length - 1);
+        setActiveScreenshotIndex(nextIndex);
+        beginImageLoad(next[nextIndex]);
+    };
+
+    const handleImageFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(event.target.files || []);
+        if (files.length === 0) return;
+        const next = [...loadedScreenshots, ...files];
+        setLoadedScreenshots(next);
+        const firstNewIndex = loadedScreenshots.length;
+        setActiveScreenshotIndex(firstNewIndex);
+        beginImageLoad(next[firstNewIndex]);
         event.target.value = '';
     };
 
@@ -767,16 +821,67 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
                             className="md3-btn-tonal w-full inline-flex items-center justify-center gap-2 text-center"
                         >
                             <Upload size={14} />
-                            Load Screenshot
+                            Load Screenshot(s)
                         </button>
                         <input
                             ref={fileInputRef}
                             type="file"
                             accept="image/*"
+                            multiple
                             className="hidden"
                             onChange={handleImageFile}
                             aria-label="Load screenshot file"
                         />
+                        {loadedScreenshots.length > 0 && (
+                            <div className="md3-surface-low rounded-control border border-md-sys-outline/10 p-2 space-y-2">
+                                <div className="text-label-xs uppercase font-bold opacity-60">
+                                    Loaded ({loadedScreenshots.length})
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => selectScreenshotAtIndex(Math.max(0, activeScreenshotIndex - 1))}
+                                        disabled={activeScreenshotIndex <= 0}
+                                        className="md3-btn-outlined px-2 py-1 text-label-xs disabled:opacity-50"
+                                    >
+                                        Prev
+                                    </button>
+                                    <span className="text-label-xs opacity-70">
+                                        {activeScreenshotIndex >= 0 ? `${activeScreenshotIndex + 1}/${loadedScreenshots.length}` : '--'}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => selectScreenshotAtIndex(Math.min(loadedScreenshots.length - 1, activeScreenshotIndex + 1))}
+                                        disabled={activeScreenshotIndex < 0 || activeScreenshotIndex >= loadedScreenshots.length - 1}
+                                        className="md3-btn-outlined px-2 py-1 text-label-xs disabled:opacity-50"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                                <div className="max-h-24 overflow-y-auto custom-scrollbar space-y-1 pr-1">
+                                    {loadedScreenshots.map((file, idx) => (
+                                        <div key={`${file.name}_${idx}`} className="flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => selectScreenshotAtIndex(idx)}
+                                                className={`flex-1 text-left rounded-control px-2 py-1 text-label-xs truncate ${idx === activeScreenshotIndex ? 'bg-md-sys-primary/15 text-md-sys-primary font-semibold' : 'hover:bg-md-sys-on-surface/5'}`}
+                                                title={file.name}
+                                            >
+                                                {idx + 1}. {file.name}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => removeScreenshotAtIndex(idx)}
+                                                className="rounded-control px-1.5 py-1 text-label-xs text-danger hover:bg-danger-soft"
+                                                title={`Remove ${file.name}`}
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         <div className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface p-2 text-label-xs opacity-80 break-words">
                             {imageLoadStatus}
                         </div>

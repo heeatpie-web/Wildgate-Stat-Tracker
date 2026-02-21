@@ -12,8 +12,9 @@ export const RenameModal: React.FC = () => {
     const dialogTitleId = useId();
     const dialogDescriptionId = useId();
     const focusTrapRef = useFocusTrap<HTMLDivElement>(renameModal != null);
+    const isBlockingNewProfile = renameModal?.type === 'new' && renameModal?.blocking === true;
     useKeyboardShortcuts([
-        { key: 'Escape', handler: () => setRenameModal(null) },
+        { key: 'Escape', handler: () => { if (!isBlockingNewProfile) setRenameModal(null); } },
     ], renameModal != null);
 
     if (!renameModal) return null;
@@ -25,7 +26,15 @@ export const RenameModal: React.FC = () => {
     };
 
     const handleSubmit = () => {
-        if (!renameModal || !renameValue.trim()) { setRenameModal(null); return; }
+        if (!renameModal) return;
+        if (!renameValue.trim()) {
+            if (renameModal.type === 'new') {
+                setToast({ message: 'Username is required and should match your in-game name.', type: 'warning' });
+                return;
+            }
+            setRenameModal(null);
+            return;
+        }
 
         if (renameModal.type === 'new') {
             handleRegisterUser(renameValue.trim());
@@ -52,12 +61,18 @@ export const RenameModal: React.FC = () => {
     };
 
     const isRename = renameModal.type === 'rename';
+    const isNewProfile = renameModal.type === 'new';
     const isShare = (renameModal.type as string) === 'share_code';
     const title = isShare ? 'Import Match' : (isRename ? 'Rename Profile' : 'New Profile');
     const sub = isShare ? 'Paste your share code below' : (isRename ? 'Enter a new callsign' : 'Identify yourself, prospector');
 
+    const closeModal = () => {
+        if (isBlockingNewProfile) return;
+        setRenameModal(null);
+    };
+
     return (
-        <div className="fixed inset-0 md3-dialog-scrim z-modal flex items-center justify-center p-4 animate-fade-in" onClick={() => setRenameModal(null)}>
+        <div className="fixed inset-0 md3-dialog-scrim z-modal flex items-center justify-center p-4 animate-fade-in" onClick={closeModal}>
             <div
                 ref={focusTrapRef}
                 role="dialog"
@@ -69,6 +84,11 @@ export const RenameModal: React.FC = () => {
             >
                 <h3 id={dialogTitleId} className="text-title font-bold uppercase mb-2">{title}</h3>
                 <p id={dialogDescriptionId} className="text-label-sm font-bold opacity-60 uppercase tracking-widest mb-6">{sub}</p>
+                {isNewProfile && (
+                    <div className="mb-4 rounded-control bg-warning-soft border border-warning-soft-strong px-3 py-2 text-label-sm text-warning">
+                        For accurate teammate/opponent matching, your app username must exactly match your in-game name.
+                    </div>
+                )}
 
                 <input
                     autoFocus
@@ -80,7 +100,9 @@ export const RenameModal: React.FC = () => {
                 />
 
                 <div className="flex gap-2">
-                    <button onClick={() => setRenameModal(null)} className="flex-1 md3-btn-outlined py-4 rounded-card font-bold uppercase tracking-widest">Cancel</button>
+                    {!isBlockingNewProfile && (
+                        <button onClick={() => setRenameModal(null)} className="flex-1 md3-btn-outlined py-4 rounded-card font-bold uppercase tracking-widest">Cancel</button>
+                    )}
                     <button onClick={handleSubmit} className="flex-1 md3-btn-filled py-4 rounded-card font-bold uppercase tracking-widest shadow-lg">Confirm</button>
                 </div>
             </div>

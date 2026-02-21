@@ -185,6 +185,30 @@ export const IdMapper: React.FC = () => {
         },
     };
 
+    const inferRelationshipTag = (id: string, name: string): MappingTag => {
+        const unknownTypeTag = getTagFromUnknownType(detectedUnknowns?.[id]?.type);
+        if (unknownTypeTag) return unknownTypeTag;
+
+        if ((uidMappings?.ships || {})[id]) return 'ship';
+        if ((uidMappings?.weapons || {})[id]) return 'weapon';
+        if ((uidMappings?.equipment || {})[id]) return 'equipment';
+        if ((uidMappings?.players || {})[id]) {
+            const inferredPlayerTag = inferTagFromName(name);
+            return inferredPlayerTag || 'player';
+        }
+
+        const inferredByName = inferTagFromName(name);
+        if (inferredByName) return inferredByName;
+
+        const normalizedId = normalizeLabel(id);
+        if (normalizedId.startsWith('ship')) return 'ship';
+        if (normalizedId.startsWith('wpn') || normalizedId.startsWith('weapon') || normalizedId.startsWith('cw')) return 'weapon';
+        if (normalizedId.startsWith('equip') || normalizedId.startsWith('gear') || normalizedId.startsWith('ce')) return 'equipment';
+        if (normalizedId.startsWith('hero') || normalizedId.startsWith('char') || normalizedId.startsWith('prospector')) return 'prospector';
+
+        return 'player';
+    };
+
     // Computed relationship data
     const topOpponents = useMemo(() => getMostFrequentOpponents(5), [playerProfiles]);
     const topTeammates = useMemo(() => getMostFrequentTeammates(5), [playerProfiles]);
@@ -585,6 +609,8 @@ export const IdMapper: React.FC = () => {
                                         .sort((a: any, b: any) => (b[1].sightings || 0) - (a[1].sightings || 0))
                                         .map(([id, profile]: [string, any]) => {
                                             const role = getPlayerRole(id);
+                                            const entityTag = inferRelationshipTag(id, profile.name || '');
+                                            const entityTagStyle = mappingTagStyle[entityTag];
                                             const playedWithCount = Object.values(profile.playedWith || {}).reduce((a: number, b: any) => a + (b as number), 0) as number;
                                             const playedAgainstCount = Object.values(profile.playedAgainst || {}).reduce((a: number, b: any) => a + (b as number), 0) as number;
                                             const lastSeen = profile.lastSeen ? formatLastSeen(profile.lastSeen) : 'Unknown';
@@ -597,6 +623,9 @@ export const IdMapper: React.FC = () => {
                                                         <div className="flex items-center gap-2">
                                                             <span className="font-bold truncate">{profile.name || id.slice(0, 12) + '...'}</span>
                                                             <RoleBadge role={role} />
+                                                            <span className={`px-1.5 py-0.5 rounded text-label-xs font-bold uppercase ${entityTagStyle.className}`}>
+                                                                {entityTagStyle.label}
+                                                            </span>
                                                         </div>
                                                         <div className="flex gap-3 text-label-sm opacity-60 mt-0.5">
                                                             <span>{profile.sightings || 0}x seen</span>

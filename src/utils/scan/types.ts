@@ -52,6 +52,14 @@ export interface OcrRegionSettings {
         leftPanel: OcrRegionBounds;
         rightPanel: OcrRegionBounds;
         teamHeader: OcrRegionBounds;
+        enemyRow1TeamName: OcrRegionBounds;
+        enemyRow1Players: OcrRegionBounds;
+        enemyRow2TeamName: OcrRegionBounds;
+        enemyRow2Players: OcrRegionBounds;
+        enemyRow3TeamName: OcrRegionBounds;
+        enemyRow3Players: OcrRegionBounds;
+        enemyRow4TeamName: OcrRegionBounds;
+        enemyRow4Players: OcrRegionBounds;
     };
     mapScreen: {
         yourShip: OcrRegionBounds;

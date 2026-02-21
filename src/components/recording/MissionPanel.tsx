@@ -300,8 +300,9 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                             {selectedCharacterWeaponsLabel}
                                         </span>
                                         {telemetryProspectorWeapons.length > 0 && (
-                                            <span className="px-1.5 py-0.5 rounded-pill text-label-xs font-bold uppercase tracking-wide bg-info/15 text-info">
-                                                Auto
+                                            <span className="inline-flex items-center gap-1 text-label-xs font-bold uppercase tracking-wide text-success">
+                                                <span className="recording-telemetry-dot" />
+                                                Telemetry
                                             </span>
                                         )}
                                     </>
@@ -375,8 +376,9 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                             {selectedCharacterEquipmentLabel}
                                         </span>
                                         {telemetryProspectorEquipment.length > 0 && (
-                                            <span className="px-1.5 py-0.5 rounded-pill text-label-xs font-bold uppercase tracking-wide bg-info/15 text-info">
-                                                Auto
+                                            <span className="inline-flex items-center gap-1 text-label-xs font-bold uppercase tracking-wide text-success">
+                                                <span className="recording-telemetry-dot" />
+                                                Telemetry
                                             </span>
                                         )}
                                     </>

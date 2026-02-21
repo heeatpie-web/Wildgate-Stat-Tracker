@@ -4,6 +4,8 @@
  * Re-exports constants from utils/constants.ts for convenience.
  */
 
+import { SHIP_CAPACITY, SHIP_NAME_ALIASES } from './utils/constants';
+
 /** The two competitive game modes available in Wildgate. */
 export type GameMode = 'Artifact Brawl' | 'Fleet Battle';
 /** Possible outcomes for a match. */
@@ -128,19 +130,32 @@ export interface Match {
 
 /** Returns crew capacity (1-4) based on the ship display name. */
 export const getShipCapacity = (ship: string): number => {
-  if (ship.includes("4 Player")) return 4;
-  if (ship.includes("3 Player")) return 3;
-  if (ship.includes("2 Player")) return 2;
-  return 1;
+  const normalized = normalizeShipName(ship);
+  return SHIP_CAPACITY[normalized] ?? 4;
 };
 
 /** Returns a hex color associated with the ship class for chart rendering. */
 export const getShipColor = (ship: string): string => {
-  if (ship.includes("Hunter")) return "var(--ship-hunter)";
-  if (ship.includes("Bastion")) return "var(--ship-bastion)";
-  if (ship.includes("Privateer")) return "var(--ship-privateer)";
-  if (ship.includes("Scout")) return "var(--ship-scout)";
+  const normalized = normalizeShipName(ship);
+  if (normalized === "Hunter") return "var(--ship-hunter)";
+  if (normalized === "Bastion") return "var(--ship-bastion)";
+  if (normalized === "Privateer") return "var(--ship-privateer)";
+  if (normalized === "Scout") return "var(--ship-scout)";
   return "var(--ship-default)";
+};
+
+export const normalizeShipName = (ship: string | null | undefined): string => {
+  const cleaned = String(ship || '').trim();
+  if (!cleaned) return '';
+  if (SHIP_CAPACITY[cleaned] != null) return cleaned;
+  if (SHIP_NAME_ALIASES[cleaned]) return SHIP_NAME_ALIASES[cleaned];
+  if (/solo\s*outlaw/i.test(cleaned)) return 'Solo Outlaw';
+  if (/outlaw/i.test(cleaned)) return 'Outlaw';
+  if (/hunter/i.test(cleaned)) return 'Hunter';
+  if (/bastion/i.test(cleaned)) return 'Bastion';
+  if (/privateer/i.test(cleaned)) return 'Privateer';
+  if (/scout/i.test(cleaned)) return 'Scout';
+  return cleaned;
 };
 
 /** Target for the analytics drill-down overlay — clicking a chart element sets this. */
