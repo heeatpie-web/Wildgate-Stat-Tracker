@@ -196,6 +196,24 @@ body[data-mode='twilight'] [data-recording-panel='ship-loadout'] .md3-chip--sele
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 58%);
 }
 
+/* Twilight: ship/prospector selection buttons — match chip treatment for consistency. */
+body[data-mode='twilight'] [data-recording-panel='ship-loadout'] button.rounded-xl {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 24%);
+  border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 70%);
+}
+
+body[data-mode='twilight'] [data-recording-panel='ship-loadout'] button.rounded-xl:hover {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 14%);
+  border-color: color-mix(in srgb, var(--md-sys-color-primary), transparent 60%);
+}
+
+body[data-mode='twilight'] [data-recording-panel='ship-loadout'] button[class*='bg-md-sys-primary'] {
+  background: color-mix(in srgb, var(--md-sys-color-primary), transparent 84%);
+  border-color: color-mix(in srgb, var(--md-sys-color-primary), transparent 48%);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 58%);
+}
+
 /* Twilight click-target clarity improvements for dense list/action UIs. */
 body[data-mode='twilight'] .idmapper-click-target,
 body[data-mode='twilight'] .player-list-item {
@@ -2780,12 +2798,12 @@ body[data-mode='light'] select.md3-textfield--outlined {
 .recording-telemetry-indicator.is-active {
   opacity: 1;
   transform: translateY(0);
-  color: var(--color-success);
+  color: var(--md-sys-color-primary);
 }
 
 .recording-telemetry-indicator.is-active .recording-telemetry-dot {
-  background: var(--color-success);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-success), transparent 60%);
+  background: var(--md-sys-color-primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 60%);
 }
 
 .recording-telemetry-indicator.is-recording .recording-telemetry-dot {

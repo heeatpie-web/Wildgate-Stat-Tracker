@@ -52,6 +52,10 @@ export interface OcrRegionSettings {
         leftPanel: OcrRegionBounds;
         rightPanel: OcrRegionBounds;
         teamHeader: OcrRegionBounds;
+        team1ShipName: OcrRegionBounds;
+        team1ShipColor: OcrRegionBounds;
+        team2ShipName: OcrRegionBounds;
+        team2ShipColor: OcrRegionBounds;
     };
     mapScreen: {
         yourShip: OcrRegionBounds;

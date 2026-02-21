@@ -182,6 +182,10 @@ function sanitizeOcrRegions(input) {
       leftPanel: sanitizeRegionBounds(crewHub.leftPanel, defaults.crewHub.leftPanel),
       rightPanel: sanitizeRegionBounds(crewHub.rightPanel, defaults.crewHub.rightPanel),
       teamHeader: sanitizeRegionBounds(crewHub.teamHeader, defaults.crewHub.teamHeader),
+      team1ShipName: sanitizeRegionBounds(crewHub.team1ShipName, defaults.crewHub.team1ShipName),
+      team1ShipColor: sanitizeRegionBounds(crewHub.team1ShipColor, defaults.crewHub.team1ShipColor),
+      team2ShipName: sanitizeRegionBounds(crewHub.team2ShipName, defaults.crewHub.team2ShipName),
+      team2ShipColor: sanitizeRegionBounds(crewHub.team2ShipColor, defaults.crewHub.team2ShipColor),
     },
     mapScreen: {
       yourShip: sanitizeRegionBounds(mapScreen.yourShip, defaults.mapScreen.yourShip),

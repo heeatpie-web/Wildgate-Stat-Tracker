@@ -118,9 +118,6 @@ export const RosterPanel: React.FC = () => {
                     </span>
                 </div>
                 <div className="recording-panel-heading-meta">
-                    <span className="text-label-sm font-semibold px-2 py-1 rounded-control mg-surface text-md-sys-on-surface/60">
-                        {pilotRegistry.length} pilots
-                    </span>
                 </div>
             </div>
 
@@ -150,12 +147,12 @@ export const RosterPanel: React.FC = () => {
                         <span className="text-label-sm px-1.5 py-0.5 rounded-full md3-surface">{selectedTeammates.length}</span>
                     </div>
                     {hasTeammates ? (
-                        <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto custom-scrollbar pr-1">
+                        <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto custom-scrollbar pr-1">
                             {selectedTeammates.map((p: string) => (
                                 <button
                                     key={p}
                                     onClick={() => toggleTeammate(p)}
-                                    className="md3-chip md3-chip--selected roster-teammate-chip px-2 py-1 text-label-xs font-semibold"
+                                    className="md3-chip md3-chip--selected roster-teammate-chip px-1.5 py-0.5 text-label-xs font-semibold"
                                 >
                                     {p}
                                 </button>
@@ -188,7 +185,7 @@ export const RosterPanel: React.FC = () => {
                         const hasGroups = Object.keys(grouped).length > 0;
 
                         return hasGroups ? (
-                            <div className="flex flex-col gap-1.5 max-h-20 overflow-y-auto custom-scrollbar pr-1">
+                            <div className="flex flex-col gap-1.5 max-h-32 overflow-y-auto custom-scrollbar pr-1">
                                 {Object.entries(grouped).map(([color, players]) => {
                                     const shipType = (sessionShipTypes || {})[color] || '';
                                     return (
@@ -233,7 +230,7 @@ export const RosterPanel: React.FC = () => {
                                 )}
                             </div>
                         ) : (
-                            <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto custom-scrollbar pr-1">
+                            <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto custom-scrollbar pr-1">
                                 {selectedOpponents.map((p: string) => (
                                     <button
                                         key={p}

@@ -13,6 +13,7 @@ import {
   Image,
   Eye,
   Info,
+  GripVertical,
 } from 'lucide-react';
 import { LocalImage } from '../LocalImage';
 import type { OCRExtractedData, ExtractedOpponentTeam, TeamColor } from '../../utils/ocr/ocrTypes';
@@ -985,8 +986,8 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                   editedData.opponentTeams.map((team, teamIndex) => (
                     <div
                       key={teamIndex}
-                      className={`md3-surface-high rounded-card p-2 ${
-                        dragHoverTeamIndex === teamIndex ? 'ring-1 ring-md-sys-primary/30' : ''
+                      className={`md3-surface-high rounded-card p-2 transition-all duration-150 ${
+                        dragHoverTeamIndex === teamIndex ? 'ring-2 ring-md-sys-primary/50 bg-md-sys-primary/5 shadow-md' : ''
                       }`}
                       onDragOver={(event) => allowOpponentDrop(event, teamIndex)}
                       onDragLeave={() => setDragHoverTeamIndex(null)}
@@ -1051,11 +1052,11 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                             return (
                               <div
                                 key={playerIndex}
-                                className={`flex items-center gap-2 pl-5 ${
+                                className={`flex items-center gap-1.5 px-2 py-1 mg-surface rounded-xl border transition-all duration-150 cursor-grab active:cursor-grabbing ${
                                   draggedOpponentPlayer?.teamIndex === teamIndex
                                   && draggedOpponentPlayer?.playerIndex === playerIndex
-                                    ? 'opacity-60'
-                                    : ''
+                                    ? 'opacity-50 scale-95 shadow-none border-md-sys-outline/5'
+                                    : 'border-md-sys-outline/10 shadow-sm hover:shadow-md hover:border-md-sys-primary/20'
                                 }`}
                                 draggable
                                 onDragStart={(event) => {
@@ -1069,6 +1070,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                                 onDragOver={(event) => allowOpponentDrop(event, teamIndex)}
                                 onDrop={(event) => dropOpponentPlayer(event, teamIndex, playerIndex)}
                               >
+                                <GripVertical size={12} className="text-md-sys-on-surface/30 shrink-0" />
                                 <div className="flex-1 min-w-0">
                                   <input
                                     type="text"

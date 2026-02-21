@@ -144,7 +144,11 @@ export const useMatchSubmission = () => {
             unresolvedDraft?.loadout?.ship,
             unresolvedDraft?.ship
         );
-        const cappedResolvedTeammates = capTeammateNames(resolvedTeammates, teammateShipForCap);
+        // Filter out the active user's own name — they're implicitly the player, not a teammate slot.
+        const resolvedTeammatesWithoutSelf = activeUser
+            ? resolvedTeammates.filter(t => t.toLowerCase() !== activeUser.toLowerCase())
+            : resolvedTeammates;
+        const cappedResolvedTeammates = capTeammateNames(resolvedTeammatesWithoutSelf, teammateShipForCap);
 
         const data: Partial<Match> = {
             id: unresolvedDraft?.id,
@@ -262,7 +266,11 @@ export const useMatchSubmission = () => {
             const finalTeammatesRaw = (selectedTeammates && selectedTeammates.length > 0)
                 ? selectedTeammates
                 : (pendingMatchData.teammates || []);
-            const finalTeammates = capTeammateNames(finalTeammatesRaw, resolvedShip);
+            // Filter out the active user's own name — they're implicitly the player, not a teammate slot.
+            const finalTeammatesWithoutSelf = activeUser
+                ? finalTeammatesRaw.filter((t: string) => t.toLowerCase() !== activeUser.toLowerCase())
+                : finalTeammatesRaw;
+            const finalTeammates = capTeammateNames(finalTeammatesWithoutSelf, resolvedShip);
             const finalOpponents = (selectedOpponents && selectedOpponents.length > 0)
                 ? selectedOpponents
                 : (pendingMatchData.opponents || []);

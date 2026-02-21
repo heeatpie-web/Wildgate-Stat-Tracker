@@ -23,6 +23,10 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
 
   const shipTelemetryActive = Boolean(telemetryDetectedShip || shipSource === 'telemetry');
   const prospectorTelemetryActive = Boolean(telemetryDetectedHero || heroSource === 'telemetry');
+  const anyTelemetryActive = shipTelemetryActive || prospectorTelemetryActive;
+  const telemetryTitle = anyTelemetryActive
+    ? `Telemetry active: ${[shipTelemetryActive && 'Ship', prospectorTelemetryActive && 'Prospector'].filter(Boolean).join(', ')}`
+    : 'Telemetry inactive';
   const toShipKey = (value: string | null | undefined) => (value || '').split('(')[0].trim().toLowerCase();
   const sameShip = (a: string | null | undefined, b: string | null | undefined) => toShipKey(a) && toShipKey(a) === toShipKey(b);
   const hasShipManualOverride = Boolean(telemetryDetectedShip && activeShip && !sameShip(telemetryDetectedShip, activeShip));
@@ -65,8 +69,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
             <h3 className="recording-panel-heading-title">Ship and Loadout</h3>
           </div>
           <div className="recording-panel-heading-meta">
-            <TelemetryIndicator active={shipTelemetryActive} title="Ship telemetry active" label="Ship telemetry" />
-            <TelemetryIndicator active={prospectorTelemetryActive} title="Prospector telemetry active" label="Prospector telemetry" />
+            <TelemetryIndicator active={anyTelemetryActive} title={telemetryTitle} label="Telemetry" />
             {sourceChip('Ship', shipSource)}
             {sourceChip('Prospector', heroSource)}
           </div>
@@ -170,8 +173,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
           <h3 className="recording-panel-heading-title">Ship and Loadout</h3>
         </div>
         <div className="recording-panel-heading-meta">
-          <TelemetryIndicator active={shipTelemetryActive} title="Ship telemetry active" label="Ship telemetry" />
-          <TelemetryIndicator active={prospectorTelemetryActive} title="Prospector telemetry active" label="Prospector telemetry" />
+          <TelemetryIndicator active={anyTelemetryActive} title={telemetryTitle} label="Telemetry" />
           {sourceChip('Ship', shipSource)}
           {sourceChip('Prospector', heroSource)}
         </div>

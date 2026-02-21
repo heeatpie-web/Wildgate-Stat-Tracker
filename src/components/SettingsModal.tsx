@@ -561,7 +561,8 @@ const SettingsModalContent: React.FC = () => {
                     {activeTab === 'identity' && (
                         <section className="md3-surface p-5 rounded-card border border-md-sys-outline/10">
                         <h3 className="text-label-lg font-bold text-md-sys-on-surface mb-1">Alias & authority</h3>
-                        <p className="text-body text-md-sys-on-surface/60 mb-4">This identity is used for session and analytics.</p>
+                        <p className="text-body text-md-sys-on-surface/60 mb-1">This identity is used for session and analytics.</p>
+                        <p className="text-label-sm text-md-sys-primary/80 mb-4">⚠ Use your exact in-game display name — OCR teammate detection relies on it matching what appears on screen.</p>
                         <div className="grid grid-cols-2 gap-2 mb-3">
                             <Input
                                 type="text"

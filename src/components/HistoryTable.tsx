@@ -720,22 +720,36 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                                     {/* teammates */}
                                                     <td className="px-3 py-4 text-body max-w-40">
                                                         <div className="flex flex-wrap gap-1">
-                                                            {(m.teammates && m.teammates.length > 0) ? m.teammates.map((t, i) => (
-                                                                <span key={i} onClick={(e) => { e.stopPropagation(); onDrillDown?.(t, 'Teammate'); }} className="px-2 py-0.5 rounded-md bg-info/8 text-info/80 hover:bg-info/15 cursor-pointer transition-colors text-label-sm font-medium">
-                                                                    {t}
-                                                                </span>
-                                                            )) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
+                                                            {(m.teammates && m.teammates.length > 0) ? (
+                                                                <>
+                                                                    {m.teammates.slice(0, 4).map((t, i) => (
+                                                                        <span key={i} onClick={(e) => { e.stopPropagation(); onDrillDown?.(t, 'Teammate'); }} className="px-2 py-0.5 rounded-md bg-info/8 text-info/80 hover:bg-info/15 cursor-pointer transition-colors text-label-sm font-medium">
+                                                                            {t}
+                                                                        </span>
+                                                                    ))}
+                                                                    {m.teammates.length > 4 && (
+                                                                        <span className="text-label-sm text-md-sys-on-surface/40 font-medium">+{m.teammates.length - 4}</span>
+                                                                    )}
+                                                                </>
+                                                            ) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
                                                         </div>
                                                     </td>
 
                                                     {/* opponents */}
                                                     <td className="px-3 py-4 text-body max-w-40">
                                                         <div className="flex flex-wrap gap-1">
-                                                            {(m.opponents && m.opponents.length > 0) ? m.opponents.map((o, i) => (
-                                                                <span key={i} onClick={(e) => { e.stopPropagation(); onDrillDown?.(o, 'Opponent'); }} className="px-2 py-0.5 rounded-md bg-danger/8 text-danger/80 hover:bg-danger/15 cursor-pointer transition-colors text-label-sm font-medium">
-                                                                    {o}
-                                                                </span>
-                                                            )) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
+                                                            {(m.opponents && m.opponents.length > 0) ? (
+                                                                <>
+                                                                    {m.opponents.slice(0, 4).map((o, i) => (
+                                                                        <span key={i} onClick={(e) => { e.stopPropagation(); onDrillDown?.(o, 'Opponent'); }} className="px-2 py-0.5 rounded-md bg-danger/8 text-danger/80 hover:bg-danger/15 cursor-pointer transition-colors text-label-sm font-medium">
+                                                                            {o}
+                                                                        </span>
+                                                                    ))}
+                                                                    {m.opponents.length > 4 && (
+                                                                        <span className="text-label-sm text-md-sys-on-surface/40 font-medium">+{m.opponents.length - 4}</span>
+                                                                    )}
+                                                                </>
+                                                            ) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
                                                         </div>
                                                     </td>
 

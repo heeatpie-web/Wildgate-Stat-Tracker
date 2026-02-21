@@ -58,6 +58,10 @@ export interface OcrRegionSettings {
     leftPanel: OcrRegionBounds;
     rightPanel: OcrRegionBounds;
     teamHeader: OcrRegionBounds;
+    team1ShipName: OcrRegionBounds;
+    team1ShipColor: OcrRegionBounds;
+    team2ShipName: OcrRegionBounds;
+    team2ShipColor: OcrRegionBounds;
   };
   mapScreen: {
     yourShip: OcrRegionBounds;
@@ -92,6 +96,10 @@ export const createDefaultOcrRegions = (): OcrRegionSettings => ({
     leftPanel: { xMin: 0.0, xMax: 0.36, yMin: 0.10, yMax: 0.80 },
     rightPanel: { xMin: 0.45, xMax: 1.0, yMin: 0.10, yMax: 0.90 },
     teamHeader: { xMin: 0.0, xMax: 0.45, yMin: 0.05, yMax: 0.20 },
+    team1ShipName: { xMin: 0.02, xMax: 0.20, yMin: 0.02, yMax: 0.08 },
+    team1ShipColor: { xMin: 0.20, xMax: 0.30, yMin: 0.02, yMax: 0.08 },
+    team2ShipName: { xMin: 0.55, xMax: 0.73, yMin: 0.02, yMax: 0.08 },
+    team2ShipColor: { xMin: 0.73, xMax: 0.83, yMin: 0.02, yMax: 0.08 },
   },
   mapScreen: {
     yourShip: { xMin: 0.0, xMax: 0.30, yMin: 0.0, yMax: 0.25 },
@@ -428,6 +436,10 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
         leftPanel: { ...state.ocrRegions.crewHub.leftPanel, ...(update.crewHub?.leftPanel || {}) },
         rightPanel: { ...state.ocrRegions.crewHub.rightPanel, ...(update.crewHub?.rightPanel || {}) },
         teamHeader: { ...state.ocrRegions.crewHub.teamHeader, ...(update.crewHub?.teamHeader || {}) },
+        team1ShipName: { ...state.ocrRegions.crewHub.team1ShipName, ...(update.crewHub?.team1ShipName || {}) },
+        team1ShipColor: { ...state.ocrRegions.crewHub.team1ShipColor, ...(update.crewHub?.team1ShipColor || {}) },
+        team2ShipName: { ...state.ocrRegions.crewHub.team2ShipName, ...(update.crewHub?.team2ShipName || {}) },
+        team2ShipColor: { ...state.ocrRegions.crewHub.team2ShipColor, ...(update.crewHub?.team2ShipColor || {}) },
       },
       mapScreen: {
         ...state.ocrRegions.mapScreen,

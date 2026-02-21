@@ -65,7 +65,7 @@ interface ImageSize {
     height: number;
 }
 
-const CREW_REGION_KEYS: CrewRegionKey[] = ['leftPanel', 'rightPanel', 'teamHeader'];
+const CREW_REGION_KEYS: CrewRegionKey[] = ['leftPanel', 'rightPanel', 'teamHeader', 'team1ShipName', 'team1ShipColor', 'team2ShipName', 'team2ShipColor'];
 const MAP_REGION_KEYS: MapRegionKey[] = [
     'yourShip',
     'enemyShips',
@@ -80,6 +80,10 @@ const REGION_LABELS: Record<RegionKey, string> = {
     leftPanel: 'Crew Left Panel',
     rightPanel: 'Crew Right Panel',
     teamHeader: 'Crew Team Header',
+    team1ShipName: 'Crew Team 1 Ship Name',
+    team1ShipColor: 'Crew Team 1 Ship Color',
+    team2ShipName: 'Crew Team 2 Ship Name',
+    team2ShipColor: 'Crew Team 2 Ship Color',
     yourShip: 'Map Your Ship',
     enemyShips: 'Map Enemy Ships #1',
     enemyShips2: 'Map Enemy Ships #2',
@@ -93,6 +97,10 @@ const REGION_COLORS: Record<RegionKey, string> = {
     leftPanel: '#34D399',
     rightPanel: '#F59E0B',
     teamHeader: '#38BDF8',
+    team1ShipName: '#A78BFA',
+    team1ShipColor: '#C084FC',
+    team2ShipName: '#FB7185',
+    team2ShipColor: '#FDA4AF',
     yourShip: '#34D399',
     enemyShips: '#F59E0B',
     enemyShips2: '#FB923C',
