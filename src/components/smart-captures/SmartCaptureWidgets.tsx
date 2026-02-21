@@ -71,6 +71,7 @@ export const EditableStatCard: React.FC<{
                     onKeyDown={(e) => { if (e.key === 'Enter') { onSave(draft); setEditing(false); } if (e.key === 'Escape') setEditing(false); }}
                     className="text-body font-black md3-surface rounded px-2 w-20 text-center outline-none"
                     placeholder={placeholder}
+                    min={type === 'number' ? 0 : undefined}
                     autoFocus
                 />
             ) : (

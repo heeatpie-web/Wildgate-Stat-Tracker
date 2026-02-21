@@ -358,9 +358,9 @@ export const Wizard: React.FC = () => {
                                 <Clock size={16} className="text-md-sys-primary/60 mb-1" />
                                 <span className={labelClass}>Time</span>
                                 <div className="flex items-center gap-1">
-                                    <input type="number" placeholder="00" value={timeMin} onChange={(e) => setTimeMin(e.target.value)} className={`w-8 ${inputBaseClass} ${isOverlayMode ? 'text-base py-1' : 'text-xl py-2'}`} />
+                                    <input type="number" placeholder="00" min="0" value={timeMin} onChange={(e) => setTimeMin(e.target.value)} className={`w-12 ${inputBaseClass} ${isOverlayMode ? 'text-base py-1' : 'text-xl py-2'}`} />
                                     <span className="font-bold opacity-40">:</span>
-                                    <input type="number" placeholder="00" value={timeSec} onChange={(e) => setTimeSec(e.target.value)} className={`w-8 ${inputBaseClass} ${isOverlayMode ? 'text-base py-1' : 'text-xl py-2'}`} />
+                                    <input type="number" placeholder="00" min="0" max="59" value={timeSec} onChange={(e) => setTimeSec(e.target.value)} className={`w-12 ${inputBaseClass} ${isOverlayMode ? 'text-base py-1' : 'text-xl py-2'}`} />
                                 </div>
                             </div>
                             <div className={`${cardClass} flex flex-col items-center bg-danger/5`}>
