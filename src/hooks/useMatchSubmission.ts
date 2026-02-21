@@ -445,7 +445,8 @@ export const useMatchSubmission = () => {
             setDamageTaken(""); setCurrentNote(""); setActiveWeapons({});
 
             window.dispatchEvent(new CustomEvent('recording:match-complete', { detail: { result: submittedResult } }));
-            setToast({ message: `Match recorded: ${submittedResult}`, type: 'success' });
+            const artifactSuffix = mergedArtifacts.length > 0 ? ` · ${mergedArtifacts.length} screenshot${mergedArtifacts.length === 1 ? '' : 's'} bundled` : '';
+            setToast({ message: `Match recorded: ${submittedResult}${artifactSuffix}`, type: 'success' });
 
         } catch (e) {
             Logger.error('Submission', 'Process failed', e);

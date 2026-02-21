@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Users, Star, Filter, Search, Edit2, Plus, X, Trash2, Check, Undo2 } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
+import { useUIState } from '../../providers/UIStateProvider';
+import { useAppStore } from '../../store/useAppStore';
 import { getShipColor } from '../../types';
 import { normalizeOcrName, similarityScore } from '../../utils/stringUtils';
 
@@ -32,6 +34,9 @@ export const RosterPanel: React.FC = () => {
         pendingReviews,
         isMatchInProgress
     } = useGameData();
+
+    const { setToast } = useUIState();
+    const setActiveView = useAppStore(s => s.setActiveView);
 
     const [searchTerm, setSearchTerm] = useState("");
     const [sortMode, setSortMode] = useState<'pinned' | 'alpha'>('pinned');
@@ -96,8 +101,14 @@ export const RosterPanel: React.FC = () => {
 
     const handleAddNewPilot = () => {
         if (newPilotName.trim()) {
-            onAddPilot(newPilotName.trim());
+            const name = newPilotName.trim();
+            onAddPilot(name);
             setNewPilotName("");
+            setToast({
+                message: `${name} added to registry`,
+                type: 'success',
+                action: { label: 'View Players', onClick: () => setActiveView('players') }
+            });
         }
     };
 
@@ -117,11 +128,7 @@ export const RosterPanel: React.FC = () => {
                         <span>Telemetry Active</span>
                     </span>
                 </div>
-                <div className="recording-panel-heading-meta">
-                    <span className="text-label-sm font-semibold px-2 py-1 rounded-control mg-surface text-md-sys-on-surface/60">
-                        {pilotRegistry.length} pilots
-                    </span>
-                </div>
+                <div className="recording-panel-heading-meta" />
             </div>
 
             {mergeHistory && mergeHistory.length > 0 && (() => {

@@ -303,7 +303,7 @@ export const Wizard: React.FC = () => {
                         disabled={submitting}
                         className={`w-full ${isOverlayMode ? 'py-4' : 'py-5'} rounded-3xl font-bold uppercase tracking-wide-30 text-label-sm transition-all shadow-xl active:scale-95 ${submitting ? 'opacity-disabled grayscale' : (selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong' : selectedWinType === 'Objective' ? 'bg-info text-ink-strong' : 'bg-md-sys-primary text-md-sys-onPrimary')}`}
                     >
-                        {submitting ? 'Synchronizing...' : `Finalize ${selectedWinType}`}
+                        {submitting ? 'Saving & Bundling Screenshots...' : `Finalize ${selectedWinType}`}
                     </button>
 
                 </div>

@@ -10,9 +10,10 @@ export interface ToastProps {
   type?: 'success' | 'error' | 'info' | 'warning';
   duration?: number;
   onClose: () => void;
+  action?: { label: string; onClick: () => void };
 }
 
-export const Toast: React.FC<ToastProps> = ({ message, type = 'info', duration = runtimeConfig.ui.toastDurationMs, onClose }) => {
+export const Toast: React.FC<ToastProps> = ({ message, type = 'info', duration = runtimeConfig.ui.toastDurationMs, onClose, action }) => {
   const { soundEnabled } = useUserPreferences();
 
   useEffect(() => {
@@ -48,8 +49,16 @@ export const Toast: React.FC<ToastProps> = ({ message, type = 'info', duration =
       aria-atomic="true"
     >
         <div>{icon}</div>
-        <div className="font-bold text-body leading-tight">{message}</div>
-        <button onClick={onClose} className="p-1 hover:bg-md-sys-on-surface/20 rounded-full" aria-label="Dismiss notification"><X size={16}/></button>
+        <div className="font-bold text-body leading-tight flex-1">{message}</div>
+        {action && (
+            <button
+                onClick={() => { action.onClick(); onClose(); }}
+                className="text-label-sm font-black uppercase tracking-wide underline underline-offset-2 hover:no-underline px-1 shrink-0"
+            >
+                {action.label}
+            </button>
+        )}
+        <button onClick={onClose} className="p-1 hover:bg-md-sys-on-surface/20 rounded-full shrink-0" aria-label="Dismiss notification"><X size={16}/></button>
     </div>,
     document.body
   );

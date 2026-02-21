@@ -13,6 +13,7 @@ import type { TelemetryStatusState } from '../store/slices/createUISlice';
 interface ToastData {
     message: string;
     type?: 'success' | 'error' | 'warning' | 'info';
+    action?: { label: string; onClick: () => void };
 }
 
 interface RenameModalState {

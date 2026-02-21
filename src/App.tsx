@@ -1041,11 +1041,15 @@ const App: React.FC = () => {
             setTelemetryDraftPendingResult(result);
             setActiveView('recording');
         } else {
-            window.dispatchEvent(new CustomEvent('submission:open-result', {
-                detail: { result, source: 'telemetry-draft-prompt' }
-            }));
+            // Defer by one tick so that the React state update (setPendingMatchData)
+            // is committed before the wizard flow reads it via the event handler.
+            setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('submission:open-result', {
+                    detail: { result, source: 'telemetry-draft-prompt' }
+                }));
+            }, 0);
         }
-        setToast({ message: `Telemetry draft loaded. Confirm ${result} and OCR choice in Recording.`, type: 'success' });
+        setToast({ message: `Telemetry draft loaded. Opening result wizard...`, type: 'success' });
     }, [activeView, matches, setActiveView, setPendingMatchData, setToast, telemetryDraftPrompt]);
 
     useEffect(() => {
@@ -1706,7 +1710,7 @@ const App: React.FC = () => {
                 </>
             )}
 
-            {toast && <Toast message={toast.message} type={toast.type || 'info'} onClose={() => setToast(null)} />}
+            {toast && <Toast message={toast.message} type={toast.type || 'info'} onClose={() => setToast(null)} action={toast.action} />}
 
             <RenameModal />
             <DrillDownOverlay />

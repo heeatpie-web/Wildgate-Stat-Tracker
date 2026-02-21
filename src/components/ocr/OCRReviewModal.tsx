@@ -1051,7 +1051,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                             return (
                               <div
                                 key={playerIndex}
-                                className={`flex items-center gap-2 pl-5 ${
+                                className={`rounded-control border border-md-sys-outline/20 p-1.5 bg-md-sys-surface cursor-grab active:cursor-grabbing flex items-center gap-2 ${
                                   draggedOpponentPlayer?.teamIndex === teamIndex
                                   && draggedOpponentPlayer?.playerIndex === playerIndex
                                     ? 'opacity-60'
@@ -1069,7 +1069,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                                 onDragOver={(event) => allowOpponentDrop(event, teamIndex)}
                                 onDrop={(event) => dropOpponentPlayer(event, teamIndex, playerIndex)}
                               >
-                                <div className="flex-1 min-w-0">
+                                <div className="flex-1 min-w-0 pl-1">
                                   <input
                                     type="text"
                                     value={player.name}

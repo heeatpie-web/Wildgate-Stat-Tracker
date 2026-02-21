@@ -72,9 +72,9 @@
   --md-motion-duration-long: var(--md-motion-duration-long1);
 
   /* Masterplan semantic status aliases */
-  --md-sys-color-success: #67937A;
-  --md-sys-color-warning: #B08E65;
-  --md-sys-color-info: #688EAD;
+  --md-sys-color-success: #4d8468;
+  --md-sys-color-warning: #b08444;
+  --md-sys-color-info: #4a82ab;
   --md-sys-color-accent: #8D7EA9;
   --md-sys-color-danger: var(--md-sys-color-error);
   --md-sys-color-on-danger: var(--md-sys-color-on-error);
@@ -393,9 +393,9 @@ body[data-mode='light'] {
   --md-sys-color-on-tertiary: #ffffff;
   --md-sys-color-tertiary-container: hsl(calc(var(--app-hue) + 24), 24%, 89%);
   --md-sys-color-on-tertiary-container: hsl(calc(var(--app-hue) + 30), 20%, 15%);
-  --md-sys-color-success: color-mix(in srgb, hsl(145, 32%, 38%), var(--md-sys-color-primary) 16%);
-  --md-sys-color-warning: color-mix(in srgb, hsl(35, 34%, 42%), var(--md-sys-color-primary) 14%);
-  --md-sys-color-info: color-mix(in srgb, hsl(210, 36%, 43%), var(--md-sys-color-primary) 24%);
+  --md-sys-color-success: color-mix(in srgb, hsl(145, 48%, 36%), var(--md-sys-color-primary) 16%);
+  --md-sys-color-warning: color-mix(in srgb, hsl(35, 50%, 40%), var(--md-sys-color-primary) 14%);
+  --md-sys-color-info: color-mix(in srgb, hsl(210, 52%, 41%), var(--md-sys-color-primary) 24%);
   --md-sys-color-accent: color-mix(in srgb, hsl(270, 30%, 44%), var(--md-sys-color-primary) 20%);
   --md-sys-color-danger: color-mix(in srgb, #b35f67, var(--md-sys-color-primary) 10%);
   --md-sys-color-on-danger: #ffffff;
@@ -2174,13 +2174,13 @@ body[data-mode='dark'] {
   --md-sys-color-shadow: rgba(0, 0, 0, 0.7);
 
   /* Semantic colors - muted and theme-adaptive */
-  --md-sys-color-error: #E08D95;
+  --md-sys-color-error: #F07080;
   --md-sys-color-on-error: #220808;
   --md-sys-color-error-container: #3A1717;
   --md-sys-color-on-error-container: #FFD8D8;
-  --md-sys-color-success: color-mix(in srgb, hsl(145, 56%, 66%), var(--md-sys-color-primary) 8%);
-  --md-sys-color-warning: color-mix(in srgb, hsl(35, 58%, 67%), var(--md-sys-color-primary) 6%);
-  --md-sys-color-info: color-mix(in srgb, hsl(210, 56%, 67%), var(--md-sys-color-primary) 12%);
+  --md-sys-color-success: color-mix(in srgb, hsl(145, 72%, 64%), var(--md-sys-color-primary) 8%);
+  --md-sys-color-warning: color-mix(in srgb, hsl(35, 74%, 65%), var(--md-sys-color-primary) 6%);
+  --md-sys-color-info: color-mix(in srgb, hsl(210, 72%, 65%), var(--md-sys-color-primary) 12%);
   --md-sys-color-accent: color-mix(in srgb, hsl(270, 52%, 68%), var(--md-sys-color-primary) 10%);
   --md-sys-color-danger: color-mix(in srgb, #E37D89, var(--md-sys-color-primary) 6%);
   --md-sys-color-on-danger: #1E0A0C;
@@ -2280,9 +2280,9 @@ body[data-mode='twilight'] {
   --md-sys-color-outline: #737983;
   --md-sys-color-outline-variant: #1e1f22;
   --md-sys-color-shadow: rgba(0, 0, 0, 0.6);
-  --md-sys-color-success: color-mix(in srgb, hsl(145, 56%, 68%), var(--md-sys-color-primary) 8%);
-  --md-sys-color-warning: color-mix(in srgb, hsl(35, 58%, 69%), var(--md-sys-color-primary) 6%);
-  --md-sys-color-info: color-mix(in srgb, hsl(210, 56%, 70%), var(--md-sys-color-primary) 12%);
+  --md-sys-color-success: color-mix(in srgb, hsl(145, 72%, 66%), var(--md-sys-color-primary) 8%);
+  --md-sys-color-warning: color-mix(in srgb, hsl(35, 74%, 67%), var(--md-sys-color-primary) 6%);
+  --md-sys-color-info: color-mix(in srgb, hsl(210, 72%, 68%), var(--md-sys-color-primary) 12%);
   --md-sys-color-accent: color-mix(in srgb, hsl(270, 52%, 70%), var(--md-sys-color-primary) 10%);
   --md-sys-color-danger: color-mix(in srgb, #E17C88, var(--md-sys-color-primary) 6%);
   --md-sys-color-on-danger: #1E0A0C;

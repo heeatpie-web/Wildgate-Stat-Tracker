@@ -877,16 +877,20 @@ export const useLogMonitor = (activeUser?: string) => {
                                 Logger.warn('LogMonitor', `Unknown Hero GUID: ${heroGuid} | raw: "${rawHero}" | resolved: "${heroName}"`);
                             }
 
-                            if (heroName && !heroName.startsWith('Unknown') && heroName !== activeHeroRef.current) {
+                            if (heroName && !heroName.startsWith('Unknown')) {
                                 setActiveHero(heroName, 'telemetry');
-                                Logger.info('LogMonitor', `Auto-selected prospector: ${heroName}`);
+                                if (heroName !== activeHeroRef.current) {
+                                    Logger.info('LogMonitor', `Auto-selected prospector: ${heroName}`);
+                                }
                             }
                         } else if (heroNameHint) {
                             const matched = fuzzyMatchList(heroNameHint, [...CHARACTERS]);
                             heroName = matched || heroNameHint;
-                            if (heroName && heroName !== activeHeroRef.current) {
+                            if (heroName) {
                                 setActiveHero(heroName, 'telemetry');
-                                Logger.info('LogMonitor', `Auto-selected prospector from raw telemetry: ${heroName}`);
+                                if (heroName !== activeHeroRef.current) {
+                                    Logger.info('LogMonitor', `Auto-selected prospector from raw telemetry: ${heroName}`);
+                                }
                             }
                         }
 
@@ -927,16 +931,20 @@ export const useLogMonitor = (activeUser?: string) => {
                                 Logger.warn('LogMonitor', `Unknown Ship GUID: ${shipGuid} | raw: "${rawShip}" | resolved: "${shipName}"`);
                             }
 
-                            if (shipName && !shipName.startsWith('Unknown') && shipName !== activeShipRef.current) {
+                            if (shipName && !shipName.startsWith('Unknown')) {
                                 setActiveShip(shipName, 'telemetry');
-                                Logger.info('LogMonitor', `Auto-selected ship: ${shipName}`);
+                                if (shipName !== activeShipRef.current) {
+                                    Logger.info('LogMonitor', `Auto-selected ship: ${shipName}`);
+                                }
                             }
                         } else if (shipNameHint) {
                             const matched = fuzzyMatchList(shipNameHint, [...SHIPS]);
                             shipName = matched || '';
-                            if (shipName && shipName !== activeShipRef.current) {
+                            if (shipName) {
                                 setActiveShip(shipName, 'telemetry');
-                                Logger.info('LogMonitor', `Auto-selected ship from raw telemetry: ${shipName}`);
+                                if (shipName !== activeShipRef.current) {
+                                    Logger.info('LogMonitor', `Auto-selected ship from raw telemetry: ${shipName}`);
+                                }
                             }
                         }
                         const collectCandidateStrings = (value: unknown, out: string[], depth = 0) => {

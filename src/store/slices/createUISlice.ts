@@ -24,7 +24,7 @@ export interface UISlice {
     showChangelog: boolean;
     showResetConfirm: boolean;
     isRearranging: boolean;
-    toast: { message: string, type?: 'info' | 'warning' | 'error' | 'success' } | null;
+    toast: { message: string, type?: 'info' | 'warning' | 'error' | 'success', action?: { label: string; onClick: () => void } } | null;
     drillDownTarget: DrillDownTarget | null;
     showWelcomeBack: boolean;
     isLayoutReady: boolean;
@@ -49,7 +49,7 @@ export interface UISlice {
     setShowChangelog: (show: boolean) => void;
     setShowResetConfirm: (show: boolean) => void;
     setIsRearranging: (isRearranging: boolean) => void;
-    setToast: (toast: { message: string, type?: 'info' | 'warning' | 'error' | 'success' } | null) => void;
+    setToast: (toast: { message: string, type?: 'info' | 'warning' | 'error' | 'success', action?: { label: string; onClick: () => void } } | null) => void;
     setDrillDownTarget: (target: DrillDownTarget | null) => void;
     setShowWelcomeBack: (show: boolean) => void;
     setIsLayoutReady: (ready: boolean) => void;
