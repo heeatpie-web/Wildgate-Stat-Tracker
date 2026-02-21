@@ -461,7 +461,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
 
     const OcrDecisionPrompt = () => (
         ocrDecisionPrompt ? (
-            <div className="fixed inset-0 z-modal-top md3-dialog-scrim flex items-center justify-center p-4">
+            <div className="fixed inset-0 z-modal-top md3-dialog-scrim flex items-center justify-center p-4" onClick={handleOcrPromptCancel}>
                 <div className="md3-dialog rounded-modal w-full max-w-md" onClick={(e) => e.stopPropagation()}>
                     <div className="md3-dialog-title">Queued Smart Captures Detected</div>
                     <div className="md3-dialog-content text-md-sys-on-surface/70">

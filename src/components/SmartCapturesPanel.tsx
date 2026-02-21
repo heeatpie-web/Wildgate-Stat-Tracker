@@ -566,6 +566,14 @@ const SmartCapturesPanel: React.FC = () => {
                 ...(keep.loadout?.equipment || []),
                 ...mergeFrom.flatMap((match) => match.loadout?.equipment || []),
             ]).slice(0, 2),
+            characterWeapons: toUnique([
+                ...(keep.loadout?.characterWeapons || []),
+                ...mergeFrom.flatMap((match) => match.loadout?.characterWeapons || []),
+            ]).slice(0, 2),
+            characterEquipment: toUnique([
+                ...(keep.loadout?.characterEquipment || []),
+                ...mergeFrom.flatMap((match) => match.loadout?.characterEquipment || []),
+            ]).slice(0, 2),
         };
         const mergedTimeline = [
             ...(keep.timelineEvents || []),
@@ -2394,6 +2402,26 @@ const SmartMatchDetail: React.FC<{
                                     <span className="opacity-40 w-20 shrink-0">Equipment:</span>
                                     <div className="flex flex-wrap gap-1">
                                         {match.loadout.equipment.filter((equipment) => !/tertiary\s+(weapon|equipment)/i.test(String(equipment || ''))).slice(0, 2).map((eq, i) => (
+                                            <span key={i} className="px-2 py-0.5 bg-accent-soft text-accent rounded-md text-label-sm font-bold">{eq}</span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {match.loadout?.characterWeapons && match.loadout.characterWeapons.filter(Boolean).slice(0, 2).length > 0 && (
+                                <div className="flex gap-2 items-start">
+                                    <span className="opacity-40 w-20 shrink-0">Prosp. Weapons:</span>
+                                    <div className="flex flex-wrap gap-1">
+                                        {match.loadout.characterWeapons.filter(Boolean).slice(0, 2).map((w, i) => (
+                                            <span key={i} className="px-2 py-0.5 bg-info-soft text-info rounded-md text-label-sm font-bold">{w}</span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {match.loadout?.characterEquipment && match.loadout.characterEquipment.filter(Boolean).slice(0, 2).length > 0 && (
+                                <div className="flex gap-2 items-start">
+                                    <span className="opacity-40 w-20 shrink-0">Prosp. Equip.:</span>
+                                    <div className="flex flex-wrap gap-1">
+                                        {match.loadout.characterEquipment.filter(Boolean).slice(0, 2).map((eq, i) => (
                                             <span key={i} className="px-2 py-0.5 bg-accent-soft text-accent rounded-md text-label-sm font-bold">{eq}</span>
                                         ))}
                                     </div>

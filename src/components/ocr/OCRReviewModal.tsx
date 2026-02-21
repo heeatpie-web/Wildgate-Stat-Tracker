@@ -585,7 +585,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
   ], true);
 
   return (
-    <div className="fixed inset-0 md3-dialog-scrim backdrop-blur-sm z-modal-top flex items-start justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 md3-dialog-scrim backdrop-blur-sm z-modal-top flex items-start justify-center p-4 overflow-y-auto" onClick={onCancel}>
         <div
           ref={modalFocusTrapRef}
           role="dialog"
@@ -593,6 +593,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
           aria-labelledby={dialogTitleId}
           aria-describedby={dialogDescriptionId}
           className="md3-dialog rounded-modal shadow-2xl max-w-2xl w-full max-h-90vh my-2 overflow-hidden flex flex-col relative z-0"
+          onClick={e => e.stopPropagation()}
         >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

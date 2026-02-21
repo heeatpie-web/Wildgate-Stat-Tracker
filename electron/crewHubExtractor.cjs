@@ -186,10 +186,18 @@ async function extractCrewHub(
       result.enemyTeams.reduce((sum, t) => sum + t.players.length, 0);
     result.confidence = Math.min(95, 50 + playerCount * 5);
 
-    // Check if this might be a partial capture (scrolling needed)
+    // Check if this might be a partial capture (scrolling needed).
+    // Heuristic: flag partial if player counts are inconsistent across teams (some teams have
+    // many more players than others — suggesting some rows are cut off), OR if every team
+    // shows ≤1 player when there are ≥2 teams (universally sparse, likely not fully OCR'd).
+    // Legitimate small teams (e.g., [2,2,2,2] or [3,3]) are NOT flagged as partial.
     if (result.enemyTeams.length > 0) {
-      const maxPlayersPerTeam = Math.max(...result.enemyTeams.map(t => t.players.length));
-      if (maxPlayersPerTeam < 4 && result.enemyTeams.some(t => t.players.length < 4)) {
+      const counts = result.enemyTeams.map(t => t.players.length);
+      const maxCount = Math.max(...counts);
+      const minCount = Math.min(...counts);
+      const isInconsistent = maxCount - minCount >= 2;
+      const isUniversallySparse = maxCount <= 1 && result.enemyTeams.length >= 2;
+      if (isInconsistent || isUniversallySparse) {
         result.isPartialCapture = true;
       }
     }

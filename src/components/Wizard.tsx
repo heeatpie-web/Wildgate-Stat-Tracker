@@ -549,7 +549,7 @@ export const Wizard: React.FC = () => {
                                 Re-run OCR
                             </button>
                         </div>
-                        <div className="flex-1 min-h-0 overflow-hidden">
+                        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
                         <OcrCorrectionModal
                             isOpen={true}
                             embedded={true}

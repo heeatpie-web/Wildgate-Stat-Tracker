@@ -367,6 +367,12 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         message: `OCR looks partial (${Math.round(confidence)}%, ${source}). Review before applying.`,
       };
     }
+    if (data.isPartialCapture) {
+      return {
+        level: 'fair' as const,
+        message: `Roster looks incomplete — scroll and capture again to see all players.`,
+      };
+    }
     if (baseHint?.level === 'fair') {
       return {
         level: 'good' as const,

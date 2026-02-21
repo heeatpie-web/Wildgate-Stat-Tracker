@@ -94,6 +94,7 @@ export interface OCRExtractedData {
     words: OCRWord[];
   };
   ocrCorpusSampleId?: string;
+  isPartialCapture?: boolean;
 }
 
 /**

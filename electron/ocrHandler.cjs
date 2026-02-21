@@ -915,32 +915,84 @@ function normalizeDebugWord(word, scaleDivisor = 1, maxWidth = Infinity, maxHeig
  * Build optional OCR debug payload with word-level bounding boxes.
  * Local/merged mode uses local OCR words mapped back to original image coordinates.
  * Cloud mode uses cloud coordinates as-is (already in original image space).
+ * Words are filtered to only include those inside the active ROI regions for the detected screen type.
  */
-function buildOcrBoundingBoxDebugPayload(ocrSource, ocrResult, localOCRForFallback, processed) {
+function buildOcrBoundingBoxDebugPayload(ocrSource, ocrResult, localOCRForFallback, processed, screenType, ocrRegions) {
   const imageWidth = Math.max(1, toFiniteNumber(processed?.originalWidth, processed?.width || 0));
   const imageHeight = Math.max(1, toFiniteNumber(processed?.originalHeight, processed?.height || 0));
   const scale = Number.isFinite(processed?.scale) && processed.scale > 0 ? processed.scale : 1;
 
+  // Collect all ROI bounds for the detected screen type (normalized 0-1)
+  const roiBounds = collectRoiBounds(screenType, ocrRegions);
+
+  function filterByRoi(normalizedWords) {
+    if (roiBounds.length === 0) return normalizedWords;
+    return normalizedWords.filter(w => {
+      if (!w.bbox) return false;
+      const cx = ((w.bbox.x0 + w.bbox.x1) / 2) / imageWidth;
+      const cy = ((w.bbox.y0 + w.bbox.y1) / 2) / imageHeight;
+      return roiBounds.some(b => cx >= b.xMin && cx <= b.xMax && cy >= b.yMin && cy <= b.yMax);
+    });
+  }
+
   if (ocrSource === 'cloud') {
     const cloudWords = Array.isArray(ocrResult?.words) ? ocrResult.words : [];
+    const normalized = cloudWords.map(word => normalizeDebugWord(word, 1, imageWidth, imageHeight));
     return {
       source: 'cloud',
       imageWidth,
       imageHeight,
-      words: cloudWords.map(word => normalizeDebugWord(word, 1, imageWidth, imageHeight)),
+      words: filterByRoi(normalized),
     };
   }
 
   const localWords = Array.isArray(localOCRForFallback?.words) && localOCRForFallback.words.length > 0
     ? localOCRForFallback.words
     : (Array.isArray(ocrResult?.words) ? ocrResult.words : []);
+  const normalized = localWords.map(word => normalizeDebugWord(word, scale, imageWidth, imageHeight));
 
   return {
     source: 'local',
     imageWidth,
     imageHeight,
-    words: localWords.map(word => normalizeDebugWord(word, scale, imageWidth, imageHeight)),
+    words: filterByRoi(normalized),
   };
+}
+
+/**
+ * Collect all ROI region bounds for the given screen type.
+ * Returns an array of normalized {xMin, xMax, yMin, yMax} (0-1) bounds.
+ * If no valid regions, returns empty array (no filtering).
+ */
+function collectRoiBounds(screenType, ocrRegions) {
+  if (!ocrRegions) return [];
+  const bounds = [];
+  const addBound = (region) => {
+    if (region && typeof region === 'object' &&
+        Number.isFinite(region.xMin) && Number.isFinite(region.xMax) &&
+        Number.isFinite(region.yMin) && Number.isFinite(region.yMax)) {
+      bounds.push(region);
+    }
+  };
+
+  if (screenType === SCREEN_TYPES.CREW_HUB && ocrRegions.crewHub) {
+    for (const region of Object.values(ocrRegions.crewHub)) {
+      addBound(region);
+    }
+  } else if (screenType === SCREEN_TYPES.MAP_SCREEN && ocrRegions.mapScreen) {
+    for (const region of Object.values(ocrRegions.mapScreen)) {
+      addBound(region);
+    }
+  } else {
+    // Unknown screen type — collect all regions from both screen types
+    if (ocrRegions.crewHub) {
+      for (const region of Object.values(ocrRegions.crewHub)) addBound(region);
+    }
+    if (ocrRegions.mapScreen) {
+      for (const region of Object.values(ocrRegions.mapScreen)) addBound(region);
+    }
+  }
+  return bounds;
 }
 
 // ─── CJK Detection ───
@@ -1860,7 +1912,9 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         ocrSource,
         ocrResult,
         localOCRForFallback,
-        processed
+        processed,
+        screenDetection.type,
+        ocrRegions
       );
     }
     if (shouldArchiveOcrSample) {
