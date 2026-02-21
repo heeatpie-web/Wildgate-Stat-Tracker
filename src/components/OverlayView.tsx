@@ -50,6 +50,23 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
         setToast({ message: `Added "${name}" to roster`, type: 'success' });
     };
 
+    const visibleSocialAdds = useMemo(() => {
+        const seen = new Set<string>();
+        return [...topWingmen.map(([name]) => name), ...topRivals.map(([name]) => name)]
+            .filter((name) => {
+                const normalized = name.trim().toLowerCase();
+                if (!canAddRosterPlayer(name) || seen.has(normalized)) return false;
+                seen.add(normalized);
+                return true;
+            });
+    }, [topWingmen, topRivals, pilotRegistry]);
+
+    const handleAddVisibleSocialPlayers = () => {
+        if (visibleSocialAdds.length === 0) return;
+        visibleSocialAdds.forEach((name) => addToRegistry(name));
+        setToast({ message: `Added ${visibleSocialAdds.length} player(s) to roster`, type: 'success' });
+    };
+
     const exitOverlayToView = (
         view: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr',
         analyticsSubview?: AnalyticsView,
@@ -154,12 +171,34 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
         <div className={`${isTransparent ? 'bg-transparent p-0' : 'md3-card recording-inside-panel p-3 mg-surface shadow-lg'} h-full flex flex-col gap-3`}>
             <div className="flex items-center justify-between">
                 <h3 className="text-label-sm font-bold uppercase tracking-wide opacity-70">Social Pulse</h3>
+                <div className="flex items-center gap-1.5">
+                    <button
+                        type="button"
+                        onClick={() => exitOverlayToView('players')}
+                        className="md3-btn-tonal px-2.5 py-1 text-label-xs font-bold uppercase"
+                    >
+                        Players
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => exitOverlayToView('analytics', 'social')}
+                        className="md3-btn-tonal px-2.5 py-1 text-label-xs font-bold uppercase"
+                    >
+                        Open Full
+                    </button>
+                </div>
+            </div>
+            <div className="flex items-center justify-between rounded-control md3-surface p-1.5 border border-md-sys-outline/10">
+                <span className="text-label-xs font-semibold text-md-sys-on-surface/60">
+                    {visibleSocialAdds.length > 0 ? `${visibleSocialAdds.length} roster suggestions` : 'No new roster suggestions'}
+                </span>
                 <button
                     type="button"
-                    onClick={() => exitOverlayToView('analytics', 'social')}
-                    className="md3-btn-tonal px-2.5 py-1 text-label-xs font-bold uppercase"
+                    onClick={handleAddVisibleSocialPlayers}
+                    disabled={visibleSocialAdds.length === 0}
+                    className="h-6 px-2 rounded-md text-label-xs font-bold bg-md-sys-primary/12 text-md-sys-primary hover:bg-md-sys-primary/20 disabled:opacity-disabled"
                 >
-                    Open Full
+                    Add Visible
                 </button>
             </div>
             <div className="grid grid-cols-1 gap-2">
@@ -379,7 +418,7 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                     >
                         <div className="flex items-center gap-2 text-md-sys-on-surface/60">
                             <GripHorizontal size={14} aria-hidden />
-                            <span className="text-label-sm font-bold uppercase tracking-widest">HUD</span>
+                            <span className="text-label-sm font-bold uppercase tracking-widest">Overlay</span>
                         </div>
                         <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as any}>
                             <button

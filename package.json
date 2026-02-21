@@ -119,8 +119,8 @@
         "to": "icon.ico"
       },
       {
-        "from": "public/favicon.png",
-        "to": "favicon.png"
+        "from": "electron/assets/icon.png",
+        "to": "icon.png"
       }
     ],
     "win": {

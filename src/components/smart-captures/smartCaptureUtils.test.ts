@@ -5,6 +5,7 @@ import {
   classifySpecConfidence,
   countImages,
   formatDualConfidence,
+  getComparableTeammateCount,
   getCollapsedQueueGlyph,
   getQueueDisplayNumber,
   getQueueStatus,
@@ -191,6 +192,20 @@ describe('smartCaptureUtils', () => {
     }));
 
     expect(chips).toHaveLength(0);
+  });
+
+  it('normalizes teammate count when self is present but player field is missing', () => {
+    const match = makeMatch({
+      player: '',
+      teammates: ['Tester', 'A', 'B', 'C'],
+      telemetryConsistency: {
+        expectedTeammateCount: 3,
+      },
+    });
+
+    expect(getComparableTeammateCount(match)).toBe(3);
+    const chips = getTelemetryConsistencyWarningChips(match);
+    expect(chips.some((chip) => chip.key === 'team-count-mismatch')).toBe(false);
   });
 
   it('chooses collapsed glyph by outcome and status', () => {

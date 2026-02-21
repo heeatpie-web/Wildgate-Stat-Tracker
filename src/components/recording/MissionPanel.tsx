@@ -157,13 +157,13 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                             <div className={`${isTransparent ? 'mg-surface border border-md-sys-outline/10' : 'mg-surface border border-md-sys-outline/10'} ${accordionMode ? 'p-2' : 'p-3'} rounded-card flex flex-col items-center justify-center`}>
                                 <Clock size={accordionMode ? 12 : 16} className="text-md-sys-on-surface/60 mb-0.5" />
                                 <span className="text-label-sm font-semibold text-md-sys-on-surface/60 mb-0.5">Time</span>
-                                <div className="flex items-center gap-0 relative z-10">
+                                <div className="flex items-center gap-1 relative z-10">
                                     <input
                                         type="number"
                                         placeholder="00"
                                         value={timeMin}
                                         onChange={(e) => setTimeMin(e.target.value)}
-                                        className={`${accordionMode ? 'w-10 text-lg' : 'w-12 text-xl'} font-mono tabular-nums font-bold tracking-wide outline-none text-center rounded-control py-0.5 placeholder:opacity-40 pointer-events-auto
+                                        className={`${accordionMode ? 'w-12 text-lg' : 'w-14 text-xl'} font-mono tabular-nums font-bold tracking-wide outline-none text-center rounded-control py-0.5 placeholder:opacity-40 pointer-events-auto
                                             ${isTransparent ? 'bg-scrim-60 text-on-scrim border border-frost-10' : 'md3-textfield--compact text-md-sys-on-surface'}
                                             `}
                                     />
@@ -173,7 +173,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                         placeholder="00"
                                         value={timeSec}
                                         onChange={(e) => setTimeSec(e.target.value)}
-                                        className={`${accordionMode ? 'w-10 text-lg' : 'w-12 text-xl'} font-mono tabular-nums font-bold tracking-wide outline-none text-center rounded-control py-0.5 placeholder:opacity-40 pointer-events-auto
+                                        className={`${accordionMode ? 'w-12 text-lg' : 'w-14 text-xl'} font-mono tabular-nums font-bold tracking-wide outline-none text-center rounded-control py-0.5 placeholder:opacity-40 pointer-events-auto
                                             ${isTransparent ? 'bg-scrim-60 text-on-scrim border border-frost-10' : 'md3-textfield--compact text-md-sys-on-surface'}
                                             `}
                                     />
@@ -505,7 +505,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                         onChange={(e) => setCurrentNote(e.target.value)}
                         placeholder="Match Notes..."
                         readOnly={false}
-                        className={`w-full ${currentNote.trim().length > 0 ? 'h-20' : 'h-14'} md3-textfield--outlined rounded-control p-3 text-body outline-none resize-none placeholder:text-md-sys-on-surface/40 transition-all
+                        className={`w-full ${currentNote.trim().length > 0 ? 'h-20' : 'h-10'} md3-textfield--outlined rounded-control p-3 text-body outline-none resize-none placeholder:text-md-sys-on-surface/40 transition-all
                         focus:ring-2 focus:ring-md-sys-primary/50`}
                     />
                 )}

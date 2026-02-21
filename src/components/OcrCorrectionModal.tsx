@@ -645,11 +645,16 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                             <span className="text-label-sm font-bold uppercase text-info">Likely Teammates</span>
                             <span className="text-label-sm font-mono text-info">{teammateSuggestions.length}</span>
                         </div>
-                        <p className="text-label-sm opacity-60 mt-1">
-                            "Likely teammates" are names from your own recent matches that often appear on the same side as this roster.
-                            Use them as suggestions only, not confirmed identities.
+                        <p className="text-label-sm opacity-70 mt-1">
+                            Suggestions are estimated from your recent match co-occurrence history.
+                            They are likely allies, not confirmed identities.
                         </p>
-                        <div className="mt-2 max-h-44 overflow-y-auto custom-scrollbar pr-1 space-y-2">
+                        <p className="text-label-sm opacity-60 mt-1">
+                            {suggestionTarget
+                                ? `Target unresolved OCR name: "${suggestionTarget.name}". Click a suggestion to apply it.`
+                                : 'No unresolved OCR name is currently selected. Suggestions are read-only until one is unresolved.'}
+                        </p>
+                        <div className="mt-2 max-h-52 overflow-y-auto custom-scrollbar pr-1 space-y-2">
                             {teammateSuggestions.map((suggestion) => (
                                 <button
                                     key={suggestion.player}
@@ -664,16 +669,11 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                         <span className="text-label-sm font-mono text-info">{suggestion.likelihood}%</span>
                                     </div>
                                     <div className="text-label-xs opacity-60 mt-0.5">
-                                        {suggestion.reason} - {suggestion.encounters} encounters - {suggestion.winRate}% win rate
+                                        {suggestion.reason} | {suggestion.encounters} encounters | {suggestion.winRate}% win rate
                                     </div>
                                 </button>
                             ))}
                         </div>
-                        <p className="text-label-xs opacity-60 mt-2">
-                            {suggestionTarget
-                                ? `Click a suggestion to fill unresolved OCR name "${suggestionTarget.name}".`
-                                : 'All unresolved names are already handled. Suggestions are view-only right now.'}
-                        </p>
                     </div>
                 )}
 

@@ -279,10 +279,10 @@ const PlayerHub: React.FC = () => {
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
                             placeholder="Search players..."
-                            className="w-full md3-textfield--outlined rounded-xl pl-10 pr-9 py-2 text-label-sm outline-none"
+                            className="w-full md3-textfield--outlined rounded-xl pl-10 pr-12 py-2 text-label-sm outline-none"
                         />
                         {searchTerm && (
-                            <button onClick={() => setSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-md-sys-on-surface/40 hover:text-md-sys-on-surface" aria-label="Clear player search">
+                            <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full inline-flex items-center justify-center text-md-sys-on-surface/40 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10" aria-label="Clear player search">
                                 <X size={14} />
                             </button>
                         )}

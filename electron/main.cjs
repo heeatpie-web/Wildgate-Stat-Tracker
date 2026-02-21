@@ -839,12 +839,13 @@ let tray = null;
 function resolveAppIconPath() {
   const candidates = [
     path.join(process.resourcesPath || '', 'icon.ico'),
-    path.join(process.resourcesPath || '', 'favicon.png'),
+    path.join(process.resourcesPath || '', 'icon.png'),
     path.join(__dirname, 'assets/icon.ico'),
-    path.join(__dirname, '../public/favicon.ico'),
-    path.join(__dirname, '../public/favicon.png'),
+    path.join(__dirname, 'assets/icon.png'),
+    path.join(__dirname, '../public/app-icon.png'),
+    path.join(__dirname, '../public/icon-512.png'),
   ];
-  return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[candidates.length - 1];
+  return candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0];
 }
 let previousBounds = { x: 0, y: 0, width: 1440, height: 900 };
 let lastOverlayBounds = null;

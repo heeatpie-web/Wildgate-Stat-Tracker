@@ -2,9 +2,7 @@ import React from 'react';
 import {
   AlertCircle,
   AlertTriangle,
-  Check,
   CheckCircle2,
-  ChevronRight,
   Clock3,
   ScanEye,
   ShieldAlert,
@@ -101,7 +99,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
   const bundledCount = countImages(match.artifacts || []);
   const tone = getSemanticStatusTone(qs.key);
   const statusMeta = getStatusMeta(qs.key);
-  const displayTone = qs.key === 'Resolved' && !isSelected ? 'neutral' : tone;
+  const displayTone = qs.key === 'Resolved' ? 'neutral' : tone;
   const consistencyChips = getTelemetryConsistencyWarningChips(match);
   const statusIcon = (() => {
     switch (statusMeta.icon) {
@@ -203,9 +201,6 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
               {hasConfidence ? (
                 <ConfidenceBadge percent={confidence} />
               ) : null}
-              {qs.key === 'Resolved'
-                ? <Check size={11} className="text-success/50" />
-                : <ChevronRight size={12} className="text-md-sys-on-surface/40" />}
             </div>
           </div>
 

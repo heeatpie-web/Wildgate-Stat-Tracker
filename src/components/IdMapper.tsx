@@ -31,6 +31,7 @@ const EQUIPMENT_SET = new Set((CHARACTER_EQUIPMENT || []).map((name) => normaliz
 const SHIP_KEYWORDS = ['drone', 'privateer', 'interceptor', 'gunship', 'fighter', 'frigate', 'raider', 'brawler', 'carrier'];
 const WEAPON_KEYWORDS = ['cannon', 'rifle', 'pistol', 'launcher', 'beam', 'turret', 'blaster', 'weapon'];
 const EQUIPMENT_KEYWORDS = ['shield', 'module', 'booster', 'utility', 'gear', 'ability', 'equipment'];
+const SHIP_TYPE_HINTS = ['attackdrone', 'drone', 'privateer', 'interceptor', 'gunship', 'fighter', 'frigate', 'raider', 'brawler', 'carrier'];
 
 const hasAliasMatch = (value: string, aliases: Set<string>): boolean => {
     const normalizedValue = normalizeEntityLabel(value);
@@ -51,6 +52,14 @@ const inferTagFromKeywords = (value: string): MappingTag | null => {
     if (WEAPON_KEYWORDS.some((keyword) => normalizedValue.includes(keyword))) return 'weapon';
     if (EQUIPMENT_KEYWORDS.some((keyword) => normalizedValue.includes(keyword))) return 'equipment';
     return null;
+};
+
+const looksLikeShipEntity = (value: unknown): boolean => {
+    const normalizedValue = normalizeEntityLabel(value);
+    if (!normalizedValue) return false;
+    if (SHIP_KEYWORDS.some((keyword) => normalizedValue.includes(keyword))) return true;
+    const compact = normalizedValue.replace(/[^a-z0-9]/g, '');
+    return SHIP_TYPE_HINTS.some((hint) => compact.includes(hint));
 };
 
 const inferDomainFromName = (name: string): MappingDomain | null => {
@@ -157,7 +166,7 @@ export const IdMapper: React.FC = () => {
         const normalizedType = normalizeLabel(rawType);
         if (normalizedType.includes('hero')) return 'prospector';
         if (normalizedType.includes('ship')) return 'ship';
-        if (normalizedType.includes('drone') || normalizedType.includes('privateer')) return 'ship';
+        if (looksLikeShipEntity(normalizedType)) return 'ship';
         if (normalizedType.includes('weapon')) return 'weapon';
         if (normalizedType.includes('equipment') || normalizedType.includes('gear') || normalizedType.includes('utility')) return 'equipment';
         return null;
@@ -173,6 +182,7 @@ export const IdMapper: React.FC = () => {
 
         const normalizedId = normalizeLabel(entry.id);
         if (normalizedId.startsWith('ship')) return 'ship';
+        if (looksLikeShipEntity(normalizedId)) return 'ship';
         if (normalizedId.startsWith('wpn') || normalizedId.startsWith('weapon') || normalizedId.startsWith('cw')) return 'weapon';
         if (normalizedId.startsWith('equip') || normalizedId.startsWith('gear') || normalizedId.startsWith('ce')) return 'equipment';
 
@@ -219,6 +229,7 @@ export const IdMapper: React.FC = () => {
 
         const normalizedId = normalizeLabel(id);
         if (normalizedId.startsWith('ship')) return 'ship';
+        if (looksLikeShipEntity(normalizedId)) return 'ship';
         if (normalizedId.startsWith('wpn') || normalizedId.startsWith('weapon') || normalizedId.startsWith('cw')) return 'weapon';
         if (normalizedId.startsWith('equip') || normalizedId.startsWith('gear') || normalizedId.startsWith('ce')) return 'equipment';
         if (normalizedId.startsWith('hero') || normalizedId.startsWith('char') || normalizedId.startsWith('prospector')) return 'prospector';

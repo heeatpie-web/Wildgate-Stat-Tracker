@@ -114,6 +114,32 @@ export interface TelemetryConsistencyChip {
     tone: QueueSemanticTone;
 }
 
+const normalizeNameKey = (value: string | null | undefined): string =>
+    String(value || '').trim().toLowerCase();
+
+export const getComparableTeammateCount = (match: Match): number => {
+    const teammateNames = Array.isArray(match.teammates)
+        ? match.teammates
+            .map((name) => String(name || '').trim())
+            .filter(Boolean)
+        : [];
+    const uniqueTeammates = Array.from(new Set(teammateNames.map((name) => normalizeNameKey(name))));
+    const playerKey = normalizeNameKey(match.player);
+    const withoutPlayer = playerKey
+        ? uniqueTeammates.filter((name) => name !== playerKey)
+        : uniqueTeammates;
+    const expectedCount = match.telemetryConsistency?.expectedTeammateCount;
+    if (
+        typeof expectedCount === 'number'
+        && withoutPlayer.length === expectedCount + 1
+        && withoutPlayer.length === uniqueTeammates.length
+    ) {
+        // Legacy captures can store self in teammates without a reliable player field.
+        return expectedCount;
+    }
+    return withoutPlayer.length;
+};
+
 export const getQueueDisplayNumber = (matchId: number, orderedIds: number[]): number => {
     const idx = orderedIds.indexOf(matchId);
     return idx >= 0 ? idx + 1 : orderedIds.length + 1;
@@ -170,10 +196,7 @@ export const getStatusMeta = (statusKey: QueueStatusKey): StatusMeta => {
 export const getTelemetryConsistencyWarningChips = (match: Match): TelemetryConsistencyChip[] => {
     if (!match.telemetryConsistency) return [];
     const consistency = match.telemetryConsistency;
-    const normalizedPlayer = String(match.player || '').trim().toLowerCase();
-    const comparableTeammateCount = (match.teammates || []).filter((name) => (
-        String(name || '').trim().toLowerCase() !== normalizedPlayer
-    )).length;
+    const comparableTeammateCount = getComparableTeammateCount(match);
     const evaluated = evaluateTelemetryConsistencyChecks(consistency, {
         teammateCount: comparableTeammateCount,
         mode: match.mode,

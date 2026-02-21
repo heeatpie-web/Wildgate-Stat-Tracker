@@ -8,12 +8,12 @@ interface AnalyticsNavigationProps {
     onSelectCategory: (category: AnalyticsCategory) => void;
 }
 
-const CATEGORIES: { id: AnalyticsCategory; label: string; icon: React.ReactNode; tone: string }[] = [
-    { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={16} />, tone: 'text-md-sys-primary' },
-    { id: 'performance', label: 'Performance', icon: <Gauge size={16} />, tone: 'text-success' },
-    { id: 'team', label: 'Team', icon: <Users size={16} />, tone: 'text-info' },
-    { id: 'environment', label: 'Environment', icon: <Globe size={16} />, tone: 'text-warning' },
-    { id: 'narrative', label: 'Narrative', icon: <BookOpen size={16} />, tone: 'text-accent' },
+const CATEGORIES: { id: AnalyticsCategory; label: string; icon: React.ReactNode; tone: string; activeTone: string }[] = [
+    { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={16} />, tone: 'text-md-sys-primary', activeTone: 'bg-md-sys-primary text-md-sys-onPrimary' },
+    { id: 'performance', label: 'Performance', icon: <Gauge size={16} />, tone: 'text-success', activeTone: 'bg-success-soft text-success border border-success/25' },
+    { id: 'team', label: 'Team', icon: <Users size={16} />, tone: 'text-info', activeTone: 'bg-info-soft text-info border border-info/25' },
+    { id: 'environment', label: 'Environment', icon: <Globe size={16} />, tone: 'text-warning', activeTone: 'bg-warning-soft text-warning border border-warning/25' },
+    { id: 'narrative', label: 'Narrative', icon: <BookOpen size={16} />, tone: 'text-accent', activeTone: 'bg-accent-soft text-accent border border-accent/25' },
 ];
 
 export const AnalyticsNavigation: React.FC<AnalyticsNavigationProps> = ({ activeCategory, onSelectCategory }) => {
@@ -23,9 +23,9 @@ export const AnalyticsNavigation: React.FC<AnalyticsNavigationProps> = ({ active
                 <button
                     key={cat.id}
                     onClick={() => onSelectCategory(cat.id)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-control text-label-sm font-bold uppercase tracking-wide transition-all whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-control text-label-sm font-bold uppercase tracking-wide transition-all whitespace-nowrap border border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary ${
                         activeCategory === cat.id
-                            ? `bg-md-sys-primary text-md-sys-onPrimary shadow-sm`
+                            ? `${cat.activeTone} shadow-sm`
                             : `text-md-sys-on-surface/72 hover:bg-md-sys-surfaceContainerHigh hover:text-md-sys-on-surface`
                     }`}
                 >

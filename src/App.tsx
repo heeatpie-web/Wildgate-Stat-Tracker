@@ -175,9 +175,25 @@ const formatBytes = (bytes: number): string => {
     return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 };
 
+const buildStableSignatureValue = (value: unknown): unknown => {
+    if (Array.isArray(value)) {
+        return value.map((entry) => buildStableSignatureValue(entry));
+    }
+    if (value && typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        return Object.keys(record)
+            .sort((a, b) => a.localeCompare(b))
+            .reduce<Record<string, unknown>>((acc, key) => {
+                acc[key] = buildStableSignatureValue(record[key]);
+                return acc;
+            }, {});
+    }
+    return value;
+};
+
 const buildRestorePayloadSignature = (payload: RestoreSessionPayload): string => {
     try {
-        return JSON.stringify(payload);
+        return JSON.stringify(buildStableSignatureValue(payload));
     } catch {
         return '';
     }

@@ -210,6 +210,21 @@ const SettingsModalContent: React.FC = () => {
         }
     }, [activeTab, isOverlayMode]);
 
+    useEffect(() => {
+        const onFocusSection = (evt: Event) => {
+            const customEvt = evt as CustomEvent<{ tab?: SettingsTabId; search?: string }>;
+            const requestedTab = customEvt.detail?.tab;
+            if (requestedTab) {
+                setActiveTab(requestedTab);
+            }
+            if (typeof customEvt.detail?.search === 'string') {
+                setSettingsSearch(customEvt.detail.search);
+            }
+        };
+        window.addEventListener('settings:focus-section', onFocusSection as EventListener);
+        return () => window.removeEventListener('settings:focus-section', onFocusSection as EventListener);
+    }, []);
+
     const handleSaveAndClose = useCallback(async () => {
         setSaved(true);
         // Force an immediate persist of the current store state

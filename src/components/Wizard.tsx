@@ -80,6 +80,21 @@ export const Wizard: React.FC = () => {
     }, [activeMode, selectedWinType]);
 
     React.useEffect(() => {
+        if (!showWizard) return;
+        if (showWizard === 'Win') {
+            if (pendingPlacement !== 1) setPendingPlacement(1);
+            return;
+        }
+        if (showWizard === 'Loss') {
+            if (!pendingPlacement || pendingPlacement < 2 || pendingPlacement > 5) {
+                setPendingPlacement(2);
+            }
+            return;
+        }
+        if (pendingPlacement != null) setPendingPlacement(null);
+    }, [pendingPlacement, setPendingPlacement, showWizard]);
+
+    React.useEffect(() => {
         const onRequestOcrReview = (evt: Event) => {
             const customEvt = evt as CustomEvent<{ matchId?: number }>;
             const requestedMatchId = Number(customEvt?.detail?.matchId || 0);
@@ -320,7 +335,7 @@ export const Wizard: React.FC = () => {
                             {activeMode === 'Artifact Brawl' ? (
                                 <>
                                     <button onClick={() => setSelectedWinType('Combat')} className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Combat' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg scale-102' : 'mg-surface-high opacity-60 hover:opacity-100'}`}>
-                                        <Sword size={16} /> {showWizard === 'Loss' ? 'Combat Defeat' : 'Combat'}
+                                        <Sword size={16} /> {showWizard === 'Loss' ? 'Combat Defeat' : 'Combat Win'}
                                     </button>
                                     <button onClick={() => setSelectedWinType('Artifact')} className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong shadow-lg scale-102' : 'mg-surface-high opacity-60 hover:opacity-100'}`}>
                                         <Gem size={16} /> {showWizard === 'Loss' ? 'Artifact Defeat' : 'Artifact Win'}

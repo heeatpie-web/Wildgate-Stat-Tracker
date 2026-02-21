@@ -3,7 +3,7 @@ import {
     Search, Trophy, Skull,
     Clock, HeartCrack, Target, Image, Eye, X, Edit3, Check,
     ShieldCheck, Crosshair, Users, AlertTriangle,
-    ScanEye, RefreshCw, Plus, ImageOff, Trash2, Upload, Camera, Zap, FolderOpen,
+    ScanEye, RefreshCw, Plus, ImageOff, Trash2, Upload, Zap, FolderOpen,
     FlaskConical, MoreHorizontal, Settings,
 } from 'lucide-react';
 import { Match, SHIPS, getShipColor, OpponentTeam, Loadout } from '../types';
@@ -32,7 +32,6 @@ import {
     buildPlayerColorHintsFromOpponentTeams,
     normalizeTeamColor,
 } from '../utils/ocr/teamColorAssignment';
-import { useSmartCapture, type SavedCapture } from '../hooks/useSmartCapture';
 import { LocalImage } from './LocalImage';
 import { exportJSONFile } from '../utils/export';
 import { Section, StatCard, EditableStatCard, ModifierAdder, KillAdder, InlinePlayerAdd } from './smart-captures/SmartCaptureWidgets';
@@ -41,6 +40,7 @@ import {
     IMAGE_EXTS,
     countImages,
     formatDualConfidence,
+    getComparableTeammateCount,
     getQueueDisplayNumber,
     getQueueStatus,
     getStatusMeta,
@@ -147,8 +147,6 @@ const SmartCapturesPanel: React.FC = () => {
     const pendingReviews = useAppStore(s => s.pendingReviews);
     const queueCollapsed = useAppStore(s => s.queueCollapsed);
     const toggleQueueCollapsed = useAppStore(s => s.toggleQueueCollapsed);
-    const [captureState, captureActions] = useSmartCapture();
-
     const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
     const [bulkBusy, setBulkBusy] = useState(false);
     const todayQueueDayKey = useMemo(() => toLocalDateKey(Date.now()), []);
@@ -891,8 +889,13 @@ const SmartCapturesPanel: React.FC = () => {
                                                 <button
                                                     type="button"
                                                     onClick={() => {
+                                                        window.dispatchEvent(new CustomEvent('settings:focus-section', {
+                                                            detail: {
+                                                                tab: 'ocr-capture',
+                                                                search: 'capture mode',
+                                                            },
+                                                        }));
                                                         setShowSettings(true);
-                                                        setActiveSection('tools');
                                                     }}
                                                     className="h-9 w-9 md3-surface rounded-control inline-flex items-center justify-center text-md-sys-on-surface/70 hover:text-md-sys-primary transition-colors"
                                                     title="Open Smart Capture settings"
@@ -1299,32 +1302,6 @@ const SmartCapturesPanel: React.FC = () => {
                             </div>
                         )}
                     </section>
-                    {captureState.savedCaptures.length > 0 && (
-                        <section className="md3-surface rounded-card p-4 border border-md-sys-outline/10" aria-labelledby="sc-tools-queue-heading">
-                            <h2 id="sc-tools-queue-heading" className="text-label-lg font-bold text-md-sys-on-surface mb-3 flex items-center justify-between gap-2">
-                                <span className="flex items-center gap-1"><Camera size={16} /> Capture Queue ({captureState.savedCaptures.length})</span>
-                                {captureState.processingProgress && <span className="text-label-sm text-md-sys-on-surface/60">Processing {captureState.processingProgress.current}/{captureState.processingProgress.total}</span>}
-                                {captureState.savedCaptures.some(c => !c.ocrProcessed) && (
-                                    <Button onClick={() => captureActions.processAllStored(activeUser)} disabled={captureState.isProcessing} loading={captureState.isProcessing} variant="secondary" className="px-2 py-1.5 text-label-xs font-bold rounded-control flex items-center gap-1" icon={!captureState.isProcessing ? <Zap size={12} /> : undefined}>
-                                        OCR All
-                                    </Button>
-                                )}
-                            </h2>
-                            <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-                                {captureState.savedCaptures.map((cap) => (
-                                    <div key={cap.filePath} className="flex items-center gap-2 py-2 px-3 rounded-control md3-surface-high border border-md-sys-outline/10">
-                                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cap.ocrProcessed ? 'bg-success' : 'bg-warning'}`} aria-hidden />
-                                        <span className="text-label-sm text-md-sys-on-surface/60 flex-1 truncate">{cap.filename}</span>
-                                        {!cap.ocrProcessed ? (
-                                            <button onClick={() => captureActions.processStoredImage(cap.filePath, activeUser)} disabled={captureState.isProcessing} className="md3-btn-tonal px-2 py-1 text-label-xs font-bold rounded-control disabled:opacity-disabled">OCR</button>
-                                        ) : (
-                                            <Check size={14} className="text-success flex-shrink-0" aria-hidden />
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </section>
-                    )}
                     {ocrIssueMatches.length > 0 && (
                         <section className="md3-surface rounded-card p-4 border border-md-sys-outline/10" aria-labelledby="sc-tools-priority-heading">
                             <h2 id="sc-tools-priority-heading" className="text-label-lg font-bold text-md-sys-on-surface mb-3">Priority (OCR issues)</h2>
@@ -1910,9 +1887,7 @@ const SmartMatchDetail: React.FC<{
         const merged = mergeTelemetryConsistency(match.telemetryConsistency, derived);
         if (!merged) return undefined;
         const evaluated = evaluateTelemetryConsistencyChecks(merged, {
-            teammateCount: (match.teammates || []).filter((name) => (
-                String(name || '').trim().toLowerCase() !== String(match.player || '').trim().toLowerCase()
-            )).length,
+            teammateCount: getComparableTeammateCount(match),
             mode: match.mode,
             durationSeconds: (() => {
                 const parts = String(match.time || '').split(':').map((part) => Number(part));
