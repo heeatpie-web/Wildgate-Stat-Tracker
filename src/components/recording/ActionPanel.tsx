@@ -568,7 +568,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                             <span className="text-label-xs font-bold uppercase text-md-sys-primary">Live Mission</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-body text-md-sys-primary">{matchElapsed}</span>
+                            <span className="font-mono tabular-nums font-bold text-lg tracking-wide text-md-sys-primary">{matchElapsed}</span>
                             <button
                                 onClick={() => { setIsMatchInProgress(false); setMatchStartTime(null); }}
                                 className="inline-flex items-center gap-1 text-label-xs px-2 py-1 bg-md-sys-errorContainer/40 text-md-sys-error rounded hover:bg-md-sys-error/20 font-bold uppercase"
@@ -618,8 +618,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     <TelemetryIndicatorDot
                         detectedShip={telemetryDetectedShip}
                         detectedHero={telemetryDetectedHero}
-                        activeShip={activeShip}
-                        activeHero={activeHero}
+                        activeShip={activeShip ?? undefined}
+                        activeHero={activeHero ?? undefined}
                     />
                 )}
 
@@ -698,7 +698,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                             <span className="text-label-sm font-bold uppercase text-md-sys-primary">Live Mission</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-body text-md-sys-primary">{matchElapsed}</span>
+                            <span className="font-mono tabular-nums font-bold text-lg tracking-wide text-md-sys-primary">{matchElapsed}</span>
                             <button
                                 onClick={() => { setIsMatchInProgress(false); setMatchStartTime(null); }}
                                 className="inline-flex items-center gap-1 text-label-xs px-2 py-1 bg-md-sys-errorContainer/40 text-md-sys-error rounded hover:bg-md-sys-error/20 font-bold uppercase"
@@ -759,8 +759,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     <TelemetryIndicatorDot
                         detectedShip={telemetryDetectedShip}
                         detectedHero={telemetryDetectedHero}
-                        activeShip={activeShip}
-                        activeHero={activeHero}
+                        activeShip={activeShip ?? undefined}
+                        activeHero={activeHero ?? undefined}
                     />
                 )}
 

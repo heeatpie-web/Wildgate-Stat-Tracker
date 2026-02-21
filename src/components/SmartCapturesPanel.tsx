@@ -3,8 +3,8 @@ import {
     Search, Trophy, Skull,
     Clock, HeartCrack, Target, Image, Eye, X, Edit3, Check,
     ShieldCheck, Crosshair, Users, AlertTriangle,
-    ScanEye, RefreshCw, Plus, ImageOff, Trash2, Upload, Camera, Zap, Loader2, FolderOpen,
-    FlaskConical, MoreHorizontal,
+    ScanEye, RefreshCw, Plus, ImageOff, Trash2, Upload, Camera, Zap, FolderOpen,
+    FlaskConical, MoreHorizontal, Settings,
 } from 'lucide-react';
 import { Match, SHIPS, getShipColor, OpponentTeam, Loadout } from '../types';
 import { UI_REACH_MODIFIERS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT, SYSTEMS } from '../utils/constants';
@@ -23,7 +23,7 @@ import {
 } from '../utils/artifactService';
 import { getElectronAPI } from '../utils/electronAPI';
 import { useAppStore } from '../store/useAppStore';
-import type { CaptureMode, OcrMode, OcrRegionSettings } from '../store/slices/createSettingsSlice';
+import type { OcrRegionSettings } from '../store/slices/createSettingsSlice';
 import { mergeOCRData, calculateOverallConfidence } from '../utils/ocr/ocrParser';
 import type { ExtractedModifier, OCRExtractedData } from '../utils/ocr/ocrTypes';
 import {
@@ -69,15 +69,6 @@ import { moveOpponentPlayerBetweenTeams } from '../utils/opponentTeamTransfer';
 import Logger from '../utils/logger';
 
 let autoArtifactRepairAttempted = false;
-
-const CAPTURE_MODE_VALUES: CaptureMode[] = ['auto', 'deferred'];
-const OCR_MODE_VALUES: OcrMode[] = ['local', 'cloud', 'both', 'hybrid-plus'];
-
-const isCaptureMode = (value: string): value is CaptureMode =>
-    CAPTURE_MODE_VALUES.includes(value as CaptureMode);
-
-const isOcrMode = (value: string): value is OcrMode =>
-    OCR_MODE_VALUES.includes(value as OcrMode);
 
 const errorMessage = (error: unknown): string =>
     error instanceof Error ? error.message : 'Unknown error';
@@ -134,16 +125,14 @@ const SmartCapturesPanel: React.FC = () => {
     const {
         activeUser,
         setToast,
+        setShowSettings,
         smartCapturesFocusMatchId,
         setSmartCapturesFocusMatchId,
         setActiveView,
     } = useUIState();
     const ocrMode = useAppStore(s => s.ocrMode);
     const ocrRegions = useAppStore(s => s.ocrRegions);
-    const setOcrMode = useAppStore(s => s.setOcrMode);
     const setOcrRegions = useAppStore(s => s.setOcrRegions);
-    const captureMode = useAppStore(s => s.captureMode);
-    const setCaptureMode = useAppStore(s => s.setCaptureMode);
     const activeSection = useAppStore(s => s.activeSection);
     const setActiveSection = useAppStore(s => s.setActiveSection);
     const selectedMatchId = useAppStore(s => s.selectedMatchId);
@@ -312,17 +301,13 @@ const SmartCapturesPanel: React.FC = () => {
 
     useEffect(() => {
         if (availableQueueDayKeys.length === 0) return;
+        if (queueDayFilter === todayQueueDayKey) return;
         if (availableQueueDayKeys.includes(queueDayFilter)) return;
         const fallbackDay = availableQueueDayKeys.includes(todayQueueDayKey)
             ? todayQueueDayKey
             : availableQueueDayKeys[0];
         setQueueDayFilter(fallbackDay);
     }, [availableQueueDayKeys, queueDayFilter, todayQueueDayKey]);
-
-    const queueDayLabel = useMemo(
-        () => formatQueueDayLabel(queueDayFilter, todayQueueDayKey),
-        [queueDayFilter, todayQueueDayKey]
-    );
 
     const filteredMatches = useMemo(() => {
         let result = [...matches].sort((a, b) => b.timestamp - a.timestamp);
@@ -871,11 +856,6 @@ const SmartCapturesPanel: React.FC = () => {
                                             <QueueCollapseToggle collapsed={queueCollapsed} onToggle={toggleQueueCollapsed} />
                                             {!queueCollapsed && renderSectionTabs('sc-workspace-tabs--inline')}
                                         </div>
-                                        {!queueCollapsed && (
-                                            <div className="text-label-sm text-md-sys-on-surface/60 whitespace-nowrap hidden sm:block">
-                                                {workQueueOpenCount > 0 ? `${workQueueOpenCount} open` : 'No open items'} | {queueDayLabel}
-                                            </div>
-                                        )}
                                     </div>
 
                                     {!queueCollapsed && (
@@ -890,49 +870,36 @@ const SmartCapturesPanel: React.FC = () => {
                                                     className="w-full h-10 md3-surface rounded-control pl-9 pr-3 text-label-sm outline-none placeholder:opacity-40"
                                                 />
                                             </div>
-                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                                <select
-                                                    aria-label="Capture mode"
-                                                    value={captureMode}
-                                                    onChange={(e) => {
-                                                        const next = e.target.value;
-                                                        if (isCaptureMode(next)) setCaptureMode(next);
-                                                    }}
-                                                    className="h-9 px-2 md3-surface rounded-control text-label-sm font-semibold outline-none"
-                                                >
-                                                    <option value="auto">Capture: Now</option>
-                                                    <option value="deferred">Capture: Later</option>
-                                                </select>
-                                                <select
-                                                    aria-label="OCR mode"
-                                                    value={ocrMode}
-                                                    onChange={(e) => {
-                                                        const next = e.target.value;
-                                                        if (isOcrMode(next)) setOcrMode(next);
-                                                    }}
-                                                    className="h-9 px-2 md3-surface rounded-control text-label-sm font-semibold outline-none"
-                                                >
-                                                    <option value="local">OCR: Local</option>
-                                                    <option value="cloud">OCR: Cloud</option>
-                                                    <option value="both">OCR: Hybrid</option>
-                                                    <option value="hybrid-plus">OCR: Hybrid+</option>
-                                                </select>
+                                            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
                                                 <select
                                                     aria-label="Match day"
                                                     value={queueDayFilter}
                                                     onChange={(e) => setQueueDayFilter(e.target.value)}
                                                     className="h-9 px-2 md3-surface rounded-control text-label-sm font-semibold outline-none"
                                                 >
-                                                    {availableQueueDayKeys.length === 0 ? (
-                                                        <option value={todayQueueDayKey}>No matches</option>
-                                                    ) : (
-                                                        availableQueueDayKeys.map((dayKey) => (
+                                                    <option value={todayQueueDayKey}>
+                                                        Today ({queueDayMatchCount.get(todayQueueDayKey) || 0})
+                                                    </option>
+                                                    {availableQueueDayKeys
+                                                        .filter((dayKey) => dayKey !== todayQueueDayKey)
+                                                        .map((dayKey) => (
                                                             <option key={dayKey} value={dayKey}>
                                                                 {formatQueueDayLabel(dayKey, todayQueueDayKey)} ({queueDayMatchCount.get(dayKey) || 0})
                                                             </option>
-                                                        ))
-                                                    )}
+                                                        ))}
                                                 </select>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setShowSettings(true);
+                                                        setActiveSection('tools');
+                                                    }}
+                                                    className="h-9 w-9 md3-surface rounded-control inline-flex items-center justify-center text-md-sys-on-surface/70 hover:text-md-sys-primary transition-colors"
+                                                    title="Open Smart Capture settings"
+                                                    aria-label="Open Smart Capture settings"
+                                                >
+                                                    <Settings size={14} />
+                                                </button>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <div className="sc-seg sc-bordered flex-1">
@@ -949,18 +916,6 @@ const SmartCapturesPanel: React.FC = () => {
                                                         {showResolved ? 'Showing resolved' : 'Show resolved'}
                                                     </button>
                                                 )}
-                                            </div>
-                                            <div className="flex items-center gap-1">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => captureActions.captureOnly()}
-                                                    disabled={captureState.isCapturing}
-                                                    className="md3-btn-tonal px-2 py-1.5 text-label-xs font-bold disabled:opacity-disabled inline-flex items-center gap-1"
-                                                    title="Quick Capture (no OCR)"
-                                                >
-                                                    {captureState.isCapturing ? <Loader2 size={10} className="animate-spin" /> : <Camera size={10} />}
-                                                    Capture
-                                                </button>
                                             </div>
                                         </>
                                     )}
@@ -1672,8 +1627,10 @@ const SmartMatchDetail: React.FC<{
 
     const applyResult = (result: 'Win' | 'Loss' | 'Draw') => {
         const placement = result === 'Win'
-            ? (match.placement || 1)
-            : match.placement;
+            ? 1
+            : result === 'Loss'
+                ? (match.placement && match.placement >= 2 && match.placement <= 5 ? match.placement : 2)
+                : match.placement;
         onUpdate({ ...match, result, placement });
     };
     const moveOpponentPlayer = useCallback((
@@ -1953,7 +1910,9 @@ const SmartMatchDetail: React.FC<{
         const merged = mergeTelemetryConsistency(match.telemetryConsistency, derived);
         if (!merged) return undefined;
         const evaluated = evaluateTelemetryConsistencyChecks(merged, {
-            teammateCount: (match.teammates || []).length,
+            teammateCount: (match.teammates || []).filter((name) => (
+                String(name || '').trim().toLowerCase() !== String(match.player || '').trim().toLowerCase()
+            )).length,
             mode: match.mode,
             durationSeconds: (() => {
                 const parts = String(match.time || '').split(':').map((part) => Number(part));
@@ -2215,11 +2174,47 @@ const SmartMatchDetail: React.FC<{
                             icon={<Target size={14} className="text-success" />} label="Kills" value={totalKills.toString()}
                             readOnly
                         />
-                        <EditableStatCard
-                            icon={<Trophy size={14} className="text-warning" />} label="Place" value={match.placement ? `#${match.placement}` : (match.result === 'Win' ? '#1' : '--')}
-                            onSave={(v) => onUpdate({ ...match, placement: parseInt(v.replace('#', '')) || undefined })}
-                            placeholder="#"
-                        />
+                        <div className="md3-surface rounded-xl sc-bordered p-3 flex flex-col items-center gap-0.5 sc-editor-stat-card">
+                            <span className="text-md-sys-on-surface/60"><Trophy size={14} className="text-warning" /></span>
+                            <span className="text-label-xs font-semibold text-md-sys-on-surface/60">Place</span>
+                            {match.result === 'Win' ? (
+                                <span className="text-body font-semibold text-md-sys-on-surface">#1</span>
+                            ) : (
+                                <select
+                                    className="text-body font-black md3-surface rounded px-2 w-20 text-center outline-none"
+                                    value={
+                                        match.result === 'Loss'
+                                            ? (match.placement && match.placement >= 2 && match.placement <= 5 ? String(match.placement) : '2')
+                                            : String(match.placement || '')
+                                    }
+                                    onChange={(e) => {
+                                        const next = Number.parseInt(e.target.value, 10);
+                                        if (!Number.isFinite(next)) {
+                                            onUpdate({ ...match, placement: undefined });
+                                            return;
+                                        }
+                                        if (match.result === 'Loss') {
+                                            onUpdate({ ...match, placement: Math.min(5, Math.max(2, next)) });
+                                            return;
+                                        }
+                                        onUpdate({ ...match, placement: next });
+                                    }}
+                                >
+                                    {match.result === 'Loss' ? (
+                                        [2, 3, 4, 5].map((place) => (
+                                            <option key={place} value={place}>{`#${place}`}</option>
+                                        ))
+                                    ) : (
+                                        <>
+                                            <option value="">--</option>
+                                            {Array.from({ length: 20 }, (_, idx) => idx + 2).map((place) => (
+                                                <option key={place} value={place}>{`#${place}`}</option>
+                                            ))}
+                                        </>
+                                    )}
+                                </select>
+                            )}
+                        </div>
                     </div>
 
                     <Section title="Players" collapsible collapsed={!!collapsedSections.players} onToggle={() => toggleSection('players')}>

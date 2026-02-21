@@ -138,7 +138,7 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
     // Compact variant - for narrow columns (Overlay HUD)
     if (variant === 'compact') {
         return (
-            <div className="flex items-center justify-between gap-2 md3-surface-high rounded-lg p-1 border border-md-sys-outline/10">
+            <div className="flex items-center justify-between gap-2 md3-surface-high rounded-lg p-2 border border-md-sys-outline/10">
                 <div className="flex items-center gap-2">
                     <button
                         onClick={togglePause}
@@ -151,15 +151,15 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
                     >
                         {isPaused ? <Play size={14} /> : <Pause size={14} />}
                     </button>
-                    <div className="flex flex-col min-w-60px">
-                        <span className={`font-mono font-bold text-body leading-none ${isMatchInProgress ? 'text-success' : (isPaused ? 'text-warning' : 'text-md-sys-on-surface')}`}>
+                    <div className="flex flex-col min-w-84px">
+                        <span className={`font-mono tabular-nums font-bold text-lg leading-none tracking-wide ${isMatchInProgress ? 'text-success' : (isPaused ? 'text-warning' : 'text-md-sys-on-surface')}`}>
                             {isMatchInProgress ? matchElapsedDisplay : elapsedDisplay}
                         </span>
                         <span className={`text-label-xs font-bold uppercase ${isMatchInProgress ? 'text-success/60' : (isPaused ? 'text-warning/60' : 'text-md-sys-on-surface/40')}`}>
                             {isMatchInProgress ? 'Mission' : (isPaused ? 'Session Paused' : 'Session')}
                         </span>
                         {isMatchInProgress && (
-                            <span className="text-label-xs font-semibold text-md-sys-on-surface/60">
+                            <span className="text-label-xs font-semibold text-md-sys-on-surface/60 tabular-nums">
                                 S: {elapsedDisplay}
                             </span>
                         )}
@@ -228,7 +228,7 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
                     <div className="flex items-center gap-3 md3-surface-high rounded-full px-4 py-1.5 border border-md-sys-primary/30 animate-pulse-slow">
                         <div className="flex flex-col items-center">
                             <span className="text-label-xs font-bold uppercase text-md-sys-primary">Live Mission</span>
-                            <span className="font-mono font-bold text-body text-md-sys-primary">{matchElapsedDisplay}</span>
+                            <span className="font-mono tabular-nums font-bold text-lg tracking-wide text-md-sys-primary">{matchElapsedDisplay}</span>
                         </div>
                         <button
                             onClick={onResetMatch}
@@ -248,7 +248,7 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
                 <div className="text-label-sm font-bold uppercase opacity-60 leading-none mb-1 flex items-center gap-1">
                     {isPaused ? <span className="text-warning flex items-center gap-1">Paused</span> : "Session Time"}
                 </div>
-                <div className={`font-mono font-bold text-xl leading-none tracking-tight ${isPaused ? 'opacity-60' : 'text-md-sys-primary'}`}>
+                <div className={`font-mono tabular-nums font-bold text-2xl leading-none tracking-wide ${isPaused ? 'opacity-60' : 'text-md-sys-primary'}`}>
                     {elapsedDisplay}
                 </div>
             </div>

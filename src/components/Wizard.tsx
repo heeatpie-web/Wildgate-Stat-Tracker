@@ -75,6 +75,11 @@ export const Wizard: React.FC = () => {
     }, [showWizard]);
 
     React.useEffect(() => {
+        if (activeMode === 'Artifact Brawl') return;
+        if (selectedWinType === 'Artifact') setSelectedWinType('Combat');
+    }, [activeMode, selectedWinType]);
+
+    React.useEffect(() => {
         const onRequestOcrReview = (evt: Event) => {
             const customEvt = evt as CustomEvent<{ matchId?: number }>;
             const requestedMatchId = Number(customEvt?.detail?.matchId || 0);
@@ -273,6 +278,8 @@ export const Wizard: React.FC = () => {
                                                 setPendingPlacement(1);
                                             } else if (result !== 'Loss') {
                                                 setPendingPlacement(null);
+                                            } else if (!pendingPlacement || pendingPlacement < 2 || pendingPlacement > 5) {
+                                                setPendingPlacement(2);
                                             }
                                         }}
                                         className={`rounded-xl py-2 text-label-sm font-bold uppercase tracking-widest transition-all ${showWizard === result
@@ -284,16 +291,39 @@ export const Wizard: React.FC = () => {
                                     </button>
                                 ))}
                             </div>
+                            {showWizard === 'Loss' && (
+                                <div className="mt-2">
+                                    <span className="text-label-xs font-bold uppercase opacity-50 block mb-1">Placement</span>
+                                    <select
+                                        className={`w-full ${inputBaseClass} py-2 text-body`}
+                                        value={pendingPlacement && pendingPlacement >= 2 && pendingPlacement <= 5 ? pendingPlacement : 2}
+                                        onChange={(e) => {
+                                            const next = Number.parseInt(e.target.value, 10);
+                                            if (!Number.isFinite(next)) {
+                                                setPendingPlacement(2);
+                                                return;
+                                            }
+                                            setPendingPlacement(Math.min(5, Math.max(2, next)));
+                                        }}
+                                    >
+                                        {[2, 3, 4, 5].map((place) => (
+                                            <option key={place} value={place}>
+                                                {place === 2 ? '2nd' : place === 3 ? '3rd' : `${place}th`}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex gap-2 w-full">
                             {activeMode === 'Artifact Brawl' ? (
                                 <>
                                     <button onClick={() => setSelectedWinType('Combat')} className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Combat' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg scale-102' : 'mg-surface-high opacity-60 hover:opacity-100'}`}>
-                                        <Sword size={16} /> Combat
+                                        <Sword size={16} /> {showWizard === 'Loss' ? 'Combat Defeat' : 'Combat'}
                                     </button>
                                     <button onClick={() => setSelectedWinType('Artifact')} className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong shadow-lg scale-102' : 'mg-surface-high opacity-60 hover:opacity-100'}`}>
-                                        <Gem size={16} /> Artifact
+                                        <Gem size={16} /> {showWizard === 'Loss' ? 'Artifact Defeat' : 'Artifact Win'}
                                     </button>
                                 </>
                             ) : activeMode === 'Fleet Battle' ? (
@@ -478,25 +508,6 @@ export const Wizard: React.FC = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                     <input type="text" className={`w-full ${inputBaseClass} py-2 text-body placeholder:opacity-40`} placeholder="Killer player/team..." value={pendingKilledBy || ''} onChange={e => setPendingKilledBy(e.target.value)} />
                                     <input type="text" className={`w-full ${inputBaseClass} py-2 text-body placeholder:opacity-40`} placeholder="Killer ship..." value={pendingKilledByShip || ''} onChange={e => setPendingKilledByShip(e.target.value)} />
-                                </div>
-                                <div className="mt-2">
-                                    <span className="text-label-xs font-bold uppercase opacity-50 block mb-1">Placement</span>
-                                    <input
-                                        type="number"
-                                        min={1}
-                                        max={99}
-                                        className={`w-full ${inputBaseClass} py-2 text-body placeholder:opacity-40`}
-                                        placeholder="Enter final place (e.g. 2)"
-                                        value={pendingPlacement ?? ''}
-                                        onChange={(e) => {
-                                            const next = Number.parseInt(e.target.value, 10);
-                                            if (!Number.isFinite(next) || next <= 0) {
-                                                setPendingPlacement(null);
-                                                return;
-                                            }
-                                            setPendingPlacement(next);
-                                        }}
-                                    />
                                 </div>
                             </div>
                         )}

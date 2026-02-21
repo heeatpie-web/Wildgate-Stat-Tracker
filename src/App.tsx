@@ -139,6 +139,7 @@ interface RestoreSessionSnapshot {
 }
 
 const RESTORE_SESSION_STORAGE_KEY = 'wg_restore_session_v1';
+const RESTORE_SESSION_DISMISSED_SIGNATURE_KEY = 'wg_restore_session_dismissed_signature_v1';
 const RESTORE_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const UNKNOWN_PLAYER_LABELS = new Set(['unknown', 'unknown player', 'n/a', 'na', '?']);
 
@@ -172,6 +173,14 @@ const formatBytes = (bytes: number): string => {
         unitIndex += 1;
     }
     return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+};
+
+const buildRestorePayloadSignature = (payload: RestoreSessionPayload): string => {
+    try {
+        return JSON.stringify(payload);
+    } catch {
+        return '';
+    }
 };
 
 const App: React.FC = () => {
@@ -487,8 +496,17 @@ const App: React.FC = () => {
                 isMatchInProgress: !!state.isMatchInProgress,
             },
         };
+        const payloadSignature = buildRestorePayloadSignature(snapshot.payload);
         try {
+            const dismissedSignature = window.localStorage.getItem(RESTORE_SESSION_DISMISSED_SIGNATURE_KEY) || '';
+            if (payloadSignature && dismissedSignature === payloadSignature) {
+                window.localStorage.removeItem(RESTORE_SESSION_STORAGE_KEY);
+                return;
+            }
             window.localStorage.setItem(RESTORE_SESSION_STORAGE_KEY, JSON.stringify(snapshot));
+            if (payloadSignature && dismissedSignature) {
+                window.localStorage.removeItem(RESTORE_SESSION_DISMISSED_SIGNATURE_KEY);
+            }
         } catch {
             // no-op
         }
@@ -614,6 +632,16 @@ const App: React.FC = () => {
                 isMatchInProgress: !!payloadRecord.isMatchInProgress,
             },
         };
+        const snapshotSignature = buildRestorePayloadSignature(snapshot.payload);
+        try {
+            const dismissedSignature = window.localStorage.getItem(RESTORE_SESSION_DISMISSED_SIGNATURE_KEY) || '';
+            if (snapshotSignature && dismissedSignature === snapshotSignature) {
+                clearRestoreSessionSnapshot();
+                return;
+            }
+        } catch {
+            // no-op
+        }
         setRestoreSessionPrompt(snapshot);
     }, [clearRestoreSessionSnapshot, isStoreLoading]);
 
@@ -622,14 +650,29 @@ const App: React.FC = () => {
         applyRestoreSessionSnapshot(restoreSessionPrompt);
         setRestoreSessionPrompt(null);
         setToast({ message: 'Previous session restored.', type: 'success' });
+        try {
+            window.localStorage.removeItem(RESTORE_SESSION_DISMISSED_SIGNATURE_KEY);
+        } catch {
+            // no-op
+        }
         persistRestoreSessionSnapshot();
     }, [applyRestoreSessionSnapshot, persistRestoreSessionSnapshot, restoreSessionPrompt, setToast]);
 
     const handleDiscardRestoreSession = useCallback(() => {
+        if (restoreSessionPrompt) {
+            const signature = buildRestorePayloadSignature(restoreSessionPrompt.payload);
+            if (signature) {
+                try {
+                    window.localStorage.setItem(RESTORE_SESSION_DISMISSED_SIGNATURE_KEY, signature);
+                } catch {
+                    // no-op
+                }
+            }
+        }
         clearRestoreSessionSnapshot();
         setRestoreSessionPrompt(null);
         setToast({ message: 'Saved session draft discarded.', type: 'info' });
-    }, [clearRestoreSessionSnapshot, setToast]);
+    }, [clearRestoreSessionSnapshot, restoreSessionPrompt, setToast]);
 
     const overlayTransitionRef = React.useRef(false);
     const viewSwitchSoundArmedRef = React.useRef(false);

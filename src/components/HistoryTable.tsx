@@ -696,7 +696,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
 
                                                     {/* duration */}
                                                     <td className="px-3 py-4">
-                                                        <span className="font-mono text-body tracking-wide text-md-sys-on-surface/60 bg-md-sys-on-surface/[0.04] px-2.5 py-1 rounded-lg">{m.time || '--:--'}</span>
+                                                        <span className="font-mono tabular-nums text-base tracking-wider text-md-sys-on-surface/70 bg-md-sys-on-surface/[0.04] px-3 py-1.5 rounded-lg">{m.time || '--:--'}</span>
                                                     </td>
 
                                                     {/* hazards */}
@@ -731,11 +731,20 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                                     {/* opponents */}
                                                     <td className="px-3 py-4 text-body max-w-40">
                                                         <div className="flex flex-wrap gap-1">
-                                                            {(m.opponents && m.opponents.length > 0) ? m.opponents.map((o, i) => (
-                                                                <span key={i} onClick={(e) => { e.stopPropagation(); onDrillDown?.(o, 'Opponent'); }} className="px-2 py-0.5 rounded-md bg-danger/8 text-danger/80 hover:bg-danger/15 cursor-pointer transition-colors text-label-sm font-medium">
-                                                                    {o}
-                                                                </span>
-                                                            )) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
+                                                            {(m.opponents && m.opponents.length > 0) ? (
+                                                                <>
+                                                                    {m.opponents.slice(0, 5).map((o, i) => (
+                                                                        <span key={i} onClick={(e) => { e.stopPropagation(); onDrillDown?.(o, 'Opponent'); }} className="px-2 py-0.5 rounded-md bg-danger/8 text-danger/80 hover:bg-danger/15 cursor-pointer transition-colors text-label-sm font-medium">
+                                                                            {o}
+                                                                        </span>
+                                                                    ))}
+                                                                    {m.opponents.length > 5 && (
+                                                                        <span className="px-2 py-0.5 rounded-md bg-danger/10 text-danger/70 text-label-sm font-semibold">
+                                                                            +{m.opponents.length - 5}
+                                                                        </span>
+                                                                    )}
+                                                                </>
+                                                            ) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
                                                         </div>
                                                     </td>
 
@@ -981,11 +990,20 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                 <div className="text-right">
                                     <div className="text-label-sm font-semibold uppercase tracking-wide-08 text-md-sys-on-surface/40 mb-2">Hostiles</div>
                                     <div className="flex flex-wrap gap-2 justify-end">
-                                        {(selectedMatchForDetails.opponents || []).length > 0 ? (selectedMatchForDetails.opponents || []).map(t => (
-                                            <span key={t} onClick={() => onDrillDown?.(t, 'Opponent')} className="px-3 py-1 bg-danger-soft text-danger rounded-lg text-label-sm font-bold cursor-pointer hover:bg-danger-soft-strong transition-colors">
-                                                {t}
-                                            </span>
-                                        )) : <span className="opacity-40 text-label-sm italic">None</span>}
+                                        {(selectedMatchForDetails.opponents || []).length > 0 ? (
+                                            <>
+                                                {(selectedMatchForDetails.opponents || []).slice(0, 5).map(t => (
+                                                    <span key={t} onClick={() => onDrillDown?.(t, 'Opponent')} className="px-3 py-1 bg-danger-soft text-danger rounded-lg text-label-sm font-bold cursor-pointer hover:bg-danger-soft-strong transition-colors">
+                                                        {t}
+                                                    </span>
+                                                ))}
+                                                {(selectedMatchForDetails.opponents || []).length > 5 && (
+                                                    <span className="px-3 py-1 bg-danger/10 text-danger/70 rounded-lg text-label-sm font-bold">
+                                                        +{(selectedMatchForDetails.opponents || []).length - 5}
+                                                    </span>
+                                                )}
+                                            </>
+                                        ) : <span className="opacity-40 text-label-sm italic">None</span>}
                                     </div>
                                 </div>
                             </div>

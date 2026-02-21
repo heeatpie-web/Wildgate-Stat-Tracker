@@ -3,7 +3,7 @@ import { MissionPanel } from './recording/MissionPanel';
 import { ActionPanel } from './recording/ActionPanel';
 import { SquadronPanel } from './recording/SquadronPanel';
 import { WindowResizer } from './WindowResizer';
-import { X, Minus, LayoutTemplate, GripHorizontal, ChevronDown, ChevronUp, Users, Rocket } from 'lucide-react';
+import { X, Minus, LayoutTemplate, GripHorizontal, ChevronDown, ChevronUp, Users, Rocket, UserPlus } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { getElectronAPI } from '../utils/electronAPI';
@@ -16,9 +16,9 @@ interface OverlayViewProps {
 }
 
 export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) => {
-    const { setIsOverlayMode, showWizard, devMode, overlayTab, setOverlayTab, setActiveView, activeMode } = useUIState();
+    const { setIsOverlayMode, showWizard, devMode, overlayTab, setOverlayTab, setActiveView, activeMode, setToast } = useUIState();
     const { overlayStyle } = useUserPreferences();
-    const { matches } = useGameData();
+    const { matches, pilotRegistry, addToRegistry } = useGameData();
     const [missionPanelCollapsed, setMissionPanelCollapsed] = useState(false);
     const [devToolsCollapsed, setDevToolsCollapsed] = useState(true);
 
@@ -34,6 +34,21 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
     const socialData = useMemo(() => calculateSocialData(modeMatches), [modeMatches]);
     const topWingmen = socialData.teammates.slice(0, 4);
     const topRivals = [...socialData.opponents].reverse().slice(0, 4);
+    const registrySet = useMemo(
+        () => new Set((pilotRegistry || []).map((name) => name.toLowerCase())),
+        [pilotRegistry],
+    );
+
+    const canAddRosterPlayer = (name: string) => {
+        const normalized = name.trim().toLowerCase();
+        return normalized.length > 0 && !registrySet.has(normalized);
+    };
+
+    const handleAddRosterPlayer = (name: string) => {
+        if (!canAddRosterPlayer(name)) return;
+        addToRegistry(name);
+        setToast({ message: `Added "${name}" to roster`, type: 'success' });
+    };
 
     const exitOverlayToView = (
         view: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr',
@@ -155,10 +170,24 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                     ) : (
                         topWingmen.map(([name, stat]) => {
                             const wr = Math.round((stat.wins / Math.max(1, stat.total)) * 100);
+                            const showAdd = canAddRosterPlayer(name);
                             return (
                                 <div key={`wing-${name}`} className="flex items-center justify-between text-label-sm py-0.5">
                                     <span className="truncate max-w-70p">{name}</span>
-                                    <span className="font-mono text-success">{wr}%</span>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="font-mono tabular-nums text-success">{wr}%</span>
+                                        {showAdd && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleAddRosterPlayer(name)}
+                                                className="h-6 px-1.5 rounded-md text-label-xs font-bold bg-info/12 text-info hover:bg-info/20 inline-flex items-center gap-1"
+                                                title={`Add ${name} to roster`}
+                                            >
+                                                <UserPlus size={10} />
+                                                Add
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             );
                         })
@@ -171,10 +200,24 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                     ) : (
                         topRivals.map(([name, stat]) => {
                             const wr = Math.round((stat.wins / Math.max(1, stat.total)) * 100);
+                            const showAdd = canAddRosterPlayer(name);
                             return (
                                 <div key={`rival-${name}`} className="flex items-center justify-between text-label-sm py-0.5">
                                     <span className="truncate max-w-70p">{name}</span>
-                                    <span className="font-mono text-danger">{wr}%</span>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="font-mono tabular-nums text-danger">{wr}%</span>
+                                        {showAdd && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleAddRosterPlayer(name)}
+                                                className="h-6 px-1.5 rounded-md text-label-xs font-bold bg-danger/12 text-danger hover:bg-danger/20 inline-flex items-center gap-1"
+                                                title={`Add ${name} to roster`}
+                                            >
+                                                <UserPlus size={10} />
+                                                Add
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             );
                         })
@@ -224,7 +267,7 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                                 <LayoutTemplate size={12} className="text-md-sys-primary" aria-hidden />
                             </div>
                             <span className="text-label-sm font-bold uppercase tracking-widest text-md-sys-on-surface/60">
-                                Mini-Mode
+                                Overlay
                             </span>
                         </div>
                         <div className="flex items-center gap-0.5" style={{ WebkitAppRegion: 'no-drag' } as any}>

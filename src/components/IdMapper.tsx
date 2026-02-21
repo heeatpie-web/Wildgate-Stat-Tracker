@@ -28,6 +28,9 @@ const WEAPON_SET = new Set([
     ...(CHARACTER_WEAPONS || []),
 ].map((name) => normalizeEntityLabel(name)));
 const EQUIPMENT_SET = new Set((CHARACTER_EQUIPMENT || []).map((name) => normalizeEntityLabel(name)));
+const SHIP_KEYWORDS = ['drone', 'privateer', 'interceptor', 'gunship', 'fighter', 'frigate', 'raider', 'brawler', 'carrier'];
+const WEAPON_KEYWORDS = ['cannon', 'rifle', 'pistol', 'launcher', 'beam', 'turret', 'blaster', 'weapon'];
+const EQUIPMENT_KEYWORDS = ['shield', 'module', 'booster', 'utility', 'gear', 'ability', 'equipment'];
 
 const hasAliasMatch = (value: string, aliases: Set<string>): boolean => {
     const normalizedValue = normalizeEntityLabel(value);
@@ -41,12 +44,25 @@ const hasAliasMatch = (value: string, aliases: Set<string>): boolean => {
     return false;
 };
 
+const inferTagFromKeywords = (value: string): MappingTag | null => {
+    const normalizedValue = normalizeEntityLabel(value);
+    if (!normalizedValue) return null;
+    if (SHIP_KEYWORDS.some((keyword) => normalizedValue.includes(keyword))) return 'ship';
+    if (WEAPON_KEYWORDS.some((keyword) => normalizedValue.includes(keyword))) return 'weapon';
+    if (EQUIPMENT_KEYWORDS.some((keyword) => normalizedValue.includes(keyword))) return 'equipment';
+    return null;
+};
+
 const inferDomainFromName = (name: string): MappingDomain | null => {
     if (!name) return null;
     if (hasAliasMatch(name, SHIP_SET)) return 'ships';
     if (hasAliasMatch(name, WEAPON_SET)) return 'weapons';
     if (hasAliasMatch(name, EQUIPMENT_SET)) return 'equipment';
     if (hasAliasMatch(name, PROSPECTOR_SET)) return 'players';
+    const inferredTag = inferTagFromKeywords(name);
+    if (inferredTag === 'ship') return 'ships';
+    if (inferredTag === 'weapon') return 'weapons';
+    if (inferredTag === 'equipment') return 'equipment';
     return null;
 };
 
@@ -56,6 +72,8 @@ const inferTagFromName = (name: string): MappingTag | null => {
     if (hasAliasMatch(name, PROSPECTOR_SET)) return 'prospector';
     if (hasAliasMatch(name, WEAPON_SET)) return 'weapon';
     if (hasAliasMatch(name, EQUIPMENT_SET)) return 'equipment';
+    const inferredTag = inferTagFromKeywords(name);
+    if (inferredTag) return inferredTag;
     return null;
 };
 
@@ -102,9 +120,6 @@ export const IdMapper: React.FC = () => {
 
     const resolveUnknownDomain = (id: string, rawType?: string, candidateName?: string): MappingDomain => {
         const normalizedType = String(rawType || '').trim().toLowerCase();
-        if (normalizedType.includes('hero') || normalizedType.includes('player') || normalizedType.includes('pilot')) {
-            return 'players';
-        }
         if (normalizedType.includes('ship')) {
             return 'ships';
         }
@@ -123,6 +138,10 @@ export const IdMapper: React.FC = () => {
         const inferredFromName = inferDomainFromName(String(candidateName || ''));
         if (inferredFromName) return inferredFromName;
 
+        if (normalizedType.includes('hero') || normalizedType.includes('player') || normalizedType.includes('pilot')) {
+            return 'players';
+        }
+
         return 'players';
     };
 
@@ -138,6 +157,7 @@ export const IdMapper: React.FC = () => {
         const normalizedType = normalizeLabel(rawType);
         if (normalizedType.includes('hero')) return 'prospector';
         if (normalizedType.includes('ship')) return 'ship';
+        if (normalizedType.includes('drone') || normalizedType.includes('privateer')) return 'ship';
         if (normalizedType.includes('weapon')) return 'weapon';
         if (normalizedType.includes('equipment') || normalizedType.includes('gear') || normalizedType.includes('utility')) return 'equipment';
         return null;
@@ -193,18 +213,18 @@ export const IdMapper: React.FC = () => {
         if ((uidMappings?.weapons || {})[id]) return 'weapon';
         if ((uidMappings?.equipment || {})[id]) return 'equipment';
         if ((uidMappings?.players || {})[id]) {
-            const inferredPlayerTag = inferTagFromName(name);
-            return inferredPlayerTag || 'player';
+            const inferredFromName = inferTagFromName(name);
+            return inferredFromName || 'player';
         }
-
-        const inferredByName = inferTagFromName(name);
-        if (inferredByName) return inferredByName;
 
         const normalizedId = normalizeLabel(id);
         if (normalizedId.startsWith('ship')) return 'ship';
         if (normalizedId.startsWith('wpn') || normalizedId.startsWith('weapon') || normalizedId.startsWith('cw')) return 'weapon';
         if (normalizedId.startsWith('equip') || normalizedId.startsWith('gear') || normalizedId.startsWith('ce')) return 'equipment';
         if (normalizedId.startsWith('hero') || normalizedId.startsWith('char') || normalizedId.startsWith('prospector')) return 'prospector';
+
+        const inferredByName = inferTagFromName(name);
+        if (inferredByName) return inferredByName;
 
         return 'player';
     };
@@ -233,6 +253,11 @@ export const IdMapper: React.FC = () => {
         });
         return entries;
     }, [knownMappings, uidMappings]);
+    const relationshipEntries = useMemo(
+        () => Object.entries(playerProfiles)
+            .filter(([id, profile]: [string, any]) => inferRelationshipTag(id, profile.name || '') === 'player'),
+        [playerProfiles, uidMappings, detectedUnknowns]
+    );
 
     useEffect(() => {
         const unknownCount = Object.keys(detectedUnknowns || {}).length;
@@ -594,13 +619,13 @@ export const IdMapper: React.FC = () => {
                         {/* Player Profiles - Direct from playerProfiles data */}
                         <div className="md3-card rounded-lg p-3">
                             <h4 className="text-label-sm font-bold uppercase tracking-wide text-md-sys-primary flex items-center gap-2 mb-2">
-                                <Users size={12} /> Player Sightings ({Object.keys(playerProfiles).length})
+                                <Users size={12} /> Player Sightings ({relationshipEntries.length})
                             </h4>
-                            {Object.keys(playerProfiles).length === 0 ? (
+                            {relationshipEntries.length === 0 ? (
                                 <div className="text-label-sm opacity-40 text-center py-4">No player sightings recorded yet. Use Smart Capture or Smart Scan to detect players.</div>
                             ) : (
                                 <div className="space-y-1 max-h-40 overflow-y-auto">
-                                    {Object.entries(playerProfiles)
+                                    {relationshipEntries
                                         .filter(([id, profile]: [string, any]) =>
                                             !searchTerm ||
                                             (profile.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||

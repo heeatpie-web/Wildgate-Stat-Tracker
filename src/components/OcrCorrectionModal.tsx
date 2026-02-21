@@ -572,8 +572,8 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 aria-labelledby={dialogTitleId}
                 aria-describedby={dialogDescriptionId}
                 className={embedded
-                    ? 'w-full h-full min-h-0 flex flex-col rounded-2xl border border-md-sys-outline/10 bg-md-sys-surface-container'
-                    : 'md3-dialog rounded-modal w-full max-w-2xl max-h-85vh my-2 flex flex-col animate-scale-in'}
+                    ? 'w-full h-full min-h-0 flex flex-col rounded-2xl border border-md-sys-outline/10 bg-md-sys-surface-container overflow-hidden'
+                    : 'md3-dialog rounded-modal w-full max-w-2xl max-h-85vh my-2 flex flex-col animate-scale-in overflow-hidden'}
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
@@ -590,6 +590,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                     </button>
                 </div>
 
+                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar md3-dialog-content">
                 <div className="md3-banner md3-banner--info">
                     <Info size={16} className="mt-0.5 flex-shrink-0" />
                     <div>
@@ -645,9 +646,10 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                             <span className="text-label-sm font-mono text-info">{teammateSuggestions.length}</span>
                         </div>
                         <p className="text-label-sm opacity-60 mt-1">
-                            Suggestions are based on teammate co-occurrence in your recent matches.
+                            "Likely teammates" are names from your own recent matches that often appear on the same side as this roster.
+                            Use them as suggestions only, not confirmed identities.
                         </p>
-                        <div className="mt-2 space-y-2">
+                        <div className="mt-2 max-h-44 overflow-y-auto custom-scrollbar pr-1 space-y-2">
                             {teammateSuggestions.map((suggestion) => (
                                 <button
                                     key={suggestion.player}
@@ -772,7 +774,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 )}
 
                 {/* Player List */}
-                <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar md3-dialog-content">
+                <div className="space-y-3">
                     {reviewScreenshots.length > 0 && (
                         <div className="sticky top-0 z-20 md3-card p-2 border border-md-sys-outline/15 bg-md-sys-surface/95 backdrop-blur-sm">
                             <div className="flex items-center justify-between gap-2 mb-1">
@@ -995,6 +997,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                         <kbd className="px-1.5 py-0.5 rounded bg-md-sys-surface3 border border-md-sys-outline/20 font-mono text-label-xs">Ctrl+I</kbd>
                         Ignore Next
                     </span>
+                </div>
                 </div>
 
                 {/* Footer */}

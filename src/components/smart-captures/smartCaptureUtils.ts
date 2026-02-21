@@ -143,7 +143,7 @@ export const getSemanticStatusTone = (statusKey: QueueStatusKey): QueueSemanticT
 export const getStatusMeta = (statusKey: QueueStatusKey): StatusMeta => {
     switch (statusKey) {
         case 'Resolved':
-            return { label: 'Resolved', description: 'Review completed and saved.', tone: 'success', icon: 'check' };
+            return { label: 'Resolved', description: 'Review completed and saved.', tone: 'neutral', icon: 'check' };
         case 'Ready':
             return { label: 'Ready', description: 'Reviewed and ready to save.', tone: 'success', icon: 'spark' };
         case 'OK':
@@ -170,8 +170,12 @@ export const getStatusMeta = (statusKey: QueueStatusKey): StatusMeta => {
 export const getTelemetryConsistencyWarningChips = (match: Match): TelemetryConsistencyChip[] => {
     if (!match.telemetryConsistency) return [];
     const consistency = match.telemetryConsistency;
+    const normalizedPlayer = String(match.player || '').trim().toLowerCase();
+    const comparableTeammateCount = (match.teammates || []).filter((name) => (
+        String(name || '').trim().toLowerCase() !== normalizedPlayer
+    )).length;
     const evaluated = evaluateTelemetryConsistencyChecks(consistency, {
-        teammateCount: (match.teammates || []).length,
+        teammateCount: comparableTeammateCount,
         mode: match.mode,
         durationSeconds: parseClockDurationSeconds(match.time),
     });
@@ -183,7 +187,7 @@ export const getTelemetryConsistencyWarningChips = (match: Match): TelemetryCons
     const chips: TelemetryConsistencyChip[] = [];
     if (checks.teammateCount === 'warn') {
         const expected = consistency.expectedTeammateCount;
-        const actual = (match.teammates || []).length;
+        const actual = comparableTeammateCount;
         chips.push({
             key: 'team-count-mismatch',
             label: 'Team Count Mismatch',

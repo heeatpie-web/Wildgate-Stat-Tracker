@@ -206,6 +206,13 @@ body[data-mode='twilight'] [data-recording-panel='ship-loadout'] .md3-chip--sele
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 58%);
 }
 
+/* Twilight: selected ship/prospector choices should use themed outlines, not bright neutral rings. */
+body[data-mode='twilight'] [data-recording-panel='ship-loadout'] button.shadow-inner {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 46%),
+    inset 0 1px 2px color-mix(in srgb, #000, transparent 40%);
+}
+
 /* Twilight click-target clarity improvements for dense list/action UIs. */
 body[data-mode='twilight'] .idmapper-click-target,
 body[data-mode='twilight'] .player-list-item {
