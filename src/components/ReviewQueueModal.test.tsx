@@ -19,6 +19,7 @@ const gameData = {
 
 const uiState = {
   setToast: vi.fn(),
+  pushNotification: vi.fn(),
 };
 
 const appStoreState = {

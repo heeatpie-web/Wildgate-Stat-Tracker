@@ -42,6 +42,7 @@ const uiState = {
     activeMode: 'Artifact Brawl',
     activeUser: 'Alec',
     setToast: vi.fn(),
+    pushNotification: vi.fn(),
     requestSmartCapture: vi.fn(() => 'wizard-test-request'),
 };
 

@@ -60,7 +60,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         selectedOpponents,
         setSelectedOpponents
     } = useGameData();
-    const { setToast } = useUIState();
+    const { pushNotification } = useUIState();
     const ocrLearningQueue = useAppStore((s) => s.ocrLearningQueue);
     const approveOcrLearningEvent = useAppStore((s) => s.approveOcrLearningEvent);
     const rejectOcrLearningEvent = useAppStore((s) => s.rejectOcrLearningEvent);
@@ -103,6 +103,14 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             screenshotLabel: sourceCapture.screenshotLabel || 'Captured Screenshot',
             capturedAtLabel: formatCaptureTime(sourceCapture.capturedAt),
         };
+    };
+    const notifyReviewQueue = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
+        pushNotification({
+            message,
+            type,
+            source: 'review-queue',
+            deepLink: { type: 'openReviewQueue' },
+        });
     };
 
     const unknownItems: UnknownReviewItem[] = Object.entries(detectedUnknowns).map(([id, data]) => ({
@@ -189,14 +197,14 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
 
     const handleConfirm = (review: ReviewItem) => {
         if (isUnknownReview(review)) {
-            setToast({ message: "Please rename to identify this item", type: 'info' });
+            notifyReviewQueue('Please rename to identify this item', 'info');
             startEdit(review);
             announce('Unknown item requires a name before confirming.', 'assertive');
             return;
         }
         if (isLearningReview(review)) {
             approveOcrLearningEvent(review.learningEventId);
-            setToast({ message: `Approved OCR learning: "${review.rawValue}" -> "${review.suggestedName}"`, type: 'success' });
+            notifyReviewQueue(`Approved OCR learning: "${review.rawValue}" -> "${review.suggestedName}"`, 'success');
             announce(`Approved learning correction from ${review.rawValue} to ${review.suggestedName}.`, 'polite');
             return;
         }
@@ -205,7 +213,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             const normalized = normalizeName(review.value);
             if (normalized) addToRegistry(normalized);
             removePendingReview(review.id);
-            setToast({ message: `Added "${normalized || review.value}" to roster`, type: 'success' });
+            notifyReviewQueue(`Added "${normalized || review.value}" to roster`, 'success');
             announce(`Added ${normalized || review.value} to roster.`, 'polite');
             return;
         }
@@ -214,25 +222,25 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             const normalized = normalizeName(review.value);
             if (normalized) addToRegistry(normalized);
             removePendingReview(review.id);
-            setToast({ message: `Added "${normalized || review.value}" to roster`, type: 'success' });
+            notifyReviewQueue(`Added "${normalized || review.value}" to roster`, 'success');
             announce(`Added ${normalized || review.value} to roster.`, 'polite');
             return;
         }
 
         removePendingReview(review.id);
-        setToast({ message: "Item confirmed", type: 'success' });
+        notifyReviewQueue('Item confirmed', 'success');
         announce('Review item confirmed.', 'polite');
     };
 
     const handleDelete = (review: ReviewItem) => {
         if (isUnknownReview(review)) {
-            setToast({ message: "Cannot delete unknown ID yet", type: 'error' });
+            notifyReviewQueue('Cannot delete unknown ID yet', 'error');
             announce('Unknown IDs must be mapped before removal.', 'assertive');
             return;
         }
         if (isLearningReview(review)) {
             rejectOcrLearningEvent(review.learningEventId, 'Rejected from review queue');
-            setToast({ message: "Learning suggestion rejected", type: 'success' });
+            notifyReviewQueue('Learning suggestion rejected', 'success');
             announce('Learning suggestion rejected.', 'polite');
             return;
         }
@@ -241,7 +249,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             removeNameFromSession(review.value);
         }
         removePendingReview(review.id);
-        setToast({ message: "Item deleted", type: 'success' });
+        notifyReviewQueue('Item deleted', 'success');
         announce('Review item deleted.', 'polite');
     };
 
@@ -254,7 +262,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
 
         if (isUnknownReview(review)) {
             addMapping(review.id, normalizedEditValue);
-            setToast({ message: `Mapped ID to "${normalizedEditValue}"`, type: 'success' });
+            notifyReviewQueue(`Mapped ID to "${normalizedEditValue}"`, 'success');
             setEditingId(null);
             announce(`Mapped unknown identifier to ${normalizedEditValue}.`, 'polite');
             return;
@@ -267,7 +275,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                 confidenceWeight: 1,
                 decisionId: review.learningEventId,
             });
-            setToast({ message: `Applied correction "${review.rawValue}" -> "${normalizedEditValue}"`, type: 'success' });
+            notifyReviewQueue(`Applied correction "${review.rawValue}" -> "${normalizedEditValue}"`, 'success');
             setEditingId(null);
             announce(`Applied correction from ${review.rawValue} to ${normalizedEditValue}.`, 'polite');
             return;
@@ -282,7 +290,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         }
 
         removePendingReview(review.id);
-        setToast({ message: "Item updated", type: 'success' });
+        notifyReviewQueue('Item updated', 'success');
         setEditingId(null);
         announce(`Updated item to ${normalizedEditValue}.`, 'polite');
     };
@@ -440,7 +448,12 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                                     onClick={() => {
                                                         replaceNameInSession(review.value, s.name);
                                                         removePendingReview(review.id);
-                                                        setToast({ message: `Merged into "${s.name}"`, type: 'success' });
+                                                        pushNotification({
+                                                            message: `Merged into "${s.name}"`,
+                                                            type: 'success',
+                                                            source: 'review-queue',
+                                                            deepLink: { type: 'openReviewQueue' },
+                                                        });
                                                     }}
                                                     className="md3-chip text-label-sm font-bold hover:bg-md-sys-primary hover:text-md-sys-onPrimary transition-colors"
                                                 >

@@ -12,6 +12,7 @@ import { useAppStore } from '../store/useAppStore';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import type { Match } from '../types';
 import { Button } from './ui';
+import NotificationCenter from './NotificationCenter';
 
 /**
  * Header - compact top command bar with profile hub and global actions.
@@ -37,7 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
         activeView, setActiveView,
         setIsOverlayMode,
         setShowTutorial,
-        setToast,
+        pushNotification,
         requestSmartCapture,
         devMode, setDevMode,
         visionStatus
@@ -82,7 +83,12 @@ export const Header: React.FC<HeaderProps> = ({
                 detail: { activeUser: activeUser || null, source: 'header', matchId: captureMatchId, requestId }
             }));
         } catch (e: any) {
-            setToast({ message: e?.message || 'Smart capture failed', type: 'error' });
+            pushNotification({
+                message: e?.message || 'Smart capture failed',
+                type: 'error',
+                source: 'smart-capture',
+                deepLink: { type: 'openView', view: 'recording' },
+            });
         }
     };
 
@@ -178,6 +184,8 @@ export const Header: React.FC<HeaderProps> = ({
                             <HelpCircle size={16} />
                         </Button>
                     )}
+
+                    <NotificationCenter />
 
                 </div>
             </div>

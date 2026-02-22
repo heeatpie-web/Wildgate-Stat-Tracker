@@ -13,7 +13,7 @@ import {
     Wrench,
     RefreshCw,
 } from 'lucide-react';
-import { Match, SHIPS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT } from '../types';
+import { Match, SHIPS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT } from '../types';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useMatchSubmission } from '../hooks/useMatchSubmission';
@@ -22,6 +22,8 @@ import { useAppStore } from '../store/useAppStore';
 import { getElectronAPI } from '../utils/electronAPI';
 
 type WizardTab = 'result' | 'ocr';
+const MAX_SHIP_WEAPONS = 10;
+const MAX_PROSPECTOR_SLOTS = 2;
 
 const parseDurationToSeconds = (value: string): number | null => {
     const parts = String(value || '').split(':').map((part) => Number(part));
@@ -54,7 +56,7 @@ export const Wizard: React.FC = () => {
         poiEpic, setPoiEpic,
     } = useGameData();
 
-    const { showWizard, setShowWizard, isOverlayMode, activeMode, activeUser, setToast, requestSmartCapture } = useUIState();
+    const { showWizard, setShowWizard, isOverlayMode, activeMode, activeUser, pushNotification, requestSmartCapture } = useUIState();
     const { processFinalSubmission, submitting } = useMatchSubmission();
     const [selectedWinType, setSelectedWinType] = useState<'Combat' | 'Artifact' | 'Objective'>('Combat');
     const [requestedOcrReviewMatchId, setRequestedOcrReviewMatchId] = useState<number | null | undefined>(undefined);
@@ -171,12 +173,18 @@ export const Wizard: React.FC = () => {
         characterWeapons: [],
         characterEquipment: [],
     };
-    const hasTelemetryLoadout = (pendingLoadout.characterWeapons?.length || 0) > 0 || (pendingLoadout.characterEquipment?.length || 0) > 0;
+    const hasTelemetryLoadout = (pendingLoadout.weapons?.length || 0) > 0
+        || (pendingLoadout.characterWeapons?.length || 0) > 0
+        || (pendingLoadout.characterEquipment?.length || 0) > 0;
+    const displayedShipWeapons = (pendingLoadout.weapons || [])
+        .filter((entry) => !/tertiary\s+(weapon|equipment)/i.test(String(entry || '')))
+        .slice(0, MAX_SHIP_WEAPONS);
     const displayedCharacterWeapons = (pendingLoadout.characterWeapons || []).slice(0, 2);
     const displayedCharacterEquipment = (pendingLoadout.characterEquipment || []).slice(0, 2);
     const loadoutSummary = [
-        displayedCharacterWeapons.length > 0 ? `W: ${displayedCharacterWeapons.join(', ')}` : 'W: --',
-        displayedCharacterEquipment.length > 0 ? `E: ${displayedCharacterEquipment.join(', ')}` : 'E: --',
+        displayedShipWeapons.length > 0 ? `SW: ${displayedShipWeapons.join(', ')}` : 'SW: --',
+        displayedCharacterWeapons.length > 0 ? `PW: ${displayedCharacterWeapons.join(', ')}` : 'PW: --',
+        displayedCharacterEquipment.length > 0 ? `PE: ${displayedCharacterEquipment.join(', ')}` : 'PE: --',
     ].join(' | ');
     const telemetryDurationSeconds = typeof pendingMatchData?.telemetryConsistency?.telemetryDurationSeconds === 'number'
         ? pendingMatchData.telemetryConsistency.telemetryDurationSeconds
@@ -197,15 +205,16 @@ export const Wizard: React.FC = () => {
     const hasDurationMismatch = telemetryDurationDelta != null && telemetryDurationDelta > telemetryDurationToleranceSeconds;
 
     const updatePendingLoadout = (
-        key: 'characterWeapons' | 'characterEquipment',
+        key: 'weapons' | 'characterWeapons' | 'characterEquipment',
         item: string
     ) => {
+        const maxSlots = key === 'weapons' ? MAX_SHIP_WEAPONS : MAX_PROSPECTOR_SLOTS;
         const existing = Array.isArray(pendingLoadout[key]) ? [...pendingLoadout[key]] : [];
         const idx = existing.findIndex((entry) => entry.toLowerCase() === item.toLowerCase());
         let next = existing;
         if (idx >= 0) {
             next = existing.filter((entry) => entry.toLowerCase() !== item.toLowerCase());
-        } else if (existing.length < 2) {
+        } else if (existing.length < maxSlots) {
             next = [...existing, item];
         }
         useAppStore.getState().setPendingMatchData({
@@ -241,7 +250,13 @@ export const Wizard: React.FC = () => {
                 matchId: Number.isInteger(pendingMatchId) && pendingMatchId > 0 ? pendingMatchId : null,
             }
         }));
-        setToast({ message: 'Smart Capture requested from wizard.', type: 'info' });
+        pushNotification({
+            message: 'Smart Capture requested from wizard.',
+            type: 'info',
+            source: 'wizard',
+            durationMs: 10_000,
+            deepLink: { type: 'openWizard', result: showWizard || undefined },
+        });
     };
 
     return (
@@ -389,7 +404,12 @@ export const Wizard: React.FC = () => {
                                             const ss = telemetryDurationSeconds % 60;
                                             setTimeMin(String(mm).padStart(2, '0'));
                                             setTimeSec(String(ss).padStart(2, '0'));
-                                            setToast({ message: 'Duration set from telemetry.', type: 'success' });
+                                            pushNotification({
+                                                message: 'Duration set from telemetry.',
+                                                type: 'success',
+                                                source: 'wizard',
+                                                deepLink: { type: 'openWizard', result: showWizard || undefined },
+                                            });
                                         }}
                                         className="px-2.5 py-1 rounded-lg text-label-sm font-bold md3-btn-tonal"
                                     >
@@ -435,14 +455,34 @@ export const Wizard: React.FC = () => {
                             >
                                 <span className={labelClass + ' mb-0 flex items-center gap-2'}>
                                     <Wrench size={14} /> Prospector Loadout
-                                    {hasTelemetryLoadout && <span className="w-2 h-2 rounded-full bg-success" title="Telemetry-populated loadout" />}
+                                    {hasTelemetryLoadout && <span className="w-2 h-2 rounded-full bg-success" title="Detected loadout data" />}
                                 </span>
                                 <span className="text-label-sm opacity-60 truncate">{loadoutSummary}</span>
                             </button>
                             {(loadoutExpanded || !hasTelemetryLoadout) && (
                                 <div className="mt-3 space-y-3">
                                     <div>
-                                        <span className="text-label-xs font-bold uppercase opacity-50">Character Weapons (max 2)</span>
+                                        <span className="text-label-xs font-bold uppercase opacity-50">Ship Weapons (max 10)</span>
+                                        <div className="flex flex-wrap gap-1.5 mt-1">
+                                            {WEAPONS.map((weapon) => {
+                                                const selected = displayedShipWeapons.some((entry) => entry.toLowerCase() === weapon.toLowerCase());
+                                                const disabled = !selected && displayedShipWeapons.length >= MAX_SHIP_WEAPONS;
+                                                return (
+                                                    <button
+                                                        key={weapon}
+                                                        type="button"
+                                                        disabled={disabled}
+                                                        onClick={() => updatePendingLoadout('weapons', weapon)}
+                                                        className={`px-2 py-1 rounded-md text-label-sm font-semibold transition-all ${selected ? 'bg-md-sys-primary/20 text-md-sys-primary ring-1 ring-md-sys-primary/40' : 'mg-surface-high opacity-70 hover:opacity-100'} disabled:opacity-40`}
+                                                    >
+                                                        {weapon}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <span className="text-label-xs font-bold uppercase opacity-50">Prospector Weapons (max 2)</span>
                                         <div className="flex flex-wrap gap-1.5 mt-1">
                                             {CHARACTER_WEAPONS.map((weapon) => {
                                                 const selected = displayedCharacterWeapons.some((entry) => entry.toLowerCase() === weapon.toLowerCase());
@@ -462,7 +502,7 @@ export const Wizard: React.FC = () => {
                                         </div>
                                     </div>
                                     <div>
-                                        <span className="text-label-xs font-bold uppercase opacity-50">Character Equipment (max 2)</span>
+                                        <span className="text-label-xs font-bold uppercase opacity-50">Prospector Equipment (max 2)</span>
                                         <div className="flex flex-wrap gap-1.5 mt-1">
                                             {CHARACTER_EQUIPMENT.map((equipment) => {
                                                 const selected = displayedCharacterEquipment.some((entry) => entry.toLowerCase() === equipment.toLowerCase());
@@ -549,7 +589,7 @@ export const Wizard: React.FC = () => {
                                 Re-run OCR
                             </button>
                         </div>
-                        <div className="flex-1 min-h-0 overflow-hidden">
+                        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar">
                         <OcrCorrectionModal
                             isOpen={true}
                             embedded={true}

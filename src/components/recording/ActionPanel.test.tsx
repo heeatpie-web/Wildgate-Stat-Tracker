@@ -32,6 +32,7 @@ const uiState = {
   smartCaptureRequest: null as any,
   clearSmartCaptureRequest: vi.fn(),
   setToast: vi.fn(),
+  pushNotification: vi.fn(),
 };
 
 const smartScan = {
@@ -152,6 +153,24 @@ describe('ActionPanel', () => {
     render(<ActionPanel />);
 
     expect(screen.getByRole('button', { name: /stop match timer/i })).toBeInTheDocument();
+  });
+
+  it('opens ID Mapper from the default recording layout', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+
+    render(<ActionPanel />);
+    fireEvent.click(screen.getByRole('button', { name: /id mapper/i }));
+
+    expect(uiState.setShowIdMapper).toHaveBeenCalledWith(true);
+  });
+
+  it('opens ID Mapper from the transparent recording layout', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+
+    render(<ActionPanel variant="transparent" />);
+    fireEvent.click(screen.getByRole('button', { name: /id mapper/i }));
+
+    expect(uiState.setShowIdMapper).toHaveBeenCalledWith(true);
   });
 
   it('falls back to smart scan when smart capture callback is not provided', async () => {
@@ -383,7 +402,11 @@ describe('ActionPanel', () => {
 
     render(<ActionPanel />);
 
-    expect(uiState.setToast).toHaveBeenCalledWith({ message: 'Processing OCR...', type: 'info' });
+    expect(uiState.pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'Processing OCR...',
+      type: 'info',
+      source: 'smart-capture',
+    }));
   });
 
   it('keeps prospector weapon/equipment telemetry labels out of ActionPanel', async () => {

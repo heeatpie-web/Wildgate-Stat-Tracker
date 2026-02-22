@@ -141,6 +141,7 @@ interface RestoreSessionSnapshot {
 const RESTORE_SESSION_STORAGE_KEY = 'wg_restore_session_v1';
 const RESTORE_SESSION_DISMISSED_SIGNATURE_KEY = 'wg_restore_session_dismissed_signature_v1';
 const RESTORE_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const SETTINGS_FOCUS_SECTION_STORAGE_KEY = 'wg_settings_focus_section_v1';
 const UNKNOWN_PLAYER_LABELS = new Set(['unknown', 'unknown player', 'n/a', 'na', '?']);
 
 interface WindowWithIdleCallbacks {
@@ -215,6 +216,11 @@ const App: React.FC = () => {
     const dismissedTelemetryDraftMidmatchPromptIdsRef = React.useRef<Set<number>>(new Set());
     const handledTelemetryDraftPostmatchPromptIdsRef = React.useRef<Set<number>>(new Set());
     const telemetryDraftCaptureClicksRef = React.useRef<Map<number, number>>(new Map());
+    const telemetryPromptNotificationKeyRef = React.useRef<string | null>(null);
+    const fuzzyPromptNotificationCountRef = React.useRef(0);
+    const idPromptNotificationCountRef = React.useRef(0);
+    const tipLastSentAtRef = React.useRef(0);
+    const tipByViewSentAtRef = React.useRef<Record<string, number>>({});
     const restorePromptCheckedRef = React.useRef(false);
     const onboardingPromptedRef = React.useRef(false);
     const fuzzyPromptCountRef = React.useRef(0);
@@ -246,11 +252,14 @@ const App: React.FC = () => {
         activeMode,
         activeView,
         setActiveView,
+        pushNotification,
         toast, setToast,
+        dismissActiveNotification,
         updateStatus, setUpdateStatus,
         hiddenForScan,
         showReviewQueue, setShowReviewQueue,
         requestSmartCapture,
+        setShowSettings,
         showIdMapper, setShowIdMapper,
         sidebarCollapsed, setSidebarCollapsed,
         renameModal, setRenameModal, setRenameValue,
@@ -329,6 +338,85 @@ const App: React.FC = () => {
         }
         idPromptCountRef.current = unknownIdCount;
     }, [showIdMapper, unknownIdCount]);
+
+    useEffect(() => {
+        if (!telemetryDraftPrompt) {
+            telemetryPromptNotificationKeyRef.current = null;
+            return;
+        }
+        const key = `${telemetryDraftPrompt.phase}:${telemetryDraftPrompt.matchId}`;
+        if (telemetryPromptNotificationKeyRef.current === key) return;
+        telemetryPromptNotificationKeyRef.current = key;
+        if (telemetryDraftPrompt.phase === 'midmatch') {
+            pushNotification({
+                message: 'Telemetry detected mission start. Smart Capture is ready when you are.',
+                type: 'info',
+                source: 'smart-capture',
+                durationMs: 10_000,
+                deepLink: { type: 'openView', view: 'recording' },
+            });
+            return;
+        }
+        pushNotification({
+            message: `Telemetry match is ready (${telemetryDraftPrompt.duration}). Open result flow to submit.`,
+            type: 'info',
+            source: 'wizard',
+            durationMs: 10_000,
+            deepLink: { type: 'openView', view: 'recording' },
+        });
+    }, [pushNotification, telemetryDraftPrompt]);
+
+    useEffect(() => {
+        if (!showFuzzyReviewPrompt || showReviewQueue) return;
+        const count = fuzzyRosterCandidates.length;
+        if (count <= 0 || count === fuzzyPromptNotificationCountRef.current) return;
+        fuzzyPromptNotificationCountRef.current = count;
+        pushNotification({
+            message: `${count} OCR name match${count === 1 ? '' : 'es'} can be reviewed in the queue.`,
+            type: 'warning',
+            source: 'review-queue',
+            durationMs: 10_000,
+            deepLink: { type: 'openReviewQueue' },
+        });
+    }, [fuzzyRosterCandidates.length, pushNotification, showFuzzyReviewPrompt, showReviewQueue]);
+
+    useEffect(() => {
+        if (!showIdInfoPrompt || showIdMapper) return;
+        const count = unknownIdCount;
+        if (count <= 0 || count === idPromptNotificationCountRef.current) return;
+        idPromptNotificationCountRef.current = count;
+        pushNotification({
+            message: `${count} unknown telemetry ID${count === 1 ? '' : 's'} need mapping for accurate tracking.`,
+            type: 'info',
+            source: 'id-mapper',
+            durationMs: 10_000,
+            deepLink: { type: 'openIdMapper' },
+        });
+    }, [pushNotification, showIdInfoPrompt, showIdMapper, unknownIdCount]);
+
+    useEffect(() => {
+        const tipsByView: Record<string, string> = {
+            'smart-captures': 'Tip: Use queue filters first, then open one match to apply OCR corrections quickly.',
+            history: 'Tip: Select multiple matches in History to rerun OCR in one pass.',
+            'dev-ocr': 'Tip: OCR Debug is best for threshold tuning after you confirm ROI in the visual editor.',
+        };
+        const tip = tipsByView[activeView];
+        if (!tip) return;
+        const now = Date.now();
+        const tenMinutesMs = 10 * 60 * 1000;
+        if (now - tipLastSentAtRef.current < tenMinutesMs) return;
+        const lastForView = tipByViewSentAtRef.current[activeView] || 0;
+        if (now - lastForView < tenMinutesMs) return;
+        tipLastSentAtRef.current = now;
+        tipByViewSentAtRef.current[activeView] = now;
+        pushNotification({
+            message: tip,
+            type: 'tip',
+            source: 'system',
+            durationMs: 5_000,
+            deepLink: { type: 'openView', view: activeView },
+        });
+    }, [activeView, pushNotification]);
 
     useEffect(() => {
         if (welcomeBackToastShownRef.current) return;
@@ -446,7 +534,7 @@ const App: React.FC = () => {
             ? {
                 hero: typeof state.currentLoadout.hero === 'string' ? state.currentLoadout.hero : null,
                 ship: typeof state.currentLoadout.ship === 'string' ? state.currentLoadout.ship : null,
-                weapons: Array.isArray(state.currentLoadout.weapons) ? state.currentLoadout.weapons.filter(Boolean).slice(0, 2) : [],
+                weapons: Array.isArray(state.currentLoadout.weapons) ? state.currentLoadout.weapons.filter(Boolean).slice(0, 10) : [],
                 equipment: Array.isArray(state.currentLoadout.equipment) ? state.currentLoadout.equipment.filter(Boolean).slice(0, 2) : [],
                 characterWeapons: Array.isArray(state.currentLoadout.characterWeapons) ? state.currentLoadout.characterWeapons.filter(Boolean).slice(0, 2) : [],
                 characterEquipment: Array.isArray(state.currentLoadout.characterEquipment) ? state.currentLoadout.characterEquipment.filter(Boolean).slice(0, 2) : [],
@@ -520,9 +608,6 @@ const App: React.FC = () => {
                 return;
             }
             window.localStorage.setItem(RESTORE_SESSION_STORAGE_KEY, JSON.stringify(snapshot));
-            if (payloadSignature && dismissedSignature) {
-                window.localStorage.removeItem(RESTORE_SESSION_DISMISSED_SIGNATURE_KEY);
-            }
         } catch {
             // no-op
         }
@@ -618,7 +703,7 @@ const App: React.FC = () => {
                 currentLoadout: isRecord(payloadRecord.currentLoadout) ? {
                     hero: String(payloadRecord.currentLoadout.hero || '').trim() || null,
                     ship: String(payloadRecord.currentLoadout.ship || '').trim() || null,
-                    weapons: Array.isArray(payloadRecord.currentLoadout.weapons) ? payloadRecord.currentLoadout.weapons.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
+                    weapons: Array.isArray(payloadRecord.currentLoadout.weapons) ? payloadRecord.currentLoadout.weapons.map(v => String(v || '').trim()).filter(Boolean).slice(0, 10) : [],
                     equipment: Array.isArray(payloadRecord.currentLoadout.equipment) ? payloadRecord.currentLoadout.equipment.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
                     characterWeapons: Array.isArray(payloadRecord.currentLoadout.characterWeapons) ? payloadRecord.currentLoadout.characterWeapons.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
                     characterEquipment: Array.isArray(payloadRecord.currentLoadout.characterEquipment) ? payloadRecord.currentLoadout.characterEquipment.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
@@ -689,6 +774,23 @@ const App: React.FC = () => {
         setRestoreSessionPrompt(null);
         setToast({ message: 'Saved session draft discarded.', type: 'info' });
     }, [clearRestoreSessionSnapshot, restoreSessionPrompt, setToast]);
+
+    useEffect(() => {
+        const onSettingsFocusSection = (evt: Event) => {
+            const customEvt = evt as CustomEvent<{ tab?: string; search?: string }>;
+            try {
+                window.sessionStorage.setItem(
+                    SETTINGS_FOCUS_SECTION_STORAGE_KEY,
+                    JSON.stringify(customEvt.detail || {})
+                );
+            } catch {
+                // no-op: sessionStorage may be unavailable in restricted shells
+            }
+            setShowSettings(true);
+        };
+        window.addEventListener('settings:focus-section', onSettingsFocusSection as EventListener);
+        return () => window.removeEventListener('settings:focus-section', onSettingsFocusSection as EventListener);
+    }, [setShowSettings]);
 
     const overlayTransitionRef = React.useRef(false);
     const viewSwitchSoundArmedRef = React.useRef(false);
@@ -1606,6 +1708,8 @@ const App: React.FC = () => {
                 cloudError: data.ocrCloudError,
                 geminiError: data.ocrGeminiError,
                 mergeStats: data.mergeStats,
+                fieldConfidence: data.fieldConfidence,
+                routing: data.ocrRouting,
                 timestamp: data.captureTimestamp || Date.now(),
             }
         });
@@ -1615,17 +1719,15 @@ const App: React.FC = () => {
             ? `${autoAppliedTeammates.length}/${rawTeammateCount}`
             : String(autoAppliedTeammates.length);
         setToast({ message: `Applied OCR data: ${teammateCountLabel} teammates, ${canonicalModifierNames.length} modifiers`, type: 'success' });
-        const targetResult = gateResult || showWizard;
-        if (targetResult) {
-            if (gateResult) {
-                setShowWizard(gateResult);
-            }
-            window.setTimeout(() => {
-                window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
-                    detail: { source: 'app-ocr-gate' },
-                }));
-            }, 0);
+        const targetResult = gateResult || showWizard || 'Draw';
+        if (gateResult || !showWizard) {
+            setShowWizard(targetResult);
         }
+        window.setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
+                detail: { source: 'app-ocr-gate' },
+            }));
+        }, 0);
     }, [pilotRegistry, activeShip, setSelectedTeammates, selectedOpponents, setSelectedOpponents, setActiveShip, selectedReachModifiers, setSelectedReachModifiers, setToast, addPendingReview, pendingReviews, sessionTeams, setSessionTeams, setSessionShipTypes, showWizard, setShowWizard]);
 
     const handleSmartCaptureData = useCallback((data: OCRExtractedData) => {
@@ -1821,7 +1923,15 @@ const App: React.FC = () => {
                 </>
             )}
 
-            {toast && <Toast message={toast.message} type={toast.type || 'info'} onClose={() => setToast(null)} action={toast.action} />}
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    type={toast.type || 'info'}
+                    duration={toast.durationMs}
+                    onClose={dismissActiveNotification}
+                    action={toast.action}
+                />
+            )}
 
             <RenameModal />
             <DrillDownOverlay />

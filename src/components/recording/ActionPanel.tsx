@@ -81,7 +81,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         setShowIdMapper,
         smartCaptureRequest,
         clearSmartCaptureRequest,
-        setToast
+        pushNotification
     } = useUIState();
 
     const isTransparent = variant === 'transparent';
@@ -263,12 +263,17 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     React.useEffect(() => {
         if (isProcessing && !processingToastShownRef.current) {
             processingToastShownRef.current = true;
-            setToast({ message: 'Processing OCR...', type: 'info' });
+            pushNotification({
+                message: 'Processing OCR...',
+                type: 'info',
+                source: 'smart-capture',
+                deepLink: { type: 'openView', view: 'recording' },
+            });
         }
         if (!isProcessing) {
             processingToastShownRef.current = false;
         }
-    }, [isProcessing, setToast]);
+    }, [isProcessing, pushNotification]);
 
     React.useEffect(() => {
         const onMatchComplete = (evt: Event) => {
@@ -313,20 +318,44 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                 const scopeForSubmission = submissionMatchId ?? null;
                 if (!backgroundOcrInFlightRef.current) {
                     backgroundOcrInFlightRef.current = true;
-                    setToast({ message: 'Processing queued OCR in background...', type: 'info' });
+                    pushNotification({
+                        message: 'Processing queued OCR in background...',
+                        type: 'info',
+                        source: 'smart-capture',
+                        durationMs: 10_000,
+                        deepLink: { type: 'openView', view: 'smart-captures' },
+                    });
                     void (async () => {
                         try {
                             await processAllStored(activeUser || null, scopeForSubmission);
                             const reviewData = scopeForSubmission != null ? getPendingData(scopeForSubmission) : getPendingData();
                             if (reviewData) {
                                 onSmartCaptureData(reviewData);
-                                setToast({ message: 'Background OCR ready for review.', type: 'success' });
+                                pushNotification({
+                                    message: 'Background OCR ready for review.',
+                                    type: 'success',
+                                    source: 'smart-capture',
+                                    durationMs: 10_000,
+                                    deepLink: { type: 'openView', view: 'smart-captures', focusMatchId: Number(scopeForSubmission || 0) || null },
+                                });
                             } else {
-                                setToast({ message: 'Background OCR finished without review data.', type: 'warning' });
+                                pushNotification({
+                                    message: 'Background OCR finished without review data.',
+                                    type: 'warning',
+                                    source: 'smart-capture',
+                                    durationMs: 10_000,
+                                    deepLink: { type: 'openView', view: 'recording' },
+                                });
                             }
                         } catch (error) {
                             Logger.warn('ActionPanel', 'Background OCR processing failed', { error });
-                            setToast({ message: 'Background OCR failed. Review queued captures manually.', type: 'error' });
+                            pushNotification({
+                                message: 'Background OCR failed. Review queued captures manually.',
+                                type: 'error',
+                                source: 'smart-capture',
+                                durationMs: 10_000,
+                                deepLink: { type: 'openView', view: 'smart-captures' },
+                            });
                         } finally {
                             backgroundOcrInFlightRef.current = false;
                         }
@@ -364,7 +393,13 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             return;
         }
         setOcrDecisionPrompt(null);
-        setToast({ message: 'No OCR review data was produced. Continuing to wizard.', type: 'warning' });
+        pushNotification({
+            message: 'No OCR review data was produced. Continuing to wizard.',
+            type: 'warning',
+            source: 'smart-capture',
+            durationMs: 10_000,
+            deepLink: { type: 'openView', view: 'recording' },
+        });
         openResultWizard(result);
     };
 
@@ -509,6 +544,16 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                 >
                     {isBusy ? <Loader2 size={18} className="animate-spin" /> : <Scan size={18} className="group-hover:scale-110 transition-transform" />}
                     <span>Smart Capture</span>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => setShowIdMapper(true)}
+                    className="rounded-control text-label-sm font-semibold text-md-sys-on-surface/70 hover:text-md-sys-primary flex items-center justify-center gap-1.5 py-1.5"
+                    title="Manage player ID mappings"
+                >
+                    <UserPlus size={12} />
+                    ID Mapper
                 </button>
 
                 {captureError && (

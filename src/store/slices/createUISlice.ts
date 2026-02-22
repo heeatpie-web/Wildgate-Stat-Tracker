@@ -6,6 +6,67 @@
  */
 import { StateCreator } from 'zustand';
 import { DrillDownTarget } from '../../types';
+import { runtimeConfig } from '../../config/runtimeConfig';
+
+const MAX_NOTIFICATION_HISTORY = 200;
+const DEFAULT_NOTIFICATION_DURATION_MS = runtimeConfig.ui.toastDurationMs;
+
+export type AppView = 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr';
+export type NotificationKind = 'info' | 'warning' | 'error' | 'success' | 'tip';
+export type NotificationSource =
+    | 'system'
+    | 'smart-capture'
+    | 'id-mapper'
+    | 'ocr'
+    | 'wizard'
+    | 'history'
+    | 'settings'
+    | 'telemetry'
+    | 'review-queue'
+    | 'user';
+
+export type NotificationDeepLink =
+    | { type: 'openView'; view: AppView; focusMatchId?: number | null }
+    | { type: 'openSettings'; tab: 'identity' | 'interface' | 'ocr-capture' | 'data'; section?: string }
+    | { type: 'openIdMapper' }
+    | { type: 'openReviewQueue' }
+    | { type: 'openWizard'; result?: 'Win' | 'Loss' | 'Draw' };
+
+export interface NotificationAction {
+    label: string;
+    onClick: () => void;
+}
+
+export interface NotificationInput {
+    message: string;
+    type?: NotificationKind;
+    action?: NotificationAction;
+    source?: NotificationSource;
+    popup?: boolean;
+    durationMs?: number;
+    deepLink?: NotificationDeepLink;
+}
+
+export interface ToastState {
+    id: string;
+    message: string;
+    type: NotificationKind;
+    action?: NotificationAction;
+    durationMs: number;
+}
+
+export interface AppNotification {
+    id: string;
+    message: string;
+    type: NotificationKind;
+    action?: NotificationAction;
+    source: NotificationSource;
+    popup: boolean;
+    durationMs: number;
+    deepLink?: NotificationDeepLink;
+    createdAt: number;
+    readAt: number | null;
+}
 
 export interface TelemetryStatusState {
     exists: boolean;
@@ -24,7 +85,11 @@ export interface UISlice {
     showChangelog: boolean;
     showResetConfirm: boolean;
     isRearranging: boolean;
-    toast: { message: string, type?: 'info' | 'warning' | 'error' | 'success', action?: { label: string; onClick: () => void } } | null;
+    toast: ToastState | null;
+    notifications: AppNotification[];
+    notificationQueue: string[];
+    activeNotificationId: string | null;
+    notificationCenterOpen: boolean;
     drillDownTarget: DrillDownTarget | null;
     showWelcomeBack: boolean;
     isLayoutReady: boolean;
@@ -38,7 +103,7 @@ export interface UISlice {
     overlayTab: 'Mission' | 'Squadron' | 'Social';
     overlayPhase: 'Setup' | 'Live' | 'Result';
     sidebarCollapsed: boolean;
-    activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr';
+    activeView: AppView;
     visionStatus: 'idle' | 'capturing' | 'scanning' | 'processing';
     telemetryStatus: TelemetryStatusState;
 
@@ -49,7 +114,13 @@ export interface UISlice {
     setShowChangelog: (show: boolean) => void;
     setShowResetConfirm: (show: boolean) => void;
     setIsRearranging: (isRearranging: boolean) => void;
-    setToast: (toast: { message: string, type?: 'info' | 'warning' | 'error' | 'success', action?: { label: string; onClick: () => void } } | null) => void;
+    setToast: (toast: NotificationInput | null) => void;
+    pushNotification: (notification: NotificationInput) => void;
+    dismissActiveNotification: () => void;
+    markNotificationRead: (id: string) => void;
+    markAllNotificationsRead: () => void;
+    clearNotifications: () => void;
+    setNotificationCenterOpen: (open: boolean) => void;
     setDrillDownTarget: (target: DrillDownTarget | null) => void;
     setShowWelcomeBack: (show: boolean) => void;
     setIsLayoutReady: (ready: boolean) => void;
@@ -62,7 +133,7 @@ export interface UISlice {
     setOverlayTab: (tab: 'Mission' | 'Squadron' | 'Social') => void;
     setOverlayPhase: (phase: 'Setup' | 'Live' | 'Result') => void;
     setSidebarCollapsed: (collapsed: boolean) => void;
-    setActiveView: (view: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr') => void;
+    setActiveView: (view: AppView) => void;
     showIdMapper: boolean;
     setShowIdMapper: (show: boolean) => void;
     setVisionStatus: (status: 'idle' | 'capturing' | 'scanning' | 'processing') => void;
@@ -70,6 +141,125 @@ export interface UISlice {
     smartCapturesFocusMatchId: number | null;
     setSmartCapturesFocusMatchId: (id: number | null) => void;
 }
+
+type NotificationStateShape = Pick<
+    UISlice,
+    'toast' | 'notifications' | 'notificationQueue' | 'activeNotificationId'
+>;
+
+const buildNotificationId = () => `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+const toPositiveDuration = (value: unknown): number => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_NOTIFICATION_DURATION_MS;
+    return Math.round(parsed);
+};
+
+const createNotification = (input: NotificationInput): AppNotification => {
+    const type = input.type ?? 'info';
+    return {
+        id: buildNotificationId(),
+        message: String(input.message || '').trim(),
+        type,
+        action: input.action,
+        source: input.source ?? 'system',
+        popup: input.popup !== false,
+        durationMs: toPositiveDuration(input.durationMs),
+        deepLink: input.deepLink,
+        createdAt: Date.now(),
+        readAt: null,
+    };
+};
+
+const toToastState = (notification: AppNotification): ToastState => ({
+    id: notification.id,
+    message: notification.message,
+    type: notification.type,
+    action: notification.action,
+    durationMs: notification.durationMs,
+});
+
+const shiftToNextQueuedNotification = (
+    notifications: AppNotification[],
+    queue: string[]
+): { nextNotification: AppNotification | null; nextQueue: string[] } => {
+    let nextQueue = [...queue];
+    while (nextQueue.length > 0) {
+        const nextId = nextQueue[0];
+        nextQueue = nextQueue.slice(1);
+        const candidate = notifications.find((item) => item.id === nextId);
+        if (candidate) {
+            return { nextNotification: candidate, nextQueue };
+        }
+    }
+    return { nextNotification: null, nextQueue: [] };
+};
+
+const trimNotificationState = (state: NotificationStateShape): NotificationStateShape => {
+    const notifications = state.notifications.slice(0, MAX_NOTIFICATION_HISTORY);
+    const idSet = new Set(notifications.map((item) => item.id));
+    let activeNotificationId = state.activeNotificationId;
+    let toast = state.toast;
+    let notificationQueue = state.notificationQueue.filter((id) => idSet.has(id));
+    if (activeNotificationId && !idSet.has(activeNotificationId)) {
+        const shifted = shiftToNextQueuedNotification(notifications, notificationQueue);
+        activeNotificationId = shifted.nextNotification?.id ?? null;
+        notificationQueue = shifted.nextQueue;
+        toast = shifted.nextNotification ? toToastState(shifted.nextNotification) : null;
+    }
+    return {
+        notifications,
+        notificationQueue,
+        activeNotificationId,
+        toast,
+    };
+};
+
+const pushNotificationState = (
+    state: NotificationStateShape,
+    input: NotificationInput
+): NotificationStateShape => {
+    const notification = createNotification(input);
+    let nextState: NotificationStateShape = {
+        notifications: [notification, ...state.notifications],
+        notificationQueue: [...state.notificationQueue],
+        activeNotificationId: state.activeNotificationId,
+        toast: state.toast,
+    };
+
+    if (notification.popup) {
+        if (!nextState.activeNotificationId) {
+            nextState.activeNotificationId = notification.id;
+            nextState.toast = toToastState(notification);
+        } else {
+            nextState.notificationQueue.push(notification.id);
+        }
+    }
+
+    nextState = trimNotificationState(nextState);
+    return nextState;
+};
+
+const dismissActiveNotificationState = (state: NotificationStateShape): NotificationStateShape => {
+    const activeId = state.activeNotificationId;
+    if (!activeId) {
+        return { ...state, toast: null };
+    }
+    const readAt = Date.now();
+    const notifications = state.notifications.map((item) =>
+        item.id === activeId && !item.readAt
+            ? { ...item, readAt }
+            : item
+    );
+    const queueSansActive = state.notificationQueue.filter((id) => id !== activeId);
+    const shifted = shiftToNextQueuedNotification(notifications, queueSansActive);
+    return {
+        notifications,
+        notificationQueue: shifted.nextQueue,
+        activeNotificationId: shifted.nextNotification?.id ?? null,
+        toast: shifted.nextNotification ? toToastState(shifted.nextNotification) : null,
+    };
+};
 
 export const createUISlice: StateCreator<UISlice> = (set) => ({
     isLoading: true,
@@ -80,6 +270,10 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     showResetConfirm: false,
     isRearranging: false,
     toast: null,
+    notifications: [],
+    notificationQueue: [],
+    activeNotificationId: null,
+    notificationCenterOpen: false,
     drillDownTarget: null,
     showWelcomeBack: false,
     isLayoutReady: false,
@@ -130,7 +324,40 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     setShowChangelog: (show) => set({ showChangelog: show }),
     setShowResetConfirm: (show) => set({ showResetConfirm: show }),
     setIsRearranging: (isRearranging) => set({ isRearranging }),
-    setToast: (toast) => set({ toast }),
+    setToast: (toast) => set((state) => {
+        if (!toast) {
+            return dismissActiveNotificationState(state);
+        }
+        return pushNotificationState(state, {
+            ...toast,
+            popup: toast.popup !== false,
+        });
+    }),
+    pushNotification: (notification) => set((state) => pushNotificationState(state, notification)),
+    dismissActiveNotification: () => set((state) => dismissActiveNotificationState(state)),
+    markNotificationRead: (id) => set((state) => ({
+        notifications: state.notifications.map((item) =>
+            item.id === id && !item.readAt
+                ? { ...item, readAt: Date.now() }
+                : item
+        ),
+    })),
+    markAllNotificationsRead: () => set((state) => {
+        const readAt = Date.now();
+        return {
+            notifications: state.notifications.map((item) =>
+                item.readAt ? item : { ...item, readAt }
+            ),
+        };
+    }),
+    clearNotifications: () => set({
+        notifications: [],
+        notificationQueue: [],
+        activeNotificationId: null,
+        toast: null,
+        notificationCenterOpen: false,
+    }),
+    setNotificationCenterOpen: (open) => set({ notificationCenterOpen: open }),
     setDrillDownTarget: (target) => set({ drillDownTarget: target }),
     setShowWelcomeBack: (show) => set({ showWelcomeBack: show }),
     setIsLayoutReady: (ready) => set({ isLayoutReady: ready }),

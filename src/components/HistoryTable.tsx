@@ -23,7 +23,7 @@ interface HistoryTableProps {
 const HistoryTable: React.FC<HistoryTableProps> = () => {
     const { matches, deleteMatch: onDelete, updateMatch: onEdit, toggleMatchPin: onPin, setDrillDownTarget } = useGameData();
     const { language } = useUserPreferences();
-    const { setActiveView, setSmartCapturesFocusMatchId, activeUser, setToast } = useUIState();
+    const { setActiveView, setSmartCapturesFocusMatchId, activeUser, pushNotification } = useUIState();
     const ocrMode = useAppStore((state) => state.ocrMode);
     const ocrRegions = useAppStore((state) => state.ocrRegions);
 
@@ -224,13 +224,24 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
         selectedMatches.forEach(id => onDelete(id));
         setSelectedMatches([]);
         setBulkDeleteConfirm(false);
-        setToast?.({ message: `Deleted ${selectedMatches.length} matches`, type: 'success' });
+        pushNotification({
+            message: `Deleted ${selectedMatches.length} matches`,
+            type: 'success',
+            source: 'history',
+            deepLink: { type: 'openView', view: 'history' },
+        });
     };
 
     const handleBulkRerunOcr = useCallback(async () => {
         if (selectedMatches.length === 0 || bulkOcrBusy) return;
         setBulkOcrBusy(true);
-        setToast?.({ message: `Rerunning OCR on ${selectedMatches.length} match(es)...`, type: 'info' });
+        pushNotification({
+            message: `Rerunning OCR on ${selectedMatches.length} match(es)...`,
+            type: 'info',
+            source: 'history',
+            durationMs: 10_000,
+            deepLink: { type: 'openView', view: 'history' },
+        });
 
         let successCount = 0;
         for (const matchId of selectedMatches) {
@@ -249,8 +260,14 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
         }
 
         setBulkOcrBusy(false);
-        setToast?.({ message: `OCR rerun complete: ${successCount}/${selectedMatches.length} succeeded`, type: successCount > 0 ? 'success' : 'error' });
-    }, [selectedMatches, bulkOcrBusy, activeUser, ocrMode, ocrRegions, setToast]);
+        pushNotification({
+            message: `OCR rerun complete: ${successCount}/${selectedMatches.length} succeeded`,
+            type: successCount > 0 ? 'success' : 'error',
+            source: 'history',
+            durationMs: 10_000,
+            deepLink: { type: 'openView', view: 'history' },
+        });
+    }, [selectedMatches, bulkOcrBusy, activeUser, ocrMode, ocrRegions, pushNotification]);
 
     const handleOpenNote = (match: Match) => {
         setEditingNoteMatch(match);

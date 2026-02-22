@@ -8,13 +8,12 @@ import React, { createContext, useContext, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useShallow } from 'zustand/react/shallow';
 import { GameMode } from '../types';
-import type { TelemetryStatusState } from '../store/slices/createUISlice';
-
-interface ToastData {
-    message: string;
-    type?: 'success' | 'error' | 'warning' | 'info';
-    action?: { label: string; onClick: () => void };
-}
+import type {
+    AppNotification,
+    NotificationInput,
+    TelemetryStatusState,
+    ToastState,
+} from '../store/slices/createUISlice';
 
 interface RenameModalState {
     type: 'new' | 'rename' | 'share_code';
@@ -41,8 +40,16 @@ interface UIStateContextType {
     setActiveUser: (user: string) => void;
     isRearranging: boolean;
     setIsRearranging: (is: boolean) => void;
-    toast: ToastData | null;
-    setToast: (toast: ToastData | null) => void;
+    toast: ToastState | null;
+    setToast: (toast: NotificationInput | null) => void;
+    notifications: AppNotification[];
+    pushNotification: (notification: NotificationInput) => void;
+    dismissActiveNotification: () => void;
+    markNotificationRead: (id: string) => void;
+    markAllNotificationsRead: () => void;
+    clearNotifications: () => void;
+    notificationCenterOpen: boolean;
+    setNotificationCenterOpen: (open: boolean) => void;
     isOverlayMode: boolean;
     setIsOverlayMode: (is: boolean) => void;
     showWelcome: boolean;
@@ -123,6 +130,14 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
         activeUser: s.activeUser, setActiveUser: s.setActiveUser,
         isRearranging: s.isRearranging, setIsRearranging: s.setIsRearranging,
         toast: s.toast, setToast: s.setToast,
+        notifications: s.notifications,
+        pushNotification: s.pushNotification,
+        dismissActiveNotification: s.dismissActiveNotification,
+        markNotificationRead: s.markNotificationRead,
+        markAllNotificationsRead: s.markAllNotificationsRead,
+        clearNotifications: s.clearNotifications,
+        notificationCenterOpen: s.notificationCenterOpen,
+        setNotificationCenterOpen: s.setNotificationCenterOpen,
         isOverlayMode: s.isOverlayMode, setIsOverlayMode: s.setIsOverlayMode,
         showWelcome: s.showWelcome, setShowWelcome: s.setShowWelcome,
         showTutorial: s.showTutorial, setShowTutorial: s.setShowTutorial,

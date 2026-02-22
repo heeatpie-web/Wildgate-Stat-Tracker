@@ -117,7 +117,7 @@ export const IdMapper: React.FC = () => {
         getMostFrequentOpponents,
         getMostFrequentTeammates
     } = useAppStore();
-    const { setToast } = useUIState();
+    const { pushNotification } = useUIState();
     const [nameInputs, setNameInputs] = useState<Record<string, string>>({});
     const [editingKnownKey, setEditingKnownKey] = useState<string | null>(null);
     const [jsonInput, setJsonInput] = useState('');
@@ -278,6 +278,15 @@ export const IdMapper: React.FC = () => {
         previousUnknownCountRef.current = unknownCount;
     }, [detectedUnknowns]);
 
+    const notifyIdMapper = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
+        pushNotification({
+            message,
+            type,
+            source: 'id-mapper',
+            deepLink: { type: 'openIdMapper' },
+        });
+    };
+
     const handleSave = (id: string) => {
         const name = nameInputs[id];
         if (name && name.trim()) {
@@ -287,7 +296,7 @@ export const IdMapper: React.FC = () => {
             const newInputs = { ...nameInputs };
             delete newInputs[id];
             setNameInputs(newInputs);
-            setToast({ message: "Mapping Saved", type: 'success' });
+            notifyIdMapper('Mapping Saved', 'success');
             Logger.info('IdMapper', `Saved mapping: ${domain}:${id} -> ${trimmed}`);
         }
     };
@@ -302,7 +311,7 @@ export const IdMapper: React.FC = () => {
             return updated;
         });
         setEditingKnownKey(null);
-        setToast({ message: "Mapping Updated", type: 'success' });
+        notifyIdMapper('Mapping Updated', 'success');
         Logger.info('IdMapper', `Updated mapping: ${entry.domain}:${entry.id} -> ${nextName}`);
     };
 
@@ -322,7 +331,7 @@ export const IdMapper: React.FC = () => {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        setToast({ message: "Mappings Exported", type: 'success' });
+        notifyIdMapper('Mappings Exported', 'success');
         Logger.info('IdMapper', `Exported ${Object.keys(knownMappings).length} mappings`);
     };
 
@@ -334,11 +343,11 @@ export const IdMapper: React.FC = () => {
             if (typeof mappings === 'object') {
                 importMappings(mappings);
                 setJsonInput('');
-                setToast({ message: "Mappings Imported Successfully", type: 'success' });
+                notifyIdMapper('Mappings Imported Successfully', 'success');
                 Logger.info('IdMapper', `Imported mappings`);
             }
         } catch (e) {
-            setToast({ message: "Invalid JSON", type: 'error' });
+            notifyIdMapper('Invalid JSON', 'error');
             Logger.error('IdMapper', 'Import failed', e);
         }
     };
@@ -379,7 +388,7 @@ export const IdMapper: React.FC = () => {
                         const lines = Object.entries(knownMappings).map(([id, name]) => `    '${id}': '${name}'`).join(',\n');
                         const code = `// Paste into utils/guids.ts\n${lines}`;
                         navigator.clipboard.writeText(code);
-                        setToast({ message: "Copied to Clipboard!", type: 'success' });
+                        notifyIdMapper('Copied to Clipboard!', 'success');
                     }} className="idmapper-click-target flex items-center gap-2 px-3 py-1.5 bg-md-sys-primary/10 text-md-sys-primary rounded-lg text-body font-bold hover:bg-md-sys-primary/20 transition-colors">
                         <FileJson size={14} /> Copy Code
                     </button>

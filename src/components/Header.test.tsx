@@ -14,6 +14,7 @@ const uiState = {
   setShowTutorial: vi.fn(),
   setShowSettings: vi.fn(),
   setToast: vi.fn(),
+  pushNotification: vi.fn(),
   setShowWelcome: vi.fn(),
   requestSmartCapture: vi.fn().mockReturnValue('sc_req_1'),
   devMode: false,
@@ -48,6 +49,10 @@ vi.mock('../providers/UserPreferencesProvider', () => ({
 
 vi.mock('./SystemPulse', () => ({
   default: () => <div data-testid="system-pulse">Pulse</div>,
+}));
+
+vi.mock('./NotificationCenter', () => ({
+  default: () => <div data-testid="notification-center" />,
 }));
 
 describe('Header', () => {
