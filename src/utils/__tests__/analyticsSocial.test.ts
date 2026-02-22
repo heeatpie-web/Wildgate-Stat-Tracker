@@ -89,9 +89,8 @@ describe('calculateSynergyMatrix', () => {
       createMatch({ ship: 'Hunter (4 Player)', hero: 'Adrian', result: 'Win' }),
     ];
     const matrix = calculateSynergyMatrix(matches);
-    // "Hunter (4 Player)" → split at "(" → "Hunter "
-    expect(matrix['Hunter ']['Adrian'].wins).toBe(2);
-    expect(matrix['Hunter ']['Adrian'].total).toBe(3);
+    expect(matrix.Hunter.Adrian.wins).toBe(2);
+    expect(matrix.Hunter.Adrian.total).toBe(3);
   });
 
   it('handles unknown ships gracefully', () => {

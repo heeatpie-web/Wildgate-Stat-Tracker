@@ -38,17 +38,19 @@ export const calculateSocialData = (matches: Match[]) => {
 export const calculateSynergyMatrix = (matches: Match[]) => {
     const completedMatches = matches.filter((m) => m.result !== 'Ongoing');
     const matrix: Record<string, Record<string, { wins: number, total: number }>> = {};
+    const normalizeShip = (value: string) => String(value || '').split('(')[0].trim();
+    const normalizeHero = (value: string) => String(value || '').trim();
 
     // Init Matrix
     SHIPS.forEach(s => {
-        const cleanShip = s.split('(')[0];
+        const cleanShip = normalizeShip(s);
         matrix[cleanShip] = {};
-        CHARACTERS.forEach(c => matrix[cleanShip][c] = { wins: 0, total: 0 });
+        CHARACTERS.forEach(c => matrix[cleanShip][normalizeHero(c)] = { wins: 0, total: 0 });
     });
 
     completedMatches.forEach(m => {
-        const s = (m.ship || 'Unknown').split('(')[0];
-        const h = m.hero || 'Unknown';
+        const s = normalizeShip(m.ship || 'Unknown');
+        const h = normalizeHero(m.hero || 'Unknown');
         if (matrix[s] && matrix[s][h]) {
             matrix[s][h].total++;
             if (m.result === 'Win') matrix[s][h].wins++;
