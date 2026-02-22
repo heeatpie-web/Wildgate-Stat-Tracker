@@ -1,0 +1,21 @@
+# Limit indexing/search scope for faster local edits.
+# Keep source folders indexed while skipping generated/heavy content.
+.git/
+node_modules/
+dist/
+dist-electron/
+dist-ssr/
+build/
+coverage/
+.nyc_output/
+.venv/
+.venv-studio/
+tmp-user-data/
+test-results/
+_archive/
+dataset/
+.claude/worktrees/
+.visual/
+*.log
+tmp_*.log
+tmp-*.log

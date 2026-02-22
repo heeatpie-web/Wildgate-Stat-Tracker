@@ -1,0 +1,20 @@
+# Ripgrep-specific ignore rules (kept in sync with .ignore).
+.git/
+node_modules/
+dist/
+dist-electron/
+dist-ssr/
+build/
+coverage/
+.nyc_output/
+.venv/
+.venv-studio/
+tmp-user-data/
+test-results/
+_archive/
+dataset/
+.claude/worktrees/
+.visual/
+*.log
+tmp_*.log
+tmp-*.log
