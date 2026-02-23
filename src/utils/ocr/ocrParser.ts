@@ -576,6 +576,15 @@ export function calculateOverallConfidence(data: Partial<OCRExtractedData>): num
  * Validate and clean extracted data
  */
 export function validateExtractedData(data: OCRExtractedData): OCRExtractedData {
+  // Build a set of normalized real team name keys for team-name-as-player heuristic filtering.
+  // Only use non-placeholder team names with enough length to be meaningful.
+  const knownTeamNameKeys = new Set<string>(
+    (data.opponentTeams || [])
+      .filter(team => !isPlaceholderTeamName(team.teamName))
+      .map(team => normalizeKey(team.teamName))
+      .filter(key => key.length >= 4)
+  );
+
   const validTeammates = capTeammatePlayers(
     data.teammates.filter(t => t.confidence >= 50),
     data.playerShip?.shipType
@@ -585,7 +594,18 @@ export function validateExtractedData(data: OCRExtractedData): OCRExtractedData 
     .filter(team => team.confidence >= 40)
     .map(team => ({
       ...team,
-      players: capOpponentPlayers(team.players.filter(p => p.confidence >= 50)),
+      players: capOpponentPlayers(
+        team.players
+          .filter(p => p.confidence >= 50)
+          .filter(p => {
+            // Heuristic: skip players whose normalized name exactly matches a known team name label.
+            // This prevents OCR misclassifying a team banner as a player entry.
+            if (!p.name || knownTeamNameKeys.size === 0) return true;
+            const playerKey = normalizeKey(p.name);
+            if (playerKey.length < 4) return true;
+            return !knownTeamNameKeys.has(playerKey);
+          })
+      ),
     }))
     .filter(team => team.players.length > 0 || team.teamName)
     .sort((a, b) => {

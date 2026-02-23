@@ -127,6 +127,9 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             }, 0) / recent.length)
             : 0;
         const weekDelta = Number(periodComparison?.weekDelta?.winRate || 0);
+        const thisWeekCount = Number(periodComparison?.thisWeek?.matches || 0);
+        const lastWeekCount = Number(periodComparison?.lastWeek?.matches || 0);
+        const weekDeltaReliable = thisWeekCount >= 3 && lastWeekCount >= 3;
         const topHour = (timePatterns?.byHour || []).reduce((best: any, point: any) => {
             if (!best) return point;
             if ((point.matches || 0) > (best.matches || 0)) return point;
@@ -136,6 +139,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             recentWinRate,
             avgKills: Number(avgKills.toFixed(1)),
             weekDelta,
+            weekDeltaReliable,
             topHourLabel: topHour ? `${topHour.hour}:00` : '--',
             topHourMatches: topHour ? Number(topHour.matches || 0) : 0,
         };
@@ -188,7 +192,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
 
     return (
         <div className="flex-1 overflow-y-auto custom-scrollbar animate-fade-in p-2 pb-8">
-            <div className={`grid gap-4 ${dense ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-6'}`}>
+            <div className={`grid gap-5 ${dense ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-6'}`}>
 
                 {/* Row 1: Hero */}
                 <AnalyticsCard
@@ -287,10 +291,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                             </div>
                             <div className="rounded-control bg-md-sys-on-surface/6 p-2.5">
                                 <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/40">Weekly Delta</div>
-                                <div className={`text-title font-bold ${pulseSummary.weekDelta >= 0 ? 'text-md-sys-primary' : 'text-md-sys-on-surface/60'}`}>
-                                    {pulseSummary.weekDelta >= 0 ? '+' : ''}{pulseSummary.weekDelta}pp
-                                </div>
-                                <div className="text-label-sm text-md-sys-on-surface/55">Win-rate trend</div>
+                                {pulseSummary.weekDeltaReliable ? (
+                                    <div className={`text-title font-bold ${pulseSummary.weekDelta >= 0 ? 'text-md-sys-primary' : 'text-md-sys-on-surface/60'}`}>
+                                        {pulseSummary.weekDelta >= 0 ? '+' : ''}{pulseSummary.weekDelta}pp
+                                    </div>
+                                ) : (
+                                    <div className="text-title font-bold text-md-sys-on-surface/40">N/A</div>
+                                )}
+                                <div className="text-label-sm text-md-sys-on-surface/55">{pulseSummary.weekDeltaReliable ? 'Win-rate trend' : 'Need 3+ matches/week'}</div>
                             </div>
                             <div className="rounded-control bg-md-sys-on-surface/6 p-2.5">
                                 <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/40">Peak Window</div>

@@ -69,11 +69,17 @@ describe('MissionPanel', () => {
     const { MissionPanel } = await import('./MissionPanel');
     render(<MissionPanel accordionMode />);
 
-    const charWeaponsHeader = screen.getByRole('button', { name: /prospector weapons/i });
-    expect(within(charWeaponsHeader).getByText(selectedCharacterWeapon)).toBeInTheDocument();
+    // Find the character weapons section by the weapon name shown in its indicator
+    const weaponsButtons = screen.getAllByRole('button', { name: /weapons/i });
+    const charWeaponsHeader = weaponsButtons.find(btn => btn.textContent?.includes(selectedCharacterWeapon));
+    expect(charWeaponsHeader).toBeInTheDocument();
+    expect(within(charWeaponsHeader!).getByText(selectedCharacterWeapon)).toBeInTheDocument();
 
-    const equipmentHeader = screen.getByRole('button', { name: /prospector equipment/i });
-    expect(within(equipmentHeader).getByText(selectedCharacterEquipment)).toBeInTheDocument();
+    // Find the character equipment section by the equipment name shown in its indicator
+    const equipmentButtons = screen.getAllByRole('button', { name: /equipment/i });
+    const equipmentHeader = equipmentButtons.find(btn => btn.textContent?.includes(selectedCharacterEquipment));
+    expect(equipmentHeader).toBeInTheDocument();
+    expect(within(equipmentHeader!).getByText(selectedCharacterEquipment)).toBeInTheDocument();
   });
 
   it('uses MM:SS text inputs and sanitizes timer values', async () => {
@@ -99,10 +105,16 @@ describe('MissionPanel', () => {
 
     expect(screen.getAllByText(/^Telemetry$/i).length).toBeGreaterThanOrEqual(1);
 
-    const charWeaponsHeader = screen.getByRole('button', { name: /prospector weapons/i });
-    expect(within(charWeaponsHeader).getByTestId('telemetry-prospector-weapons')).toHaveTextContent('Source: Telemetry');
+    // Find the Weapons section header that contains the telemetry badge
+    const weaponsTelemetryBadge = screen.getByTestId('telemetry-prospector-weapons');
+    const charWeaponsHeader = weaponsTelemetryBadge.closest('button');
+    expect(charWeaponsHeader).toBeInTheDocument();
+    expect(within(charWeaponsHeader!).getByTestId('telemetry-prospector-weapons')).toHaveTextContent('Source: Telemetry');
 
-    const equipmentHeader = screen.getByRole('button', { name: /prospector equipment/i });
-    expect(within(equipmentHeader).getByTestId('telemetry-prospector-equipment')).toHaveTextContent('Source: Telemetry');
+    // Find the Equipment section header that contains the telemetry badge
+    const equipmentTelemetryBadge = screen.getByTestId('telemetry-prospector-equipment');
+    const equipmentHeader = equipmentTelemetryBadge.closest('button');
+    expect(equipmentHeader).toBeInTheDocument();
+    expect(within(equipmentHeader!).getByTestId('telemetry-prospector-equipment')).toHaveTextContent('Source: Telemetry');
   });
 });

@@ -330,7 +330,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                             <SectionHeader
                                 id="charWeapons"
                                 icon={<Crosshair size={12} />}
-                                title="Prospector Weapons"
+                                title="Weapons"
                                 badge={`${totalWeapons}/${MAX_WEAPONS}`}
                                 indicator={(
                                     <>
@@ -412,7 +412,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                             <SectionHeader
                                 id="equipment"
                                 icon={<Zap size={12} />}
-                                title="Prospector Equipment"
+                                title="Equipment"
                                 badge={`${totalEquipment}/${MAX_EQUIPMENT}`}
                                 indicator={(
                                     <>

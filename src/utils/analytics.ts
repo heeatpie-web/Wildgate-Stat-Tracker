@@ -492,7 +492,7 @@ export const calculateLoadoutAnalytics = (matches: Match[]): {
         insights.push({
             title: 'Best Combo',
             subtitle: `${topCombo.hero} on ${topCombo.ship}`,
-            value: topCombo.combo.split('|').slice(2).join(' '),
+            value: topCombo.combo.split('|').slice(2).map(s => s.replace(/^[WE]:/, '')).filter(Boolean).join(' / '),
             subValue: `${topCombo.winRate}% WR (${topCombo.total} matches)`,
             tone: 'success',
             iconType: 'Target',
@@ -514,7 +514,7 @@ export const calculateLoadoutAnalytics = (matches: Match[]): {
         insights.push({
             title: 'Prospector Signature',
             subtitle: `${topHeroCombo.hero}`,
-            value: topHeroCombo.combo.split('|').slice(2).join(' '),
+            value: topHeroCombo.combo.split('|').slice(2).map(s => s.replace(/^[WE]:/, '')).filter(Boolean).join(' / '),
             subValue: `${topHeroCombo.winRate}% WR`,
             tone: 'info',
             iconType: 'Users',

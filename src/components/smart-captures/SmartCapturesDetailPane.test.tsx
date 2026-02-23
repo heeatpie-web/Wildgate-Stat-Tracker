@@ -18,9 +18,10 @@ describe('SmartCapturesDetailPane', () => {
     expect(screen.getByText('Detail Body')).toBeInTheDocument();
 
     const pane = container.querySelector('section');
-    expect(pane).toHaveClass('sc-detail-pane', 'overflow-visible', 'flex', 'flex-col', 'custom-pane');
+    // overflow-hidden is required so sticky positioning within the pane works correctly
+    expect(pane).toHaveClass('sc-detail-pane', 'overflow-hidden', 'flex', 'flex-col', 'custom-pane');
 
     const scroller = screen.getByText('Detail Body').parentElement;
-    expect(scroller).toHaveClass('flex-1', 'min-h-0', 'overflow-y-auto', 'overflow-x-visible');
+    expect(scroller).toHaveClass('flex-1', 'min-h-0', 'overflow-y-auto', 'overflow-x-hidden');
   });
 });

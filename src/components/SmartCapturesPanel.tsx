@@ -972,8 +972,11 @@ const SmartCapturesPanel: React.FC = () => {
         <>
             <SmartCapturesShell
                 topNav={(
-                    <div className="flex items-center justify-start">
+                    <div className="flex items-center justify-start gap-2">
                         {renderSectionTabs('sc-workspace-tabs--inline')}
+                        {activeSection === 'capture' && (
+                            <QueueCollapseToggle collapsed={queueCollapsed} onToggle={toggleQueueCollapsed} />
+                        )}
                     </div>
                 )}
                 content={activeSection === 'capture' ? (
@@ -986,12 +989,6 @@ const SmartCapturesPanel: React.FC = () => {
                             className="h-full"
                             header={
                                 <div className="px-3 pt-3 pb-2 space-y-2 border-b border-md-sys-outline/10">
-                                    <div className="flex items-center justify-between gap-2">
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <QueueCollapseToggle collapsed={queueCollapsed} onToggle={toggleQueueCollapsed} />
-                                        </div>
-                                    </div>
-
                                     {!queueCollapsed && (
                                         <>
                                             <div className="relative">
@@ -2755,7 +2752,7 @@ const SmartMatchDetail: React.FC<{
                 ))}
             </datalist>
 
-            <div className="sticky top-0 z-40 isolate overflow-visible -mx-4 lg:-mx-5 px-4 lg:px-5 pt-2.5 pb-2.5 bg-md-sys-surface-container-highest border-b border-md-sys-outline/14 shadow-sm sc-detail-sticky-header">
+            <div className="sticky top-0 z-40 -mx-4 lg:-mx-5 px-4 lg:px-5 pt-2.5 pb-2.5 bg-md-sys-surface-container-highest border-b border-md-sys-outline/14 shadow-sm sc-detail-sticky-header">
                 <SmartCaptureSummaryBar>
                     {!queueOnly && (
                         <div className="sc-detail-summary-top">

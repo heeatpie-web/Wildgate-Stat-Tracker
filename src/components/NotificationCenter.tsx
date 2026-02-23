@@ -197,7 +197,7 @@ export const NotificationCenter: React.FC = () => {
                     id="notification-center-panel"
                     role="dialog"
                     aria-label="Notification inbox"
-                    className="fixed right-4 top-16 z-top-second w-[min(30rem,calc(100vw-2rem))] max-h-[calc(100vh-6rem)] rounded-2xl border border-md-sys-outline/30 bg-md-sys-surface-container-highest text-md-sys-on-surface shadow-[0_24px_56px_rgba(0,0,0,0.52)] overflow-hidden supports-[backdrop-filter]:bg-md-sys-surface-container-highest supports-[backdrop-filter]:backdrop-blur-sm"
+                    className="fixed right-4 top-16 z-top-second w-[min(30rem,calc(100vw-2rem))] max-h-[calc(100vh-6rem)] rounded-2xl border border-md-sys-outline/30 bg-md-sys-surface-container-highest text-md-sys-on-surface shadow-[0_24px_56px_rgba(0,0,0,0.52)] overflow-hidden backdrop-blur-sm"
                 >
                     <div className="px-4 py-3 border-b border-md-sys-outline/14 flex items-center justify-between">
                         <div className="text-label-sm font-bold uppercase tracking-wide">Notifications</div>

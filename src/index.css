@@ -106,7 +106,7 @@
   --mg-surface: color-mix(in srgb, var(--md-sys-color-surface), transparent calc(100% - (var(--mg-opacity-light) * 100%)));
 
   /* Header indicator tokens (theme-accent driven) */
-  --indicator-idle: color-mix(in srgb, var(--md-sys-color-outline), transparent 35%);
+  --indicator-idle: color-mix(in srgb, var(--md-sys-color-outline), transparent 15%);
   --indicator-data: var(--md-sys-color-primary);
   --indicator-data-warning: var(--md-sys-color-secondary);
   --indicator-data-error: var(--md-sys-color-danger);
@@ -186,6 +186,14 @@ body[data-mode='twilight'] .recording-inside-panel input[type='text'],
 body[data-mode='twilight'] .recording-inside-panel input[type='number'] {
   background: var(--mg-surface);
   border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 80%);
+}
+
+body[data-mode='dark'] .recording-inside-panel .md3-textfield--compact,
+body[data-mode='dark'] .recording-inside-panel input[type='text'],
+body[data-mode='dark'] .recording-inside-panel input[type='number'] {
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  border-color: var(--md-sys-color-outline-variant);
 }
 
 /* Twilight: align Ship & Loadout block/button treatment with the other recording panels. */
@@ -612,27 +620,22 @@ body[data-mode='twilight'] .sc-bordered {
 .sc-workspace-tabs {
   display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
+  gap: 2px;
   max-width: 100%;
-  padding: 4px;
+  padding: 2px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 72%);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  background:
-    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--md-sys-color-primary), transparent 86%), transparent 44%),
-    color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 8%);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 8%);
 }
 
 .sc-workspace-tabs--inline {
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .sc-workspace-tab-btn {
   min-width: 0;
-  flex: 1 1 96px;
-  height: 30px;
+  flex: 0 1 auto;
+  height: 26px;
   border-radius: 999px;
   padding: 0 10px;
   font-size: var(--md-sys-typescale-label-small-size, 11px);
@@ -643,7 +646,7 @@ body[data-mode='twilight'] .sc-bordered {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   transition:
     background var(--md-motion-duration-short3) var(--md-motion-easing-standard),
     color var(--md-motion-duration-short3) var(--md-motion-easing-standard),
@@ -972,9 +975,14 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 }
 
 .ocr-teammate-chip--row {
-  font-size: 10px;
-  padding: 2px 7px;
+  font-size: 0;
+  padding: 3px;
   flex-shrink: 0;
+}
+
+.ocr-teammate-chip--row svg {
+  width: 10px;
+  height: 10px;
 }
 
 body[data-mode='dark'] .ocr-teammate-chip,
@@ -1526,40 +1534,12 @@ body[data-mode='twilight'] .sc-detail-meta-line {
 
 .sc-detail-workspace {
   position: relative;
-  isolation: isolate;
   background:
-    radial-gradient(circle at 95% 0%, color-mix(in srgb, var(--md-sys-color-info), transparent 90%), transparent 50%),
-    radial-gradient(circle at 0% 100%, color-mix(in srgb, var(--md-sys-color-warning), transparent 90%), transparent 52%),
-    radial-gradient(circle at 18% -12%, color-mix(in srgb, var(--md-sys-color-primary), transparent 90%), transparent 56%),
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 2%) 0%,
-      color-mix(in srgb, var(--md-sys-color-surface-container), transparent 0%) 100%
+      var(--md-sys-color-surface-container-high) 0%,
+      var(--md-sys-color-surface-container) 100%
     );
-}
-
-.sc-detail-workspace::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    repeating-linear-gradient(
-      0deg,
-      color-mix(in srgb, var(--md-sys-color-on-surface), transparent 99.25%) 0px,
-      color-mix(in srgb, var(--md-sys-color-on-surface), transparent 99.25%) 1px,
-      transparent 2px,
-      transparent 4px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--md-sys-color-on-surface), transparent 99.35%) 0px,
-      color-mix(in srgb, var(--md-sys-color-on-surface), transparent 99.35%) 1px,
-      transparent 2px,
-      transparent 4px
-    );
-  mix-blend-mode: soft-light;
-  opacity: 0.2;
 }
 
 .sc-detail-pane {

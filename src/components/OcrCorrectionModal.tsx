@@ -1127,11 +1127,11 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                 ))}
                             </datalist>
                         )}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 ocr-team-assignment-grid">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2 ocr-team-assignment-grid">
                             {teamDraft.map((team, teamIndex) => (
                                 <div
                                     key={`${team.key}-${teamIndex}`}
-                                    className={`ocr-team-assignment-card rounded-control border p-2 md3-surface-high ${
+                                    className={`ocr-team-assignment-card rounded-card border p-3 md3-surface-high ${
                                         dragHoverTeamIndex === teamIndex ? 'ring-1 ring-md-sys-primary/35 border-md-sys-primary/30' : 'border-md-sys-outline/15'
                                     }`}
                                     onDragOver={(event) => allowTeamDrop(event, teamIndex)}
@@ -1197,7 +1197,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                                         onKeyDown={(event) => handleTeamPlayerRowKeyDown(event, teamIndex, playerIndex)}
                                                         tabIndex={0}
                                                         aria-label={`Edit ${linkedName || playerName || `player ${playerIndex + 1}`} in ${teamTitle}`}
-                                                        className={`ocr-team-player-row ocr-team-player-row--quick rounded-control border border-md-sys-outline/20 p-1.5 bg-md-sys-surface flex items-center gap-2 ${
+                                                        className={`ocr-team-player-row ocr-team-player-row--quick rounded-control border border-md-sys-outline/20 p-2 bg-md-sys-surface flex items-center gap-2 ${
                                                             isDragged ? 'opacity-60' : ''
                                                         } ${
                                                             isRowEditing ? 'ocr-team-player-row--editing border-md-sys-primary/35' : ''
@@ -1282,7 +1282,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 )}
 
                 {/* Player List */}
-                <div className="space-y-3">
+                <div className="space-y-4">
                     {reviewScreenshots.length > 0 && (
                         <div className="sticky top-0 z-20 md3-card p-2 border border-md-sys-outline/15 bg-md-sys-surface/95 backdrop-blur-sm">
                             <div className="flex items-center justify-between gap-2 mb-1">

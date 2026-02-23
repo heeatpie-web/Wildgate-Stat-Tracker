@@ -79,6 +79,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         activeUser,
         setShowReviewQueue,
         setShowIdMapper,
+        setShowWizard,
         smartCaptureRequest,
         clearSmartCaptureRequest,
         pushNotification
@@ -224,7 +225,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
 
     React.useEffect(() => {
         const onCaptureRequest = (evt: Event) => {
-            const custom = evt as CustomEvent<{ activeUser?: string | null; requestId?: string; matchId?: string | number | null }>;
+            const custom = evt as CustomEvent<{ activeUser?: string | null; requestId?: string; matchId?: string | number | null; forceOcr?: boolean }>;
             const requestId = custom?.detail?.requestId || null;
             if (requestId && handledCaptureRequestRef.current === requestId) return;
             if (requestId) handledCaptureRequestRef.current = requestId;
@@ -233,15 +234,23 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             lastCaptureRequestAtRef.current = now;
             const requestedUser = custom?.detail?.activeUser;
             const requestedMatchId = custom?.detail?.matchId;
-            if (requestedMatchId != null && requestedMatchId !== '') {
-                void triggerSmartCapture(requestedUser ?? activeUser ?? null, requestedMatchId);
-            } else {
-                void triggerSmartCapture(requestedUser ?? activeUser ?? null);
-            }
+            const forceOcr = custom?.detail?.forceOcr === true;
+            const runCapture = async () => {
+                if (forceOcr && requestedMatchId != null && requestedMatchId !== '') {
+                    // Re-run OCR from wizard: only process already-saved captures for this match.
+                    // Skip taking a fresh screenshot to avoid capturing the wrong screen.
+                    await processAllStored(requestedUser ?? activeUser ?? null, requestedMatchId);
+                } else if (requestedMatchId != null && requestedMatchId !== '') {
+                    await triggerSmartCapture(requestedUser ?? activeUser ?? null, requestedMatchId);
+                } else {
+                    await triggerSmartCapture(requestedUser ?? activeUser ?? null);
+                }
+            };
+            void runCapture();
         };
         window.addEventListener('smart-capture-request', onCaptureRequest as EventListener);
         return () => window.removeEventListener('smart-capture-request', onCaptureRequest as EventListener);
-    }, [triggerSmartCapture, activeUser]);
+    }, [triggerSmartCapture, processAllStored, activeUser]);
 
     React.useEffect(() => {
         if (!smartCaptureRequest?.requestId) return;
@@ -261,6 +270,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         clearSmartCaptureRequest(requestId);
     }, [activeUser, clearSmartCaptureRequest, smartCaptureRequest, triggerSmartCapture]);
 
+    const autoOpenedForPendingRef = React.useRef<string | null>(null);
     React.useEffect(() => {
         if (isProcessing && !processingToastShownRef.current) {
             processingToastShownRef.current = true;
@@ -275,6 +285,17 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             processingToastShownRef.current = false;
         }
     }, [isProcessing, pushNotification]);
+
+    // Auto-open the wizard OCR tab when processing completes and new pending data is available
+    React.useEffect(() => {
+        if (processingStatus?.phase !== 'completed') return;
+        if (!pendingData) return;
+        // Use a key to prevent re-opening for the same data
+        const dataKey = JSON.stringify(Object.keys(pendingData));
+        if (autoOpenedForPendingRef.current === dataKey) return;
+        autoOpenedForPendingRef.current = dataKey;
+        setShowWizard('Match Result');
+    }, [processingStatus?.phase, pendingData, setShowWizard]);
 
     React.useEffect(() => {
         const onMatchComplete = (evt: Event) => {

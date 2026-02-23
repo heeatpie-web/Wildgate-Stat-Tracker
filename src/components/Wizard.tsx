@@ -388,6 +388,7 @@ export const Wizard: React.FC = () => {
                 source: 'wizard',
                 requestId,
                 matchId: Number.isInteger(pendingMatchId) && pendingMatchId > 0 ? pendingMatchId : null,
+                forceOcr: true,
             }
         }));
         pushNotification({

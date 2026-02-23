@@ -181,7 +181,7 @@ const SystemPulse: React.FC = () => {
                     <span className={indicator.color}>{indicator.icon}</span>
                     {indicator.label && <span>{indicator.label}</span>}
                     <span
-                        className={`w-1.5 h-1.5 rounded-full ${indicator.pulse ? 'animate-pulse' : ''}`}
+                        className={`w-2 h-2 rounded-full ${indicator.pulse ? 'animate-pulse' : ''}`}
                         style={{ backgroundColor: `var(${indicator.dotVar})` }}
                     />
                 </div>

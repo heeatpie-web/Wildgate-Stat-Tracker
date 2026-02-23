@@ -673,7 +673,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
           aria-modal="true"
           aria-labelledby={dialogTitleId}
           aria-describedby={dialogDescriptionId}
-          className="ocr-review-dialog md3-dialog rounded-modal shadow-2xl max-w-2xl w-full max-h-90vh my-2 overflow-visible flex flex-col relative z-0"
+          className="ocr-review-dialog md3-dialog rounded-modal shadow-2xl max-w-2xl w-full max-h-90vh my-2 overflow-hidden flex flex-col relative z-0"
         >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -709,8 +709,8 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
         <p id={dialogDescriptionId} className="a11y-sr-only">
           Review OCR teammates, opponents, ship, and modifiers. Use Tab to navigate controls, Escape to close, and Control Enter to apply.
         </p>
-        <div className="ocr-review-body flex-1 min-h-0 overflow-y-auto space-y-4 custom-scrollbar md3-dialog-content">
-          <div className="grid grid-cols-4 gap-2 ocr-review-metrics-grid">
+        <div className="ocr-review-body flex-1 min-h-0 overflow-y-auto space-y-5 custom-scrollbar md3-dialog-content">
+          <div className="grid grid-cols-4 gap-3 ocr-review-metrics-grid">
             <div className="ocr-review-metric-card md3-surface-high rounded-card p-2 text-center">
               <div className="text-label-xs uppercase opacity-60">Ship</div>
               <div className={`text-label-sm font-bold ${getConfidenceColor(confidenceSummary.shipConf)}`}>{Math.round(confidenceSummary.shipConf)}%</div>
@@ -732,12 +732,12 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
             <div className="md3-banner md3-banner--info">
               <Info size={16} className="mt-0.5 flex-shrink-0" />
               <div>
-                <p className="text-body font-medium">Quick Tutorial</p>
+                <p className="text-body font-medium">How This Helps</p>
                 <p className="text-label-sm opacity-60 mt-0.5">
-                  1) Fix any wrong name. 2) Check team/ship/modifiers. 3) Press <span className="font-semibold">Apply and Learn</span>.
+                  Fix wrong names, check team/ship/modifiers, then press <span className="font-semibold">Apply and Learn</span>. Your corrections improve future OCR accuracy.
                 </p>
-                <p className="text-label-sm opacity-60 mt-0.5">
-                  Every correction here helps OCR make better guesses next time.
+                <p className="text-label-sm opacity-60 mt-1">
+                  <span className="font-semibold text-success">Roster</span> = exact match &middot; <span className="font-semibold text-warning">~ Name</span> = fuzzy match &middot; <span className="font-semibold text-info">+ Roster</span> = new candidate
                 </p>
                 <button
                   type="button"
@@ -749,18 +749,6 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
               </div>
             </div>
           )}
-          <div className="md3-banner md3-banner--info">
-            <Info size={16} className="mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-body font-medium">Name Correction Helper</p>
-              <p className="text-label-sm opacity-60 mt-0.5">
-                Edit any wrong player name, then press <span className="font-semibold">Apply and Learn</span>. This saves your corrections so future OCR runs are more accurate.
-              </p>
-              <p className="text-label-sm opacity-60 mt-0.5">
-                Badge guide: <span className="font-semibold text-success">Roster</span> = exact match, <span className="font-semibold text-warning">~ Name</span> = fuzzy match, <span className="font-semibold text-info">+ Roster</span> = queue as new roster candidate.
-              </p>
-            </div>
-          </div>
           {nameChanges.length > 0 && (
             <div className="md3-surface-high rounded-card border border-md-sys-outline/10 p-3 space-y-2">
               <div className="flex items-center justify-between gap-2">

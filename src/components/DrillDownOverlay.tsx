@@ -199,7 +199,7 @@ export const DrillDownOverlay: React.FC = () => {
                             <div className="flex flex-col gap-2">
                                 {topSynergies.length > 0 ? topSynergies.map(([name, stat], i) => (
                                     <div key={name} className="flex justify-between items-center text-label-sm">
-                                        <div className="font-bold truncate max-w-70p">{i + 1}. {name}</div>
+                                        <div className="font-bold truncate max-w-[85%]">{i + 1}. {name}</div>
                                         <div className="font-mono opacity-60">{Math.round((stat.wins / stat.total) * 100)}%</div>
                                     </div>
                                 )) : <div className="text-label-sm opacity-40 font-bold uppercase">No Data</div>}
@@ -213,7 +213,7 @@ export const DrillDownOverlay: React.FC = () => {
                             <div className="flex flex-col gap-2">
                                 {topNemeses.length > 0 ? topNemeses.map(([name, stat], i) => (
                                     <div key={name} className="flex justify-between items-center text-label-sm">
-                                        <div className="font-bold truncate max-w-70p">{i + 1}. {name}</div>
+                                        <div className="font-bold truncate max-w-[85%]">{i + 1}. {name}</div>
                                         <div className="font-mono opacity-60 text-danger">{Math.round((stat.wins / stat.total) * 100)}%</div>
                                     </div>
                                 )) : <div className="text-label-sm opacity-40 font-bold uppercase">No Data</div>}
@@ -230,7 +230,7 @@ export const DrillDownOverlay: React.FC = () => {
                                         <div className="text-label-sm uppercase opacity-40 font-bold mb-1">Best</div>
                                         {topEnvs.map(([name, stat]) => (
                                             <div key={name} className="flex justify-between items-center text-label-sm">
-                                                <div className="font-bold truncate max-w-70p">{name}</div>
+                                                <div className="font-bold truncate max-w-[85%]">{name}</div>
                                                 <div className="font-mono text-success">{Math.round((stat.wins / stat.total) * 100)}%</div>
                                             </div>
                                         ))}
