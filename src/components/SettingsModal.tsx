@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useId, useState } from 'react';
-import { Palette, FileJson, Save, Download, RefreshCw, X, Cloud, Monitor, Merge, Check, Sparkles, Search } from 'lucide-react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Palette, FileJson, Save, Download, RefreshCw, X, Cloud, Monitor, Merge, Check, Sparkles, Search, Upload } from 'lucide-react';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
@@ -371,6 +371,32 @@ const SettingsModalContent: React.FC = () => {
             alert(`Backup saved to:\n${res.path}`);
         } else {
             alert("Backup failed: " + (res?.error || "Unknown error"));
+        }
+    };
+
+    const restoreInputRef = useRef<HTMLInputElement>(null);
+
+    const handleRestoreBackup = () => {
+        restoreInputRef.current?.click();
+    };
+
+    const handleRestoreFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        // Reset so same file can be re-selected if needed
+        e.target.value = '';
+        try {
+            const text = await file.text();
+            const rawData = JSON.parse(text);
+            const res = await StorageService.restoreFromData(rawData);
+            if (res.success) {
+                alert('Backup restored successfully. The app will now reload.');
+                window.location.reload();
+            } else {
+                alert('Restore failed: ' + (res.error || 'Unknown error'));
+            }
+        } catch {
+            alert('Restore failed: could not read or parse the backup file. Make sure it is a valid Wildgate JSON backup.');
         }
     };
 
@@ -1690,6 +1716,13 @@ const SettingsModalContent: React.FC = () => {
                                     <span className="text-label-sm font-bold">Backup</span>
                                 </button>
                                 <button
+                                    onClick={handleRestoreBackup}
+                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high/50 backdrop-blur-sm rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
+                                >
+                                    <Upload size={20} />
+                                    <span className="text-label-sm font-bold">Restore</span>
+                                </button>
+                                <button
                                     onClick={() => exportToCSV(matches)}
                                     className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high/50 backdrop-blur-sm rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
                                 >
@@ -1705,7 +1738,7 @@ const SettingsModalContent: React.FC = () => {
                                 </button>
                                 <button
                                     onClick={() => setShowResetConfirm(true)}
-                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high/50 backdrop-blur-sm hover:bg-md-sys-error/10 text-md-sys-error rounded-card transition-colors border border-md-sys-outline/10"
+                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high/50 backdrop-blur-sm hover:bg-md-sys-error/10 text-md-sys-error rounded-card transition-colors col-span-2 border border-md-sys-outline/10"
                                 >
                                     <RefreshCw size={20} />
                                     <span className="text-label-sm font-bold">Reset Data</span>
@@ -1718,6 +1751,13 @@ const SettingsModalContent: React.FC = () => {
                                     <span className="text-label-sm font-bold">Manage ID Mappings</span>
                                 </button>
                             </div>
+                            <input
+                                ref={restoreInputRef}
+                                type="file"
+                                accept=".json"
+                                className="hidden"
+                                onChange={handleRestoreFileChange}
+                            />
 
                             {/* Update Section */}
                             <div className="md3-surface-high/50 backdrop-blur-sm p-4 rounded-card flex items-center justify-between border border-md-sys-outline/10">

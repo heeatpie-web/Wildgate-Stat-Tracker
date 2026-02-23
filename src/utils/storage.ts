@@ -530,5 +530,23 @@ export const StorageService = {
       return await ipc.invoke('db-backup');
     }
     return { success: false, error: 'Not in Electron' };
+  },
+
+  async restoreFromData(rawData: unknown): Promise<{ success: boolean; error?: string }> {
+    try {
+      const normalized = coerceStorageData(rawData);
+      if (!normalized) {
+        return { success: false, error: 'Invalid backup data format — could not parse the file.' };
+      }
+      const seeded = await applyUidSeed(normalized);
+      const ok = await writeNow(seeded);
+      if (!ok) {
+        return { success: false, error: 'Failed to write restored data to storage.' };
+      }
+      rememberLoadedData(seeded);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
   }
 };
