@@ -982,7 +982,7 @@ const SmartCapturesPanel: React.FC = () => {
                 content={activeSection === 'capture' ? (
                 <div className="h-full min-h-0 flex max-[1200px]:flex-col gap-2">
                     <div
-                        className={`min-h-0 min-w-0 transition-[width] duration-300 ${queueCollapsed ? 'w-[72px] min-w-[72px]' : 'min-w-[360px] max-[1200px]:w-full max-[1200px]:min-w-0'}`}
+                        className={`min-h-0 min-w-0 transition-[width] duration-300 ${queueCollapsed ? 'w-[72px] min-w-[72px]' : 'min-w-[260px] max-[1200px]:w-full max-[1200px]:min-w-0'}`}
                         style={!queueCollapsed ? { width: `${queueWidthPct}%` } : undefined}
                     >
                         <SmartCapturesQueuePane
@@ -1172,7 +1172,7 @@ const SmartCapturesPanel: React.FC = () => {
                         />
                     )}
 
-                    <div className="flex-1 min-w-0 min-h-0 overflow-visible">
+                    <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
                         <SmartCapturesDetailPane
                             className="h-full"
                             content={selectedMatch ? (

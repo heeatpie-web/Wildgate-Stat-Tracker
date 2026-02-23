@@ -236,10 +236,10 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             const requestedMatchId = custom?.detail?.matchId;
             const forceOcr = custom?.detail?.forceOcr === true;
             const runCapture = async () => {
-                if (forceOcr && requestedMatchId != null && requestedMatchId !== '') {
-                    // Re-run OCR from wizard: only process already-saved captures for this match.
+                if (forceOcr) {
+                    // Re-run OCR from wizard: only process already-saved captures.
                     // Skip taking a fresh screenshot to avoid capturing the wrong screen.
-                    await processAllStored(requestedUser ?? activeUser ?? null, requestedMatchId);
+                    await processAllStored(requestedUser ?? activeUser ?? null, requestedMatchId ?? undefined);
                 } else if (requestedMatchId != null && requestedMatchId !== '') {
                     await triggerSmartCapture(requestedUser ?? activeUser ?? null, requestedMatchId);
                 } else {

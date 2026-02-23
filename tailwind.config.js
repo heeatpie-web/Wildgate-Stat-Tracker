@@ -163,9 +163,9 @@ export default {
         'time-heatmap': 'auto repeat(24, minmax(0, 1fr))',
         '1-auto': '1fr auto',
         '1-auto-auto-auto': '1fr auto auto auto',
-        'playerhub-lg': '560px minmax(0, 1fr) 340px',
-        'playerhub-xl': '620px minmax(0, 1fr) 420px',
-        'playerhub-2xl': '680px minmax(0, 1fr) 460px',
+        'playerhub-lg': '300px minmax(0, 1fr) 280px',
+        'playerhub-xl': '340px minmax(0, 1fr) 320px',
+        'playerhub-2xl': '380px minmax(0, 1fr) 360px',
       },
       colors: {
         status: {

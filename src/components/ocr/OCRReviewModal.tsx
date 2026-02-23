@@ -673,9 +673,9 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
           aria-modal="true"
           aria-labelledby={dialogTitleId}
           aria-describedby={dialogDescriptionId}
-          className="ocr-review-dialog md3-dialog rounded-modal shadow-2xl max-w-2xl w-full max-h-90vh my-2 overflow-hidden flex flex-col relative z-0"
+          className="ocr-review-dialog md3-dialog rounded-modal shadow-2xl max-w-2xl w-full max-h-90vh my-2 overflow-hidden flex flex-col gap-3 p-4 relative z-0"
         >
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="md3-surface-high p-2 rounded-card">
               <Ship className="text-accent" size={20} />
@@ -1320,7 +1320,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
             </div>
           )}
         </div>
-        <div className="md3-dialog-actions ocr-review-actions">
+        <div className="md3-dialog-actions ocr-review-actions shrink-0">
           <button
             onClick={onCancel}
             className="md3-btn-text"
