@@ -9,7 +9,12 @@
 import { create } from 'zustand';
 import { persist, PersistStorage } from 'zustand/middleware';
 import { DataSlice, createDataSlice } from './slices/createDataSlice';
-import { SettingsSlice, createDefaultOcrRegions, createSettingsSlice } from './slices/createSettingsSlice';
+import {
+  SettingsSlice,
+  createDefaultOcrRegions,
+  createSettingsSlice,
+  normalizeOcrNameRerouteThreshold,
+} from './slices/createSettingsSlice';
 import { UISlice, createUISlice } from './slices/createUISlice';
 import { FormSlice, createFormSlice } from './slices/createFormSlice';
 import { MappingSlice, createMappingSlice } from './slices/createMappingSlice';
@@ -146,11 +151,21 @@ const customStorage: PersistStorage<AppState> = {
         }
         return withNormalizedShips;
       });
+      const maxCanonical = recoveredMatches.reduce((acc, match) => {
+        const parsed = Number((match as Match).canonicalMatchNumber || 0);
+        if (!Number.isInteger(parsed) || parsed <= 0) return acc;
+        return Math.max(acc, parsed);
+      }, 0);
+      const storedNextCanonical = Number(data.storageMeta?.nextCanonicalMatchNumber || 0);
+      const nextCanonicalMatchNumber = Number.isInteger(storedNextCanonical) && storedNextCanonical > 0
+        ? Math.max(storedNextCanonical, maxCanonical + 1)
+        : Math.max(1, maxCanonical + 1);
 
       return {
         state: {
           // Data
           matches: recoveredMatches,
+          nextCanonicalMatchNumber,
           players,
           pilotRegistry: data.pilotRegistry || [],
           favorites: data.favorites || [],
@@ -189,12 +204,25 @@ const customStorage: PersistStorage<AppState> = {
           captureMode: settings.captureMode || 'auto',
           resultOcrFlowMode: settings.resultOcrFlowMode === 'background' ? 'background' : 'prompt',
           lockOcrTeams: settings.lockOcrTeams || false,
+          ocrEnhancedNameRecoveryEnabled: settings.ocrEnhancedNameRecoveryEnabled ?? true,
+          ocrNameRerouteThreshold: normalizeOcrNameRerouteThreshold(settings.ocrNameRerouteThreshold),
+          externalFallbackEnabled: settings.externalFallbackEnabled ?? true,
+          externalFallbackThreshold: (() => {
+            const rawThreshold = Number(settings.externalFallbackThreshold);
+            const normalized = Number.isFinite(rawThreshold)
+              ? Math.max(0, Math.min(1, rawThreshold))
+              : 0.66;
+            // Migrate the previous default (0.72) to the new lower barrier.
+            return Math.abs(normalized - 0.72) < 0.000001 ? 0.66 : normalized;
+          })(),
+          externalOnDetectorDisagreement: settings.externalOnDetectorDisagreement ?? true,
+          forceMaxAnalysis: settings.forceMaxAnalysis ?? false,
           ocrLearningEnabled: settings.ocrLearningEnabled ?? true,
-          ocrAutoApplyMinScore: Number.isFinite(settings.ocrAutoApplyMinScore) ? Number(settings.ocrAutoApplyMinScore) : 0.82,
+          ocrAutoApplyMinScore: Number.isFinite(settings.ocrAutoApplyMinScore) ? Number(settings.ocrAutoApplyMinScore) : 0.83,
           ocrAutoApplyMinCount: Number.isFinite(settings.ocrAutoApplyMinCount) ? Math.max(1, Math.round(Number(settings.ocrAutoApplyMinCount))) : 3,
           ocrLearningStrictMode: settings.ocrLearningStrictMode ?? true,
           ocrLearningReviewMode: settings.ocrLearningReviewMode || 'conservative',
-          ocrLearningAutoPromoteCount: Number.isFinite(settings.ocrLearningAutoPromoteCount) ? Math.max(1, Math.round(Number(settings.ocrLearningAutoPromoteCount))) : 5,
+          ocrLearningAutoPromoteCount: Number.isFinite(settings.ocrLearningAutoPromoteCount) ? Math.max(1, Math.round(Number(settings.ocrLearningAutoPromoteCount))) : 3,
           ocrLearningQueueEnabled: settings.ocrLearningQueueEnabled ?? true,
           adaptivePreloadEnabled: settings.adaptivePreloadEnabled ?? true,
           adaptivePreloadBudgetMs: Number.isFinite(settings.adaptivePreloadBudgetMs) ? Math.max(200, Math.round(Number(settings.adaptivePreloadBudgetMs))) : 900,
@@ -305,6 +333,12 @@ const customStorage: PersistStorage<AppState> = {
                 captureMode: state.captureMode,
                 resultOcrFlowMode: state.resultOcrFlowMode,
                 lockOcrTeams: state.lockOcrTeams,
+                ocrEnhancedNameRecoveryEnabled: state.ocrEnhancedNameRecoveryEnabled,
+                ocrNameRerouteThreshold: state.ocrNameRerouteThreshold,
+                externalFallbackEnabled: state.externalFallbackEnabled,
+                externalFallbackThreshold: state.externalFallbackThreshold,
+                externalOnDetectorDisagreement: state.externalOnDetectorDisagreement,
+                forceMaxAnalysis: state.forceMaxAnalysis,
                 ocrLearningEnabled: state.ocrLearningEnabled,
                 ocrAutoApplyMinScore: state.ocrAutoApplyMinScore,
                 ocrAutoApplyMinCount: state.ocrAutoApplyMinCount,
@@ -330,6 +364,11 @@ const customStorage: PersistStorage<AppState> = {
                 smartCapturesSearchQuery: state.searchQuery,
                 smartCapturesSortMode: state.sortMode,
         activeUser: state.activeUser
+      },
+      storageMeta: {
+        nextCanonicalMatchNumber: Number.isInteger(Number(state.nextCanonicalMatchNumber))
+          ? Math.max(1, Number(state.nextCanonicalMatchNumber))
+          : 1,
       },
       layouts: state.layouts,
       timelineEvents: state.timelineEvents,
@@ -358,6 +397,7 @@ export const useAppStore = create<AppState>()(
       storage: customStorage,
       partialize: (state) => ({
         matches: state.matches,
+        nextCanonicalMatchNumber: state.nextCanonicalMatchNumber,
         players: state.players,
         pilotRegistry: state.pilotRegistry,
         favorites: state.favorites,
@@ -389,6 +429,12 @@ export const useAppStore = create<AppState>()(
         captureMode: state.captureMode,
         resultOcrFlowMode: state.resultOcrFlowMode,
         lockOcrTeams: state.lockOcrTeams,
+        ocrEnhancedNameRecoveryEnabled: state.ocrEnhancedNameRecoveryEnabled,
+        ocrNameRerouteThreshold: state.ocrNameRerouteThreshold,
+        externalFallbackEnabled: state.externalFallbackEnabled,
+        externalFallbackThreshold: state.externalFallbackThreshold,
+        externalOnDetectorDisagreement: state.externalOnDetectorDisagreement,
+        forceMaxAnalysis: state.forceMaxAnalysis,
         ocrLearningEnabled: state.ocrLearningEnabled,
         ocrAutoApplyMinScore: state.ocrAutoApplyMinScore,
         ocrAutoApplyMinCount: state.ocrAutoApplyMinCount,

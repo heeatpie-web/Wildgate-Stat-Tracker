@@ -13,6 +13,7 @@ const gcloudService = require('./gcloudService.cjs');
 const gcloudSyncService = require('./gcloudSyncService.cjs');
 const geminiService = require('./geminiService.cjs');
 const artifactHelpers = require('./helpers/artifactHelpers.cjs');
+const { runArtifactCanonicalMigration } = require('./helpers/artifactCanonicalMigration.cjs');
 const telemetryArchiveHelpers = require('./helpers/telemetryArchiveHelpers.cjs');
 const dbHelpers = require('./helpers/dbHelpers.cjs');
 const { registerArtifactHandlers } = require('./handlers/artifactHandlers.cjs');
@@ -1215,7 +1216,7 @@ const LOG_FILE_PATH = path.join(app.getPath('userData'), 'app_logs.txt');
 // Artifact handlers (Phase 2: electron/handlers/*)
 registerArtifactHandlers(ipcMain, { app, getWin: () => win, artifactHelpers, gcloudSyncService });
 
-ipcMain.handle('rerun-ocr-on-artifact', async (event, { imagePath, activeUser, ocrMode, ocrRegions }) => {
+ipcMain.handle('rerun-ocr-on-artifact', async (event, { imagePath, activeUser, ocrMode, ocrRegions, runtimeOptions }) => {
   try {
     const pathCheck = resolveAllowedRendererPath(imagePath);
     if (!pathCheck.success) {
@@ -1232,9 +1233,13 @@ ipcMain.handle('rerun-ocr-on-artifact', async (event, { imagePath, activeUser, o
     const imageBuffer = await fsPromises.readFile(fullPath);
     const base64 = imageBuffer.toString('base64');
     // Pass sourceImagePath to skip duplicate debug save and cloud upload
+    const safeRuntimeOptions = (runtimeOptions && typeof runtimeOptions === 'object' && !Array.isArray(runtimeOptions))
+      ? runtimeOptions
+      : {};
     const result = await processCapture(base64, activeUser, null, ocrMode || 'both', {
       sourceImagePath: fullPath,
       ocrRegions: ocrRegions || null,
+      ...safeRuntimeOptions,
     });
     return result;
   } catch (e) {
@@ -2291,6 +2296,26 @@ ipcMain.handle('gcloud-backfill-screenshots', async () => {
 
 app.whenReady().then(async () => {
   devMark('app whenReady');
+  try {
+    await replayWalIfPresent();
+  } catch (e) {
+    console.warn('[DB] WAL preflight replay failed:', e?.message || e);
+  }
+  try {
+    const migration = runArtifactCanonicalMigration({
+      dbPath: DB_PATH,
+      userData: app.getPath('userData'),
+    });
+    if (migration?.changed) {
+      console.log(
+        `[Artifacts] Canonical migration applied (assigned=${migration.assignedCanonicalNumbers}, renamedDirs=${migration.renamedDirs}, mergedDirs=${migration.mergedDirs}, duplicatesDeleted=${migration.duplicateFilesDeleted}, orphanReattached=${migration.orphanReattachedFiles}, orphanQuarantined=${migration.orphanQuarantinedFiles}, elapsedMs=${migration.elapsedMs})`
+      );
+    } else if (migration?.reason && migration.reason !== 'already-migrated') {
+      console.log(`[Artifacts] Canonical migration skipped (${migration.reason})`);
+    }
+  } catch (e) {
+    console.warn('[Artifacts] Canonical migration failed:', e?.message || e);
+  }
   createWindow();
   createTray();
 

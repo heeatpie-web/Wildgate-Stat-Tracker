@@ -50,6 +50,7 @@ const appStoreState = {
   matches: [] as Array<Record<string, unknown>>,
   knownMappings: {},
   uidMappings: { players: {}, ships: {}, weapons: {}, equipment: {} },
+  resetSelectionSourcesForNewMatch: vi.fn(),
   registerUnknownId: vi.fn(),
   setPlayerName: vi.fn(),
   activeWeapons: {},
@@ -113,6 +114,7 @@ describe('useLogMonitor', () => {
     setTelemetryStatus.mockClear();
     processTelemetryEvent.mockClear();
     appStoreState.setPlayerName.mockClear();
+    appStoreState.resetSelectionSourcesForNewMatch.mockClear();
     ipcMock.send.mockClear();
     ipcMock.on.mockClear();
     gameDataState.setCurrentLoadout.mockClear();
@@ -186,6 +188,34 @@ describe('useLogMonitor', () => {
       subType: 'Telemetry Draft',
       ocrState: 'queued',
     });
+  });
+
+  it('resets selection source gates and seeds hero/ship from latest telemetry loadout on match start', async () => {
+    gameDataState.currentLoadout = {
+      hero: 'Venture',
+      ship: 'Scout (3 Player)',
+      weapons: [],
+      equipment: [],
+      characterWeapons: [],
+      characterEquipment: [],
+    };
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(appStoreState.resetSelectionSourcesForNewMatch).toHaveBeenCalledTimes(1);
+    expect(gameDataState.setActiveHero).toHaveBeenCalledWith('Venture', 'telemetry');
+    expect(gameDataState.setActiveShip).toHaveBeenCalledWith('Scout (3 Player)', 'telemetry');
   });
 
   it('does not create telemetry draft from session-id start without map start', async () => {
@@ -453,10 +483,32 @@ describe('useLogMonitor', () => {
     expect(latestLoadout?.characterEquipment).toEqual(expect.arrayContaining(['Repair Drone']));
   });
 
-  it('captures matchmaker teammate and mode expectations into telemetry consistency', async () => {
+  it('captures matchmaker teammate and mode expectations only after match start', async () => {
     const nowSec = Math.floor(Date.now() / 1000);
     const { useLogMonitor } = await import('../useLogMonitor');
     renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebClientMatchmakerStateChange',
+          Payload: {
+            event: {
+              playerIds: ['pilot-id', 'wing-1'],
+              ticketMatchPool: 'FleetBattle',
+            },
+          },
+          ClientTimestamp: nowSec - 1,
+        },
+      ]);
+    });
+
+    const beforeStartConsistency = updateMatch.mock.calls
+      .map(([match]) => match as {
+        telemetryConsistency?: { expectedTeammateCount?: number; expectedMode?: string };
+      })
+      .find((match) => typeof match?.telemetryConsistency?.expectedTeammateCount === 'number');
+    expect(beforeStartConsistency).toBeUndefined();
 
     act(() => {
       ipcCallbacks['log-data']?.([
@@ -470,6 +522,7 @@ describe('useLogMonitor', () => {
 
     const createdDraft = addMatch.mock.calls[0]?.[0];
     expect(createdDraft).toBeTruthy();
+    expect((createdDraft?.telemetryConsistency as { expectedTeammateCount?: number } | undefined)?.expectedTeammateCount).toBeUndefined();
     appStoreState.matches = [createdDraft];
 
     act(() => {

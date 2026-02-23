@@ -211,14 +211,31 @@ export const getTelemetryConsistencyWarningChips = (match: Match): TelemetryCons
     if (checks.teammateCount === 'warn') {
         const expected = consistency.expectedTeammateCount;
         const actual = comparableTeammateCount;
-        chips.push({
-            key: 'team-count-mismatch',
-            label: 'Team Count Mismatch',
-            description: typeof expected === 'number'
-                ? `Entered ${actual} teammate(s); telemetry expected ${expected}.`
-                : 'Entered teammate count does not match telemetry expectation.',
-            tone: 'warning',
-        });
+        const hasEnteredTeammates = Array.isArray(match.teammates)
+            && match.teammates.some((name) => String(name || '').trim().length > 0);
+        const isInOcrReviewFlow = match.ocrState === 'queued'
+            || match.ocrState === 'processing'
+            || match.ocrState === 'reviewing'
+            || match.ocrState === 'ready';
+        const nearMiss = typeof expected === 'number' && Math.abs(actual - expected) <= 1;
+        const hasStructuredOpponentTeams = Array.isArray(match.opponentTeams)
+            && match.opponentTeams.some((team) => Array.isArray(team.players) && team.players.length > 0);
+        const shouldSuppressEmptyEntryWarning = typeof expected === 'number'
+            && expected > 0
+            && actual === 0
+            && !hasEnteredTeammates;
+        const shouldSuppressNearMissReviewWarning = isInOcrReviewFlow && nearMiss && hasStructuredOpponentTeams;
+        const shouldSuppressDuringOcrReview = isInOcrReviewFlow;
+        if (!shouldSuppressEmptyEntryWarning && !shouldSuppressNearMissReviewWarning && !shouldSuppressDuringOcrReview) {
+            chips.push({
+                key: 'team-count-mismatch',
+                label: 'Team Count Mismatch',
+                description: typeof expected === 'number'
+                    ? `Entered ${actual} teammate(s); telemetry expected ${expected}.`
+                    : 'Entered teammate count does not match telemetry expectation.',
+                tone: 'warning',
+            });
+        }
     }
     if (checks.duration === 'warn') {
         const delta = Math.max(0, Math.floor(Number(durationDeltaSeconds || 0)));

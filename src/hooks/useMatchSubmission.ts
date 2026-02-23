@@ -12,6 +12,8 @@ import { capTeammateNames } from '../utils/teamLimits';
 import { evaluateTelemetryConsistencyChecks, formatDurationOffset } from '../utils/telemetryConsistency';
 
 const DEFAULT_ARTIFACT_LOOKBACK_MS = 10 * 60 * 1000;
+const MAX_SHIP_WEAPON_SLOTS = 10;
+const MAX_PROSPECTOR_SLOTS = 2;
 const parseDurationSecs = (value: string | undefined): number => {
     if (!value) return 0;
     const parts = value.split(':').map(Number);
@@ -21,19 +23,19 @@ const parseDurationSecs = (value: string | undefined): number => {
 
 const sanitizeLoadoutSlots = (loadout: Match['loadout'] | null) => {
     if (!loadout) return undefined;
-    const sanitizeSlotList = (entries?: string[]) => (
+    const sanitizeSlotList = (entries: string[] | undefined, maxSlots: number) => (
         (entries || [])
             .map((entry) => String(entry || '').trim())
             .filter(Boolean)
             .filter((entry) => !/tertiary\s+(weapon|equipment)/i.test(entry))
-            .slice(0, 2)
+            .slice(0, Math.max(1, maxSlots))
     );
     return {
         ...loadout,
-        weapons: sanitizeSlotList(loadout.weapons),
-        equipment: sanitizeSlotList(loadout.equipment),
-        characterWeapons: sanitizeSlotList(loadout.characterWeapons),
-        characterEquipment: sanitizeSlotList(loadout.characterEquipment),
+        weapons: sanitizeSlotList(loadout.weapons, MAX_SHIP_WEAPON_SLOTS),
+        equipment: sanitizeSlotList(loadout.equipment, MAX_PROSPECTOR_SLOTS),
+        characterWeapons: sanitizeSlotList(loadout.characterWeapons, MAX_PROSPECTOR_SLOTS),
+        characterEquipment: sanitizeSlotList(loadout.characterEquipment, MAX_PROSPECTOR_SLOTS),
     };
 };
 
@@ -217,10 +219,18 @@ export const useMatchSubmission = () => {
         if (data.telemetryConsistency?.checks?.teammateCount === 'warn') {
             const expected = data.telemetryConsistency.expectedTeammateCount;
             const actual = countComparableTeammates(data.teammates, data.player);
-            if (typeof expected === 'number') {
-                healthWarnings.push(`team count mismatch (entered ${actual}, expected ${expected})`);
-            } else {
-                healthWarnings.push('team count mismatch');
+            const hasEnteredTeammates = Array.isArray(data.teammates)
+                && data.teammates.some((name) => String(name || '').trim().length > 0);
+            const shouldSuppressEmptyEntryWarning = typeof expected === 'number'
+                && expected > 0
+                && actual === 0
+                && !hasEnteredTeammates;
+            if (!shouldSuppressEmptyEntryWarning) {
+                if (typeof expected === 'number') {
+                    healthWarnings.push(`team count mismatch (entered ${actual}, expected ${expected})`);
+                } else {
+                    healthWarnings.push('team count mismatch');
+                }
             }
         }
         if (data.telemetryConsistency?.checks?.mode === 'warn') {
@@ -256,8 +266,23 @@ export const useMatchSubmission = () => {
         } = state;
 
         if (!pendingMatchData || submitting) return;
+        const selectedResult = showWizard === 'Win' || showWizard === 'Loss' || showWizard === 'Draw'
+            ? showWizard
+            : null;
+        if (!selectedResult) {
+            setToast({ message: "Select Win/Loss/Draw before finalizing.", type: 'warning' });
+            return;
+        }
         if (!activeUser && !pendingMatchData.player) {
             setToast({ message: "Select a profile before finalizing.", type: 'error' });
+            return;
+        }
+        const isLossCombat = selectedResult === 'Loss' && subType === 'Combat';
+        const normalizedLossPlacement = Number.isFinite(Number(pendingPlacement))
+            ? Math.min(5, Math.max(2, Number(pendingPlacement)))
+            : null;
+        if (isLossCombat && (normalizedLossPlacement == null || !Number.isInteger(normalizedLossPlacement))) {
+            setToast({ message: "Combat losses require placement (2nd-5th).", type: 'warning' });
             return;
         }
 
@@ -269,7 +294,7 @@ export const useMatchSubmission = () => {
             let finalMods = [...baseMods];
             if (subType === 'Artifact') finalMods.push(`Artifact: ${pendingArtifactType || 'Healing'}`);
 
-            if (showWizard === 'Win') {
+            if (selectedResult === 'Win') {
                 confetti({ particleCount: 100, spread: 70 });
                 playVictory();
             } else {
@@ -300,7 +325,11 @@ export const useMatchSubmission = () => {
             const finalPoiMedium = Math.max(Number(pendingMatchData.poiMedium) || 0, Number(poiMedium) || 0);
             const finalPoiEpic = Math.max(Number(pendingMatchData.poiEpic) || 0, Number(poiEpic) || 0);
             const finalNotes = currentNote || pendingMatchData.notes || '';
-            const finalPlacement = pendingPlacement || (showWizard === 'Win' ? 1 : undefined);
+            const finalPlacement = selectedResult === 'Win'
+                ? 1
+                : (selectedResult === 'Loss' && subType === 'Combat'
+                    ? (normalizedLossPlacement ?? undefined)
+                    : undefined);
             const pendingMatchId = Number(pendingMatchData.id || 0);
             const existingMatchByPendingId = Number.isInteger(pendingMatchId) && pendingMatchId > 0
                 ? (Array.isArray(matches) ? matches.find((m: Match) => m.id === pendingMatchId) : undefined)
@@ -318,6 +347,11 @@ export const useMatchSubmission = () => {
                     return true;
                 });
             const existingMatch = existingMatchByPendingId || fallbackTelemetryDraft;
+            const finalEliminatedByTeam = (() => {
+                const stored = String(pendingMatchData?.eliminatedByTeam || existingMatch?.eliminatedByTeam || '').trim();
+                if (selectedResult !== 'Loss' || !stored) return undefined;
+                return stored;
+            })();
             const matchId = existingMatch?.id || Date.now();
             const matchTimestamp = existingMatch?.timestamp || pendingMatchData.timestamp || Date.now();
             const mergedLoadout = sanitizeLoadoutSlots(pendingMatchData.loadout || currentLoadout);
@@ -354,7 +388,7 @@ export const useMatchSubmission = () => {
                 loadout: mergedLoadout,
                 reachModifiers: finalMods,
                 kills: Object.keys(finalKills).length > 0 ? finalKills : pendingKills,
-                result: (showWizard || 'Win') as 'Win' | 'Loss' | 'Draw',
+                result: selectedResult,
                 subType: subType || 'Combat',
                 placement: finalPlacement,
                 damageTaken: finalDamageTaken,
@@ -369,6 +403,7 @@ export const useMatchSubmission = () => {
                 artifacts: [...(existingMatch?.artifacts || pendingMatchData.artifacts || [])],
                 ocrDebug: pendingMatchData?.ocrDebug || undefined,
                 opponentTeams: pendingMatchData?.opponentTeams || undefined,
+                eliminatedByTeam: finalEliminatedByTeam,
                 ocrState: pendingMatchData?.ocrState || existingMatch?.ocrState,
                 telemetryConsistency: finalTelemetryConsistency,
             };

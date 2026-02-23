@@ -1,11 +1,17 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { captureGameWindow, ocrProcessCapture, saveScreenshot, isElectron } from '../utils/electronBridge';
+import type { OCRProcessRuntimeOptions } from '../utils/electronBridge';
 import { rerunOCROnArtifact, type RerunOcrResult } from '../utils/artifactService';
 import type { OCRExtractedData, ScreenshotType } from '../utils/ocr/ocrTypes';
 import { mergeOCRData, calculateOverallConfidence } from '../utils/ocr/ocrParser';
 import { useAppStore } from '../store/useAppStore';
 import { useSoundEffects } from './useSoundEffects';
-import { findClosestMatch, normalizeOcrName, similarityScore } from '../utils/stringUtils';
+import {
+  combinedNameSimilarityScore,
+  findClosestMatch,
+  getAdaptiveNameSimilarityThreshold,
+  normalizeOcrName,
+} from '../utils/stringUtils';
 import {
   buildAliasVariantMap,
   dedupeNamedByCanonical,
@@ -32,6 +38,7 @@ export interface SavedCapture {
 export interface SmartCaptureState {
   isCapturing: boolean;
   isProcessing: boolean;
+  processingStatus: { phase: 'prepare' | 'analyzing' | 'merging' | 'completed' | 'error'; message: string } | null;
   error: string | null;
   pendingData: OCRExtractedData | null;
   capturedScreenshots: Array<{
@@ -60,6 +67,18 @@ export interface SmartCaptureActions {
   resetCaptureSession: () => void;
 }
 
+interface TemporalNameEvidence {
+  displayName: string;
+  count: number;
+  weightedScore: number;
+  maxConfidence: number;
+}
+
+interface ScopeNameEvidence {
+  teammates: Record<string, TemporalNameEvidence>;
+  opponents: Record<string, TemporalNameEvidence>;
+}
+
 /**
  * useSmartCapture - Hook for managing multi-screenshot capture sessions and OCR batching.
  * Synchronizes capture/processing state with the global visionStatus for the SystemPulse.
@@ -70,6 +89,12 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const captureMode = useAppStore(s => s.captureMode);
   const performanceMode = useAppStore(s => s.performanceMode);
   const lockOcrTeams = useAppStore(s => s.lockOcrTeams);
+  const ocrEnhancedNameRecoveryEnabled = useAppStore(s => s.ocrEnhancedNameRecoveryEnabled);
+  const ocrNameRerouteThreshold = useAppStore(s => s.ocrNameRerouteThreshold);
+  const externalFallbackEnabled = useAppStore(s => s.externalFallbackEnabled);
+  const externalFallbackThreshold = useAppStore(s => s.externalFallbackThreshold);
+  const externalOnDetectorDisagreement = useAppStore(s => s.externalOnDetectorDisagreement);
+  const forceMaxAnalysis = useAppStore(s => s.forceMaxAnalysis);
   const pilotRegistry = useAppStore(s => s.pilotRegistry);
   const ocrCorrections = useAppStore(s => s.ocrCorrections);
   const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
@@ -89,6 +114,10 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const [error, setError] = useState<string | null>(null);
   const isCapturing = visionStatus === 'capturing';
   const isProcessing = visionStatus === 'processing';
+  const [processingStatus, setProcessingStatus] = useState<{
+    phase: 'prepare' | 'analyzing' | 'merging' | 'completed' | 'error';
+    message: string;
+  } | null>(null);
 
   const [pendingData, setPendingData] = useState<OCRExtractedData | null>(null);
   const pendingDataRef = useRef<OCRExtractedData | null>(null);
@@ -96,17 +125,22 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const [capturedScreenshots, setCapturedScreenshots] = useState<
     Array<{ type: ScreenshotType; data: OCRExtractedData; timestamp: number }>
   >([]);
+  const capturedScreenshotsRef = useRef<Array<{ type: ScreenshotType; data: OCRExtractedData; timestamp: number }>>([]);
   const [queueDepth, setQueueDepth] = useState(0);
   const [savedCaptures, setSavedCaptures] = useState<SavedCapture[]>([]);
   const [processingProgress, setProcessingProgress] = useState<{ current: number; total: number } | null>(null);
   const [qualityHint, setQualityHint] = useState<{ level: 'good' | 'fair' | 'poor'; message: string } | null>(null);
   const aliasVariantMap = useMemo(() => buildAliasVariantMap(ocrAliasModel), [ocrAliasModel]);
+  const nameEvidenceByScopeRef = useRef<Record<string, ScopeNameEvidence>>({});
 
   // Avoid stale closures in delayed processing (auto-bundling).
   const savedCapturesRef = useRef<SavedCapture[]>([]);
   useEffect(() => {
     savedCapturesRef.current = savedCaptures;
   }, [savedCaptures]);
+  useEffect(() => {
+    capturedScreenshotsRef.current = capturedScreenshots;
+  }, [capturedScreenshots]);
   useEffect(() => {
     pendingDataRef.current = pendingData;
   }, [pendingData]);
@@ -125,6 +159,61 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     if (matchId === null || matchId === undefined || matchId === '') return null;
     const normalized = String(matchId).trim();
     return normalized.length > 0 ? normalized : null;
+  }, []);
+
+  const getFileLabel = useCallback((filePath: string): string => {
+    const normalized = String(filePath || '').trim();
+    if (!normalized) return 'image';
+    const parts = normalized.split(/[\\/]/).filter(Boolean);
+    return parts[parts.length - 1] || normalized;
+  }, []);
+
+  const ocrRuntimeOptions = useMemo<OCRProcessRuntimeOptions>(() => ({
+    routingProfile: ocrEnhancedNameRecoveryEnabled ? 'names-only' : 'default',
+    fontProfile: ocrEnhancedNameRecoveryEnabled ? 'ealing-black-italic' : 'default',
+    nameRerouteThreshold: ocrNameRerouteThreshold,
+    maxReroutePasses: ocrEnhancedNameRecoveryEnabled ? 1 : 0,
+    externalFallbackEnabled,
+    externalFallbackThreshold,
+    externalOnDetectorDisagreement,
+    forceMaxAnalysis,
+    forceUncached: forceMaxAnalysis,
+  }), [
+    ocrEnhancedNameRecoveryEnabled,
+    ocrNameRerouteThreshold,
+    externalFallbackEnabled,
+    externalFallbackThreshold,
+    externalOnDetectorDisagreement,
+    forceMaxAnalysis,
+  ]);
+
+  const createEmptyScopeEvidence = useCallback((): ScopeNameEvidence => ({
+    teammates: {},
+    opponents: {},
+  }), []);
+
+  const updateTemporalEvidence = useCallback((
+    bucket: Record<string, TemporalNameEvidence>,
+    rawName: string,
+    confidence: number
+  ) => {
+    const normalized = normalizeOcrName(rawName || '');
+    const key = normalized.toLowerCase();
+    if (!key || normalized.length < 2) return;
+    const previous = bucket[key];
+    const prevWeighted = previous ? previous.weightedScore * 0.75 : 0;
+    const weight = Math.max(0.4, Math.min(1.0, Number(confidence || 0) / 100));
+    bucket[key] = {
+      displayName: normalized,
+      count: (previous?.count || 0) + 1,
+      weightedScore: prevWeighted + weight,
+      maxConfidence: Math.max(previous?.maxConfidence || 0, Number(confidence || 0)),
+    };
+  }, []);
+
+  const isStableTemporalName = useCallback((evidence: TemporalNameEvidence | undefined): boolean => {
+    if (!evidence) return false;
+    return evidence.count >= 2 || evidence.weightedScore >= 1.35 || evidence.maxConfidence >= 88;
   }, []);
 
   const captureQueueRef = useRef<Array<{ activeUser?: string | null }>>([]);
@@ -189,7 +278,6 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       };
       const SMARTSCAN_REJECT_CONFIDENCE = 55;
       const SMARTSCAN_REVIEW_CONFIDENCE = 75;
-      const SMARTSCAN_MIN_RESOLVE_SIMILARITY = 70;
       const pendingPlayerReviewKeys = new Set(
         (pendingReviews || [])
           .filter((review) => review.type === 'player_name')
@@ -276,8 +364,12 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         const rawNormalized = normalizeOcrName(rawName);
         const resolvedNormalized = normalizeOcrName(name);
         const changed = rawNormalized.toLowerCase() !== resolvedNormalized.toLowerCase();
-        if (changed && similarityScore(rawNormalized, resolvedNormalized) < SMARTSCAN_MIN_RESOLVE_SIMILARITY) {
-          queueSmartScanReview(rawName, confidence, `${res.mode}: review (ambiguous resolution)`);
+        const score = combinedNameSimilarityScore(rawNormalized, resolvedNormalized);
+        const minSimilarity = getAdaptiveNameSimilarityThreshold(
+          Math.max(rawNormalized.length, resolvedNormalized.length)
+        );
+        if (changed && score < minSimilarity) {
+          queueSmartScanReview(rawName, confidence, `${res.mode}: review (ambiguous resolution ${Math.round(score)}% < ${minSimilarity}%)`);
           continue;
         }
         const color = (p?.teamColor || 'Unknown') as string;
@@ -335,7 +427,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const assessCaptureQuality = useCallback((base64: string) => {
     const approxBytes = Math.floor((base64.length * 3) / 4);
     if (approxBytes < 280_000) {
-      return { level: 'poor' as const, message: 'Low detail capture detected. Recapture for best OCR results.' };
+      return { level: 'poor' as const, message: 'Low detail capture detected. Review OCR output carefully before applying.' };
     }
     if (approxBytes < 450_000) {
       return { level: 'fair' as const, message: 'Capture quality is fair. OCR may need manual review.' };
@@ -358,7 +450,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     if (confidence < 62 || (teamCount + oppCount + modCount) === 0) {
       return {
         level: 'poor' as const,
-        message: `OCR confidence is low (${Math.round(confidence)}%, ${source}). Consider recapturing this screen.`,
+        message: `OCR confidence is low (${Math.round(confidence)}%, ${source}). Review results and optionally rerun OCR for this screen.`,
       };
     }
     if (confidence < 78 || (teamCount + oppCount) < 3) {
@@ -398,6 +490,74 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     if (/^(team|enemy|unknown)\b/i.test(cleaned)) return '';
     return cleaned;
   }, []);
+
+  const applyTemporalFusion = useCallback((
+    scope: string,
+    data: OCRExtractedData
+  ): OCRExtractedData => {
+    if (!ocrEnhancedNameRecoveryEnabled) return data;
+    const scopedEvidence = nameEvidenceByScopeRef.current[scope] || createEmptyScopeEvidence();
+    nameEvidenceByScopeRef.current[scope] = scopedEvidence;
+
+    (data.teammates || []).forEach((teammate) => {
+      updateTemporalEvidence(scopedEvidence.teammates, teammate.name, Number(teammate.confidence || 0));
+    });
+    (data.opponentTeams || []).forEach((team) => {
+      (team.players || []).forEach((player) => {
+        updateTemporalEvidence(scopedEvidence.opponents, player.name, Number(player.confidence || 0));
+      });
+    });
+
+    const teammateMap = new Map<string, (typeof data.teammates)[number]>();
+    (data.teammates || []).forEach((teammate) => {
+      const name = normalizeOcrName(teammate.name || '');
+      const key = name.toLowerCase();
+      if (!key) return;
+      const evidence = scopedEvidence.teammates[key];
+      const boostedConfidence = isStableTemporalName(evidence)
+        ? Math.max(Number(teammate.confidence || 0), Math.max(88, Number(evidence?.maxConfidence || 0)))
+        : Number(teammate.confidence || 0);
+      const candidate = { ...teammate, name: evidence?.displayName || name, confidence: boostedConfidence };
+      const prev = teammateMap.get(key);
+      if (!prev || Number(candidate.confidence || 0) > Number(prev.confidence || 0)) {
+        teammateMap.set(key, candidate);
+      }
+    });
+    const fusedTeammates = capTeammatePlayers(Array.from(teammateMap.values()), data.playerShip?.shipType);
+
+    const fusedOpponentTeams = (data.opponentTeams || []).map((team) => {
+      const playerMap = new Map<string, typeof team.players[number]>();
+      (team.players || []).forEach((player) => {
+        const name = normalizeOcrName(player.name || '');
+        const key = name.toLowerCase();
+        if (!key) return;
+        const evidence = scopedEvidence.opponents[key];
+        const boostedConfidence = isStableTemporalName(evidence)
+          ? Math.max(Number(player.confidence || 0), Math.max(88, Number(evidence?.maxConfidence || 0)))
+          : Number(player.confidence || 0);
+        const candidate = { ...player, name: evidence?.displayName || name, confidence: boostedConfidence };
+        const prev = playerMap.get(key);
+        if (!prev || Number(candidate.confidence || 0) > Number(prev.confidence || 0)) {
+          playerMap.set(key, candidate);
+        }
+      });
+      return {
+        ...team,
+        players: Array.from(playerMap.values()),
+      };
+    });
+
+    return {
+      ...data,
+      teammates: fusedTeammates,
+      opponentTeams: fusedOpponentTeams,
+    };
+  }, [
+    createEmptyScopeEvidence,
+    isStableTemporalName,
+    ocrEnhancedNameRecoveryEnabled,
+    updateTemporalEvidence,
+  ]);
 
   const canonicalizeOcrData = useCallback((
     data: OCRExtractedData,
@@ -566,6 +726,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       reachModifiers: [],
       teammates: [],
       opponentTeams: [],
+      enemyShips: [],
     };
 
     for (const capture of screenshots) {
@@ -574,6 +735,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         reachModifiers: capture.data.reachModifiers,
         teammates: capture.data.teammates,
         opponentTeams: capture.data.opponentTeams,
+        enemyShips: capture.data.enemyShips,
       });
     }
 
@@ -592,7 +754,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       playerShip: merged.playerShip,
       playerTeamName: undefined,
       reachModifiers: merged.reachModifiers || [],
-      enemyShips: [],
+      enemyShips: merged.enemyShips || [],
       teammates: mergedTeammates,
       opponentTeams: merged.opponentTeams || [],
       overallConfidence,
@@ -602,13 +764,19 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   }, []);
 
   const mergeIntoPending = useCallback((extractedData: OCRExtractedData, matchId?: string | number | null) => {
-    let normalizedData = extractedData;
-    setCapturedScreenshots(prev => {
-      normalizedData = canonicalizeOcrData(extractedData, prev.map(p => p.data));
-      return [...prev, { type: normalizedData.screenshotType, data: normalizedData, timestamp: Date.now() }];
-    });
-
     const scope = normalizeMatchScope(matchId) || 'unscoped';
+    const canonicalized = canonicalizeOcrData(
+      extractedData,
+      capturedScreenshotsRef.current.map((screenshot) => screenshot.data)
+    );
+    const normalizedData = applyTemporalFusion(scope, canonicalized);
+    const nextScreenshots = [
+      ...capturedScreenshotsRef.current,
+      { type: normalizedData.screenshotType, data: normalizedData, timestamp: Date.now() },
+    ];
+    capturedScreenshotsRef.current = nextScreenshots;
+    setCapturedScreenshots(nextScreenshots);
+
     const previous = pendingDataByScopeRef.current[scope];
     if (!previous) {
       const cappedTeammates = capTeammatePlayers(
@@ -620,7 +788,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         playerShip: normalizedData.playerShip,
         playerTeamName: undefined,
         reachModifiers: normalizedData.reachModifiers || [],
-        enemyShips: [],
+        enemyShips: normalizedData.enemyShips || [],
         teammates: cappedTeammates,
         opponentTeams: normalizedData.opponentTeams || [],
         overallConfidence: normalizedData.overallConfidence || 0,
@@ -637,6 +805,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       reachModifiers: normalizedData.reachModifiers,
       teammates: normalizedData.teammates,
       opponentTeams: normalizedData.opponentTeams,
+      enemyShips: normalizedData.enemyShips,
     });
     const screenshotType = normalizedData.screenshotType !== 'unknown'
       ? normalizedData.screenshotType : previous.screenshotType;
@@ -652,13 +821,14 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       reachModifiers: merged.reachModifiers || previous.reachModifiers,
       teammates: cappedMergedTeammates,
       opponentTeams: merged.opponentTeams || previous.opponentTeams,
+      enemyShips: merged.enemyShips || previous.enemyShips || normalizedData.enemyShips || [],
       overallConfidence: calculateOverallConfidence(merged),
       captureTimestamp: Date.now(),
       imagePreview: normalizedData.imagePreview || previous.imagePreview,
     };
     pendingDataByScopeRef.current[scope] = updated;
     setPendingData(updated);
-  }, [canonicalizeOcrData, normalizeMatchScope]);
+  }, [applyTemporalFusion, canonicalizeOcrData, normalizeMatchScope]);
 
   const processSingleCapture = useCallback(async (activeUser?: string | null) => {
     const captureResult = await captureGameWindow();
@@ -689,13 +859,17 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
     const saved = await saveScreenshot(captureResult.imageBase64);
     if (saved.success && saved.filePath) {
-      setSavedCaptures(prev => [...prev, {
-        filePath: saved.filePath!,
-        filename: saved.filename || 'capture.png',
-        timestamp: Date.now(),
-        matchId: null,
-        ocrProcessed: false,
-      }]);
+      setSavedCaptures(prev => {
+        const next = [...prev, {
+          filePath: saved.filePath!,
+          filename: saved.filename || 'capture.png',
+          timestamp: Date.now(),
+          matchId: null,
+          ocrProcessed: false,
+        }];
+        savedCapturesRef.current = next;
+        return next;
+      });
     }
 
     const effectiveOcrMode = ocrMode === 'hybrid-plus' ? 'both' : ocrMode;
@@ -704,7 +878,8 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       activeUser,
       null,
       effectiveOcrMode,
-      ocrRegions
+      ocrRegions,
+      ocrRuntimeOptions
     );
 
     if (!ocrResult.success || !ocrResult.data) {
@@ -714,13 +889,17 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     setQualityHint(refineQualityFromOcr(baseHint, ocrResult.data));
 
     if (saved.success && saved.filePath) {
-      setSavedCaptures(prev => prev.map(c =>
-        c.filePath === saved.filePath ? { ...c, ocrProcessed: true, ocrData: ocrResult.data } : c
-      ));
+      setSavedCaptures(prev => {
+        const next = prev.map(c =>
+          c.filePath === saved.filePath ? { ...c, ocrProcessed: true, ocrData: ocrResult.data } : c
+        );
+        savedCapturesRef.current = next;
+        return next;
+      });
     }
 
     return ocrResult.data;
-  }, [applySmartScanResult, assessCaptureQuality, ocrMode, ocrRegions, refineQualityFromOcr]);
+  }, [applySmartScanResult, assessCaptureQuality, ocrMode, ocrRegions, ocrRuntimeOptions, refineQualityFromOcr]);
 
   const captureOnly = useCallback(async (matchId?: string | number | null): Promise<SavedCapture | null> => {
     if (!isElectron()) {
@@ -756,7 +935,11 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         ocrProcessed: false,
       };
 
-      setSavedCaptures(prev => [...prev, entry]);
+      setSavedCaptures(prev => {
+        const next = [...prev, entry];
+        savedCapturesRef.current = next;
+        return next;
+      });
       playSuccess();
       return entry;
     } catch (err) {
@@ -773,29 +956,39 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const processStoredImage = useCallback(async (filePath: string, activeUser?: string | null) => {
     setVisionStatus('processing');
     setError(null);
+    setProcessingStatus({ phase: 'prepare', message: 'Preparing OCR run...' });
 
     try {
-      const result = await rerunOCROnArtifact(filePath, activeUser || '', ocrMode, ocrRegions);
+      const fileLabel = getFileLabel(filePath);
+      setProcessingStatus({ phase: 'analyzing', message: `Analyzing ${fileLabel} (1/1)...` });
+      const result = await rerunOCROnArtifact(filePath, activeUser || '', ocrMode, ocrRegions, ocrRuntimeOptions);
       if (!result?.success || !result?.data) {
         throw new Error(result?.error || 'OCR processing failed');
       }
       setQualityHint(refineQualityFromOcr(null, result.data));
 
-      setSavedCaptures(prev => prev.map(c =>
-        c.filePath === filePath ? { ...c, ocrProcessed: true, ocrData: result.data } : c
-      ));
+      setSavedCaptures(prev => {
+        const next = prev.map(c =>
+          c.filePath === filePath ? { ...c, ocrProcessed: true, ocrData: result.data } : c
+        );
+        savedCapturesRef.current = next;
+        return next;
+      });
 
       const scopeMatchId = savedCapturesRef.current.find(c => c.filePath === filePath)?.matchId ?? null;
+      setProcessingStatus({ phase: 'merging', message: 'Merging OCR results...' });
       mergeIntoPending(result.data, scopeMatchId);
+      setProcessingStatus({ phase: 'completed', message: `Completed OCR for ${fileLabel}.` });
       playSuccess();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Processing failed';
       setError(errorMessage);
+      setProcessingStatus({ phase: 'error', message: `OCR failed: ${errorMessage}` });
       playSoundError();
     } finally {
       setVisionStatus('idle');
     }
-  }, [ocrMode, ocrRegions, mergeIntoPending, playSuccess, playSoundError, setVisionStatus, refineQualityFromOcr]);
+  }, [ocrMode, ocrRegions, ocrRuntimeOptions, mergeIntoPending, playSuccess, playSoundError, setVisionStatus, refineQualityFromOcr, getFileLabel]);
 
   const processAllStored = useCallback(async (activeUser?: string | null, matchId?: string | number | null) => {
     const scope = normalizeMatchScope(matchId);
@@ -809,12 +1002,14 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     if (scope) {
       delete pendingDataByScopeRef.current[scope];
       setPendingData(null);
+      capturedScreenshotsRef.current = [];
       setCapturedScreenshots([]);
     }
 
     setVisionStatus('processing');
     setError(null);
     setProcessingProgress({ current: 0, total: unprocessed.length });
+    setProcessingStatus({ phase: 'prepare', message: `Preparing OCR queue (${unprocessed.length} files)...` });
 
     try {
       const normalizedMode = ocrMode === 'hybrid-plus' ? 'both' : ocrMode;
@@ -831,7 +1026,11 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         while (queue.length > 0) {
           const next = queue.shift();
           if (!next) break;
-          const result = await rerunOCROnArtifact(next.filePath, activeUser || '', ocrMode, ocrRegions);
+          setProcessingStatus({
+            phase: 'analyzing',
+            message: `Analyzing ${getFileLabel(next.filePath)} (${completed + 1}/${unprocessed.length})...`,
+          });
+          const result = await rerunOCROnArtifact(next.filePath, activeUser || '', ocrMode, ocrRegions, ocrRuntimeOptions);
           completed += 1;
           processedByWorker += 1;
           setProcessingProgress({ current: completed, total: unprocessed.length });
@@ -848,6 +1047,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
       const workers = Array.from({ length: Math.min(concurrency, queue.length) }, () => runNext());
       await Promise.allSettled(workers);
+      setProcessingStatus({ phase: 'merging', message: 'Merging OCR queue results...' });
 
       for (const outcome of results) {
         if (outcome.result?.success && outcome.result.data) {
@@ -855,9 +1055,13 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
           const processedData = result.data;
           if (!processedData) continue;
           const outcomeMatchId = savedCapturesRef.current.find(c => c.filePath === filePath)?.matchId ?? null;
-          setSavedCaptures(prev => prev.map(c =>
-            c.filePath === filePath ? { ...c, ocrProcessed: true, ocrData: processedData } : c
-          ));
+          setSavedCaptures(prev => {
+            const next = prev.map(c =>
+              c.filePath === filePath ? { ...c, ocrProcessed: true, ocrData: processedData } : c
+            );
+            savedCapturesRef.current = next;
+            return next;
+          });
           mergeIntoPending(processedData, scope || outcomeMatchId);
           setQualityHint(refineQualityFromOcr(null, processedData));
         }
@@ -867,10 +1071,17 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       if (successCount > 0) playSuccess();
       if (successCount < unprocessed.length) {
         setError(`${unprocessed.length - successCount} of ${unprocessed.length} images failed OCR`);
+        setProcessingStatus({
+          phase: 'error',
+          message: `Completed with ${unprocessed.length - successCount} OCR failures.`,
+        });
+      } else {
+        setProcessingStatus({ phase: 'completed', message: `Completed OCR for ${successCount} files.` });
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Batch processing failed';
       setError(errorMessage);
+      setProcessingStatus({ phase: 'error', message: `OCR failed: ${errorMessage}` });
       playSoundError();
     } finally {
       setVisionStatus('idle');
@@ -879,6 +1090,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   }, [
     ocrMode,
     ocrRegions,
+    ocrRuntimeOptions,
     performanceMode,
     mergeIntoPending,
     playSuccess,
@@ -886,11 +1098,15 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     setVisionStatus,
     refineQualityFromOcr,
     normalizeMatchScope,
+    getFileLabel,
   ]);
 
   const processQueue = useCallback(async () => {
     if (isProcessingQueueRef.current) return;
     isProcessingQueueRef.current = true;
+    const totalQueued = captureQueueRef.current.length;
+    let processedQueued = 0;
+    setProcessingStatus({ phase: 'prepare', message: `Preparing queued OCR (${totalQueued} captures)...` });
 
     while (captureQueueRef.current.length > 0) {
       const item = captureQueueRef.current.shift()!;
@@ -898,16 +1114,23 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
       try {
         setVisionStatus('capturing');
+        setProcessingStatus({
+          phase: 'analyzing',
+          message: `Analyzing queued capture ${processedQueued + 1}/${totalQueued}...`,
+        });
         const extractedData = await processSingleCapture(item.activeUser);
         setVisionStatus('processing');
 
         if (extractedData) {
+          setProcessingStatus({ phase: 'merging', message: 'Merging queued OCR result...' });
           mergeIntoPending(extractedData);
         }
+        processedQueued += 1;
         playSuccess();
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Capture failed';
         setError(errorMessage);
+        setProcessingStatus({ phase: 'error', message: `Queued OCR failed: ${errorMessage}` });
         playSoundError();
         Logger.error('SmartCapture', 'Queue capture failed', err);
       } finally {
@@ -916,6 +1139,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     }
 
     setQueueDepth(0);
+    setProcessingStatus({ phase: 'completed', message: `Completed queued OCR for ${processedQueued}/${totalQueued} captures.` });
     isProcessingQueueRef.current = false;
   }, [processSingleCapture, mergeIntoPending, playSuccess, playSoundError, setVisionStatus]);
 
@@ -970,10 +1194,13 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   }, [captureOnly, captureMode, scheduleAutoOcr, normalizeMatchScope]);
 
   const clearCaptures = useCallback(() => {
+    capturedScreenshotsRef.current = [];
     setCapturedScreenshots([]);
     setPendingData(null);
     pendingDataByScopeRef.current = {};
+    nameEvidenceByScopeRef.current = {};
     setError(null);
+    setProcessingStatus(null);
   }, []);
 
   const clearError = useCallback(() => {
@@ -983,6 +1210,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const dismissPendingData = useCallback(() => {
     setPendingData(null);
     pendingDataByScopeRef.current = {};
+    nameEvidenceByScopeRef.current = {};
   }, []);
 
   const getMergedData = useCallback((): OCRExtractedData | null => {
@@ -1022,11 +1250,15 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   }, [buildMergedData, capturedScreenshots, normalizeMatchScope, savedCaptures]);
 
   const resetCaptureSession = useCallback(() => {
+    capturedScreenshotsRef.current = [];
     setCapturedScreenshots([]);
+    savedCapturesRef.current = [];
     setSavedCaptures([]);
     setPendingData(null);
     pendingDataByScopeRef.current = {};
+    nameEvidenceByScopeRef.current = {};
     setError(null);
+    setProcessingStatus(null);
     captureQueueRef.current = [];
     setQueueDepth(0);
     isProcessingQueueRef.current = false;
@@ -1039,6 +1271,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const state: SmartCaptureState = {
     isCapturing,
     isProcessing,
+    processingStatus,
     error,
     pendingData,
     capturedScreenshots,

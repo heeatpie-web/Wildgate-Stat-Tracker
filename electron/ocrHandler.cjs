@@ -18,7 +18,13 @@ const os = require('os');
 
 // Import new extraction modules
 const { detectScreenType, detectScreenTypeFromLines, SCREEN_TYPES } = require('./screenDetector.cjs');
-const { extractCrewHub } = require('./crewHubExtractor.cjs');
+const {
+  extractCrewHub,
+  groupWordsIntoLines: groupCrewHubWordsIntoLines,
+  extractPlayerNameFromLine: extractCrewHubPlayerNameFromLine,
+  cleanupPlayerName: cleanupCrewHubPlayerName,
+  isValidPlayerName: isValidCrewHubPlayerName,
+} = require('./crewHubExtractor.cjs');
 const { extractMapScreen, extractPlayerList, KNOWN_HAZARDS } = require('./mapScreenExtractor.cjs');
 const { mergeCaptures, isSameMatch } = require('./ocrMerger.cjs');
 const gcloudService = require('./gcloudService.cjs');
@@ -224,10 +230,16 @@ function getImageHash(buffer) {
   return crypto.createHash('md5').update(buffer).digest('hex');
 }
 
-function buildCacheKey(imageHash, activeUser = null, ocrMode = 'both', regionFingerprint = 'default') {
+function buildCacheKey(
+  imageHash,
+  activeUser = null,
+  ocrMode = 'both',
+  regionFingerprint = 'default',
+  routingFingerprint = 'routing:default'
+) {
   const normalizedUser = String(activeUser || '').trim().toLowerCase();
   const normalizedMode = String(ocrMode || 'both').trim().toLowerCase();
-  return `${imageHash}|u:${normalizedUser}|m:${normalizedMode}|r:${regionFingerprint}`;
+  return `${imageHash}|u:${normalizedUser}|m:${normalizedMode}|r:${regionFingerprint}|x:${String(routingFingerprint || 'routing:default')}`;
 }
 
 function getCachedResult(cacheKey) {
@@ -593,7 +605,20 @@ function resolveRegionPixels(region, fullWidth, fullHeight, minDimension = REGIO
   return { left, top, cropWidth, cropHeight };
 }
 
-async function preprocessRegionCropFirst(imageBuffer, regionPixels, scale = REGION_OCR_SCALE) {
+async function preprocessRegionCropFirst(
+  imageBuffer,
+  regionPixels,
+  scale = REGION_OCR_SCALE,
+  fontProfile = 'default'
+) {
+  const isEalingProfile = String(fontProfile || '').toLowerCase() === 'ealing-black-italic';
+  const brightness = isEalingProfile ? 1.28 : 1.2;
+  const contrastAlpha = isEalingProfile ? 1.8 : 1.5;
+  const contrastBeta = isEalingProfile ? -(0.55 * 128) : -(0.5 * 128);
+  const sharpen = isEalingProfile
+    ? { sigma: 1.9, m1: 1.8, m2: 0.8 }
+    : { sigma: 1.5, m1: 1.5, m2: 0.7 };
+
   return await sharp(imageBuffer)
     .extract({
       left: regionPixels.left,
@@ -605,9 +630,9 @@ async function preprocessRegionCropFirst(imageBuffer, regionPixels, scale = REGI
       kernel: sharp.kernel.lanczos3,
     })
     .grayscale()
-    .modulate({ brightness: 1.2 })
-    .linear(1.5, -(0.5 * 128))
-    .sharpen({ sigma: 1.5, m1: 1.5, m2: 0.7 })
+    .modulate({ brightness })
+    .linear(contrastAlpha, contrastBeta)
+    .sharpen(sharpen)
     .png()
     .toBuffer();
 }
@@ -747,7 +772,14 @@ async function benchmarkRegionPreprocessing(imageBuffer, ocrRegions, iterations 
  * @param {number} fullHeight - Full image height (pixels)
  * @returns {Promise<{ words: Array, text: string } | null>}
  */
-async function cropRegionAndOCR(imageBuffer, region, fullWidth, fullHeight, psm = null) {
+async function cropRegionAndOCR(
+  imageBuffer,
+  region,
+  fullWidth,
+  fullHeight,
+  psm = null,
+  fontProfile = 'default'
+) {
   if (!sharp) {
     console.warn('[OCR-Region] sharp not available, skipping region OCR');
     return null;
@@ -764,7 +796,7 @@ async function cropRegionAndOCR(imageBuffer, region, fullWidth, fullHeight, psm 
 
     console.log(`[OCR-Region] Cropping region: ${left},${top} ${cropWidth}x${cropHeight} from ${fullWidth}x${fullHeight}`);
 
-    const cropped = await preprocessRegionCropFirst(imageBuffer, regionPixels);
+    const cropped = await preprocessRegionCropFirst(imageBuffer, regionPixels, REGION_OCR_SCALE, fontProfile);
 
     console.log(`[OCR-Region] Cropped+upscaled buffer: ${cropped.length} bytes`);
 
@@ -1024,6 +1056,54 @@ function cloudAnnotationsToWords(annotations) {
       source: 'cloud',
     };
     });
+}
+
+function normalizeConfidence01(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  if (numeric > 1) return Math.max(0, Math.min(1, numeric / 100));
+  return Math.max(0, Math.min(1, numeric));
+}
+
+function tokenizeOcrText(text) {
+  return String(text || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2);
+}
+
+function computeTokenOverlapRatio(leftTokens = [], rightTokens = []) {
+  if (!Array.isArray(leftTokens) || !Array.isArray(rightTokens)) return 0;
+  if (leftTokens.length === 0 || rightTokens.length === 0) return 0;
+  const left = new Set(leftTokens);
+  const right = new Set(rightTokens);
+  let overlap = 0;
+  left.forEach((token) => {
+    if (right.has(token)) overlap += 1;
+  });
+  return overlap / Math.max(1, Math.min(left.size, right.size));
+}
+
+function evaluateCrossEngineDisagreement(localResult, cloudResult) {
+  const localWordCount = Array.isArray(localResult?.words) ? localResult.words.length : 0;
+  const cloudWordCount = Array.isArray(cloudResult?.annotations) ? cloudResult.annotations.length : 0;
+  const wordCountDrift = (localWordCount > 0 && cloudWordCount > 0)
+    ? Math.abs(localWordCount - cloudWordCount) / Math.max(localWordCount, cloudWordCount)
+    : 0;
+  const tokenOverlap = computeTokenOverlapRatio(
+    tokenizeOcrText(localResult?.text || ''),
+    tokenizeOcrText(cloudResult?.fullText || '')
+  );
+  const lowOverlap = tokenOverlap > 0 ? tokenOverlap < 0.35 : false;
+  const strongCountDrift = wordCountDrift >= 0.45;
+  return {
+    disagrees: lowOverlap || strongCountDrift,
+    tokenOverlap,
+    wordCountDrift,
+    localWordCount,
+    cloudWordCount,
+  };
 }
 
 /**
@@ -1423,6 +1503,104 @@ function mergeGeminiRefinement(extractedData, geminiData) {
   return { data: out, contributed };
 }
 
+function normalizeNameKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/g, '');
+}
+
+function dedupeExtractedPlayers(players, maxCount = 4) {
+  if (!Array.isArray(players)) return [];
+  const byName = new Map();
+  players.forEach((player) => {
+    const rawName = typeof player === 'string' ? player : player?.name;
+    const cleanedName = cleanupCrewHubPlayerName(String(rawName || ''));
+    const key = normalizeNameKey(cleanedName);
+    if (!key || !cleanedName) return;
+    const confidence = Number(player?.confidence || 0);
+    const existing = byName.get(key);
+    if (!existing || confidence > existing.confidence) {
+      byName.set(key, {
+        name: cleanedName,
+        confidence: Math.max(60, Math.min(99, confidence || 74)),
+        isTeammate: player?.isTeammate,
+      });
+    }
+  });
+  return [...byName.values()]
+    .sort((a, b) => Number(b.confidence || 0) - Number(a.confidence || 0))
+    .slice(0, Math.max(1, Number(maxCount || 4)));
+}
+
+function extractCrewHubNamesFromWords(words, imageWidth, imageHeight) {
+  if (!Array.isArray(words) || words.length === 0) return [];
+  const lines = groupCrewHubWordsIntoLines(words, imageHeight, imageWidth);
+  const names = [];
+  for (const line of lines) {
+    const parsed = extractCrewHubPlayerNameFromLine(line?.words || []);
+    const cleaned = cleanupCrewHubPlayerName(String(parsed || ''));
+    if (!cleaned) continue;
+    if (!isValidCrewHubPlayerName(cleaned)) continue;
+    const avgConfidence = Array.isArray(line?.words) && line.words.length > 0
+      ? (line.words.reduce((sum, word) => sum + Number(word?.confidence || 0), 0) / line.words.length)
+      : 74;
+    names.push({
+      name: cleaned,
+      confidence: Math.max(60, Math.min(99, Number.isFinite(avgConfidence) ? avgConfidence : 74)),
+    });
+  }
+  return dedupeExtractedPlayers(names, 4);
+}
+
+function computeFieldConfidence(extractedData) {
+  const teammateConfidences = Array.isArray(extractedData?.teammates)
+    ? extractedData.teammates.map((player) => Number(player?.confidence || 0)).filter((value) => value > 0)
+    : [];
+  const opponentConfidences = Array.isArray(extractedData?.opponentTeams)
+    ? extractedData.opponentTeams.flatMap((team) => (
+      Array.isArray(team?.players)
+        ? team.players.map((player) => Number(player?.confidence || 0)).filter((value) => value > 0)
+        : []
+    ))
+    : [];
+  const modifierConfidences = Array.isArray(extractedData?.reachModifiers)
+    ? extractedData.reachModifiers.map((mod) => Number(mod?.confidence || 0)).filter((value) => value > 0)
+    : [];
+  const average = (arr) => arr.length > 0
+    ? (arr.reduce((sum, value) => sum + value, 0) / arr.length)
+    : 0;
+
+  return {
+    teammateNames: average(teammateConfidences),
+    opponentNames: average(opponentConfidences),
+    ship: Number(extractedData?.playerShip?.confidence || 0),
+    modifiers: average(modifierConfidences),
+  };
+}
+
+function countUniqueExtractedNames(extractedData) {
+  const keys = new Set();
+  (extractedData?.teammates || []).forEach((player) => {
+    const key = normalizeNameKey(player?.name);
+    if (key) keys.add(key);
+  });
+  (extractedData?.opponentTeams || []).forEach((team) => {
+    (team?.players || []).forEach((player) => {
+      const key = normalizeNameKey(player?.name);
+      if (key) keys.add(key);
+    });
+  });
+  return keys.size;
+}
+
+function getNameConfidenceFloor(fieldConfidence) {
+  const values = [Number(fieldConfidence?.teammateNames || 0), Number(fieldConfidence?.opponentNames || 0)]
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (values.length === 0) return 0;
+  return Math.min(...values);
+}
+
 /**
  * Main processing function
  * @param {string} imageBase64 - Base64 encoded image
@@ -1440,17 +1618,33 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       sourceImagePath = null,
       skipDebugSave = false,
       forceUncached = false,
+      forceMaxAnalysis: rawForceMaxAnalysis = false,
+      externalFallbackEnabled: rawExternalFallbackEnabled = true,
+      externalFallbackThreshold: rawExternalFallbackThreshold = 0.74,
+      externalOnDetectorDisagreement: rawExternalOnDetectorDisagreement = true,
       ocrRegions: rawOcrRegions = null,
       screenTypeHint: rawScreenTypeHint = null,
       includeBboxes: rawIncludeBboxes = false,
       archiveOcrSample: rawArchiveOcrSample = false,
       archiveMetadata: rawArchiveMetadata = null,
+      routingProfile: rawRoutingProfile = 'default',
+      fontProfile: rawFontProfile = 'default',
+      nameRerouteThreshold: rawNameRerouteThreshold = 78,
+      maxReroutePasses: rawMaxReroutePasses = 1,
     } = options;
     const includeBboxes = rawIncludeBboxes === true;
     const shouldArchiveOcrSample = rawArchiveOcrSample === true;
     const archiveMetadata = (rawArchiveMetadata && typeof rawArchiveMetadata === 'object')
       ? rawArchiveMetadata
       : {};
+    const routingProfile = rawRoutingProfile === 'names-only' ? 'names-only' : 'default';
+    const fontProfile = rawFontProfile === 'ealing-black-italic' ? 'ealing-black-italic' : 'default';
+    const nameRerouteThreshold = Math.max(50, Math.min(95, Number(rawNameRerouteThreshold) || 78));
+    const maxReroutePasses = Math.max(0, Math.min(2, Math.round(Number(rawMaxReroutePasses) || 1)));
+    const forceMaxAnalysis = rawForceMaxAnalysis === true;
+    const externalFallbackEnabled = forceMaxAnalysis ? true : rawExternalFallbackEnabled !== false;
+    const externalFallbackThreshold = clamp01(rawExternalFallbackThreshold, 0.74);
+    const externalOnDetectorDisagreement = forceMaxAnalysis ? true : rawExternalOnDetectorDisagreement !== false;
     const ocrRegions = sanitizeOcrRegions(rawOcrRegions);
     const inferredScreenType =
       (typeof rawScreenTypeHint === 'string' ? rawScreenTypeHint : '')
@@ -1468,10 +1662,23 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       : hintedScreenType === SCREEN_TYPES.MAP_SCREEN ? 11
       : null;
     const ocrRegionFingerprint = getOcrRegionsCacheFingerprint(ocrRegions);
+    const runtimeFingerprint = [
+      forceMaxAnalysis ? 1 : 0,
+      externalFallbackEnabled ? 1 : 0,
+      Math.round(externalFallbackThreshold * 100),
+      externalOnDetectorDisagreement ? 1 : 0,
+    ].join(':');
+    const routingFingerprint = `${routingProfile}:${fontProfile}:${nameRerouteThreshold}:${maxReroutePasses}:${runtimeFingerprint}`;
     console.log('[OCR] Starting processCapture');
     console.log('[OCR] activeUser:', activeUser);
     console.log('[OCR] hasExistingData:', !!existingData);
     console.log('[OCR] ocrMode:', ocrMode);
+    console.log('[OCR] routingProfile:', routingProfile);
+    console.log('[OCR] fontProfile:', fontProfile);
+    console.log('[OCR] forceMaxAnalysis:', forceMaxAnalysis);
+    console.log('[OCR] externalFallbackEnabled:', externalFallbackEnabled);
+    console.log('[OCR] externalFallbackThreshold:', Math.round(externalFallbackThreshold * 100));
+    console.log('[OCR] externalOnDetectorDisagreement:', externalOnDetectorDisagreement);
     console.log('[OCR] regionFingerprint:', ocrRegionFingerprint);
     if (sourceImagePath) console.log('[OCR] Re-analysis from:', sourceImagePath);
     if (skipDebugSave) console.log('[OCR] Skipping debug save (screenshot already saved by caller)');
@@ -1487,8 +1694,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
 
     // Check OCR cache only for non-cloud, non-reanalysis, non-forced runs.
     const imageHash = getImageHash(imageBuffer);
-    const cacheKey = buildCacheKey(imageHash, activeUser, ocrMode, ocrRegionFingerprint);
-    const shouldBypassCache = !!sourceImagePath || forceUncached || ocrMode === 'cloud' || !!existingData || includeBboxes || shouldArchiveOcrSample;
+    const cacheKey = buildCacheKey(imageHash, activeUser, ocrMode, ocrRegionFingerprint, routingFingerprint);
+    const shouldBypassCache = !!sourceImagePath || forceUncached || forceMaxAnalysis || ocrMode === 'cloud' || !!existingData || includeBboxes || shouldArchiveOcrSample;
     let cacheLookupStartedAt = null;
     if (!shouldBypassCache) {
       cacheLookupStartedAt = Date.now();
@@ -1509,9 +1716,10 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     // and use the original file path for cloud OCR instead.
     // When skipDebugSave is true (normal smart capture where saveScreenshot already ran),
     // save a temporary file for cloud OCR but don't keep it in ocr-debug/ to avoid duplication.
-    const useHybridMerge = ocrMode === 'both' || ocrMode === 'hybrid-plus';
-    const useGeminiRefine = ocrMode === 'hybrid-plus';
-    const needsFilePath = useHybridMerge || ocrMode === 'cloud' || useGeminiRefine;
+    const useHybridMerge = ocrMode === 'both' || ocrMode === 'hybrid-plus' || forceMaxAnalysis;
+    const useGeminiRefine = ocrMode === 'hybrid-plus' || forceMaxAnalysis;
+    const shouldProbeExternalInLocal = ocrMode === 'local' && externalFallbackEnabled;
+    const needsFilePath = useHybridMerge || ocrMode === 'cloud' || useGeminiRefine || shouldProbeExternalInLocal;
     let rawDebugPath = null;
     if (sourceImagePath) {
       rawDebugPath = sourceImagePath;
@@ -1552,6 +1760,22 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     let localOCRForFallback = null;
     let cloudFailureReason = '';
     let geminiFailureReason = '';
+    let geminiContributed = false;
+    let providerUsed = null;
+    let consensusScore = 0;
+    let detectorDisagreement = false;
+    let externalFallbackApplied = false;
+    let externalFallbackReason = '';
+    const analysisPathsUsed = new Set();
+    let routingDebug = {
+      attempted: false,
+      applied: false,
+      route: routingProfile === 'names-only' ? 'names-only' : 'none',
+      preNameConfidence: 0,
+      postNameConfidence: 0,
+      latencyMs: 0,
+      fontProfile,
+    };
 
     if (useHybridMerge) {
       // Run both in parallel
@@ -1565,7 +1789,13 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
 
       const localOCR = localResult.status === 'fulfilled' ? localResult.value : null;
       const cloudOCR = cloudResult.status === 'fulfilled' ? cloudResult.value : null;
-      if (localOCR) localOCRForFallback = localOCR;
+      if (localOCR) {
+        localOCRForFallback = localOCR;
+        analysisPathsUsed.add('local');
+      }
+      if (cloudOCR) {
+        analysisPathsUsed.add('cloud');
+      }
 
       if (localResult.status === 'rejected') {
         console.error('[OCR] Local Tesseract failed:', localResult.reason?.message);
@@ -1651,6 +1881,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         };
         cloudContributed = true;
         ocrSource = 'cloud';
+        analysisPathsUsed.add('cloud');
         console.log(`[OCR] Cloud-only done, text length: ${ocrResult.text?.length || 0}`);
       } else {
         cloudFailureReason = cloudFailureReason || 'Cloud OCR unavailable';
@@ -1658,6 +1889,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         ocrResult = await runOCR(processed.buffer, ocrPsm);
         localOCRForFallback = ocrResult;
         ocrSource = 'local';
+        analysisPathsUsed.add('local');
       }
     } else {
       // Local only (default / fallback)
@@ -1665,6 +1897,46 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       ocrResult = await runOCR(processed.buffer, ocrPsm);
       localOCRForFallback = ocrResult;
       ocrSource = 'local';
+      analysisPathsUsed.add('local');
+      const localConsensus = normalizeConfidence01(ocrResult?.confidence || 0);
+      consensusScore = localConsensus;
+      const shouldProbeCloudForDisagreement = externalOnDetectorDisagreement && localConsensus <= Math.min(0.92, externalFallbackThreshold + 0.2);
+      const shouldProbeExternal = shouldProbeExternalInLocal
+        && !!rawDebugPath
+        && (localConsensus < externalFallbackThreshold || shouldProbeCloudForDisagreement);
+      if (shouldProbeExternal) {
+        const cloudProbe = await runCloudOCR(rawDebugPath, Math.min(30000, Math.max(1000, parseInt(process.env.WILDGATE_OCR_CLOUD_TIMEOUT_MS || '7000', 10) || 7000)));
+        if (cloudProbe) {
+          analysisPathsUsed.add('cloud');
+          const disagreement = evaluateCrossEngineDisagreement(ocrResult, cloudProbe);
+          detectorDisagreement = disagreement.disagrees;
+          const shouldApplyFallback = (localConsensus < externalFallbackThreshold)
+            || (externalOnDetectorDisagreement && disagreement.disagrees);
+          if (shouldApplyFallback) {
+            const mergedProbe = mergeOCRResults(ocrResult, cloudProbe);
+            ocrResult = mergedProbe;
+            cloudContributed = mergedProbe.cloudContributed;
+            ocrSource = 'merged';
+            mergeStats = mergedProbe.mergeStats;
+            mergeLog = mergedProbe.mergeLog;
+            externalFallbackApplied = true;
+            const triggerParts = [];
+            if (localConsensus < externalFallbackThreshold) {
+              triggerParts.push(`consensus ${Math.round(localConsensus * 100)}% below ${Math.round(externalFallbackThreshold * 100)}%`);
+            }
+            if (externalOnDetectorDisagreement && disagreement.disagrees) {
+              triggerParts.push(`detector disagreement (overlap ${Math.round(disagreement.tokenOverlap * 100)}%, drift ${Math.round(disagreement.wordCountDrift * 100)}%)`);
+            }
+            externalFallbackReason = `External fallback activated: ${triggerParts.join('; ') || 'policy trigger'}.`;
+            console.log(`[OCR-External] ${externalFallbackReason}`);
+          } else {
+            console.log('[OCR-External] Probe completed; local OCR retained');
+          }
+        } else {
+          cloudFailureReason = cloudFailureReason || 'Cloud OCR unavailable during external fallback probe';
+          console.warn(`[OCR-External] ${cloudFailureReason}`);
+        }
+      }
       console.log(`[OCR] Local-only done, text length: ${ocrResult.text?.length || 0}`);
     }
 
@@ -1719,7 +1991,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
             PLAYER_REGION,
             processed.originalWidth,
             processed.originalHeight,
-            11
+            11,
+            fontProfile
           )
           : Promise.resolve(null),
       ]);
@@ -1809,22 +2082,51 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       }
     }
 
+    const baselineFieldConfidence = computeFieldConfidence(extractedData);
+    consensusScore = normalizeConfidence01(getNameConfidenceFloor(baselineFieldConfidence));
+    const mergeConflictRatio = (mergeStats && mergeStats.total > 0)
+      ? (Number(mergeStats.conflicts || 0) / Number(mergeStats.total || 1))
+      : 0;
+    detectorDisagreement = screenDetection.type === SCREEN_TYPES.UNKNOWN || mergeConflictRatio >= 0.2;
+    const shouldTriggerExternalGemini = externalFallbackEnabled && (
+      consensusScore < externalFallbackThreshold
+      || (externalOnDetectorDisagreement && detectorDisagreement)
+    );
+
     // Optional Gemini refinement (runs after normal extraction/merge, preserves multi-screenshot workflow)
-    if (useGeminiRefine && rawDebugPath && geminiService.isInitialized) {
+    const shouldRunGemini = !!rawDebugPath && (useGeminiRefine || shouldTriggerExternalGemini);
+    if (shouldRunGemini && geminiService.isInitialized) {
       try {
-        console.log('[OCR-AI] Running Gemini structured refinement...');
+        const thresholdPct = Math.round(externalFallbackThreshold * 100);
+        const consensusPct = Math.round(consensusScore * 100);
+        const triggerLabel = forceMaxAnalysis
+          ? 'force-max-analysis'
+          : useGeminiRefine
+            ? 'hybrid-plus'
+            : `external-fallback(consensus=${consensusPct}%, threshold=${thresholdPct}%, disagreement=${detectorDisagreement ? 'yes' : 'no'})`;
+        console.log(`[OCR-AI] Running Gemini structured refinement (${triggerLabel})...`);
+        analysisPathsUsed.add('gemini');
         const geminiData = await geminiService.extractStructured(rawDebugPath, activeUser, extractedData.rawText || '');
         const refined = mergeGeminiRefinement(extractedData, geminiData);
         extractedData = refined.data;
         extractedData.aiContributed = refined.contributed;
         extractedData.aiSource = refined.contributed ? 'gemini' : undefined;
         if (refined.contributed) {
+          geminiContributed = true;
+          providerUsed = 'gemini';
           console.log('[OCR-AI] Gemini contributed structured refinements');
+          if (!forceMaxAnalysis && shouldTriggerExternalGemini) {
+            externalFallbackApplied = true;
+            externalFallbackReason = `External fallback activated: consensus ${consensusPct}% vs threshold ${thresholdPct}%${detectorDisagreement ? '; detector disagreement observed' : ''}.`;
+          }
         }
       } catch (e) {
         geminiFailureReason = e?.message || 'Gemini refinement failed';
         console.warn('[OCR-AI] Gemini refinement failed:', geminiFailureReason);
       }
+    } else if (shouldRunGemini && !geminiService.isInitialized) {
+      geminiFailureReason = 'Gemini service unavailable';
+      console.warn('[OCR-AI] Gemini service unavailable; skipping refinement');
     }
 
     // Merge with existing data if provided
@@ -1833,11 +2135,167 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       extractedData = mergeCaptures(existingData, extractedData);
     }
 
+    const mergeReroutedNames = async () => {
+      if (routingProfile !== 'names-only' || maxReroutePasses <= 0 || !imageBuffer) {
+        return;
+      }
+      const preFieldConfidence = computeFieldConfidence(extractedData);
+      const preUniqueNames = countUniqueExtractedNames(extractedData);
+      const preNameConfidence = getNameConfidenceFloor(preFieldConfidence);
+      const shouldReroute = preNameConfidence < nameRerouteThreshold || preUniqueNames < 3;
+      routingDebug.preNameConfidence = Number.isFinite(preNameConfidence) ? preNameConfidence : 0;
+      if (!shouldReroute) {
+        routingDebug.postNameConfidence = routingDebug.preNameConfidence;
+        return;
+      }
+
+      routingDebug.attempted = true;
+      const rerouteStart = Date.now();
+
+      if (extractedData.screenshotType === 'tactical_map') {
+        const rerouteResult = await cropRegionAndOCR(
+          imageBuffer,
+          ocrRegions.mapScreen.players,
+          processed.originalWidth,
+          processed.originalHeight,
+          11,
+          fontProfile
+        );
+        const routedPlayers = rerouteResult?.words?.length
+          ? extractPlayerList(
+            rerouteResult.words,
+            processed.originalWidth,
+            processed.originalHeight,
+            ocrRegions.mapScreen
+          )
+          : [];
+        if (Array.isArray(routedPlayers) && routedPlayers.length > 0) {
+          const candidatePlayers = routedPlayers.map((name) => ({
+            name,
+            confidence: 76,
+            isTeammate: true,
+          }));
+          const mergedPlayers = dedupeExtractedPlayers(
+            [...(extractedData.teammates || []), ...candidatePlayers],
+            4
+          ).map((player) => ({ ...player, isTeammate: true }));
+          if (mergedPlayers.length > (extractedData.teammates || []).length) {
+            routingDebug.applied = true;
+          }
+          extractedData.teammates = mergedPlayers;
+        }
+      } else if (extractedData.screenshotType === 'crew_hub') {
+        const teammateRegionResult = await cropRegionAndOCR(
+          imageBuffer,
+          ocrRegions.crewHub.leftPanel,
+          processed.originalWidth,
+          processed.originalHeight,
+          7,
+          fontProfile
+        );
+        const teammateCandidates = teammateRegionResult?.words?.length
+          ? extractCrewHubNamesFromWords(
+            teammateRegionResult.words,
+            processed.originalWidth,
+            processed.originalHeight
+          )
+          : [];
+
+        const enemyRegions = [
+          ocrRegions.crewHub.enemyRow1Players,
+          ocrRegions.crewHub.enemyRow2Players,
+          ocrRegions.crewHub.enemyRow3Players,
+          ocrRegions.crewHub.enemyRow4Players,
+        ];
+        const routedOpponentByIndex = [];
+        for (let idx = 0; idx < enemyRegions.length; idx += 1) {
+          const region = enemyRegions[idx];
+          const enemyResult = await cropRegionAndOCR(
+            imageBuffer,
+            region,
+            processed.originalWidth,
+            processed.originalHeight,
+            7,
+            fontProfile
+          );
+          const enemyCandidates = enemyResult?.words?.length
+            ? extractCrewHubNamesFromWords(
+              enemyResult.words,
+              processed.originalWidth,
+              processed.originalHeight
+            )
+            : [];
+          routedOpponentByIndex[idx] = enemyCandidates;
+        }
+
+        if (teammateCandidates.length > 0) {
+          const mergedTeammates = dedupeExtractedPlayers(
+            [...(extractedData.teammates || []), ...teammateCandidates.map((item) => ({ ...item, isTeammate: true }))],
+            4
+          ).map((player) => ({ ...player, isTeammate: true }));
+          if (mergedTeammates.length > (extractedData.teammates || []).length) {
+            routingDebug.applied = true;
+          }
+          extractedData.teammates = mergedTeammates;
+        }
+
+        const nextOpponentTeams = Array.isArray(extractedData.opponentTeams)
+          ? [...extractedData.opponentTeams]
+          : [];
+        for (let idx = 0; idx < routedOpponentByIndex.length; idx += 1) {
+          const candidates = routedOpponentByIndex[idx] || [];
+          if (!Array.isArray(candidates) || candidates.length === 0) continue;
+          while (nextOpponentTeams.length <= idx) {
+            nextOpponentTeams.push({
+              teamName: `Enemy Team ${nextOpponentTeams.length + 1}`,
+              shipType: '',
+              color: 'unknown',
+              players: [],
+              confidence: 64,
+            });
+          }
+          const existingTeam = nextOpponentTeams[idx] || {
+            teamName: `Enemy Team ${idx + 1}`,
+            shipType: '',
+            color: 'unknown',
+            players: [],
+            confidence: 64,
+          };
+          const mergedPlayers = dedupeExtractedPlayers(
+            [
+              ...(existingTeam.players || []),
+              ...candidates.map((player) => ({ ...player, isTeammate: false })),
+            ],
+            4
+          ).map((player) => ({ ...player, isTeammate: false }));
+          if (mergedPlayers.length > (existingTeam.players || []).length) {
+            routingDebug.applied = true;
+          }
+          nextOpponentTeams[idx] = {
+            ...existingTeam,
+            players: mergedPlayers,
+            confidence: Math.max(Number(existingTeam.confidence || 0), 70),
+          };
+        }
+        extractedData.opponentTeams = nextOpponentTeams;
+      }
+
+      routingDebug.latencyMs = Date.now() - rerouteStart;
+      const postFieldConfidence = computeFieldConfidence(extractedData);
+      const postNameConfidence = getNameConfidenceFloor(postFieldConfidence);
+      routingDebug.postNameConfidence = Number.isFinite(postNameConfidence)
+        ? postNameConfidence
+        : routingDebug.preNameConfidence;
+    };
+
+    await mergeReroutedNames();
+
     console.log('[OCR] Extraction complete:', {
       type: extractedData.screenshotType,
       teammates: extractedData.teammates?.length || 0,
       opponentTeams: extractedData.opponentTeams?.length || 0,
       confidence: (extractedData.overallConfidence || 0).toFixed(1),
+      routed: routingDebug.applied,
     });
 
     // Detect artifact type from raw text
@@ -1847,9 +2305,43 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     // Attach cloud/merge metadata to extracted data
     extractedData.cloudContributed = cloudContributed;
     extractedData.ocrSource = ocrSource;
+    const fieldConfidence = computeFieldConfidence(extractedData);
+    extractedData.fieldConfidence = fieldConfidence;
+    const nameConfidenceFloor = getNameConfidenceFloor(fieldConfidence);
+    const floorConsensus = normalizeConfidence01(nameConfidenceFloor);
+    const confidenceConsensus = floorConsensus > 0
+      ? floorConsensus
+      : normalizeConfidence01(extractedData.overallConfidence || 0);
+    const conflictConsensus = (mergeStats && mergeStats.total > 0)
+      ? Math.max(0, Math.min(1, 1 - (Number(mergeStats.conflicts || 0) / Number(mergeStats.total || 1))))
+      : confidenceConsensus;
+    consensusScore = Math.min(1, Math.max(0, Math.min(confidenceConsensus, conflictConsensus)));
+    extractedData.consensusScore = Number(consensusScore.toFixed(4));
+    extractedData.analysisPathsUsed = Array.from(analysisPathsUsed);
+    extractedData.providerUsed = providerUsed || (geminiContributed ? 'gemini' : (cloudContributed ? 'vertex' : null));
+    if (!routingDebug.attempted && routingDebug.postNameConfidence <= 0) {
+      routingDebug.postNameConfidence = getNameConfidenceFloor(fieldConfidence);
+    }
+    extractedData.ocrRouting = {
+      attempted: Boolean(routingDebug.attempted),
+      applied: Boolean(routingDebug.applied),
+      route: routingDebug.route === 'names-only' ? 'names-only' : 'none',
+      preNameConfidence: Number.isFinite(routingDebug.preNameConfidence) ? routingDebug.preNameConfidence : 0,
+      postNameConfidence: Number.isFinite(routingDebug.postNameConfidence) ? routingDebug.postNameConfidence : 0,
+      latencyMs: Number.isFinite(routingDebug.latencyMs) ? routingDebug.latencyMs : 0,
+      fontProfile: routingDebug.fontProfile === 'ealing-black-italic' ? 'ealing-black-italic' : 'default',
+    };
     if (cloudFailureReason) {
-      extractedData.ocrFallbackReason = 'Cloud OCR unavailable, local OCR used';
       extractedData.ocrCloudError = cloudFailureReason;
+      if (!externalFallbackReason) {
+        externalFallbackReason = 'Cloud OCR unavailable, local OCR used';
+      }
+    }
+    if (externalFallbackApplied && !externalFallbackReason) {
+      externalFallbackReason = 'External fallback activated';
+    }
+    if (externalFallbackReason) {
+      extractedData.ocrFallbackReason = externalFallbackReason;
     }
     if (geminiFailureReason) {
       extractedData.ocrGeminiError = geminiFailureReason;

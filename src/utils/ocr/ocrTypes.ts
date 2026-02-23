@@ -78,6 +78,9 @@ export interface OCRExtractedData {
   ocrFallbackReason?: string;
   ocrCloudError?: string;
   ocrGeminiError?: string;
+  analysisPathsUsed?: string[];
+  consensusScore?: number;
+  providerUsed?: 'vertex' | 'gemini' | null;
   mergeStats?: {
     total: number;
     agreed: number;
@@ -92,6 +95,21 @@ export interface OCRExtractedData {
     imageWidth: number;
     imageHeight: number;
     words: OCRWord[];
+  };
+  fieldConfidence?: {
+    teammateNames: number;
+    opponentNames: number;
+    ship: number;
+    modifiers: number;
+  };
+  ocrRouting?: {
+    attempted: boolean;
+    applied: boolean;
+    route: 'none' | 'names-only';
+    preNameConfidence: number;
+    postNameConfidence: number;
+    latencyMs: number;
+    fontProfile: 'default' | 'ealing-black-italic';
   };
   ocrCorpusSampleId?: string;
 }
@@ -126,6 +144,14 @@ export interface OCRProcessOptions {
   debug?: boolean;
   /** Language hint for OCR */
   language?: string;
+  /** Force the OCR pipeline to run the maximum analysis path. */
+  forceMaxAnalysis?: boolean;
+  /** Enable external-model fallback passes when confidence is low. */
+  externalFallbackEnabled?: boolean;
+  /** Consensus floor (0-1) for triggering external fallback paths. */
+  externalFallbackThreshold?: number;
+  /** Trigger external fallback when detector classification disagrees. */
+  externalOnDetectorDisagreement?: boolean;
 }
 
 /**

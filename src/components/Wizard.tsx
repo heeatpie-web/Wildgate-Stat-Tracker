@@ -20,10 +20,34 @@ import { useMatchSubmission } from '../hooks/useMatchSubmission';
 import { OcrCorrectionModal } from './OcrCorrectionModal';
 import { useAppStore } from '../store/useAppStore';
 import { getElectronAPI } from '../utils/electronAPI';
+import {
+    getEliminatorDisplayLabel,
+    getPrimaryEliminatedByTeamValue,
+    isEliminatedByTeamMatch,
+} from '../utils/eliminatorTeam';
 
 type WizardTab = 'result' | 'ocr';
 const MAX_SHIP_WEAPONS = 10;
 const MAX_PROSPECTOR_SLOTS = 2;
+const MODAL_FOCUSABLE_SELECTOR = [
+    'button:not([disabled])',
+    '[href]',
+    'input:not([disabled])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+const getFocusableElements = (container: HTMLElement | null): HTMLElement[] => {
+    if (!container) return [];
+    return Array.from(container.querySelectorAll<HTMLElement>(MODAL_FOCUSABLE_SELECTOR))
+        .filter((element) => (
+            element.tabIndex >= 0
+            && element.getAttribute('aria-hidden') !== 'true'
+            && (!element.hasAttribute('disabled'))
+            && (element.offsetParent !== null || element === document.activeElement)
+        ));
+};
 
 const parseDurationToSeconds = (value: string): number | null => {
     const parts = String(value || '').split(':').map((part) => Number(part));
@@ -58,43 +82,122 @@ export const Wizard: React.FC = () => {
 
     const { showWizard, setShowWizard, isOverlayMode, activeMode, activeUser, pushNotification, requestSmartCapture } = useUIState();
     const { processFinalSubmission, submitting } = useMatchSubmission();
-    const [selectedWinType, setSelectedWinType] = useState<'Combat' | 'Artifact' | 'Objective'>('Combat');
+    const [selectedWinType, setSelectedWinType] = useState<'Combat' | 'Artifact' | null>(null);
     const [requestedOcrReviewMatchId, setRequestedOcrReviewMatchId] = useState<number | null | undefined>(undefined);
     const [activeTab, setActiveTab] = useState<WizardTab>('result');
     const [loadoutExpanded, setLoadoutExpanded] = useState(false);
+    const isWizardOpen = Boolean(showWizard);
+    const lastTimeSyncMatchIdRef = React.useRef<number | null>(null);
+    const dialogRef = React.useRef<HTMLDivElement | null>(null);
+    const closeButtonRef = React.useRef<HTMLButtonElement | null>(null);
+    const previousFocusedElementRef = React.useRef<HTMLElement | null>(null);
+    const titleId = React.useId();
+    const descriptionId = React.useId();
 
     React.useEffect(() => {
-        if (showWizard && isOverlayMode) {
+        if (isWizardOpen && isOverlayMode) {
             getElectronAPI()?.send('set-ignore-mouse-events', false);
         }
-    }, [showWizard, isOverlayMode]);
+    }, [isOverlayMode, isWizardOpen]);
 
     React.useEffect(() => {
-        if (!showWizard) {
+        if (!isWizardOpen) {
             setActiveTab('result');
             setLoadoutExpanded(false);
+            setSelectedWinType(null);
+            lastTimeSyncMatchIdRef.current = null;
         }
-    }, [showWizard]);
+    }, [isWizardOpen]);
 
     React.useEffect(() => {
-        if (activeMode === 'Artifact Brawl') return;
-        if (selectedWinType === 'Artifact') setSelectedWinType('Combat');
-    }, [activeMode, selectedWinType]);
+        if (!isWizardOpen) return;
+        previousFocusedElementRef.current = document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null;
+        const focusTimer = window.setTimeout(() => {
+            if (closeButtonRef.current) {
+                closeButtonRef.current.focus();
+                return;
+            }
+            const focusable = getFocusableElements(dialogRef.current);
+            if (focusable.length > 0) {
+                focusable[0].focus();
+                return;
+            }
+            dialogRef.current?.focus();
+        }, 0);
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (!dialogRef.current) return;
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                setShowWizard(null);
+                return;
+            }
+            if (event.key !== 'Tab') return;
+            const focusable = getFocusableElements(dialogRef.current);
+            if (focusable.length === 0) {
+                event.preventDefault();
+                dialogRef.current.focus();
+                return;
+            }
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            const activeElement = document.activeElement as HTMLElement | null;
+            const activeInsideDialog = !!(activeElement && dialogRef.current.contains(activeElement));
+            if (event.shiftKey) {
+                if (!activeInsideDialog || activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                }
+                return;
+            }
+            if (!activeInsideDialog || activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        };
+        document.addEventListener('keydown', onKeyDown, true);
+        return () => {
+            window.clearTimeout(focusTimer);
+            document.removeEventListener('keydown', onKeyDown, true);
+            const previous = previousFocusedElementRef.current;
+            if (previous && document.contains(previous)) {
+                previous.focus();
+            }
+        };
+    }, [isWizardOpen, setShowWizard]);
 
     React.useEffect(() => {
         if (!showWizard) return;
-        if (showWizard === 'Win') {
-            if (pendingPlacement !== 1) setPendingPlacement(1);
-            return;
-        }
-        if (showWizard === 'Loss') {
+        if (showWizard === 'Loss' && selectedWinType === 'Combat') {
             if (!pendingPlacement || pendingPlacement < 2 || pendingPlacement > 5) {
                 setPendingPlacement(2);
             }
             return;
         }
         if (pendingPlacement != null) setPendingPlacement(null);
-    }, [pendingPlacement, setPendingPlacement, showWizard]);
+    }, [pendingPlacement, selectedWinType, setPendingPlacement, showWizard]);
+
+    React.useEffect(() => {
+        if (!showWizard || !pendingMatchData) return;
+        const pendingId = Number((pendingMatchData as Match | null)?.id || 0);
+        const forceSync = Number.isInteger(pendingId)
+            && pendingId > 0
+            && lastTimeSyncMatchIdRef.current !== pendingId;
+        if (!forceSync && ((timeMin || '').trim() || (timeSec || '').trim())) return;
+        const raw = String(pendingMatchData.time || '').trim();
+        const parts = raw.split(':');
+        if (parts.length !== 2) return;
+        const mm = String(parts[0] || '').replace(/[^0-9]/g, '').slice(0, 2);
+        const ss = String(parts[1] || '').replace(/[^0-9]/g, '').slice(0, 2);
+        if (!mm && !ss) return;
+        setTimeMin(mm.padStart(2, '0'));
+        setTimeSec(ss.padStart(2, '0'));
+        if (forceSync) {
+            lastTimeSyncMatchIdRef.current = pendingId;
+        }
+    }, [pendingMatchData, setTimeMin, setTimeSec, showWizard, timeMin, timeSec]);
 
     React.useEffect(() => {
         const onRequestOcrReview = (evt: Event) => {
@@ -122,6 +225,13 @@ export const Wizard: React.FC = () => {
             setRequestedOcrReviewMatchId(undefined);
         }
     }, [pendingMatchData, requestedOcrReviewMatchId, showWizard]);
+
+    React.useEffect(() => {
+        if (showWizard) return;
+        if (requestedOcrReviewMatchId !== undefined) {
+            setRequestedOcrReviewMatchId(undefined);
+        }
+    }, [requestedOcrReviewMatchId, showWizard]);
 
     const detectedPlayerCount = React.useMemo(() => {
         if (!sessionTeams) return 0;
@@ -158,12 +268,32 @@ export const Wizard: React.FC = () => {
 
     if (!showWizard || !pendingMatchData) return null;
 
-    const isDefeat = showWizard === 'Loss';
-    const title = isDefeat ? 'Defeat' : showWizard;
+    const selectedResult = showWizard === 'Win' || showWizard === 'Loss' || showWizard === 'Draw'
+        ? showWizard
+        : null;
+    const hasSelectedResult = selectedResult !== null;
+    const isDefeat = selectedResult === 'Loss';
+    const title = !hasSelectedResult ? 'Match Result' : (isDefeat ? 'Defeat' : selectedResult);
+    const hasSelectedOutcomeType = selectedResult === 'Draw' || selectedWinType !== null;
+    const hasValidCombatLossPlacement = (
+        selectedResult !== 'Loss'
+        || selectedWinType !== 'Combat'
+        || (pendingPlacement != null && pendingPlacement >= 2 && pendingPlacement <= 5)
+    );
+    const canFinalizeResult = hasSelectedResult && hasSelectedOutcomeType && hasValidCombatLossPlacement;
+    const finalizeButtonLabel = (() => {
+        if (!hasSelectedResult) return 'Select Match Result';
+        if (selectedResult === 'Draw') return 'Finalize Draw';
+        if (!hasSelectedOutcomeType) return selectedResult === 'Loss' ? 'Choose Loss Type' : 'Choose Win Type';
+        if (!hasValidCombatLossPlacement) return 'Select Placement';
+        return selectedResult === 'Loss'
+            ? `Finalize ${selectedWinType} Loss`
+            : `Finalize ${selectedWinType} Win`;
+    })();
 
-    const cardClass = `mg-surface rounded-2xl border border-md-sys-outline/10 shadow-sm ${isOverlayMode ? 'p-3' : 'p-5'}`;
-    const labelClass = 'text-label-sm font-bold uppercase tracking-widest opacity-60 mb-1.5 block';
-    const inputBaseClass = 'mg-surface-primary bg-md-sys-primary/5 font-bold outline-none text-center rounded-xl border border-md-sys-primary/10 transition-all focus:border-md-sys-primary/40 focus:bg-md-sys-primary/10';
+    const cardClass = `wizard-card rounded-2xl border border-md-sys-outline/14 shadow-sm bg-md-sys-surface-container ${isOverlayMode ? 'p-4' : 'p-5'}`;
+    const labelClass = 'wizard-section-label text-label-sm font-black uppercase tracking-widest text-md-sys-on-surface/92 mb-2 block';
+    const inputBaseClass = 'wizard-input wizard-input-control bg-md-sys-surface-container-high font-bold outline-none text-center rounded-xl border border-md-sys-outline/24 text-md-sys-on-surface/95 transition-all focus:border-md-sys-primary/45 focus:bg-md-sys-surface-container-highest';
 
     const pendingLoadout = pendingMatchData.loadout || {
         hero: null,
@@ -176,15 +306,21 @@ export const Wizard: React.FC = () => {
     const hasTelemetryLoadout = (pendingLoadout.weapons?.length || 0) > 0
         || (pendingLoadout.characterWeapons?.length || 0) > 0
         || (pendingLoadout.characterEquipment?.length || 0) > 0;
+    const latestTelemetryLoadoutSource = pendingMatchData?.telemetryConsistency?.loadoutSaves?.length
+        ? pendingMatchData.telemetryConsistency.loadoutSaves[pendingMatchData.telemetryConsistency.loadoutSaves.length - 1].source
+        : null;
+    const loadoutSourceBadgeLabel = latestTelemetryLoadoutSource
+        ? `Source: ${latestTelemetryLoadoutSource}`
+        : 'Source: Telemetry';
     const displayedShipWeapons = (pendingLoadout.weapons || [])
         .filter((entry) => !/tertiary\s+(weapon|equipment)/i.test(String(entry || '')))
         .slice(0, MAX_SHIP_WEAPONS);
     const displayedCharacterWeapons = (pendingLoadout.characterWeapons || []).slice(0, 2);
     const displayedCharacterEquipment = (pendingLoadout.characterEquipment || []).slice(0, 2);
     const loadoutSummary = [
-        displayedShipWeapons.length > 0 ? `SW: ${displayedShipWeapons.join(', ')}` : 'SW: --',
-        displayedCharacterWeapons.length > 0 ? `PW: ${displayedCharacterWeapons.join(', ')}` : 'PW: --',
-        displayedCharacterEquipment.length > 0 ? `PE: ${displayedCharacterEquipment.join(', ')}` : 'PE: --',
+        displayedShipWeapons.length > 0 ? `Ship Weapons: ${displayedShipWeapons.join(', ')}` : 'Ship Weapons: --',
+        displayedCharacterWeapons.length > 0 ? `Prospector Weapons: ${displayedCharacterWeapons.join(', ')}` : 'Prospector Weapons: --',
+        displayedCharacterEquipment.length > 0 ? `Prospector Equipment: ${displayedCharacterEquipment.join(', ')}` : 'Prospector Equipment: --',
     ].join(' | ');
     const telemetryDurationSeconds = typeof pendingMatchData?.telemetryConsistency?.telemetryDurationSeconds === 'number'
         ? pendingMatchData.telemetryConsistency.telemetryDurationSeconds
@@ -226,15 +362,19 @@ export const Wizard: React.FC = () => {
         });
     };
 
-    const applyEliminatorTeam = (teamName: string, shipType?: string, players?: string[]) => {
-        const preferredPlayer = Array.isArray(players) && players.length > 0 ? players[0] : '';
-        if (preferredPlayer) setPendingKilledBy(preferredPlayer);
-        else setPendingKilledBy(teamName);
+    const applyEliminatorTeam = (teamName: string, color?: string, shipType?: string) => {
+        const teamSelection = { teamName, color: color || '' };
+        const eliminatedByValue = getPrimaryEliminatedByTeamValue(teamSelection);
+        setPendingKilledBy(getEliminatorDisplayLabel(teamSelection));
         if (shipType) setPendingKilledByShip(shipType);
-        useAppStore.getState().setPendingMatchData({ ...pendingMatchData, eliminatedByTeam: teamName });
+        useAppStore.getState().setPendingMatchData({
+            ...pendingMatchData,
+            eliminatedByTeam: eliminatedByValue || undefined,
+        });
     };
 
     const handleWizardSmartCapture = () => {
+        setActiveTab('ocr');
         const pendingMatchId = Number((pendingMatchData as Match | null)?.id || 0);
         const requestId = requestSmartCapture({
             activeUser: activeUser || null,
@@ -255,37 +395,46 @@ export const Wizard: React.FC = () => {
             type: 'info',
             source: 'wizard',
             durationMs: 10_000,
-            deepLink: { type: 'openWizard', result: showWizard || undefined },
+            deepLink: { type: 'openWizard', result: selectedResult || undefined },
         });
     };
 
     return (
-        <div className="fixed inset-0 md3-dialog-scrim z-top flex items-start justify-center p-4 overflow-y-auto mg-blur animate-fade-in" onClick={() => setShowWizard(null)}>
+        <div className="wizard-scrim fixed inset-0 md3-dialog-scrim backdrop-blur-none z-top flex items-start justify-center p-4 overflow-y-auto animate-fade-in" onClick={() => setShowWizard(null)}>
             <div
-                className={`mg-surface overflow-hidden rounded-2_5rem w-full my-2 shadow-2xl flex flex-col animate-scale-in border border-md-sys-outline/20 ${isOverlayMode ? 'max-w-2xl max-h-90vh' : 'max-w-3xl max-h-95vh'}`}
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={titleId}
+                aria-describedby={descriptionId}
+                tabIndex={-1}
+                className={`wizard-shell overflow-hidden rounded-2_5rem w-full my-2 shadow-2xl flex flex-col animate-scale-in border border-md-sys-outline/24 bg-md-sys-surface-container-highest text-md-sys-on-surface ${isOverlayMode ? 'max-w-2xl max-h-90vh' : 'max-w-3xl max-h-95vh'}`}
                 onClick={e => e.stopPropagation()}
             >
-                <div className={`${isOverlayMode ? 'py-3 px-5 text-label-sm' : 'py-5 px-8 text-xl'} font-bold uppercase tracking-wide-20 mg-surface-high border-b border-md-sys-outline/10 text-md-sys-on-surface flex items-center justify-center gap-3 relative`}>
-                    <div className={`w-2 h-2 rounded-full ${isDefeat ? 'bg-md-sys-error' : 'bg-success'} animate-pulse`} />
+                <span id={descriptionId} className="sr-only">
+                    Review and submit match outcome, OCR roster alignment, and match details.
+                </span>
+                <div id={titleId} className={`wizard-header ${isOverlayMode ? 'py-3 px-5 text-label-sm' : 'py-5 px-8 text-xl'} font-bold uppercase tracking-wide-20 bg-md-sys-surface-container-high border-b border-md-sys-outline/14 text-md-sys-on-surface flex items-center justify-center gap-3 relative`}>
+                    <div className={`w-2 h-2 rounded-full ${!hasSelectedResult ? 'bg-info' : (isDefeat ? 'bg-md-sys-error' : 'bg-success')} animate-pulse`} />
                     {title}
-                    <button onClick={() => setShowWizard(null)} className="absolute right-4 md3-icon-btn opacity-40 hover:opacity-100 hover:bg-md-sys-error/10 hover:text-md-sys-error transition-all" aria-label="Close match wizard">
+                    <button ref={closeButtonRef} onClick={() => setShowWizard(null)} className="absolute right-4 md3-icon-btn opacity-40 hover:opacity-100 hover:bg-md-sys-error/10 hover:text-md-sys-error transition-all" aria-label="Close match wizard">
                         <X size={isOverlayMode ? 18 : 24} />
                     </button>
                 </div>
 
-                <div className="px-4 pt-3">
+                <div className="px-4 pt-3 wizard-tabs-wrap">
                     <div className="grid grid-cols-2 gap-2">
                         <button
                             type="button"
                             onClick={() => setActiveTab('result')}
-                            className={`rounded-xl py-2 text-label-sm font-bold uppercase tracking-widest ${activeTab === 'result' ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'mg-surface-high opacity-70 hover:opacity-100'}`}
+                            className={`wizard-tab-btn rounded-xl py-2.5 text-label-sm font-bold uppercase tracking-widest ${activeTab === 'result' ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'mg-surface-high text-md-sys-on-surface/90 hover:text-md-sys-on-surface'}`}
                         >
                             Result
                         </button>
                         <button
                             type="button"
                             onClick={() => setActiveTab('ocr')}
-                            className={`rounded-xl py-2 text-label-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 ${activeTab === 'ocr' ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'mg-surface-high opacity-70 hover:opacity-100'}`}
+                            className={`wizard-tab-btn rounded-xl py-2.5 text-label-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 ${activeTab === 'ocr' ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'mg-surface-high text-md-sys-on-surface/90 hover:text-md-sys-on-surface'}`}
                         >
                             <Users size={14} />
                             OCR Review {detectedPlayerCount > 0 ? `(${detectedPlayerCount})` : ''}
@@ -294,7 +443,7 @@ export const Wizard: React.FC = () => {
                 </div>
 
                 {activeTab === 'result' ? (
-                    <div className={`overflow-y-auto flex-1 flex flex-col ${isOverlayMode ? 'gap-3 px-4 py-4' : 'gap-5 px-8 py-6'} custom-scrollbar`}>
+                    <div className={`overflow-y-auto overscroll-contain flex-1 flex flex-col ${isOverlayMode ? 'gap-3 px-4 py-4' : 'gap-5 px-8 py-6'} custom-scrollbar`}>
                         <div className={cardClass}>
                             <span className={labelClass}>Outcome</span>
                             <div className="grid grid-cols-3 gap-2">
@@ -304,26 +453,25 @@ export const Wizard: React.FC = () => {
                                         type="button"
                                         onClick={() => {
                                             setShowWizard(result);
-                                            if (result === 'Win') {
-                                                setPendingPlacement(1);
-                                            } else if (result !== 'Loss') {
-                                                setPendingPlacement(null);
-                                            } else if (!pendingPlacement || pendingPlacement < 2 || pendingPlacement > 5) {
-                                                setPendingPlacement(2);
-                                            }
+                                            setSelectedWinType(null);
                                         }}
-                                        className={`rounded-xl py-2 text-label-sm font-bold uppercase tracking-widest transition-all ${showWizard === result
+                                        className={`wizard-outcome-btn rounded-xl py-2.5 text-label-sm font-bold uppercase tracking-widest transition-all ${selectedResult === result
                                             ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg'
-                                            : 'mg-surface-high opacity-70 hover:opacity-100'
+                                            : 'mg-surface-high text-md-sys-on-surface/90 hover:text-md-sys-on-surface'
                                             }`}
                                     >
                                         {result}
                                     </button>
                                 ))}
                             </div>
-                            {showWizard === 'Loss' && (
+                            {!hasSelectedResult && (
+                                <div className="mt-2 text-label-sm text-md-sys-on-surface/92">
+                                    Select a result to unlock match-type follow-up.
+                                </div>
+                            )}
+                            {selectedResult === 'Loss' && selectedWinType === 'Combat' && (
                                 <div className="mt-2">
-                                    <span className="text-label-xs font-bold uppercase opacity-50 block mb-1">Placement</span>
+                                    <span className="text-label-sm font-bold uppercase text-md-sys-on-surface/80 block mb-1">Placement</span>
                                     <select
                                         className={`w-full ${inputBaseClass} py-2 text-body`}
                                         value={pendingPlacement && pendingPlacement >= 2 && pendingPlacement <= 5 ? pendingPlacement : 2}
@@ -346,36 +494,48 @@ export const Wizard: React.FC = () => {
                             )}
                         </div>
 
-                        <div className="flex gap-2 w-full">
-                            {activeMode === 'Artifact Brawl' ? (
-                                <>
-                                    <button onClick={() => setSelectedWinType('Combat')} className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Combat' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg scale-102' : 'mg-surface-high opacity-60 hover:opacity-100'}`}>
-                                        <Sword size={16} /> {showWizard === 'Loss' ? 'Combat Defeat' : 'Combat Win'}
-                                    </button>
-                                    <button onClick={() => setSelectedWinType('Artifact')} className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong shadow-lg scale-102' : 'mg-surface-high opacity-60 hover:opacity-100'}`}>
-                                        <Gem size={16} /> {showWizard === 'Loss' ? 'Artifact Defeat' : 'Artifact Win'}
-                                    </button>
-                                </>
-                            ) : activeMode === 'Fleet Battle' ? (
-                                <>
-                                    <button onClick={() => setSelectedWinType('Combat')} className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Combat' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg scale-102' : 'mg-surface-high opacity-60 hover:opacity-100'}`}>
-                                        <Sword size={16} /> Combat
-                                    </button>
-                                    <button onClick={() => setSelectedWinType('Objective')} className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Objective' ? 'bg-info text-ink-strong shadow-lg scale-102' : 'mg-surface-high opacity-60 hover:opacity-100'}`}>
-                                        <Target size={16} /> Objective
-                                    </button>
-                                </>
-                            ) : null}
-                        </div>
+                        {(selectedResult === 'Win' || selectedResult === 'Loss') && (
+                            <div className="flex gap-2 w-full">
+                                <button onClick={() => setSelectedWinType('Combat')} className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Combat' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg scale-102' : 'mg-surface-high text-md-sys-on-surface/90 hover:text-md-sys-on-surface'}`}>
+                                    <Sword size={16} /> {selectedResult === 'Loss' ? 'Combat Defeat' : 'Combat Win'}
+                                </button>
+                                <button onClick={() => setSelectedWinType('Artifact')} className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong shadow-lg scale-102' : 'mg-surface-high text-md-sys-on-surface/90 hover:text-md-sys-on-surface'}`}>
+                                    <Gem size={16} /> {selectedResult === 'Loss' ? 'Artifact Defeat' : 'Artifact Win'}
+                                </button>
+                            </div>
+                        )}
+                        {(selectedResult === 'Win' || selectedResult === 'Loss') && !selectedWinType && (
+                            <div className="text-label-sm text-md-sys-on-surface/92 -mt-2">
+                                Pick whether this was a Combat or Artifact outcome.
+                            </div>
+                        )}
 
-                        <div className={`grid grid-cols-3 ${isOverlayMode ? 'gap-2' : 'gap-4'}`}>
+                        <div className={`grid grid-cols-1 md:grid-cols-3 ${isOverlayMode ? 'gap-2.5' : 'gap-4'}`}>
                             <div className={`${cardClass} flex flex-col items-center bg-md-sys-primary/5`}>
-                                <Clock size={16} className="text-md-sys-primary/60 mb-1" />
+                                <Clock size={16} className="text-md-sys-primary/70 mb-1" />
                                 <span className={labelClass}>Time</span>
-                                <div className="flex items-center gap-1">
-                                    <input type="number" placeholder="00" value={timeMin} onChange={(e) => setTimeMin(e.target.value)} className={`w-8 ${inputBaseClass} ${isOverlayMode ? 'text-base py-1' : 'text-xl py-2'}`} />
-                                    <span className="font-bold opacity-40">:</span>
-                                    <input type="number" placeholder="00" value={timeSec} onChange={(e) => setTimeSec(e.target.value)} className={`w-8 ${inputBaseClass} ${isOverlayMode ? 'text-base py-1' : 'text-xl py-2'}`} />
+                                <div className="wizard-time-row" data-testid="wizard-time-row">
+                                    <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        maxLength={2}
+                                        placeholder="00"
+                                        aria-label="Minutes"
+                                        value={timeMin}
+                                        onChange={(e) => setTimeMin(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))}
+                                        className={`wizard-time-input font-mono tabular-nums h-11 leading-tight ${inputBaseClass} ${isOverlayMode ? 'text-base py-1' : 'text-xl py-2'}`}
+                                    />
+                                    <span className="wizard-time-separator">:</span>
+                                    <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        maxLength={2}
+                                        placeholder="00"
+                                        aria-label="Seconds"
+                                        value={timeSec}
+                                        onChange={(e) => setTimeSec(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))}
+                                        className={`wizard-time-input font-mono tabular-nums h-11 leading-tight ${inputBaseClass} ${isOverlayMode ? 'text-base py-1' : 'text-xl py-2'}`}
+                                    />
                                 </div>
                             </div>
                             <div className={`${cardClass} flex flex-col items-center bg-danger/5`}>
@@ -385,7 +545,7 @@ export const Wizard: React.FC = () => {
                             </div>
                             <div className={`${cardClass} flex flex-col items-center bg-success/5`}>
                                 <Target size={16} className="text-success/60 mb-1" />
-                                <span className={labelClass}>Elims</span>
+                                <span className={labelClass}>Ship Eliminations</span>
                                 <span className={`${isOverlayMode ? 'text-xl' : 'text-2xl'} font-black text-md-sys-on-surface`}>
                                     {Object.values(kills || {}).reduce((a, b) => a + (Number(b) || 0), 0)}
                                 </span>
@@ -394,7 +554,7 @@ export const Wizard: React.FC = () => {
                         {telemetryDurationSeconds != null && (
                             <div className={cardClass}>
                                 <div className="flex items-center justify-between gap-2">
-                                    <span className="text-label-sm font-bold uppercase tracking-widest opacity-60">
+                                    <span className="text-label-sm font-bold uppercase tracking-widest text-md-sys-on-surface/80">
                                         Telemetry Duration: {Math.floor(telemetryDurationSeconds / 60).toString().padStart(2, '0')}:{String(telemetryDurationSeconds % 60).padStart(2, '0')}
                                     </span>
                                     <button
@@ -408,7 +568,7 @@ export const Wizard: React.FC = () => {
                                                 message: 'Duration set from telemetry.',
                                                 type: 'success',
                                                 source: 'wizard',
-                                                deepLink: { type: 'openWizard', result: showWizard || undefined },
+                                                deepLink: { type: 'openWizard', result: selectedResult || undefined },
                                             });
                                         }}
                                         className="px-2.5 py-1 rounded-lg text-label-sm font-bold md3-btn-tonal"
@@ -426,20 +586,39 @@ export const Wizard: React.FC = () => {
 
                         <div className={cardClass}>
                             <div className="flex items-center justify-between mb-4">
-                                <span className={labelClass + ' mb-0'}>Tactical Breakdown</span>
+                                <span className={labelClass + ' mb-0'}>Ship Eliminations</span>
                                 <ChevronDown size={14} className="opacity-40" />
                             </div>
                             <div className={`grid ${isOverlayMode ? 'grid-cols-3' : 'grid-cols-4'} gap-2`}>
                                 {[...SHIPS, 'AI Legion'].map(ship => {
                                     const shortName = ship.split('(')[0].trim();
                                     const currentVal = kills?.[shortName] || 0;
+                                    const isAiLegion = shortName.toLowerCase() === 'ai legion';
                                     return (
-                                        <div key={ship} className="flex flex-col items-center mg-surface-high rounded-xl p-2 border border-md-sys-outline/5 hover:border-md-sys-primary/20 transition-all group">
-                                            <span className="text-label-xs font-bold opacity-40 uppercase mb-2 truncate w-full text-center">{shortName}</span>
+                                        <div
+                                            key={ship}
+                                            data-testid={isAiLegion ? 'wizard-ai-legion-kill-card' : undefined}
+                                            className={`wizard-kill-card flex flex-col items-center rounded-xl p-2 border transition-all group ${
+                                            isAiLegion
+                                                ? 'wizard-kill-card--ai-legion ai-legion-chip'
+                                                : 'mg-surface-high border-md-sys-outline/5 hover:border-md-sys-primary/20'
+                                        }`}
+                                        >
+                                            <span className={`wizard-kill-label text-label-xs font-bold uppercase mb-2 truncate w-full text-center ${
+                                                isAiLegion ? 'wizard-kill-label--ai-legion ai-legion-chip__label' : 'opacity-40'
+                                            }`}>{shortName}</span>
                                             <div className="flex items-center w-full justify-between">
-                                                <button onClick={() => setKills({ ...kills, [shortName]: Math.max(0, currentVal - 1) })} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-md-sys-error/10 text-md-sys-on-surface/60 hover:text-md-sys-error transition-all">-</button>
-                                                <span className="font-mono font-bold text-body">{currentVal}</span>
-                                                <button onClick={() => setKills({ ...kills, [shortName]: currentVal + 1 })} className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-success/10 text-md-sys-on-surface/60 hover:text-success transition-all">+</button>
+                                                <button onClick={() => setKills({ ...kills, [shortName]: Math.max(0, currentVal - 1) })} className={`wizard-kill-stepper w-6 h-6 flex items-center justify-center rounded-lg transition-all ${
+                                                    isAiLegion
+                                                        ? 'wizard-kill-stepper--ai-legion'
+                                                        : 'hover:bg-md-sys-error/10 text-md-sys-on-surface/60 hover:text-md-sys-error'
+                                                }`}>-</button>
+                                                <span className={`wizard-kill-value font-mono font-bold text-body ${isAiLegion ? 'wizard-kill-value--ai-legion ai-legion-chip__value' : ''}`}>{currentVal}</span>
+                                                <button onClick={() => setKills({ ...kills, [shortName]: currentVal + 1 })} className={`wizard-kill-stepper w-6 h-6 flex items-center justify-center rounded-lg transition-all ${
+                                                    isAiLegion
+                                                        ? 'wizard-kill-stepper--ai-legion'
+                                                        : 'hover:bg-success/10 text-md-sys-on-surface/60 hover:text-success'
+                                                }`}>+</button>
                                             </div>
                                         </div>
                                     );
@@ -455,14 +634,31 @@ export const Wizard: React.FC = () => {
                             >
                                 <span className={labelClass + ' mb-0 flex items-center gap-2'}>
                                     <Wrench size={14} /> Prospector Loadout
-                                    {hasTelemetryLoadout && <span className="w-2 h-2 rounded-full bg-success" title="Detected loadout data" />}
+                                    {hasTelemetryLoadout && (
+                                        <span className="inline-flex items-center gap-1.5 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold" title="Detected loadout data">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                                            Telemetry
+                                        </span>
+                                    )}
                                 </span>
-                                <span className="text-label-sm opacity-60 truncate">{loadoutSummary}</span>
+                                <span className="text-label-sm text-md-sys-on-surface/80 truncate">{loadoutSummary}</span>
                             </button>
                             {(loadoutExpanded || !hasTelemetryLoadout) && (
                                 <div className="mt-3 space-y-3">
                                     <div>
-                                        <span className="text-label-xs font-bold uppercase opacity-50">Ship Weapons (max 10)</span>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-label-xs font-bold uppercase opacity-50">Ship Weapons (max 10)</span>
+                                            {hasTelemetryLoadout && displayedShipWeapons.length > 0 && (
+                                                <span
+                                                    data-testid="wizard-telemetry-ship-weapons"
+                                                    className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold"
+                                                    title="Loadout source from telemetry"
+                                                >
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                                                    {loadoutSourceBadgeLabel}
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="flex flex-wrap gap-1.5 mt-1">
                                             {WEAPONS.map((weapon) => {
                                                 const selected = displayedShipWeapons.some((entry) => entry.toLowerCase() === weapon.toLowerCase());
@@ -482,7 +678,19 @@ export const Wizard: React.FC = () => {
                                         </div>
                                     </div>
                                     <div>
-                                        <span className="text-label-xs font-bold uppercase opacity-50">Prospector Weapons (max 2)</span>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-label-xs font-bold uppercase opacity-50">Prospector Weapons (max 2)</span>
+                                            {hasTelemetryLoadout && displayedCharacterWeapons.length > 0 && (
+                                                <span
+                                                    data-testid="wizard-telemetry-prospector-weapons"
+                                                    className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold"
+                                                    title="Loadout source from telemetry"
+                                                >
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                                                    {loadoutSourceBadgeLabel}
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="flex flex-wrap gap-1.5 mt-1">
                                             {CHARACTER_WEAPONS.map((weapon) => {
                                                 const selected = displayedCharacterWeapons.some((entry) => entry.toLowerCase() === weapon.toLowerCase());
@@ -502,7 +710,19 @@ export const Wizard: React.FC = () => {
                                         </div>
                                     </div>
                                     <div>
-                                        <span className="text-label-xs font-bold uppercase opacity-50">Prospector Equipment (max 2)</span>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-label-xs font-bold uppercase opacity-50">Prospector Equipment (max 2)</span>
+                                            {hasTelemetryLoadout && displayedCharacterEquipment.length > 0 && (
+                                                <span
+                                                    data-testid="wizard-telemetry-prospector-equipment"
+                                                    className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold"
+                                                    title="Loadout source from telemetry"
+                                                >
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                                                    {loadoutSourceBadgeLabel}
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="flex flex-wrap gap-1.5 mt-1">
                                             {CHARACTER_EQUIPMENT.map((equipment) => {
                                                 const selected = displayedCharacterEquipment.some((entry) => entry.toLowerCase() === equipment.toLowerCase());
@@ -535,7 +755,7 @@ export const Wizard: React.FC = () => {
                                         { label: 'Epic', val: poiEpic, set: setPoiEpic, border: 'border-accent-soft' }
                                     ].map((item) => (
                                         <div key={item.label} className={`relative ${isOverlayMode ? 'py-2' : 'py-3'} rounded-2xl mg-surface-high border ${item.border} flex flex-col items-center group cursor-pointer active:scale-95 transition-all`} onClick={() => item.set(item.val + 1)} onContextMenu={(e) => { e.preventDefault(); item.set(Math.max(0, item.val - 1)); }}>
-                                            <span className="text-label-xs font-bold opacity-40 mb-1">{item.label}</span>
+                                            <span className="text-label-sm font-bold text-md-sys-on-surface/70 mb-1">{item.label}</span>
                                             <span className="text-xl font-bold">{item.val}</span>
                                         </div>
                                     ))}
@@ -548,20 +768,23 @@ export const Wizard: React.FC = () => {
                                 <span className={labelClass}>Eliminated By</span>
                                 {defeatedTeams.length > 0 && (
                                     <div className="flex flex-wrap gap-1.5 mb-2">
-                                        {defeatedTeams.map((team, index) => (
-                                            <button
-                                                key={`${team.teamName}-${index}`}
-                                                type="button"
-                                                onClick={() => applyEliminatorTeam(team.teamName, team.shipType, team.players)}
-                                                className={`px-2.5 py-1 rounded-xl text-label-sm font-bold uppercase border transition-all ${pendingMatchData?.eliminatedByTeam === team.teamName ? 'border-md-sys-primary bg-md-sys-primary/10 shadow-lg' : 'border-md-sys-outline/10 mg-surface-high opacity-75 hover:opacity-100'}`}
-                                            >
-                                                {team.color ? `${team.color}: ` : ''}{team.teamName}
-                                            </button>
-                                        ))}
+                                        {defeatedTeams.map((team, index) => {
+                                            const isSelected = isEliminatedByTeamMatch(pendingMatchData?.eliminatedByTeam, team);
+                                            return (
+                                                <button
+                                                    key={`${team.teamName}-${index}`}
+                                                    type="button"
+                                                    onClick={() => applyEliminatorTeam(team.teamName, team.color, team.shipType)}
+                                                    className={`px-2.5 py-1 rounded-xl text-label-sm font-bold uppercase border transition-all ${isSelected ? 'border-md-sys-primary bg-md-sys-primary/10 shadow-lg' : 'border-md-sys-outline/10 mg-surface-high opacity-75 hover:opacity-100'}`}
+                                                >
+                                                    {getEliminatorDisplayLabel({ teamName: team.teamName, color: team.color }) || team.teamName}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 )}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                    <input type="text" className={`w-full ${inputBaseClass} py-2 text-body placeholder:opacity-40`} placeholder="Killer player/team..." value={pendingKilledBy || ''} onChange={e => setPendingKilledBy(e.target.value)} />
+                                    <input type="text" className={`w-full ${inputBaseClass} py-2 text-body placeholder:opacity-40`} placeholder="Eliminator team color/name..." value={pendingKilledBy || ''} onChange={e => setPendingKilledBy(e.target.value)} />
                                     <input type="text" className={`w-full ${inputBaseClass} py-2 text-body placeholder:opacity-40`} placeholder="Killer ship..." value={pendingKilledByShip || ''} onChange={e => setPendingKilledByShip(e.target.value)} />
                                 </div>
                             </div>
@@ -571,14 +794,19 @@ export const Wizard: React.FC = () => {
                             <Scan size={14} /> Smart Capture
                         </button>
 
-                        <button onClick={() => processFinalSubmission(selectedWinType)} disabled={submitting} className={`w-full ${isOverlayMode ? 'py-4' : 'py-5'} rounded-3xl font-bold uppercase tracking-wide-30 text-label-sm transition-all shadow-xl active:scale-95 ${submitting ? 'opacity-disabled grayscale' : (selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong' : selectedWinType === 'Objective' ? 'bg-info text-ink-strong' : 'bg-md-sys-primary text-md-sys-onPrimary')}`}>
-                            {submitting ? 'Synchronizing...' : `Finalize ${selectedWinType}`}
+                        <button
+                            onClick={() => processFinalSubmission(selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat'))}
+                            disabled={submitting || !canFinalizeResult}
+                            className={`w-full ${isOverlayMode ? 'py-4' : 'py-5'} rounded-3xl font-bold uppercase tracking-wide-30 text-label-sm transition-all shadow-xl active:scale-95 ${submitting ? 'opacity-disabled grayscale' : (!canFinalizeResult ? 'opacity-disabled grayscale' : (selectedResult === 'Draw' ? 'bg-info text-ink-strong' : (selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong' : 'bg-md-sys-primary text-md-sys-onPrimary')))}`
+                            }
+                        >
+                            {submitting ? 'Synchronizing...' : finalizeButtonLabel}
                         </button>
                     </div>
                 ) : (
                     <div className={`flex-1 min-h-0 flex flex-col ${isOverlayMode ? 'px-4 py-4 gap-3' : 'px-8 py-6 gap-4'}`}>
                         <div className="flex items-center justify-between rounded-xl border border-md-sys-outline/10 mg-surface-high px-3 py-2">
-                            <span className="text-label-sm font-bold uppercase tracking-widest opacity-60">OCR Review Tools</span>
+                            <span className="text-label-sm font-bold uppercase tracking-widest text-md-sys-on-surface/80">OCR Review Tools</span>
                             <button
                                 type="button"
                                 onClick={handleWizardSmartCapture}
@@ -589,7 +817,7 @@ export const Wizard: React.FC = () => {
                                 Re-run OCR
                             </button>
                         </div>
-                        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain custom-scrollbar">
+                        <div className="flex-1 min-h-0 overflow-visible">
                         <OcrCorrectionModal
                             isOpen={true}
                             embedded={true}
@@ -602,7 +830,7 @@ export const Wizard: React.FC = () => {
                 )}
 
                 <div className="p-4 flex justify-center border-t border-md-sys-outline/5">
-                    <button onClick={() => setShowWizard(null)} className="text-label-sm font-bold uppercase tracking-widest opacity-40 hover:opacity-100 transition-opacity flex items-center gap-2">
+                    <button onClick={() => setShowWizard(null)} className="text-label-sm font-bold uppercase tracking-widest text-md-sys-on-surface/70 hover:text-md-sys-on-surface transition-colors flex items-center gap-2">
                         <CheckCircle2 size={14} />
                         {activeTab === 'result' ? 'Abort Submission' : 'Close Review'}
                     </button>

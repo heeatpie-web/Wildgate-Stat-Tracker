@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
+  combinedNameSimilarityScore,
+  containsNameScore,
+  getAdaptiveNameDistanceThreshold,
+  getAdaptiveNameSimilarityThreshold,
   levenshteinDistance,
   findClosestMatch,
   lcsLength,
@@ -11,6 +15,8 @@ import {
   isOcrNoise,
   cleanPlayerName,
   cleanMissionName,
+  tokenOverlapNameScore,
+  tokenizeForNameSimilarity,
 } from '../stringUtils';
 
 describe('levenshteinDistance', () => {
@@ -51,6 +57,34 @@ describe('findClosestMatch', () => {
 
   it('is case-insensitive', () => {
     expect(findClosestMatch('hunter', candidates)).toBe('Hunter');
+  });
+});
+
+describe('name similarity helpers', () => {
+  it('combines token overlap and edit distance for roster-like names', () => {
+    const score = combinedNameSimilarityScore('Jr Viper', 'Junior Viper');
+    expect(score).toBeGreaterThanOrEqual(80);
+  });
+
+  it('scores containment matches above basic edit distance', () => {
+    expect(containsNameScore('Ace', 'Ace Pilot')).toBeGreaterThanOrEqual(70);
+  });
+
+  it('scores token overlap for split names', () => {
+    const score = tokenOverlapNameScore(
+      tokenizeForNameSimilarity('Jr Viper'),
+      tokenizeForNameSimilarity('Junior Viper')
+    );
+    expect(score).toBeGreaterThanOrEqual(80);
+  });
+
+  it('uses adaptive thresholds by name length', () => {
+    expect(getAdaptiveNameSimilarityThreshold(4)).toBe(70);
+    expect(getAdaptiveNameSimilarityThreshold(7)).toBe(65);
+    expect(getAdaptiveNameSimilarityThreshold(8)).toBe(61);
+    expect(getAdaptiveNameSimilarityThreshold(16)).toBe(58);
+    expect(getAdaptiveNameDistanceThreshold(4)).toBe(1);
+    expect(getAdaptiveNameDistanceThreshold(13)).toBe(4);
   });
 });
 

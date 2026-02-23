@@ -60,7 +60,7 @@ const loadDashboardChunk = (view: LazyDashboardView): Promise<LazyDashboardModul
 };
 const loadAnalyticsPanel = () => loadDashboardChunk('analytics');
 const AnalyticsPanel = React.lazy(loadAnalyticsPanel);
-import { APP_VERSION, Match, MatchResult } from './types';
+import { APP_VERSION, Match, MatchResult, WizardResult } from './types';
 import { CHANGELOG } from './utils/changelog';
 import { Toast } from './components/Toast';
 import { IdMapper } from './components/IdMapper';
@@ -74,12 +74,18 @@ const MatchRecordingPage = React.lazy(() => import('./components/MatchRecordingP
 import type { OCRExtractedData } from './utils/ocr/ocrTypes';
 import { useAppStore } from './store/useAppStore';
 import { getElectronAPI } from './utils/electronAPI';
-import { normalizeOcrName, similarityScore } from './utils/stringUtils';
+import {
+    combinedNameSimilarityScore,
+    getAdaptiveNameSimilarityThreshold,
+    normalizeOcrName,
+    similarityScore,
+} from './utils/stringUtils';
 import { StorageService } from './utils/storage';
 import { playSoundCue } from './utils/soundCues';
 import { shouldQueueLearningReview } from './utils/ocrAliasEngine';
 import { buildAliasVariantMap, resolveOcrName } from './utils/ocrNameResolver';
-import { assignDeterministicTeamColors, buildPlayerColorHints } from './utils/ocr/teamColorAssignment';
+import { assignDeterministicTeamColors, buildPlayerColorHints, normalizeTeamColor, type TeamColor } from './utils/ocr/teamColorAssignment';
+import { backfillOpponentTeamShipTypes } from './utils/ocr/opponentTeamShipTypes';
 import { capTeammatePlayers, getMaxTeammatesForShip } from './utils/teamLimits';
 import Logger from './utils/logger';
 import { runtimeConfig } from './config/runtimeConfig';
@@ -107,7 +113,7 @@ interface TelemetryDraftPromptState {
 
 interface RestoreSessionPayload {
     activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr';
-    showWizard: 'Win' | 'Loss' | 'Draw' | null;
+    showWizard: WizardResult | null;
     pendingMatchData: Partial<Match> | null;
     selectedTeammates: string[];
     selectedOpponents: string[];
@@ -232,6 +238,8 @@ const App: React.FC = () => {
     const adaptivePreloadBudgetMs = useAppStore(s => s.adaptivePreloadBudgetMs);
     const dashboardPreloadStats = useAppStore(s => s.dashboardPreloadStats);
     const recordDashboardPreloadVisit = useAppStore(s => s.recordDashboardPreloadVisit);
+    const ocrAutoApplyMinScore = useAppStore(s => s.ocrAutoApplyMinScore);
+    const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
     const welcomeBackToastShownRef = React.useRef(false);
     const [preloadedViews, setPreloadedViews] = useState<Record<LazyDashboardView, boolean>>({
         analytics: lazyDashboardStatus.analytics === 'ready',
@@ -277,6 +285,7 @@ const App: React.FC = () => {
         setMatches,
         players,
         sessionStartTime,
+        addToRegistry,
         setPendingMatchData,
         pilotRegistry,
         setSelectedTeammates,
@@ -284,9 +293,11 @@ const App: React.FC = () => {
         activeShip, setActiveShip,
         selectedReachModifiers, setSelectedReachModifiers,
         addPendingReview,
+        removePendingReview,
         pendingReviews,
         detectedUnknowns,
         sessionTeams, setSessionTeams,
+        sessionShipTypes,
         setSessionShipTypes
     } = useGameData();
 
@@ -393,6 +404,94 @@ const App: React.FC = () => {
             deepLink: { type: 'openIdMapper' },
         });
     }, [pushNotification, showIdInfoPrompt, showIdMapper, unknownIdCount]);
+
+    const approveFuzzyCandidates = useCallback(() => {
+        if (!fuzzyRosterCandidates.length) return;
+        let approved = 0;
+        fuzzyRosterCandidates.forEach((review) => {
+            removePendingReview(review.id);
+            const source = normalizeOcrName(review.value || '');
+            const target = normalizeOcrName(review.bestMatch || '');
+            if (!source || !target) return;
+            if (source.toLowerCase() === target.toLowerCase()) return;
+
+            recordOcrAliasCorrection(source, target, {
+                source: 'manual_correction',
+                context: 'matchstats',
+                confidenceWeight: Math.max(1, Number(review.bestScore || 0) / 100),
+            });
+            const hasTarget = pilotRegistry.some((name) => (
+                normalizeOcrName(name).toLowerCase() === target.toLowerCase()
+            ));
+            if (!hasTarget) {
+                addToRegistry(target);
+            }
+            approved += 1;
+        });
+        setShowFuzzyReviewPrompt(false);
+        if (approved > 0) {
+            setToast({
+                message: `Approved ${approved} fuzzy roster match${approved === 1 ? '' : 'es'}.`,
+                type: 'success',
+            });
+        }
+    }, [
+        addToRegistry,
+        fuzzyRosterCandidates,
+        pilotRegistry,
+        recordOcrAliasCorrection,
+        removePendingReview,
+        setShowFuzzyReviewPrompt,
+        setToast,
+    ]);
+
+    useEffect(() => {
+        const minScorePct = Math.round((Number(ocrAutoApplyMinScore) || 0.83) * 100);
+        const autoMergeEligible = (pendingReviews || []).filter((review) => (
+            review.type === 'roster_candidate'
+            && Number(review.bestScore || 0) >= minScorePct
+            && String(review.bestMatch || '').trim().length > 0
+        ));
+        if (autoMergeEligible.length === 0) return;
+
+        let mergedCount = 0;
+        autoMergeEligible.forEach((review) => {
+            const source = normalizeOcrName(review.value || '');
+            const target = normalizeOcrName(review.bestMatch || '');
+            removePendingReview(review.id);
+            if (!source || !target) return;
+            if (source.toLowerCase() === target.toLowerCase()) return;
+
+            recordOcrAliasCorrection(source, target, {
+                source: 'manual_correction',
+                context: 'matchstats',
+                confidenceWeight: Math.max(1, Number(review.bestScore || 0) / 100),
+            });
+
+            const hasTarget = pilotRegistry.some((name) => (
+                normalizeOcrName(name).toLowerCase() === target.toLowerCase()
+            ));
+            if (!hasTarget) {
+                addToRegistry(target);
+            }
+            mergedCount += 1;
+        });
+
+        if (mergedCount > 0) {
+            setToast({
+                message: `Auto-merged ${mergedCount} OCR name${mergedCount === 1 ? '' : 's'} at ${minScorePct}%+ confidence.`,
+                type: 'success',
+            });
+        }
+    }, [
+        addToRegistry,
+        ocrAutoApplyMinScore,
+        pendingReviews,
+        pilotRegistry,
+        recordOcrAliasCorrection,
+        removePendingReview,
+        setToast,
+    ]);
 
     useEffect(() => {
         const tipsByView: Record<string, string> = {
@@ -676,7 +775,10 @@ const App: React.FC = () => {
                 activeView: isLazyDashboardView(String(payloadRecord.activeView || ''))
                     ? String(payloadRecord.activeView) as LazyDashboardView
                     : (String(payloadRecord.activeView || '') === 'recording' ? 'recording' : 'recording'),
-                showWizard: payloadRecord.showWizard === 'Win' || payloadRecord.showWizard === 'Loss' || payloadRecord.showWizard === 'Draw'
+                showWizard: payloadRecord.showWizard === 'Win'
+                    || payloadRecord.showWizard === 'Loss'
+                    || payloadRecord.showWizard === 'Draw'
+                    || payloadRecord.showWizard === 'Match Result'
                     ? payloadRecord.showWizard
                     : null,
                 pendingMatchData: isRecord(payloadRecord.pendingMatchData) ? payloadRecord.pendingMatchData as Partial<Match> : null,
@@ -1453,9 +1555,9 @@ const App: React.FC = () => {
 
         const buildRosterSuggestions = (name: string) => {
             const normalized = normalizeOcrName(name);
-            const scored = pilotRegistry.map(p => ({
-                name: p,
-                score: similarityScore(normalized, normalizeOcrName(p))
+            const scored = pilotRegistry.map((pilot) => ({
+                name: pilot,
+                score: combinedNameSimilarityScore(normalized, pilot),
             })).sort((a, b) => b.score - a.score);
             const top = scored.filter(s => s.score > 0).slice(0, 3);
             return {
@@ -1482,8 +1584,7 @@ const App: React.FC = () => {
             return dedupeNames(values).slice(0, maxCount);
         };
         const OCR_REJECT_CONFIDENCE = 55;
-        const OCR_REVIEW_CONFIDENCE = 75;
-        const OCR_MIN_RESOLVE_SIMILARITY = 70;
+        const OCR_REVIEW_CONFIDENCE = 70;
         const MAX_OPPONENT_PLAYERS_PER_TEAM = 4;
         const toNameKey = (value: string) => normalizeOcrName(value || '').toLowerCase();
         const pendingPlayerNameKeys = new Set(
@@ -1533,12 +1634,19 @@ const App: React.FC = () => {
                 return false;
             }
             const normalizedRaw = normalizeOcrName(rawName || '');
-            const score = similarityScore(normalizedRaw, normalizedResolved);
+            const score = combinedNameSimilarityScore(normalizedRaw, normalizedResolved);
             const normalizedRawKey = toNameKey(normalizedRaw);
             const normalizedResolvedKey = toNameKey(normalizedResolved);
             const changed = normalizedRawKey && normalizedResolvedKey && normalizedRawKey !== normalizedResolvedKey;
-            if (changed && score < OCR_MIN_RESOLVE_SIMILARITY) {
-                queuePlayerNameReview(rawName || normalizedResolved, confidence, `${context}: review (ambiguous resolution)`);
+            const minSimilarity = getAdaptiveNameSimilarityThreshold(
+                Math.max(normalizedRaw.length, normalizedResolved.length)
+            );
+            if (changed && score < minSimilarity) {
+                queuePlayerNameReview(
+                    rawName || normalizedResolved,
+                    confidence,
+                    `${context}: review (ambiguous resolution ${Math.round(score)}% < ${minSimilarity}%)`
+                );
                 return false;
             }
             return true;
@@ -1625,12 +1733,49 @@ const App: React.FC = () => {
         });
         const playerColorHints = buildPlayerColorHints(sessionTeams);
         const assignedColors = assignDeterministicTeamColors(unresolvedTeams, { playerColorHints });
-        const structuredTeams = unresolvedTeams
-            .map((team, index) => ({
-                ...team,
-                color: assignedColors[index] || 'unknown',
-            }))
+        const preferredFallbackOrder: TeamColor[] = ['red', 'orange', 'yellow', 'green'];
+        const teamHasHintedColor = (team: { players: string[] }) => (
+            team.players.some((player) => {
+                const hinted = normalizeTeamColor(playerColorHints[normalizeOcrName(player).toLowerCase()]);
+                return hinted !== 'unknown';
+            })
+        );
+        const claimedColors = new Set<TeamColor>();
+        unresolvedTeams.forEach((team, index) => {
+            const parsed = normalizeTeamColor(team.color);
+            if (parsed !== 'unknown') {
+                claimedColors.add(parsed);
+                return;
+            }
+            const deterministic = normalizeTeamColor(assignedColors[index]);
+            if (teamHasHintedColor(team) && deterministic !== 'unknown') {
+                claimedColors.add(deterministic);
+            }
+        });
+        const fallbackQueue = preferredFallbackOrder.filter((color) => !claimedColors.has(color));
+        let fallbackCursor = 0;
+        const colorAssignedTeams = unresolvedTeams
+            .map((team, index) => {
+                const parsed = normalizeTeamColor(team.color);
+                if (parsed !== 'unknown') {
+                    return { ...team, color: parsed };
+                }
+                const deterministic = normalizeTeamColor(assignedColors[index]);
+                if (teamHasHintedColor(team) && deterministic !== 'unknown') {
+                    return { ...team, color: deterministic };
+                }
+                const positionalFallback = fallbackQueue[fallbackCursor] || 'unknown';
+                if (fallbackCursor < fallbackQueue.length) fallbackCursor += 1;
+                return {
+                    ...team,
+                    color: positionalFallback,
+                };
+            })
             .filter((team) => team.players.length > 0 || team.teamName || team.shipType);
+        const structuredTeams = backfillOpponentTeamShipTypes(colorAssignedTeams, {
+            sessionShipTypes,
+            enemyShips: data.enemyShips,
+        });
 
         const mergedOpponents = structuredTeams.flatMap((team) => team.players);
         if (mergedOpponents.length > 0) {
@@ -1684,6 +1829,10 @@ const App: React.FC = () => {
         setSessionShipTypes(newShipTypes, 'ocr');
 
         const pendingMatch = useAppStore.getState().pendingMatchData || {};
+        const pendingMatchId = Number((pendingMatch as Partial<Match> | null)?.id || 0);
+        const targetMatchId = Number.isInteger(pendingMatchId) && pendingMatchId > 0
+            ? pendingMatchId
+            : undefined;
         const pendingModifierMap = new Map<string, string>();
         (pendingMatch.reachModifiers || []).forEach((name) => {
             const clean = String(name || '').trim();
@@ -1719,16 +1868,22 @@ const App: React.FC = () => {
             ? `${autoAppliedTeammates.length}/${rawTeammateCount}`
             : String(autoAppliedTeammates.length);
         setToast({ message: `Applied OCR data: ${teammateCountLabel} teammates, ${canonicalModifierNames.length} modifiers`, type: 'success' });
-        const targetResult = gateResult || showWizard || 'Draw';
-        if (gateResult || !showWizard) {
+        const selectedWizardResult = showWizard === 'Win' || showWizard === 'Loss' || showWizard === 'Draw'
+            ? showWizard
+            : null;
+        const pendingWizardResult = pendingMatch?.result === 'Win' || pendingMatch?.result === 'Loss' || pendingMatch?.result === 'Draw'
+            ? pendingMatch.result
+            : null;
+        const targetResult: WizardResult = gateResult || selectedWizardResult || pendingWizardResult || 'Match Result';
+        if (showWizard !== targetResult) {
             setShowWizard(targetResult);
         }
         window.setTimeout(() => {
             window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
-                detail: { source: 'app-ocr-gate' },
+                detail: { source: 'app-ocr-gate', matchId: targetMatchId },
             }));
         }, 0);
-    }, [pilotRegistry, activeShip, setSelectedTeammates, selectedOpponents, setSelectedOpponents, setActiveShip, selectedReachModifiers, setSelectedReachModifiers, setToast, addPendingReview, pendingReviews, sessionTeams, setSessionTeams, setSessionShipTypes, showWizard, setShowWizard]);
+    }, [pilotRegistry, activeShip, setSelectedTeammates, selectedOpponents, setSelectedOpponents, setActiveShip, selectedReachModifiers, setSelectedReachModifiers, setToast, addPendingReview, pendingReviews, sessionTeams, sessionShipTypes, setSessionTeams, setSessionShipTypes, showWizard, setShowWizard]);
 
     const handleSmartCaptureData = useCallback((data: OCRExtractedData) => {
         handleApplyOCRData(data, null);
@@ -2032,170 +2187,185 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {telemetryPruneStatus && (
-                <div className="fixed z-popover bottom-4 right-4 left-4 md:left-auto md:w-96 pointer-events-none">
-                    <div className="pointer-events-auto rounded-2xl border border-warning/40 bg-md-sys-surface1 shadow-2xl p-4">
-                        <div className="text-body font-bold">Telemetry retention needs cleanup</div>
-                        <div className="mt-1 text-label-sm opacity-70">
-                            {telemetryPruneStatus.exceedsSize && telemetryPruneStatus.exceedsAge
-                                ? 'Retention is exceeded by both size and age.'
-                                : telemetryPruneStatus.exceedsSize
-                                    ? 'Retention is exceeded by size.'
-                                    : 'Retention is exceeded by age.'}
-                        </div>
-                        {telemetryPruneStatus.exceedsSize ? (
+            {(telemetryPruneStatus
+                || telemetryDraftPrompt
+                || (showFuzzyReviewPrompt && fuzzyRosterCandidates.length > 0 && !showReviewQueue)
+                || (showIdInfoPrompt && unknownIdCount > 0 && !showIdMapper)) && (
+                <div className="fixed z-popover top-20 right-4 left-4 md:left-auto md:w-[28rem] pointer-events-none space-y-3">
+                    {telemetryPruneStatus && (
+                        <div className="pointer-events-auto rounded-2xl border border-warning/45 bg-md-sys-surface-container-highest shadow-2xl p-4">
+                            <div className="text-body font-bold">Telemetry retention needs cleanup</div>
                             <div className="mt-1 text-label-sm opacity-70">
-                                Current: {formatBytes(telemetryPruneStatus.sizeBytes)} of {formatBytes(telemetryPruneStatus.maxBytes)}.
+                                {telemetryPruneStatus.exceedsSize && telemetryPruneStatus.exceedsAge
+                                    ? 'Retention is exceeded by both size and age.'
+                                    : telemetryPruneStatus.exceedsSize
+                                        ? 'Retention is exceeded by size.'
+                                        : 'Retention is exceeded by age.'}
                             </div>
-                        ) : (
-                            <div className="mt-1 text-label-sm opacity-70">
-                                Age policy: keep telemetry newer than {Math.max(1, Math.round(telemetryPruneStatus.maxAgeMs / (24 * 60 * 60 * 1000)))} day(s).
-                            </div>
-                        )}
-                        <div className="mt-1 text-label-sm opacity-70">
-                            Suggested prune: {telemetryPruneStatus.prunePreview?.wouldRemoveEntries || 0} entries
-                            ({formatBytes(telemetryPruneStatus.prunePreview?.wouldFreeBytes || 0)}).
-                        </div>
-                        <div className="mt-3 flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={handleTelemetryPruneNow}
-                                disabled={telemetryPruneBusy}
-                                className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled"
-                            >
-                                {telemetryPruneBusy ? 'Pruning...' : 'Prune now'}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleTelemetryPruneLater}
-                                disabled={telemetryPruneBusy}
-                                className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled"
-                            >
-                                Later
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {telemetryDraftPrompt && (
-                <div className="fixed z-popover bottom-4 left-4 right-4 md:right-auto md:w-[28rem] pointer-events-none">
-                    <div className="pointer-events-auto rounded-2xl border border-md-sys-primary/40 bg-md-sys-surface1 shadow-2xl p-4">
-                        <div className="text-body font-bold">
-                            {telemetryDraftPrompt.phase === 'midmatch' ? 'Telemetry match in progress' : 'Telemetry match ready'}
-                        </div>
-                        {telemetryDraftPrompt.phase === 'midmatch' ? (
-                            <div className="mt-1 text-label-sm opacity-70">
-                                Telemetry detected mission start. Capture Crew Hub/Tactical now for better OCR.
-                            </div>
-                        ) : (
-                            <>
+                            {telemetryPruneStatus.exceedsSize ? (
                                 <div className="mt-1 text-label-sm opacity-70">
-                                    Duration: {telemetryDraftPrompt.duration}. Choose a result to continue in Recording. OCR stays manual until you choose Process OCR.
+                                    Current: {formatBytes(telemetryPruneStatus.sizeBytes)} of {formatBytes(telemetryPruneStatus.maxBytes)}.
                                 </div>
-                                <div className="mt-3 grid grid-cols-3 gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => handleTelemetryDraftResult('Win')}
-                                        className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
-                                    >
-                                        Win
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleTelemetryDraftResult('Loss')}
-                                        className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
-                                    >
-                                        Loss
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleTelemetryDraftResult('Draw')}
-                                        className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
-                                    >
-                                        Draw
-                                    </button>
+                            ) : (
+                                <div className="mt-1 text-label-sm opacity-70">
+                                    Age policy: keep telemetry newer than {Math.max(1, Math.round(telemetryPruneStatus.maxAgeMs / (24 * 60 * 60 * 1000)))} day(s).
                                 </div>
-                            </>
-                        )}
-                        <div className="mt-3 flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={handleTelemetryDraftSmartCapture}
-                                className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
-                            >
-                                Start Smart Capture
-                            </button>
+                            )}
+                            <div className="mt-1 text-label-sm opacity-70">
+                                Suggested prune: {telemetryPruneStatus.prunePreview?.wouldRemoveEntries || 0} entries
+                                ({formatBytes(telemetryPruneStatus.prunePreview?.wouldFreeBytes || 0)}).
+                            </div>
+                            <div className="mt-3 flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleTelemetryPruneNow}
+                                    disabled={telemetryPruneBusy}
+                                    className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled"
+                                >
+                                    {telemetryPruneBusy ? 'Pruning...' : 'Prune now'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleTelemetryPruneLater}
+                                    disabled={telemetryPruneBusy}
+                                    className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled"
+                                >
+                                    Later
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {telemetryDraftPrompt && (
+                        <div className="pointer-events-auto rounded-2xl border border-md-sys-primary/45 bg-md-sys-surface-container-highest shadow-2xl p-4 relative">
                             <button
                                 type="button"
                                 onClick={handleTelemetryDraftLater}
-                                className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
+                                className="absolute top-2 right-2 h-7 w-7 rounded-full border border-md-sys-outline/20 text-label-sm font-bold text-md-sys-on-surface/70 hover:bg-md-sys-on-surface/10"
+                                aria-label="Dismiss telemetry prompt"
+                                title="Dismiss"
                             >
-                                Later
+                                ×
                             </button>
+                            <div className="text-body font-bold pr-8">
+                                {telemetryDraftPrompt.phase === 'midmatch' ? 'Telemetry match in progress' : 'Telemetry match ready'}
+                            </div>
+                            {telemetryDraftPrompt.phase === 'midmatch' ? (
+                                <div className="mt-1 text-label-sm opacity-70">
+                                    Telemetry detected mission start. Capture Crew Hub/Tactical only when roster/loadout changed.
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="mt-1 text-label-sm opacity-70">
+                                        Duration: {telemetryDraftPrompt.duration}. Choose a result to continue in Recording. OCR stays manual until you choose Process OCR.
+                                    </div>
+                                    <div className="mt-3 grid grid-cols-3 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleTelemetryDraftResult('Win')}
+                                            className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
+                                        >
+                                            Win
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleTelemetryDraftResult('Loss')}
+                                            className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
+                                        >
+                                            Loss
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleTelemetryDraftResult('Draw')}
+                                            className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
+                                        >
+                                            Draw
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                            <div className="mt-3 flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleTelemetryDraftSmartCapture}
+                                    className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
+                                >
+                                    Start Smart Capture
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleTelemetryDraftLater}
+                                    className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
+                                >
+                                    Later
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                </div>
-            )}
+                    )}
 
-            {showFuzzyReviewPrompt && fuzzyRosterCandidates.length > 0 && !showReviewQueue && (
-                <div className="fixed z-popover bottom-4 right-4 left-4 md:left-auto md:w-[25rem] pointer-events-none">
-                    <div className="pointer-events-auto rounded-2xl border border-warning/40 bg-md-sys-surface1 shadow-2xl p-4 space-y-2">
-                        <div className="text-body font-bold">Fuzzy Match Review Ready</div>
-                        <div className="text-label-sm opacity-70">
-                            {fuzzyRosterCandidates.length} OCR name{fuzzyRosterCandidates.length === 1 ? '' : 's'} can be merged.
-                            Top candidate: "{fuzzyRosterCandidates[0].value}" {'->'} "{fuzzyRosterCandidates[0].bestMatch}" ({Math.round(Number(fuzzyRosterCandidates[0].bestScore || 0))}%)
+                    {showFuzzyReviewPrompt && fuzzyRosterCandidates.length > 0 && !showReviewQueue && (
+                        <div className="pointer-events-auto rounded-2xl border border-warning/45 bg-md-sys-surface-container-highest shadow-2xl p-4 space-y-2">
+                            <div className="text-body font-bold">Fuzzy Match Review Ready</div>
+                            <div className="text-label-sm opacity-70">
+                                {fuzzyRosterCandidates.length} OCR name{fuzzyRosterCandidates.length === 1 ? '' : 's'} can be merged.
+                                Top candidate: "{fuzzyRosterCandidates[0].value}" {'->'} "{fuzzyRosterCandidates[0].bestMatch}" ({Math.round(Number(fuzzyRosterCandidates[0].bestScore || 0))}%)
+                            </div>
+                            <div className="flex items-center gap-2 justify-end">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowFuzzyReviewPrompt(false)}
+                                    className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
+                                >
+                                    Later
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={approveFuzzyCandidates}
+                                    className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
+                                >
+                                    Approve
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowFuzzyReviewPrompt(false);
+                                        setShowReviewQueue(true);
+                                    }}
+                                    className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
+                                >
+                                    Review now
+                                </button>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2 justify-end">
-                            <button
-                                type="button"
-                                onClick={() => setShowFuzzyReviewPrompt(false)}
-                                className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
-                            >
-                                Later
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setShowFuzzyReviewPrompt(false);
-                                    setShowReviewQueue(true);
-                                }}
-                                className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
-                            >
-                                Review now
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+                    )}
 
-            {showIdInfoPrompt && unknownIdCount > 0 && !showIdMapper && (
-                <div className="fixed z-popover bottom-[9.5rem] right-4 left-4 md:left-auto md:w-[25rem] pointer-events-none">
-                    <div className="pointer-events-auto rounded-2xl border border-info/45 bg-md-sys-surface1 shadow-2xl p-4 space-y-2">
-                        <div className="text-body font-bold">ID Info Requested</div>
-                        <div className="text-label-sm opacity-70">
-                            {unknownIdCount} unknown telemetry ID{unknownIdCount === 1 ? '' : 's'} detected. Map them now so ship/prospector/loadout tracking stays accurate.
+                    {showIdInfoPrompt && unknownIdCount > 0 && !showIdMapper && (
+                        <div className="pointer-events-auto rounded-2xl border border-info/45 bg-md-sys-surface-container-highest shadow-2xl p-4 space-y-2">
+                            <div className="text-body font-bold">ID Info Requested</div>
+                            <div className="text-label-sm opacity-70">
+                                {unknownIdCount} unknown telemetry ID{unknownIdCount === 1 ? '' : 's'} detected. Map them now so ship/prospector/loadout tracking stays accurate.
+                            </div>
+                            <div className="flex items-center gap-2 justify-end">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowIdInfoPrompt(false)}
+                                    className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
+                                >
+                                    Later
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowIdInfoPrompt(false);
+                                        setShowIdMapper(true);
+                                    }}
+                                    className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
+                                >
+                                    Open ID Mapper
+                                </button>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2 justify-end">
-                            <button
-                                type="button"
-                                onClick={() => setShowIdInfoPrompt(false)}
-                                className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
-                            >
-                                Later
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setShowIdInfoPrompt(false);
-                                    setShowIdMapper(true);
-                                }}
-                                className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
-                            >
-                                Open ID Mapper
-                            </button>
-                        </div>
-                    </div>
+                    )}
                 </div>
             )}
 

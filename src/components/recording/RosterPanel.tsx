@@ -32,9 +32,6 @@ export const RosterPanel: React.FC = () => {
         sessionShipTypes,
         addPendingReview,
         pendingReviews,
-        isMatchInProgress,
-        telemetryDetectedShip,
-        telemetryDetectedHero
     } = useGameData();
 
     const [searchTerm, setSearchTerm] = useState("");
@@ -58,14 +55,6 @@ export const RosterPanel: React.FC = () => {
 
     const hasTeammates = selectedTeammates.length > 0;
     const hasOpponents = selectedOpponents.length > 0;
-    const hasTelemetryRosterData = Object.values(sessionTeams || {}).some(team => (team?.length || 0) > 0);
-    const rosterTelemetryActive = Boolean(
-        isMatchInProgress && (
-            hasTelemetryRosterData
-            || telemetryDetectedShip
-            || telemetryDetectedHero
-        )
-    );
 
     const filtered = Array.from(new Set(pilotRegistry))
         .filter((p: string) => !selectedTeammates.includes(p) && !selectedOpponents.includes(p))
@@ -129,10 +118,6 @@ export const RosterPanel: React.FC = () => {
                         <Users size={12} />
                     </span>
                     <h3 className="recording-panel-heading-title">Roster Manager</h3>
-                    <span className={`recording-telemetry-indicator ${rosterTelemetryActive ? 'is-active' : ''} ${rosterTelemetryActive ? 'is-recording' : ''}`} title="Roster telemetry active">
-                        <span className="recording-telemetry-dot" />
-                        <span>Telemetry Active</span>
-                    </span>
                 </div>
             </div>
 

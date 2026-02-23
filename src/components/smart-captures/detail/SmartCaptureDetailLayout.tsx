@@ -5,17 +5,23 @@ interface SmartCaptureDetailLayoutProps {
   editor: React.ReactNode;
   rail: React.ReactNode;
   footer?: React.ReactNode;
+  summaryMode?: 'default' | 'compact' | 'hidden';
 }
 
-export const SmartCaptureDetailLayout: React.FC<SmartCaptureDetailLayoutProps> = ({ summary, editor, rail, footer }) => {
+export const SmartCaptureDetailLayout: React.FC<SmartCaptureDetailLayoutProps> = ({ summary, editor, rail, footer, summaryMode = 'default' }) => {
+  const showSummary = summaryMode !== 'hidden';
+  const summaryClassName = summaryMode === 'compact'
+    ? 'sc-detail-summary sticky top-0 z-30 overflow-visible bg-md-sys-surface-container-high rounded-card px-2 py-1 border border-md-sys-outline/12 shadow-sm'
+    : 'sc-detail-summary sticky top-0 z-30 overflow-visible bg-md-sys-surface-container-high rounded-card px-2 py-1.5 border border-md-sys-outline/12 shadow-sm';
+
   return (
-    <div className="sc-detail-shell p-4 lg:p-5">
-      <div className="sc-detail-summary sticky top-0 z-20">{summary}</div>
-      <div className="sc-detail-main mt-3">
-        <div className="sc-detail-editor min-w-0 space-y-3">{editor}</div>
-        <aside className="sc-detail-rail min-w-0 space-y-3">{rail}</aside>
+    <div className="sc-detail-shell h-full min-h-0 p-4 lg:p-5 flex flex-col">
+      {showSummary ? <div className={summaryClassName}>{summary}</div> : null}
+      <div className={`sc-detail-main min-h-0 ${showSummary ? 'mt-4' : ''}`}>
+        <div className="sc-detail-editor min-w-0 space-y-4">{editor}</div>
+        <aside className="sc-detail-rail min-w-0 space-y-4">{rail}</aside>
       </div>
-      {footer ? <div className="mt-3">{footer}</div> : null}
+      {footer ? <div className="mt-4 flex-shrink-0">{footer}</div> : null}
     </div>
   );
 };

@@ -13,7 +13,7 @@ const uiState = {
   setShowTutorial: vi.fn(),
   showChangelog: false,
   setShowChangelog: vi.fn(),
-  showWizard: null as 'Win' | 'Loss' | 'Draw' | null,
+  showWizard: null as 'Win' | 'Loss' | 'Draw' | 'Match Result' | null,
   setShowWizard: vi.fn(),
   activeUser: 'Pilot',
   activeMode: 'Artifact Brawl',

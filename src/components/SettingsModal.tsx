@@ -9,15 +9,17 @@ import { StorageService } from '../utils/storage';
 import { getElectronAPI } from '../utils/electronAPI';
 import { useAppStore } from '../store/useAppStore';
 import { getGCloudStatus, type GCloudStatus } from '../utils/electronBridge';
-import type {
-    OcrMode,
-    CaptureMode,
-    ResultOcrFlowMode,
-    TelemetryPerformanceProfile,
-    OcrLearningReviewMode,
-    OcrThresholdRecommendationMode,
-    OcrRegionBounds,
-    OcrRegionSettings,
+import {
+    type OcrMode,
+    type CaptureMode,
+    type ResultOcrFlowMode,
+    type TelemetryPerformanceProfile,
+    type OcrLearningReviewMode,
+    type OcrThresholdRecommendationMode,
+    type OcrRegionBounds,
+    type OcrRegionSettings,
+    OCR_NAME_REROUTE_THRESHOLD_MAX,
+    OCR_NAME_REROUTE_THRESHOLD_MIN,
 } from '../store/slices/createSettingsSlice';
 import { normalizeOcrName, similarityScore } from '../utils/stringUtils';
 import { DEFAULT_OCR_BEST_GUESS_THRESHOLDS, getPreset, detectSensitivityLevel } from './settings/ocrThresholdPresets';
@@ -120,6 +122,16 @@ const SettingsModalContent: React.FC = () => {
     const setStartupSmartPreloadEnabled = useAppStore(s => s.setStartupSmartPreloadEnabled);
     const ocrEnhancedNameRecoveryEnabled = useAppStore(s => s.ocrEnhancedNameRecoveryEnabled);
     const setOcrEnhancedNameRecoveryEnabled = useAppStore(s => s.setOcrEnhancedNameRecoveryEnabled);
+    const ocrNameRerouteThreshold = useAppStore(s => s.ocrNameRerouteThreshold);
+    const setOcrNameRerouteThreshold = useAppStore(s => s.setOcrNameRerouteThreshold);
+    const externalFallbackEnabled = useAppStore(s => s.externalFallbackEnabled);
+    const setExternalFallbackEnabled = useAppStore(s => s.setExternalFallbackEnabled);
+    const externalFallbackThreshold = useAppStore(s => s.externalFallbackThreshold);
+    const setExternalFallbackThreshold = useAppStore(s => s.setExternalFallbackThreshold);
+    const externalOnDetectorDisagreement = useAppStore(s => s.externalOnDetectorDisagreement);
+    const setExternalOnDetectorDisagreement = useAppStore(s => s.setExternalOnDetectorDisagreement);
+    const forceMaxAnalysis = useAppStore(s => s.forceMaxAnalysis);
+    const setForceMaxAnalysis = useAppStore(s => s.setForceMaxAnalysis);
     const ocrLearningEnabled = useAppStore(s => s.ocrLearningEnabled);
     const setOcrLearningEnabled = useAppStore(s => s.setOcrLearningEnabled);
     const ocrAutoApplyMinScore = useAppStore(s => s.ocrAutoApplyMinScore);
@@ -316,6 +328,11 @@ const SettingsModalContent: React.FC = () => {
                 resultOcrFlowMode: state.resultOcrFlowMode,
                 lockOcrTeams: state.lockOcrTeams,
                 ocrEnhancedNameRecoveryEnabled: (state as any).ocrEnhancedNameRecoveryEnabled,
+                ocrNameRerouteThreshold: (state as any).ocrNameRerouteThreshold,
+                externalFallbackEnabled: (state as any).externalFallbackEnabled,
+                externalFallbackThreshold: (state as any).externalFallbackThreshold,
+                externalOnDetectorDisagreement: (state as any).externalOnDetectorDisagreement,
+                forceMaxAnalysis: (state as any).forceMaxAnalysis,
                 ocrLearningEnabled: (state as any).ocrLearningEnabled,
                 ocrAutoApplyMinScore: (state as any).ocrAutoApplyMinScore,
                 ocrAutoApplyMinCount: (state as any).ocrAutoApplyMinCount,
@@ -1085,6 +1102,73 @@ const SettingsModalContent: React.FC = () => {
                                     className={`w-11 h-6 rounded-full transition-colors ${ocrEnhancedNameRecoveryEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
                                 >
                                     <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${ocrEnhancedNameRecoveryEnabled ? 'translate-x-5' : ''}`} />
+                                </button>
+                            </div>
+                            <label className="text-label-sm opacity-60 flex items-center gap-2">
+                                Name reroute threshold
+                                <input
+                                    type="range"
+                                    min={OCR_NAME_REROUTE_THRESHOLD_MIN}
+                                    max={OCR_NAME_REROUTE_THRESHOLD_MAX}
+                                    step={1}
+                                    value={ocrNameRerouteThreshold}
+                                    onChange={(e) => setOcrNameRerouteThreshold(Number(e.target.value))}
+                                    disabled={!ocrEnhancedNameRecoveryEnabled}
+                                    className="flex-1"
+                                />
+                                <span className="font-mono text-label-sm w-10 text-right">{ocrNameRerouteThreshold}%</span>
+                            </label>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-label-sm font-semibold">External Feedback Assist</div>
+                                    <div className="text-label-sm opacity-60">Allow cloud/Gemini fallback when local confidence is weak</div>
+                                </div>
+                                <button
+                                    onClick={() => setExternalFallbackEnabled(!externalFallbackEnabled)}
+                                    disabled={forceMaxAnalysis}
+                                    className={`w-11 h-6 rounded-full transition-colors ${externalFallbackEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative disabled:opacity-disabled`}
+                                    title={forceMaxAnalysis ? 'Always enabled while Force Max Analysis is on' : 'Toggle external fallback assist'}
+                                >
+                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${externalFallbackEnabled ? 'translate-x-5' : ''}`} />
+                                </button>
+                            </div>
+                            <label className="text-label-sm opacity-60 flex items-center gap-2">
+                                External activation threshold
+                                <input
+                                    type="range"
+                                    min={0.55}
+                                    max={0.90}
+                                    step={0.01}
+                                    value={externalFallbackThreshold}
+                                    onChange={(e) => setExternalFallbackThreshold(Number(e.target.value))}
+                                    disabled={!externalFallbackEnabled || forceMaxAnalysis}
+                                    className="flex-1"
+                                />
+                                <span className="font-mono text-label-sm w-10 text-right">{Math.round(externalFallbackThreshold * 100)}%</span>
+                            </label>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-label-sm font-semibold opacity-60">Detector disagreement trigger</div>
+                                    <div className="text-label-sm opacity-40">Escalate to external analysis when OCR engines materially disagree</div>
+                                </div>
+                                <button
+                                    onClick={() => setExternalOnDetectorDisagreement(!externalOnDetectorDisagreement)}
+                                    disabled={!externalFallbackEnabled || forceMaxAnalysis}
+                                    className={`w-11 h-6 rounded-full transition-colors ${externalOnDetectorDisagreement ? 'bg-md-sys-primary' : 'md3-surface-high'} relative disabled:opacity-disabled`}
+                                >
+                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${externalOnDetectorDisagreement ? 'translate-x-5' : ''}`} />
+                                </button>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-label-sm font-semibold">Force Max Analysis</div>
+                                    <div className="text-label-sm opacity-60">Use all available analysis paths (local + cloud + Gemini) and bypass cache</div>
+                                </div>
+                                <button
+                                    onClick={() => setForceMaxAnalysis(!forceMaxAnalysis)}
+                                    className={`w-11 h-6 rounded-full transition-colors ${forceMaxAnalysis ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
+                                >
+                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${forceMaxAnalysis ? 'translate-x-5' : ''}`} />
                                 </button>
                             </div>
                             <div className="flex items-center justify-between">

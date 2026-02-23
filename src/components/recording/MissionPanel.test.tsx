@@ -1,6 +1,6 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { CHARACTER_EQUIPMENT, CHARACTER_WEAPONS } from '../../types';
 
@@ -61,16 +61,48 @@ vi.mock('../../utils/scanService', () => ({
 }));
 
 describe('MissionPanel', () => {
-  it('shows selected character loadout and telemetry indicator on section headers', async () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows selected character loadout on section headers', async () => {
     const { MissionPanel } = await import('./MissionPanel');
     render(<MissionPanel accordionMode />);
 
-    const charWeaponsHeader = screen.getByRole('button', { name: /char weapons/i });
+    const charWeaponsHeader = screen.getByRole('button', { name: /prospector weapons/i });
     expect(within(charWeaponsHeader).getByText(selectedCharacterWeapon)).toBeInTheDocument();
-    expect(within(charWeaponsHeader).getByText('Telemetry')).toBeInTheDocument();
 
-    const equipmentHeader = screen.getByRole('button', { name: /equipment/i });
+    const equipmentHeader = screen.getByRole('button', { name: /prospector equipment/i });
     expect(within(equipmentHeader).getByText(selectedCharacterEquipment)).toBeInTheDocument();
-    expect(within(equipmentHeader).getByText('Telemetry')).toBeInTheDocument();
+  });
+
+  it('uses MM:SS text inputs and sanitizes timer values', async () => {
+    const { MissionPanel } = await import('./MissionPanel');
+    render(<MissionPanel />);
+
+    const minutesInput = screen.getByLabelText('Minutes');
+    const secondsInput = screen.getByLabelText('Seconds');
+
+    expect(minutesInput).toHaveAttribute('type', 'text');
+    expect(secondsInput).toHaveAttribute('type', 'text');
+
+    fireEvent.change(minutesInput, { target: { value: '1a7' } });
+    expect(gameData.setTimeMin).toHaveBeenCalledWith('17');
+
+    fireEvent.change(secondsInput, { target: { value: '99' } });
+    expect(gameData.setTimeSec).toHaveBeenCalledWith('59');
+  });
+
+  it('shows telemetry source badges directly on prospector loadout sections', async () => {
+    const { MissionPanel } = await import('./MissionPanel');
+    render(<MissionPanel accordionMode />);
+
+    expect(screen.getAllByText(/^Telemetry$/i).length).toBeGreaterThanOrEqual(1);
+
+    const charWeaponsHeader = screen.getByRole('button', { name: /prospector weapons/i });
+    expect(within(charWeaponsHeader).getByTestId('telemetry-prospector-weapons')).toHaveTextContent('Source: Telemetry');
+
+    const equipmentHeader = screen.getByRole('button', { name: /prospector equipment/i });
+    expect(within(equipmentHeader).getByTestId('telemetry-prospector-equipment')).toHaveTextContent('Source: Telemetry');
   });
 });

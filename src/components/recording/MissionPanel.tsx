@@ -61,6 +61,26 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
     const telemetryProspectorEquipment = Array.isArray(currentLoadout?.characterEquipment)
         ? currentLoadout.characterEquipment.filter(Boolean)
         : [];
+    const telemetryProspectorWeaponsLabel = telemetryProspectorWeapons.join(', ');
+    const telemetryProspectorEquipmentLabel = telemetryProspectorEquipment.join(', ');
+    const hasTelemetryLoadout = telemetryProspectorWeapons.length > 0 || telemetryProspectorEquipment.length > 0;
+    const sanitizeMinuteInput = (value: string) => value.replace(/[^0-9]/g, '').slice(0, 2);
+    const sanitizeSecondInput = (value: string) => {
+        const digits = value.replace(/[^0-9]/g, '').slice(0, 2);
+        if (!digits) return '';
+        const numeric = Number(digits);
+        if (!Number.isFinite(numeric)) return '';
+        return String(Math.min(59, Math.max(0, numeric))).padStart(digits.length, '0');
+    };
+    const formatTimeSegment = (value: string, maxValue: number) => {
+        const digits = value.replace(/[^0-9]/g, '').slice(0, 2);
+        if (!digits) return '00';
+        const numeric = Number(digits);
+        const clamped = Number.isFinite(numeric)
+            ? Math.min(maxValue, Math.max(0, numeric))
+            : 0;
+        return String(clamped).padStart(2, '0');
+    };
 
     const handleAutoScan = async () => {
         setIsScanning(true);
@@ -145,6 +165,14 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                         </span>
                         <h3 className="recording-panel-heading-title">Mission Intel</h3>
                     </div>
+                    {hasTelemetryLoadout && (
+                        <div className="recording-panel-heading-meta">
+                            <span className="recording-telemetry-indicator is-active" title="Loadout synced from telemetry">
+                                <span className="recording-telemetry-dot" />
+                                Telemetry
+                            </span>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -159,20 +187,30 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                 <span className="text-label-sm font-semibold text-md-sys-on-surface/60 mb-0.5">Time</span>
                                 <div className="flex items-center gap-1 relative z-10">
                                     <input
-                                        type="number"
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
+                                        maxLength={2}
+                                        aria-label="Minutes"
                                         placeholder="00"
                                         value={timeMin}
-                                        onChange={(e) => setTimeMin(e.target.value)}
+                                        onChange={(e) => setTimeMin(sanitizeMinuteInput(e.target.value))}
+                                        onBlur={() => setTimeMin(formatTimeSegment(timeMin, 99))}
                                         className={`${accordionMode ? 'w-12 text-lg' : 'w-14 text-xl'} font-mono tabular-nums font-bold tracking-wide outline-none text-center rounded-control py-0.5 placeholder:opacity-40 pointer-events-auto
                                             ${isTransparent ? 'bg-scrim-60 text-on-scrim border border-frost-10' : 'md3-textfield--compact text-md-sys-on-surface'}
                                             `}
                                     />
                                     <span className={`${accordionMode ? 'text-lg' : 'text-2xl'} font-mono tabular-nums font-bold tracking-wide text-md-sys-on-surface/60`}>:</span>
                                     <input
-                                        type="number"
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
+                                        maxLength={2}
+                                        aria-label="Seconds"
                                         placeholder="00"
                                         value={timeSec}
-                                        onChange={(e) => setTimeSec(e.target.value)}
+                                        onChange={(e) => setTimeSec(sanitizeSecondInput(e.target.value))}
+                                        onBlur={() => setTimeSec(formatTimeSegment(timeSec, 59))}
                                         className={`${accordionMode ? 'w-12 text-lg' : 'w-14 text-xl'} font-mono tabular-nums font-bold tracking-wide outline-none text-center rounded-control py-0.5 placeholder:opacity-40 pointer-events-auto
                                             ${isTransparent ? 'bg-scrim-60 text-on-scrim border border-frost-10' : 'md3-textfield--compact text-md-sys-on-surface'}
                                             `}
@@ -292,7 +330,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                             <SectionHeader
                                 id="charWeapons"
                                 icon={<Crosshair size={12} />}
-                                title="Char Weapons"
+                                title="Prospector Weapons"
                                 badge={`${totalWeapons}/${MAX_WEAPONS}`}
                                 indicator={(
                                     <>
@@ -300,53 +338,59 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                             {selectedCharacterWeaponsLabel}
                                         </span>
                                         {telemetryProspectorWeapons.length > 0 && (
-                                            <span className="inline-flex items-center gap-1 text-label-xs font-bold uppercase tracking-wide text-success">
-                                                <span className="recording-telemetry-dot" />
-                                                Telemetry
+                                            <span
+                                                data-testid="telemetry-prospector-weapons"
+                                                className="inline-flex items-center gap-1.5 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold whitespace-nowrap"
+                                                title={`Telemetry source for prospector weapons: ${telemetryProspectorWeaponsLabel || 'detected loadout'}`}
+                                            >
+                                                <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                                                Source: Telemetry
                                             </span>
                                         )}
                                     </>
                                 )}
                             />
                             {isSectionExpanded('charWeapons') && (
-                                <div className="grid grid-cols-2 gap-2">
-                                    {CHARACTER_WEAPONS.map(w => {
-                                        const count = weapons?.[w] || 0;
-                                        const isActive = count > 0;
-                                        const canAdd = totalWeapons < MAX_WEAPONS && count === 0; // Can only have 1 of each
-                                        const item = EQUIPMENT_DB.find(i => i.name === w);
-                                        const tooltip = item ? `${item.name}\n${item.description || ''}` : w;
-                                        return (
-                                            <div
-                                                key={w}
-                                                title={tooltip}
-                                                onClick={() => {
-                                                    if (isActive) {
-                                                        setWeapons({ ...weapons, [w]: 0 });
-                                                    } else if (canAdd) {
-                                                        setWeapons({ ...weapons, [w]: 1 });
-                                                    }
-                                                }}
-                                                className={`relative ${accordionMode ? 'h-8' : 'h-10'} rounded-control transition-all select-none overflow-hidden
-                                                    ${isActive
-                                                        ? 'bg-weapon-soft ring-1 ring-weapon'
-                                                        : canAdd
-                                                            ? (isTransparent ? 'mg-surface border border-md-sys-outline/10 hover:bg-md-sys-on-surface/[0.08]' : 'mg-surface')
-                                                            : (isTransparent ? 'bg-scrim-40 opacity-40' : 'mg-surface opacity-40')
-                                                    }
-                                                    ${isActive || canAdd ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-                                            >
-                                                <div className="absolute inset-0 flex items-center justify-between px-3 pointer-events-none">
-                                                    <span className={`text-label-sm font-semibold uppercase truncate ${isActive ? 'text-weapon' : 'text-md-sys-on-surface/60'}`}>
-                                                        {w}
-                                                    </span>
-                                                    {isActive && (
-                                                        <Check size={14} className="text-weapon" />
-                                                    )}
+                                <div className="flex flex-col gap-2">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {CHARACTER_WEAPONS.map(w => {
+                                            const count = weapons?.[w] || 0;
+                                            const isActive = count > 0;
+                                            const canAdd = totalWeapons < MAX_WEAPONS && count === 0; // Can only have 1 of each
+                                            const item = EQUIPMENT_DB.find(i => i.name === w);
+                                            const tooltip = item ? `${item.name}\n${item.description || ''}` : w;
+                                            return (
+                                                <div
+                                                    key={w}
+                                                    title={tooltip}
+                                                    onClick={() => {
+                                                        if (isActive) {
+                                                            setWeapons({ ...weapons, [w]: 0 });
+                                                        } else if (canAdd) {
+                                                            setWeapons({ ...weapons, [w]: 1 });
+                                                        }
+                                                    }}
+                                                    className={`relative ${accordionMode ? 'h-8' : 'h-10'} rounded-control transition-all select-none overflow-hidden
+                                                        ${isActive
+                                                            ? 'bg-weapon-soft ring-1 ring-weapon'
+                                                            : canAdd
+                                                                ? (isTransparent ? 'mg-surface border border-md-sys-outline/10 hover:bg-md-sys-on-surface/[0.08]' : 'mg-surface')
+                                                                : (isTransparent ? 'bg-scrim-40 opacity-40' : 'mg-surface opacity-40')
+                                                        }
+                                                        ${isActive || canAdd ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                                                >
+                                                    <div className="absolute inset-0 flex items-center justify-between px-3 pointer-events-none">
+                                                        <span className={`text-label-sm font-semibold uppercase truncate ${isActive ? 'text-weapon' : 'text-md-sys-on-surface/60'}`}>
+                                                            {w}
+                                                        </span>
+                                                        {isActive && (
+                                                            <Check size={14} className="text-weapon" />
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -368,7 +412,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                             <SectionHeader
                                 id="equipment"
                                 icon={<Zap size={12} />}
-                                title="Equipment"
+                                title="Prospector Equipment"
                                 badge={`${totalEquipment}/${MAX_EQUIPMENT}`}
                                 indicator={(
                                     <>
@@ -376,54 +420,60 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                             {selectedCharacterEquipmentLabel}
                                         </span>
                                         {telemetryProspectorEquipment.length > 0 && (
-                                            <span className="inline-flex items-center gap-1 text-label-xs font-bold uppercase tracking-wide text-success">
-                                                <span className="recording-telemetry-dot" />
-                                                Telemetry
+                                            <span
+                                                data-testid="telemetry-prospector-equipment"
+                                                className="inline-flex items-center gap-1.5 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold whitespace-nowrap"
+                                                title={`Telemetry source for prospector equipment: ${telemetryProspectorEquipmentLabel || 'detected loadout'}`}
+                                            >
+                                                <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                                                Source: Telemetry
                                             </span>
                                         )}
                                     </>
                                 )}
                             />
                             {isSectionExpanded('equipment') && (
-                                <div className="grid grid-cols-2 gap-2">
-                                    {CHARACTER_EQUIPMENT.map(w => {
-                                        const count = weapons?.[w] || 0;
-                                        const isActive = count > 0;
-                                        const canAdd = totalEquipment < MAX_EQUIPMENT && count === 0; // Can only have 1 of each
-                                        const item = EQUIPMENT_DB.find(i => i.name === w);
-                                        const tooltip = item ? `${item.name}\n${item.description || ''}` : w;
-                                        return (
-                                            <div
-                                                key={w}
-                                                title={tooltip}
-                                                onClick={() => {
-                                                    // Equipment is always editable
-                                                    if (isActive) {
-                                                        setWeapons({ ...weapons, [w]: 0 });
-                                                    } else if (canAdd) {
-                                                        setWeapons({ ...weapons, [w]: 1 });
-                                                    }
-                                                }}
-                                                className={`relative ${accordionMode ? 'h-8' : 'h-10'} rounded-control transition-all select-none overflow-hidden
-                                                    ${isActive
-                                                        ? 'bg-equipment-soft ring-1 ring-equipment'
-                                                        : canAdd
-                                                            ? (isTransparent ? 'mg-surface border border-md-sys-outline/10 hover:bg-md-sys-on-surface/[0.08]' : 'mg-surface')
-                                                            : (isTransparent ? 'bg-scrim-40 opacity-40' : 'mg-surface opacity-40')
-                                                    }
-                                                    ${isActive || canAdd ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-                                            >
-                                                <div className="absolute inset-0 flex items-center justify-between px-3 pointer-events-none">
-                                                    <span className={`text-label-sm font-semibold uppercase truncate ${isActive ? 'text-equipment' : 'text-md-sys-on-surface/60'}`}>
-                                                        {w}
-                                                    </span>
-                                                    {isActive && (
-                                                        <Check size={14} className="text-equipment" />
-                                                    )}
+                                <div className="flex flex-col gap-2">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {CHARACTER_EQUIPMENT.map(w => {
+                                            const count = weapons?.[w] || 0;
+                                            const isActive = count > 0;
+                                            const canAdd = totalEquipment < MAX_EQUIPMENT && count === 0; // Can only have 1 of each
+                                            const item = EQUIPMENT_DB.find(i => i.name === w);
+                                            const tooltip = item ? `${item.name}\n${item.description || ''}` : w;
+                                            return (
+                                                <div
+                                                    key={w}
+                                                    title={tooltip}
+                                                    onClick={() => {
+                                                        // Equipment is always editable
+                                                        if (isActive) {
+                                                            setWeapons({ ...weapons, [w]: 0 });
+                                                        } else if (canAdd) {
+                                                            setWeapons({ ...weapons, [w]: 1 });
+                                                        }
+                                                    }}
+                                                    className={`relative ${accordionMode ? 'h-8' : 'h-10'} rounded-control transition-all select-none overflow-hidden
+                                                        ${isActive
+                                                            ? 'bg-equipment-soft ring-1 ring-equipment'
+                                                            : canAdd
+                                                                ? (isTransparent ? 'mg-surface border border-md-sys-outline/10 hover:bg-md-sys-on-surface/[0.08]' : 'mg-surface')
+                                                                : (isTransparent ? 'bg-scrim-40 opacity-40' : 'mg-surface opacity-40')
+                                                        }
+                                                        ${isActive || canAdd ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                                                >
+                                                    <div className="absolute inset-0 flex items-center justify-between px-3 pointer-events-none">
+                                                        <span className={`text-label-sm font-semibold uppercase truncate ${isActive ? 'text-equipment' : 'text-md-sys-on-surface/60'}`}>
+                                                            {w}
+                                                        </span>
+                                                        {isActive && (
+                                                            <Check size={14} className="text-equipment" />
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
                         </div>

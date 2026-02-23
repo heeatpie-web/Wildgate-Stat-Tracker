@@ -7,6 +7,7 @@
  */
 import Logger from './logger';
 import type { DataSource } from '../store/slices/createDataSlice';
+import type { WizardResult } from '../types';
 import { UNNAMED_PLAYER_PREFIX } from './constants';
 
 const MAX_TELEMETRY_MATCH_DURATION_SECONDS = 60 * 60;
@@ -42,7 +43,7 @@ export interface TelemetryActions {
     setOverlayPhase: (phase: 'Setup' | 'Live' | 'Result') => void;
     setToast: (toast: { message: string; type: 'success' | 'error' | 'info' | 'warning' }) => void;
     updatePlayerIdMapping: (id: string, name: string) => void;
-    setShowWizard: (result: 'Win' | 'Loss' | 'Draw' | null) => void;
+    setShowWizard: (result: WizardResult | null) => void;
     setLastMatchSessionId?: (id: string) => void;
 }
 
@@ -157,7 +158,7 @@ export const processTelemetryEvent = (
         const recordKey = payload.recordKey || '';
         if (recordKey.includes('GameModeShipSelection')) {
             Logger.info('TelemetryProcessor', `Ship selection changed (record size: ${payload.recordSize || 'unknown'})`);
-            actions.setToast({ message: 'Loadout change detected — use Smart Capture to update', type: 'info' });
+            // Loadout telemetry now syncs directly into draft/session state; suppress noisy prompts.
         }
     }
 };

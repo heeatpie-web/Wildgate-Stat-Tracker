@@ -10,6 +10,7 @@ import { calculateSocialData } from '../utils/analyticsSocial';
 import { getShipColor } from '../types';
 
 type SortMode = 'alpha' | 'favorites' | 'recent' | 'encounters';
+type PlayerHubMode = 'roster' | 'ocr-work';
 
 interface PlayerDetail {
     name: string;
@@ -22,8 +23,6 @@ interface PlayerDetail {
     lastSeen: number | null;
     shipsObserved: Record<string, number>;
     teamsObserved: Record<string, number>;
-    playedWith: Record<string, number>;
-    playedAgainst: Record<string, number>;
     ocrSightings: number;
     manualSightings: number;
     lastOcrConfidence: number | null;
@@ -51,7 +50,9 @@ const PlayerHub: React.FC = () => {
     const { setActiveView, setToast } = useUIState();
 
     const [searchTerm, setSearchTerm] = useState('');
+    const [ocrSearchTerm, setOcrSearchTerm] = useState('');
     const [sortMode, setSortMode] = useState<SortMode>('favorites');
+    const [panelMode, setPanelMode] = useState<PlayerHubMode>('roster');
     const [selectedPilot, setSelectedPilot] = useState<string | null>(null);
     const [editingNote, setEditingNote] = useState<string | null>(null);
     const [noteValue, setNoteValue] = useState('');
@@ -62,6 +63,7 @@ const PlayerHub: React.FC = () => {
     const [mergeKeepName, setMergeKeepName] = useState<string | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
     const [showFullProfile, setShowFullProfile] = useState(false);
+    const [pendingCandidateEdits, setPendingCandidateEdits] = useState<Record<string, string>>({});
 
     const socialData = useMemo(() => calculateSocialData(matches), [matches]);
     const pendingRosterCandidates = useMemo(() => {
@@ -75,6 +77,17 @@ const PlayerHub: React.FC = () => {
                 return true;
             });
     }, [pendingReviews]);
+
+    useEffect(() => {
+        setPendingCandidateEdits((prev) => {
+            const next: Record<string, string> = {};
+            pendingRosterCandidates.forEach((candidate) => {
+                const existing = prev[candidate.id];
+                next[candidate.id] = typeof existing === 'string' ? existing : candidate.value;
+            });
+            return next;
+        });
+    }, [pendingRosterCandidates]);
 
     const teammateMap = useMemo(() => {
         const map: Record<string, { wins: number; total: number }> = {};
@@ -105,8 +118,6 @@ const PlayerHub: React.FC = () => {
                 lastSeen: profile?.lastSeen || null,
                 shipsObserved: profile?.shipsObserved || {},
                 teamsObserved: profile?.teamsObserved || {},
-                playedWith: profile?.playedWith || {},
-                playedAgainst: profile?.playedAgainst || {},
                 ocrSightings: profile?.ocrSightings || 0,
                 manualSightings: profile?.manualSightings || 0,
                 lastOcrConfidence: profile?.lastOcrConfidence ?? null,
@@ -139,6 +150,15 @@ const PlayerHub: React.FC = () => {
         return list;
     }, [enrichedPilots, searchTerm, sortMode]);
 
+    const filteredOcrCandidates = useMemo(() => {
+        const query = ocrSearchTerm.trim().toLowerCase();
+        if (!query) return pendingRosterCandidates;
+        return pendingRosterCandidates.filter((candidate) => {
+            const editedValue = String(pendingCandidateEdits[candidate.id] ?? candidate.value).trim().toLowerCase();
+            return editedValue.includes(query);
+        });
+    }, [ocrSearchTerm, pendingCandidateEdits, pendingRosterCandidates]);
+
     useEffect(() => {
         setShowFullProfile(false);
     }, [selectedPilot]);
@@ -154,17 +174,96 @@ const PlayerHub: React.FC = () => {
         return top || null;
     }, [selected]);
 
-    const selectedTopTeammate = useMemo(() => {
-        if (!selected) return null;
-        const top = Object.entries(selected.playedWith || {}).sort((a, b) => b[1] - a[1])[0];
-        return top || null;
-    }, [selected]);
+    const selectedPatternSignals = useMemo(() => {
+        if (!selected) return { topTeammate: null as [string, number] | null, topOpponent: null as [string, number] | null };
 
-    const selectedTopOpponent = useMemo(() => {
-        if (!selected) return null;
-        const top = Object.entries(selected.playedAgainst || {}).sort((a, b) => b[1] - a[1])[0];
-        return top || null;
-    }, [selected]);
+        const toNameKey = (value: string) => String(value || '').trim().toLowerCase();
+        const toDisplayName = (value: string) => String(value || '').trim();
+        const selectedKey = toNameKey(selected.name);
+        if (!selectedKey) return { topTeammate: null as [string, number] | null, topOpponent: null as [string, number] | null };
+
+        const teammateCounts = new Map<string, { name: string; count: number }>();
+        const opponentCounts = new Map<string, { name: string; count: number }>();
+
+        const incrementCounter = (counter: Map<string, { name: string; count: number }>, name: string) => {
+            const cleaned = toDisplayName(name);
+            const key = toNameKey(cleaned);
+            if (!cleaned || !key || key === selectedKey) return;
+            const current = counter.get(key);
+            if (current) {
+                current.count += 1;
+                return;
+            }
+            counter.set(key, { name: cleaned, count: 1 });
+        };
+
+        (matches || []).forEach((match) => {
+            const teamNames = [
+                toDisplayName(match.player),
+                ...(Array.isArray(match.teammates) ? match.teammates.map(toDisplayName) : []),
+            ].filter(Boolean);
+
+            const dedupedTeam = new Map<string, string>();
+            teamNames.forEach((name) => {
+                const key = toNameKey(name);
+                if (!key || dedupedTeam.has(key)) return;
+                dedupedTeam.set(key, name);
+            });
+
+            const opponentsFromTeams = Array.isArray(match.opponentTeams)
+                ? match.opponentTeams.flatMap((team) => (Array.isArray(team.players) ? team.players : []))
+                : [];
+            const allOpponents = [
+                ...(Array.isArray(match.opponents) ? match.opponents : []),
+                ...opponentsFromTeams,
+            ].map(toDisplayName).filter(Boolean);
+
+            const dedupedOpponents = new Map<string, string>();
+            allOpponents.forEach((name) => {
+                const key = toNameKey(name);
+                if (!key || dedupedOpponents.has(key)) return;
+                dedupedOpponents.set(key, name);
+            });
+
+            const selectedInFriendly = dedupedTeam.has(selectedKey);
+            const selectedInEnemy = dedupedOpponents.has(selectedKey);
+            if (!selectedInFriendly && !selectedInEnemy) return;
+
+            if (selectedInFriendly) {
+                dedupedTeam.forEach((name, key) => {
+                    if (key !== selectedKey) incrementCounter(teammateCounts, name);
+                });
+                dedupedOpponents.forEach((name) => {
+                    incrementCounter(opponentCounts, name);
+                });
+                return;
+            }
+
+            dedupedOpponents.forEach((name, key) => {
+                if (key !== selectedKey) incrementCounter(teammateCounts, name);
+            });
+            dedupedTeam.forEach((name) => {
+                incrementCounter(opponentCounts, name);
+            });
+        });
+
+        const pickTop = (counter: Map<string, { name: string; count: number }>): [string, number] | null => {
+            const sorted = Array.from(counter.values()).sort((a, b) => {
+                if (b.count !== a.count) return b.count - a.count;
+                return a.name.localeCompare(b.name);
+            });
+            const top = sorted[0];
+            return top ? [top.name, top.count] : null;
+        };
+
+        return {
+            topTeammate: pickTop(teammateCounts),
+            topOpponent: pickTop(opponentCounts),
+        };
+    }, [matches, selected]);
+
+    const selectedTopTeammate = selectedPatternSignals.topTeammate;
+    const selectedTopOpponent = selectedPatternSignals.topOpponent;
 
     const handleStartNote = (pilot: string) => {
         setEditingNote(pilot);
@@ -239,8 +338,12 @@ const PlayerHub: React.FC = () => {
             .slice(0, 20);
     }, [enrichedPilots, selectedPilot, mergeSearch]);
 
-    const resolveRosterCandidate = (candidate: { id: string; value: string }, action: 'approve' | 'dismiss') => {
-        const value = candidate.value.trim();
+    const resolveRosterCandidate = (
+        candidate: { id: string; value: string },
+        action: 'approve' | 'dismiss',
+        overrideValue?: string
+    ) => {
+        const value = String(overrideValue ?? candidate.value).trim();
         if (!value) return;
         if (action === 'approve') {
             addToRegistry(value);
@@ -250,15 +353,122 @@ const PlayerHub: React.FC = () => {
         (pendingReviews || [])
             .filter((review) => review.type === 'roster_candidate' && review.value.trim().toLowerCase() === key)
             .forEach((review) => removePendingReview(review.id));
+        setPendingCandidateEdits((prev) => {
+            const next = { ...prev };
+            delete next[candidate.id];
+            return next;
+        });
         if (action === 'dismiss') {
             setToast({ message: `Dismissed pending roster candidate "${value}"`, type: 'info' });
         }
     };
 
+    const renderOcrWorkbench = (containerClassName: string) => (
+        <div className={containerClassName}>
+            <div className={`md3-card mg-surface shadow-lg p-3 border flex flex-col gap-2 h-full min-h-0 ${panelMode === 'ocr-work'
+                ? 'border-info/40 ring-1 ring-info/25'
+                : 'border-md-sys-outline/12'
+                }`}>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <ScanEye size={14} className="text-info" />
+                        <div className="text-label-sm font-semibold uppercase tracking-wide text-info">OCR Roster Workbench</div>
+                    </div>
+                    <span className="text-label-xs font-bold px-2 py-0.5 rounded-pill bg-info-soft text-info">
+                        {pendingRosterCandidates.length}
+                    </span>
+                </div>
+                <p className="text-label-xs text-md-sys-on-surface/62">
+                    Review OCR-detected roster names without hiding your roster list.
+                </p>
+                <div className="relative">
+                    <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-md-sys-on-surface/40 pointer-events-none" />
+                    <input
+                        type="text"
+                        value={ocrSearchTerm}
+                        onChange={(event) => setOcrSearchTerm(event.target.value)}
+                        placeholder="Search OCR candidates..."
+                        className="w-full md3-textfield--outlined rounded-xl pl-8 pr-8 py-1.5 text-label-sm outline-none"
+                    />
+                    {ocrSearchTerm && (
+                        <button
+                            type="button"
+                            onClick={() => setOcrSearchTerm('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full inline-flex items-center justify-center text-md-sys-on-surface/40 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10"
+                            aria-label="Clear OCR candidate search"
+                        >
+                            <X size={12} />
+                        </button>
+                    )}
+                </div>
+                <div className="flex-1 min-h-0">
+                    {pendingRosterCandidates.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center py-8 text-md-sys-on-surface/40">
+                            <ScanEye size={24} className="mb-2 opacity-40" />
+                            <span className="text-label-sm font-semibold">No pending OCR roster candidates</span>
+                        </div>
+                    ) : filteredOcrCandidates.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center py-8 text-md-sys-on-surface/40">
+                            <Search size={20} className="mb-2 opacity-40" />
+                            <span className="text-label-sm font-semibold">No OCR candidates match your search</span>
+                        </div>
+                    ) : (
+                        <div className="h-full min-h-0 overflow-y-auto custom-scrollbar pr-1">
+                            <div className="flex flex-col gap-2 content-start">
+                                {filteredOcrCandidates.map((candidate) => {
+                                    const pendingValue = pendingCandidateEdits[candidate.id] ?? candidate.value;
+                                    return (
+                                        <div key={candidate.id} className="rounded-xl border border-md-sys-outline/14 bg-md-sys-surface-container p-2.5 space-y-2">
+                                            <input
+                                                type="text"
+                                                value={pendingValue}
+                                                onChange={(event) => setPendingCandidateEdits((prev) => ({
+                                                    ...prev,
+                                                    [candidate.id]: event.target.value,
+                                                }))}
+                                                onKeyDown={(event) => {
+                                                    event.stopPropagation();
+                                                    if (event.key === 'Enter') {
+                                                        event.preventDefault();
+                                                        resolveRosterCandidate(candidate, 'approve', pendingValue);
+                                                    }
+                                                }}
+                                                className="md3-textfield md3-textfield--outlined w-full text-label-sm font-semibold"
+                                                aria-label={`Pending OCR roster candidate ${candidate.id}`}
+                                            />
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => resolveRosterCandidate(candidate, 'approve', pendingValue)}
+                                                    className="flex-1 h-8 rounded-md text-label-xs font-bold bg-success/15 text-success hover:bg-success/25"
+                                                    disabled={!pendingValue.trim()}
+                                                >
+                                                    Approve
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => resolveRosterCandidate(candidate, 'dismiss', pendingValue)}
+                                                    className="flex-1 h-8 rounded-md text-label-xs font-bold bg-md-sys-on-surface/10 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/15"
+                                                    disabled={!pendingValue.trim()}
+                                                >
+                                                    Dismiss
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+
     return (
-        <div data-tour="view-players" className="w-full flex-1 h-full min-h-0 flex flex-col lg:grid lg:grid-cols-playerhub-lg xl:grid-cols-playerhub-xl gap-4 overflow-hidden players-shell-gradient rounded-2xl">
+        <div data-tour="view-players" className="w-full flex-1 h-full min-h-0 flex flex-col lg:grid lg:grid-cols-playerhub-lg xl:grid-cols-playerhub-xl 2xl:grid-cols-playerhub-2xl gap-4 overflow-visible players-shell-gradient rounded-2xl">
             {/* Column 1: Roster List */}
-            <div className="w-full lg:w-340px shrink-0 flex flex-col gap-3 h-full min-h-0">
+            <div className="w-full lg:w-full shrink-0 flex flex-col gap-3 h-full min-h-0">
                 <div className="md3-card mg-surface shadow-lg p-4 flex flex-col gap-3 shrink-0">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -270,6 +480,29 @@ const PlayerHub: React.FC = () => {
                                 <span className="text-label-xs text-md-sys-on-surface/60">{pilotRegistry.length} registered</span>
                             </div>
                         </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1">
+                        <button
+                            type="button"
+                            onClick={() => setPanelMode('roster')}
+                            className={`h-7 rounded-lg text-label-xs font-bold uppercase tracking-wide transition-all ${panelMode === 'roster'
+                                ? 'bg-md-sys-primary text-md-sys-onPrimary'
+                                : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
+                                }`}
+                        >
+                            Roster
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setPanelMode('ocr-work')}
+                            className={`h-7 rounded-lg text-label-xs font-bold uppercase tracking-wide transition-all ${panelMode === 'ocr-work'
+                                ? 'bg-md-sys-primary text-md-sys-onPrimary'
+                                : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
+                                }`}
+                        >
+                            OCR Work {pendingRosterCandidates.length > 0 ? `(${pendingRosterCandidates.length})` : ''}
+                        </button>
                     </div>
 
                     <div className="relative">
@@ -331,38 +564,28 @@ const PlayerHub: React.FC = () => {
                 {pendingRosterCandidates.length > 0 && (
                     <div className="md3-card mg-surface shadow-lg p-3 border border-info/20 flex flex-col gap-2">
                         <div className="flex items-center justify-between">
-                            <div className="text-label-sm font-semibold uppercase tracking-wide text-info">Pending OCR roster approvals</div>
+                            <div className="text-label-sm font-semibold uppercase tracking-wide text-info">OCR Roster Work</div>
                             <span className="text-label-xs font-bold px-2 py-0.5 rounded-pill bg-info-soft text-info">
                                 {pendingRosterCandidates.length}
                             </span>
                         </div>
-                        <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
-                            {pendingRosterCandidates.map((candidate) => (
-                                <div key={candidate.id} className="flex items-center justify-between gap-2 rounded-lg border border-md-sys-outline/10 px-2.5 py-1.5">
-                                    <span className="text-label-sm font-semibold truncate">{candidate.value}</span>
-                                    <div className="flex items-center gap-1.5 shrink-0">
-                                        <button
-                                            type="button"
-                                            onClick={() => resolveRosterCandidate(candidate, 'approve')}
-                                            className="px-2 py-1 rounded-md text-label-xs font-bold bg-success/15 text-success hover:bg-success/25"
-                                        >
-                                            Approve
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => resolveRosterCandidate(candidate, 'dismiss')}
-                                            className="px-2 py-1 rounded-md text-label-xs font-bold bg-md-sys-on-surface/10 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/15"
-                                        >
-                                            Dismiss
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                        <p className="text-label-xs text-md-sys-on-surface/62">
+                            OCR found pending roster names. Review them in the dedicated workbench.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setPanelMode('ocr-work')}
+                            className={`h-8 rounded-lg text-label-xs font-bold uppercase tracking-wide transition-all ${panelMode === 'ocr-work'
+                                ? 'bg-info text-md-sys-on-info'
+                                : 'bg-info-soft text-info hover:bg-info-soft-strong'
+                                }`}
+                        >
+                            {panelMode === 'ocr-work' ? 'OCR work active' : 'Open OCR work'}
+                        </button>
                     </div>
                 )}
 
-                <div className="flex-1 min-h-0 flex flex-col">
+                <div className="flex-1 min-h-0 flex flex-col gap-3">
                     {filtered.length === 0 ? (
                         <div className="flex-1 flex flex-col items-center justify-center py-12 text-md-sys-on-surface/40">
                             <Users size={32} className="mb-2 opacity-40" />
@@ -371,43 +594,42 @@ const PlayerHub: React.FC = () => {
                             </span>
                         </div>
                     ) : (
-                        <>
                         <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1">
-                        <div className="grid grid-cols-2 gap-1.5 content-start">
-                            {filtered.map(pilot => (
-                            <button
-                                key={pilot.name}
-                                onClick={() => {
-                                    setSelectedPilot(pilot.name);
-                                    setShowFullProfile(false);
-                                }}
-                                className={`player-list-item w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3 transition-all group ${selectedPilot === pilot.name
-                                    ? 'bg-md-sys-primary/10 border border-md-sys-primary/20 text-md-sys-on-surface'
-                                    : 'hover:bg-md-sys-on-surface/5 text-md-sys-on-surface/60'
-                                    }`}
-                            >
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-1.5">
-                                        {pilot.isFavorite && <Star size={10} className="text-warning fill-amber-400 shrink-0" />}
-                                        <span className="player-list-name text-label-sm font-semibold truncate">{pilot.name}</span>
-                                    </div>
-                                    {pilot.totalEncounters > 0 && (
-                                        <span className="text-label-xs text-md-sys-on-surface/40">
-                                            {pilot.totalEncounters} encounter{pilot.totalEncounters !== 1 ? 's' : ''}
-                                            {pilot.lastSeen ? ` · ${timeAgo(pilot.lastSeen)}` : ''}
-                                        </span>
-                                    )}
-                                </div>
-                                {pilot.note && (
-                                    <span className="w-1.5 h-1.5 rounded-full bg-md-sys-primary/40 shrink-0" title="Has note" />
-                                )}
-                                <ChevronRight size={14} className="text-md-sys-on-surface/40 group-hover:text-md-sys-on-surface/40 shrink-0" />
-                            </button>
-                            ))}
+                            <div className="grid grid-cols-2 2xl:grid-cols-3 gap-1.5 content-start">
+                                {filtered.map(pilot => (
+                                    <button
+                                        key={pilot.name}
+                                        onClick={() => {
+                                            setSelectedPilot(pilot.name);
+                                            setShowFullProfile(false);
+                                        }}
+                                        className={`player-list-item w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3 transition-all group ${selectedPilot === pilot.name
+                                            ? 'bg-md-sys-primary/10 border border-md-sys-primary/20 text-md-sys-on-surface'
+                                            : 'hover:bg-md-sys-on-surface/5 text-md-sys-on-surface/60'
+                                            }`}
+                                    >
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-1.5">
+                                                {pilot.isFavorite && <Star size={10} className="text-warning fill-amber-400 shrink-0" />}
+                                                <span className="player-list-name text-label-sm font-semibold truncate">{pilot.name}</span>
+                                            </div>
+                                            {pilot.totalEncounters > 0 && (
+                                                <span className="text-label-xs text-md-sys-on-surface/40">
+                                                    {pilot.totalEncounters} encounter{pilot.totalEncounters !== 1 ? 's' : ''}
+                                                    {pilot.lastSeen ? ` | ${timeAgo(pilot.lastSeen)}` : ''}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {pilot.note && (
+                                            <span className="w-1.5 h-1.5 rounded-full bg-md-sys-primary/40 shrink-0" title="Has note" />
+                                        )}
+                                        <ChevronRight size={14} className="text-md-sys-on-surface/40 group-hover:text-md-sys-on-surface/40 shrink-0" />
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                        </div>
-                        </>
                     )}
+                    {renderOcrWorkbench('lg:hidden shrink-0')}
                 </div>
             </div>
 
@@ -415,9 +637,19 @@ const PlayerHub: React.FC = () => {
             <div className="flex-1 min-w-0 h-full min-h-0 flex flex-col overflow-hidden">
                 {!selected ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-md-sys-on-surface/40">
-                        <Users size={48} className="mb-3 opacity-40" />
-                        <span className="text-body font-semibold">Select a player to view details</span>
-                        <span className="text-label-sm mt-1 opacity-60">{pilotRegistry.length} players in your roster</span>
+                        {panelMode === 'ocr-work' ? (
+                            <ScanEye size={48} className="mb-3 opacity-40" />
+                        ) : (
+                            <Users size={48} className="mb-3 opacity-40" />
+                        )}
+                        <span className="text-body font-semibold">
+                            {panelMode === 'ocr-work' ? 'OCR roster workbench is active' : 'Select a player to view details'}
+                        </span>
+                        <span className="text-label-sm mt-1 opacity-60">
+                            {panelMode === 'ocr-work'
+                                ? `${pendingRosterCandidates.length} pending OCR candidate${pendingRosterCandidates.length === 1 ? '' : 's'}`
+                                : `${pilotRegistry.length} players in your roster`}
+                        </span>
                     </div>
                 ) : (
                     <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1">
@@ -798,38 +1030,41 @@ const PlayerHub: React.FC = () => {
                 )}
             </div>
 
-            {/* Column 3: Selected player summary */}
-            <div className="hidden lg:flex flex-col min-w-0 min-h-0 h-full rounded-card md3-surface-high p-4 border border-md-sys-outline/10">
-                {!selected ? (
-                    <div className="flex flex-col items-center justify-center flex-1 text-md-sys-on-surface/40 py-8">
-                        <Users size={24} className="mb-2 opacity-40" />
-                        <span className="text-label-sm">Select a player</span>
-                    </div>
-                ) : (
-                    <div className="flex flex-col gap-3">
-                        <div className="text-label-lg font-bold text-md-sys-on-surface truncate">{selected.name}</div>
-                        {selected.asTeammate && (
-                            <div className="text-label-sm text-md-sys-on-surface/80">
-                                As teammate: {winRate(selected.asTeammate)}% ({selected.asTeammate.wins}W / {selected.asTeammate.total - selected.asTeammate.wins}L)
-                            </div>
-                        )}
-                        {selected.asOpponent && (
-                            <div className="text-label-sm text-md-sys-on-surface/80">
-                                As opponent: {winRate(selected.asOpponent)}% ({selected.asOpponent.wins}W / {selected.asOpponent.total - selected.asOpponent.wins}L)
-                            </div>
-                        )}
-                        {selected.totalEncounters > 0 && (
-                            <div className="text-label-xs text-md-sys-on-surface/60">{selected.totalEncounters} encounters</div>
-                        )}
-                        <button
-                            type="button"
-                            onClick={() => handleOpenFullProfile(selected)}
-                            className="text-label-xs text-md-sys-primary font-semibold text-left hover:underline"
-                        >
-                            View full profile -&gt;
-                        </button>
-                    </div>
-                )}
+            {/* Column 3: OCR workbench + selected player summary */}
+            <div className="hidden lg:flex flex-col min-w-0 min-h-0 h-full gap-3">
+                {renderOcrWorkbench('flex-1 min-h-0')}
+                <div className="rounded-card md3-surface-high p-4 border border-md-sys-outline/10">
+                    {!selected ? (
+                        <div className="flex flex-col items-center justify-center flex-1 text-md-sys-on-surface/40 py-8">
+                            <Users size={24} className="mb-2 opacity-40" />
+                            <span className="text-label-sm">Select a player</span>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-3">
+                            <div className="text-label-lg font-bold text-md-sys-on-surface truncate">{selected.name}</div>
+                            {selected.asTeammate && (
+                                <div className="text-label-sm text-md-sys-on-surface/80">
+                                    As teammate: {winRate(selected.asTeammate)}% ({selected.asTeammate.wins}W / {selected.asTeammate.total - selected.asTeammate.wins}L)
+                                </div>
+                            )}
+                            {selected.asOpponent && (
+                                <div className="text-label-sm text-md-sys-on-surface/80">
+                                    As opponent: {winRate(selected.asOpponent)}% ({selected.asOpponent.wins}W / {selected.asOpponent.total - selected.asOpponent.wins}L)
+                                </div>
+                            )}
+                            {selected.totalEncounters > 0 && (
+                                <div className="text-label-xs text-md-sys-on-surface/60">{selected.totalEncounters} encounters</div>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => handleOpenFullProfile(selected)}
+                                className="text-label-xs text-md-sys-primary font-semibold text-left hover:underline"
+                            >
+                                View full profile -&gt;
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

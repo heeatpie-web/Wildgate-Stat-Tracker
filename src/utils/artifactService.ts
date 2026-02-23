@@ -11,6 +11,7 @@ import {
 } from './telemetryArchive';
 import type { OCRExtractedData, OCRProcessResult } from './ocr/ocrTypes';
 import type { OcrRegionSettings } from './scan/types';
+import type { OCRProcessRuntimeOptions } from './electronBridge';
 
 export type IpcErrorCode =
     | 'PATH_NOT_ALLOWED'
@@ -161,12 +162,16 @@ export const rerunOCROnArtifact = async (
     imagePath: string,
     activeUser: string,
     ocrMode: string,
-    ocrRegions?: OcrRegionSettings | null
+    ocrRegions?: OcrRegionSettings | null,
+    runtimeOptions?: OCRProcessRuntimeOptions | null
 ): Promise<RerunOcrResult> => {
     const api = getElectronAPI();
     if (!api) throw new Error('Electron API not available');
     const payload: Record<string, unknown> = { imagePath, activeUser, ocrMode };
     if (ocrRegions) payload.ocrRegions = ocrRegions;
+    if (runtimeOptions && typeof runtimeOptions === 'object') {
+        payload.runtimeOptions = runtimeOptions;
+    }
     const raw = await api.invoke('rerun-ocr-on-artifact', payload);
     if (!isRecord(raw)) {
         return { success: false, error: 'Invalid OCR response' };

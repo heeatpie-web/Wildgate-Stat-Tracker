@@ -21,6 +21,7 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
     const { matches, pilotRegistry, addToRegistry } = useGameData();
     const [missionPanelCollapsed, setMissionPanelCollapsed] = useState(false);
     const [devToolsCollapsed, setDevToolsCollapsed] = useState(true);
+    const [showSocialSuggestions, setShowSocialSuggestions] = useState(false);
 
     const handleMinimize = () => getElectronAPI()?.send('minimize-window');
     const handleClose = () => getElectronAPI()?.send('close-window');
@@ -188,18 +189,30 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
                     </button>
                 </div>
             </div>
-            <div className="flex items-center justify-between rounded-control md3-surface p-1.5 border border-md-sys-outline/10">
-                <span className="text-label-xs font-semibold text-md-sys-on-surface/60">
-                    {visibleSocialAdds.length > 0 ? `${visibleSocialAdds.length} roster suggestions` : 'No new roster suggestions'}
-                </span>
+            <div className="rounded-control md3-surface border border-md-sys-outline/10 p-1.5">
                 <button
                     type="button"
-                    onClick={handleAddVisibleSocialPlayers}
-                    disabled={visibleSocialAdds.length === 0}
-                    className="h-6 px-2 rounded-md text-label-xs font-bold bg-md-sys-primary/12 text-md-sys-primary hover:bg-md-sys-primary/20 disabled:opacity-disabled"
+                    onClick={() => setShowSocialSuggestions((prev) => !prev)}
+                    className="w-full flex items-center justify-between text-left"
+                    aria-expanded={showSocialSuggestions}
                 >
-                    Add Visible
+                    <span className="text-label-xs font-semibold text-md-sys-on-surface/60">
+                        {visibleSocialAdds.length > 0 ? `${visibleSocialAdds.length} roster suggestions` : 'No new roster suggestions'}
+                    </span>
+                    {showSocialSuggestions ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                 </button>
+                {showSocialSuggestions && (
+                    <div className="mt-1 flex items-center justify-end">
+                        <button
+                            type="button"
+                            onClick={handleAddVisibleSocialPlayers}
+                            disabled={visibleSocialAdds.length === 0}
+                            className="h-6 px-2 rounded-md text-label-xs font-bold bg-md-sys-primary/12 text-md-sys-primary hover:bg-md-sys-primary/20 disabled:opacity-disabled"
+                        >
+                            Add Visible
+                        </button>
+                    </div>
+                )}
             </div>
             <div className="grid grid-cols-1 gap-2">
                 <div className="md3-surface rounded-control p-2">

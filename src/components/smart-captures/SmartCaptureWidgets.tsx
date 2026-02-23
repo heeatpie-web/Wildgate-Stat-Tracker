@@ -2,6 +2,7 @@ import React from 'react';
 import { ChevronRight, ChevronDown, Plus, X, Check } from 'lucide-react';
 import { SHIPS, getShipColor } from '../../types';
 import { UI_REACH_MODIFIERS } from '../../utils/constants';
+import { normalizeOcrName } from '../../utils/stringUtils';
 
 export const Section: React.FC<{
     title: string;
@@ -143,9 +144,47 @@ export const KillAdder: React.FC<{ existingShips: string[]; onAdd: (ship: string
     );
 };
 
-export const InlinePlayerAdd: React.FC<{ onAdd: (name: string) => void }> = ({ onAdd }) => {
+export const InlinePlayerAdd: React.FC<{
+    onAdd: (name: string) => void;
+    pilotRegistry?: string[];
+    onAddToRoster?: (name: string) => void;
+}> = ({ onAdd, pilotRegistry = [], onAddToRoster }) => {
     const [adding, setAdding] = React.useState(false);
     const [name, setName] = React.useState('');
+    const listId = React.useId();
+    const normalizedRegistry = React.useMemo(() => (
+        new Map(
+            pilotRegistry
+                .map((pilot) => {
+                    const normalized = normalizeOcrName(pilot).toLowerCase();
+                    return normalized ? [normalized, pilot] : null;
+                })
+                .filter((entry): entry is [string, string] => !!entry)
+        )
+    ), [pilotRegistry]);
+    const normalizedDraft = normalizeOcrName(name || '');
+    const existingRosterName = normalizedDraft
+        ? normalizedRegistry.get(normalizedDraft.toLowerCase()) || ''
+        : '';
+    const hasRosterAddAction = Boolean(
+        onAddToRoster
+        && normalizedDraft.length >= 2
+        && !existingRosterName
+    );
+    const commitAdd = () => {
+        const trimmed = normalizeOcrName(name || '');
+        if (!trimmed) return;
+        onAdd(existingRosterName || trimmed);
+        setName('');
+        setAdding(false);
+    };
+    const addDraftToRoster = () => {
+        if (!onAddToRoster) return;
+        const trimmed = normalizeOcrName(name || '');
+        if (!trimmed || trimmed.length < 2) return;
+        if (normalizedRegistry.has(trimmed.toLowerCase())) return;
+        onAddToRoster(trimmed);
+    };
 
     if (!adding) {
         return (
@@ -159,13 +198,40 @@ export const InlinePlayerAdd: React.FC<{ onAdd: (name: string) => void }> = ({ o
         <div className="flex items-center gap-1">
             <input
                 value={name} onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) { onAdd(name.trim()); setName(''); setAdding(false); } if (e.key === 'Escape') { setAdding(false); setName(''); } }}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' && normalizeOcrName(name || '')) {
+                        commitAdd();
+                    }
+                    if (e.key === 'Escape') {
+                        setAdding(false);
+                        setName('');
+                    }
+                }}
                 placeholder="Name..."
                 className="md3-textfield--outlined px-2 py-0.5 text-label-sm outline-none w-24"
+                list={pilotRegistry.length > 0 ? listId : undefined}
                 autoFocus
             />
-            <button onClick={() => { if (name.trim()) { onAdd(name.trim()); setName(''); setAdding(false); } }} className="md3-icon-btn w-5 h-5 text-success" aria-label="Confirm player add"><Check size={10} /></button>
+            {hasRosterAddAction && (
+                <button
+                    type="button"
+                    onClick={addDraftToRoster}
+                    className="px-1.5 py-0.5 rounded-md text-label-xs font-bold bg-info-soft text-info hover:bg-info-soft-strong transition-colors"
+                    aria-label="Add player to roster"
+                    title="Add player to roster"
+                >
+                    +R
+                </button>
+            )}
+            <button onClick={commitAdd} className="md3-icon-btn w-5 h-5 text-success" aria-label="Confirm player add"><Check size={10} /></button>
             <button onClick={() => { setAdding(false); setName(''); }} className="md3-icon-btn w-5 h-5 text-danger" aria-label="Cancel player add"><X size={10} /></button>
+            {pilotRegistry.length > 0 && (
+                <datalist id={listId}>
+                    {pilotRegistry.map((pilot) => (
+                        <option key={pilot} value={pilot} />
+                    ))}
+                </datalist>
+            )}
         </div>
     );
 };

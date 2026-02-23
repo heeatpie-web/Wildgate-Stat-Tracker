@@ -81,5 +81,60 @@ describe('OCRReviewModal accessibility', () => {
     expect(screen.queryByRole('dialog', { name: /screenshot 1 of 1/i })).not.toBeInTheDocument();
     expect(onCancel).not.toHaveBeenCalled();
   });
-});
 
+  it('allows approving fuzzy teammate suggestion directly', async () => {
+    const { OCRReviewModal } = await import('./OCRReviewModal');
+    const data: OCRExtractedData = {
+      ...buildData(),
+      teammates: [{ name: 'Ace', confidence: 72 }],
+    };
+
+    render(
+      <OCRReviewModal
+        data={data}
+        onApply={vi.fn()}
+        onCancel={vi.fn()}
+        pilotRegistry={['Ace Pilot']}
+      />
+    );
+
+    expect(screen.getByText(/~ Ace Pilot/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /approve fuzzy match for teammate 1/i }));
+
+    expect(screen.getByDisplayValue('Ace Pilot')).toBeInTheDocument();
+  });
+
+  it('applies manual merge targets for teammate and opponent rows', async () => {
+    const { OCRReviewModal } = await import('./OCRReviewModal');
+    const data: OCRExtractedData = {
+      ...buildData(),
+      teammates: [{ name: 'UnknownMate', confidence: 70 }],
+      opponentTeams: [{
+        teamName: 'Enemy Team 1',
+        shipType: 'Hunter',
+        color: 'red',
+        confidence: 65,
+        players: [{ name: 'UnknownEnemy', confidence: 66 }],
+      }],
+    };
+
+    render(
+      <OCRReviewModal
+        data={data}
+        onApply={vi.fn()}
+        onCancel={vi.fn()}
+        pilotRegistry={['TeammateTarget', 'OpponentTarget']}
+      />
+    );
+
+    const teammateMergeInput = screen.getByRole('combobox', { name: /merge teammate 1 to roster/i });
+    fireEvent.change(teammateMergeInput, { target: { value: 'TeammateTarget' } });
+    fireEvent.click(screen.getByRole('button', { name: /apply merge for teammate 1/i }));
+    expect(screen.getByRole('button', { name: /remove teammate teammatetarget/i })).toBeInTheDocument();
+
+    const opponentMergeInput = screen.getByRole('combobox', { name: /merge opponent 1 on team 1 to roster/i });
+    fireEvent.change(opponentMergeInput, { target: { value: 'OpponentTarget' } });
+    fireEvent.click(screen.getByRole('button', { name: /apply merge for opponent 1 on team 1/i }));
+    expect(screen.getByRole('button', { name: /remove opponent opponenttarget/i })).toBeInTheDocument();
+  });
+});

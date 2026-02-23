@@ -147,6 +147,7 @@ export const deriveTelemetryConsistency = (events: TelemetryArchiveEvent[]): Tel
 
   let startTs = 0;
   let endTs = 0;
+  let matchActive = false;
   const loadoutSaves: TelemetryLoadoutSaveSnapshot[] = [];
 
   const consistency: TelemetryConsistency = {
@@ -157,7 +158,23 @@ export const deriveTelemetryConsistency = (events: TelemetryArchiveEvent[]): Tel
     const eventName = getTelemetryEventName(event);
     const payload = getTelemetryEventPayload(event);
 
-    if (eventName === 'NebClientMatchmakerStateChange') {
+    if (eventName === 'NebLoadingScreen' && ts > 0) {
+      const mapName = payload.loadedMap ?? payload.loadingMap;
+      if (!isFrontendMap(mapName)) {
+        matchActive = true;
+        if (startTs === 0) {
+          startTs = ts;
+        }
+      }
+      if (isFrontendMap(mapName) && startTs > 0 && ts >= startTs) {
+        matchActive = false;
+        if (endTs === 0) {
+          endTs = ts;
+        }
+      }
+    }
+
+    if (eventName === 'NebClientMatchmakerStateChange' && matchActive) {
       const playerIds = parseMatchmakerPlayerIds(payload);
       const inferredMode = inferModeFromMatchPool(
         payload.ticketMatchPool ?? payload.ticket_match_pool ?? payload.matchPool ?? payload.match_pool,
@@ -175,16 +192,6 @@ export const deriveTelemetryConsistency = (events: TelemetryArchiveEvent[]): Tel
       if (inferredMode) {
         consistency.expectedMode = inferredMode.mode;
         consistency.expectedModeSource = inferredMode.source;
-      }
-    }
-
-    if (eventName === 'NebLoadingScreen' && ts > 0) {
-      const mapName = payload.loadedMap ?? payload.loadingMap;
-      if (!isFrontendMap(mapName) && startTs === 0) {
-        startTs = ts;
-      }
-      if (isFrontendMap(mapName) && startTs > 0 && ts >= startTs && endTs === 0) {
-        endTs = ts;
       }
     }
 

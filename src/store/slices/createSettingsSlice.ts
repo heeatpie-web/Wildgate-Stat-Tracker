@@ -26,6 +26,9 @@ export type TelemetryPerformanceProfile = 'low-power' | 'balanced' | 'high-accur
 export type OcrThresholdRecommendationMode = 'manual' | 'assisted' | 'auto';
 export type OcrLearningReviewMode = 'conservative' | 'balanced' | 'aggressive';
 export type DashboardPreloadView = 'analytics' | 'history' | 'smart-captures' | 'players' | 'dev-ocr';
+export const OCR_NAME_REROUTE_THRESHOLD_MIN = 50;
+export const OCR_NAME_REROUTE_THRESHOLD_MAX = 95;
+export const OCR_NAME_REROUTE_THRESHOLD_DEFAULT = 78;
 
 export interface OcrBestGuessThresholds {
   cloud: { player: number; mod: number; ship: number };
@@ -95,6 +98,15 @@ export interface OcrCacheStats {
   maxSize: number;
 }
 
+export const normalizeOcrNameRerouteThreshold = (threshold: unknown): number => {
+  const numeric = Number(threshold);
+  if (!Number.isFinite(numeric)) return OCR_NAME_REROUTE_THRESHOLD_DEFAULT;
+  return Math.max(
+    OCR_NAME_REROUTE_THRESHOLD_MIN,
+    Math.min(OCR_NAME_REROUTE_THRESHOLD_MAX, Math.round(numeric))
+  );
+};
+
 export const createDefaultOcrRegions = (): OcrRegionSettings => ({
   crewHub: {
     leftPanel: { xMin: 0.0, xMax: 0.36, yMin: 0.10, yMax: 0.80 },
@@ -145,6 +157,12 @@ export interface SettingsSlice {
   captureMode: CaptureMode;
   resultOcrFlowMode: ResultOcrFlowMode;
   lockOcrTeams: boolean;
+  ocrEnhancedNameRecoveryEnabled: boolean;
+  ocrNameRerouteThreshold: number;
+  externalFallbackEnabled: boolean;
+  externalFallbackThreshold: number;
+  externalOnDetectorDisagreement: boolean;
+  forceMaxAnalysis: boolean;
   ocrLearningEnabled: boolean;
   ocrAutoApplyMinScore: number;
   ocrAutoApplyMinCount: number;
@@ -188,6 +206,12 @@ export interface SettingsSlice {
   setCaptureMode: (mode: CaptureMode) => void;
   setResultOcrFlowMode: (mode: ResultOcrFlowMode) => void;
   setLockOcrTeams: (enabled: boolean) => void;
+  setOcrEnhancedNameRecoveryEnabled: (enabled: boolean) => void;
+  setOcrNameRerouteThreshold: (threshold: number) => void;
+  setExternalFallbackEnabled: (enabled: boolean) => void;
+  setExternalFallbackThreshold: (threshold: number) => void;
+  setExternalOnDetectorDisagreement: (enabled: boolean) => void;
+  setForceMaxAnalysis: (enabled: boolean) => void;
   setOcrLearningEnabled: (enabled: boolean) => void;
   setOcrAutoApplyMinScore: (score: number) => void;
   setOcrAutoApplyMinCount: (count: number) => void;
@@ -247,12 +271,18 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   captureMode: 'auto',
   resultOcrFlowMode: 'prompt',
   lockOcrTeams: false,
+  ocrEnhancedNameRecoveryEnabled: true,
+  ocrNameRerouteThreshold: OCR_NAME_REROUTE_THRESHOLD_DEFAULT,
+  externalFallbackEnabled: true,
+  externalFallbackThreshold: 0.66,
+  externalOnDetectorDisagreement: true,
+  forceMaxAnalysis: false,
   ocrLearningEnabled: true,
-  ocrAutoApplyMinScore: 0.82,
+  ocrAutoApplyMinScore: 0.83,
   ocrAutoApplyMinCount: 3,
   ocrLearningStrictMode: true,
   ocrLearningReviewMode: 'conservative',
-  ocrLearningAutoPromoteCount: 5,
+  ocrLearningAutoPromoteCount: 3,
   ocrLearningQueueEnabled: true,
   adaptivePreloadEnabled: true,
   adaptivePreloadBudgetMs: 900,
@@ -304,8 +334,18 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
     resultOcrFlowMode: mode === 'background' ? 'background' : 'prompt'
   }),
   setLockOcrTeams: (enabled) => set({ lockOcrTeams: enabled }),
+  setOcrEnhancedNameRecoveryEnabled: (enabled) => set({ ocrEnhancedNameRecoveryEnabled: enabled }),
+  setOcrNameRerouteThreshold: (threshold) => set({
+    ocrNameRerouteThreshold: normalizeOcrNameRerouteThreshold(threshold)
+  }),
+  setExternalFallbackEnabled: (enabled) => set({ externalFallbackEnabled: enabled }),
+  setExternalFallbackThreshold: (threshold) => set({
+    externalFallbackThreshold: Math.max(0, Math.min(1, Number.isFinite(Number(threshold)) ? Number(threshold) : 0.66))
+  }),
+  setExternalOnDetectorDisagreement: (enabled) => set({ externalOnDetectorDisagreement: enabled }),
+  setForceMaxAnalysis: (enabled) => set({ forceMaxAnalysis: enabled }),
   setOcrLearningEnabled: (enabled) => set({ ocrLearningEnabled: enabled }),
-  setOcrAutoApplyMinScore: (score) => set({ ocrAutoApplyMinScore: Math.max(0.5, Math.min(0.99, Number(score) || 0.82)) }),
+  setOcrAutoApplyMinScore: (score) => set({ ocrAutoApplyMinScore: Math.max(0.5, Math.min(0.99, Number(score) || 0.83)) }),
   setOcrAutoApplyMinCount: (count) => set({ ocrAutoApplyMinCount: Math.max(1, Math.min(10, Math.round(Number(count) || 3))) }),
   setOcrLearningStrictMode: (enabled) => set({ ocrLearningStrictMode: enabled }),
   setOcrLearningReviewMode: (mode) => set({

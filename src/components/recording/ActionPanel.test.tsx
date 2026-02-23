@@ -45,6 +45,7 @@ const smartScan = {
 const smartCaptureState = {
   isCapturing: false,
   isProcessing: false,
+  processingStatus: null as { phase: string; message: string } | null,
   error: null as string | null,
   pendingData: null as any,
   queueDepth: 0,
@@ -120,6 +121,7 @@ describe('ActionPanel', () => {
     Object.assign(smartCaptureState, {
       isCapturing: false,
       isProcessing: false,
+      processingStatus: null,
       error: null,
       pendingData: null,
       queueDepth: 0,
@@ -407,6 +409,19 @@ describe('ActionPanel', () => {
       type: 'info',
       source: 'smart-capture',
     }));
+  });
+
+  it('shows granular OCR processing status message in overlay', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    smartCaptureState.isProcessing = true;
+    smartCaptureState.processingStatus = {
+      phase: 'analyzing',
+      message: 'Analyzing cap-2.png (2/4)...',
+    };
+
+    render(<ActionPanel />);
+
+    expect(screen.getByText('Analyzing cap-2.png (2/4)...')).toBeInTheDocument();
   });
 
   it('keeps prospector weapon/equipment telemetry labels out of ActionPanel', async () => {

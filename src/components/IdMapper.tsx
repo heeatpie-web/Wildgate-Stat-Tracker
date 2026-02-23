@@ -86,6 +86,28 @@ const inferTagFromName = (name: string): MappingTag | null => {
     return null;
 };
 
+const normalizeGuidKey = (value: unknown): string => String(value || '')
+    .replace(/[{}-]/g, '')
+    .trim()
+    .toUpperCase();
+
+const extractUnknownGuidPrefix = (value: unknown): string => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const match = raw.match(/^unknown\s*\(([^)]+)\)$/i);
+    if (!match) return '';
+    return normalizeGuidKey(match[1]).slice(0, 4);
+};
+
+const resolveMappedActiveShipSource = (
+    currentSource: 'manual' | 'telemetry' | 'ocr' | undefined,
+    telemetryWillBeUpdated: boolean
+): 'manual' | 'telemetry' => {
+    if (currentSource === 'manual') return 'manual';
+    if (currentSource === 'telemetry') return 'telemetry';
+    return telemetryWillBeUpdated ? 'telemetry' : 'manual';
+};
+
 // Role badge component
 const RoleBadge: React.FC<{ role: PlayerRole }> = ({ role }) => {
     const styles: Record<PlayerRole, { bg: string; text: string; label: string }> = {
@@ -115,7 +137,17 @@ export const IdMapper: React.FC = () => {
         importMappings,
         getPlayerRole,
         getMostFrequentOpponents,
-        getMostFrequentTeammates
+        getMostFrequentTeammates,
+        activeShip,
+        shipSource,
+        telemetryDetectedShip,
+        setActiveShip,
+        currentLoadout,
+        setCurrentLoadout,
+        pendingMatchData,
+        setPendingMatchData,
+        sessionShipTypes,
+        setSessionShipTypes,
     } = useAppStore();
     const { pushNotification } = useUIState();
     const [nameInputs, setNameInputs] = useState<Record<string, string>>({});
@@ -160,6 +192,67 @@ export const IdMapper: React.FC = () => {
             return;
         }
         setUidMapping(domain, id, name);
+        if (domain !== 'ships') return;
+
+        const normalizedId = normalizeGuidKey(id);
+        const guidPrefix = normalizedId.slice(0, 4);
+        if (!guidPrefix) return;
+        const matchesUnknownGuid = (value: unknown): boolean => (
+            extractUnknownGuidPrefix(value) === guidPrefix
+        );
+
+        const replaceActiveShip = matchesUnknownGuid(activeShip);
+        const replaceTelemetryShip = matchesUnknownGuid(telemetryDetectedShip);
+        const activeShipUpdateSource = replaceActiveShip
+            ? resolveMappedActiveShipSource(shipSource, replaceTelemetryShip)
+            : null;
+
+        if (replaceActiveShip && activeShipUpdateSource) {
+            setActiveShip(name, activeShipUpdateSource);
+        }
+        if (replaceTelemetryShip && activeShipUpdateSource !== 'telemetry') {
+            setActiveShip(name, 'telemetry');
+        }
+
+        if (currentLoadout?.ship && matchesUnknownGuid(currentLoadout.ship)) {
+            setCurrentLoadout({
+                ...currentLoadout,
+                ship: name,
+            });
+        }
+
+        if (pendingMatchData) {
+            const pendingShip = String(pendingMatchData.ship || '');
+            const pendingLoadoutShip = String(pendingMatchData.loadout?.ship || '');
+            const replacePendingShip = matchesUnknownGuid(pendingShip);
+            const replacePendingLoadoutShip = matchesUnknownGuid(pendingLoadoutShip);
+            if (replacePendingShip || replacePendingLoadoutShip) {
+                setPendingMatchData({
+                    ...pendingMatchData,
+                    ship: replacePendingShip ? name : pendingMatchData.ship,
+                    loadout: pendingMatchData.loadout
+                        ? {
+                            ...pendingMatchData.loadout,
+                            ship: replacePendingLoadoutShip ? name : pendingMatchData.loadout.ship,
+                        }
+                        : pendingMatchData.loadout,
+                });
+            }
+        }
+
+        if (sessionShipTypes && Object.keys(sessionShipTypes).length > 0) {
+            let shipTypesChanged = false;
+            const nextShipTypes = Object.fromEntries(
+                Object.entries(sessionShipTypes).map(([key, value]) => {
+                    if (!matchesUnknownGuid(value)) return [key, value];
+                    shipTypesChanged = true;
+                    return [key, name];
+                })
+            );
+            if (shipTypesChanged) {
+                setSessionShipTypes(nextShipTypes, 'manual');
+            }
+        }
     };
 
     const getTagFromUnknownType = (rawType?: string): MappingTag | null => {

@@ -8,6 +8,12 @@ const mockStoreState: Record<string, unknown> = {
   ocrMode: 'both',
   captureMode: 'auto',
   performanceMode: false,
+  ocrEnhancedNameRecoveryEnabled: true,
+  ocrNameRerouteThreshold: 78,
+  externalFallbackEnabled: true,
+  externalFallbackThreshold: 0.66,
+  externalOnDetectorDisagreement: true,
+  forceMaxAnalysis: false,
   lockOcrTeams: false,
   pilotRegistry: [],
   ocrCorrections: {},
@@ -27,7 +33,14 @@ vi.mock('../../utils/artifactService', () => ({
 }));
 
 vi.mock('../../utils/ocr/ocrParser', () => ({
-  mergeOCRData: vi.fn().mockReturnValue({}),
+  mergeOCRData: vi.fn((existing: any = {}, next: any = {}) => ({
+    ...existing,
+    ...next,
+    playerShip: next.playerShip ?? existing.playerShip,
+    reachModifiers: next.reachModifiers ?? existing.reachModifiers ?? [],
+    teammates: next.teammates ?? existing.teammates ?? [],
+    opponentTeams: next.opponentTeams ?? existing.opponentTeams ?? [],
+  })),
   calculateOverallConfidence: vi.fn().mockReturnValue(0),
 }));
 
@@ -41,7 +54,9 @@ vi.mock('../../hooks/useSoundEffects', () => ({
 }));
 
 vi.mock('../../utils/stringUtils', () => ({
+  combinedNameSimilarityScore: vi.fn((a: string, b: string) => (a === b ? 100 : 65)),
   findClosestMatch: vi.fn().mockReturnValue(null),
+  getAdaptiveNameSimilarityThreshold: vi.fn().mockReturnValue(68),
   findBestVariantMatch: vi.fn().mockReturnValue(null),
   normalizeOcrName: vi.fn((s: string) => s),
 }));
@@ -80,6 +95,12 @@ describe('useSmartCapture', () => {
     mockStoreState.ocrMode = 'both';
     mockStoreState.captureMode = 'auto';
     mockStoreState.performanceMode = false;
+    mockStoreState.ocrEnhancedNameRecoveryEnabled = true;
+    mockStoreState.ocrNameRerouteThreshold = 78;
+    mockStoreState.externalFallbackEnabled = true;
+    mockStoreState.externalFallbackThreshold = 0.66;
+    mockStoreState.externalOnDetectorDisagreement = true;
+    mockStoreState.forceMaxAnalysis = false;
     mockStoreState.lockOcrTeams = false;
     mockStoreState.pilotRegistry = [];
     mockStoreState.ocrCorrections = {};
@@ -97,6 +118,7 @@ describe('useSmartCapture', () => {
 
     expect(state).toHaveProperty('isCapturing');
     expect(state).toHaveProperty('isProcessing');
+    expect(state).toHaveProperty('processingStatus');
     expect(state).toHaveProperty('error');
     expect(state).toHaveProperty('pendingData');
     expect(state).toHaveProperty('capturedScreenshots');
@@ -109,6 +131,7 @@ describe('useSmartCapture', () => {
     expect(typeof state.isProcessing).toBe('boolean');
     expect(Array.isArray(state.capturedScreenshots)).toBe(true);
     expect(Array.isArray(state.savedCaptures)).toBe(true);
+    expect(state.processingStatus).toBeNull();
   });
 
   it('returns a tuple [state, actions] with expected action keys', () => {
@@ -197,8 +220,190 @@ describe('useSmartCapture', () => {
       await actions.processStoredImage('C:\\captures\\cap-1.png', 'Pilot');
     });
 
+    expect(vi.mocked(rerunOCROnArtifact)).toHaveBeenCalledWith(
+      'C:\\captures\\cap-1.png',
+      'Pilot',
+      'both',
+      undefined,
+      expect.objectContaining({
+        routingProfile: 'names-only',
+        fontProfile: 'ealing-black-italic',
+        nameRerouteThreshold: 78,
+        maxReroutePasses: 1,
+        externalFallbackEnabled: true,
+        externalFallbackThreshold: 0.66,
+        externalOnDetectorDisagreement: true,
+        forceMaxAnalysis: false,
+        forceUncached: false,
+      })
+    );
     expect(result.current[0].savedCaptures[0]?.ocrProcessed).toBe(true);
     expect(actions.getPendingData('match-42')).not.toBeNull();
+  });
+
+  it('uses configured OCR name reroute threshold in runtime options', async () => {
+    vi.mocked(isElectron).mockReturnValue(true);
+    mockStoreState.ocrNameRerouteThreshold = 86;
+
+    vi.mocked(captureGameWindow).mockResolvedValue({
+      success: true,
+      imageBase64: 'ZmFrZQ==',
+    });
+    vi.mocked(saveScreenshot).mockResolvedValue({
+      success: true,
+      filePath: 'C:\\captures\\cap-threshold.png',
+      filename: 'cap-threshold.png',
+    });
+    vi.mocked(rerunOCROnArtifact).mockResolvedValue({
+      success: true,
+      data: {
+        screenshotType: 'crew_hub',
+        playerShip: { shipType: 'Hunter (4 Player)', confidence: 90, rawText: 'Hunter' },
+        playerTeamName: '',
+        reachModifiers: [],
+        enemyShips: [],
+        teammates: [{ name: 'Wingman', confidence: 88, isTeammate: true, rawText: 'Wingman' }],
+        opponentTeams: [],
+        overallConfidence: 88,
+        captureTimestamp: Date.now(),
+      },
+    });
+
+    const { result } = renderHook(() => useSmartCapture());
+    const [, actions] = result.current;
+
+    await act(async () => {
+      await actions.captureOnly('match-threshold');
+    });
+    await act(async () => {
+      await actions.processStoredImage('C:\\captures\\cap-threshold.png', 'Pilot');
+    });
+
+    expect(vi.mocked(rerunOCROnArtifact)).toHaveBeenCalledWith(
+      'C:\\captures\\cap-threshold.png',
+      'Pilot',
+      'both',
+      undefined,
+      expect.objectContaining({
+        nameRerouteThreshold: 86,
+      })
+    );
+  });
+
+  it('updates OCR processingStatus through analyze and completed phases', async () => {
+    vi.mocked(isElectron).mockReturnValue(true);
+    vi.mocked(captureGameWindow).mockResolvedValue({
+      success: true,
+      imageBase64: 'ZmFrZQ==',
+    });
+    vi.mocked(saveScreenshot).mockResolvedValue({
+      success: true,
+      filePath: 'C:\\captures\\phase-1.png',
+      filename: 'phase-1.png',
+    });
+
+    let resolveOcr: ((value: any) => void) | null = null;
+    vi.mocked(rerunOCROnArtifact).mockImplementation(() =>
+      new Promise((resolve) => {
+        resolveOcr = resolve;
+      })
+    );
+
+    const { result } = renderHook(() => useSmartCapture());
+    const [, actions] = result.current;
+
+    await act(async () => {
+      await actions.captureOnly('match-phases');
+    });
+
+    let processingPromise: Promise<void> | null = null;
+    await act(async () => {
+      processingPromise = actions.processStoredImage('C:\\captures\\phase-1.png', 'Pilot');
+      await Promise.resolve();
+    });
+
+    expect(result.current[0].processingStatus?.phase).toBe('analyzing');
+    expect(result.current[0].processingStatus?.message).toContain('phase-1.png');
+
+    await act(async () => {
+      resolveOcr?.({
+        success: true,
+        data: {
+          screenshotType: 'crew_hub',
+          playerShip: { shipType: 'Hunter (4 Player)', confidence: 90, rawText: 'Hunter' },
+          playerTeamName: '',
+          reachModifiers: [],
+          enemyShips: [],
+          teammates: [{ name: 'Wingman', confidence: 88, isTeammate: true, rawText: 'Wingman' }],
+          opponentTeams: [],
+          overallConfidence: 88,
+          captureTimestamp: Date.now(),
+        },
+      });
+      await processingPromise;
+    });
+
+    expect(result.current[0].processingStatus?.phase).toBe('completed');
+    expect(result.current[0].processingStatus?.message).toContain('Completed OCR');
+  });
+
+  it('enables forced uncached reruns when forceMaxAnalysis is enabled', async () => {
+    vi.mocked(isElectron).mockReturnValue(true);
+    mockStoreState.forceMaxAnalysis = true;
+    mockStoreState.ocrEnhancedNameRecoveryEnabled = false;
+    mockStoreState.externalFallbackThreshold = 0.66;
+    mockStoreState.externalOnDetectorDisagreement = false;
+
+    vi.mocked(captureGameWindow).mockResolvedValue({
+      success: true,
+      imageBase64: 'ZmFrZQ==',
+    });
+    vi.mocked(saveScreenshot).mockResolvedValue({
+      success: true,
+      filePath: 'C:\\captures\\cap-force.png',
+      filename: 'cap-force.png',
+    });
+    vi.mocked(rerunOCROnArtifact).mockResolvedValue({
+      success: true,
+      data: {
+        screenshotType: 'crew_hub',
+        playerShip: { shipType: 'Hunter (4 Player)', confidence: 90, rawText: 'Hunter' },
+        playerTeamName: '',
+        reachModifiers: [],
+        enemyShips: [],
+        teammates: [{ name: 'Wingman', confidence: 88, isTeammate: true, rawText: 'Wingman' }],
+        opponentTeams: [],
+        overallConfidence: 88,
+        captureTimestamp: Date.now(),
+      },
+    });
+
+    const { result } = renderHook(() => useSmartCapture());
+    const [, actions] = result.current;
+
+    await act(async () => {
+      await actions.captureOnly('match-force');
+    });
+    await act(async () => {
+      await actions.processStoredImage('C:\\captures\\cap-force.png', 'Pilot');
+    });
+
+    expect(vi.mocked(rerunOCROnArtifact)).toHaveBeenCalledWith(
+      'C:\\captures\\cap-force.png',
+      'Pilot',
+      'both',
+      undefined,
+      expect.objectContaining({
+        routingProfile: 'default',
+        fontProfile: 'default',
+        maxReroutePasses: 0,
+        externalFallbackEnabled: true,
+        externalFallbackThreshold: 0.66,
+        externalOnDetectorDisagreement: false,
+        forceMaxAnalysis: true,
+        forceUncached: true,
+      })
+    );
   });
 
   it('processAllStored runs one OCR job at a time in performance mode', async () => {
@@ -267,5 +472,105 @@ describe('useSmartCapture', () => {
     });
 
     expect(result.current[0].savedCaptures.every((capture) => capture.ocrProcessed)).toBe(true);
+  });
+
+  it('promotes stable teammate names with temporal fusion when enhancement is enabled', async () => {
+    vi.mocked(isElectron).mockReturnValue(true);
+    mockStoreState.ocrEnhancedNameRecoveryEnabled = true;
+
+    vi.mocked(captureGameWindow).mockResolvedValue({
+      success: true,
+      imageBase64: 'ZmFrZQ==',
+    });
+    let saveIndex = 0;
+    vi.mocked(saveScreenshot).mockImplementation(async () => {
+      saveIndex += 1;
+      return {
+        success: true,
+        filePath: `C:\\captures\\stable-${saveIndex}.png`,
+        filename: `stable-${saveIndex}.png`,
+      };
+    });
+
+    const makeData = (confidence: number) => ({
+      screenshotType: 'crew_hub' as const,
+      playerShip: { shipType: 'Hunter (4 Player)', confidence: 90, rawText: 'Hunter' },
+      playerTeamName: '',
+      reachModifiers: [],
+      enemyShips: [],
+      teammates: [{ name: 'Wingman', confidence, isTeammate: true, rawText: 'Wingman' }],
+      opponentTeams: [],
+      overallConfidence: confidence,
+      captureTimestamp: Date.now(),
+    });
+    vi.mocked(rerunOCROnArtifact)
+      .mockResolvedValueOnce({ success: true, data: makeData(70) } as any)
+      .mockResolvedValueOnce({ success: true, data: makeData(65) } as any);
+
+    const { result } = renderHook(() => useSmartCapture());
+    const [, actions] = result.current;
+
+    await act(async () => {
+      await actions.captureOnly('match-55');
+      await actions.captureOnly('match-55');
+    });
+    await act(async () => {
+      await actions.processAllStored('Pilot', 'match-55');
+    });
+
+    const pending = actions.getPendingData('match-55');
+    const teammate = pending?.teammates?.find((entry) => entry.name === 'Wingman');
+    expect(teammate).toBeTruthy();
+    expect(Number(teammate?.confidence || 0)).toBeGreaterThanOrEqual(88);
+  });
+
+  it('does not apply temporal fusion boost when enhancement is disabled', async () => {
+    vi.mocked(isElectron).mockReturnValue(true);
+    mockStoreState.ocrEnhancedNameRecoveryEnabled = false;
+
+    vi.mocked(captureGameWindow).mockResolvedValue({
+      success: true,
+      imageBase64: 'ZmFrZQ==',
+    });
+    let saveIndex = 0;
+    vi.mocked(saveScreenshot).mockImplementation(async () => {
+      saveIndex += 1;
+      return {
+        success: true,
+        filePath: `C:\\captures\\legacy-${saveIndex}.png`,
+        filename: `legacy-${saveIndex}.png`,
+      };
+    });
+
+    const makeData = (confidence: number) => ({
+      screenshotType: 'crew_hub' as const,
+      playerShip: { shipType: 'Hunter (4 Player)', confidence: 90, rawText: 'Hunter' },
+      playerTeamName: '',
+      reachModifiers: [],
+      enemyShips: [],
+      teammates: [{ name: 'Wingman', confidence, isTeammate: true, rawText: 'Wingman' }],
+      opponentTeams: [],
+      overallConfidence: confidence,
+      captureTimestamp: Date.now(),
+    });
+    vi.mocked(rerunOCROnArtifact)
+      .mockResolvedValueOnce({ success: true, data: makeData(70) } as any)
+      .mockResolvedValueOnce({ success: true, data: makeData(65) } as any);
+
+    const { result } = renderHook(() => useSmartCapture());
+    const [, actions] = result.current;
+
+    await act(async () => {
+      await actions.captureOnly('match-56');
+      await actions.captureOnly('match-56');
+    });
+    await act(async () => {
+      await actions.processAllStored('Pilot', 'match-56');
+    });
+
+    const pending = actions.getPendingData('match-56');
+    const teammate = pending?.teammates?.find((entry) => entry.name === 'Wingman');
+    expect(teammate).toBeTruthy();
+    expect(Number(teammate?.confidence || 0)).toBeLessThan(88);
   });
 });

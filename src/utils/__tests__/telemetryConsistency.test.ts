@@ -56,7 +56,7 @@ describe('telemetryConsistency', () => {
       event({
         EventName: 'NebClientMatchmakerStateChange',
         Payload: { event: { playerIds: ['p1', 'p2', 'p3', 'p4'], ticketMatchPool: 'ArtifactBrawl' } },
-        ClientTimestamp: 1_700_000_001,
+        ClientTimestamp: 1_700_000_150,
       }),
       event({
         EventName: 'NebLoadingScreen',
@@ -98,6 +98,11 @@ describe('telemetryConsistency', () => {
   it('falls back to mode-derived teammate count when player ids are unavailable', () => {
     const consistency = deriveTelemetryConsistency([
       event({
+        EventName: 'NebLoadingScreen',
+        Payload: { event: { loadedMap: 'DesolationReach' } },
+        ClientTimestamp: 1_700_100_000,
+      }),
+      event({
         EventName: 'NebClientMatchmakerStateChange',
         Payload: { event: { ticketMatchPool: 'artifact-ranked' } },
         ClientTimestamp: 1_700_100_001,
@@ -109,21 +114,40 @@ describe('telemetryConsistency', () => {
     expect(consistency.expectedTeammateCount).toBe(3);
   });
 
+  it('ignores pre-start matchmaker expectations until the match has started', () => {
+    const consistency = deriveTelemetryConsistency([
+      event({
+        EventName: 'NebClientMatchmakerStateChange',
+        Payload: { event: { playerIds: ['self', 'wing1'], ticketMatchPool: 'FleetBattle' } },
+        ClientTimestamp: 1_700_150_001,
+      }),
+      event({
+        EventName: 'NebLoadingScreen',
+        Payload: { event: { loadedMap: 'MapOne' } },
+        ClientTimestamp: 1_700_150_020,
+      }),
+    ]);
+
+    expect(consistency.expectedTeammateCount).toBeUndefined();
+    expect(consistency.expectedMode).toBeUndefined();
+    expect(consistency.expectedModeSource).toBeUndefined();
+  });
+
   it('derives consistency from mixed archive collections', () => {
     const consistency = deriveTelemetryConsistencyFromCollections([
+      {
+        EventName: 'NebLoadingScreen',
+        Payload: { event: { loadedMap: 'MapOne' } },
+        ClientTimestamp: 1_700_200_020,
+      },
       {
         telemetry: [
           {
             EventName: 'NebClientMatchmakerStateChange',
             Payload: { event: { playerIds: ['self', 'wing1'], ticketMatchPool: 'FleetBattle' } },
-            ClientTimestamp: 1_700_200_010,
+            ClientTimestamp: 1_700_200_030,
           },
         ],
-      },
-      {
-        EventName: 'NebLoadingScreen',
-        Payload: { event: { loadedMap: 'MapOne' } },
-        ClientTimestamp: 1_700_200_020,
       },
       {
         EventName: 'NebLoadingScreen',

@@ -18,6 +18,8 @@ type StorageLayouts = Record<string, StorageLayoutItem[]>;
 interface StorageMeta {
   mappingsToUidMigratedAt?: number;
   legacyV13MigratedAt?: number;
+  nextCanonicalMatchNumber?: number;
+  artifactCanonicalMigrationV1At?: number;
 }
 
 interface UidMappings {
@@ -189,9 +191,13 @@ const toStorageMeta = (value: unknown): StorageMeta => {
   if (!isRecord(value)) return {};
   const mappingsToUidMigratedAt = toNumberOr(value.mappingsToUidMigratedAt, 0);
   const legacyV13MigratedAt = toNumberOr(value.legacyV13MigratedAt, 0);
+  const nextCanonicalMatchNumber = toNumberOr(value.nextCanonicalMatchNumber, 0);
+  const artifactCanonicalMigrationV1At = toNumberOr(value.artifactCanonicalMigrationV1At, 0);
   return {
     ...(mappingsToUidMigratedAt > 0 ? { mappingsToUidMigratedAt } : {}),
     ...(legacyV13MigratedAt > 0 ? { legacyV13MigratedAt } : {}),
+    ...(nextCanonicalMatchNumber > 0 ? { nextCanonicalMatchNumber } : {}),
+    ...(artifactCanonicalMigrationV1At > 0 ? { artifactCanonicalMigrationV1At } : {}),
   };
 };
 

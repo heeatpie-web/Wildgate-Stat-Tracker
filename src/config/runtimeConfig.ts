@@ -56,6 +56,6 @@ export const runtimeConfig = {
     resultRippleDurationMs: readEnvNumber('VITE_ACTION_PANEL_RESULT_RIPPLE_MS', 320, 100, 2_000),
   },
   ui: {
-    toastDurationMs: readEnvNumber('VITE_TOAST_DURATION_MS', 5_000, 1_000, 60_000),
+    toastDurationMs: readEnvNumber('VITE_TOAST_DURATION_MS', 3_200, 1_000, 60_000),
   },
 } as const;

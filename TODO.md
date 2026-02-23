@@ -33,7 +33,12 @@
 - [ ] Keep `GUIDE.md` and `docs/` updated as architecture evolves.
 - [x] Clarified `ocr-debug/` path lifecycle - compatibility capture path remains supported intentionally; no deferred cleanup task.
 
+
 ## Priority Now (Friend Beta Readiness)
-- [ ] **Ship-to-Friends 24h Gate** � Freeze new features and require all before sharing build: (1) 
-pm test PASS, (2) 
-pm run build PASS, (3) 30-minute no-crash smoke run, (4) OCR core flow PASS (capture -> review -> save), (5) update path validated once or explicitly disabled with user-facing note, (6) version + changelog visible in-app.
+- [ ] **Ship-to-Friends 24h Gate** - Freeze new features and require all before sharing build.
+  - [x] `npm test` PASS (validated on 2026-02-23).
+  - [x] `npm run build` PASS (validated on 2026-02-23).
+  - [ ] 30-minute no-crash smoke run (manual desktop runtime check).
+  - [ ] OCR core flow PASS (capture -> review -> save) in manual runtime.
+  - [ ] Update path validated once end-to-end, or explicitly disabled with user-facing note.
+  - [x] Version + changelog visible in-app (`App.tsx` changelog modal + `SettingsModal` update/version section).

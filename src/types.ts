@@ -10,6 +10,8 @@ import { SHIP_CAPACITY, SHIP_NAME_ALIASES } from './utils/constants';
 export type GameMode = 'Artifact Brawl' | 'Fleet Battle';
 /** Possible outcomes for a match. */
 export type MatchResult = 'Win' | 'Loss' | 'Draw' | 'Ongoing';
+/** Wizard result selection state (includes neutral, unselected step). */
+export type WizardResult = 'Win' | 'Loss' | 'Draw' | 'Match Result';
 /** Supported colorblind filter modes, applied via SVG filters in index.html. */
 export type ColorblindMode = 'none' | 'protanopia' | 'deuteranopia' | 'tritanopia';
 
@@ -81,6 +83,7 @@ export interface OpponentTeam {
 /** Primary data record for a completed match. Persisted to disk via StorageService. */
 export interface Match {
   id: number;
+  canonicalMatchNumber?: number;
   timestamp: number;
   date: string;
   mode: GameMode;
@@ -118,6 +121,16 @@ export interface Match {
     cloudError?: string;
     geminiError?: string;
     mergeStats?: { total: number; agreed: number; cloudPreferred: number; localOnly: number; cloudOnly: number; conflicts: number };
+    fieldConfidence?: { teammateNames: number; opponentNames: number; ship: number; modifiers: number };
+    routing?: {
+      attempted: boolean;
+      applied: boolean;
+      route: 'none' | 'names-only';
+      preNameConfidence: number;
+      postNameConfidence: number;
+      latencyMs: number;
+      fontProfile: 'default' | 'ealing-black-italic';
+    };
     timestamp?: number;
   };
   /** Explicit OCR pipeline state for this match's artifacts. */

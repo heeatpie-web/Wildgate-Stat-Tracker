@@ -51,6 +51,39 @@ describe('mergeOCRData', () => {
     expect(alice!.confidence).toBe(90);
   });
 
+  it('deduplicates OCR-variant teammate names with digit substitutions', () => {
+    const existing = makeOCRData({
+      teammates: [
+        { name: 'chrismario', confidence: 84, isTeammate: true },
+      ],
+    });
+    const incoming = makeOCRData({
+      teammates: [
+        { name: 'chrismar10', confidence: 92, isTeammate: true },
+        { name: 'chrismar1o', confidence: 90, isTeammate: true },
+      ],
+    });
+    const merged = mergeOCRData(existing, incoming);
+    expect(merged.teammates).toHaveLength(1);
+    expect(merged.teammates[0].confidence).toBe(92);
+    expect(merged.teammates[0].name.toLowerCase()).toBe('chrismario');
+  });
+
+  it('does not merge similarly-shaped but distinct teammate names', () => {
+    const existing = makeOCRData({
+      teammates: [
+        { name: 'chrismario', confidence: 90, isTeammate: true },
+      ],
+    });
+    const incoming = makeOCRData({
+      teammates: [
+        { name: 'chrismarco', confidence: 88, isTeammate: true },
+      ],
+    });
+    const merged = mergeOCRData(existing, incoming);
+    expect(merged.teammates).toHaveLength(2);
+  });
+
   it('deduplicates modifiers by name, keeping highest confidence', () => {
     const existing = makeOCRData({
       reachModifiers: [
@@ -100,6 +133,32 @@ describe('mergeOCRData', () => {
     expect(merged.opponentTeams[0].color).toBe('red');
     // Confidence should be max
     expect(merged.opponentTeams[0].confidence).toBe(80);
+  });
+
+  it('deduplicates OCR-variant opponent player names during team merge', () => {
+    const existing = makeOCRData({
+      opponentTeams: [{
+        teamName: 'RedTeam',
+        shipType: 'Hunter',
+        color: 'red',
+        players: [{ name: 'chrismario', confidence: 80, isTeammate: false }],
+        confidence: 75,
+      }],
+    });
+    const incoming = makeOCRData({
+      opponentTeams: [{
+        teamName: 'redteam',
+        shipType: '',
+        color: 'unknown',
+        players: [{ name: 'chrismar10', confidence: 89, isTeammate: false }],
+        confidence: 82,
+      }],
+    });
+    const merged = mergeOCRData(existing, incoming);
+    expect(merged.opponentTeams).toHaveLength(1);
+    expect(merged.opponentTeams[0].players).toHaveLength(1);
+    expect(merged.opponentTeams[0].players[0].confidence).toBe(89);
+    expect(merged.opponentTeams[0].players[0].name.toLowerCase()).toBe('chrismario');
   });
 
   it('adds new opponent teams that do not match existing', () => {

@@ -28,19 +28,71 @@ export const getPriority = (source: DataSource = 'manual'): number => {
 
 const sanitizeLoadoutSlots = (loadout: Loadout | null): Loadout | null => {
   if (!loadout) return null;
-  const sanitizeSlotList = (entries?: string[]) => (
+  const sanitizeSlotList = (entries: string[] | undefined, maxSlots: number) => (
     (entries || [])
       .map((entry) => String(entry || '').trim())
       .filter(Boolean)
       .filter((entry) => !/tertiary\s+(weapon|equipment)/i.test(entry))
-      .slice(0, 2)
+      .slice(0, Math.max(1, maxSlots))
   );
   return {
     ...loadout,
-    weapons: sanitizeSlotList(loadout.weapons),
-    equipment: sanitizeSlotList(loadout.equipment),
-    characterWeapons: sanitizeSlotList(loadout.characterWeapons),
-    characterEquipment: sanitizeSlotList(loadout.characterEquipment),
+    weapons: sanitizeSlotList(loadout.weapons, 10),
+    equipment: sanitizeSlotList(loadout.equipment, 2),
+    characterWeapons: sanitizeSlotList(loadout.characterWeapons, 2),
+    characterEquipment: sanitizeSlotList(loadout.characterEquipment, 2),
+  };
+};
+
+const toPositiveInt = (value: unknown): number | null => {
+  const parsed = Number(value || 0);
+  if (!Number.isInteger(parsed) || parsed <= 0) return null;
+  return parsed;
+};
+
+const sortMatchesForCanonical = (matches: Match[]): Match[] => (
+  [...matches].sort((a, b) => {
+    const tsA = Number(a?.timestamp || 0);
+    const tsB = Number(b?.timestamp || 0);
+    if (tsA !== tsB) return tsA - tsB;
+    const idA = Number(a?.id || 0);
+    const idB = Number(b?.id || 0);
+    return idA - idB;
+  })
+);
+
+const assignCanonicalMatchNumbers = (matches: Match[], nextHint: number): {
+  matches: Match[];
+  nextCanonicalMatchNumber: number;
+} => {
+  const taken = new Set<number>();
+  let maxCanonical = 0;
+  const nextMatches = matches.map((match) => ({ ...match }));
+
+  nextMatches.forEach((match) => {
+    const canonical = toPositiveInt(match.canonicalMatchNumber);
+    if (!canonical || taken.has(canonical)) {
+      delete (match as Partial<Match>).canonicalMatchNumber;
+      return;
+    }
+    match.canonicalMatchNumber = canonical;
+    taken.add(canonical);
+    if (canonical > maxCanonical) maxCanonical = canonical;
+  });
+
+  let nextCanonical = Math.max(1, toPositiveInt(nextHint) || 1, maxCanonical + 1);
+  sortMatchesForCanonical(nextMatches).forEach((match) => {
+    if (toPositiveInt(match.canonicalMatchNumber)) return;
+    while (taken.has(nextCanonical)) nextCanonical += 1;
+    match.canonicalMatchNumber = nextCanonical;
+    taken.add(nextCanonical);
+    maxCanonical = Math.max(maxCanonical, nextCanonical);
+    nextCanonical += 1;
+  });
+
+  return {
+    matches: nextMatches,
+    nextCanonicalMatchNumber: Math.max(nextCanonical, maxCanonical + 1, 1),
   };
 };
 
@@ -91,6 +143,7 @@ export interface TimelineEvent {
 
 export interface DataSlice {
   matches: Match[];
+  nextCanonicalMatchNumber: number;
   /** @deprecated Legacy quick-add player list. Use pilotRegistry for the authoritative roster. */
   players: string[];
   /** Authoritative roster of known pilot display names. Source of truth for OCR matching and teammate/opponent assignment. */
@@ -169,6 +222,7 @@ export interface DataSlice {
 
 export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
   matches: [],
+  nextCanonicalMatchNumber: 1,
   players: [],
   pilotRegistry: [],
   favorites: [],
@@ -243,12 +297,59 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
 
   mergeHistory: [],
 
-  setMatches: (matches) => set({ matches, lastActivity: Date.now() }),
-  addMatch: (match) => set((state) => ({ matches: [match, ...state.matches], lastActivity: Date.now() })),
-  updateMatch: (updatedMatch) => set((state) => ({
-    matches: state.matches.map(m => m.id === updatedMatch.id ? updatedMatch : m),
-    lastActivity: Date.now()
-  })),
+  setMatches: (matches) => set((state) => {
+    const assigned = assignCanonicalMatchNumbers(matches, state.nextCanonicalMatchNumber);
+    return {
+      matches: assigned.matches,
+      nextCanonicalMatchNumber: assigned.nextCanonicalMatchNumber,
+      lastActivity: Date.now(),
+    };
+  }),
+  addMatch: (match) => set((state) => {
+    const taken = new Set(
+      state.matches
+        .map((entry) => toPositiveInt(entry.canonicalMatchNumber))
+        .filter((value): value is number => Number.isInteger(value))
+    );
+    let canonical = toPositiveInt(match.canonicalMatchNumber);
+    let nextCanonical = Math.max(1, toPositiveInt(state.nextCanonicalMatchNumber) || 1);
+    if (!canonical || taken.has(canonical)) {
+      canonical = nextCanonical;
+      while (taken.has(canonical)) canonical += 1;
+    }
+    nextCanonical = Math.max(nextCanonical, canonical + 1);
+    return {
+      matches: [{ ...match, canonicalMatchNumber: canonical }, ...state.matches],
+      nextCanonicalMatchNumber: nextCanonical,
+      lastActivity: Date.now(),
+    };
+  }),
+  updateMatch: (updatedMatch) => set((state) => {
+    const existing = state.matches.find((entry) => entry.id === updatedMatch.id);
+    if (!existing) {
+      return { lastActivity: Date.now() };
+    }
+    const taken = new Set(
+      state.matches
+        .filter((entry) => entry.id !== updatedMatch.id)
+        .map((entry) => toPositiveInt(entry.canonicalMatchNumber))
+        .filter((value): value is number => Number.isInteger(value))
+    );
+    let canonical = toPositiveInt(updatedMatch.canonicalMatchNumber)
+      || toPositiveInt(existing?.canonicalMatchNumber);
+    let nextCanonical = Math.max(1, toPositiveInt(state.nextCanonicalMatchNumber) || 1);
+    if (!canonical || taken.has(canonical)) {
+      canonical = nextCanonical;
+      while (taken.has(canonical)) canonical += 1;
+    }
+    nextCanonical = Math.max(nextCanonical, canonical + 1);
+    const nextMatch: Match = { ...updatedMatch, canonicalMatchNumber: canonical };
+    return {
+      matches: state.matches.map(m => m.id === updatedMatch.id ? nextMatch : m),
+      nextCanonicalMatchNumber: nextCanonical,
+      lastActivity: Date.now(),
+    };
+  }),
   deleteMatch: (id) => set((state) => ({
     matches: state.matches.filter(m => m.id !== id),
     lastActivity: Date.now()

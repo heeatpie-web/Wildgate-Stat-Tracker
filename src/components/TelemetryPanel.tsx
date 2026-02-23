@@ -1,10 +1,25 @@
 import React from 'react';
 import { RefreshCw, Terminal, X } from 'lucide-react';
-import { getElectronAPI } from '../utils/electronAPI';
+
+interface TelemetryFeedEntry {
+    EventName?: string;
+    ClientTimestamp?: number;
+    Payload?: unknown;
+    [key: string]: unknown;
+}
+
+interface TelemetryPanelStatus {
+    exists?: boolean;
+    size?: number;
+    lastCheck?: number;
+    lastEventAt?: number;
+    error?: string;
+    rawHead?: string;
+}
 
 interface TelemetryPanelProps {
-    logFeed: any[];
-    logStatus: any;
+    logFeed: TelemetryFeedEntry[];
+    logStatus: TelemetryPanelStatus;
     onClear: () => void;
 }
 
@@ -31,11 +46,9 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logFeed, logStat
             <div className="px-4 py-2.5 bg-md-sys-surface-container-high/50 flex flex-col gap-1.5 border-b border-md-sys-outline/5">
                 <div className="flex justify-between items-center">
                     <span className="text-label-xs font-semibold uppercase tracking-widest text-md-sys-on-surface/40">System Node</span>
-                    <span className={`text-label-xs font-mono font-bold ${logStatus.exists ? 'text-success' : 'text-danger'}`}>
-                        {logStatus.exists ? 'SYNCED' : 'OFFLINE'}
-                    </span>
+                    <span className="text-label-xs font-mono text-md-sys-on-surface/55">Live Diagnostics</span>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                     <div className="flex justify-between items-center">
                         <span className="text-label-xs font-semibold uppercase text-md-sys-on-surface/40">Buffer</span>
                         <span className="text-label-xs font-mono text-md-sys-on-surface/60">
@@ -43,9 +56,15 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logFeed, logStat
                         </span>
                     </div>
                     <div className="flex justify-between items-center">
-                        <span className="text-label-xs font-semibold uppercase text-md-sys-on-surface/40">Last Pulse</span>
+                        <span className="text-label-xs font-semibold uppercase text-md-sys-on-surface/40">Last Check</span>
                         <span className="text-label-xs font-mono text-md-sys-on-surface/60">
                             {logStatus.lastCheck ? new Date(logStatus.lastCheck).toLocaleTimeString([], { hour12: false }) : '--:--:--'}
+                        </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <span className="text-label-xs font-semibold uppercase text-md-sys-on-surface/40">Last Event</span>
+                        <span className="text-label-xs font-mono text-md-sys-on-surface/60">
+                            {logStatus.lastEventAt ? new Date(logStatus.lastEventAt).toLocaleTimeString([], { hour12: false }) : '--:--:--'}
                         </span>
                     </div>
                 </div>
@@ -78,7 +97,11 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({ logFeed, logStat
                                         <span className="w-1.5 h-1.5 rounded-full bg-md-sys-primary/50 flex-shrink-0" aria-hidden />
                                         <span className="text-md-sys-primary font-bold uppercase tracking-tighter">{entry.EventName || 'TELEMETRY_EVENT'}</span>
                                     </div>
-                                    <span className="text-md-sys-on-surface/40 text-label-xs font-mono">{new Date(entry.ClientTimestamp * 1000).toLocaleTimeString([], { hour12: false })}</span>
+                                    <span className="text-md-sys-on-surface/40 text-label-xs font-mono">
+                                        {typeof entry.ClientTimestamp === 'number'
+                                            ? new Date(entry.ClientTimestamp * 1000).toLocaleTimeString([], { hour12: false })
+                                            : '--:--:--'}
+                                    </span>
                                 </div>
                                 <pre className="text-md-sys-on-surface/60 overflow-hidden text-ellipsis whitespace-pre-wrap leading-relaxed text-label-xs">
                                     {JSON.stringify(entry.Payload || entry, null, 2)}

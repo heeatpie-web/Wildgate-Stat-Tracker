@@ -7,7 +7,7 @@ import type { Match } from '../../types';
 
 const baseMatch: Match = {
   id: 12345,
-  timestamp: Date.now(),
+  timestamp: new Date('2026-02-14T17:45:00.000Z').getTime(),
   date: '2026-02-14',
   mode: 'Artifact Brawl',
   player: 'Alec',
@@ -24,7 +24,7 @@ const baseMatch: Match = {
 };
 
 describe('QueueItemRichPreview', () => {
-  it('renders match, outcome, status and confidence', () => {
+  it('renders essential queue fields and omits confidence noise', () => {
     render(
       <QueueItemRichPreview
         match={baseMatch}
@@ -37,11 +37,18 @@ describe('QueueItemRichPreview', () => {
       />,
     );
 
-    expect(screen.getByText(/Match 73/)).toBeInTheDocument();
+    expect(screen.getByText('Match #73')).toBeInTheDocument();
+    const previewButton = screen.getByRole('button', { name: /match #73/i });
+    expect(previewButton).toHaveAttribute('title', expect.stringContaining('Match 73 - '));
+    expect(previewButton).toHaveAttribute('title', expect.stringContaining('14th'));
+    expect(screen.queryByText(/\d{1,2}(st|nd|rd|th)/i)).toBeNull();
     expect(screen.queryByText(/ID 12345/)).toBeNull();
     expect(screen.getByText('Win')).toBeInTheDocument();
-    expect(screen.getByText('85%')).toBeInTheDocument();
-    expect(screen.getByText(/bundled/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Status Ready')).toBeInTheDocument();
+    expect(screen.queryByText('85%')).toBeNull();
+    expect(screen.queryByText(/Spec:/i)).toBeNull();
+    expect(screen.queryByText(/Practical:/i)).toBeNull();
+    expect(screen.queryByText(/\b\d+\s+warnings?\b/i)).toBeNull();
   });
 
   it('renders compact collapsed row with icon and short number', () => {
@@ -77,11 +84,12 @@ describe('QueueItemRichPreview', () => {
       />,
     );
 
-    expect(screen.getAllByText('Resolved').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Status Resolved')).toBeInTheDocument();
     expect(screen.queryByText('Pending')).toBeNull();
+    expect(screen.queryByText(/\b\d+\s+warnings?\b/i)).toBeNull();
   });
 
-  it('renders duration mismatch as indicator-only in queue rows', () => {
+  it('does not render telemetry mismatch warning badges in queue rows', () => {
     const durationMismatch: Match = {
       ...baseMatch,
       time: '05:00',
@@ -102,6 +110,8 @@ describe('QueueItemRichPreview', () => {
     );
 
     expect(screen.queryByText(/Duration Off by/i)).toBeNull();
-    expect(screen.getByLabelText('Duration mismatch')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Duration mismatch')).toBeNull();
+    expect(screen.getByLabelText('Status Ready')).toBeInTheDocument();
+    expect(screen.queryByText(/\b\d+\s+warnings?\b/i)).toBeNull();
   });
 });

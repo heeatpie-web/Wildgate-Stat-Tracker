@@ -13,12 +13,19 @@ import {
   Image,
   Eye,
   Info,
+  GripVertical,
 } from 'lucide-react';
 import { LocalImage } from '../LocalImage';
 import type { OCRExtractedData, ExtractedOpponentTeam, TeamColor } from '../../utils/ocr/ocrTypes';
 import { SHIPS, UI_REACH_MODIFIERS } from '../../utils/constants';
 import { useAppStore } from '../../store/useAppStore';
-import { findClosestMatch, normalizeOcrName } from '../../utils/stringUtils';
+import {
+  combinedNameSimilarityScore,
+  findClosestMatch,
+  getAdaptiveNameDistanceThreshold,
+  getAdaptiveNameSimilarityThreshold,
+  normalizeOcrName,
+} from '../../utils/stringUtils';
 import { moveOpponentPlayerBetweenTeams } from '../../utils/opponentTeamTransfer';
 import Logger from '../../utils/logger';
 import { getElectronAPI } from '../../utils/electronAPI';
@@ -47,6 +54,11 @@ interface NameChangeRecord {
 }
 
 const OCR_REVIEW_COACHMARK_KEY = 'wst_ocr_review_helper_seen_v3';
+
+type RosterMatchMeta = {
+  type: 'exact' | 'fuzzy' | 'new';
+  label: string;
+};
 
 export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
   data,
@@ -81,6 +93,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
   const lightboxFocusTrapRef = useFocusTrap<HTMLDivElement>(lightboxIdx !== null);
   const { announce } = useAriaLiveRegion(true);
   const [newTeammateName, setNewTeammateName] = useState('');
+  const [mergeTargets, setMergeTargets] = useState<Record<string, string>>({});
   const [showCoachmark, setShowCoachmark] = useState(false);
   const [draggedOpponentPlayer, setDraggedOpponentPlayer] = useState<{
     teamIndex: number;
@@ -161,6 +174,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
     const normalized = { ...data, reachModifiers: mergedMods };
     setEditedData(normalized);
     originalDataRef.current = normalized;
+    setMergeTargets({});
   }, [data]);
 
   useEffect(() => {
@@ -375,17 +389,84 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
     setDraggedOpponentPlayer(null);
     setDragHoverTeamIndex(null);
   };
-  const getRosterMatchMeta = (name: string) => {
-    const normalized = normalizeOcrName(name || '');
-    if (!normalized) return { type: 'new' as const, label: '' };
+  const getTeammateMergeKey = (index: number) => `teammate_${index}`;
+  const getOpponentMergeKey = (teamIndex: number, playerIndex: number) => `opponent_${teamIndex}_${playerIndex}`;
+
+  const updateMergeTarget = (key: string, value: string) => {
+    setMergeTargets((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const resolveRosterMergeTarget = (value: string): string | null => {
+    const normalized = normalizeOcrName(value || '').toLowerCase();
+    if (!normalized) return null;
     const exact = pilotRegistry.find((pilot) => (
-      normalizeOcrName(pilot).toLowerCase() === normalized.toLowerCase()
+      normalizeOcrName(pilot).toLowerCase() === normalized
     ));
-    if (exact) return { type: 'exact' as const, label: exact };
-    const threshold = normalized.length > 8 ? 2 : 1;
-    const fuzzy = findClosestMatch(normalized, pilotRegistry, threshold);
-    if (fuzzy) return { type: 'fuzzy' as const, label: fuzzy };
-    return { type: 'new' as const, label: normalized };
+    return exact || null;
+  };
+
+  const applyTeammateMergeTarget = (index: number) => {
+    const key = getTeammateMergeKey(index);
+    const rosterTarget = resolveRosterMergeTarget(mergeTargets[key] || '');
+    if (!rosterTarget) return;
+    updateTeammate(index, rosterTarget);
+    setMergeTargets((prev) => ({ ...prev, [key]: rosterTarget }));
+  };
+
+  const applyOpponentMergeTarget = (teamIndex: number, playerIndex: number) => {
+    const key = getOpponentMergeKey(teamIndex, playerIndex);
+    const rosterTarget = resolveRosterMergeTarget(mergeTargets[key] || '');
+    if (!rosterTarget) return;
+    updateOpponentPlayer(teamIndex, playerIndex, rosterTarget);
+    setMergeTargets((prev) => ({ ...prev, [key]: rosterTarget }));
+  };
+
+  const approveTeammateFuzzy = (index: number, label: string) => {
+    if (!label) return;
+    updateTeammate(index, label);
+  };
+
+  const approveOpponentFuzzy = (teamIndex: number, playerIndex: number, label: string) => {
+    if (!label) return;
+    updateOpponentPlayer(teamIndex, playerIndex, label);
+  };
+
+  const getRosterMatchMeta = (name: string): RosterMatchMeta => {
+    const normalized = normalizeOcrName(name || '');
+    if (!normalized) return { type: 'new', label: '' };
+
+    const normalizedLower = normalized.toLowerCase();
+    const exact = pilotRegistry.find((pilot) => (
+      normalizeOcrName(pilot).toLowerCase() === normalizedLower
+    ));
+    if (exact) return { type: 'exact', label: exact };
+
+    const similarityThreshold = getAdaptiveNameSimilarityThreshold(normalizedLower.length);
+    let bestCandidate: { label: string; score: number } | null = null;
+
+    for (const pilot of pilotRegistry) {
+      const combinedScore = combinedNameSimilarityScore(normalizedLower, pilot);
+
+      if (!bestCandidate || combinedScore > bestCandidate.score) {
+        bestCandidate = { label: pilot, score: combinedScore };
+      }
+    }
+
+    if (bestCandidate && bestCandidate.score >= similarityThreshold) {
+      return { type: 'fuzzy', label: bestCandidate.label };
+    }
+
+    const distanceThreshold = getAdaptiveNameDistanceThreshold(normalizedLower.length);
+    const distanceCandidate = findClosestMatch(normalizedLower, pilotRegistry, distanceThreshold);
+    if (distanceCandidate) {
+      const distanceSimilarity = combinedNameSimilarityScore(normalizedLower, distanceCandidate);
+      const fallbackThreshold = Math.max(56, similarityThreshold - 8);
+      if (distanceSimilarity >= fallbackThreshold) {
+        return { type: 'fuzzy', label: distanceCandidate };
+      }
+    }
+
+    return { type: 'new', label: normalized };
   };
   const getRosterMatchHint = (meta: ReturnType<typeof getRosterMatchMeta>) => {
     if (meta.type === 'exact') {
@@ -592,7 +673,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
           aria-modal="true"
           aria-labelledby={dialogTitleId}
           aria-describedby={dialogDescriptionId}
-          className="md3-dialog rounded-modal shadow-2xl max-w-2xl w-full max-h-90vh my-2 overflow-hidden flex flex-col relative z-0"
+          className="ocr-review-dialog md3-dialog rounded-modal shadow-2xl max-w-2xl w-full max-h-90vh my-2 overflow-visible flex flex-col relative z-0"
         >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -628,21 +709,21 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
         <p id={dialogDescriptionId} className="a11y-sr-only">
           Review OCR teammates, opponents, ship, and modifiers. Use Tab to navigate controls, Escape to close, and Control Enter to apply.
         </p>
-        <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar md3-dialog-content">
-          <div className="grid grid-cols-4 gap-2">
-            <div className="md3-surface-high rounded-card p-2 text-center">
+        <div className="ocr-review-body flex-1 min-h-0 overflow-y-auto space-y-4 custom-scrollbar md3-dialog-content">
+          <div className="grid grid-cols-4 gap-2 ocr-review-metrics-grid">
+            <div className="ocr-review-metric-card md3-surface-high rounded-card p-2 text-center">
               <div className="text-label-xs uppercase opacity-60">Ship</div>
               <div className={`text-label-sm font-bold ${getConfidenceColor(confidenceSummary.shipConf)}`}>{Math.round(confidenceSummary.shipConf)}%</div>
             </div>
-            <div className="md3-surface-high rounded-card p-2 text-center">
+            <div className="ocr-review-metric-card md3-surface-high rounded-card p-2 text-center">
               <div className="text-label-xs uppercase opacity-60">Team</div>
               <div className={`text-label-sm font-bold ${getConfidenceColor(confidenceSummary.teammateConf)}`}>{Math.round(confidenceSummary.teammateConf)}%</div>
             </div>
-            <div className="md3-surface-high rounded-card p-2 text-center">
+            <div className="ocr-review-metric-card md3-surface-high rounded-card p-2 text-center">
               <div className="text-label-xs uppercase opacity-60">Opponents</div>
               <div className={`text-label-sm font-bold ${getConfidenceColor(confidenceSummary.opponentPlayerConf)}`}>{Math.round(confidenceSummary.opponentPlayerConf)}%</div>
             </div>
-            <div className="md3-surface-high rounded-card p-2 text-center">
+            <div className="ocr-review-metric-card md3-surface-high rounded-card p-2 text-center">
               <div className="text-label-xs uppercase opacity-60">Modifiers</div>
               <div className={`text-label-sm font-bold ${getConfidenceColor(confidenceSummary.modConf)}`}>{Math.round(confidenceSummary.modConf)}%</div>
             </div>
@@ -713,7 +794,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
             </div>
           )}
           {screenshots && screenshots.length > 0 && (
-            <div className="md3-card rounded-card overflow-hidden sticky top-0 z-10 backdrop-blur-sm">
+            <div className="md3-card rounded-card overflow-hidden sticky top-0 z-10 bg-md-sys-surface-container-highest border border-md-sys-outline/15">
               <button
                 onClick={() => toggleSection('screenshots')}
                 className="w-full p-3 flex items-center justify-between hover:bg-md-sys-on-surface/5 transition-colors"
@@ -859,7 +940,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
               </div>
             )}
           </div>
-          <div className="md3-card rounded-card overflow-hidden">
+          <div className="md3-card rounded-card overflow-visible">
             <button
               onClick={() => toggleSection('teammates')}
               className="w-full p-3 flex items-center justify-between hover:bg-md-sys-on-surface/5 transition-colors"
@@ -881,10 +962,13 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                   editedData.teammates.map((teammate, index) => {
                     const matchMeta = getRosterMatchMeta(teammate.name);
                     const matchHint = getRosterMatchHint(matchMeta);
+                    const mergeKey = getTeammateMergeKey(index);
+                    const mergeValue = mergeTargets[mergeKey] || '';
+                    const mergeTarget = resolveRosterMergeTarget(mergeValue);
                     return (
                       <div
                         key={index}
-                        className="flex items-center gap-2 md3-surface-high rounded-card p-2"
+                        className="ocr-review-entity-row flex items-center gap-2 md3-surface-high rounded-card p-2"
                       >
                         <div className="flex-1 min-w-0">
                           <input
@@ -892,19 +976,49 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                             value={teammate.name}
                             onChange={(e) => updateTeammate(index, e.target.value)}
                             list="pilot-suggestions"
-                            className="md3-textfield md3-textfield--outlined w-full text-body"
+                            className="md3-textfield md3-textfield--outlined w-full text-body ocr-review-input"
                           />
                           <div className={`mt-1 text-label-xs ${matchHint.tone}`}>
                             {matchHint.text}
+                          </div>
+                          <div className="ocr-merge-row mt-1.5 flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              value={mergeValue}
+                              onChange={(event) => updateMergeTarget(mergeKey, event.target.value)}
+                              list="pilot-suggestions"
+                              placeholder="Merge to roster name"
+                              className="md3-textfield md3-textfield--outlined flex-1 text-label-sm ocr-review-input"
+                              aria-label={`Merge teammate ${index + 1} to roster`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => applyTeammateMergeTarget(index)}
+                              className="ocr-merge-apply-btn md3-btn-text text-label-xs px-2 py-1 whitespace-nowrap"
+                              disabled={!mergeTarget}
+                              aria-label={`Apply merge for teammate ${index + 1}`}
+                            >
+                              Merge To
+                            </button>
                           </div>
                         </div>
                         {matchMeta.type === 'exact' && (
                           <span className="text-label-sm text-success font-semibold">Roster</span>
                         )}
                         {matchMeta.type === 'fuzzy' && (
-                          <span className="text-label-sm text-warning font-semibold" title={`Fuzzy match: ${matchMeta.label}`}>
-                            ~ {matchMeta.label}
-                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="text-label-sm text-warning font-semibold" title={`Fuzzy match: ${matchMeta.label}`}>
+                              ~ {matchMeta.label}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => approveTeammateFuzzy(index, matchMeta.label)}
+                              className="md3-btn-text text-label-xs px-2 py-1"
+                              aria-label={`Approve fuzzy match for teammate ${index + 1}`}
+                            >
+                              Approve
+                            </button>
+                          </div>
                         )}
                         {matchMeta.type === 'new' && (
                           <button
@@ -963,7 +1077,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
               </div>
             )}
           </div>
-          <div className="md3-card rounded-card overflow-hidden">
+          <div className="md3-card rounded-card overflow-visible">
             <button
               onClick={() => toggleSection('opponents')}
               className="w-full p-3 flex items-center justify-between hover:bg-md-sys-on-surface/5 transition-colors"
@@ -985,7 +1099,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                   editedData.opponentTeams.map((team, teamIndex) => (
                     <div
                       key={teamIndex}
-                      className={`md3-surface-high rounded-card p-2 ${
+                      className={`ocr-review-team-card md3-surface-high rounded-card p-2 ${
                         dragHoverTeamIndex === teamIndex ? 'ring-1 ring-md-sys-primary/30' : ''
                       }`}
                       onDragOver={(event) => allowOpponentDrop(event, teamIndex)}
@@ -1020,15 +1134,19 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                         <select
                           value={team.color || 'unknown'}
                           onChange={(e) => updateOpponentTeam(teamIndex, { color: e.target.value as TeamColor })}
-                          className="md3-textfield md3-textfield--outlined w-24 text-body"
+                          className="md3-textfield md3-textfield--outlined w-24 text-body font-semibold bg-md-sys-surface-container-highest text-md-sys-on-surface"
+                          style={{
+                            color: 'var(--md-sys-color-on-surface)',
+                            backgroundColor: 'var(--md-sys-color-surface-container-highest)',
+                          }}
                         >
-                          <option value="red">Red</option>
-                          <option value="orange">Orange</option>
-                          <option value="yellow">Yellow</option>
-                          <option value="green">Green</option>
-                          <option value="blue">Blue</option>
-                          <option value="purple">Purple</option>
-                          <option value="unknown">Unknown</option>
+                          <option value="red" className="text-md-sys-on-surface bg-md-sys-surface-container-highest">Red</option>
+                          <option value="orange" className="text-md-sys-on-surface bg-md-sys-surface-container-highest">Orange</option>
+                          <option value="yellow" className="text-md-sys-on-surface bg-md-sys-surface-container-highest">Yellow</option>
+                          <option value="green" className="text-md-sys-on-surface bg-md-sys-surface-container-highest">Green</option>
+                          <option value="blue" className="text-md-sys-on-surface bg-md-sys-surface-container-highest">Blue</option>
+                          <option value="purple" className="text-md-sys-on-surface bg-md-sys-surface-container-highest">Purple</option>
+                          <option value="unknown" className="text-md-sys-on-surface bg-md-sys-surface-container-highest">Unknown</option>
                         </select>
                         <button
                           type="button"
@@ -1048,46 +1166,90 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                           (() => {
                             const matchMeta = getRosterMatchMeta(player.name);
                             const matchHint = getRosterMatchHint(matchMeta);
+                            const mergeKey = getOpponentMergeKey(teamIndex, playerIndex);
+                            const mergeValue = mergeTargets[mergeKey] || '';
+                            const mergeTarget = resolveRosterMergeTarget(mergeValue);
                             return (
                               <div
                                 key={playerIndex}
-                                className={`rounded-control border border-md-sys-outline/20 p-1.5 bg-md-sys-surface cursor-grab active:cursor-grabbing flex items-center gap-2 ${
+                                className={`ocr-review-entity-row rounded-control border border-md-sys-outline/20 p-1.5 bg-md-sys-surface flex items-center gap-2 ${
                                   draggedOpponentPlayer?.teamIndex === teamIndex
                                   && draggedOpponentPlayer?.playerIndex === playerIndex
                                     ? 'opacity-60'
                                     : ''
                                 }`}
-                                draggable
-                                onDragStart={(event) => {
-                                  event.dataTransfer.effectAllowed = 'move';
-                                  setDraggedOpponentPlayer({ teamIndex, playerIndex });
-                                }}
-                                onDragEnd={() => {
-                                  setDraggedOpponentPlayer(null);
-                                  setDragHoverTeamIndex(null);
-                                }}
                                 onDragOver={(event) => allowOpponentDrop(event, teamIndex)}
                                 onDrop={(event) => dropOpponentPlayer(event, teamIndex, playerIndex)}
                               >
+                                <button
+                                  type="button"
+                                  draggable
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onDragStart={(event) => {
+                                    event.dataTransfer.effectAllowed = 'move';
+                                    setDraggedOpponentPlayer({ teamIndex, playerIndex });
+                                  }}
+                                  onDragEnd={() => {
+                                    setDraggedOpponentPlayer(null);
+                                    setDragHoverTeamIndex(null);
+                                  }}
+                                  className="md3-icon-btn h-6 w-6 text-md-sys-on-surface/60 cursor-grab active:cursor-grabbing shrink-0"
+                                  title="Drag to move player"
+                                  aria-label={`Drag opponent ${playerIndex + 1} in team ${teamIndex + 1}`}
+                                >
+                                  <GripVertical size={12} />
+                                </button>
                                 <div className="flex-1 min-w-0 pl-1">
                                   <input
                                     type="text"
                                     value={player.name}
                                     onChange={(e) => updateOpponentPlayer(teamIndex, playerIndex, e.target.value)}
+                                    onKeyDown={(event) => event.stopPropagation()}
                                     list="pilot-suggestions"
-                                    className="md3-textfield md3-textfield--outlined w-full text-body"
+                                    className="md3-textfield md3-textfield--outlined w-full text-body ocr-review-input"
                                   />
                                   <div className={`mt-1 text-label-xs ${matchHint.tone}`}>
                                     {matchHint.text}
+                                  </div>
+                                  <div className="ocr-merge-row mt-1.5 flex items-center gap-1.5">
+                                    <input
+                                      type="text"
+                                      value={mergeValue}
+                                      onChange={(event) => updateMergeTarget(mergeKey, event.target.value)}
+                                      onKeyDown={(event) => event.stopPropagation()}
+                                      list="pilot-suggestions"
+                                      placeholder="Merge to roster name"
+                                      className="md3-textfield md3-textfield--outlined flex-1 text-label-sm ocr-review-input"
+                                      aria-label={`Merge opponent ${playerIndex + 1} on team ${teamIndex + 1} to roster`}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => applyOpponentMergeTarget(teamIndex, playerIndex)}
+                                      className="ocr-merge-apply-btn md3-btn-text text-label-xs px-2 py-1 whitespace-nowrap"
+                                      disabled={!mergeTarget}
+                                      aria-label={`Apply merge for opponent ${playerIndex + 1} on team ${teamIndex + 1}`}
+                                    >
+                                      Merge To
+                                    </button>
                                   </div>
                                 </div>
                                 {matchMeta.type === 'exact' && (
                                   <span className="text-label-sm text-success font-semibold">Roster</span>
                                 )}
                                 {matchMeta.type === 'fuzzy' && (
-                                  <span className="text-label-sm text-warning font-semibold" title={`Fuzzy match: ${matchMeta.label}`}>
-                                    ~ {matchMeta.label}
-                                  </span>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <span className="text-label-sm text-warning font-semibold" title={`Fuzzy match: ${matchMeta.label}`}>
+                                      ~ {matchMeta.label}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => approveOpponentFuzzy(teamIndex, playerIndex, matchMeta.label)}
+                                      className="md3-btn-text text-label-xs px-2 py-1"
+                                      aria-label={`Approve fuzzy match for opponent ${playerIndex + 1} on team ${teamIndex + 1}`}
+                                    >
+                                      Approve
+                                    </button>
+                                  </div>
                                 )}
                                 {matchMeta.type === 'new' && (
                                   <button
@@ -1170,7 +1332,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
             </div>
           )}
         </div>
-        <div className="md3-dialog-actions">
+        <div className="md3-dialog-actions ocr-review-actions">
           <button
             onClick={onCancel}
             className="md3-btn-text"

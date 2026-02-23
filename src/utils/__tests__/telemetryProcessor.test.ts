@@ -265,9 +265,7 @@ describe('processTelemetryEvent', () => {
         ClientTimestamp: Date.now() / 1000,
       };
       processTelemetryEvent(event, actions, context);
-      expect(actions.setToast).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'info' })
-      );
+      expect(actions.setToast).not.toHaveBeenCalled();
     });
   });
 });

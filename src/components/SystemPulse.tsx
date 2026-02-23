@@ -17,9 +17,21 @@ import { runtimeConfig } from '../config/runtimeConfig';
  *   - Vision: whether there are pending OCR reviews waiting to be applied.
  *   - Mission: whether a match is currently in progress.
  *   - Updates: Electron auto-updater status.
- *   - Telemetry: solid = connected (log exists), blinking = receiving (recent events within ~45s).
+ *   - Telemetry: lit/blinking = receiving (recent events), with explicit receiving/connected/offline state tooltips.
  */
 const TELEMETRY_RECEIVING_MS = runtimeConfig.systemPulse.telemetryReceivingWindowMs;
+type TelemetryActivityState = 'receiving' | 'connected' | 'offline';
+
+const getTelemetryActivityState = (
+    exists: boolean | undefined,
+    lastEventAt: number | undefined,
+): TelemetryActivityState => {
+    if (!exists) return 'offline';
+    if (typeof lastEventAt === 'number' && Number.isFinite(lastEventAt) && (Date.now() - lastEventAt) <= TELEMETRY_RECEIVING_MS) {
+        return 'receiving';
+    }
+    return 'connected';
+};
 
 const SystemPulse: React.FC = () => {
     const { updateStatus, enableAutoLogRecording, telemetryStatus } = useUIState();
@@ -108,20 +120,25 @@ const SystemPulse: React.FC = () => {
             tooltip: `Updates: ${updateStatus === 'available' ? 'New version available' : updateStatus === 'downloaded' ? 'Restart to apply' : updateStatus === 'checking' ? 'Checking...' : 'Up to date'}`,
         },
         (() => {
-            const connected = !!telemetryStatus?.exists;
-            const lastAt = telemetryStatus?.lastEventAt;
-            const receiving = !!lastAt && (Date.now() - lastAt) < TELEMETRY_RECEIVING_MS;
+            const telemetryActivity = getTelemetryActivityState(
+                telemetryStatus?.exists,
+                telemetryStatus?.lastEventAt,
+            );
+            const isReceiving = telemetryActivity === 'receiving';
+            const isConnected = telemetryActivity === 'connected';
             return {
                 id: 'session',
                 label: '',
                 icon: <Terminal size={12} />,
-                active: connected,
-                color: connected ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
-                dotVar: connected ? '--indicator-session' : '--indicator-idle',
-                pulse: connected ? receiving : false,
-                tooltip: connected
-                    ? `Session: ${receiving ? 'receiving telemetry' : 'connected'}`
-                    : 'Session: not connected',
+                active: isReceiving,
+                color: isReceiving ? 'text-md-sys-on-surface/85' : isConnected ? 'text-md-sys-on-surface/70' : 'text-md-sys-on-surface/60',
+                dotVar: isReceiving ? '--indicator-session' : '--indicator-idle',
+                pulse: isReceiving,
+                tooltip: telemetryActivity === 'receiving'
+                    ? 'Session: receiving telemetry'
+                    : telemetryActivity === 'connected'
+                        ? 'Session: connected (idle)'
+                        : 'Session: offline',
             };
         })(),
         {

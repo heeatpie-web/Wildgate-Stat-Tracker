@@ -71,6 +71,40 @@ describe('createDataSlice', () => {
       expect(store.getState().matches[0].result).toBe('Loss');
     });
 
+    it('assigns stable canonical match numbers to new matches', () => {
+      store.getState().addMatch(createMatch({ id: 1 }));
+      store.getState().addMatch(createMatch({ id: 2 }));
+      const [latest, first] = store.getState().matches;
+      expect(first.canonicalMatchNumber).toBe(1);
+      expect(latest.canonicalMatchNumber).toBe(2);
+      expect(store.getState().nextCanonicalMatchNumber).toBe(3);
+    });
+
+    it('preserves canonical match number on update when omitted', () => {
+      store.getState().addMatch(createMatch({ id: 7 }));
+      const initial = store.getState().matches[0];
+      expect(initial.canonicalMatchNumber).toBe(1);
+      store.getState().updateMatch({ ...initial, result: 'Loss', canonicalMatchNumber: undefined });
+      const updated = store.getState().matches[0];
+      expect(updated.canonicalMatchNumber).toBe(1);
+      expect(updated.result).toBe('Loss');
+    });
+
+    it('backfills missing canonical numbers in setMatches and keeps next counter monotonic', () => {
+      const matches = [
+        createMatch({ id: 11, timestamp: 1000, canonicalMatchNumber: 4 }),
+        createMatch({ id: 12, timestamp: 900 }),
+        createMatch({ id: 13, timestamp: 1100 }),
+      ];
+      store.getState().setMatches(matches);
+      const state = store.getState();
+      const byId = new Map(state.matches.map((match) => [match.id, match]));
+      expect(byId.get(11)?.canonicalMatchNumber).toBe(4);
+      expect(byId.get(12)?.canonicalMatchNumber).toBe(5);
+      expect(byId.get(13)?.canonicalMatchNumber).toBe(6);
+      expect(state.nextCanonicalMatchNumber).toBe(7);
+    });
+
     it('deletes a match by id', () => {
       store.getState().addMatch(createMatch({ id: 1 }));
       store.getState().addMatch(createMatch({ id: 2 }));

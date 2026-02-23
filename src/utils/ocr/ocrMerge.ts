@@ -4,24 +4,14 @@
  */
 
 import type { OCRExtractedData, ExtractedPlayer, ExtractedOpponentTeam, ExtractedModifier } from './ocrTypes';
+import { deduplicatePlayersByLikelyName } from './playerNameMatching';
 
 /**
- * Deduplicate players by name (case-insensitive)
- * Keeps the entry with the highest confidence
+ * Deduplicate players by likely OCR-normalized name
+ * Keeps highest confidence while preferring cleaner display names
  */
 function deduplicatePlayers(players: ExtractedPlayer[]): ExtractedPlayer[] {
-  const playerMap = new Map<string, ExtractedPlayer>();
-
-  for (const player of players) {
-    const key = player.name.toLowerCase();
-    const existing = playerMap.get(key);
-
-    if (!existing || player.confidence > existing.confidence) {
-      playerMap.set(key, player);
-    }
-  }
-
-  return Array.from(playerMap.values());
+  return deduplicatePlayersByLikelyName(players);
 }
 
 /**

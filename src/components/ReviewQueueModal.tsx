@@ -1,4 +1,4 @@
-import React, { useId, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { Check, X, Edit2, AlertTriangle, Trash2, Image as ImageIcon } from 'lucide-react';
@@ -36,6 +36,8 @@ interface LearningReviewItem {
 }
 
 type ReviewItem = PendingReview | UnknownReviewItem | LearningReviewItem;
+const AUTO_MERGE_APPROVAL_THRESHOLD = 83;
+const FUZZY_READY_APPROVAL_MIN = 70;
 
 const isUnknownReview = (review: ReviewItem): review is UnknownReviewItem =>
     review.type === 'unknown_id';
@@ -45,6 +47,8 @@ const isLearningReview = (review: ReviewItem): review is LearningReviewItem =>
 
 const isPendingReviewItem = (review: ReviewItem): review is PendingReview =>
     !isUnknownReview(review) && !isLearningReview(review);
+const isEditableRosterReview = (review: ReviewItem): review is PendingReview =>
+    isPendingReviewItem(review) && (review.type === 'player_name' || review.type === 'roster_candidate');
 
 export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) => {
     const {
@@ -71,6 +75,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
     const dialogTitleId = useId();
     const dialogDescriptionId = useId();
     const sourcePreviewTitleId = useId();
+    const autoApprovedRosterIdsRef = useRef<Set<string>>(new Set());
     const focusTrapRef = useFocusTrap<HTMLDivElement>(!sourcePreview);
     const sourcePreviewFocusTrapRef = useFocusTrap<HTMLDivElement>(sourcePreview != null);
     const { announce } = useAriaLiveRegion(true);
@@ -89,6 +94,29 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             out.push(normalized);
         });
         return out;
+    };
+    const sessionTeamKeys = useMemo(
+        () => Object.keys(sessionTeams || {}).filter((key) => key.trim().length > 0),
+        [sessionTeams]
+    );
+    const friendlyTeamKey = useMemo(
+        () => sessionTeamKeys.find((key) => normalizeName(key).toLowerCase() === 'friendly')
+            || sessionTeamKeys.find((key) => normalizeName(key).toLowerCase().includes('friendly'))
+            || null,
+        [sessionTeamKeys]
+    );
+    const resolveTeamForName = (name: string): string | null => {
+        const normalizedTarget = normalizeName(name);
+        if (!normalizedTarget) return null;
+        for (const teamKey of sessionTeamKeys) {
+            const names = Array.isArray(sessionTeams?.[teamKey]) ? sessionTeams[teamKey] : [];
+            if (names.some((existing) => namesEqual(existing, normalizedTarget))) return teamKey;
+        }
+        return null;
+    };
+    const formatTeamLabel = (teamKey: string): string => {
+        if (friendlyTeamKey && teamKey === friendlyTeamKey) return 'Friendly Team';
+        return normalizeName(teamKey) || teamKey;
     };
     const formatCaptureTime = (timestamp?: number) => {
         if (!timestamp || !Number.isFinite(timestamp)) return '';
@@ -195,6 +223,33 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         setSelectedOpponents(dedupeNames(selectedOpponents.filter(n => !namesEqual(n, normalizedTarget))));
     };
 
+    const assignNameToSessionTeam = (name: string, targetTeamKey: string | null) => {
+        const normalizedName = normalizeName(name);
+        if (!normalizedName) return;
+        const nextTeams = { ...sessionTeams };
+        Object.keys(nextTeams).forEach((teamKey) => {
+            const current = Array.isArray(nextTeams[teamKey]) ? nextTeams[teamKey] : [];
+            nextTeams[teamKey] = dedupeNames(current.filter((entry) => !namesEqual(entry, normalizedName)));
+        });
+        if (targetTeamKey && Object.prototype.hasOwnProperty.call(nextTeams, targetTeamKey)) {
+            const bucket = Array.isArray(nextTeams[targetTeamKey]) ? [...nextTeams[targetTeamKey]] : [];
+            bucket.push(normalizedName);
+            nextTeams[targetTeamKey] = dedupeNames(bucket);
+        }
+        setSessionTeams(nextTeams);
+
+        const nextFriendly = friendlyTeamKey
+            ? dedupeNames(nextTeams[friendlyTeamKey] || [])
+            : dedupeNames(selectedTeammates.filter((entry) => !namesEqual(entry, normalizedName)));
+        const nextOpponents = dedupeNames(
+            Object.entries(nextTeams)
+                .filter(([teamKey]) => !friendlyTeamKey || teamKey !== friendlyTeamKey)
+                .flatMap(([, names]) => (Array.isArray(names) ? names : []))
+        );
+        setSelectedTeammates(nextFriendly);
+        setSelectedOpponents(nextOpponents);
+    };
+
     const handleConfirm = (review: ReviewItem) => {
         if (isUnknownReview(review)) {
             notifyReviewQueue('Please rename to identify this item', 'info');
@@ -219,6 +274,16 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         }
 
         if (review.type === 'roster_candidate') {
+            const autoMergeTarget = normalizeName(review.bestMatch || '');
+            const autoMergeScore = Number(review.bestScore || 0);
+            if (autoMergeTarget && autoMergeScore >= AUTO_MERGE_APPROVAL_THRESHOLD) {
+                replaceNameInSession(review.value, autoMergeTarget);
+                addToRegistry(autoMergeTarget);
+                removePendingReview(review.id);
+                notifyReviewQueue(`Auto-merged "${review.value}" into "${autoMergeTarget}" (${Math.round(autoMergeScore)}%)`, 'success');
+                announce(`Auto-merged ${review.value} into ${autoMergeTarget}.`, 'polite');
+                return;
+            }
             const normalized = normalizeName(review.value);
             if (normalized) addToRegistry(normalized);
             removePendingReview(review.id);
@@ -295,6 +360,50 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         announce(`Updated item to ${normalizedEditValue}.`, 'polite');
     };
 
+    const handleApproveRosterSuggestion = (review: PendingReview) => {
+        if (review.type !== 'roster_candidate') return;
+        const target = normalizeName(review.bestMatch || '');
+        const score = Number(review.bestScore || 0);
+        if (!target) {
+            notifyReviewQueue('No best-match suggestion is available for this entry.', 'warning');
+            announce('No best match is available yet.', 'assertive');
+            return;
+        }
+        replaceNameInSession(review.value, target);
+        addToRegistry(target);
+        removePendingReview(review.id);
+        notifyReviewQueue(`Approved merge "${review.value}" -> "${target}"${score > 0 ? ` (${Math.round(score)}%)` : ''}`, 'success');
+        announce(`Approved merge from ${review.value} to ${target}.`, 'polite');
+    };
+
+    useEffect(() => {
+        const currentPendingIds = new Set(prioritizedPending.map((review) => review.id));
+        autoApprovedRosterIdsRef.current.forEach((reviewId) => {
+            if (!currentPendingIds.has(reviewId)) {
+                autoApprovedRosterIdsRef.current.delete(reviewId);
+            }
+        });
+
+        const nextAutoMergeReview = prioritizedPending.find((review) => {
+            if (review.type !== 'roster_candidate') return false;
+            if (autoApprovedRosterIdsRef.current.has(review.id)) return false;
+            const score = Number(review.bestScore || 0);
+            const target = normalizeName(review.bestMatch || '');
+            return score >= AUTO_MERGE_APPROVAL_THRESHOLD && target.length > 0;
+        });
+
+        if (!nextAutoMergeReview) return;
+
+        autoApprovedRosterIdsRef.current.add(nextAutoMergeReview.id);
+        const target = normalizeName(nextAutoMergeReview.bestMatch || '');
+        const score = Number(nextAutoMergeReview.bestScore || 0);
+        replaceNameInSession(nextAutoMergeReview.value, target);
+        addToRegistry(target);
+        removePendingReview(nextAutoMergeReview.id);
+        notifyReviewQueue(`Auto-approved merge "${nextAutoMergeReview.value}" -> "${target}" (${Math.round(score)}%)`, 'success');
+        announce(`Auto-approved merge from ${nextAutoMergeReview.value} to ${target}.`, 'polite');
+    }, [announce, addToRegistry, prioritizedPending, removePendingReview]);
+
     const startEdit = (review: ReviewItem) => {
         setEditingId(review.id);
         setEditValue(isUnknownReview(review) ? "" : review.value);
@@ -331,7 +440,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                 aria-modal="true"
                 aria-labelledby={dialogTitleId}
                 aria-describedby={dialogDescriptionId}
-                className="md3-dialog rounded-modal w-full max-w-lg overflow-hidden max-h-80vh"
+                className="review-queue-dialog md3-dialog rounded-modal w-full max-w-lg overflow-hidden max-h-80vh"
                 onClick={e => e.stopPropagation()}
             >
                 <div className="md3-banner md3-banner--warn">
@@ -350,11 +459,13 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                     Review uncertain OCR and mapping items. Use Tab to move through actions and Escape to close.
                 </p>
 
-                <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar md3-dialog-content">
+                <div className="review-queue-body flex-1 overflow-y-auto space-y-3 custom-scrollbar md3-dialog-content">
                     {allItems.map(review => {
                         const sourceDetails = getReviewSourceDetails(review);
+                        const isEditing = editingId === review.id;
+                        const useInlineNameEdit = isEditing && isEditableRosterReview(review);
                         return (
-                        <div key={review.id} className="md3-card rounded-card p-3 border border-md-sys-outline-variant/30 animate-fade-in">
+                        <div key={review.id} className="review-queue-item md3-card rounded-card p-3 border border-md-sys-outline-variant/30 animate-fade-in">
                             <div className="flex justify-between items-start mb-2">
                                 <div>
                                     <div className="text-label-sm font-black uppercase text-md-sys-on-surface/40 tracking-wider mb-1">
@@ -366,12 +477,14 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                         </div>
                                     )}
                                 </div>
-                                <div className="flex gap-1">
-                                    {editingId === review.id ? (
-                                        <>
-                                            <button onClick={() => handleSaveEdit(review)} className="md3-icon-btn text-success" title="Save" aria-label="Save review edit"><Check size={16} /></button>
-                                            <button onClick={() => setEditingId(null)} className="md3-icon-btn" title="Cancel" aria-label="Cancel review edit"><X size={16} /></button>
-                                        </>
+                                <div className="review-queue-actions flex gap-1">
+                                    {isEditing ? (
+                                        useInlineNameEdit ? null : (
+                                            <>
+                                                <button onClick={() => handleSaveEdit(review)} className="md3-icon-btn text-success" title="Save" aria-label="Save review edit"><Check size={16} /></button>
+                                                <button onClick={() => setEditingId(null)} className="md3-icon-btn" title="Cancel" aria-label="Cancel review edit"><X size={16} /></button>
+                                            </>
+                                        )
                                     ) : (
                                         <>
                                             {/* For Unknowns, Check button enters edit mode essentially */}
@@ -385,23 +498,55 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                 </div>
                             </div>
 
-                            {editingId === review.id ? (
+                            {useInlineNameEdit ? (
+                                <div className="flex items-center gap-2 review-queue-inline-edit">
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={editValue}
+                                        onChange={e => setEditValue(e.target.value)}
+                                        className="review-queue-edit-input md3-textfield md3-textfield--outlined flex-1 font-semibold text-base"
+                                        aria-label={`Edit name for ${review.value}`}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSaveEdit(review)}
+                                        className="md3-btn-tonal px-2.5 py-1.5 text-label-sm font-bold whitespace-nowrap"
+                                        aria-label={`Save edited name for ${review.value}`}
+                                    >
+                                        Save
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditingId(null)}
+                                        className="md3-btn-outlined px-2.5 py-1.5 text-label-sm font-bold whitespace-nowrap"
+                                        aria-label={`Cancel editing ${review.value}`}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            ) : isEditing ? (
                                 <input
                                     autoFocus
                                     type="text"
                                     placeholder={isUnknownReview(review) ? "Enter Name..." : ""}
                                     value={editValue}
                                     onChange={e => setEditValue(e.target.value)}
-                                    className="md3-textfield md3-textfield--outlined w-full font-semibold text-base"
+                                    className="review-queue-edit-input md3-textfield md3-textfield--outlined w-full font-semibold text-base"
                                 />
                             ) : (
-                                <div className="text-lg font-bold text-md-sys-on-surface break-all">
+                                <button
+                                    type="button"
+                                    onClick={() => startEdit(review)}
+                                    className="text-lg font-bold text-md-sys-on-surface break-all text-left hover:underline decoration-dotted underline-offset-4"
+                                    title="Click to edit"
+                                >
                                     {review.value}
-                                </div>
+                                </button>
                             )}
 
-                            {editingId !== review.id && sourceDetails && (
-                                <div className="mt-2 rounded-control md3-surface-high px-2.5 py-2 flex items-start justify-between gap-2">
+                            {!isEditing && sourceDetails && (
+                                <div className="mt-2 rounded-control md3-surface-high px-2.5 py-2 flex items-start justify-between gap-2 review-queue-source-card">
                                     <div className="min-w-0">
                                         <div className="text-label-sm font-semibold text-md-sys-on-surface/70 truncate">
                                             Source: {sourceDetails.screenshotLabel}
@@ -430,18 +575,85 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                 </div>
                             )}
 
-                            {editingId !== review.id && review.type === 'roster_candidate' && (
+                            {isEditableRosterReview(review)
+                                && sessionTeamKeys.length > 0 && (
+                                    <div className="mt-2 rounded-control md3-surface-high px-2.5 py-2 flex items-center gap-2 review-queue-assign-row">
+                                        <span className="text-label-sm font-semibold text-md-sys-on-surface/65 whitespace-nowrap">
+                                            Assign Team
+                                        </span>
+                                        <select
+                                            value={resolveTeamForName(review.value) || ''}
+                                            onChange={(event) => assignNameToSessionTeam(review.value, event.target.value || null)}
+                                            className="review-queue-team-select md3-textfield md3-textfield--outlined flex-1 text-label-sm font-semibold min-w-0"
+                                            aria-label={`Assign ${review.value} to a team`}
+                                        >
+                                            <option value="">No team assignment</option>
+                                            {sessionTeamKeys.map((teamKey) => (
+                                                <option key={teamKey} value={teamKey}>
+                                                    {formatTeamLabel(teamKey)}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {resolveTeamForName(review.value) && (
+                                            <button
+                                                type="button"
+                                                onClick={() => assignNameToSessionTeam(review.value, null)}
+                                                className="md3-btn-tonal px-2.5 py-1.5 text-label-sm font-bold"
+                                            >
+                                                Remove
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+
+                            {!isEditing && review.type === 'roster_candidate' && (
                                 <div className="mt-2 space-y-2">
-                                    {review.bestScore != null && (
-                                        <div className="text-label-sm text-md-sys-on-surface/60">
-                                            Best match: <span className="font-semibold">{review.bestMatch || 'None'}</span> ({Math.round(review.bestScore)}%)
-                                            {review.bestScore >= 90 && (
-                                                <span className="ml-2 text-success font-bold">Auto-Merge Suggested</span>
-                                            )}
-                                        </div>
-                                    )}
+                                    {(() => {
+                                        const bestScore = Number(review.bestScore || 0);
+                                        const hasBestMatch = normalizeName(review.bestMatch || '').length > 0;
+                                        const isFuzzyReady = hasBestMatch
+                                            && bestScore >= FUZZY_READY_APPROVAL_MIN
+                                            && bestScore < AUTO_MERGE_APPROVAL_THRESHOLD;
+                                        const needsManualApproval = hasBestMatch
+                                            && (review.bestScore == null || bestScore < FUZZY_READY_APPROVAL_MIN);
+                                        return (
+                                            <>
+                                                {review.bestScore != null && (
+                                                    <div className="text-label-sm text-md-sys-on-surface/60">
+                                                        Best match: <span className="font-semibold">{review.bestMatch || 'None'}</span> ({Math.round(bestScore)}%)
+                                                        {bestScore >= AUTO_MERGE_APPROVAL_THRESHOLD && (
+                                                            <span className="ml-2 text-success font-bold">Auto-approve at 83%+</span>
+                                                        )}
+                                                        {isFuzzyReady && (
+                                                            <span className="ml-2 text-warning font-bold">Fuzzy-ready (70-82%)</span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                {isFuzzyReady && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleApproveRosterSuggestion(review)}
+                                                        className="md3-btn-tonal text-label-sm font-bold px-2.5 py-1.5"
+                                                        title={`Approve fuzzy merge into ${review.bestMatch}`}
+                                                    >
+                                                        Approve fuzzy match
+                                                    </button>
+                                                )}
+                                                {needsManualApproval && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleApproveRosterSuggestion(review)}
+                                                        className="md3-btn-tonal text-label-sm font-bold px-2.5 py-1.5"
+                                                        title={`Approve merge into ${review.bestMatch}`}
+                                                    >
+                                                        Approve {review.bestMatch}
+                                                    </button>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                                     {Array.isArray(review.suggestions) && review.suggestions.length > 0 && (
-                                        <div className="flex flex-wrap gap-1.5">
+                                        <div className="flex flex-wrap gap-1.5 review-queue-suggestions">
                                             {review.suggestions.map((s) => (
                                                 <button
                                                     key={s.name}
@@ -455,7 +667,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                                             deepLink: { type: 'openReviewQueue' },
                                                         });
                                                     }}
-                                                    className="md3-chip text-label-sm font-bold hover:bg-md-sys-primary hover:text-md-sys-onPrimary transition-colors"
+                                                    className="review-queue-suggestion-chip md3-chip text-label-sm font-bold hover:bg-md-sys-primary hover:text-md-sys-onPrimary transition-colors"
                                                 >
                                                     Merge with {s.name} ({Math.round(s.score)}%)
                                                 </button>
@@ -464,7 +676,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                                     )}
                                 </div>
                             )}
-                            {editingId !== review.id && isLearningReview(review) && Array.isArray(review.explanation) && review.explanation.length > 0 && (
+                            {!isEditing && isLearningReview(review) && Array.isArray(review.explanation) && review.explanation.length > 0 && (
                                 <div className="mt-2 text-label-sm opacity-60 space-y-1">
                                     {review.explanation.slice(0, 3).map((line: string, idx: number) => (
                                         <div key={`${review.id}_exp_${idx}`}>- {line}</div>

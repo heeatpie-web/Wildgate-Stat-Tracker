@@ -214,6 +214,23 @@ export const useLogMonitor = (activeUser?: string) => {
         });
     };
 
+    const hasTelemetrySelection = (value: unknown): value is string => {
+        const text = String(value || '').trim();
+        return !!text && !text.startsWith('Unknown');
+    };
+
+    const resetSelectionDefaultsForNewMatch = () => {
+        const state = useAppStore.getState();
+        state.resetSelectionSourcesForNewMatch?.();
+        const loadout = currentLoadoutRef.current;
+        if (hasTelemetrySelection(loadout?.hero)) {
+            setActiveHero(loadout.hero, 'telemetry');
+        }
+        if (hasTelemetrySelection(loadout?.ship)) {
+            setActiveShip(loadout.ship, 'telemetry');
+        }
+    };
+
     const buildTelemetryDraft = (matchId: number, gameTime: number, loadout: Loadout | null): Match => ({
         id: matchId,
         timestamp: gameTime,
@@ -276,7 +293,6 @@ export const useLogMonitor = (activeUser?: string) => {
             telemetryDraftMatchIdRef.current = existingDraft.id;
             telemetryDraftStartedAtRef.current = Number(existingDraft.timestamp || gameTime) || gameTime;
             telemetryDraftLoadoutSignatureRef.current = makeLoadoutSignature(existingDraft.loadout || loadout || currentLoadoutRef.current || null);
-            scheduleTelemetryDraftCapturePrompt(existingDraft.id);
             if (Object.keys(pendingTelemetryConsistencyRef.current || {}).length > 0) {
                 updateTelemetryDraftConsistency(pendingTelemetryConsistencyRef.current, gameTime);
             }
@@ -294,7 +310,6 @@ export const useLogMonitor = (activeUser?: string) => {
             message: 'Telemetry draft match created. We will prompt for result or Smart Capture after match end.',
             type: 'info',
         });
-        scheduleTelemetryDraftCapturePrompt(matchId);
         Logger.info('LogMonitor', `Telemetry draft created (matchId=${matchId})`);
         return matchId;
     };
@@ -365,6 +380,9 @@ export const useLogMonitor = (activeUser?: string) => {
         };
 
         const draftId = telemetryDraftMatchIdRef.current;
+        if (draftId && source === 'NebLoadoutSaved' && inGame) {
+            scheduleTelemetryDraftCapturePrompt(draftId);
+        }
         if (!draftId) {
             const pendingSnapshots = [...(pendingTelemetryConsistencyRef.current.loadoutSaves || [])];
             const pendingLast = pendingSnapshots[pendingSnapshots.length - 1];
@@ -554,6 +572,9 @@ export const useLogMonitor = (activeUser?: string) => {
                     // Keep start strict to map transitions. Session ID clear remains an emergency end signal.
                     const startLifecycleSignal = mapStartSignal;
                     const endLifecycleSignal = mapEndSignal || sessionEndSignal;
+                    if (startLifecycleSignal && !telemetryLifecycleActiveRef.current) {
+                        resetSelectionDefaultsForNewMatch();
+                    }
                     if (startLifecycleSignal && !telemetryDraftMatchIdRef.current) {
                         createTelemetryDraftIfNeeded(gameTime);
                     }
@@ -563,37 +584,41 @@ export const useLogMonitor = (activeUser?: string) => {
                     Logger.debug('LogMonitor', `EVENT: ${name} | Age: ${ageSeconds}s | Keys: ${payloadKeys}`);
 
                     if (name === 'NebClientMatchmakerStateChange') {
-                        const matchmakerPlayerIds = Array.from(new Set(
-                            extractTelemetryStringList(
-                                payload.playerIds
-                                || payload.player_ids
-                                || payload.players
-                                || payload.playerList
-                                || payload.ticketPlayerIds
-                            ).map((value) => String(value || '').trim()).filter(Boolean)
-                        ));
-                        const inferredMode = inferModeFromMatchPool(
-                            payload.ticketMatchPool
-                            || payload.ticket_match_pool
-                            || payload.matchPool
-                            || payload.match_pool
-                        );
-                        const patch: Partial<TelemetryConsistency> = {
-                            durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
-                        };
-                        if (matchmakerPlayerIds.length > 0) {
-                            patch.expectedTeammateCount = Math.max(0, matchmakerPlayerIds.length - 1);
+                        if (!telemetryLifecycleActiveRef.current) {
+                            Logger.debug('LogMonitor', 'Skipping pre-start matchmaker consistency capture');
                         } else {
-                            const fallbackExpected = getExpectedTeammateCountFromMode(inferredMode?.mode);
-                            if (typeof fallbackExpected === 'number') {
-                                patch.expectedTeammateCount = fallbackExpected;
+                            const matchmakerPlayerIds = Array.from(new Set(
+                                extractTelemetryStringList(
+                                    payload.playerIds
+                                    || payload.player_ids
+                                    || payload.players
+                                    || payload.playerList
+                                    || payload.ticketPlayerIds
+                                ).map((value) => String(value || '').trim()).filter(Boolean)
+                            ));
+                            const inferredMode = inferModeFromMatchPool(
+                                payload.ticketMatchPool
+                                || payload.ticket_match_pool
+                                || payload.matchPool
+                                || payload.match_pool
+                            );
+                            const patch: Partial<TelemetryConsistency> = {
+                                durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
+                            };
+                            if (matchmakerPlayerIds.length > 0) {
+                                patch.expectedTeammateCount = Math.max(0, matchmakerPlayerIds.length - 1);
+                            } else {
+                                const fallbackExpected = getExpectedTeammateCountFromMode(inferredMode?.mode);
+                                if (typeof fallbackExpected === 'number') {
+                                    patch.expectedTeammateCount = fallbackExpected;
+                                }
                             }
+                            if (inferredMode) {
+                                patch.expectedMode = inferredMode.mode;
+                                patch.expectedModeSource = inferredMode.source;
+                            }
+                            updateTelemetryDraftConsistency(patch, gameTime);
                         }
-                        if (inferredMode) {
-                            patch.expectedMode = inferredMode.mode;
-                            patch.expectedModeSource = inferredMode.source;
-                        }
-                        updateTelemetryDraftConsistency(patch, gameTime);
                     }
 
                     const payloadEnvelope = asRecord(e.Payload);

@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const artifactRelinker = require('../helpers/artifactRelinker.cjs');
+const artifactPathResolver = require('../helpers/artifactPathResolver.cjs');
 const {
   ok,
   fail,
@@ -49,15 +50,26 @@ function sanitizeRepairScope(scopePayload) {
   return normalized;
 }
 
-function getValidatedMatchDir(app, artifactHelpers, matchId) {
+function getValidatedMatchDir(app, artifactHelpers, matchId, options = {}) {
   const idCheck = validatePositiveInt(matchId, 'matchId');
   if (!idCheck.success) return idCheck;
 
   const paths = artifactHelpers.getArtifactPaths(app);
-  const matchDir = path.join(paths.matchArtifactsRoot, idCheck.data.toString());
+  const resolved = artifactPathResolver.resolveMatchArtifactDir({
+    userData: paths.userData,
+    matchId: idCheck.data,
+    mode: options.mode === 'write' ? 'write' : 'read',
+  });
+  const matchDir = resolved?.matchDir || path.join(paths.matchArtifactsRoot, idCheck.data.toString());
   const safePath = validatePathInRoots(matchDir, [paths.matchArtifactsRoot], { isDev: !app.isPackaged });
   if (!safePath.success) return safePath;
-  return ok({ matchId: idCheck.data, matchDir, paths });
+  return ok({
+    matchId: idCheck.data,
+    matchDir,
+    folderName: resolved?.folderName || path.basename(matchDir),
+    canonicalMatchNumber: resolved?.canonicalMatchNumber || null,
+    paths,
+  });
 }
 
 /**
@@ -70,9 +82,9 @@ function registerArtifactHandlers(ipcMain, ctx) {
 
   ipcMain.handle('bundle-artifacts', async (event, { matchId, startTime, endTime }) => {
     try {
-      const validated = getValidatedMatchDir(app, artifactHelpers, matchId);
+      const validated = getValidatedMatchDir(app, artifactHelpers, matchId, { mode: 'write' });
       if (!validated.success) return [];
-      const { paths, matchDir } = validated.data;
+      const { paths, matchDir, folderName } = validated.data;
       if (!fs.existsSync(matchDir)) fs.mkdirSync(matchDir, { recursive: true });
 
       const bundledNames = new Set();
@@ -82,7 +94,7 @@ function registerArtifactHandlers(ipcMain, ctx) {
         bundledSizes,
         onCopy: (srcPath, destPath, file) => {
           if (gcloudSyncService.isInitialized) {
-            return gcloudSyncService.uploadFile(destPath, `match_artifacts/${matchId}/${file}`)
+            return gcloudSyncService.uploadFile(destPath, `match_artifacts/${folderName}/${file}`)
               .then(r => { if (!r.success) console.warn(`[GCloud] Artifact upload failed: ${r.error}`); })
               .catch(err => console.warn(`[GCloud] Artifact upload error: ${err.message}`));
           }
@@ -105,7 +117,7 @@ function registerArtifactHandlers(ipcMain, ctx) {
 
   ipcMain.handle('get-match-artifacts', async (event, matchId) => {
     try {
-      const validated = getValidatedMatchDir(app, artifactHelpers, matchId);
+      const validated = getValidatedMatchDir(app, artifactHelpers, matchId, { mode: 'read' });
       if (!validated.success) {
         recordSecurityBlock('get-match-artifacts', validated.code, validated.message);
         return ok({ images: [], imageFiles: [], telemetry: [] });
@@ -141,12 +153,13 @@ function registerArtifactHandlers(ipcMain, ctx) {
 
   ipcMain.handle('list-match-artifacts', async () => {
     try {
-      const baseDir = artifactHelpers.getArtifactPaths(app).matchArtifactsRoot;
+      const paths = artifactHelpers.getArtifactPaths(app);
+      const baseDir = paths.matchArtifactsRoot;
       if (!fs.existsSync(baseDir)) return [];
 
       const entries = await fsPromises.readdir(baseDir, { withFileTypes: true });
       const imageExts = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.webp']);
-      const results = [];
+      const byMatchId = new Map();
 
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
@@ -165,10 +178,13 @@ function registerArtifactHandlers(ipcMain, ctx) {
           .filter(f => imageExts.has(path.extname(f).toLowerCase()))
           .map(f => path.join(dirPath, f));
 
-        results.push({ id: Number(dirName), images });
+        const resolvedId = artifactPathResolver.resolveMatchIdForFolder(paths.userData, Number(dirName));
+        const matchId = Number(resolvedId || dirName);
+        if (!byMatchId.has(matchId)) byMatchId.set(matchId, []);
+        byMatchId.get(matchId).push(...images);
       }
 
-      return results;
+      return Array.from(byMatchId.entries()).map(([id, images]) => ({ id, images }));
     } catch (e) {
       console.error('[Artifacts] list-match-artifacts error:', e.message || e);
       return [];
@@ -208,7 +224,7 @@ function registerArtifactHandlers(ipcMain, ctx) {
 
   ipcMain.handle('remove-match-artifact', async (event, { matchId, artifactId }) => {
     try {
-      const validated = getValidatedMatchDir(app, artifactHelpers, matchId);
+      const validated = getValidatedMatchDir(app, artifactHelpers, matchId, { mode: 'read' });
       if (!validated.success) {
         recordSecurityBlock('remove-match-artifact', validated.code, validated.message);
         return validated;
@@ -244,7 +260,7 @@ function registerArtifactHandlers(ipcMain, ctx) {
 
   ipcMain.handle('add-match-artifact', async (event, { matchId }) => {
     try {
-      const validated = getValidatedMatchDir(app, artifactHelpers, matchId);
+      const validated = getValidatedMatchDir(app, artifactHelpers, matchId, { mode: 'write' });
       if (!validated.success) return validated;
       const { matchDir, matchId: safeMatchId } = validated.data;
       const { dialog } = require('electron');
@@ -293,7 +309,7 @@ function registerArtifactHandlers(ipcMain, ctx) {
       const paths = artifactHelpers.getArtifactPaths(app);
       let destDir = paths.screenshotsDir;
       if (matchId != null) {
-        const validated = getValidatedMatchDir(app, artifactHelpers, matchId);
+        const validated = getValidatedMatchDir(app, artifactHelpers, matchId, { mode: 'write' });
         if (!validated.success) {
           recordSecurityBlock('save-screenshot', validated.code, validated.message);
           return validated;

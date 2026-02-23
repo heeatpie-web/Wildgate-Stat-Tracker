@@ -66,6 +66,12 @@ describe('createFormSlice', () => {
       store.getState().setSelectedTeammates((curr) => [...curr, 'D', 'E', 'F']);
       expect(store.getState().selectedTeammates).toEqual(['A', 'B', 'C']);
     });
+
+    it('keeps pendingMatchData teammates in sync with manual edits', () => {
+      store.getState().setPendingMatchData({ id: 42, teammates: [], opponents: [] });
+      store.getState().setSelectedTeammates(['Wing1', 'Wing2']);
+      expect(store.getState().pendingMatchData?.teammates).toEqual(['Wing1', 'Wing2']);
+    });
   });
 
   describe('toggleOpponent', () => {
@@ -82,6 +88,14 @@ describe('createFormSlice', () => {
       expect(store.getState().selectedOpponents).toEqual(['Enemy', 'Bandit']);
       store.getState().toggleOpponent('enemy');
       expect(store.getState().selectedOpponents).toEqual(['Bandit']);
+    });
+
+    it('keeps pendingMatchData opponents in sync when toggling', () => {
+      store.getState().setPendingMatchData({ id: 7, teammates: [], opponents: [] });
+      store.getState().toggleOpponent('EnemyA');
+      expect(store.getState().pendingMatchData?.opponents).toEqual(['EnemyA']);
+      store.getState().toggleOpponent('EnemyA');
+      expect(store.getState().pendingMatchData?.opponents).toEqual([]);
     });
   });
 
@@ -203,6 +217,30 @@ describe('createFormSlice', () => {
   });
 
   // ── resetForm ──
+
+  describe('resetSelectionSourcesForNewMatch', () => {
+    it('allows fresh telemetry baseline while preserving current selections', () => {
+      store.getState().setActiveHero('Kae', 'telemetry');
+      store.getState().setActiveShip('Scout (3 Player)', 'telemetry');
+      store.getState().setActiveHero('Ion', 'manual');
+      store.getState().setActiveShip('Outlaw (2 Player)', 'manual');
+
+      store.getState().resetSelectionSourcesForNewMatch();
+
+      expect(store.getState().activeHero).toBe('Ion');
+      expect(store.getState().activeShip).toBe('Outlaw (2 Player)');
+      expect(store.getState().heroSource).toBeUndefined();
+      expect(store.getState().shipSource).toBeUndefined();
+
+      store.getState().setActiveHero('Adrian', 'telemetry');
+      store.getState().setActiveShip('Hunter (4 Player)', 'telemetry');
+
+      expect(store.getState().activeHero).toBe('Adrian');
+      expect(store.getState().activeShip).toBe('Hunter (4 Player)');
+      expect(store.getState().heroSource).toBe('telemetry');
+      expect(store.getState().shipSource).toBe('telemetry');
+    });
+  });
 
   describe('resetForm', () => {
     it('resets form fields but restores hero loadout', () => {

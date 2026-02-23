@@ -1,6 +1,7 @@
 import React from 'react';
-import { Bell, CheckCheck, Sparkles, Trash2, XCircle } from 'lucide-react';
+import { Bell, CheckCheck, Sparkles, Trash2, X, XCircle } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
+import { useAppStore } from '../store/useAppStore';
 import type { AppNotification, NotificationDeepLink } from '../store/slices/createUISlice';
 
 const SETTINGS_FOCUS_SECTION_STORAGE_KEY = 'wg_settings_focus_section_v1';
@@ -52,10 +53,29 @@ export const NotificationCenter: React.FC = () => {
         setShowWizard,
         setSmartCapturesFocusMatchId,
     } = useUIState();
+    const dismissNotification = useAppStore((state) => state.dismissNotification);
     const containerRef = React.useRef<HTMLDivElement | null>(null);
-    const unreadCount = notifications.reduce((count, item) => count + (item.readAt ? 0 : 1), 0);
-    const unread = notifications.filter((item) => !item.readAt);
-    const read = notifications.filter((item) => !!item.readAt);
+    const [dismissedIds, setDismissedIds] = React.useState<Set<string>>(() => new Set());
+
+    React.useEffect(() => {
+        setDismissedIds((previous) => {
+            if (previous.size === 0) return previous;
+            const liveIds = new Set(notifications.map((item) => item.id));
+            const next = new Set<string>();
+            previous.forEach((id) => {
+                if (liveIds.has(id)) next.add(id);
+            });
+            return next.size === previous.size ? previous : next;
+        });
+    }, [notifications]);
+
+    const visibleNotifications = React.useMemo(
+        () => notifications.filter((item) => !dismissedIds.has(item.id)),
+        [notifications, dismissedIds]
+    );
+    const unreadCount = visibleNotifications.reduce((count, item) => count + (item.readAt ? 0 : 1), 0);
+    const unread = visibleNotifications.filter((item) => !item.readAt);
+    const read = visibleNotifications.filter((item) => !!item.readAt);
 
     const executeDeepLink = React.useCallback((deepLink?: NotificationDeepLink) => {
         if (!deepLink) return;
@@ -97,9 +117,7 @@ export const NotificationCenter: React.FC = () => {
         }
         if (deepLink.type === 'openWizard') {
             setActiveView('recording');
-            if (deepLink.result) {
-                setShowWizard(deepLink.result);
-            }
+            setShowWizard(deepLink.result || 'Match Result');
         }
     }, [
         setActiveView,
@@ -113,6 +131,25 @@ export const NotificationCenter: React.FC = () => {
     const onItemClick = (item: AppNotification) => {
         markNotificationRead(item.id);
         executeDeepLink(item.deepLink);
+    };
+
+    const onItemKeyDown = (event: React.KeyboardEvent<HTMLDivElement>, item: AppNotification) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onItemClick(item);
+        }
+    };
+
+    const onItemDismiss = (event: React.MouseEvent<HTMLButtonElement>, id: string) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setDismissedIds((previous) => {
+            if (previous.has(id)) return previous;
+            const next = new Set(previous);
+            next.add(id);
+            return next;
+        });
+        dismissNotification(id);
     };
 
     React.useEffect(() => {
@@ -140,7 +177,7 @@ export const NotificationCenter: React.FC = () => {
         <div ref={containerRef} className="relative">
             <button
                 type="button"
-                className="w-8 h-8 rounded-control flex items-center justify-center border border-md-sys-outline/10 bg-md-sys-surface-container-high/85 hover:bg-md-sys-surface-container-highest/90 text-secondary relative"
+                className="w-8 h-8 rounded-control flex items-center justify-center border border-md-sys-outline/15 bg-md-sys-surface-container-highest hover:bg-md-sys-surface-container-high text-secondary relative shadow-sm"
                 onClick={() => setNotificationCenterOpen(!notificationCenterOpen)}
                 aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'}
                 aria-expanded={notificationCenterOpen}
@@ -160,16 +197,16 @@ export const NotificationCenter: React.FC = () => {
                     id="notification-center-panel"
                     role="dialog"
                     aria-label="Notification inbox"
-                    className="absolute right-0 top-10 z-popover w-[min(28rem,calc(100vw-2rem))] rounded-2xl border border-md-sys-outline/20 bg-md-sys-surface-container-high shadow-2xl overflow-hidden"
+                    className="fixed right-4 top-16 z-top-second w-[min(30rem,calc(100vw-2rem))] max-h-[calc(100vh-6rem)] rounded-2xl border border-md-sys-outline/30 bg-md-sys-surface-container-highest text-md-sys-on-surface shadow-[0_24px_56px_rgba(0,0,0,0.52)] overflow-hidden supports-[backdrop-filter]:bg-md-sys-surface-container-highest supports-[backdrop-filter]:backdrop-blur-sm"
                 >
-                    <div className="px-3 py-2 border-b border-md-sys-outline/10 flex items-center justify-between">
+                    <div className="px-4 py-3 border-b border-md-sys-outline/14 flex items-center justify-between">
                         <div className="text-label-sm font-bold uppercase tracking-wide">Notifications</div>
                         <div className="flex items-center gap-1">
                             <button
                                 type="button"
                                 className="h-7 px-2 rounded-control md3-btn-tonal text-label-xs font-bold"
                                 onClick={() => markAllNotificationsRead()}
-                                disabled={notifications.length === 0}
+                                disabled={visibleNotifications.length === 0}
                                 title="Mark all read"
                             >
                                 <CheckCheck size={12} />
@@ -178,7 +215,7 @@ export const NotificationCenter: React.FC = () => {
                                 type="button"
                                 className="h-7 px-2 rounded-control md3-btn-tonal text-label-xs font-bold"
                                 onClick={() => clearNotifications()}
-                                disabled={notifications.length === 0}
+                                disabled={visibleNotifications.length === 0}
                                 title="Clear all"
                             >
                                 <Trash2 size={12} />
@@ -186,9 +223,9 @@ export const NotificationCenter: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="max-h-80 overflow-y-auto custom-scrollbar p-2 space-y-2">
-                        {notifications.length === 0 && (
-                            <div className="rounded-xl border border-md-sys-outline/10 bg-md-sys-surface px-3 py-4 text-label-sm opacity-70">
+                    <div className="max-h-[calc(100vh-11rem)] overflow-y-auto custom-scrollbar p-3 space-y-2 bg-md-sys-surface-container-highest/100">
+                        {visibleNotifications.length === 0 && (
+                            <div className="rounded-xl border border-md-sys-outline/20 bg-md-sys-surface-container-high px-3 py-4 text-body-sm opacity-90">
                                 App updates and tips will appear here.
                             </div>
                         )}
@@ -197,11 +234,13 @@ export const NotificationCenter: React.FC = () => {
                             <div className="px-2 pt-1 text-label-xs font-bold uppercase tracking-wide opacity-60">Unread</div>
                         )}
                         {unread.map((item) => (
-                            <button
+                            <div
                                 key={item.id}
-                                type="button"
                                 onClick={() => onItemClick(item)}
-                                className="w-full text-left rounded-xl border border-md-sys-outline/12 bg-md-sys-surface px-3 py-2 hover:bg-md-sys-surface-container-highest/80 transition-colors"
+                                onKeyDown={(event) => onItemKeyDown(event, item)}
+                                role="button"
+                                tabIndex={0}
+                                className="w-full text-left rounded-xl border border-md-sys-outline/20 bg-md-sys-surface-container px-3 py-3 hover:bg-md-sys-surface-container-high transition-colors cursor-pointer"
                             >
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="flex items-center gap-2 min-w-0">
@@ -212,21 +251,34 @@ export const NotificationCenter: React.FC = () => {
                                             {sourceLabel[item.source]}
                                         </div>
                                     </div>
-                                    <div className="text-label-xs opacity-50 shrink-0">{formatTime(item.createdAt)}</div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        <div className="text-label-xs opacity-50">{formatTime(item.createdAt)}</div>
+                                        <button
+                                            type="button"
+                                            className="w-6 h-6 rounded-full inline-flex items-center justify-center text-md-sys-on-surface/55 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10"
+                                            aria-label="Dismiss notification"
+                                            title="Dismiss"
+                                            onClick={(event) => onItemDismiss(event, item.id)}
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="mt-1 text-label-sm font-semibold leading-snug">{item.message}</div>
-                            </button>
+                                <div className="mt-1 text-body-sm font-semibold leading-snug">{item.message}</div>
+                            </div>
                         ))}
 
                         {read.length > 0 && (
                             <div className="px-2 pt-1 text-label-xs font-bold uppercase tracking-wide opacity-60">Earlier</div>
                         )}
                         {read.map((item) => (
-                            <button
+                            <div
                                 key={item.id}
-                                type="button"
                                 onClick={() => onItemClick(item)}
-                                className="w-full text-left rounded-xl border border-md-sys-outline/8 bg-md-sys-surface/70 px-3 py-2 hover:bg-md-sys-surface-container-high/70 transition-colors opacity-85"
+                                onKeyDown={(event) => onItemKeyDown(event, item)}
+                                role="button"
+                                tabIndex={0}
+                                className="w-full text-left rounded-xl border border-md-sys-outline/18 bg-md-sys-surface-container-low px-3 py-3 hover:bg-md-sys-surface-container transition-colors cursor-pointer"
                             >
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="flex items-center gap-2 min-w-0">
@@ -237,10 +289,21 @@ export const NotificationCenter: React.FC = () => {
                                             {sourceLabel[item.source]}
                                         </div>
                                     </div>
-                                    <div className="text-label-xs opacity-50 shrink-0">{formatTime(item.createdAt)}</div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        <div className="text-label-xs opacity-50">{formatTime(item.createdAt)}</div>
+                                        <button
+                                            type="button"
+                                            className="w-6 h-6 rounded-full inline-flex items-center justify-center text-md-sys-on-surface/55 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10"
+                                            aria-label="Dismiss notification"
+                                            title="Dismiss"
+                                            onClick={(event) => onItemDismiss(event, item.id)}
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="mt-1 text-label-sm leading-snug">{item.message}</div>
-                            </button>
+                                <div className="mt-1 text-body-sm leading-snug">{item.message}</div>
+                            </div>
                         ))}
                     </div>
                 </div>

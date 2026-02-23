@@ -2,6 +2,11 @@ import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
+ 
+const dismissNotification = vi.fn();
+const appStoreState = {
+  dismissNotification: (id: string) => dismissNotification(id),
+};
 
 const uiState = {
   notifications: [] as any[],
@@ -20,6 +25,9 @@ const uiState = {
 
 vi.mock('../providers/UIStateProvider', () => ({
   useUIState: () => uiState,
+}));
+vi.mock('../store/useAppStore', () => ({
+  useAppStore: (selector: (state: typeof appStoreState) => unknown) => selector(appStoreState),
 }));
 
 describe('NotificationCenter', () => {
@@ -81,5 +89,57 @@ describe('NotificationCenter', () => {
 
     expect(uiState.markNotificationRead).toHaveBeenCalledWith('n1');
     expect(uiState.setShowIdMapper).toHaveBeenCalledWith(true);
+  });
+
+  it('anchors the inbox panel at top-right and keeps read rows fully opaque', async () => {
+    uiState.notificationCenterOpen = true;
+    uiState.notifications = [
+      {
+        id: 'n1',
+        message: 'Already read',
+        type: 'info',
+        source: 'system',
+        popup: false,
+        durationMs: 5000,
+        createdAt: Date.now(),
+        readAt: Date.now(),
+      },
+    ];
+
+    const { NotificationCenter } = await import('./NotificationCenter');
+    render(<NotificationCenter />);
+
+    const panel = screen.getByRole('dialog', { name: /notification inbox/i });
+    expect(panel).toHaveClass('fixed');
+    expect(panel).toHaveClass('right-4');
+    expect(panel).toHaveClass('top-16');
+    expect(panel).toHaveClass('text-md-sys-on-surface');
+
+    const readRow = screen.getByRole('button', { name: /already read/i });
+    expect(readRow).not.toHaveClass('opacity-90');
+  });
+
+  it('supports row-level dismiss from the inbox', async () => {
+    uiState.notificationCenterOpen = true;
+    uiState.notifications = [
+      {
+        id: 'n1',
+        message: 'Dismiss this row',
+        type: 'info',
+        source: 'system',
+        popup: true,
+        durationMs: 5000,
+        createdAt: Date.now(),
+        readAt: null,
+      },
+    ];
+
+    const { NotificationCenter } = await import('./NotificationCenter');
+    render(<NotificationCenter />);
+
+    fireEvent.click(screen.getByRole('button', { name: /dismiss notification/i }));
+
+    expect(dismissNotification).toHaveBeenCalledWith('n1');
+    expect(screen.queryByText('Dismiss this row')).not.toBeInTheDocument();
   });
 });

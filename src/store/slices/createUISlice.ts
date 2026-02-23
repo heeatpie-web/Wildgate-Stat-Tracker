@@ -10,6 +10,7 @@ import { runtimeConfig } from '../../config/runtimeConfig';
 
 const MAX_NOTIFICATION_HISTORY = 200;
 const DEFAULT_NOTIFICATION_DURATION_MS = runtimeConfig.ui.toastDurationMs;
+const DUPLICATE_NOTIFICATION_WINDOW_MS = 8_000;
 
 export type AppView = 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr';
 export type NotificationKind = 'info' | 'warning' | 'error' | 'success' | 'tip';
@@ -30,7 +31,7 @@ export type NotificationDeepLink =
     | { type: 'openSettings'; tab: 'identity' | 'interface' | 'ocr-capture' | 'data'; section?: string }
     | { type: 'openIdMapper' }
     | { type: 'openReviewQueue' }
-    | { type: 'openWizard'; result?: 'Win' | 'Loss' | 'Draw' };
+    | { type: 'openWizard'; result?: 'Win' | 'Loss' | 'Draw' | 'Match Result' };
 
 export interface NotificationAction {
     label: string;
@@ -117,6 +118,7 @@ export interface UISlice {
     setToast: (toast: NotificationInput | null) => void;
     pushNotification: (notification: NotificationInput) => void;
     dismissActiveNotification: () => void;
+    dismissNotification: (id: string) => void;
     markNotificationRead: (id: string) => void;
     markAllNotificationsRead: () => void;
     clearNotifications: () => void;
@@ -179,39 +181,29 @@ const toToastState = (notification: AppNotification): ToastState => ({
     durationMs: notification.durationMs,
 });
 
-const shiftToNextQueuedNotification = (
-    notifications: AppNotification[],
-    queue: string[]
-): { nextNotification: AppNotification | null; nextQueue: string[] } => {
-    let nextQueue = [...queue];
-    while (nextQueue.length > 0) {
-        const nextId = nextQueue[0];
-        nextQueue = nextQueue.slice(1);
-        const candidate = notifications.find((item) => item.id === nextId);
-        if (candidate) {
-            return { nextNotification: candidate, nextQueue };
-        }
-    }
-    return { nextNotification: null, nextQueue: [] };
-};
-
 const trimNotificationState = (state: NotificationStateShape): NotificationStateShape => {
     const notifications = state.notifications.slice(0, MAX_NOTIFICATION_HISTORY);
-    const idSet = new Set(notifications.map((item) => item.id));
-    let activeNotificationId = state.activeNotificationId;
-    let toast = state.toast;
-    let notificationQueue = state.notificationQueue.filter((id) => idSet.has(id));
-    if (activeNotificationId && !idSet.has(activeNotificationId)) {
-        const shifted = shiftToNextQueuedNotification(notifications, notificationQueue);
-        activeNotificationId = shifted.nextNotification?.id ?? null;
-        notificationQueue = shifted.nextQueue;
-        toast = shifted.nextNotification ? toToastState(shifted.nextNotification) : null;
-    }
+    const notificationsById = new Map(notifications.map((item) => [item.id, item]));
+    const seen = new Set<string>();
+    const notificationQueue: string[] = [];
+    const collect = (id: string | null | undefined) => {
+        if (!id || seen.has(id)) return;
+        const notification = notificationsById.get(id);
+        if (!notification || !notification.popup || notification.readAt) return;
+        seen.add(id);
+        notificationQueue.push(id);
+    };
+    collect(state.activeNotificationId);
+    (state.notificationQueue || []).forEach((id) => collect(id));
+    const activeNotificationId = notificationQueue.length > 0 ? notificationQueue[0] : null;
+    const activeNotification = activeNotificationId
+        ? notificationsById.get(activeNotificationId) ?? null
+        : null;
     return {
         notifications,
         notificationQueue,
         activeNotificationId,
-        toast,
+        toast: activeNotification ? toToastState(activeNotification) : null,
     };
 };
 
@@ -219,6 +211,17 @@ const pushNotificationState = (
     state: NotificationStateShape,
     input: NotificationInput
 ): NotificationStateShape => {
+    const normalizedMessage = String(input.message || '').trim();
+    const maybeDuplicate = state.notifications.find((item) => (
+        item.message === normalizedMessage
+        && item.type === (input.type ?? 'info')
+        && item.source === (input.source ?? 'system')
+        && (Date.now() - item.createdAt) <= DUPLICATE_NOTIFICATION_WINDOW_MS
+    ));
+    if (maybeDuplicate) {
+        return state;
+    }
+
     const notification = createNotification(input);
     let nextState: NotificationStateShape = {
         notifications: [notification, ...state.notifications],
@@ -228,37 +231,48 @@ const pushNotificationState = (
     };
 
     if (notification.popup) {
-        if (!nextState.activeNotificationId) {
-            nextState.activeNotificationId = notification.id;
-            nextState.toast = toToastState(notification);
-        } else {
-            nextState.notificationQueue.push(notification.id);
-        }
+        nextState.notificationQueue = [notification.id, state.activeNotificationId, ...nextState.notificationQueue]
+            .filter((id): id is string => !!id);
+        nextState.activeNotificationId = null;
+        nextState.toast = toToastState(notification);
     }
 
     nextState = trimNotificationState(nextState);
     return nextState;
 };
 
-const dismissActiveNotificationState = (state: NotificationStateShape): NotificationStateShape => {
-    const activeId = state.activeNotificationId;
-    if (!activeId) {
-        return { ...state, toast: null };
+const dismissNotificationState = (
+    state: NotificationStateShape,
+    notificationId: string
+): NotificationStateShape => {
+    const id = String(notificationId || '').trim();
+    if (!id) {
+        return trimNotificationState(state);
     }
     const readAt = Date.now();
-    const notifications = state.notifications.map((item) =>
-        item.id === activeId && !item.readAt
-            ? { ...item, readAt }
-            : item
-    );
-    const queueSansActive = state.notificationQueue.filter((id) => id !== activeId);
-    const shifted = shiftToNextQueuedNotification(notifications, queueSansActive);
-    return {
-        notifications,
-        notificationQueue: shifted.nextQueue,
-        activeNotificationId: shifted.nextNotification?.id ?? null,
-        toast: shifted.nextNotification ? toToastState(shifted.nextNotification) : null,
-    };
+    return trimNotificationState({
+        notifications: state.notifications.map((item) =>
+            item.id === id && !item.readAt
+                ? { ...item, readAt }
+                : item
+        ),
+        notificationQueue: state.notificationQueue.filter((queuedId) => queuedId !== id),
+        activeNotificationId: state.activeNotificationId === id ? null : state.activeNotificationId,
+        toast: null,
+    });
+};
+
+const dismissActiveNotificationState = (state: NotificationStateShape): NotificationStateShape => {
+    const activeId = state.activeNotificationId ?? state.notificationQueue[0] ?? null;
+    if (!activeId) {
+        return trimNotificationState({
+            notifications: state.notifications,
+            notificationQueue: state.notificationQueue,
+            activeNotificationId: state.activeNotificationId,
+            toast: state.toast,
+        });
+    }
+    return dismissNotificationState(state, activeId);
 };
 
 export const createUISlice: StateCreator<UISlice> = (set) => ({
@@ -335,20 +349,27 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     }),
     pushNotification: (notification) => set((state) => pushNotificationState(state, notification)),
     dismissActiveNotification: () => set((state) => dismissActiveNotificationState(state)),
-    markNotificationRead: (id) => set((state) => ({
+    dismissNotification: (id) => set((state) => dismissNotificationState(state, id)),
+    markNotificationRead: (id) => set((state) => trimNotificationState({
         notifications: state.notifications.map((item) =>
             item.id === id && !item.readAt
                 ? { ...item, readAt: Date.now() }
                 : item
         ),
+        notificationQueue: state.notificationQueue.filter((queuedId) => queuedId !== id),
+        activeNotificationId: state.activeNotificationId === id ? null : state.activeNotificationId,
+        toast: state.toast,
     })),
     markAllNotificationsRead: () => set((state) => {
         const readAt = Date.now();
-        return {
+        return trimNotificationState({
             notifications: state.notifications.map((item) =>
                 item.readAt ? item : { ...item, readAt }
             ),
-        };
+            notificationQueue: [],
+            activeNotificationId: null,
+            toast: null,
+        });
     }),
     clearNotifications: () => set({
         notifications: [],

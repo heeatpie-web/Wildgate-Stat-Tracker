@@ -225,6 +225,26 @@ const MatchDetail: React.FC<{
         setEditingField(null);
     }, [match, editValue, onUpdate]);
 
+    const commitPlayerEdit = useCallback((field: 'teammates' | 'opponents', index: number, nextValue: string) => {
+        const current = Array.isArray(match[field]) ? [...match[field]] : [];
+        if (index < 0 || index >= current.length) return;
+        const normalized = String(nextValue || '').trim();
+        if (!normalized) {
+            current.splice(index, 1);
+        } else {
+            current[index] = normalized;
+        }
+        const deduped = Array.from(new Set(current.map((entry) => String(entry || '').trim()).filter(Boolean)));
+        onUpdate({ ...match, [field]: deduped });
+    }, [match, onUpdate]);
+
+    const removePlayer = useCallback((field: 'teammates' | 'opponents', index: number) => {
+        const current = Array.isArray(match[field]) ? [...match[field]] : [];
+        if (index < 0 || index >= current.length) return;
+        current.splice(index, 1);
+        onUpdate({ ...match, [field]: current.filter(Boolean) });
+    }, [match, onUpdate]);
+
     const renderEditableField = (field: string, value: string, label: string) => (
         <div className="flex items-center gap-2">
             <span className="text-label-sm uppercase font-bold opacity-40 w-20">{label}</span>
@@ -285,16 +305,22 @@ const MatchDetail: React.FC<{
                 {match.placement && <StatCard icon={<Trophy size={14} className="text-warning" />} label="Place" value={`#${match.placement}`} />}
             </div>
 
-            {/* Kill Breakdown */}
+            {/* Ship Eliminations */}
             {totalKills > 0 && (
-                <Section title="Kill Breakdown" icon={<Crosshair size={14} />}>
+                <Section title="Ship Eliminations" icon={<Crosshair size={14} />}>
                     <div className="flex flex-wrap gap-1.5">
-                        {Object.entries(match.kills || {}).filter(([, v]) => v > 0).map(([ship, count]) => (
-                            <div key={ship} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-md-sys-surface3 text-label-sm">
+                        {Object.entries(match.kills || {}).filter(([, v]) => v > 0).map(([ship, count]) => {
+                            const isAiLegionKill = ship.trim().toLowerCase() === 'ai legion';
+                            return (
+                            <div
+                                key={ship}
+                                className={`flex items-center gap-1 px-2 py-1 rounded-lg bg-md-sys-surface3 text-label-sm ${isAiLegionKill ? 'ai-legion-chip' : ''}`}
+                            >
                                 <span className="font-bold">{count}</span>
-                                <span className="opacity-60">{ship}</span>
+                                <span className={isAiLegionKill ? 'ai-legion-chip__label' : 'opacity-60'}>{ship}</span>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </Section>
             )}
@@ -353,9 +379,37 @@ const MatchDetail: React.FC<{
                     {match.teammates?.length > 0 && (
                         <div className="mb-2">
                             <span className="text-label-sm uppercase font-bold opacity-40 block mb-1">Teammates</span>
-                            <div className="flex flex-wrap gap-1">
-                                {match.teammates.map(t => (
-                                    <span key={t} className="px-2 py-0.5 bg-success-soft text-success rounded-md text-label-sm font-bold">{t}</span>
+                            <div className="space-y-1.5">
+                                {match.teammates.map((name, index) => (
+                                    <div key={`teammate-${index}-${name}`} className="flex items-center gap-1.5">
+                                        <input
+                                            type="text"
+                                            defaultValue={name}
+                                            onBlur={(event) => commitPlayerEdit('teammates', index, event.target.value)}
+                                            onKeyDown={(event) => {
+                                                if (event.key === 'Enter') {
+                                                    commitPlayerEdit('teammates', index, event.currentTarget.value);
+                                                    event.currentTarget.blur();
+                                                    return;
+                                                }
+                                                if (event.key === 'Escape') {
+                                                    event.currentTarget.value = name;
+                                                    event.currentTarget.blur();
+                                                }
+                                            }}
+                                            className="flex-1 px-2 py-1 rounded-md bg-success-soft text-success text-label-sm font-bold outline-none border border-success/25 focus:border-success/45"
+                                            aria-label={`Teammate ${index + 1} name`}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => removePlayer('teammates', index)}
+                                            className="md3-icon-btn text-danger"
+                                            aria-label={`Remove teammate ${index + 1}`}
+                                            title="Remove teammate"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </div>
                                 ))}
                             </div>
                         </div>
@@ -363,9 +417,37 @@ const MatchDetail: React.FC<{
                     {match.opponents?.length > 0 && (
                         <div>
                             <span className="text-label-sm uppercase font-bold opacity-40 block mb-1">Opponents</span>
-                            <div className="flex flex-wrap gap-1">
-                                {match.opponents.map(o => (
-                                    <span key={o} className="px-2 py-0.5 bg-danger-soft text-danger rounded-md text-label-sm font-bold">{o}</span>
+                            <div className="space-y-1.5">
+                                {match.opponents.map((name, index) => (
+                                    <div key={`opponent-${index}-${name}`} className="flex items-center gap-1.5">
+                                        <input
+                                            type="text"
+                                            defaultValue={name}
+                                            onBlur={(event) => commitPlayerEdit('opponents', index, event.target.value)}
+                                            onKeyDown={(event) => {
+                                                if (event.key === 'Enter') {
+                                                    commitPlayerEdit('opponents', index, event.currentTarget.value);
+                                                    event.currentTarget.blur();
+                                                    return;
+                                                }
+                                                if (event.key === 'Escape') {
+                                                    event.currentTarget.value = name;
+                                                    event.currentTarget.blur();
+                                                }
+                                            }}
+                                            className="flex-1 px-2 py-1 rounded-md bg-danger-soft text-danger text-label-sm font-bold outline-none border border-danger/25 focus:border-danger/45"
+                                            aria-label={`Opponent ${index + 1} name`}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => removePlayer('opponents', index)}
+                                            className="md3-icon-btn text-danger"
+                                            aria-label={`Remove opponent ${index + 1}`}
+                                            title="Remove opponent"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </div>
                                 ))}
                             </div>
                         </div>

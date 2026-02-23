@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, useId } from 'react';
 import {
     Search, Trophy, Skull,
     Clock, HeartCrack, Target, Image, Eye, X, Edit3, Check,
@@ -21,6 +21,7 @@ import {
     type RerunOcrResult,
     ArtifactFile,
 } from '../utils/artifactService';
+import type { OCRProcessRuntimeOptions } from '../utils/electronBridge';
 import { getElectronAPI } from '../utils/electronAPI';
 import { useAppStore } from '../store/useAppStore';
 import type { OcrRegionSettings } from '../store/slices/createSettingsSlice';
@@ -32,6 +33,7 @@ import {
     buildPlayerColorHintsFromOpponentTeams,
     normalizeTeamColor,
 } from '../utils/ocr/teamColorAssignment';
+import { backfillOpponentTeamShipTypes } from '../utils/ocr/opponentTeamShipTypes';
 import { LocalImage } from './LocalImage';
 import { exportJSONFile } from '../utils/export';
 import { Section, StatCard, EditableStatCard, ModifierAdder, KillAdder, InlinePlayerAdd } from './smart-captures/SmartCaptureWidgets';
@@ -56,7 +58,7 @@ import { QueueItemRichPreview } from './smart-captures/QueueItemRichPreview';
 import OcrRegionEditorModal from './OcrRegionEditorModal';
 import { SmartCaptureSummaryBar } from './smart-captures/detail/SmartCaptureSummaryBar';
 import { SmartCaptureActionBar } from './smart-captures/detail/SmartCaptureActionBar';
-import { findClosestMatch, normalizeOcrName, similarityScore } from '../utils/stringUtils';
+import { combinedNameSimilarityScore, findClosestMatch, normalizeOcrName } from '../utils/stringUtils';
 import { getTelemetryEventTimestamp, type TelemetryArchiveEvent } from '../utils/telemetryArchive';
 import {
     deriveTelemetryConsistencyFromCollections,
@@ -67,11 +69,18 @@ import type { TimelineEvent } from '../store/slices/createDataSlice';
 import { capTeammateNames, getMaxTeammatesForShip as getMaxTeammatesForShipLimit } from '../utils/teamLimits';
 import { moveOpponentPlayerBetweenTeams } from '../utils/opponentTeamTransfer';
 import Logger from '../utils/logger';
+import {
+    getPrimaryEliminatedByTeamValue,
+    isEliminatedByTeamMatch,
+} from '../utils/eliminatorTeam';
 
-let autoArtifactRepairAttempted = false;
+export { backfillOpponentTeamShipTypes } from '../utils/ocr/opponentTeamShipTypes';
 
 const errorMessage = (error: unknown): string =>
     error instanceof Error ? error.message : 'Unknown error';
+
+const toArtifactKey = (value: string): string =>
+    value.replace(/[\\/]+/g, '\\').toLowerCase();
 
 const toLocalDateKey = (timestamp: number | null | undefined): string => {
     const numericTs = Number(timestamp);
@@ -120,8 +129,81 @@ const toCanonicalModifierNames = (
     );
 };
 
+const hasTelemetrySelection = (value: unknown): value is string => {
+    const text = String(value || '').trim();
+    return !!text && !/^unknown\b/i.test(text);
+};
+
+const toShipKey = (value: string | null | undefined): string => (
+    String(value || '')
+        .split('(')[0]
+        .trim()
+        .toLowerCase()
+);
+
+const sameShip = (left: string | null | undefined, right: string | null | undefined): boolean => {
+    const leftKey = toShipKey(left);
+    if (!leftKey) return false;
+    return leftKey === toShipKey(right);
+};
+
+const POSITIONAL_TEAM_COLOR_ORDER = ['red', 'orange', 'yellow', 'green'] as const;
+
+const applyPositionalTeamColorFallback = (
+    teams: OpponentTeam[],
+    assignedColors: Array<string | null | undefined>
+): OpponentTeam[] => {
+    const claimed = new Set<string>();
+    teams.forEach((team) => {
+        const parsed = normalizeTeamColor(team.color);
+        if (parsed !== 'unknown') {
+            claimed.add(parsed);
+            return;
+        }
+    });
+    const fallbackQueue = POSITIONAL_TEAM_COLOR_ORDER.filter((color) => !claimed.has(color));
+    let fallbackCursor = 0;
+    return teams.map((team, index) => {
+        const parsed = normalizeTeamColor(team.color);
+        if (parsed !== 'unknown') {
+            return { ...team, color: parsed };
+        }
+        const positional = fallbackQueue[fallbackCursor];
+        if (positional) {
+            fallbackCursor += 1;
+            return {
+                ...team,
+                color: positional,
+            };
+        }
+        const assigned = normalizeTeamColor(assignedColors[index] || '');
+        return {
+            ...team,
+            color: assigned !== 'unknown' ? assigned : 'unknown',
+        };
+    });
+};
+
 const SmartCapturesPanel: React.FC = () => {
-    const { matches, updateMatch, deleteMatch, pilotRegistry, setSelectedTeammates, setSelectedOpponents, setActiveShip, setSessionTeams, setSessionShipTypes, setSelectedReachModifiers, selectedTeammates, selectedOpponents, sessionTeams, activeShip } = useGameData();
+    const {
+        matches,
+        updateMatch,
+        deleteMatch,
+        pilotRegistry,
+        addToRegistry,
+        setSelectedTeammates,
+        setSelectedOpponents,
+        setActiveShip,
+        setSessionTeams,
+        setSessionShipTypes,
+        setSelectedReachModifiers,
+        selectedTeammates,
+        selectedOpponents,
+        sessionTeams,
+        sessionShipTypes,
+        activeShip,
+        telemetryDetectedShip,
+    } = useGameData();
     const {
         activeUser,
         setToast,
@@ -132,6 +214,13 @@ const SmartCapturesPanel: React.FC = () => {
     } = useUIState();
     const ocrMode = useAppStore(s => s.ocrMode);
     const ocrRegions = useAppStore(s => s.ocrRegions);
+    const externalFallbackEnabled = useAppStore(s => s.externalFallbackEnabled);
+    const externalFallbackThreshold = useAppStore(s => s.externalFallbackThreshold);
+    const externalOnDetectorDisagreement = useAppStore(s => s.externalOnDetectorDisagreement);
+    const setExternalFallbackEnabled = useAppStore(s => s.setExternalFallbackEnabled);
+    const setExternalFallbackThreshold = useAppStore(s => s.setExternalFallbackThreshold);
+    const forceMaxAnalysis = useAppStore(s => s.forceMaxAnalysis);
+    const setForceMaxAnalysis = useAppStore(s => s.setForceMaxAnalysis);
     const setOcrRegions = useAppStore(s => s.setOcrRegions);
     const activeSection = useAppStore(s => s.activeSection);
     const setActiveSection = useAppStore(s => s.setActiveSection);
@@ -147,6 +236,18 @@ const SmartCapturesPanel: React.FC = () => {
     const pendingReviews = useAppStore(s => s.pendingReviews);
     const queueCollapsed = useAppStore(s => s.queueCollapsed);
     const toggleQueueCollapsed = useAppStore(s => s.toggleQueueCollapsed);
+    const rerunRuntimeOptions = useMemo<OCRProcessRuntimeOptions>(() => ({
+        externalFallbackEnabled,
+        externalFallbackThreshold,
+        externalOnDetectorDisagreement,
+        forceMaxAnalysis,
+        forceUncached: forceMaxAnalysis,
+    }), [
+        externalFallbackEnabled,
+        externalFallbackThreshold,
+        externalOnDetectorDisagreement,
+        forceMaxAnalysis,
+    ]);
     const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
     const [bulkBusy, setBulkBusy] = useState(false);
     const todayQueueDayKey = useMemo(() => toLocalDateKey(Date.now()), []);
@@ -157,6 +258,7 @@ const SmartCapturesPanel: React.FC = () => {
     const [repairBusy, setRepairBusy] = useState(false);
     const [repairResult, setRepairResult] = useState<ArtifactRepairResult | null>(null);
     const [showRoiEditor, setShowRoiEditor] = useState(false);
+    const autoRepairAttemptSignaturesRef = useRef<Set<string>>(new Set());
     const normalizeModifierName = useCallback((name: string) => {
         const match = UI_REACH_MODIFIERS.find(m => m.toLowerCase() === name.toLowerCase());
         return match || name;
@@ -189,13 +291,7 @@ const SmartCapturesPanel: React.FC = () => {
         );
         if (pendingSet.has(normalized.toLowerCase())) return;
 
-        const scored = pilotRegistry
-            .map((pilot) => ({
-                name: pilot,
-                score: similarityScore(normalized, normalizeOcrName(pilot)),
-            }))
-            .sort((a, b) => b.score - a.score);
-        const suggestions = scored.filter((entry) => entry.score > 0).slice(0, 3);
+        const suggestions = getRosterCandidateSuggestions(normalized, pilotRegistry);
         addPendingReview({
             id: `sc_roster_${Date.now()}_${Math.random().toString(36).slice(2)}`,
             type: 'roster_candidate',
@@ -209,11 +305,14 @@ const SmartCapturesPanel: React.FC = () => {
         });
         setToast({ message: `Queued roster candidate: ${normalized}`, type: 'info' });
     }, [addPendingReview, pendingReviews, pilotRegistry, setToast]);
+    const dispatchSettingsFocusRequest = useCallback((detail: { tab?: string; search?: string }) => {
+        window.dispatchEvent(new CustomEvent('settings:focus-section', { detail }));
+    }, []);
     useEffect(() => {
         if (!isResizing) return;
         const onMove = (event: MouseEvent) => {
             const viewportWidth = window.innerWidth || 1;
-            const nextPct = Math.min(45, Math.max(22, (event.clientX / viewportWidth) * 100));
+            const nextPct = Math.min(42, Math.max(24, (event.clientX / viewportWidth) * 100));
             setQueueWidthPct(nextPct);
         };
         const onUp = () => setIsResizing(false);
@@ -226,8 +325,18 @@ const SmartCapturesPanel: React.FC = () => {
     }, [isResizing]);
 
     useEffect(() => {
-        if (autoArtifactRepairAttempted) return;
-        autoArtifactRepairAttempted = true;
+        const artifactSignature = matches
+            .flatMap((match) => (
+                Array.isArray(match.artifacts)
+                    ? match.artifacts.map((artifact) => `${match.id}:${toArtifactKey(String(artifact || '').trim())}`)
+                    : []
+            ))
+            .filter((entry) => !!entry && !entry.endsWith(':'))
+            .sort()
+            .join('|');
+        if (!artifactSignature) return;
+        if (autoRepairAttemptSignaturesRef.current.has(artifactSignature)) return;
+        autoRepairAttemptSignaturesRef.current.add(artifactSignature);
         let cancelled = false;
         const runAutoRepair = async () => {
             try {
@@ -249,7 +358,7 @@ const SmartCapturesPanel: React.FC = () => {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [matches]);
 
 
     const isWorkQueueItem = useCallback((m: Match) => {
@@ -561,10 +670,18 @@ const SmartCapturesPanel: React.FC = () => {
             weapons: toUnique([
                 ...(keep.loadout?.weapons || []),
                 ...mergeFrom.flatMap((match) => match.loadout?.weapons || []),
-            ]).slice(0, 2),
+            ]).slice(0, 10),
             equipment: toUnique([
                 ...(keep.loadout?.equipment || []),
                 ...mergeFrom.flatMap((match) => match.loadout?.equipment || []),
+            ]).slice(0, 2),
+            characterWeapons: toUnique([
+                ...(keep.loadout?.characterWeapons || []),
+                ...mergeFrom.flatMap((match) => match.loadout?.characterWeapons || []),
+            ]).slice(0, 2),
+            characterEquipment: toUnique([
+                ...(keep.loadout?.characterEquipment || []),
+                ...mergeFrom.flatMap((match) => match.loadout?.characterEquipment || []),
             ]).slice(0, 2),
         };
         const mergedTimeline = [
@@ -650,7 +767,9 @@ const SmartCapturesPanel: React.FC = () => {
                 if (imagePaths.length === 0) continue;
 
                 updateMatch({ ...match, ocrState: 'processing' });
-                const settled = await Promise.allSettled(imagePaths.map(p => rerunOCROnArtifact(p, activeUser, ocrMode, ocrRegions)));
+                const settled = await Promise.allSettled(
+                    imagePaths.map((p) => rerunOCROnArtifact(p, activeUser, ocrMode, ocrRegions, rerunRuntimeOptions))
+                );
                 type BulkRerunResult = RerunOcrResult & { imagePath: string };
                 const results: BulkRerunResult[] = settled.map((s, i) => {
                     if (s.status === 'fulfilled') return { ...s.value, imagePath: imagePaths[i] };
@@ -692,7 +811,7 @@ const SmartCapturesPanel: React.FC = () => {
                     screenshotType: lastData.screenshotType || 'unknown',
                     playerShip: merged.playerShip,
                     reachModifiers: merged.reachModifiers || [],
-                    enemyShips: lastData.enemyShips || [],
+                    enemyShips: merged.enemyShips || lastData.enemyShips || [],
                     hazards: lastData.hazards || [],
                     teammates: merged.teammates || [],
                     opponentTeams: merged.opponentTeams || [],
@@ -701,6 +820,9 @@ const SmartCapturesPanel: React.FC = () => {
                     rawText: lastData.rawText,
                     imagePreview: lastData.imagePreview,
                     ocrSource: lastData.ocrSource,
+                    analysisPathsUsed: lastData.analysisPathsUsed,
+                    consensusScore: lastData.consensusScore,
+                    providerUsed: lastData.providerUsed,
                     mergeStats: lastData.mergeStats,
                 };
 
@@ -716,10 +838,11 @@ const SmartCapturesPanel: React.FC = () => {
                     ...buildPlayerColorHints(sessionTeams),
                 };
                 const rerunAssignedColors = assignDeterministicTeamColors(unresolvedOppTeams, { playerColorHints: mergedHints });
-                const nextOppTeams: OpponentTeam[] = unresolvedOppTeams.map((team, index) => ({
-                    ...team,
-                    color: rerunAssignedColors[index] || 'unknown',
-                }));
+                const coloredOppTeams = applyPositionalTeamColorFallback(unresolvedOppTeams, rerunAssignedColors);
+                const nextOppTeams: OpponentTeam[] = backfillOpponentTeamShipTypes(coloredOppTeams, {
+                    sessionShipTypes,
+                    enemyShips: combined.enemyShips,
+                });
                 const nextOpponents = nextOppTeams.flatMap(t => t.players);
                 const shipForTeammateCap = combined.playerShip?.shipType || match.ship || '';
                 const cappedTeammates = capTeammateNames(nextTeammates, shipForTeammateCap);
@@ -760,7 +883,7 @@ const SmartCapturesPanel: React.FC = () => {
         } finally {
             setBulkBusy(false);
         }
-    }, [activeUser, matches, normalizeModifierName, ocrMode, ocrRegions, selectedIds, sessionTeams, setToast, updateMatch]);
+    }, [activeUser, matches, normalizeModifierName, ocrMode, ocrRegions, rerunRuntimeOptions, selectedIds, sessionTeams, setToast, updateMatch]);
 
     const handlePreviewArtifactRepair = useCallback(async () => {
         setRepairBusy(true);
@@ -790,7 +913,16 @@ const SmartCapturesPanel: React.FC = () => {
                 const current = byId.get(matchId);
                 if (!current) return;
                 const artifacts = Array.isArray(current.artifacts) ? current.artifacts : [];
-                const merged = [...artifacts, ...addedPaths];
+                const merged: string[] = [];
+                const seen = new Set<string>();
+                [...artifacts, ...addedPaths].forEach((artifactPath) => {
+                    if (typeof artifactPath !== 'string' || !artifactPath.trim()) return;
+                    const trimmed = artifactPath.trim();
+                    const key = toArtifactKey(trimmed);
+                    if (seen.has(key)) return;
+                    seen.add(key);
+                    merged.push(trimmed);
+                });
                 updateMatch({ ...current, artifacts: merged });
             });
             const updatedMatches = result.summary?.updatedMatches || 0;
@@ -839,10 +971,15 @@ const SmartCapturesPanel: React.FC = () => {
     return (
         <>
             <SmartCapturesShell
+                topNav={(
+                    <div className="flex items-center justify-start">
+                        {renderSectionTabs('sc-workspace-tabs--inline')}
+                    </div>
+                )}
                 content={activeSection === 'capture' ? (
                 <div className="h-full min-h-0 flex max-[1200px]:flex-col gap-2">
                     <div
-                        className={`min-h-0 transition-[width] duration-300 ${queueCollapsed ? 'w-[72px] min-w-[72px]' : 'min-w-[300px] max-[1200px]:w-full'}`}
+                        className={`min-h-0 min-w-0 transition-[width] duration-300 ${queueCollapsed ? 'w-[72px] min-w-[72px]' : 'min-w-[360px] max-[1200px]:w-full max-[1200px]:min-w-0'}`}
                         style={!queueCollapsed ? { width: `${queueWidthPct}%` } : undefined}
                     >
                         <SmartCapturesQueuePane
@@ -852,7 +989,6 @@ const SmartCapturesPanel: React.FC = () => {
                                     <div className="flex items-center justify-between gap-2">
                                         <div className="flex items-center gap-3 min-w-0">
                                             <QueueCollapseToggle collapsed={queueCollapsed} onToggle={toggleQueueCollapsed} />
-                                            {!queueCollapsed && renderSectionTabs('sc-workspace-tabs--inline')}
                                         </div>
                                     </div>
 
@@ -889,12 +1025,10 @@ const SmartCapturesPanel: React.FC = () => {
                                                 <button
                                                     type="button"
                                                     onClick={() => {
-                                                        window.dispatchEvent(new CustomEvent('settings:focus-section', {
-                                                            detail: {
-                                                                tab: 'ocr-capture',
-                                                                search: 'capture mode',
-                                                            },
-                                                        }));
+                                                        dispatchSettingsFocusRequest({
+                                                            tab: 'ocr-capture',
+                                                            search: 'capture mode',
+                                                        });
                                                         setShowSettings(true);
                                                     }}
                                                     className="h-9 w-9 md3-surface rounded-control inline-flex items-center justify-center text-md-sys-on-surface/70 hover:text-md-sys-primary transition-colors"
@@ -920,12 +1054,53 @@ const SmartCapturesPanel: React.FC = () => {
                                                     </button>
                                                 )}
                                             </div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const nextEnabled = !externalFallbackEnabled;
+                                                        setExternalFallbackEnabled(nextEnabled);
+                                                        if (nextEnabled && externalFallbackThreshold > 0.66) {
+                                                            setExternalFallbackThreshold(0.66);
+                                                        }
+                                                    }}
+                                                    className={`px-2.5 py-1.5 rounded-pill text-label-xs font-bold transition-colors ${
+                                                        externalFallbackEnabled
+                                                            ? 'bg-info-soft text-info'
+                                                            : 'md3-surface-high text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/8'
+                                                    }`}
+                                                    title="Lower-barrier external feedback assist for OCR reruns"
+                                                >
+                                                    External Assist {Math.round(externalFallbackThreshold * 100)}%
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const next = !forceMaxAnalysis;
+                                                        setForceMaxAnalysis(next);
+                                                        if (next) {
+                                                            setExternalFallbackEnabled(true);
+                                                            if (externalFallbackThreshold > 0.66) {
+                                                                setExternalFallbackThreshold(0.66);
+                                                            }
+                                                        }
+                                                    }}
+                                                    className={`px-2.5 py-1.5 rounded-pill text-label-xs font-bold transition-colors ${
+                                                        forceMaxAnalysis
+                                                            ? 'bg-warning-soft text-warning'
+                                                            : 'md3-surface-high text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/8'
+                                                    }`}
+                                                    title="Force max analysis using all available avenues"
+                                                >
+                                                    All Avenues {forceMaxAnalysis ? 'On' : 'Off'}
+                                                </button>
+                                            </div>
                                         </>
                                     )}
                                 </div>
                             }
                             body={
-                                <div className="flex-1 overflow-y-auto custom-scrollbar px-2 py-1.5 flex flex-col gap-2 min-h-0">
+                                <div className="flex-1 overflow-y-auto custom-scrollbar overscroll-contain px-2 py-1.5 flex flex-col gap-2 min-h-0">
                                     {selectedIds.size > 0 && !queueCollapsed && (
                                         <div className="sticky top-0 z-20 mb-2 rounded-card p-2.5 flex items-center justify-between gap-2 sc-queue-selection-bar">
                                             <span className="text-label-sm font-bold text-md-sys-primary inline-flex items-center gap-1.5">
@@ -1000,7 +1175,7 @@ const SmartCapturesPanel: React.FC = () => {
                         />
                     )}
 
-                    <div className="flex-1 min-w-0 min-h-0">
+                    <div className="flex-1 min-w-0 min-h-0 overflow-visible">
                         <SmartCapturesDetailPane
                             className="h-full"
                             content={selectedMatch ? (
@@ -1011,6 +1186,9 @@ const SmartCapturesPanel: React.FC = () => {
                                     activeUser={activeUser}
                                     ocrMode={ocrMode}
                                     ocrRegions={ocrRegions}
+                                    rerunRuntimeOptions={rerunRuntimeOptions}
+                                    forceMaxAnalysis={forceMaxAnalysis}
+                                    onForceMaxAnalysisChange={setForceMaxAnalysis}
                                     pilotRegistry={pilotRegistry}
                                     queueOnly={queueOnly}
                                     onNext={goNextQueue}
@@ -1024,27 +1202,43 @@ const SmartCapturesPanel: React.FC = () => {
                                         }
                                     }}
                                     onApplyToSession={(data) => {
+                                        let appliedMatch: Match | null = null;
+                                        const pendingMatchId = Number(useAppStore.getState().pendingMatchData?.id || 0);
+                                        const shouldSyncCurrentSession = Number.isFinite(pendingMatchId)
+                                            && pendingMatchId > 0
+                                            && pendingMatchId === Number(selectedMatch.id);
                                         const detectedShip = data.playerShip?.shipType || '';
-                                        if (detectedShip) setActiveShip(detectedShip, 'ocr');
-                                        const shipForCapacity = detectedShip || activeShip || SHIPS[0];
+                                        if (detectedShip && shouldSyncCurrentSession) setActiveShip(detectedShip, 'ocr');
+                                        const shipForCapacity = detectedShip || activeShip || telemetryDetectedShip || selectedMatch.ship || SHIPS[0];
+                                        const friendlyShipSeed = detectedShip || telemetryDetectedShip || activeShip || selectedMatch.ship || '';
                                         const maxTeammates = getMaxTeammatesForShip(shipForCapacity);
 
+                                        const teammateBaseline = shouldSyncCurrentSession
+                                            ? selectedTeammates
+                                            : (selectedMatch.teammates || []);
+                                        const mergedTeammates = [...teammateBaseline];
                                         if (data.teammates?.length > 0) {
-                                            const existing = new Set(selectedTeammates.map(n => normalizeOcrName(n).toLowerCase()));
-                                            const merged = [...selectedTeammates];
+                                            const existing = new Set(mergedTeammates.map(n => normalizeOcrName(n).toLowerCase()));
                                             for (const raw of data.teammates.map(t => t.name).filter(Boolean)) {
                                                 queueRosterCandidate(raw);
                                                 const resolved = resolveRosterName(raw);
                                                 if (!resolved) continue;
                                                 const key = normalizeOcrName(resolved).toLowerCase();
                                                 if (existing.has(key)) continue;
-                                                if (merged.length >= maxTeammates) break;
-                                                merged.push(resolved);
+                                                if (mergedTeammates.length >= maxTeammates) break;
+                                                mergedTeammates.push(resolved);
                                                 existing.add(key);
                                             }
-                                            setSelectedTeammates(merged);
                                         }
+                                        if (shouldSyncCurrentSession && mergedTeammates.length !== teammateBaseline.length) {
+                                            setSelectedTeammates(mergedTeammates);
+                                        }
+
                                         let resolvedOpponentTeams: OpponentTeam[] = [];
+                                        const opponentBaseline = shouldSyncCurrentSession
+                                            ? selectedOpponents
+                                            : (selectedMatch.opponents || []);
+                                        let mergedOpponents = [...opponentBaseline];
                                         if (data.opponentTeams?.length > 0) {
                                             data.opponentTeams.forEach((team) => {
                                                 team.players.forEach((player) => queueRosterCandidate(player.name || ''));
@@ -1065,38 +1259,99 @@ const SmartCapturesPanel: React.FC = () => {
                                             const assignedOpponentColors = assignDeterministicTeamColors(unresolvedOpponentTeams, {
                                                 playerColorHints: buildPlayerColorHints(sessionTeams),
                                             });
-                                            resolvedOpponentTeams = unresolvedOpponentTeams.map((team, index) => ({
-                                                ...team,
-                                                color: assignedOpponentColors[index] || 'unknown',
-                                            }));
+                                            resolvedOpponentTeams = backfillOpponentTeamShipTypes(
+                                                applyPositionalTeamColorFallback(unresolvedOpponentTeams, assignedOpponentColors),
+                                                {
+                                                    sessionShipTypes,
+                                                    enemyShips: data.enemyShips,
+                                                }
+                                            );
 
-                                            const existingOpp = new Set(selectedOpponents.map(n => normalizeOcrName(n).toLowerCase()));
-                                            const mergedOpp = [...selectedOpponents];
+                                            const existingOpp = new Set(opponentBaseline.map(n => normalizeOcrName(n).toLowerCase()));
                                             for (const resolved of resolvedOpponentTeams.flatMap((team) => team.players)) {
                                                 const key = normalizeOcrName(resolved).toLowerCase();
                                                 if (!key || existingOpp.has(key)) continue;
-                                                mergedOpp.push(resolved);
+                                                mergedOpponents.push(resolved);
                                                 existingOpp.add(key);
                                             }
-                                            setSelectedOpponents(mergedOpp);
+                                        }
+                                        if (shouldSyncCurrentSession && mergedOpponents.length !== opponentBaseline.length) {
+                                            setSelectedOpponents(mergedOpponents);
+                                        }
 
-                                            const newTeams = { ...sessionTeams };
-                                            const newShipTypes: Record<string, string> = {};
+                                        if (shouldSyncCurrentSession) {
+                                            const captainSeed = resolveRosterName(activeUser || selectedMatch.player || 'You', { allowFuzzy: false })
+                                                || activeUser
+                                                || selectedMatch.player
+                                                || 'You';
+                                            const friendlyTeamKey = `friendly:${captainSeed}`;
+                                            const nextSessionTeams = { ...sessionTeams };
+                                            let sessionTeamsChanged = false;
+                                            const existingFriendlyKeys = new Set(
+                                                (nextSessionTeams[friendlyTeamKey] || [])
+                                                    .map((name) => normalizeOcrName(name).toLowerCase())
+                                            );
+                                            const nextFriendlyMembers = [...(nextSessionTeams[friendlyTeamKey] || [])];
+                                            [captainSeed, ...mergedTeammates].forEach((name) => {
+                                                const key = normalizeOcrName(name).toLowerCase();
+                                                if (!key || existingFriendlyKeys.has(key)) return;
+                                                nextFriendlyMembers.push(name);
+                                                existingFriendlyKeys.add(key);
+                                            });
+                                            if (nextFriendlyMembers.length > 0) {
+                                                const prevFriendly = nextSessionTeams[friendlyTeamKey] || [];
+                                                const prevFriendlyKey = prevFriendly.map((name) => normalizeOcrName(name).toLowerCase()).join('|');
+                                                const nextFriendlyKey = nextFriendlyMembers.map((name) => normalizeOcrName(name).toLowerCase()).join('|');
+                                                if (prevFriendlyKey !== nextFriendlyKey) {
+                                                    nextSessionTeams[friendlyTeamKey] = nextFriendlyMembers;
+                                                    sessionTeamsChanged = true;
+                                                }
+                                            }
+
                                             resolvedOpponentTeams.forEach((team) => {
                                                 const colorKey = team.color || 'unknown';
-                                                if (!newTeams[colorKey]) newTeams[colorKey] = [];
-                                                const existingKeys = new Set(newTeams[colorKey].map((name) => normalizeOcrName(name).toLowerCase()));
+                                                if (!nextSessionTeams[colorKey]) {
+                                                    nextSessionTeams[colorKey] = [];
+                                                    sessionTeamsChanged = true;
+                                                }
+                                                const existingKeys = new Set(nextSessionTeams[colorKey].map((name) => normalizeOcrName(name).toLowerCase()));
                                                 team.players.forEach((player) => {
                                                     const playerKey = normalizeOcrName(player).toLowerCase();
                                                     if (!playerKey || existingKeys.has(playerKey)) return;
-                                                    newTeams[colorKey].push(player);
+                                                    nextSessionTeams[colorKey].push(player);
                                                     existingKeys.add(playerKey);
+                                                    sessionTeamsChanged = true;
                                                 });
-                                                if (team.shipType) newShipTypes[colorKey] = team.shipType;
                                             });
-                                            setSessionTeams(newTeams);
-                                            if (Object.keys(newShipTypes).length > 0) {
-                                                setSessionShipTypes(newShipTypes, 'ocr');
+                                            if (sessionTeamsChanged) {
+                                                setSessionTeams(nextSessionTeams);
+                                            }
+
+                                            const nextShipTypes: Record<string, string> = { ...sessionShipTypes };
+                                            let shipTypeChanged = false;
+                                            const setShipType = (key: string, value: string) => {
+                                                const trimmedKey = String(key || '').trim();
+                                                const trimmedValue = String(value || '').trim();
+                                                if (!trimmedKey || !trimmedValue) return;
+                                                if (nextShipTypes[trimmedKey] === trimmedValue) return;
+                                                nextShipTypes[trimmedKey] = trimmedValue;
+                                                shipTypeChanged = true;
+                                            };
+                                            if (friendlyShipSeed) {
+                                                setShipType(friendlyTeamKey, friendlyShipSeed);
+                                                setShipType('friendly', friendlyShipSeed);
+                                                setShipType(captainSeed, friendlyShipSeed);
+                                                mergedTeammates.forEach((name) => setShipType(name, friendlyShipSeed));
+                                            }
+                                            resolvedOpponentTeams.forEach((team) => {
+                                                const colorKey = team.color || 'unknown';
+                                                const teamShip = String(team.shipType || '').trim();
+                                                if (!teamShip) return;
+                                                setShipType(colorKey, teamShip);
+                                                team.players.forEach((name) => setShipType(name, teamShip));
+                                            });
+                                            if (shipTypeChanged) {
+                                                setSessionShipTypes(nextShipTypes, 'manual');
                                             }
                                         }
                                         const reachModifiers = data.reachModifiers ?? [];
@@ -1106,10 +1361,15 @@ const SmartCapturesPanel: React.FC = () => {
                                             hazards,
                                             normalizeModifierName
                                         );
-                                        if (canonicalSessionModifiers.length > 0) {
+                                        if (shouldSyncCurrentSession && canonicalSessionModifiers.length > 0) {
                                             setSelectedReachModifiers(canonicalSessionModifiers, 'ocr');
                                         }
-                                        setToast({ message: 'Applied reprocessed data to current session', type: 'success' });
+                                        setToast({
+                                            message: shouldSyncCurrentSession
+                                                ? 'Applied reprocessed data to current session'
+                                                : 'Applied OCR updates to selected match',
+                                            type: 'success'
+                                        });
                                         if (selectedMatch) {
                                             const matchUpdates: Partial<Match> = { ocrReviewedAt: Date.now(), ocrState: 'saved' as const };
                                             if (data.playerShip?.shipType) matchUpdates.ship = data.playerShip.shipType;
@@ -1158,11 +1418,15 @@ const SmartCapturesPanel: React.FC = () => {
                                                 matchUpdates.reachModifiers = canonicalMatchModifiers;
                                             }
                                             const latest = useAppStore.getState().matches.find(m => m.id === selectedMatch.id) || selectedMatch;
-                                            updateMatch({ ...latest, ...matchUpdates });
+                                            const nextMatch: Match = { ...latest, ...matchUpdates };
+                                            updateMatch(nextMatch);
+                                            appliedMatch = nextMatch;
                                             if (queueOnly) setTimeout(() => goNextQueue(), 0);
                                         }
+                                        return appliedMatch;
                                     }}
                                     onQueueRosterCandidate={queueRosterCandidate}
+                                    onAddPilotToRoster={addToRegistry}
                                     onDeleteMatch={handleDeleteSingleMatch}
                                 />
                             ) : (
@@ -1197,11 +1461,7 @@ const SmartCapturesPanel: React.FC = () => {
                 </div>
                 ) : (
                 <SmartCapturesToolsView>
-                    <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 hidden sm:block" />{/* Spacer to match QueueToggle padding */}
-                            {renderSectionTabs('sc-workspace-tabs--inline')}
-                        </div>
+                    <div className="flex items-center justify-end gap-4">
                         <div className="text-right">
                             <h2 className="text-label-md font-bold text-md-sys-on-surface">Smart Captures Tools</h2>
                         </div>
@@ -1333,6 +1593,94 @@ type RerunResultWithMeta = RerunOcrResult & {
     filename: string;
 };
 
+type RerunProgressPhase = 'prepare' | 'processing' | 'merging' | 'ready' | 'error';
+
+type RerunProgressState = {
+    phase: RerunProgressPhase;
+    current: number;
+    total: number;
+    status: string;
+    cloudStatus: string;
+    latestFile: string;
+    latestFileStatus: string;
+};
+
+const INITIAL_RERUN_PROGRESS: RerunProgressState = {
+    phase: 'ready',
+    current: 0,
+    total: 0,
+    status: '',
+    cloudStatus: '',
+    latestFile: '',
+    latestFileStatus: '',
+};
+
+const RERUN_PHASE_LABELS: Record<RerunProgressPhase, string> = {
+    prepare: 'Preparing',
+    processing: 'Processing',
+    merging: 'Merging',
+    ready: 'Ready',
+    error: 'Needs attention',
+};
+
+type NonCurrentWizardSnapshot = {
+    selectedTeammates: string[];
+    selectedOpponents: string[];
+    sessionTeams: Record<string, string[]>;
+    sessionShipTypes: Record<string, string>;
+    selectedReachModifiers: string[];
+    timeMin: string;
+    timeSec: string;
+    damageTaken: string;
+    kills: Record<string, number>;
+    poiEasy: number;
+    poiMedium: number;
+    poiEpic: number;
+    pendingPlacement: number | null;
+    pendingKilledBy: string;
+    pendingKilledByShip: string;
+    pendingMatchData: Partial<Match> | null;
+};
+
+type ApplyToSessionResult = Match | null;
+
+type OpenWizardForMatchOptions = {
+    matchOverride?: Match | null;
+    reusePendingDraft?: boolean;
+};
+
+type PendingMatchWriter = (data: Partial<Match> | null) => void;
+type PendingMatchReader = () => Partial<Match> | null;
+
+export const commitPendingMatchDataForWizard = (
+    pendingData: Partial<Match>,
+    writePendingMatch: PendingMatchWriter,
+    readPendingMatch: PendingMatchReader
+): boolean => {
+    writePendingMatch(pendingData);
+    const expectedMatchId = Number(pendingData.id || 0);
+    if (!Number.isInteger(expectedMatchId) || expectedMatchId <= 0) return false;
+    const committedMatchId = Number(readPendingMatch()?.id || 0);
+    return committedMatchId === expectedMatchId;
+};
+
+export const getRosterCandidateSuggestions = (
+    rawName: string,
+    pilotRegistry: string[]
+): Array<{ name: string; score: number }> => {
+    const normalized = normalizeOcrName(rawName || '');
+    if (!normalized || normalized.length < 2) return [];
+
+    return pilotRegistry
+        .map((pilot) => ({
+            name: pilot,
+            score: combinedNameSimilarityScore(normalized, normalizeOcrName(pilot)),
+        }))
+        .sort((a, b) => b.score - a.score)
+        .filter((entry) => entry.score > 0)
+        .slice(0, 3);
+};
+
 const SmartMatchDetail: React.FC<{
     match: Match;
     displayNumber: number;
@@ -1340,15 +1688,38 @@ const SmartMatchDetail: React.FC<{
     activeUser: string;
     ocrMode: string;
     ocrRegions: OcrRegionSettings;
+    rerunRuntimeOptions: OCRProcessRuntimeOptions;
+    forceMaxAnalysis: boolean;
+    onForceMaxAnalysisChange: (enabled: boolean) => void;
     pilotRegistry: string[];
     queueOnly?: boolean;
     onNext?: () => void;
     onPrev?: () => void;
     onResolve?: () => void;
-    onApplyToSession?: (data: OCRExtractedData) => void;
+    onApplyToSession?: (data: OCRExtractedData) => ApplyToSessionResult;
     onQueueRosterCandidate?: (name: string) => void;
+    onAddPilotToRoster?: (name: string) => void;
     onDeleteMatch?: (match: Match) => void;
-}> = ({ match, displayNumber, onUpdate, activeUser, ocrMode, ocrRegions, pilotRegistry, queueOnly = false, onNext, onPrev, onResolve, onApplyToSession, onQueueRosterCandidate, onDeleteMatch }) => {
+}> = ({
+    match,
+    displayNumber,
+    onUpdate,
+    activeUser,
+    ocrMode,
+    ocrRegions,
+    rerunRuntimeOptions,
+    forceMaxAnalysis,
+    onForceMaxAnalysisChange,
+    pilotRegistry,
+    queueOnly = false,
+    onNext,
+    onPrev,
+    onResolve,
+    onApplyToSession,
+    onQueueRosterCandidate,
+    onAddPilotToRoster,
+    onDeleteMatch
+}) => {
     const [artifacts, setArtifacts] = useState<{ images: string[], imageFiles: ArtifactFile[], telemetry: TelemetryArchiveEvent[][] }>({ images: [], imageFiles: [], telemetry: [] });
     const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
     const screenshotsSectionRef = useRef<HTMLDivElement | null>(null);
@@ -1363,12 +1734,18 @@ const SmartMatchDetail: React.FC<{
         playerIndex: number;
     } | null>(null);
     const [dragHoverTeamIndex, setDragHoverTeamIndex] = useState<number | null>(null);
+    const [editingTeamOpponentPlayer, setEditingTeamOpponentPlayer] = useState<{
+        teamIndex: number;
+        playerIndex: number;
+    } | null>(null);
+    const [editingTeamOpponentValue, setEditingTeamOpponentValue] = useState('');
     const [rerunning, setRerunning] = useState(false);
     const [rerunResults, setRerunResults] = useState<RerunResultWithMeta[] | null>(null);
     const [reviewData, setReviewData] = useState<OCRExtractedData | null>(null);
-    const [rerunProgress, setRerunProgress] = useState<{ current: number; total: number; status: string; cloudStatus: string }>({ current: 0, total: 0, status: '', cloudStatus: '' });
+    const [rerunProgress, setRerunProgress] = useState<RerunProgressState>({ ...INITIAL_RERUN_PROGRESS });
     const [showSecondaryActions, setShowSecondaryActions] = useState(false);
     const secondaryActionsRef = useRef<HTMLDivElement | null>(null);
+    const nonCurrentWizardSnapshotRef = useRef<NonCurrentWizardSnapshot | null>(null);
     const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
         screenshots: false,
         players: false,
@@ -1381,12 +1758,23 @@ const SmartMatchDetail: React.FC<{
         details: true,
         rerun: false,
     });
-    const { setToast, setActiveView, setShowWizard } = useUIState();
+    const { setToast, setActiveView, setShowWizard, showWizard } = useUIState();
     const {
         setSelectedTeammates,
         setSelectedOpponents,
         setSessionTeams,
         setSessionShipTypes,
+        setSelectedReachModifiers,
+        setTimeMin,
+        setTimeSec,
+        setDamageTaken,
+        setKills,
+        setPoiEasy,
+        setPoiMedium,
+        setPoiEpic,
+        setPendingPlacement,
+        setPendingKilledBy,
+        setPendingKilledByShip,
     } = useGameData();
     const normalizeModifierName = useCallback((name: string) => {
         const match = UI_REACH_MODIFIERS.find(m => m.toLowerCase() === name.toLowerCase());
@@ -1402,34 +1790,153 @@ const SmartMatchDetail: React.FC<{
         const fuzzy = findClosestMatch(normalized, pilotRegistry, threshold);
         return fuzzy || normalized;
     }, [pilotRegistry]);
-    const openWizardForMatch = useCallback(() => {
+    const rosterSuggestionsId = useId();
+    const shipSuggestionsId = useId();
+    const isInPilotRegistry = useCallback((name: string) => {
+        const normalized = normalizeOcrName(name || '').toLowerCase();
+        if (!normalized) return false;
+        return pilotRegistry.some((pilot) => normalizeOcrName(pilot).toLowerCase() === normalized);
+    }, [pilotRegistry]);
+    const addPilotToRosterQuick = useCallback((rawName: string) => {
+        if (!onAddPilotToRoster) return false;
+        const normalized = normalizeOcrName(rawName || '');
+        if (!normalized || normalized.length < 2) return false;
+        if (isInPilotRegistry(normalized)) return false;
+        onAddPilotToRoster(normalized);
+        setToast({ message: `Added "${normalized}" to roster`, type: 'success' });
+        return true;
+    }, [isInPilotRegistry, onAddPilotToRoster, setToast]);
+    const openWizardForMatch = useCallback((options?: OpenWizardForMatchOptions) => {
+        const matchOverride = options?.matchOverride || null;
+        const reusePendingDraft = options?.reusePendingDraft ?? true;
+        const storeState = useAppStore.getState();
+        const liveMatch = matchOverride || storeState.matches.find((entry) => entry.id === match.id) || match;
+        const pendingDraft = (storeState.pendingMatchData || null) as Partial<Match> | null;
+        const liveMatchId = Number(liveMatch.id || 0);
+        const pendingMatchId = Number(pendingDraft?.id || 0);
+        const shouldReusePendingDraft = reusePendingDraft
+            && Number.isInteger(pendingMatchId)
+            && pendingMatchId > 0
+            && pendingMatchId === liveMatchId;
+        const isTelemetryDraftMatch = String(liveMatch.subType || '').trim().toLowerCase() === 'telemetry draft';
+        if (isTelemetryDraftMatch) {
+            const telemetryHero = hasTelemetrySelection(storeState.telemetryDetectedHero)
+                ? storeState.telemetryDetectedHero
+                : '';
+            const telemetryShip = hasTelemetrySelection(storeState.telemetryDetectedShip)
+                ? storeState.telemetryDetectedShip
+                : '';
+            const hasHeroManualOverride = Boolean(
+                telemetryHero
+                && storeState.heroSource === 'manual'
+                && String(storeState.activeHero || '').trim()
+                && String(storeState.activeHero || '').trim() !== telemetryHero
+            );
+            const hasShipManualOverride = Boolean(
+                telemetryShip
+                && storeState.shipSource === 'manual'
+                && String(storeState.activeShip || '').trim()
+                && !sameShip(storeState.activeShip, telemetryShip)
+            );
+
+            storeState.resetSelectionSourcesForNewMatch?.();
+            if (telemetryHero && !hasHeroManualOverride) {
+                storeState.setActiveHero(telemetryHero, 'telemetry');
+            }
+            if (telemetryShip && !hasShipManualOverride) {
+                storeState.setActiveShip(telemetryShip, 'telemetry');
+            }
+        }
+        if (!shouldReusePendingDraft && !nonCurrentWizardSnapshotRef.current) {
+            const clonedSessionTeams = Object.fromEntries(
+                Object.entries(storeState.sessionTeams || {}).map(([teamKey, members]) => [teamKey, [...members]])
+            );
+            nonCurrentWizardSnapshotRef.current = {
+                selectedTeammates: [...(storeState.selectedTeammates || [])],
+                selectedOpponents: [...(storeState.selectedOpponents || [])],
+                sessionTeams: clonedSessionTeams,
+                sessionShipTypes: { ...(storeState.sessionShipTypes || {}) },
+                selectedReachModifiers: [...(storeState.selectedReachModifiers || [])],
+                timeMin: String(storeState.timeMin || ''),
+                timeSec: String(storeState.timeSec || ''),
+                damageTaken: String(storeState.damageTaken || ''),
+                kills: { ...(storeState.kills || {}) },
+                poiEasy: Number(storeState.poiEasy || 0),
+                poiMedium: Number(storeState.poiMedium || 0),
+                poiEpic: Number(storeState.poiEpic || 0),
+                pendingPlacement: Number.isInteger(storeState.pendingPlacement)
+                    ? Number(storeState.pendingPlacement)
+                    : null,
+                pendingKilledBy: String(storeState.pendingKilledBy || ''),
+                pendingKilledByShip: String(storeState.pendingKilledByShip || ''),
+                pendingMatchData: storeState.pendingMatchData ? { ...storeState.pendingMatchData } : null,
+            };
+        }
+        const latestMatch: Match = shouldReusePendingDraft
+            ? ({
+                ...liveMatch,
+                player: String(pendingDraft?.player || liveMatch.player || ''),
+                teammates: Array.isArray(pendingDraft?.teammates)
+                    ? [...pendingDraft.teammates]
+                    : [...(liveMatch.teammates || [])],
+                opponents: Array.isArray(pendingDraft?.opponents)
+                    ? [...pendingDraft.opponents]
+                    : [...(liveMatch.opponents || [])],
+                hero: String(pendingDraft?.hero || liveMatch.hero || ''),
+                ship: String(pendingDraft?.ship || liveMatch.ship || ''),
+                loadout: pendingDraft?.loadout || liveMatch.loadout,
+                weapons: pendingDraft?.weapons || liveMatch.weapons || {},
+                reachModifiers: Array.isArray(pendingDraft?.reachModifiers)
+                    ? [...pendingDraft.reachModifiers]
+                    : [...(liveMatch.reachModifiers || [])],
+                kills: pendingDraft?.kills
+                    ? { ...(liveMatch.kills || {}), ...(pendingDraft.kills as Record<string, number>) }
+                    : { ...(liveMatch.kills || {}) },
+                time: String(pendingDraft?.time || liveMatch.time || ''),
+                poiEasy: Number(pendingDraft?.poiEasy ?? liveMatch.poiEasy ?? 0),
+                poiMedium: Number(pendingDraft?.poiMedium ?? liveMatch.poiMedium ?? 0),
+                poiEpic: Number(pendingDraft?.poiEpic ?? liveMatch.poiEpic ?? 0),
+                damageTaken: Number(pendingDraft?.damageTaken ?? liveMatch.damageTaken ?? 0),
+                notes: String(pendingDraft?.notes || liveMatch.notes || ''),
+                artifacts: Array.isArray(pendingDraft?.artifacts)
+                    ? [...pendingDraft.artifacts]
+                    : [...(liveMatch.artifacts || [])],
+                ocrState: (pendingDraft?.ocrState || liveMatch.ocrState),
+                opponentTeams: Array.isArray(pendingDraft?.opponentTeams)
+                    ? pendingDraft.opponentTeams
+                    : (liveMatch.opponentTeams || undefined),
+                ocrDebug: pendingDraft?.ocrDebug || liveMatch.ocrDebug || undefined,
+                eliminatedByTeam: String(pendingDraft?.eliminatedByTeam || liveMatch.eliminatedByTeam || '') || undefined,
+            } as Match)
+            : liveMatch;
+        setActiveView('recording');
         const dedupeNames = (names: string[]) => Array.from(new Set(
             names
                 .map((name) => String(name || '').trim())
                 .filter(Boolean)
         ));
-        const normalizedOpponentTeams: OpponentTeam[] = Array.isArray(match.opponentTeams) && match.opponentTeams.length > 0
-            ? match.opponentTeams
-            : (match.opponents || []).length > 0
+        const normalizedOpponentTeams: OpponentTeam[] = Array.isArray(latestMatch.opponentTeams) && latestMatch.opponentTeams.length > 0
+            ? latestMatch.opponentTeams
+            : (latestMatch.opponents || []).length > 0
                 ? [{
                     teamName: 'Enemy Team',
                     color: 'enemy',
                     shipType: '',
-                    players: [...(match.opponents || [])],
+                    players: [...(latestMatch.opponents || [])],
                 }]
                 : [];
 
-        const friendlySeed = dedupeNames([activeUser || match.player || 'You', ...(match.teammates || [])]);
-        const friendlyTeamKey = `friendly:${activeUser || match.player || 'You'}`;
+        const friendlySeed = dedupeNames([activeUser || latestMatch.player || 'You', ...(latestMatch.teammates || [])]);
+        const friendlyTeamKey = `friendly:${activeUser || latestMatch.player || 'You'}`;
         const seededSessionTeams: Record<string, string[]> = {};
         const seededShipTypes: Record<string, string> = {};
         if (friendlySeed.length > 0) {
             seededSessionTeams[friendlyTeamKey] = friendlySeed;
-            if (match.ship) {
-                seededShipTypes[friendlyTeamKey] = match.ship;
-                seededShipTypes.friendly = match.ship;
+            if (latestMatch.ship) {
+                seededShipTypes[friendlyTeamKey] = latestMatch.ship;
+                seededShipTypes.friendly = latestMatch.ship;
                 friendlySeed.forEach((name) => {
-                    seededShipTypes[name] = match.ship || '';
+                    seededShipTypes[name] = latestMatch.ship || '';
                 });
             }
         }
@@ -1450,44 +1957,113 @@ const SmartMatchDetail: React.FC<{
             }
         });
 
-        setSelectedTeammates(dedupeNames(match.teammates || []));
+        setSelectedTeammates(dedupeNames(latestMatch.teammates || []));
         const seededOpponents = normalizedOpponentTeams.length > 0
             ? dedupeNames(normalizedOpponentTeams.flatMap((team) => team.players || []))
-            : dedupeNames(match.opponents || []);
+            : dedupeNames(latestMatch.opponents || []);
         setSelectedOpponents(seededOpponents);
         setSessionTeams(seededSessionTeams);
         setSessionShipTypes(seededShipTypes, 'manual');
+        setSelectedReachModifiers([...(latestMatch.reachModifiers || [])], 'manual');
 
-        const wizardResult = (match.result === 'Win' || match.result === 'Loss' || match.result === 'Draw')
-            ? match.result
-            : 'Win';
-        useAppStore.getState().setPendingMatchData({
-            id: match.id,
-            timestamp: match.timestamp,
-            mode: match.mode,
-            player: match.player,
-            teammates: [...(match.teammates || [])],
-            opponents: [...(match.opponents || [])],
-            hero: match.hero,
-            ship: match.ship,
-            loadout: match.loadout,
-            weapons: match.weapons || {},
-            reachModifiers: [...(match.reachModifiers || [])],
-            kills: { ...(match.kills || {}) },
-            time: match.time || '',
-            poiEasy: match.poiEasy || 0,
-            poiMedium: match.poiMedium || 0,
-            poiEpic: match.poiEpic || 0,
-            damageTaken: match.damageTaken || 0,
-            notes: match.notes || '',
-            artifacts: [...(match.artifacts || [])],
-            ocrState: match.ocrState,
-            opponentTeams: match.opponentTeams || undefined,
-            ocrDebug: match.ocrDebug || undefined,
-        } as Partial<Match>);
-        setShowWizard(wizardResult);
+        const rawTime = String(latestMatch.time || '').trim();
+        const [rawMin = '', rawSec = ''] = rawTime.split(':');
+        const normalizedMin = /^\d+$/.test(rawMin) ? rawMin.padStart(2, '0') : '';
+        const normalizedSec = /^\d+$/.test(rawSec) ? rawSec.padStart(2, '0') : '';
+        setTimeMin(normalizedMin, 'manual');
+        setTimeSec(normalizedSec, 'manual');
+        setDamageTaken(latestMatch.damageTaken == null ? '' : String(Math.max(0, Number(latestMatch.damageTaken) || 0)), 'manual');
+        setKills({ ...(latestMatch.kills || {}) });
+        setPoiEasy(Number(latestMatch.poiEasy || 0));
+        setPoiMedium(Number(latestMatch.poiMedium || 0));
+        setPoiEpic(Number(latestMatch.poiEpic || 0));
+        setPendingPlacement(
+            latestMatch.result === 'Loss' && Number.isInteger(latestMatch.placement)
+                ? Math.min(5, Math.max(2, Number(latestMatch.placement)))
+                : null
+        );
+        setPendingKilledBy(String(latestMatch.killedBy || ''));
+        setPendingKilledByShip(String(latestMatch.killedByShip || ''));
+
+        const pendingMatchData: Partial<Match> = {
+            id: latestMatch.id,
+            timestamp: latestMatch.timestamp,
+            mode: latestMatch.mode,
+            player: latestMatch.player,
+            teammates: [...(latestMatch.teammates || [])],
+            opponents: [...(latestMatch.opponents || [])],
+            hero: latestMatch.hero,
+            ship: latestMatch.ship,
+            loadout: latestMatch.loadout,
+            weapons: latestMatch.weapons || {},
+            reachModifiers: [...(latestMatch.reachModifiers || [])],
+            kills: { ...(latestMatch.kills || {}) },
+            time: latestMatch.time || '',
+            poiEasy: latestMatch.poiEasy || 0,
+            poiMedium: latestMatch.poiMedium || 0,
+            poiEpic: latestMatch.poiEpic || 0,
+            damageTaken: latestMatch.damageTaken || 0,
+            notes: latestMatch.notes || '',
+            artifacts: [...(latestMatch.artifacts || [])],
+            ocrState: latestMatch.ocrState,
+            opponentTeams: latestMatch.opponentTeams || undefined,
+            ocrDebug: latestMatch.ocrDebug || undefined,
+            eliminatedByTeam: latestMatch.eliminatedByTeam || undefined,
+        };
+        const didCommitPending = commitPendingMatchDataForWizard(
+            pendingMatchData,
+            (nextPending) => useAppStore.getState().setPendingMatchData(nextPending),
+            () => (useAppStore.getState().pendingMatchData || null) as Partial<Match> | null
+        );
+        if (!didCommitPending) {
+            setToast({ message: 'Unable to open wizard: pending match data was not committed.', type: 'error' });
+            return;
+        }
+        setShowWizard('Match Result');
         setToast({ message: 'Opened wizard for this match', type: 'info' });
-    }, [activeUser, match, setSelectedOpponents, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setShowWizard, setToast]);
+    }, [activeUser, match, setActiveView, setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setShowWizard, setTimeMin, setTimeSec, setToast]);
+
+    useEffect(() => {
+        if (showWizard !== null) return;
+        const snapshot = nonCurrentWizardSnapshotRef.current;
+        if (!snapshot) return;
+        nonCurrentWizardSnapshotRef.current = null;
+        const restoredTeams = Object.fromEntries(
+            Object.entries(snapshot.sessionTeams || {}).map(([teamKey, members]) => [teamKey, [...members]])
+        );
+        setSelectedTeammates([...snapshot.selectedTeammates]);
+        setSelectedOpponents([...snapshot.selectedOpponents]);
+        setSessionTeams(restoredTeams);
+        setSessionShipTypes({ ...snapshot.sessionShipTypes }, 'manual');
+        setSelectedReachModifiers([...snapshot.selectedReachModifiers], 'manual');
+        setTimeMin(snapshot.timeMin, 'manual');
+        setTimeSec(snapshot.timeSec, 'manual');
+        setDamageTaken(snapshot.damageTaken, 'manual');
+        setKills({ ...snapshot.kills });
+        setPoiEasy(snapshot.poiEasy);
+        setPoiMedium(snapshot.poiMedium);
+        setPoiEpic(snapshot.poiEpic);
+        setPendingPlacement(snapshot.pendingPlacement);
+        setPendingKilledBy(snapshot.pendingKilledBy);
+        setPendingKilledByShip(snapshot.pendingKilledByShip);
+        useAppStore.getState().setPendingMatchData(snapshot.pendingMatchData ? { ...snapshot.pendingMatchData } : null);
+    }, [setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setTimeMin, setTimeSec, showWizard]);
+
+    const applyReviewDataToSession = useCallback(() => {
+        if (!onApplyToSession) {
+            setToast({ message: 'Apply OCR is unavailable in this context.', type: 'warning' });
+            return;
+        }
+        if (!reviewData) {
+            setToast({ message: 'No OCR analysis is ready yet. Run Re-analyze first.', type: 'warning' });
+            return;
+        }
+        const appliedMatch = onApplyToSession(reviewData);
+        openWizardForMatch({
+            matchOverride: appliedMatch,
+            reusePendingDraft: false,
+        });
+    }, [onApplyToSession, openWizardForMatch, reviewData, setToast]);
 
     useEffect(() => {
         setShowSecondaryActions(false);
@@ -1516,6 +2092,9 @@ const SmartMatchDetail: React.FC<{
     useEffect(() => {
         setArtifacts({ images: [], imageFiles: [], telemetry: [] });
         setRerunResults(null);
+        setRerunProgress({ ...INITIAL_RERUN_PROGRESS });
+        setEditingTeamOpponentPlayer(null);
+        setEditingTeamOpponentValue('');
         getMatchArtifactsStructured(match.id)
             .then(setArtifacts)
             .catch((error: unknown) => {
@@ -1576,17 +2155,52 @@ const SmartMatchDetail: React.FC<{
     };
 
     const savePlayerEdit = () => {
-        if (!editingPlayerIdx || !editPlayerValue.trim()) { setEditingPlayerIdx(null); return; }
+        if (!editingPlayerIdx) { setEditingPlayerIdx(null); return; }
         const { type, idx } = editingPlayerIdx;
+        const resolvedName = resolveRosterName(editPlayerValue, { allowFuzzy: false });
+        if (!resolvedName) { setEditingPlayerIdx(null); return; }
         const arr = type === 'teammate' ? [...(match.teammates || [])] : [...(match.opponents || [])];
-        arr[idx] = editPlayerValue.trim();
+        const existing = new Set(
+            arr
+                .map((name, index) => (index === idx ? '' : normalizeOcrName(name).toLowerCase()))
+                .filter(Boolean)
+        );
+        const key = normalizeOcrName(resolvedName).toLowerCase();
+        if (key && existing.has(key)) {
+            setToast({ message: `${resolvedName} is already listed`, type: 'warning' });
+            return;
+        }
+        arr[idx] = resolvedName;
         onUpdate({ ...match, [type === 'teammate' ? 'teammates' : 'opponents']: arr });
         setEditingPlayerIdx(null);
     };
 
+    const normalizedDraftName = normalizeOcrName(newPlayerName || '');
+    const draftInRoster = isInPilotRegistry(normalizedDraftName);
+    const canQuickAddDraftToRoster = Boolean(
+        addingPlayer
+        && onAddPilotToRoster
+        && normalizedDraftName.length >= 2
+        && !draftInRoster
+    );
+    const addDraftPlayerToRoster = () => {
+        if (!canQuickAddDraftToRoster) return;
+        addPilotToRosterQuick(normalizedDraftName);
+    };
     const addPlayer = () => {
-        if (!addingPlayer || !newPlayerName.trim()) { setAddingPlayer(null); setNewPlayerName(''); return; }
+        if (!addingPlayer) { setAddingPlayer(null); setNewPlayerName(''); return; }
+        const resolvedName = resolveRosterName(newPlayerName, { allowFuzzy: false });
+        if (!resolvedName) { setAddingPlayer(null); setNewPlayerName(''); return; }
         const field = addingPlayer === 'teammate' ? 'teammates' : 'opponents';
+        const currentPlayers = [...(match[field] || [])];
+        const existingKeys = new Set(currentPlayers.map((name) => normalizeOcrName(name).toLowerCase()));
+        const nextKey = normalizeOcrName(resolvedName).toLowerCase();
+        if (nextKey && existingKeys.has(nextKey)) {
+            setToast({ message: `${resolvedName} is already listed`, type: 'warning' });
+            setAddingPlayer(null);
+            setNewPlayerName('');
+            return;
+        }
         if (addingPlayer === 'teammate') {
             const maxTeammates = maxTeammatesForShip(match.ship || '');
             if ((match.teammates || []).length >= maxTeammates) {
@@ -1596,7 +2210,7 @@ const SmartMatchDetail: React.FC<{
                 return;
             }
         }
-        const arr = [...(match[field] || []), newPlayerName.trim()];
+        const arr = [...currentPlayers, resolvedName];
         onUpdate({ ...match, [field]: arr });
         setAddingPlayer(null);
         setNewPlayerName('');
@@ -1653,6 +2267,41 @@ const SmartMatchDetail: React.FC<{
         setDraggedOpponentPlayer(null);
         setDragHoverTeamIndex(null);
     }, [draggedOpponentPlayer, moveOpponentPlayer]);
+    const saveOpponentTeamPlayerEdit = useCallback((teamIndex: number, playerIndex: number) => {
+        const resolvedName = resolveRosterName(editingTeamOpponentValue, { allowFuzzy: false });
+        if (!resolvedName) {
+            setEditingTeamOpponentPlayer(null);
+            setEditingTeamOpponentValue('');
+            return;
+        }
+        const teams = [...(match.opponentTeams || [])];
+        const targetTeam = teams[teamIndex];
+        if (!targetTeam) {
+            setEditingTeamOpponentPlayer(null);
+            setEditingTeamOpponentValue('');
+            return;
+        }
+        const existing = new Set(
+            (targetTeam.players || [])
+                .map((name, idx) => (idx === playerIndex ? '' : normalizeOcrName(name).toLowerCase()))
+                .filter(Boolean)
+        );
+        const key = normalizeOcrName(resolvedName).toLowerCase();
+        if (key && existing.has(key)) {
+            setToast({ message: `${resolvedName} is already in this team`, type: 'warning' });
+            return;
+        }
+        const nextPlayers = [...(targetTeam.players || [])];
+        nextPlayers[playerIndex] = resolvedName;
+        teams[teamIndex] = { ...targetTeam, players: nextPlayers };
+        onUpdate({
+            ...match,
+            opponentTeams: teams,
+            opponents: teams.flatMap((team) => team.players).filter(Boolean),
+        });
+        setEditingTeamOpponentPlayer(null);
+        setEditingTeamOpponentValue('');
+    }, [editingTeamOpponentValue, match, onUpdate, resolveRosterName, setToast]);
 
     const renderPlayerChips = (players: string[], type: 'teammate' | 'opponent') => {
         const chipClass = type === 'teammate' ? 'sc-player-chip sc-player-chip--teammate' : 'sc-player-chip sc-player-chip--opponent';
@@ -1668,6 +2317,7 @@ const SmartMatchDetail: React.FC<{
                                 onChange={e => setEditPlayerValue(e.target.value)}
                                 onKeyDown={e => { if (e.key === 'Enter') savePlayerEdit(); if (e.key === 'Escape') setEditingPlayerIdx(null); }}
                                 className="md3-surface rounded px-2 py-1 text-label-sm outline-none w-24"
+                                list={pilotRegistry.length > 0 ? rosterSuggestionsId : undefined}
                                 autoFocus
                             />
                             <button onClick={savePlayerEdit} className="hover:text-success"><Check size={10} /></button>
@@ -1679,7 +2329,10 @@ const SmartMatchDetail: React.FC<{
                             className={`px-2 py-0.5 ${chipClass} rounded-md text-label-sm font-bold flex items-center gap-1 group cursor-pointer`}
                             onClick={() => { setEditingPlayerIdx({ type, idx }); setEditPlayerValue(p); }}
                         >
-                            {p}
+                            {type === 'teammate' && (
+                                <ShieldCheck size={10} className="text-info shrink-0" />
+                            )}
+                            <span className="truncate max-w-[200px]">{p}</span>
                             <button
                                 onClick={e => { e.stopPropagation(); removePlayer(type, idx); }}
                                 className="opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity"
@@ -1698,8 +2351,20 @@ const SmartMatchDetail: React.FC<{
                             onKeyDown={e => { if (e.key === 'Enter') addPlayer(); if (e.key === 'Escape') { setAddingPlayer(null); setNewPlayerName(''); } }}
                             placeholder="Name..."
                             className="md3-surface rounded px-2 py-1 text-label-sm outline-none w-24"
+                            list={pilotRegistry.length > 0 ? rosterSuggestionsId : undefined}
                             autoFocus
                         />
+                        {canQuickAddDraftToRoster && (
+                            <button
+                                type="button"
+                                onClick={addDraftPlayerToRoster}
+                                className="px-1.5 py-0.5 rounded-md text-label-xs font-bold bg-info-soft text-info hover:bg-info-soft-strong transition-colors"
+                                title="Add player to roster"
+                                aria-label="Add player to roster"
+                            >
+                                +R
+                            </button>
+                        )}
                         <button onClick={addPlayer} className="hover:text-success"><Check size={10} /></button>
                         <button onClick={() => { setAddingPlayer(null); setNewPlayerName(''); }} className="hover:text-danger"><X size={10} /></button>
                     </div>
@@ -1752,32 +2417,83 @@ const SmartMatchDetail: React.FC<{
         if (!match.artifacts || match.artifacts.length === 0) return;
         setRerunning(true);
         setRerunResults(null);
+        setRerunProgress({
+            ...INITIAL_RERUN_PROGRESS,
+            phase: 'prepare',
+            status: 'Preparing OCR rerun...',
+            latestFileStatus: 'Collecting screenshots',
+        });
         setReviewData(null);
         onUpdate({ ...match, ocrState: 'processing' });
         const imageExts = ['.png', '.jpg', '.jpeg', '.bmp', '.webp'];
         const imagePaths = match.artifacts.filter(p => imageExts.some(ext => p.toLowerCase().endsWith(ext)));
-        if (imagePaths.length === 0) { setRerunning(false); return; }
+        if (imagePaths.length === 0) {
+            setRerunning(false);
+            setRerunProgress({
+                ...INITIAL_RERUN_PROGRESS,
+                phase: 'error',
+                status: 'No screenshots available for OCR rerun.',
+                latestFileStatus: 'No valid screenshot artifacts',
+            });
+            setToast({ message: 'No screenshots found for OCR rerun.', type: 'warning' });
+            return;
+        }
 
         const cloudLabel = ocrMode === 'local' ? '' : ocrMode === 'cloud' ? 'Cloud OCR' : 'Local + Cloud OCR';
-        setRerunProgress({ current: 0, total: imagePaths.length, status: 'Starting analysis...', cloudStatus: cloudLabel ? `Cloud OCR: ${cloudLabel}` : '' });
+        setRerunProgress({
+            phase: 'processing',
+            current: 0,
+            total: imagePaths.length,
+            status: 'Starting analysis...',
+            cloudStatus: cloudLabel ? `Cloud OCR: ${cloudLabel}` : '',
+            latestFileStatus: 'Queued',
+            latestFile: '',
+        });
 
         let completed = 0;
-        setRerunProgress({ current: 0, total: imagePaths.length, status: `Processing ${imagePaths.length} images in parallel...`, cloudStatus: cloudLabel ? `${cloudLabel} active` : '' });
-        const settled = await Promise.allSettled(
+        let latestFile = '';
+        let latestFileStatus = '';
+        setRerunProgress({
+            phase: 'processing',
+            current: 0,
+            total: imagePaths.length,
+            status: `Processing ${imagePaths.length} images in parallel...`,
+            cloudStatus: cloudLabel ? `${cloudLabel} active` : '',
+            latestFileStatus: 'Waiting for first completed file',
+            latestFile: '',
+        });
+        const results: RerunResultWithMeta[] = await Promise.all(
             imagePaths.map(async (path) => {
-                const result = await rerunOCROnArtifact(path, activeUser, ocrMode, ocrRegions);
-                completed++;
                 const filename = path.split(/[\\/]/).pop() || 'image';
-                setRerunProgress(prev => ({ ...prev, current: completed, status: `Completed ${filename} (${completed}/${imagePaths.length})` }));
-                return { ...result, imagePath: path, filename };
+                let result: RerunResultWithMeta;
+                let latestStatusForFile = 'Failed: Unknown error';
+                try {
+                    const rerunResult = await rerunOCROnArtifact(path, activeUser, ocrMode, ocrRegions, rerunRuntimeOptions);
+                    latestStatusForFile = rerunResult.success
+                        ? 'Succeeded'
+                        : `Failed: ${String(rerunResult.error || rerunResult.message || 'OCR failed')}`;
+                    result = { ...rerunResult, imagePath: path, filename };
+                } catch (error) {
+                    const failureReason = errorMessage(error);
+                    result = { success: false, error: failureReason, imagePath: path, filename };
+                    latestStatusForFile = `Failed: ${failureReason}`;
+                } finally {
+                    completed += 1;
+                    latestFile = filename;
+                    latestFileStatus = latestStatusForFile;
+                    setRerunProgress(prev => ({
+                        ...prev,
+                        phase: 'processing',
+                        current: completed,
+                        total: imagePaths.length,
+                        status: `Processed ${completed}/${imagePaths.length} files`,
+                        latestFile: filename,
+                        latestFileStatus: latestStatusForFile,
+                    }));
+                }
+                return result;
             })
         );
-        const results: RerunResultWithMeta[] = settled.map((s, i) => {
-            if (s.status === 'fulfilled') return s.value;
-            const path = imagePaths[i];
-            const filename = path?.split(/[\\/]/).pop() || 'image';
-            return { success: false, error: (s as PromiseRejectedResult).reason?.message || 'Unknown error', imagePath: path, filename };
-        });
         setRerunResults(results);
         setRerunning(false);
         const successful = results.filter((r): r is RerunResultWithMeta & { success: true; data: OCRExtractedData } => !!(r.success && r.data));
@@ -1788,24 +2504,27 @@ const SmartMatchDetail: React.FC<{
         const cloudErrors = successful
             .map((r) => String(r.data?.ocrCloudError || '').trim())
             .filter(Boolean);
-        setRerunProgress(prev => ({
-            ...prev,
-            status: `Done - ${successful.length}/${results.length} succeeded`,
-            cloudStatus: cloudUsed
-                ? 'Cloud OCR contributed'
-                : (fallbackReasons[0]
-                    ? fallbackReasons[0]
-                    : (cloudLabel
-                        ? (cloudErrors[0] ? `Cloud OCR unavailable (${cloudErrors[0]})` : 'Cloud OCR unavailable')
-                        : '')),
-        }));
+        const cloudStatusMessage = cloudUsed
+            ? 'Cloud OCR contributed'
+            : (fallbackReasons[0]
+                ? fallbackReasons[0]
+                : (cloudLabel
+                    ? (cloudErrors[0] ? `Cloud OCR unavailable (${cloudErrors[0]})` : 'Cloud OCR unavailable')
+                    : ''));
 
         if (successful.length > 0) {
+            setRerunProgress(prev => ({
+                ...prev,
+                phase: 'merging',
+                status: `Merging ${successful.length} successful OCR result${successful.length === 1 ? '' : 's'}...`,
+                latestFileStatus: `Merging ${successful.length}/${results.length} successful file${successful.length === 1 ? '' : 's'}`,
+            }));
             let merged: Partial<OCRExtractedData> = {
                 playerShip: undefined,
                 reachModifiers: [],
                 teammates: [],
                 opponentTeams: [],
+                enemyShips: [],
             };
             for (const r of successful) {
                 const baseMods = normalizeModifierEntries(
@@ -1823,6 +2542,7 @@ const SmartMatchDetail: React.FC<{
                     reachModifiers: allMods,
                     teammates: r.data.teammates || [],
                     opponentTeams: r.data.opponentTeams || [],
+                    enemyShips: r.data.enemyShips || [],
                 });
             }
             const lastData = successful[successful.length - 1].data;
@@ -1830,7 +2550,7 @@ const SmartMatchDetail: React.FC<{
                 screenshotType: lastData.screenshotType || 'unknown',
                 playerShip: merged.playerShip,
                 reachModifiers: merged.reachModifiers || [],
-                enemyShips: lastData.enemyShips || [],
+                enemyShips: merged.enemyShips || lastData.enemyShips || [],
                 teammates: merged.teammates || [],
                 opponentTeams: merged.opponentTeams || [],
                 artifactType: lastData.artifactType,
@@ -1841,12 +2561,36 @@ const SmartMatchDetail: React.FC<{
                 ocrFallbackReason: lastData.ocrFallbackReason,
                 ocrCloudError: lastData.ocrCloudError,
                 ocrGeminiError: lastData.ocrGeminiError,
+                analysisPathsUsed: lastData.analysisPathsUsed,
+                consensusScore: lastData.consensusScore,
+                providerUsed: lastData.providerUsed,
                 mergeStats: lastData.mergeStats,
             };
+            setRerunProgress(prev => ({
+                ...prev,
+                phase: 'ready',
+                status: `Done - ${successful.length}/${results.length} succeeded`,
+                cloudStatus: cloudStatusMessage,
+                latestFile: latestFile || prev.latestFile,
+                latestFileStatus: latestFileStatus || prev.latestFileStatus || 'Completed',
+            }));
             setReviewData(combinedData);
             onUpdate({ ...match, ocrState: 'reviewing' });
+            setToast({
+                message: `Analysis complete: ${successful.length}/${results.length} screenshot${results.length === 1 ? '' : 's'} processed. Click Apply OCR to sync.`,
+                type: 'success',
+            });
         } else {
+            setRerunProgress(prev => ({
+                ...prev,
+                phase: 'error',
+                status: `Done - ${successful.length}/${results.length} succeeded`,
+                cloudStatus: cloudStatusMessage,
+                latestFile: latestFile || prev.latestFile,
+                latestFileStatus: latestFileStatus || prev.latestFileStatus || 'No successful OCR output',
+            }));
             onUpdate({ ...match, ocrState: 'error' });
+            setToast({ message: 'OCR re-analysis failed for all screenshots.', type: 'error' });
         }
     };
     const maxTeammatesForShip = (shipType?: string | null) => getMaxTeammatesForShipLimit(shipType);
@@ -1860,6 +2604,24 @@ const SmartMatchDetail: React.FC<{
         green: 'text-success', blue: 'text-info', cyan: 'text-info',
         purple: 'text-accent', unknown: 'text-md-sys-on-surface/60',
     };
+    const rerunSuccessCount = rerunResults
+        ? rerunResults.filter((result) => !!(result.success && result.data)).length
+        : 0;
+    const rerunFailureResults = rerunResults
+        ? rerunResults.filter((result) => !result.success)
+        : [];
+    const rerunProgressCurrent = rerunProgress.total > 0
+        ? Math.min(rerunProgress.current, rerunProgress.total)
+        : 0;
+    const rerunProgressPercent = rerunProgress.total > 0
+        ? Math.max(0, Math.min(100, Math.round((rerunProgressCurrent / rerunProgress.total) * 100)))
+        : 0;
+    const showRerunStatus = rerunning
+        || !!rerunResults
+        || !!String(rerunProgress.status || '').trim()
+        || !!String(rerunProgress.cloudStatus || '').trim()
+        || !!String(rerunProgress.latestFile || '').trim()
+        || !!String(rerunProgress.latestFileStatus || '').trim();
     const hasResult = match.result === 'Win' || match.result === 'Loss' || match.result === 'Draw';
     const hasArtifacts = (artifacts.images && artifacts.images.length > 0) || (match.artifacts && match.artifacts.length > 0);
     const queueStatus = getQueueStatus(match);
@@ -1905,6 +2667,12 @@ const SmartMatchDetail: React.FC<{
     const telemetryConsistencyChips = telemetryConsistency
         ? getTelemetryConsistencyWarningChips({ ...match, telemetryConsistency })
         : [];
+    const latestLoadoutTelemetrySnapshot = telemetryConsistency?.loadoutSaves?.length
+        ? telemetryConsistency.loadoutSaves[telemetryConsistency.loadoutSaves.length - 1]
+        : null;
+    const loadoutTelemetrySourceBadgeLabel = latestLoadoutTelemetrySnapshot?.source
+        ? `Source: ${latestLoadoutTelemetrySnapshot.source}`
+        : null;
     const applyTelemetryConsistencyChip = useCallback((chipKey: 'team-count-mismatch' | 'duration-mismatch' | 'mode-mismatch') => {
         if (chipKey !== 'duration-mismatch') return;
         const telemetryDuration = telemetryConsistency?.telemetryDurationSeconds;
@@ -1959,9 +2727,9 @@ const SmartMatchDetail: React.FC<{
             } else if (k === 'r' && match.artifacts && match.artifacts.length > 0 && !rerunning) {
                 e.preventDefault();
                 void handleRerunAnalysis();
-            } else if (k === 'a' && reviewData && onApplyToSession) {
+            } else if (k === 'a' && onApplyToSession) {
                 e.preventDefault();
-                onApplyToSession(reviewData);
+                applyReviewDataToSession();
             } else if (k === 'j') {
                 e.preventDefault();
                 screenshotsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1970,36 +2738,49 @@ const SmartMatchDetail: React.FC<{
 
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [applyResult, match, queueOnly, onNext, onPrev, onResolve, rerunning, reviewData, onApplyToSession]);
+    }, [applyResult, applyReviewDataToSession, match, queueOnly, onNext, onPrev, onResolve, rerunning, onApplyToSession]);
 
     return (
         <div className="p-4 lg:p-5 space-y-3 sc-detail-workspace">
+            {pilotRegistry.length > 0 && (
+                <datalist id={rosterSuggestionsId}>
+                    {pilotRegistry.map((pilot) => (
+                        <option key={pilot} value={pilot} />
+                    ))}
+                </datalist>
+            )}
+            <datalist id={shipSuggestionsId}>
+                {SHIPS.map((shipType) => (
+                    <option key={shipType} value={shipType} />
+                ))}
+            </datalist>
 
-            <div className="sticky top-0 z-20">
+            <div className="sticky top-0 z-40 isolate overflow-visible -mx-4 lg:-mx-5 px-4 lg:px-5 pt-2.5 pb-2.5 bg-md-sys-surface-container-highest border-b border-md-sys-outline/14 shadow-sm sc-detail-sticky-header">
                 <SmartCaptureSummaryBar>
-                    <div className="sc-detail-summary-top">
-                        <div className="sc-detail-title-block min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <span className="sc-detail-match-badge">Match {displayNumber}</span>
-                                <span className={`sc-detail-chip sc-status-chip sc-status-chip--${statusMeta.tone}`} title={statusMeta.description}>
-                                    {statusIcon}
-                                    {statusMeta.label}
-                                </span>
-                            </div>
-                            <div className="sc-detail-meta-line">
-                                <Clock size={12} />
-                                <span>{summaryDateLabel}</span>
-                                <span className="font-mono">{summaryTimeLabel}</span>
-                                <span className="sc-detail-id-label">ID {match.id}</span>
+                    {!queueOnly && (
+                        <div className="sc-detail-summary-top">
+                            <div className="sc-detail-title-block min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="sc-detail-match-badge">Match {displayNumber}</span>
+                                    <span className={`sc-detail-chip sc-status-chip sc-status-chip--${statusMeta.tone}`} title={statusMeta.description}>
+                                        {statusIcon}
+                                        {statusMeta.label}
+                                    </span>
+                                </div>
+                                <div className="sc-detail-meta-line">
+                                    <Clock size={12} />
+                                    <span className="font-semibold">{summaryDateLabel}</span>
+                                    <span aria-hidden="true" className="opacity-55">|</span>
+                                    <span className="font-mono">{summaryTimeLabel}</span>
+                                </div>
                             </div>
                         </div>
-
-                    </div>
+                    )}
 
                     <div className="sc-detail-summary-bottom">
                         <SmartCaptureActionBar>
                             <button
-                                onClick={openWizardForMatch}
+                                onClick={() => openWizardForMatch()}
                                 className="sc-detail-action-btn sc-detail-action-btn--filled sc-detail-action-btn--workflow"
                                 title="Open wizard for review and final save"
                             >
@@ -2016,11 +2797,13 @@ const SmartMatchDetail: React.FC<{
                                     Review Shots
                                 </button>
                             ) : null}
-                            {reviewData && onApplyToSession && (
+                            {onApplyToSession && (
                                 <button
-                                    onClick={() => onApplyToSession(reviewData)}
-                                    className="sc-detail-action-btn sc-detail-action-btn--tonal"
-                                    title="Apply latest OCR extraction to the current recording session"
+                                    onClick={applyReviewDataToSession}
+                                    className={`sc-detail-action-btn sc-detail-action-btn--tonal ${reviewData ? '' : 'opacity-80'}`}
+                                    title={reviewData
+                                        ? 'Apply latest OCR extraction to the current recording session and open wizard'
+                                        : 'Run Re-analyze first, then apply OCR'}
                                 >
                                     <Zap size={14} />
                                     Apply OCR
@@ -2195,7 +2978,36 @@ const SmartMatchDetail: React.FC<{
                     <Section title="Players" collapsible collapsed={!!collapsedSections.players} onToggle={() => toggleSection('players')}>
                         <div className="space-y-3">
                             <div>
-                                <span className="text-label-sm uppercase font-bold opacity-40 block mb-1">Teammates</span>
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                    <span className="text-label-sm uppercase font-bold opacity-40 block">Teammates</span>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-label-xs opacity-50 uppercase font-semibold">Friendly ship</span>
+                                        <div className="relative min-w-[12.5rem]">
+                                            <input
+                                                type="text"
+                                                list={shipSuggestionsId}
+                                                value={match.ship || ''}
+                                                onChange={(e) => onUpdate({ ...match, ship: e.target.value })}
+                                                className="text-label-xs md3-surface rounded px-2 py-1 pr-7 font-bold outline-none border border-md-sys-outline/20 bg-md-sys-surface-container-high text-md-sys-on-surface w-full"
+                                                placeholder="No ship"
+                                                title="Friendly team ship"
+                                                aria-label="Friendly team ship type"
+                                                autoComplete="off"
+                                            />
+                                            {match.ship ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onUpdate({ ...match, ship: '' })}
+                                                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-md-sys-on-surface/45 hover:text-md-sys-on-surface/75 transition-colors"
+                                                    title="Clear friendly ship"
+                                                    aria-label="Clear friendly ship"
+                                                >
+                                                    <X size={11} />
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                    </div>
+                                </div>
                                 {renderPlayerChips(match.teammates || [], 'teammate')}
                             </div>
 
@@ -2203,6 +3015,9 @@ const SmartMatchDetail: React.FC<{
                             {match.opponentTeams && match.opponentTeams.length > 0 ? (
                                 <div className="space-y-2">
                                     <span className="text-label-sm uppercase font-bold opacity-40 block">Enemy Teams</span>
+                                    <p className="text-label-xs text-md-sys-on-surface/55 -mt-1">
+                                        Multi-capture tip: Teams 3-4 are usually in an extra screenshot. Add that screenshot, rerun OCR, then review merged teams.
+                                    </p>
                                     {match.opponentTeams.map((team, ti) => {
                                         const updateTeam = (patch: Partial<OpponentTeam>) => {
                                             const teams = [...(match.opponentTeams || [])];
@@ -2212,7 +3027,13 @@ const SmartMatchDetail: React.FC<{
                                         const removeTeam = () => {
                                             const teams = (match.opponentTeams || []).filter((_, i) => i !== ti);
                                             onUpdate({ ...match, opponentTeams: teams });
+                                            setEditingTeamOpponentPlayer((current) => {
+                                                if (!current) return null;
+                                                if (current.teamIndex !== ti) return current;
+                                                return null;
+                                            });
                                         };
+                                        const teamIsEliminator = isEliminatedByTeamMatch(match.eliminatedByTeam, team);
                                         const COLORS = ['red', 'orange', 'yellow', 'green', 'blue', 'cyan', 'purple', 'unknown'];
                                         return (
                                             <div
@@ -2233,28 +3054,51 @@ const SmartMatchDetail: React.FC<{
                                                         title="Click to cycle color"
                                                         type="button"
                                                     />
-                                                    <input
-                                                        value={team.teamName}
-                                                        onChange={(e) => updateTeam({ teamName: e.target.value })}
-                                                        className={`text-label-sm font-bold bg-transparent outline-none w-28 ${TEAM_TEXT_MAP[team.color] || 'text-gray-400'}`}
-                                                        title="Edit team name"
-                                                    />
-                                                    <select
-                                                        value={team.shipType || ''}
-                                                        onChange={(e) => updateTeam({ shipType: e.target.value })}
-                                                        className="text-label-sm md3-surface rounded px-1 py-0.5 font-bold outline-none"
-                                                        title="Ship type"
-                                                    >
-                                                        <option value="">No ship</option>
-                                                        {SHIPS.map(s => <option key={s} value={s}>{s}</option>)}
-                                                    </select>
-                                                    {match.eliminatedByTeam === team.teamName ? (
+                                                    <div className="flex items-center gap-1 flex-1 min-w-0">
+                                                        <Edit3 size={11} className="opacity-50 shrink-0" />
+                                                        <input
+                                                            value={team.teamName}
+                                                            onChange={(e) => updateTeam({ teamName: e.target.value })}
+                                                            className={`md3-textfield md3-textfield--outlined text-label-sm font-bold px-2 py-1 rounded-control w-full min-w-0 ${TEAM_TEXT_MAP[team.color] || 'text-gray-400'}`}
+                                                            placeholder={`Team ${ti + 1}`}
+                                                            title="Edit team name"
+                                                            aria-label={`Enemy team ${ti + 1} name`}
+                                                        />
+                                                    </div>
+                                                    <div className="relative min-w-[10.5rem]">
+                                                        <input
+                                                            type="text"
+                                                            list={shipSuggestionsId}
+                                                            value={team.shipType || ''}
+                                                            onChange={(e) => updateTeam({ shipType: e.target.value })}
+                                                            className="text-label-sm md3-surface rounded px-2 py-1 pr-7 font-bold outline-none border border-md-sys-outline/20 bg-md-sys-surface-container-high text-md-sys-on-surface w-full"
+                                                            placeholder="No ship"
+                                                            title="Ship type"
+                                                            aria-label={`Enemy team ${ti + 1} ship type`}
+                                                            autoComplete="off"
+                                                        />
+                                                        {team.shipType ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => updateTeam({ shipType: '' })}
+                                                                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-md-sys-on-surface/45 hover:text-md-sys-on-surface/75 transition-colors"
+                                                                title="Clear ship type"
+                                                                aria-label={`Clear enemy team ${ti + 1} ship type`}
+                                                            >
+                                                                <X size={11} />
+                                                            </button>
+                                                        ) : null}
+                                                    </div>
+                                                    {teamIsEliminator ? (
                                                         <span className="ml-auto text-label-xs px-1.5 py-0.5 bg-danger-soft text-danger rounded font-bold flex items-center gap-1">
                                                             <Skull size={10} /> Eliminated you
                                                         </span>
                                                     ) : match.result === 'Loss' && (
                                                         <button
-                                                            onClick={() => onUpdate({ ...match, eliminatedByTeam: team.teamName })}
+                                                            onClick={() => onUpdate({
+                                                                ...match,
+                                                                eliminatedByTeam: getPrimaryEliminatedByTeamValue(team) || undefined,
+                                                            })}
                                                             className="ml-auto text-label-xs px-1.5 py-0.5 bg-md-sys-on-surface/5 hover:bg-danger-soft opacity-40 hover:opacity-100 hover:text-danger rounded font-bold transition-colors"
                                                             type="button"
                                                         >
@@ -2274,40 +3118,122 @@ const SmartMatchDetail: React.FC<{
                                                     Drag opponent chips between teams to reassign ship/team.
                                                 </p>
                                                 <div className="flex flex-wrap gap-1 pl-4 items-center">
-                                                    {team.players.map((p, pi) => (
-                                                        <span
-                                                            key={pi}
-                                                            className={`px-2 py-0.5 bg-danger-soft text-danger rounded-md text-label-sm font-bold flex items-center gap-1 group/player cursor-grab ${draggedOpponentPlayer?.teamIndex === ti
-                                                                && draggedOpponentPlayer?.playerIndex === pi
-                                                                ? 'opacity-60'
-                                                                : ''
-                                                                }`}
-                                                            draggable
-                                                            onDragStart={(event) => {
-                                                                event.dataTransfer.effectAllowed = 'move';
-                                                                setDraggedOpponentPlayer({ teamIndex: ti, playerIndex: pi });
-                                                            }}
-                                                            onDragEnd={() => {
-                                                                setDraggedOpponentPlayer(null);
-                                                                setDragHoverTeamIndex(null);
-                                                            }}
-                                                            onDragOver={(event) => allowOpponentDrop(event, ti)}
-                                                            onDrop={(event) => dropOpponentPlayer(event, ti, pi)}
-                                                        >
-                                                            {p}
-                                                            <button
-                                                                onClick={() => {
-                                                                    const players = team.players.filter((_, i) => i !== pi);
-                                                                    updateTeam({ players });
+                                                    {team.players.map((p, pi) => {
+                                                        const isEditing = editingTeamOpponentPlayer?.teamIndex === ti
+                                                            && editingTeamOpponentPlayer?.playerIndex === pi;
+                                                        if (isEditing) {
+                                                            return (
+                                                                <div key={pi} className="flex items-center gap-1">
+                                                                    <input
+                                                                        type="text"
+                                                                        value={editingTeamOpponentValue}
+                                                                        onChange={(event) => setEditingTeamOpponentValue(event.target.value)}
+                                                                        onKeyDown={(event) => {
+                                                                            if (event.key === 'Enter') {
+                                                                                saveOpponentTeamPlayerEdit(ti, pi);
+                                                                            } else if (event.key === 'Escape') {
+                                                                                setEditingTeamOpponentPlayer(null);
+                                                                                setEditingTeamOpponentValue('');
+                                                                            }
+                                                                        }}
+                                                                        className="md3-surface rounded px-2 py-1 text-label-sm outline-none w-28"
+                                                                        list={pilotRegistry.length > 0 ? rosterSuggestionsId : undefined}
+                                                                        autoFocus
+                                                                    />
+                                                                    <button onClick={() => saveOpponentTeamPlayerEdit(ti, pi)} className="hover:text-success" type="button">
+                                                                        <Check size={10} />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setEditingTeamOpponentPlayer(null);
+                                                                            setEditingTeamOpponentValue('');
+                                                                        }}
+                                                                        className="hover:text-danger"
+                                                                        type="button"
+                                                                    >
+                                                                        <X size={10} />
+                                                                    </button>
+                                                                </div>
+                                                            );
+                                                        }
+                                                        return (
+                                                            <span
+                                                                key={pi}
+                                                                className={`px-2 py-0.5 bg-danger-soft text-danger rounded-md text-label-sm font-bold flex items-center gap-1 group/player cursor-grab ${draggedOpponentPlayer?.teamIndex === ti
+                                                                    && draggedOpponentPlayer?.playerIndex === pi
+                                                                    ? 'opacity-60'
+                                                                    : ''
+                                                                    }`}
+                                                                draggable
+                                                                onDragStart={(event) => {
+                                                                    event.dataTransfer.effectAllowed = 'move';
+                                                                    setDraggedOpponentPlayer({ teamIndex: ti, playerIndex: pi });
                                                                 }}
-                                                                className="opacity-0 group-hover/player:opacity-60 hover:!opacity-100 transition-opacity"
-                                                                type="button"
+                                                                onDragEnd={() => {
+                                                                    setDraggedOpponentPlayer(null);
+                                                                    setDragHoverTeamIndex(null);
+                                                                }}
+                                                                onDragOver={(event) => allowOpponentDrop(event, ti)}
+                                                                onDrop={(event) => dropOpponentPlayer(event, ti, pi)}
                                                             >
-                                                                <X size={10} />
-                                                            </button>
-                                                        </span>
-                                                    ))}
-                                                    <InlinePlayerAdd onAdd={(name) => updateTeam({ players: [...team.players, name] })} />
+                                                                <button
+                                                                    type="button"
+                                                                    className="truncate max-w-[180px] text-left"
+                                                                    onClick={(event) => {
+                                                                        event.stopPropagation();
+                                                                        setEditingTeamOpponentPlayer({ teamIndex: ti, playerIndex: pi });
+                                                                        setEditingTeamOpponentValue(p);
+                                                                    }}
+                                                                    title="Edit opponent name"
+                                                                >
+                                                                    {p}
+                                                                </button>
+                                                                <button
+                                                                    onClick={(event) => {
+                                                                        event.stopPropagation();
+                                                                        setEditingTeamOpponentPlayer({ teamIndex: ti, playerIndex: pi });
+                                                                        setEditingTeamOpponentValue(p);
+                                                                    }}
+                                                                    className="opacity-0 group-hover/player:opacity-60 hover:!opacity-100 transition-opacity"
+                                                                    type="button"
+                                                                    title="Edit name"
+                                                                >
+                                                                    <Edit3 size={10} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={(event) => {
+                                                                        event.stopPropagation();
+                                                                        const players = team.players.filter((_, i) => i !== pi);
+                                                                        updateTeam({ players });
+                                                                        setEditingTeamOpponentPlayer((current) => {
+                                                                            if (!current) return null;
+                                                                            if (current.teamIndex !== ti || current.playerIndex !== pi) return current;
+                                                                            return null;
+                                                                        });
+                                                                    }}
+                                                                    className="opacity-0 group-hover/player:opacity-60 hover:!opacity-100 transition-opacity"
+                                                                    type="button"
+                                                                    title="Remove player"
+                                                                >
+                                                                    <X size={10} />
+                                                                </button>
+                                                            </span>
+                                                        );
+                                                    })}
+                                                    <InlinePlayerAdd
+                                                        onAdd={(name) => {
+                                                            const resolved = resolveRosterName(name, { allowFuzzy: false });
+                                                            if (!resolved) return;
+                                                            const key = normalizeOcrName(resolved).toLowerCase();
+                                                            const existingKeys = new Set(team.players.map((playerName) => normalizeOcrName(playerName).toLowerCase()));
+                                                            if (!key || existingKeys.has(key)) return;
+                                                            updateTeam({ players: [...team.players, resolved] });
+                                                        }}
+                                                        pilotRegistry={pilotRegistry}
+                                                        onAddToRoster={onAddPilotToRoster ? (name) => {
+                                                            addPilotToRosterQuick(name);
+                                                        } : undefined}
+                                                    />
                                                 </div>
                                             </div>
                                         );
@@ -2325,6 +3251,9 @@ const SmartMatchDetail: React.FC<{
                             ) : (
                                 <div>
                                     <span className="text-label-sm uppercase font-bold opacity-40 block mb-1">Opponents</span>
+                                    <p className="text-label-xs text-md-sys-on-surface/55 mb-1">
+                                        Need teams 3-4? Capture an additional crew screenshot and rerun OCR to pull the extra enemy teams.
+                                    </p>
                                     {renderPlayerChips(match.opponents || [], 'opponent')}
                                 </div>
                             )}
@@ -2358,7 +3287,7 @@ const SmartMatchDetail: React.FC<{
                     <Section title="Loadout" collapsible collapsed={!!collapsedSections.loadout} onToggle={() => toggleSection('loadout')}>
                         <div className="space-y-2 text-label-sm">
                             <div className="flex gap-2 items-center">
-                                <span className="opacity-40 w-20 shrink-0">Hero:</span>
+                                <span className="opacity-40 w-20 shrink-0">Prospector:</span>
                                 <select
                                     value={match.hero || ''}
                                     onChange={(e) => onUpdate({ ...match, hero: e.target.value })}
@@ -2379,22 +3308,59 @@ const SmartMatchDetail: React.FC<{
                                     {SHIPS.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
-                            {match.loadout?.weapons && match.loadout.weapons.filter((weapon) => !/tertiary\s+(weapon|equipment)/i.test(String(weapon || ''))).slice(0, 2).length > 0 && (
+                            {match.loadout?.weapons && match.loadout.weapons.filter((weapon) => !/tertiary\s+(weapon|equipment)/i.test(String(weapon || ''))).slice(0, 10).length > 0 && (
                                 <div className="flex gap-2 items-start">
-                                    <span className="opacity-40 w-20 shrink-0">Weapons:</span>
+                                    <div className="w-40 shrink-0 flex items-center gap-1.5">
+                                        <span className="opacity-40">Ship Weapons:</span>
+                                        {loadoutTelemetrySourceBadgeLabel && (
+                                            <span
+                                                className="px-1.5 py-0.5 rounded text-label-xs font-bold bg-success-soft text-success"
+                                            >
+                                                {loadoutTelemetrySourceBadgeLabel}
+                                            </span>
+                                        )}
+                                    </div>
                                     <div className="flex flex-wrap gap-1">
-                                        {match.loadout.weapons.filter((weapon) => !/tertiary\s+(weapon|equipment)/i.test(String(weapon || ''))).slice(0, 2).map((w, i) => (
+                                        {match.loadout.weapons.filter((weapon) => !/tertiary\s+(weapon|equipment)/i.test(String(weapon || ''))).slice(0, 10).map((w, i) => (
                                             <span key={i} className="px-2 py-0.5 bg-info-soft text-info rounded-md text-label-sm font-bold">{w}</span>
                                         ))}
                                     </div>
                                 </div>
                             )}
-                            {match.loadout?.equipment && match.loadout.equipment.filter((equipment) => !/tertiary\s+(weapon|equipment)/i.test(String(equipment || ''))).slice(0, 2).length > 0 && (
+                            {match.loadout?.characterWeapons && match.loadout.characterWeapons.filter(Boolean).slice(0, 2).length > 0 && (
                                 <div className="flex gap-2 items-start">
-                                    <span className="opacity-40 w-20 shrink-0">Equipment:</span>
+                                    <div className="w-40 shrink-0 flex items-center gap-1.5">
+                                        <span className="opacity-40">Prospector Weapons:</span>
+                                        {loadoutTelemetrySourceBadgeLabel && (
+                                            <span
+                                                className="px-1.5 py-0.5 rounded text-label-xs font-bold bg-success-soft text-success"
+                                            >
+                                                {loadoutTelemetrySourceBadgeLabel}
+                                            </span>
+                                        )}
+                                    </div>
                                     <div className="flex flex-wrap gap-1">
-                                        {match.loadout.equipment.filter((equipment) => !/tertiary\s+(weapon|equipment)/i.test(String(equipment || ''))).slice(0, 2).map((eq, i) => (
-                                            <span key={i} className="px-2 py-0.5 bg-accent-soft text-accent rounded-md text-label-sm font-bold">{eq}</span>
+                                        {match.loadout.characterWeapons.filter(Boolean).slice(0, 2).map((weapon, i) => (
+                                            <span key={i} className="px-2 py-0.5 bg-info-soft text-info rounded-md text-label-sm font-bold">{weapon}</span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {match.loadout?.characterEquipment && match.loadout.characterEquipment.filter(Boolean).slice(0, 2).length > 0 && (
+                                <div className="flex gap-2 items-start">
+                                    <div className="w-40 shrink-0 flex items-center gap-1.5">
+                                        <span className="opacity-40">Prospector Equipment:</span>
+                                        {loadoutTelemetrySourceBadgeLabel && (
+                                            <span
+                                                className="px-1.5 py-0.5 rounded text-label-xs font-bold bg-success-soft text-success"
+                                            >
+                                                {loadoutTelemetrySourceBadgeLabel}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex flex-wrap gap-1">
+                                        {match.loadout.characterEquipment.filter(Boolean).slice(0, 2).map((equipment, i) => (
+                                            <span key={i} className="px-2 py-0.5 bg-success-soft text-success rounded-md text-label-sm font-bold">{equipment}</span>
                                         ))}
                                     </div>
                                 </div>
@@ -2428,10 +3394,15 @@ const SmartMatchDetail: React.FC<{
                         </div>
                     </Section>
 
-                    <Section title="Kill Breakdown" collapsible collapsed={!!collapsedSections.kills} onToggle={() => toggleSection('kills')}>
+                    <Section title="Ship Eliminations" collapsible collapsed={!!collapsedSections.kills} onToggle={() => toggleSection('kills')}>
                         <div className="flex flex-wrap gap-1.5 items-center">
-                            {Object.entries(match.kills || {}).filter(([, v]) => v > 0).map(([ship, count]) => (
-                                <div key={ship} className="flex items-center gap-1 px-2 py-1 rounded-lg md3-surface-high text-label-sm group">
+                            {Object.entries(match.kills || {}).filter(([, v]) => v > 0).map(([ship, count]) => {
+                                const isAiLegionKill = ship.trim().toLowerCase() === 'ai legion';
+                                return (
+                                <div
+                                    key={ship}
+                                    className={`flex items-center gap-1 px-2 py-1 rounded-lg md3-surface-high text-label-sm group ${isAiLegionKill ? 'ai-legion-chip ai-legion-chip--editable' : ''}`}
+                                >
                                     <input
                                         type="number" min="0" value={count}
                                         onChange={(e) => {
@@ -2441,21 +3412,22 @@ const SmartMatchDetail: React.FC<{
                                             else kills[ship] = val;
                                             onUpdate({ ...match, kills });
                                         }}
-                                        className="w-8 bg-transparent font-bold text-center outline-none"
+                                        className={`w-8 bg-transparent font-bold text-center outline-none ${isAiLegionKill ? 'ai-legion-chip__value' : ''}`}
                                     />
-                                    <span className="opacity-60">{ship}</span>
+                                    <span className={isAiLegionKill ? 'ai-legion-chip__label' : 'opacity-60'}>{ship}</span>
                                     <button
                                         onClick={() => {
                                             const kills = { ...(match.kills || {}) };
                                             delete kills[ship];
                                             onUpdate({ ...match, kills });
                                         }}
-                                        className="opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity ml-0.5"
+                                        className={`opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity ml-0.5 ${isAiLegionKill ? 'ai-legion-chip__label' : ''}`}
                                     >
                                         <X size={10} />
                                     </button>
                                 </div>
-                            ))}
+                                );
+                            })}
                             <KillAdder
                                 existingShips={Object.keys(match.kills || {})}
                                 onAdd={(ship) => {
@@ -2483,17 +3455,107 @@ const SmartMatchDetail: React.FC<{
                     </div>
 
                     {artifacts.images.length > 0 && (
-                        <div className="rounded-card md3-surface-high p-2 border border-md-sys-outline/10 flex items-center justify-between gap-2">
-                            <span className="text-label-sm font-bold text-md-sys-on-surface/80">Re-run analysis</span>
-                            <button
-                                onClick={handleRerunAnalysis}
-                                disabled={rerunning}
-                                className="rounded-control md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled flex items-center gap-1.5"
-                                title="Run OCR analysis on the bundled screenshots"
-                            >
-                                <RefreshCw size={12} className={rerunning ? 'animate-spin' : ''} />
-                                {rerunning ? 'Analyzing...' : `Re-analyze ${countImages(match.artifacts || [])} Screenshot${countImages(match.artifacts || []) !== 1 ? 's' : ''}`}
-                            </button>
+                        <div className="rounded-card md3-surface-high p-2 border border-md-sys-outline/10 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="text-label-sm font-bold text-md-sys-on-surface/80">Re-run analysis</span>
+                                <div className="flex items-center gap-3">
+                                    <label className="inline-flex items-center gap-1.5 text-label-xs font-semibold text-md-sys-on-surface/70">
+                                        <input
+                                            type="checkbox"
+                                            checked={forceMaxAnalysis}
+                                            onChange={(event) => onForceMaxAnalysisChange(event.target.checked)}
+                                            disabled={rerunning}
+                                            className="h-3.5 w-3.5 accent-md-sys-primary"
+                                        />
+                                        Force max analysis
+                                    </label>
+                                    <button
+                                        onClick={handleRerunAnalysis}
+                                        disabled={rerunning}
+                                        className="rounded-control md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled flex items-center gap-1.5"
+                                        title="Run OCR analysis on the bundled screenshots"
+                                    >
+                                        <RefreshCw size={12} className={rerunning ? 'animate-spin' : ''} />
+                                        {rerunning ? 'Analyzing...' : `Re-analyze ${countImages(match.artifacts || [])} Screenshot${countImages(match.artifacts || []) !== 1 ? 's' : ''}`}
+                                    </button>
+                                </div>
+                            </div>
+                            {showRerunStatus && (
+                                <div className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container/95 px-2.5 py-2 space-y-1.5">
+                                    <div className="flex flex-wrap items-center gap-2 text-label-xs">
+                                        <span className="font-semibold text-md-sys-on-surface/86">
+                                            {rerunProgress.status || (rerunning ? 'Running analysis...' : 'Ready')}
+                                        </span>
+                                        <span
+                                            data-testid="rerun-phase-pill"
+                                            className={`rounded-pill px-2 py-0.5 font-semibold ${
+                                                rerunProgress.phase === 'error'
+                                                    ? 'bg-danger-soft-strong text-danger'
+                                                    : 'bg-md-sys-secondary/16 text-md-sys-secondary'
+                                            }`}
+                                        >
+                                            Phase: {RERUN_PHASE_LABELS[rerunProgress.phase]}
+                                        </span>
+                                        {rerunProgress.total > 0 && (
+                                            <span className="rounded-pill bg-md-sys-primary/12 px-2 py-0.5 font-semibold text-md-sys-primary">
+                                                {rerunProgressCurrent}/{rerunProgress.total}
+                                            </span>
+                                        )}
+                                        {rerunResults && (
+                                            <>
+                                                <span className="rounded-pill bg-success-soft-strong px-2 py-0.5 font-semibold text-success">
+                                                    {rerunSuccessCount} succeeded
+                                                </span>
+                                                {rerunFailureResults.length > 0 && (
+                                                    <span className="rounded-pill bg-danger-soft-strong px-2 py-0.5 font-semibold text-danger">
+                                                        {rerunFailureResults.length} failed
+                                                    </span>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                    {rerunProgress.cloudStatus && (
+                                        <div className="text-label-xs text-md-sys-on-surface/68">{rerunProgress.cloudStatus}</div>
+                                    )}
+                                    <div className="space-y-0.5 text-label-xs text-md-sys-on-surface/70">
+                                        <div>
+                                            <span className="font-semibold text-md-sys-on-surface/82">State:</span>{' '}
+                                            {RERUN_PHASE_LABELS[rerunProgress.phase]}
+                                        </div>
+                                        <div>
+                                            <span className="font-semibold text-md-sys-on-surface/82">Latest:</span>{' '}
+                                            {rerunProgress.latestFile
+                                                ? `${rerunProgress.latestFile} - ${rerunProgress.latestFileStatus || 'In progress'}`
+                                                : rerunProgress.latestFileStatus || 'No files processed yet'}
+                                        </div>
+                                    </div>
+                                    {rerunProgress.total > 0 && (
+                                        <div className="h-1.5 rounded-pill bg-md-sys-on-surface/10 overflow-hidden">
+                                            <div
+                                                className="h-full bg-md-sys-primary transition-all duration-300"
+                                                style={{ width: `${rerunProgressPercent}%` }}
+                                            />
+                                        </div>
+                                    )}
+                                    {rerunFailureResults.length > 0 && (
+                                        <div className="space-y-1">
+                                            <div className="text-label-xs font-semibold text-danger/92">Failed screenshots</div>
+                                            <div className="max-h-20 overflow-y-auto space-y-0.5 pr-1">
+                                                {rerunFailureResults.slice(0, 4).map((result) => (
+                                                    <div key={result.imagePath} className="text-label-xs text-danger/85 truncate">
+                                                        {result.filename}: {String(result.error || result.message || 'OCR failed')}
+                                                    </div>
+                                                ))}
+                                                {rerunFailureResults.length > 4 && (
+                                                    <div className="text-label-xs text-danger/70">
+                                                        +{rerunFailureResults.length - 4} more failure{rerunFailureResults.length - 4 === 1 ? '' : 's'}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -2661,16 +3723,16 @@ const SmartMatchDetail: React.FC<{
                                                         key={`telemetry-${chip.key}`}
                                                         onClick={() => applyTelemetryConsistencyChip(chip.key)}
                                                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-pill bg-warning-soft text-warning text-label-xs font-semibold hover:bg-warning/20 transition-colors"
-                                                        title={`${chip.description} Click to apply telemetry duration.`}
+                                                        aria-label={`${chip.label}. Apply telemetry duration.`}
                                                     >
                                                         <AlertTriangle size={11} />
                                                         {chip.label}
+                                                        <span className="opacity-80">Apply</span>
                                                     </button>
                                                 ) : (
                                                     <span
                                                         key={`telemetry-${chip.key}`}
                                                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-pill bg-warning-soft text-warning text-label-xs font-semibold"
-                                                        title={chip.description}
                                                     >
                                                         <AlertTriangle size={11} />
                                                         {chip.label}

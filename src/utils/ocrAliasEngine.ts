@@ -281,8 +281,8 @@ export const shouldQueueLearningReview = (
   }
   return (
     resolution.topCount < Math.max(minCount, autoPromoteCount) ||
-    resolution.margin < 0.14 ||
-    resolution.score < (minScore + 0.06)
+    resolution.margin < 0.1 ||
+    resolution.score < (minScore + 0.03)
   );
 };
 

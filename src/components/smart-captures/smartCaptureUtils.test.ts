@@ -132,6 +132,16 @@ describe('smartCaptureUtils', () => {
   });
 
   it('returns cohesive status metadata for queue states', () => {
+    const ready = getStatusMeta('OK');
+    expect(ready.label).toBe('Ready');
+    expect(ready.tone).toBe('success');
+    expect(ready.icon).toBe('spark');
+
+    const resolved = getStatusMeta('Resolved');
+    expect(resolved.label).toBe('Resolved');
+    expect(resolved.tone).toBe('neutral');
+    expect(resolved.icon).toBe('check');
+
     const missing = getStatusMeta('MissingData');
     expect(missing.label).toBe('Missing data');
     expect(missing.tone).toBe('danger');
@@ -155,6 +165,21 @@ describe('smartCaptureUtils', () => {
     expect(labels).toContain('Team Count Mismatch');
     expect(labels).toContain('Mode Mismatch');
     expect(labels.some((label) => label.startsWith('Duration Off by'))).toBe(true);
+  });
+
+  it('suppresses near-miss teammate warnings while OCR review is still in progress', () => {
+    const chips = getTelemetryConsistencyWarningChips(makeMatch({
+      ocrState: 'reviewing',
+      teammates: ['Wingmate A', 'Wingmate B'],
+      opponentTeams: [
+        { teamName: 'Red', shipType: '', color: 'red', players: ['Enemy 1', 'Enemy 2'] },
+      ],
+      telemetryConsistency: {
+        expectedTeammateCount: 3,
+      },
+    }));
+
+    expect(chips.some((chip) => chip.key === 'team-count-mismatch')).toBe(false);
   });
 
   it('does not emit telemetry consistency chips when checks pass', () => {

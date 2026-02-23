@@ -183,5 +183,27 @@ describe('artifactService', () => {
         ocrRegions,
       });
     });
+
+    it('passes optional runtimeOptions when provided', async () => {
+      mockInvoke.mockResolvedValue({ teammates: [], opponents: [] });
+      const runtimeOptions = {
+        routingProfile: 'names-only',
+        fontProfile: 'ealing-black-italic',
+        nameRerouteThreshold: 78,
+        maxReroutePasses: 1,
+        externalFallbackEnabled: true,
+        externalFallbackThreshold: 0.72,
+        externalOnDetectorDisagreement: true,
+        forceMaxAnalysis: true,
+        forceUncached: true,
+      } as const;
+      await rerunOCROnArtifact('/path/img.png', 'Alec', 'both', undefined, runtimeOptions);
+      expect(mockInvoke).toHaveBeenCalledWith('rerun-ocr-on-artifact', {
+        imagePath: '/path/img.png',
+        activeUser: 'Alec',
+        ocrMode: 'both',
+        runtimeOptions,
+      });
+    });
   });
 });

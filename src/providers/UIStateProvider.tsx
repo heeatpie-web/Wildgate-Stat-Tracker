@@ -7,7 +7,7 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useShallow } from 'zustand/react/shallow';
-import { GameMode } from '../types';
+import { GameMode, WizardResult } from '../types';
 import type {
     AppNotification,
     NotificationInput,
@@ -96,8 +96,8 @@ interface UIStateContextType {
     setSidebarCollapsed: (collapsed: boolean) => void;
     enableAutoLogRecording: boolean;
     setEnableAutoLogRecording: (enabled: boolean) => void;
-    showWizard: 'Win' | 'Loss' | 'Draw' | null;
-    setShowWizard: (result: 'Win' | 'Loss' | 'Draw' | null) => void;
+    showWizard: WizardResult | null;
+    setShowWizard: (result: WizardResult | null) => void;
     devMode: boolean;
     setDevMode: (enabled: boolean) => void;
     activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr';

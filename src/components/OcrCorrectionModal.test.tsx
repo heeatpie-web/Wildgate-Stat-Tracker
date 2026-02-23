@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
+const OCR_REVIEW_HELP_DISMISSED_STORAGE_KEY = 'wg_ocr_review_help_dismissed_v1';
+
 const gameData = {
     sessionTeams: {} as Record<string, string[]>,
     sessionShipTypes: {} as Record<string, string>,
@@ -25,6 +27,8 @@ const appStoreState = {
     ocrMode: 'both',
     ocrBatchAcceptThreshold: 85,
     setOcrBatchAcceptThreshold: vi.fn(),
+    pendingMatchData: null as any,
+    setPendingMatchData: vi.fn(),
 };
 
 vi.mock('../providers/GameDataProvider', () => ({
@@ -51,6 +55,8 @@ describe('OcrCorrectionModal', () => {
         gameData.matches = [];
         gameData.selectedTeammates = [];
         appStoreState.ocrCorrections = {};
+        appStoreState.pendingMatchData = null;
+        window.localStorage.removeItem(OCR_REVIEW_HELP_DISMISSED_STORAGE_KEY);
         vi.clearAllMocks();
     });
 
@@ -93,6 +99,115 @@ describe('OcrCorrectionModal', () => {
         expect(screen.getAllByRole('button', { name: /^ignore$/i }).length).toBeGreaterThan(0);
     });
 
+    it('surfaces fuzzy roster suggestions for OCR-like name variants', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['chrismar10'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['chrismario'];
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        const searchInput = screen.getByPlaceholderText(/search roster or type name/i);
+        fireEvent.focus(searchInput);
+        fireEvent.change(searchInput, { target: { value: 'chrismar10' } });
+
+        expect(screen.getByRole('button', { name: 'chrismario' })).toBeInTheDocument();
+    });
+
+    it('focuses inline player editing when clicking a team row while keeping drag handles available', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['PilotOne', 'PilotTwo'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['PilotOne', 'PilotTwo'];
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        const teamRow = screen.getByTestId('team-player-row-0-0');
+        const teamInput = screen.getByRole('combobox', { name: /red player 1 name/i });
+        const dragHandle = screen.getByRole('button', { name: /drag pilotone in red/i });
+
+        expect(dragHandle).toHaveAttribute('draggable', 'true');
+        expect(teamInput).not.toHaveFocus();
+
+        fireEvent.click(dragHandle);
+        expect(teamInput).not.toHaveFocus();
+
+        fireEvent.click(teamRow);
+        expect(teamInput).toHaveFocus();
+        expect(teamRow).toHaveClass('ocr-team-player-row--editing');
+    });
+
+    it('allows editing and removing players in team assignment rows before apply', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['PilotOne', 'PilotTwo'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['PilotOne', 'PilotTwo'];
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        const teamInput = screen.getByRole('combobox', { name: /red player 1 name/i });
+        fireEvent.change(teamInput, { target: { value: 'PilotOneEdited' } });
+        expect(teamInput).toHaveValue('PilotOneEdited');
+
+        fireEvent.click(screen.getByRole('button', { name: /remove pilottwo from red/i }));
+
+        fireEvent.click(screen.getByRole('button', { name: /apply and learn/i }));
+
+        expect(gameData.setSessionTeams).toHaveBeenCalledWith({ red: ['PilotOneEdited'] });
+    });
+
+    it('shows friendly teammates with blue teammate markers in assignment and review rows', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['PilotOne'], blue: ['EnemyOne'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)', blue: 'Scout' };
+        gameData.pilotRegistry = ['PilotOne', 'EnemyOne'];
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        const friendlyChip = screen.getByText(/^friendly$/i);
+        expect(friendlyChip).toHaveClass('ocr-teammate-chip');
+
+        const teammateMarker = screen.getByLabelText(/teammate marker/i);
+        expect(teammateMarker).toHaveClass('ocr-teammate-chip--row');
+        expect(screen.getAllByText(/teammate/i).length).toBeGreaterThan(1);
+    });
+
+    it('commits typed roster input and persists corrected teams to pending match data', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['chrismar10'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['chrismario'];
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        const searchInput = screen.getByPlaceholderText(/search roster or type name/i);
+        fireEvent.focus(searchInput);
+        fireEvent.change(searchInput, { target: { value: 'chrismario' } });
+        fireEvent.keyDown(searchInput, { key: 'Enter' });
+
+        fireEvent.click(screen.getByRole('button', { name: /apply and learn/i }));
+
+        expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
+            teammates: ['chrismario'],
+            opponentTeams: expect.any(Array),
+        }));
+    });
+
     it('renders screenshot references and opens image lightbox', async () => {
         const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
         const onClose = vi.fn();
@@ -116,5 +231,28 @@ describe('OcrCorrectionModal', () => {
         expect(screen.getByText(/screenshot 1 of 1/i)).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: /close screenshot preview/i }));
         expect(screen.queryByText(/screenshot 1 of 1/i)).not.toBeInTheDocument();
+    });
+
+    it('dismisses the help banner and persists dismissal in localStorage', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['PilotOne'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['PilotOne'];
+
+        const { unmount } = render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        expect(screen.getByText(/how this helps/i)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /dismiss help banner/i }));
+
+        expect(screen.queryByText(/how this helps/i)).not.toBeInTheDocument();
+        expect(window.localStorage.getItem(OCR_REVIEW_HELP_DISMISSED_STORAGE_KEY)).toBe('1');
+
+        unmount();
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+        expect(screen.queryByText(/how this helps/i)).not.toBeInTheDocument();
     });
 });

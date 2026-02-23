@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import { CHARACTERS, SHIPS, KillMap } from '../../types';
+import { CHARACTERS, SHIPS, KillMap, WizardResult } from '../../types';
 import { DataSource, getPriority } from './createDataSlice';
 import type { Match } from '../../types';
 import { capTeammateNames } from '../../utils/teamLimits';
@@ -47,7 +47,7 @@ export interface FormSlice {
     pendingSubType: string;
     pendingPlacement: number | null;
     pendingArtifactType: string;
-    showWizard: 'Win' | 'Loss' | 'Draw' | null;
+    showWizard: WizardResult | null;
 
     characterLoadouts: Record<string, Record<string, number>>;
 
@@ -72,8 +72,9 @@ export interface FormSlice {
     setPendingSubType: (type: string) => void;
     setPendingPlacement: (placement: number | null) => void;
     setPendingArtifactType: (type: string) => void;
-    setShowWizard: (result: 'Win' | 'Loss' | 'Draw' | null) => void;
+    setShowWizard: (result: WizardResult | null) => void;
     clearTelemetryDetected: () => void;
+    resetSelectionSourcesForNewMatch: () => void;
 
     resetForm: () => void;
 }
@@ -105,39 +106,70 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
     pendingArtifactType: '',
     showWizard: null,
 
-    setSelectedTeammates: (teammates) => set((state) => ({
-        selectedTeammates: sanitizeTeammates(
+    setSelectedTeammates: (teammates) => set((state) => {
+        const nextTeammates = sanitizeTeammates(
             typeof teammates === 'function' ? teammates(state.selectedTeammates) : teammates,
             state.activeShip
-        )
-    })),
+        );
+        return {
+            selectedTeammates: nextTeammates,
+            pendingMatchData: state.pendingMatchData
+                ? { ...state.pendingMatchData, teammates: nextTeammates }
+                : state.pendingMatchData,
+        };
+    }),
     toggleTeammate: (name) => set((state) => {
         const cleaned = String(name || '').trim();
         if (!cleaned) return {};
         const key = cleaned.toLowerCase();
         if (state.selectedTeammates.some((t) => t.toLowerCase() === key)) {
-            return { selectedTeammates: state.selectedTeammates.filter((t) => t.toLowerCase() !== key) };
+            const nextTeammates = state.selectedTeammates.filter((t) => t.toLowerCase() !== key);
+            return {
+                selectedTeammates: nextTeammates,
+                pendingMatchData: state.pendingMatchData
+                    ? { ...state.pendingMatchData, teammates: nextTeammates }
+                    : state.pendingMatchData,
+            };
         }
         const next = sanitizeTeammates([...state.selectedTeammates, cleaned], state.activeShip);
-        if (next.length > state.selectedTeammates.length) return { selectedTeammates: next };
+        if (next.length > state.selectedTeammates.length) {
+            return {
+                selectedTeammates: next,
+                pendingMatchData: state.pendingMatchData
+                    ? { ...state.pendingMatchData, teammates: next }
+                    : state.pendingMatchData,
+            };
+        }
         return {};
     }),
-    setSelectedOpponents: (opponents) => set((state) => ({
-        selectedOpponents: sanitizeNames(
+    setSelectedOpponents: (opponents) => set((state) => {
+        const nextOpponents = sanitizeNames(
             typeof opponents === 'function' ? opponents(state.selectedOpponents) : opponents
-        )
-    })),
-    toggleOpponent: (name) => set((state) => ({
-        selectedOpponents: (() => {
-            const cleaned = String(name || '').trim();
+        );
+        return {
+            selectedOpponents: nextOpponents,
+            pendingMatchData: state.pendingMatchData
+                ? { ...state.pendingMatchData, opponents: nextOpponents }
+                : state.pendingMatchData,
+        };
+    }),
+    toggleOpponent: (name) => set((state) => {
+        const cleaned = String(name || '').trim();
+        const nextOpponents = (() => {
             if (!cleaned) return state.selectedOpponents;
             const key = cleaned.toLowerCase();
             if (state.selectedOpponents.some((o) => o.toLowerCase() === key)) {
                 return state.selectedOpponents.filter((o) => o.toLowerCase() !== key);
             }
             return sanitizeNames([...state.selectedOpponents, cleaned]);
-        })()
-    })),
+        })();
+        return {
+            selectedOpponents: nextOpponents,
+            pendingMatchData: state.pendingMatchData
+                ? { ...state.pendingMatchData, opponents: nextOpponents }
+                : state.pendingMatchData,
+        };
+    }),
     setActiveHero: (hero, source = 'manual') => set((state) => {
         const telemetryUpdate = source === 'telemetry' ? { telemetryDetectedHero: hero } : {};
         const currentP = getPriority(state.heroSource);
@@ -203,6 +235,10 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
     setPendingArtifactType: (type) => set({ pendingArtifactType: type }),
     setShowWizard: (result) => set({ showWizard: result }),
     clearTelemetryDetected: () => set({ telemetryDetectedHero: undefined, telemetryDetectedShip: undefined }),
+    resetSelectionSourcesForNewMatch: () => set({
+        heroSource: undefined,
+        shipSource: undefined,
+    }),
 
     resetForm: () => set((state) => ({
         poiEasy: 0,

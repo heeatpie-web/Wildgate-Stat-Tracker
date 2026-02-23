@@ -7,7 +7,6 @@ import {
     ScanEye,
     FlaskConical,
     Users,
-    UserPlus,
     PanelLeftClose,
     User,
     PlusCircle,
@@ -44,7 +43,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
         activeView,
         setActiveView,
         setShowSettings,
-        setShowIdMapper,
         activeUser,
         setActiveUser,
         setRenameModal,
@@ -143,23 +141,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
                         {showLabels && <span className="text-label-xs font-semibold tracking-wide-02 leading-tight truncate">{item.label}</span>}
                     </button>
                 ))}
-
-                <button
-                    onClick={() => {
-                        setShowIdMapper(true);
-                        closeDrawerIfNeeded();
-                    }}
-                    className={`relative w-full py-2.5 premium-nav-item md3-nav-item sidebar-nav-item flex items-center transition-all duration-150 group text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5 ${
-                        showLabels ? 'justify-start px-3 gap-2.5' : 'justify-center'
-                    }`}
-                    title="ID Mapper"
-                >
-                    <span className="sidebar-nav-accent" aria-hidden />
-                    <span className="md3-nav-icon premium-nav-icon">
-                        <UserPlus size={18} />
-                    </span>
-                    {showLabels && <span className="text-label-xs font-semibold tracking-wide-02 leading-tight">ID Mapper</span>}
-                </button>
 
                 <button
                     onClick={() => {

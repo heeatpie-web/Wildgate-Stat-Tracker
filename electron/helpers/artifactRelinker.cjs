@@ -4,6 +4,8 @@
  */
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const { buildCanonicalMatchNumberMaps, toPositiveInt } = require('./canonicalMatchNumbers.cjs');
 
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.webp']);
 const DEFAULT_MAX_DELTA_MS = Number(process.env.WILDGATE_ARTIFACT_REPAIR_MAX_DELTA_MS || (30 * 60 * 1000));
@@ -100,13 +102,33 @@ function isImageFile(filePath) {
   return IMAGE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
 }
 
-function getSourceMatchId(filePath, matchArtifactsRoot) {
+function getSourceMatchId(filePath, matchArtifactsRoot, matchIdSet, canonicalToId) {
   const relative = path.relative(matchArtifactsRoot, filePath);
   if (!relative || relative.startsWith('..')) return null;
   const firstSegment = relative.split(path.sep)[0];
   if (!/^\d+$/.test(firstSegment)) return null;
   const value = Number(firstSegment);
-  return Number.isSafeInteger(value) ? value : null;
+  if (!Number.isSafeInteger(value)) return null;
+  if (matchIdSet?.has(value)) return value;
+  if (canonicalToId?.has(value)) return canonicalToId.get(value);
+  return null;
+}
+
+function hashFile(filePath, hashCache) {
+  const key = toPathKey(filePath);
+  if (hashCache.has(key)) return hashCache.get(key);
+  const hash = crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+  hashCache.set(key, hash);
+  return hash;
+}
+
+function areFilesIdentical(sourcePath, targetPath, sourceSize, hashCache) {
+  const targetStat = safeStat(targetPath);
+  if (!targetStat || !targetStat.isFile()) return false;
+  const expectedSize = Number(sourceSize || 0);
+  if (!Number.isFinite(expectedSize) || expectedSize <= 0) return false;
+  if (Number(targetStat.size || -1) !== expectedSize) return false;
+  return hashFile(sourcePath, hashCache) === hashFile(targetPath, hashCache);
 }
 
 function walkFiles(rootPath) {
@@ -133,7 +155,7 @@ function walkFiles(rootPath) {
   return result;
 }
 
-function collectCandidates(userData) {
+function collectCandidates(userData, mappingContext = {}) {
   const matchArtifactsRoot = path.join(userData, 'match_artifacts');
   const sources = [
     { kind: 'match_artifacts', root: matchArtifactsRoot },
@@ -159,7 +181,9 @@ function collectCandidates(userData) {
         filename: path.basename(filePath),
         sourcePath: path.resolve(filePath),
         sourceKind: source.kind,
-        sourceMatchId: source.kind === 'match_artifacts' ? getSourceMatchId(filePath, matchArtifactsRoot) : null,
+        sourceMatchId: source.kind === 'match_artifacts'
+          ? getSourceMatchId(filePath, matchArtifactsRoot, mappingContext.matchIdSet, mappingContext.canonicalToId)
+          : null,
         timestampMs,
         size: Number(stat.size || 0),
       });
@@ -249,24 +273,23 @@ function buildExistingArtifactSets(matches) {
   return { globalPaths, perMatch };
 }
 
-function chooseTargetPath(targetDir, preferredName, sourcePath, sourceSize, takenPathKeys) {
+function chooseTargetPath(targetDir, preferredName, sourcePath, sourceSize, takenPathKeys, hashCache) {
   const preferredPath = path.join(targetDir, preferredName);
   const preferredKey = toPathKey(preferredPath);
   if (preferredKey === toPathKey(sourcePath)) return preferredPath;
-  if (!takenPathKeys.has(preferredKey) && !fs.existsSync(preferredPath)) return preferredPath;
-
-  if (fs.existsSync(preferredPath)) {
-    const existingStat = safeStat(preferredPath);
-    if (existingStat && Number(existingStat.size || -1) === Number(sourceSize || -2)) {
-      return preferredPath;
-    }
+  if (fs.existsSync(preferredPath) && areFilesIdentical(sourcePath, preferredPath, sourceSize, hashCache)) {
+    return preferredPath;
   }
+  if (!takenPathKeys.has(preferredKey) && !fs.existsSync(preferredPath)) return preferredPath;
 
   const parsed = path.parse(preferredName);
   for (let i = 1; i <= 1000; i += 1) {
     const nextName = `${parsed.name}__relinked_${i}${parsed.ext}`;
     const nextPath = path.join(targetDir, nextName);
     const nextKey = toPathKey(nextPath);
+    if (fs.existsSync(nextPath) && areFilesIdentical(sourcePath, nextPath, sourceSize, hashCache)) {
+      return nextPath;
+    }
     if (takenPathKeys.has(nextKey)) continue;
     if (!fs.existsSync(nextPath)) return nextPath;
   }
@@ -288,7 +311,12 @@ function buildRepairPlan(db, userData, scopeOptions) {
   const scope = normalizeRepairScope(scopeOptions);
   const matches = Array.isArray(db?.matches) ? db.matches : [];
   const { byId, sorted } = buildMatchMaps(matches);
+  const canonicalMaps = buildCanonicalMatchNumberMaps(matches, {
+    mutateMissing: false,
+    nextCanonicalHint: toPositiveInt(db?.storageMeta?.nextCanonicalMatchNumber) || 1,
+  });
   const { globalPaths, perMatch } = buildExistingArtifactSets(matches);
+  const hashCache = new Map();
   const maxDeltaMs = Number.isFinite(DEFAULT_MAX_DELTA_MS) && DEFAULT_MAX_DELTA_MS > 0
     ? DEFAULT_MAX_DELTA_MS
     : (30 * 60 * 1000);
@@ -300,7 +328,10 @@ function buildRepairPlan(db, userData, scopeOptions) {
     : sorted;
   const matchWindows = buildMatchWindows(targetMatches, fallbackMaxDeltaMs);
 
-  const candidates = collectCandidates(userData);
+  const candidates = collectCandidates(userData, {
+    matchIdSet: new Set(Array.from(byId.keys())),
+    canonicalToId: canonicalMaps.canonicalToId,
+  });
   const plansByKey = new Map();
 
   for (const candidate of candidates) {
@@ -339,8 +370,16 @@ function buildRepairPlan(db, userData, scopeOptions) {
     if (!target || !byId.has(target.id)) continue;
     if (scope?.matchId && Number(target.id) !== Number(scope.matchId)) continue;
 
-    const targetDir = path.join(userData, 'match_artifacts', String(target.id));
-    const targetPath = chooseTargetPath(targetDir, candidate.filename, candidate.sourcePath, candidate.size, globalPaths);
+    const canonical = canonicalMaps.idToCanonical.get(Number(target.id)) || Number(target.id);
+    const targetDir = path.join(userData, 'match_artifacts', String(canonical));
+    const targetPath = chooseTargetPath(
+      targetDir,
+      candidate.filename,
+      candidate.sourcePath,
+      candidate.size,
+      globalPaths,
+      hashCache
+    );
     const targetKey = toPathKey(targetPath);
     const matchSet = perMatch.get(target.id) || new Set();
     if (matchSet.has(targetKey)) continue;
@@ -456,6 +495,7 @@ function applyArtifactRepair({ dbPath, userData, scope } = {}) {
     for (const match of db.matches || []) matchById.set(Number(match.id), match);
     const appliedByMatch = new Map();
     const failures = [];
+    const hashCache = new Map();
     let appliedLinks = 0;
 
     for (const planItem of plan.plans) {
@@ -483,15 +523,20 @@ function applyArtifactRepair({ dbPath, userData, scope } = {}) {
           if (!fs.existsSync(finalTargetPath)) {
             fs.copyFileSync(planItem.sourcePath, finalTargetPath);
           } else {
-            const targetStat = safeStat(finalTargetPath);
-            const sameSize = targetStat && Number(targetStat.size) === Number(sourceStat.size);
-            if (!sameSize) {
+            const sameContent = areFilesIdentical(
+              planItem.sourcePath,
+              finalTargetPath,
+              Number(sourceStat.size || 0),
+              hashCache
+            );
+            if (!sameContent) {
               finalTargetPath = chooseTargetPath(
                 targetDir,
                 path.basename(planItem.targetPath),
                 planItem.sourcePath,
                 sourceStat.size,
-                existing
+                existing,
+                hashCache
               );
               finalKey = toPathKey(finalTargetPath);
               if (!existing.has(finalKey)) {
@@ -503,6 +548,18 @@ function applyArtifactRepair({ dbPath, userData, scope } = {}) {
 
         if (existing.has(finalKey)) continue;
         artifacts.push(finalTargetPath);
+        const uniqueArtifacts = Array.from(new Set(artifacts.map(toPathKey)));
+        if (uniqueArtifacts.length !== artifacts.length) {
+          const restored = [];
+          const restoredKeys = new Set();
+          for (const artifactPath of artifacts) {
+            const key = toPathKey(artifactPath);
+            if (restoredKeys.has(key)) continue;
+            restoredKeys.add(key);
+            restored.push(artifactPath);
+          }
+          match.artifacts = restored;
+        }
         if (!appliedByMatch.has(Number(match.id))) appliedByMatch.set(Number(match.id), []);
         appliedByMatch.get(Number(match.id)).push(finalTargetPath);
         appliedLinks += 1;

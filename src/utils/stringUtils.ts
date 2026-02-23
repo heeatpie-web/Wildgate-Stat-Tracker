@@ -237,5 +237,80 @@ export const normalizeOcrName = (name: string): string => {
     return cleaned;
 };
 
+export const tokenizeForNameSimilarity = (value: string): string[] => (
+    normalizeOcrName(value || '')
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter(Boolean)
+);
+
+export const containsNameScore = (left: string, right: string): number => {
+    const normalizedLeft = normalizeOcrName(left || '').toLowerCase();
+    const normalizedRight = normalizeOcrName(right || '').toLowerCase();
+    if (!normalizedLeft || !normalizedRight) return 0;
+
+    const shorter = normalizedLeft.length <= normalizedRight.length ? normalizedLeft : normalizedRight;
+    const longer = normalizedLeft.length > normalizedRight.length ? normalizedLeft : normalizedRight;
+    if (shorter.length < 3) return 0;
+    if (!longer.includes(shorter)) return 0;
+
+    const lengthGap = Math.abs(normalizedLeft.length - normalizedRight.length);
+    return Math.max(0, 90 - (lengthGap * 3));
+};
+
+export const tokenOverlapNameScore = (leftTokens: string[], rightTokens: string[]): number => {
+    if (leftTokens.length === 0 || rightTokens.length === 0) return 0;
+    const rightSet = new Set(rightTokens);
+    let overlap = 0;
+    leftTokens.forEach((token) => {
+        if (rightSet.has(token)) overlap += 1;
+    });
+    if (overlap === 0) return 0;
+
+    const minTokenCount = Math.min(leftTokens.length, rightTokens.length);
+    const overlapRatio = overlap / minTokenCount;
+    const shortVsLong = minTokenCount === 1 && Math.max(leftTokens.length, rightTokens.length) > 1;
+
+    if (shortVsLong && overlapRatio >= 1) {
+        return 86;
+    }
+    if (!shortVsLong && overlapRatio >= 0.5) {
+        return 72 + Math.round(overlapRatio * 20);
+    }
+    return 0;
+};
+
+export const combinedNameSimilarityScore = (left: string, right: string): number => {
+    const normalizedLeft = normalizeOcrName(left || '').toLowerCase();
+    const normalizedRight = normalizeOcrName(right || '').toLowerCase();
+    if (!normalizedLeft || !normalizedRight) return 0;
+
+    const baseSimilarity = similarityScore(normalizedLeft, normalizedRight);
+    const containsScore = containsNameScore(normalizedLeft, normalizedRight);
+    const tokenScore = tokenOverlapNameScore(
+        tokenizeForNameSimilarity(normalizedLeft),
+        tokenizeForNameSimilarity(normalizedRight),
+    );
+    return Math.max(baseSimilarity, containsScore, tokenScore);
+};
+
+/**
+ * Adaptive threshold used for fuzzy roster matching.
+ * Short names need a stronger score to avoid false positives.
+ */
+export const getAdaptiveNameSimilarityThreshold = (nameLength: number): number => {
+    if (nameLength <= 4) return 70;
+    if (nameLength <= 7) return 65;
+    if (nameLength <= 12) return 61;
+    return 58;
+};
+
+export const getAdaptiveNameDistanceThreshold = (nameLength: number): number => {
+    if (nameLength <= 4) return 1;
+    if (nameLength <= 8) return 2;
+    if (nameLength <= 12) return 3;
+    return 4;
+};
+
 
 

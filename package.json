@@ -39,6 +39,8 @@
     "ocr:ingest:legacy": "electron scripts/ocr_corpus_ingest_legacy.cjs",
     "artifacts:relink:dry": "node scripts/relink_smart_capture_artifacts.cjs --dry-run",
     "artifacts:relink": "node scripts/relink_smart_capture_artifacts.cjs --apply",
+    "artifacts:migrate:canonical": "node scripts/migrate_artifact_folders_to_canonical.cjs",
+    "artifacts:migrate:canonical:force": "node scripts/migrate_artifact_folders_to_canonical.cjs --force",
     "dev:qa": "npm run snap:views && npm run ci:quality",
     "test": "vitest run",
     "test:watch": "vitest"

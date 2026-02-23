@@ -109,7 +109,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         capturedScreenshots,
         savedCaptures,
         processingProgress,
-        qualityHint
+        qualityHint,
+        processingStatus
     } = smartCaptureState;
     const {
         capture: triggerSmartCapture,
@@ -467,6 +468,11 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                                             : `Running ${ocrModeLabel} Engine...`)
                                         : scanProgress.status}
                             </div>
+                            {isProcessing && processingStatus?.message ? (
+                                <div className="text-label-xs text-md-sys-on-surface/50">
+                                    {processingStatus.message}
+                                </div>
+                            ) : null}
                         </div>
                     </div>
                     <div className="text-label-sm font-mono font-bold text-md-sys-primary">

@@ -664,4 +664,31 @@ describe('useMatchSubmission', () => {
     const [submitted] = addMatch.mock.calls[0];
     expect(submitted.placement).toBe(1);
   });
+
+  it('persists eliminatedByTeam for loss submissions', async () => {
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.pendingPlacement = 2;
+    mockStoreState.pendingMatchData = {
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: [],
+      opponents: [],
+      kills: {},
+      reachModifiers: [],
+      eliminatedByTeam: 'red',
+      time: '08:00',
+    };
+    mockStoreState.showWizard = 'Loss';
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    await act(async () => {
+      await result.current.processFinalSubmission('Combat');
+    });
+
+    expect(addMatch).toHaveBeenCalled();
+    const [submitted] = addMatch.mock.calls[0];
+    expect(submitted.result).toBe('Loss');
+    expect(submitted.eliminatedByTeam).toBe('red');
+  });
 });

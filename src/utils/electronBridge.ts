@@ -22,9 +22,18 @@ const toErrorMessage = (error: unknown, fallback: string): string => {
 export interface OCRProcessRuntimeOptions {
   includeBboxes?: boolean;
   forceUncached?: boolean;
+  forceMaxAnalysis?: boolean;
+  externalFallbackEnabled?: boolean;
+  externalFallbackThreshold?: number;
+  externalOnDetectorDisagreement?: boolean;
   sourceImagePath?: string | null;
   archiveOcrSample?: boolean;
   archiveMetadata?: Record<string, unknown>;
+  screenTypeHint?: 'crew_hub' | 'tactical_map' | 'unknown';
+  routingProfile?: 'default' | 'names-only';
+  fontProfile?: 'default' | 'ealing-black-italic';
+  nameRerouteThreshold?: number;
+  maxReroutePasses?: number;
 }
 
 /**

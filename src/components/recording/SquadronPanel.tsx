@@ -17,12 +17,9 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
     heroSource,
     telemetryDetectedHero,
     setActiveHero,
-    isMatchInProgress,
     currentLoadout,
   } = useGameData();
 
-  const shipTelemetryActive = Boolean(telemetryDetectedShip || shipSource === 'telemetry');
-  const prospectorTelemetryActive = Boolean(telemetryDetectedHero || heroSource === 'telemetry');
   const toShipKey = (value: string | null | undefined) => (value || '').split('(')[0].trim().toLowerCase();
   const sameShip = (a: string | null | undefined, b: string | null | undefined) => toShipKey(a) && toShipKey(a) === toShipKey(b);
   const hasShipManualOverride = Boolean(telemetryDetectedShip && activeShip && !sameShip(telemetryDetectedShip, activeShip));
@@ -31,12 +28,9 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
   const hasAutoEquipment = Array.isArray(currentLoadout?.equipment) && currentLoadout.equipment.length > 0;
 
   const sourceChip = (label: string, source?: 'manual' | 'telemetry' | 'ocr') => {
-    if (!source || source === 'manual') return null;
-    const cls =
-      source === 'telemetry'
-        ? 'text-info bg-info/15'
-        : 'text-info bg-info-soft';
-    const srcLabel = source === 'telemetry' ? 'Telemetry' : 'OCR';
+    if (!source || source === 'manual' || source === 'telemetry') return null;
+    const cls = 'text-info bg-info-soft';
+    const srcLabel = 'OCR';
     return (
       <span className={`md3-chip md3-label ${cls}`}>
         {label}: {srcLabel}
@@ -44,15 +38,23 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
     );
   };
 
-  const TelemetryIndicator: React.FC<{ active: boolean; title: string; label: string }> = ({ active, title, label }) => (
-    <span
-      className={`recording-telemetry-indicator ${active ? 'is-active' : ''} ${(active && isMatchInProgress) ? 'is-recording' : ''}`}
-      title={title}
-    >
-      <span className="recording-telemetry-dot" />
-      <span>{label}</span>
-    </span>
-  );
+  const telemetryOverrideSummary = ((telemetryDetectedShip && shipSource !== 'telemetry') || (telemetryDetectedHero && heroSource !== 'telemetry')) ? (
+    <div className="mg-surface rounded-card p-2 border border-info/15 space-y-1">
+      <div className="text-label-xs font-bold uppercase tracking-wide text-info">Telemetry Hints</div>
+      {(telemetryDetectedShip && shipSource !== 'telemetry') && (
+        <div className="text-label-sm font-semibold text-md-sys-on-surface/65">
+          Detected ship: <span className="font-black">{telemetryDetectedShip.split('(')[0].trim()}</span>
+          {hasShipManualOverride ? <span className="opacity-60"> (manual override)</span> : null}
+        </div>
+      )}
+      {(telemetryDetectedHero && heroSource !== 'telemetry') && (
+        <div className="text-label-sm font-semibold text-md-sys-on-surface/65">
+          Detected prospector: <span className="font-black">{telemetryDetectedHero}</span>
+          {hasHeroManualOverride ? <span className="opacity-60"> (manual override)</span> : null}
+        </div>
+      )}
+    </div>
+  ) : null;
 
   if (density === 'compact') {
     return (
@@ -65,36 +67,17 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
             <h3 className="recording-panel-heading-title">Ship and Loadout</h3>
           </div>
           <div className="recording-panel-heading-meta">
-            <TelemetryIndicator active={shipTelemetryActive} title="Ship telemetry active" label="Ship telemetry" />
-            <TelemetryIndicator active={prospectorTelemetryActive} title="Prospector telemetry active" label="Prospector telemetry" />
             {sourceChip('Ship', shipSource)}
             {sourceChip('Prospector', heroSource)}
           </div>
         </div>
 
-        {(telemetryDetectedShip && shipSource !== 'telemetry') && (
-          <div className="text-label-sm font-semibold text-md-sys-on-surface/55">
-            <span className="text-info font-black uppercase tracking-wide mr-2">Telemetry</span>
-            Detected ship: <span className="font-black">{telemetryDetectedShip.split('(')[0].trim()}</span>
-            {hasShipManualOverride ? <span className="opacity-60"> (manual override)</span> : null}
-          </div>
-        )}
-        {(telemetryDetectedHero && heroSource !== 'telemetry') && (
-          <div className="text-label-sm font-semibold text-md-sys-on-surface/55">
-            <span className="text-info font-black uppercase tracking-wide mr-2">Telemetry</span>
-            Detected prospector: <span className="font-black">{telemetryDetectedHero}</span>
-            {hasHeroManualOverride ? <span className="opacity-60"> (manual override)</span> : null}
-          </div>
-        )}
+        {telemetryOverrideSummary}
         {(hasAutoWeapons || hasAutoEquipment) && (
           <div className="mg-surface rounded-card p-2 border border-info/15 space-y-1.5">
             {hasAutoWeapons && (
               <div className="flex items-start gap-2 text-label-sm">
                 <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
-                <span className="inline-flex items-center gap-1 text-label-xs font-bold uppercase tracking-wide text-success">
-                  <span className="recording-telemetry-dot" />
-                  Telemetry
-                </span>
                 <span className="text-md-sys-on-surface/80 break-words">
                   {currentLoadout?.weapons?.join(', ')}
                 </span>
@@ -103,10 +86,6 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
             {hasAutoEquipment && (
               <div className="flex items-start gap-2 text-label-sm">
                 <span className="font-bold uppercase tracking-wide text-info">Equipment</span>
-                <span className="inline-flex items-center gap-1 text-label-xs font-bold uppercase tracking-wide text-success">
-                  <span className="recording-telemetry-dot" />
-                  Telemetry
-                </span>
                 <span className="text-md-sys-on-surface/80 break-words">
                   {currentLoadout?.equipment?.join(', ')}
                 </span>
@@ -129,9 +108,6 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
                   }`}
               >
                 {s.split('(')[0].trim()}
-                {sameShip(telemetryDetectedShip, s) && (
-                  <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-info" title="Detected from telemetry" />
-                )}
               </button>
             ))}
           </div>
@@ -151,9 +127,6 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
                   }`}
               >
                 {c}
-                {telemetryDetectedHero === c && (
-                  <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-info" title="Detected from telemetry" />
-                )}
               </button>
             ))}
           </div>
@@ -176,36 +149,17 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
           <h3 className="recording-panel-heading-title">Ship and Loadout</h3>
         </div>
         <div className="recording-panel-heading-meta">
-          <TelemetryIndicator active={shipTelemetryActive} title="Ship telemetry active" label="Ship telemetry" />
-          <TelemetryIndicator active={prospectorTelemetryActive} title="Prospector telemetry active" label="Prospector telemetry" />
           {sourceChip('Ship', shipSource)}
           {sourceChip('Prospector', heroSource)}
         </div>
       </div>
 
-      {(telemetryDetectedShip && shipSource !== 'telemetry') && (
-        <div className="text-label-sm font-semibold text-md-sys-on-surface/55">
-          <span className="text-info font-black uppercase tracking-wide mr-2">Telemetry</span>
-          Detected ship: <span className="font-black">{telemetryDetectedShip.split('(')[0].trim()}</span>
-          {hasShipManualOverride ? <span className="opacity-60"> (manual override)</span> : null}
-        </div>
-      )}
-      {(telemetryDetectedHero && heroSource !== 'telemetry') && (
-        <div className="text-label-sm font-semibold text-md-sys-on-surface/55">
-          <span className="text-info font-black uppercase tracking-wide mr-2">Telemetry</span>
-          Detected prospector: <span className="font-black">{telemetryDetectedHero}</span>
-          {hasHeroManualOverride ? <span className="opacity-60"> (manual override)</span> : null}
-        </div>
-      )}
+      {telemetryOverrideSummary}
       {(hasAutoWeapons || hasAutoEquipment) && (
         <div className="mg-surface rounded-card p-2 border border-info/15 space-y-1.5">
           {hasAutoWeapons && (
             <div className="flex items-start gap-2 text-label-sm">
               <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
-              <span className="inline-flex items-center gap-1 text-label-xs font-bold uppercase tracking-wide text-success">
-                <span className="recording-telemetry-dot" />
-                Telemetry
-              </span>
               <span className="text-md-sys-on-surface/80 break-words">
                 {currentLoadout?.weapons?.join(', ')}
               </span>
@@ -214,10 +168,6 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
           {hasAutoEquipment && (
             <div className="flex items-start gap-2 text-label-sm">
               <span className="font-bold uppercase tracking-wide text-info">Equipment</span>
-              <span className="inline-flex items-center gap-1 text-label-xs font-bold uppercase tracking-wide text-success">
-                <span className="recording-telemetry-dot" />
-                Telemetry
-              </span>
               <span className="text-md-sys-on-surface/80 break-words">
                 {currentLoadout?.equipment?.join(', ')}
               </span>
@@ -238,9 +188,6 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
               }`}
           >
             {s.split('(')[0].trim()}
-            {sameShip(telemetryDetectedShip, s) && (
-              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-info" title="Detected from telemetry" />
-            )}
           </button>
         ))}
       </div>
@@ -259,9 +206,6 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
                 }`}
             >
               {c}
-              {telemetryDetectedHero === c && (
-                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-info" title="Detected from telemetry" />
-              )}
             </button>
           ))}
         </div>

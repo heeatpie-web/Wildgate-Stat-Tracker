@@ -19,6 +19,7 @@ import {
   TEAM_COLOR_RANGES,
 } from './ocrMappings';
 import { capTeammatePlayers } from '../teamLimits';
+import { deduplicatePlayersByLikelyName } from './playerNameMatching';
 
 function distance(a: string, b: string): number {
   const matrix: number[][] = [];
@@ -93,6 +94,26 @@ const teamRosterOverlapRatio = (a: ExtractedOpponentTeam, b: ExtractedOpponentTe
     if (bPlayers.has(key)) overlap++;
   });
   return overlap / Math.min(aPlayers.size, bPlayers.size);
+};
+
+type EnemyShipEntry = OCRExtractedData['enemyShips'][number];
+
+const normalizeEnemyShipKey = (entry: EnemyShipEntry): { key: string; shipType: string } | null => {
+  const normalizedType = String(entry.shipType || '').trim();
+  if (!normalizedType) return null;
+  const teamNameKey = String(entry.teamName || '').trim().toLowerCase();
+  const colorKey = String(entry.color || 'unknown').trim().toLowerCase();
+  const key = teamNameKey || `${colorKey}:${normalizedType.toLowerCase()}`;
+  return { key, shipType: normalizedType };
+};
+
+const shouldPreferEnemyShipEntry = (current: EnemyShipEntry, candidate: EnemyShipEntry): boolean => {
+  if (current.color === 'unknown' && candidate.color !== 'unknown') return true;
+  if (!current.teamName && candidate.teamName) return true;
+  if ((current.teamName?.length || 0) < (candidate.teamName?.length || 0)) {
+    return true;
+  }
+  return false;
 };
 
 const findBestOpponentTeamMatchIndex = (
@@ -434,19 +455,12 @@ export function mergeOCRData(
     merged.reachModifiers = Array.from(existingMods.values());
   }
   if (newData.teammates) {
-    const existingPlayers = new Map<string, ExtractedPlayer>();
-    for (const player of merged.teammates || []) {
-      existingPlayers.set(normalizeKey(player.name), player);
-    }
-    for (const player of newData.teammates) {
-      const key = normalizeKey(player.name);
-      const prev = existingPlayers.get(key);
-      if (!prev || player.confidence > prev.confidence) {
-        existingPlayers.set(key, player);
-      }
-    }
+    const mergedPlayers = deduplicatePlayersByLikelyName([
+      ...(merged.teammates || []),
+      ...newData.teammates,
+    ]);
     const shipForTeammateCap = newData.playerShip?.shipType || merged.playerShip?.shipType;
-    merged.teammates = capTeammatePlayers(Array.from(existingPlayers.values()), shipForTeammateCap);
+    merged.teammates = capTeammatePlayers(mergedPlayers, shipForTeammateCap);
   }
   if (newData.opponentTeams) {
     const existingArr = [...(merged.opponentTeams || [])];
@@ -465,27 +479,24 @@ export function mergeOCRData(
         if ((!existing.color || existing.color === 'unknown') && newTeam.color && newTeam.color !== 'unknown') {
           existing.color = newTeam.color;
         }
-        const existingPlayers = new Map<string, ExtractedPlayer>();
-        for (const p of existing.players) {
-          existingPlayers.set(normalizeKey(p.name), p);
-        }
-        for (const p of newTeam.players) {
-          const key = normalizeKey(p.name);
-          const prev = existingPlayers.get(key);
-          if (!prev || p.confidence > prev.confidence) {
-            existingPlayers.set(key, p);
-          }
-        }
-        existing.players = capOpponentPlayers(Array.from(existingPlayers.values()));
+        existing.players = capOpponentPlayers(
+          deduplicatePlayersByLikelyName([
+            ...(existing.players || []),
+            ...(newTeam.players || []),
+          ])
+        );
         existing.confidence = Math.max(existing.confidence, newTeam.confidence);
       } else {
-        existingArr.push({ ...newTeam, players: capOpponentPlayers([...(newTeam.players || [])]) });
+        existingArr.push({
+          ...newTeam,
+          players: capOpponentPlayers(deduplicatePlayersByLikelyName([...(newTeam.players || [])])),
+        });
       }
     }
     merged.opponentTeams = existingArr
       .map((team) => ({
         ...team,
-        players: capOpponentPlayers(team.players || []),
+        players: capOpponentPlayers(deduplicatePlayersByLikelyName(team.players || [])),
       }))
       .sort((a, b) => {
         const bySize = (b.players?.length || 0) - (a.players?.length || 0);
@@ -493,6 +504,29 @@ export function mergeOCRData(
         return (b.confidence || 0) - (a.confidence || 0);
       })
       .slice(0, MAX_OPPONENT_TEAMS);
+  }
+  if (newData.enemyShips) {
+    const enemyShipMap = new Map<string, EnemyShipEntry>();
+    const addEntry = (entry: EnemyShipEntry) => {
+      const normalized = normalizeEnemyShipKey(entry);
+      if (!normalized) return;
+      const existingEntry = enemyShipMap.get(normalized.key);
+      const storedEntry: EnemyShipEntry = {
+        ...entry,
+        shipType: normalized.shipType,
+        teamName: String(entry.teamName || '').trim(),
+      };
+      if (!existingEntry) {
+        enemyShipMap.set(normalized.key, storedEntry);
+        return;
+      }
+      if (shouldPreferEnemyShipEntry(existingEntry, storedEntry)) {
+        enemyShipMap.set(normalized.key, storedEntry);
+      }
+    };
+    (merged.enemyShips || []).forEach(addEntry);
+    newData.enemyShips.forEach(addEntry);
+    merged.enemyShips = Array.from(enemyShipMap.values());
   }
   if (newData.hazards) {
     const existing = new Set((merged.hazards || []).map(h => h.toLowerCase()));

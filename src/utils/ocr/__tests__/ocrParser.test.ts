@@ -344,6 +344,33 @@ describe('mergeOCRData (parser)', () => {
     expect(alice!.confidence).toBe(90);
   });
 
+  it('deduplicates OCR-variant teammate names with number/letter confusion', () => {
+    const existing: Partial<OCRExtractedData> = {
+      teammates: [{ name: 'chrismario', confidence: 83, isTeammate: true }],
+    };
+    const newData: Partial<OCRExtractedData> = {
+      teammates: [
+        { name: 'chrismar10', confidence: 91, isTeammate: true },
+        { name: 'chrismar1o', confidence: 89, isTeammate: true },
+      ],
+    };
+    const merged = mergeOCRData(existing, newData);
+    expect(merged.teammates).toHaveLength(1);
+    expect(merged.teammates?.[0].confidence).toBe(91);
+    expect(merged.teammates?.[0].name.toLowerCase()).toBe('chrismario');
+  });
+
+  it('does not merge distinct names that only share a long prefix', () => {
+    const existing: Partial<OCRExtractedData> = {
+      teammates: [{ name: 'chrismario', confidence: 90, isTeammate: true }],
+    };
+    const newData: Partial<OCRExtractedData> = {
+      teammates: [{ name: 'chrismarco', confidence: 88, isTeammate: true }],
+    };
+    const merged = mergeOCRData(existing, newData);
+    expect(merged.teammates).toHaveLength(2);
+  });
+
   it('prefers higher-confidence playerShip', () => {
     const existing: Partial<OCRExtractedData> = {
       playerShip: { shipType: 'Hunter', confidence: 70 },
@@ -381,6 +408,32 @@ describe('mergeOCRData (parser)', () => {
     expect(merged.opponentTeams![0].players).toHaveLength(2);
     // Longer team name preferred
     expect(merged.opponentTeams![0].teamName).toBe('RedTeamExtended');
+  });
+
+  it('deduplicates OCR-variant opponent players when merging a team', () => {
+    const existing: Partial<OCRExtractedData> = {
+      opponentTeams: [{
+        teamName: 'Blue Team',
+        shipType: 'Hunter',
+        color: 'blue' as const,
+        players: [{ name: 'chrismario', confidence: 80, isTeammate: false }],
+        confidence: 70,
+      }],
+    };
+    const newData: Partial<OCRExtractedData> = {
+      opponentTeams: [{
+        teamName: 'Blue Team',
+        shipType: '',
+        color: 'blue' as const,
+        players: [{ name: 'chrismar10', confidence: 92, isTeammate: false }],
+        confidence: 79,
+      }],
+    };
+    const merged = mergeOCRData(existing, newData);
+    expect(merged.opponentTeams).toHaveLength(1);
+    expect(merged.opponentTeams?.[0].players).toHaveLength(1);
+    expect(merged.opponentTeams?.[0].players[0].confidence).toBe(92);
+    expect(merged.opponentTeams?.[0].players[0].name.toLowerCase()).toBe('chrismario');
   });
 
   it('does not merge unrelated teams by color only when names and roster differ', () => {
@@ -473,6 +526,32 @@ describe('mergeOCRData (parser)', () => {
 describe('calculateOverallConfidence', () => {
   it('returns 0 for empty data', () => {
     expect(calculateOverallConfidence({})).toBe(0);
+  });
+
+  it('merges enemy ship entries and prefers better metadata', () => {
+    const existing: Partial<OCRExtractedData> = {
+      enemyShips: [{ teamName: 'RedTeam', shipType: 'Hunter', color: 'unknown' }],
+    };
+    const newData: Partial<OCRExtractedData> = {
+      enemyShips: [
+        { teamName: 'RedTeam', shipType: 'Hunter', color: 'red' },
+        { teamName: 'BlueTeam', shipType: 'Scout', color: 'blue' },
+      ],
+    };
+    const merged = mergeOCRData(existing, newData);
+    expect(merged.enemyShips).toHaveLength(2);
+    expect(merged.enemyShips?.find((e) => e.teamName === 'RedTeam')?.color).toBe('red');
+  });
+
+  it('keeps existing enemy ships when new data provides no tactical map update', () => {
+    const existing: Partial<OCRExtractedData> = {
+      enemyShips: [{ teamName: 'Gamma', shipType: 'Privateer', color: 'yellow' }],
+    };
+    const newData: Partial<OCRExtractedData> = {
+      enemyShips: [],
+    };
+    const merged = mergeOCRData(existing, newData);
+    expect(merged.enemyShips).toEqual(existing.enemyShips);
   });
 
   it('weights ship confidence higher', () => {
