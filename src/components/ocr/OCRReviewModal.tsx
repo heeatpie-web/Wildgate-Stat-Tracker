@@ -675,8 +675,6 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
           aria-describedby={dialogDescriptionId}
           className="ocr-review-dialog md3-dialog rounded-modal shadow-2xl max-w-2xl w-full h-[90vh] max-h-90vh my-2 overflow-hidden flex flex-col gap-3 p-4 relative z-0"
           onClick={e => e.stopPropagation()}
-          className="ocr-review-dialog md3-dialog rounded-modal shadow-2xl max-w-2xl w-full h-[90vh] max-h-90vh my-2 overflow-hidden flex flex-col gap-3 p-4 relative z-0"
-          onClick={e => e.stopPropagation()}
         >
         <div className="flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">

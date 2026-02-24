@@ -183,8 +183,13 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         discardMatch();
         clearCaptures();
         setSessionTeams({});
-        setToast({ message: 'Match discarded. Ready for a fresh start.', type: 'info' });
-    }, [discardMatch, clearCaptures, setSessionTeams, setToast]);
+        pushNotification({
+            message: 'Match discarded. Ready for a fresh start.',
+            type: 'info',
+            source: 'user',
+            deepLink: { type: 'openView', view: 'recording' },
+        });
+    }, [discardMatch, clearCaptures, setSessionTeams, pushNotification]);
 
     // Dedicated mission timer display so match time remains visible at a glance.
     const [matchElapsed, setMatchElapsed] = React.useState('00:00');
