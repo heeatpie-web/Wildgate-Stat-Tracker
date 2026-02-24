@@ -77,6 +77,7 @@ export interface FormSlice {
     resetSelectionSourcesForNewMatch: () => void;
 
     resetForm: () => void;
+    discardMatch: () => void;
 }
 
 export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
@@ -254,5 +255,32 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
         elims: "",
         currentNote: "",
         activeWeapons: state.characterLoadouts[state.activeHero] || {}
-    }))
+    })),
+
+    discardMatch: () => set((state) => ({
+        // Everything resetForm does
+        poiEasy: 0,
+        poiMedium: 0,
+        poiEpic: 0,
+        kills: { "AI Legion": 0 },
+        selectedReachModifiers: [],
+        modifiersSource: undefined,
+        heroSource: undefined,
+        shipSource: undefined,
+        telemetryDetectedHero: undefined,
+        telemetryDetectedShip: undefined,
+        elims: "",
+        currentNote: "",
+        activeWeapons: state.characterLoadouts[state.activeHero] || {},
+        // Full discard: clear teammates, opponents, pending data, timer
+        selectedTeammates: [],
+        selectedOpponents: [],
+        pendingMatchData: null,
+        pendingSubType: '',
+        pendingPlacement: null,
+        pendingArtifactType: '',
+        showWizard: null,
+        matchStartTime: null,
+        isMatchInProgress: false,
+    })),
 });

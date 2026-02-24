@@ -10,7 +10,8 @@ import {
     RefreshCw,
     X,
     ChevronRight,
-    UserPlus
+    UserPlus,
+    Trash2
 } from 'lucide-react';
 import { SessionTimer } from '../SessionTimer';
 import { useGameData } from '../../providers/GameDataProvider';
@@ -72,7 +73,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         activeShip, shipSource, telemetryDetectedShip,
         activeHero, heroSource, telemetryDetectedHero,
         pendingReviews,
-        detectedUnknowns
+        detectedUnknowns,
+        setSessionTeams
     } = useGameData();
 
     const {
@@ -90,6 +92,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
 
     const { handleSmartScan, isScanning, scanProgress, scanLogs } = useSmartScan();
     const ocrMode = useAppStore(s => s.ocrMode);
+    const discardMatch = useAppStore(s => s.discardMatch);
     const resultOcrFlowMode = useAppStore(s => s.resultOcrFlowMode);
     const selectedSmartCapturesMatchId = useAppStore(s => s.selectedMatchId);
     const ocrModeLabel = ocrMode === 'hybrid-plus'
@@ -117,6 +120,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         capture: triggerSmartCapture,
         processAllStored,
         clearError: clearCaptureError,
+        clearCaptures,
         dismissPendingData,
         getPendingData,
         reanalyzeCaptures
@@ -174,6 +178,13 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         telemetryDetectedShip
         || telemetryDetectedHero
     );
+
+    const handleDiscardMatch = React.useCallback(() => {
+        discardMatch();
+        clearCaptures();
+        setSessionTeams({});
+        setToast({ message: 'Match discarded. Ready for a fresh start.', type: 'info' });
+    }, [discardMatch, clearCaptures, setSessionTeams, setToast]);
 
     // Dedicated mission timer display so match time remains visible at a glance.
     const [matchElapsed, setMatchElapsed] = React.useState('00:00');
@@ -642,6 +653,15 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                         <div className="flex items-center gap-2 flex-wrap justify-end">
                             <span className="font-mono tabular-nums font-bold text-xl tracking-wide text-md-sys-primary">{matchElapsed}</span>
                             <button
+                                onClick={handleDiscardMatch}
+                                className="inline-flex items-center gap-1 text-label-xs px-2 py-1 bg-md-sys-errorContainer/40 text-md-sys-error rounded hover:bg-md-sys-error/20 font-bold uppercase"
+                                title="Discard match and reset all data"
+                                aria-label="Discard match"
+                            >
+                                <Trash2 size={10} />
+                                <span>Discard</span>
+                            </button>
+                            <button
                                 onClick={() => { setIsMatchInProgress(false); setMatchStartTime(null); }}
                                 className="inline-flex items-center gap-1 text-label-xs px-2 py-1 bg-md-sys-errorContainer/40 text-md-sys-error rounded hover:bg-md-sys-error/20 font-bold uppercase"
                                 title="Stop match timer"
@@ -771,6 +791,15 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                         </div>
                         <div className="flex items-center gap-2 flex-wrap justify-end">
                             <span className="font-mono tabular-nums font-bold text-xl tracking-wide text-md-sys-primary">{matchElapsed}</span>
+                            <button
+                                onClick={handleDiscardMatch}
+                                className="inline-flex items-center gap-1 text-label-xs px-2 py-1 bg-md-sys-errorContainer/40 text-md-sys-error rounded hover:bg-md-sys-error/20 font-bold uppercase"
+                                title="Discard match and reset all data"
+                                aria-label="Discard match"
+                            >
+                                <Trash2 size={10} />
+                                <span>Discard</span>
+                            </button>
                             <button
                                 onClick={() => { setIsMatchInProgress(false); setMatchStartTime(null); }}
                                 className="inline-flex items-center gap-1 text-label-xs px-2 py-1 bg-md-sys-errorContainer/40 text-md-sys-error rounded hover:bg-md-sys-error/20 font-bold uppercase"
