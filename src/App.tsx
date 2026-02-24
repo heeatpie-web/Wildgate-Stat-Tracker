@@ -232,6 +232,8 @@ const App: React.FC = () => {
     const fuzzyPromptCountRef = React.useRef(0);
     const idPromptCountRef = React.useRef(0);
     const setTutorialCompleted = useAppStore(s => s.setTutorialCompleted);
+    const tutorialCompleted = useAppStore(s => s.tutorialCompleted);
+    const tipsEnabled = useAppStore(s => s.tipsEnabled);
     const isStoreLoading = useAppStore(s => s.isLoading);
     const startupSmartPreloadEnabled = useAppStore(s => s.startupSmartPreloadEnabled);
     const adaptivePreloadEnabled = useAppStore(s => s.adaptivePreloadEnabled);
@@ -241,6 +243,7 @@ const App: React.FC = () => {
     const ocrAutoApplyMinScore = useAppStore(s => s.ocrAutoApplyMinScore);
     const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
     const welcomeBackToastShownRef = React.useRef(false);
+    const tutorialAutoPromptedRef = React.useRef(false);
     const [preloadedViews, setPreloadedViews] = useState<Record<LazyDashboardView, boolean>>({
         analytics: lazyDashboardStatus.analytics === 'ready',
         'smart-captures': lazyDashboardStatus['smart-captures'] === 'ready',
@@ -494,6 +497,7 @@ const App: React.FC = () => {
     ]);
 
     useEffect(() => {
+        if (!tipsEnabled) return;
         const tipsByView: Record<string, string> = {
             'smart-captures': 'Tip: Use queue filters first, then open one match to apply OCR corrections quickly.',
             history: 'Tip: Select multiple matches in History to rerun OCR in one pass.',
@@ -515,7 +519,7 @@ const App: React.FC = () => {
             durationMs: 5_000,
             deepLink: { type: 'openView', view: activeView },
         });
-    }, [activeView, pushNotification]);
+    }, [activeView, pushNotification, tipsEnabled]);
 
     useEffect(() => {
         if (welcomeBackToastShownRef.current) return;
@@ -555,6 +559,30 @@ const App: React.FC = () => {
         setRenameValue('');
         setRenameModal({ type: 'new', blocking: true });
     }, [activeUser, isStoreLoading, players, renameModal, setRenameModal, setRenameValue]);
+
+    useEffect(() => {
+        if (tutorialAutoPromptedRef.current) return;
+        if (isStoreLoading) return;
+        if (showTutorial) return;
+        if (tutorialCompleted) {
+            tutorialAutoPromptedRef.current = true;
+            return;
+        }
+        if (renameModal) return;
+        if (!String(activeUser || '').trim()) return;
+        try {
+            const key = 'wg_tutorial_autostart_seen_v1';
+            if (window.localStorage.getItem(key) === '1') {
+                tutorialAutoPromptedRef.current = true;
+                return;
+            }
+            window.localStorage.setItem(key, '1');
+        } catch {
+            // Ignore localStorage failures and continue with ref guard.
+        }
+        tutorialAutoPromptedRef.current = true;
+        setShowTutorial(true);
+    }, [activeUser, isStoreLoading, renameModal, setShowTutorial, showTutorial, tutorialCompleted]);
 
     useEffect(() => {
         if (isStoreLoading) return;

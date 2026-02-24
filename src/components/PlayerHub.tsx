@@ -485,16 +485,6 @@ const PlayerHub: React.FC = () => {
                     <div className="grid grid-cols-2 gap-1">
                         <button
                             type="button"
-                            onClick={() => setPanelMode('roster')}
-                            className={`h-7 rounded-lg text-label-xs font-bold uppercase tracking-wide transition-all ${panelMode === 'roster'
-                                ? 'bg-md-sys-primary text-md-sys-onPrimary'
-                                : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
-                                }`}
-                        >
-                            Roster
-                        </button>
-                        <button
-                            type="button"
                             onClick={() => setPanelMode('ocr-work')}
                             className={`h-7 rounded-lg text-label-xs font-bold uppercase tracking-wide transition-all ${panelMode === 'ocr-work'
                                 ? 'bg-md-sys-primary text-md-sys-onPrimary'
@@ -502,6 +492,16 @@ const PlayerHub: React.FC = () => {
                                 }`}
                         >
                             OCR Work {pendingRosterCandidates.length > 0 ? `(${pendingRosterCandidates.length})` : ''}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setPanelMode('roster')}
+                            className={`h-7 rounded-lg text-label-xs font-bold uppercase tracking-wide transition-all ${panelMode === 'roster'
+                                ? 'bg-md-sys-primary text-md-sys-onPrimary'
+                                : 'text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/5'
+                                }`}
+                        >
+                            Roster
                         </button>
                     </div>
 

@@ -143,6 +143,7 @@ export interface SettingsSlice {
   disableAnimations: boolean;
   performanceMode: boolean;
   showSmartCaptureInHeader: boolean;
+  tipsEnabled: boolean;
   soundEnabled: boolean;
   language: Language;
   showSessionTimer: boolean;
@@ -192,6 +193,7 @@ export interface SettingsSlice {
   setDisableAnimations: (disabled: boolean) => void;
   setPerformanceMode: (enabled: boolean) => void;
   setShowSmartCaptureInHeader: (enabled: boolean) => void;
+  setTipsEnabled: (enabled: boolean) => void;
   setSoundEnabled: (enabled: boolean) => void;
   setLanguage: (lang: Language) => void;
   setShowSessionTimer: (show: boolean) => void;
@@ -257,6 +259,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   disableAnimations: false,
   performanceMode: false,
   showSmartCaptureInHeader: true,
+  tipsEnabled: true,
   soundEnabled: true,
   language: 'en',
   showSessionTimer: true,
@@ -318,6 +321,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   setDisableAnimations: (disabled) => set({ disableAnimations: disabled }),
   setPerformanceMode: (enabled) => set({ performanceMode: enabled, disableAnimations: enabled ? true : false }),
   setShowSmartCaptureInHeader: (enabled) => set({ showSmartCaptureInHeader: enabled }),
+  setTipsEnabled: (enabled) => set({ tipsEnabled: enabled }),
   setSoundEnabled: (enabled) => set({ soundEnabled: enabled }),
   setLanguage: (lang) => set({ language: lang }),
   setShowSessionTimer: (show) => set({ showSessionTimer: show }),

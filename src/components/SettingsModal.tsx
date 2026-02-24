@@ -116,6 +116,8 @@ const SettingsModalContent: React.FC = () => {
     const setResultOcrFlowMode = useAppStore(s => s.setResultOcrFlowMode);
     const showSmartCaptureInHeader = useAppStore(s => s.showSmartCaptureInHeader);
     const setShowSmartCaptureInHeader = useAppStore(s => s.setShowSmartCaptureInHeader);
+    const tipsEnabled = useAppStore(s => s.tipsEnabled);
+    const setTipsEnabled = useAppStore(s => s.setTipsEnabled);
     const telemetryPerformanceProfile = useAppStore(s => s.telemetryPerformanceProfile);
     const setTelemetryPerformanceProfile = useAppStore(s => s.setTelemetryPerformanceProfile);
     const startupSmartPreloadEnabled = useAppStore(s => s.startupSmartPreloadEnabled);
@@ -347,6 +349,7 @@ const SettingsModalContent: React.FC = () => {
                 ocrThresholdHistory: (state as any).ocrThresholdHistory,
                 ocrBestGuessThresholds: state.ocrBestGuessThresholds,
                 autoBackup: state.enableAutoBackup,
+                tipsEnabled: state.tipsEnabled,
                 startupSmartPreloadEnabled: (state as any).startupSmartPreloadEnabled,
                 ocrCalibration: state.ocrCalibration,
                 ocrRegions: state.ocrRegions,
@@ -368,7 +371,11 @@ const SettingsModalContent: React.FC = () => {
     const handleBackupDB = async () => {
         const res = await StorageService.backup();
         if (res && res.success) {
-            alert(`Backup saved to:\n${res.path}`);
+            const lines = [`Backup saved to:\n${res.path}`];
+            if ((res as { bundlePath?: string }).bundlePath) {
+                lines.push(`\nArtifacts bundled at:\n${(res as { bundlePath?: string }).bundlePath}`);
+            }
+            alert(lines.join(''));
         } else {
             alert("Backup failed: " + (res?.error || "Unknown error"));
         }
@@ -1031,10 +1038,28 @@ const SettingsModalContent: React.FC = () => {
                                     </span>
                                 </div>
                                 <button
-                                    onClick={() => setShowTutorial(true)}
+                                    onClick={() => {
+                                        setShowSettings(false);
+                                        setShowTutorial(true);
+                                    }}
                                     className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold uppercase"
                                 >
                                     Open
+                                </button>
+                            </div>
+                            <div className="flex justify-between items-center pt-3 mt-3 border-t border-md-sys-outline/10">
+                                <div>
+                                    <span className="text-label-sm font-medium opacity-60 block">Tips</span>
+                                    <span className="text-label-sm opacity-40 uppercase font-bold">
+                                        {tipsEnabled ? 'Enabled' : 'Disabled'}
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={() => setTipsEnabled(!tipsEnabled)}
+                                    className={`w-11 h-6 rounded-full transition-colors ${tipsEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
+                                    aria-label="Toggle tips"
+                                >
+                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${tipsEnabled ? 'translate-x-5' : ''}`} />
                                 </button>
                             </div>
                         </div>

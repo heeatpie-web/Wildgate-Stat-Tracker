@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useSmartCapture } from '../useSmartCapture';
+import { resolveLobbyTagShipType, useSmartCapture } from '../useSmartCapture';
 import { captureGameWindow, saveScreenshot, isElectron } from '../../utils/electronBridge';
 import { rerunOCROnArtifact } from '../../utils/artifactService';
 
@@ -132,6 +132,16 @@ describe('useSmartCapture', () => {
     expect(Array.isArray(state.capturedScreenshots)).toBe(true);
     expect(Array.isArray(state.savedCaptures)).toBe(true);
     expect(state.processingStatus).toBeNull();
+  });
+
+  it('treats colored OCR tag text as ship metadata candidates', () => {
+    expect(resolveLobbyTagShipType({
+      name: '[Bastion (2 Player)]',
+      teamColor: 'Red',
+      confidence: 82,
+      source: 'OCR',
+      isTag: true,
+    })).toBe('Bastion');
   });
 
   it('returns a tuple [state, actions] with expected action keys', () => {

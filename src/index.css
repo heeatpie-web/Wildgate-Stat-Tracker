@@ -952,6 +952,187 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 56%);
 }
 
+.ocr-assignment-board {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ocr-assignment-board-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 10px;
+}
+
+.ocr-assignment-team-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-radius: 14px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 68%);
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--md-sys-color-primary), transparent 86%), transparent 52%),
+    color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 6%);
+}
+
+.ocr-assignment-team-card--hover {
+  border-color: color-mix(in srgb, var(--md-sys-color-primary), transparent 52%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 64%);
+}
+
+.ocr-assignment-team-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ocr-assignment-team-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 62%);
+  flex-shrink: 0;
+}
+
+.ocr-assignment-team-dot--red { background: #ef4444; }
+.ocr-assignment-team-dot--orange { background: #f59e0b; }
+.ocr-assignment-team-dot--yellow { background: #facc15; }
+.ocr-assignment-team-dot--green { background: #22c55e; }
+.ocr-assignment-team-dot--blue { background: #3b82f6; }
+.ocr-assignment-team-dot--cyan { background: #06b6d4; }
+.ocr-assignment-team-dot--purple { background: #a855f7; }
+.ocr-assignment-team-dot--friendly { background: #2563eb; }
+.ocr-assignment-team-dot--unknown { background: color-mix(in srgb, var(--md-sys-color-outline), transparent 36%); }
+
+.ocr-assignment-team-name {
+  min-width: 0;
+  flex: 1;
+  font-weight: 700;
+}
+
+.ocr-assignment-team-title {
+  min-width: 0;
+  flex: 1;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ocr-assignment-team-meta {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.62;
+  white-space: nowrap;
+}
+
+.ocr-assignment-team-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ocr-assignment-control-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
+.ocr-assignment-ship-select,
+.ocr-assignment-color-select {
+  width: 100%;
+  min-height: 34px;
+}
+
+.ocr-assignment-players {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ocr-assignment-empty {
+  border-radius: 10px;
+  border: 1px dashed color-mix(in srgb, var(--md-sys-color-outline), transparent 56%);
+  padding: 8px;
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+.ocr-team-player-row--quick {
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 66%);
+  background: color-mix(in srgb, var(--md-sys-color-surface), transparent 6%);
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ocr-assignment-player-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.ocr-assignment-fuzzy-badge {
+  flex-shrink: 0;
+  max-width: 120px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-info), transparent 62%);
+  background: color-mix(in srgb, var(--md-sys-color-info), transparent 88%);
+  color: var(--md-sys-color-info);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ocr-assignment-add-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ocr-assignment-add-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.ocr-assignment-add-btn {
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+}
+
+.ocr-assignment-add-team {
+  align-self: flex-start;
+  padding: 8px 0;
+}
+
+.ocr-assignment-board--compact .ocr-assignment-team-card {
+  padding: 8px;
+  gap: 6px;
+}
+
+.ocr-assignment-board--compact .ocr-assignment-team-name,
+.ocr-assignment-board--compact .ocr-assignment-team-title {
+  font-size: 12px;
+}
+
+.ocr-assignment-board--compact .ocr-assignment-team-meta {
+  font-size: 10px;
+}
+
+.ocr-assignment-board--compact .ocr-assignment-control-label {
+  font-size: 9px;
+}
+
 .ocr-teammate-chip {
   display: inline-flex;
   align-items: center;
@@ -1004,6 +1185,21 @@ body[data-mode='twilight'] .ocr-teammate-chip {
 .review-queue-body {
   font-size: var(--md-sys-typescale-body-medium-size, 14px);
   line-height: 1.45;
+}
+
+.ocr-correction-dialog--embedded {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ocr-correction-dialog--embedded .ocr-correction-body {
+  flex: 1 1 auto;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  min-height: 0;
 }
 
 .ocr-correction-dialog .md3-textfield--outlined,
@@ -1210,27 +1406,21 @@ select option {
 
 .sc-detail-summary-bar {
   overflow: visible;
-  background:
-    radial-gradient(circle at 2% 0%, color-mix(in srgb, var(--md-sys-color-primary), transparent 90%), transparent 46%),
-    radial-gradient(circle at 98% -14%, color-mix(in srgb, var(--md-sys-color-tertiary), transparent 92%), transparent 50%),
-    var(--md-sys-color-surface-container-highest);
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 62%);
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 74%);
 }
 
 body[data-mode='twilight'] .sc-detail-summary-bar {
-  background:
-    radial-gradient(circle at 2% 0%, color-mix(in srgb, var(--md-sys-color-primary), transparent 82%), transparent 52%),
-    radial-gradient(circle at 98% -14%, color-mix(in srgb, var(--md-sys-color-tertiary), transparent 84%), transparent 56%),
-    color-mix(in srgb, var(--md-sys-color-surface-container-highest), black 6%);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), black 6%);
   border-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 42%);
 }
 
 body[data-mode='twilight'] .sc-detail-sticky-header {
   overflow: visible;
-  background-color: color-mix(in srgb, var(--md-sys-color-surface-container-highest), black 4%);
+  background-color: color-mix(in srgb, var(--md-sys-color-surface-container-high), black 2%);
   border-bottom-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 46%);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .sc-queue-selection-bar {
@@ -1425,9 +1615,7 @@ body[data-mode='twilight'] .sc-detail-meta-line {
   padding: 6px;
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 68%);
-  background:
-    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--md-sys-color-primary), transparent 84%), transparent 50%),
-    color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 2%);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 2%);
   box-shadow: var(--elevation-2);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -1534,26 +1722,18 @@ body[data-mode='twilight'] .sc-detail-meta-line {
 
 .sc-detail-workspace {
   position: relative;
-  background:
-    linear-gradient(
-      180deg,
-      var(--md-sys-color-surface-container-high) 0%,
-      var(--md-sys-color-surface-container) 100%
-    );
+  background: var(--md-sys-color-surface-container-high);
 }
 
 .sc-detail-pane {
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--md-sys-color-primary), transparent 92%), transparent 56%),
-    radial-gradient(circle at 8% 100%, color-mix(in srgb, var(--md-sys-color-tertiary), transparent 94%), transparent 52%),
-    var(--md-sys-color-surface-container-high);
+  background: var(--md-sys-color-surface-container-high);
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 66%);
 }
 
 .sc-detail-main-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
+  gap: 12px;
   align-items: start;
 }
 
@@ -1573,37 +1753,28 @@ body[data-mode='twilight'] .sc-detail-meta-line {
   padding: 4px 10px;
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.05em;
+  font-weight: 700;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--md-sys-color-primary), transparent 8%);
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-primary), transparent 74%);
-  background: color-mix(in srgb, var(--md-sys-color-primary), transparent 90%);
+  color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 26%);
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 82%);
+  background: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 97%);
 }
 
 .sc-detail-lane-kicker--rail {
-  color: color-mix(in srgb, var(--md-sys-color-info), transparent 16%);
-  border-color: color-mix(in srgb, var(--md-sys-color-info), transparent 72%);
-  background: color-mix(in srgb, var(--md-sys-color-info), transparent 91%);
+  color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 26%);
+  border-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 76%);
+  background: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 96%);
 }
 
 .sc-editor-section {
   border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 72%);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--md-sys-color-on-surface), transparent 96%);
-  background:
-    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--md-sys-color-primary), transparent 84%), transparent 46%),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--md-sys-color-surface-container-highest), transparent 11%) 0%,
-      color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 2%) 100%
-    );
+  box-shadow: none;
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), transparent 4%);
 }
 
 .sc-detail-rail-block .sc-editor-section {
-  background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--md-sys-color-info), transparent 82%), transparent 56%),
-    radial-gradient(circle at 0% 100%, color-mix(in srgb, var(--md-sys-color-accent), transparent 84%), transparent 50%),
-    color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 3%);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), transparent 6%);
 }
 
 .sc-editor-section-icon {
@@ -1618,12 +1789,7 @@ body[data-mode='twilight'] .sc-detail-meta-line {
   min-height: 82px;
   justify-content: center;
   border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 72%);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 6%) 0%,
-      color-mix(in srgb, var(--md-sys-color-surface-container), transparent 4%) 100%
-    );
+  background: color-mix(in srgb, var(--md-sys-color-surface-container), transparent 3%);
 }
 
 .sc-detail-stats-grid .sc-editor-stat-card:hover {

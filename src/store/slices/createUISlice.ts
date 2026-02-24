@@ -237,6 +237,27 @@ const pushNotificationState = (
         nextState.toast = toToastState(notification);
     }
 
+    if (notification.type === 'tip') {
+        const readAt = Date.now();
+        const staleTipIds = new Set(
+            nextState.notifications
+                .filter((item) => item.type === 'tip' && item.id !== notification.id)
+                .map((item) => item.id)
+        );
+        if (staleTipIds.size > 0) {
+            nextState.notifications = nextState.notifications.map((item) => (
+                staleTipIds.has(item.id) && !item.readAt
+                    ? { ...item, readAt }
+                    : item
+            ));
+            nextState.notificationQueue = nextState.notificationQueue.filter((id) => !staleTipIds.has(id));
+            if (nextState.activeNotificationId && staleTipIds.has(nextState.activeNotificationId)) {
+                nextState.activeNotificationId = null;
+                nextState.toast = null;
+            }
+        }
+    }
+
     nextState = trimNotificationState(nextState);
     return nextState;
 };

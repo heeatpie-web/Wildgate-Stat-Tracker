@@ -320,12 +320,15 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                     >
                         <div className="space-y-2">
                             {topInsights.map((insight) => (
-                                <div key={`${insight.title}_${insight.value}`} className="rounded-control bg-md-sys-on-surface/6 p-2.5">
+                                <div
+                                    key={`${insight.title}_${insight.value}`}
+                                    className={`rounded-control border p-2.5 ${getInsightToneClasses(insight.tone)}`}
+                                >
                                     <div className="flex items-center justify-between gap-2">
-                                        <div className="text-label-sm font-bold text-md-sys-on-surface truncate">{insight.title}</div>
-                                        <div className="text-label-sm font-bold text-md-sys-primary">{insight.value}</div>
+                                        <div className="text-label-sm font-bold truncate">{insight.title}</div>
+                                        <div className="text-label-sm font-bold">{insight.value}</div>
                                     </div>
-                                    <div className="text-label-sm text-md-sys-on-surface/60">{insight.subtitle || insight.subValue}</div>
+                                    <div className="text-label-sm opacity-75">{insight.subtitle || insight.subValue}</div>
                                 </div>
                             ))}
                         </div>

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, User, Ship, Search, Info, Users, Image as ImageIcon, Eye, Trash2, GripVertical, Shield, Minus, Plus } from 'lucide-react';
+import { X, Check, Search, Info, Users, Image as ImageIcon, Eye, Shield, Minus, Plus, ArrowLeft } from 'lucide-react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
@@ -23,7 +23,8 @@ import { LocalImage } from './LocalImage';
 import { Match, SHIPS } from '../types';
 import Logger from '../utils/logger';
 import { getElectronAPI } from '../utils/electronAPI';
-import { similarityScore } from '../utils/stringUtils';
+import { findClosestMatch, similarityScore } from '../utils/stringUtils';
+import { OcrTeamAssignmentBoard } from './ocr/OcrTeamAssignmentBoard';
 
 interface OcrCorrectionModalProps {
     isOpen: boolean;
@@ -51,11 +52,6 @@ interface TeamDraft {
     shipType: string;
 }
 
-interface DraggedPlayer {
-    teamIndex: number;
-    playerIndex: number;
-}
-
 interface DropdownAnchor {
     top: number;
     left: number;
@@ -66,7 +62,6 @@ interface DropdownAnchor {
 
 const IMAGE_FILE_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
 const OCR_REVIEW_HELP_DISMISSED_STORAGE_KEY = 'wg_ocr_review_help_dismissed_v1';
-const getTeamPlayerRowKey = (teamIndex: number, playerIndex: number): string => `${teamIndex}:${playerIndex}`;
 
 const getStoredHelpBannerDismissed = (): boolean => {
     if (typeof window === 'undefined') return false;
@@ -106,6 +101,11 @@ const dedupeNames = (names: string[]): string[] => {
     });
     return out;
 };
+
+const FRIENDLY_SHIP_SUFFIX_PATTERN = /\s*\(\s*\d+\s*player[s]?\s*\)\s*$/i;
+const normalizeShipTeamLabel = (value: string): string => (
+    normalizeSubmittedName(String(value || '').replace(FRIENDLY_SHIP_SUFFIX_PATTERN, ''))
+);
 
 const parseTeamKey = (teamKey: string, index: number): { color: string; teamName: string } => {
     const normalizedKey = String(teamKey || '').trim();
@@ -175,11 +175,21 @@ const buildTeamDraftFromPendingData = (
         || String(pendingMatchData?.player || '').trim()
         || 'You'
     );
+    const seededFriendlyLabel = Object.keys(sessionTeams || {}).find((teamKey) => (
+        String(teamKey || '').toLowerCase().startsWith('friendly:')
+    ));
+    const parsedFriendlyLabel = seededFriendlyLabel
+        ? parseTeamKey(seededFriendlyLabel, 0).teamName
+        : '';
     const friendlyPlayers = dedupeNames([
         friendlyCaptain,
         ...((pendingMatchData?.teammates || []).map((name) => normalizeSubmittedName(String(name || '')))),
     ].filter(Boolean));
-    const friendlyTeamName = friendlyCaptain || 'Friendly Team';
+    const friendlyTeamName = normalizeShipTeamLabel(String(pendingMatchData?.ship || ''))
+        || normalizeSubmittedName(String((pendingMatchData as { playerTeamName?: string } | null | undefined)?.playerTeamName || ''))
+        || normalizeSubmittedName(parsedFriendlyLabel)
+        || friendlyCaptain
+        || 'Friendly Team';
     const friendlyShipType = normalizeSubmittedName(
         String(pendingMatchData?.ship || '')
     ) || resolveInitialTeamShip(`friendly:${friendlyTeamName}`, 'friendly', friendlyPlayers, sessionShipTypes);
@@ -281,13 +291,12 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         [seededTeamDraft]
     );
     const [teamDraft, setTeamDraft] = useState<TeamDraft[]>(() => seededTeamDraft);
-    const [draggedPlayer, setDraggedPlayer] = useState<DraggedPlayer | null>(null);
-    const [dragHoverTeamIndex, setDragHoverTeamIndex] = useState<number | null>(null);
-    const [activeTeamPlayerRowKey, setActiveTeamPlayerRowKey] = useState<string | null>(null);
     const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
-    const [isHelpBannerDismissed, setIsHelpBannerDismissed] = useState<boolean>(getStoredHelpBannerDismissed);
+    const [isHelpBannerDismissed, setIsHelpBannerDismissed] = useState<boolean>(() => (
+        embedded || getStoredHelpBannerDismissed()
+    ));
     const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
-    const teamPlayerInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+    const scrollBodyRef = useRef<HTMLDivElement | null>(null);
     const suppressSeedSyncRef = useRef(false);
     const teamDraftSeedRef = useRef<string>('');
     const [dropdownAnchor, setDropdownAnchor] = useState<DropdownAnchor | null>(null);
@@ -366,9 +375,6 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         setPendingBatchAction(null);
         setTeamDraft(seededTeamDraft);
         teamDraftSeedRef.current = seededTeamDraftSignature;
-        setDraggedPlayer(null);
-        setDragHoverTeamIndex(null);
-        setActiveTeamPlayerRowKey(null);
         setLightboxIdx(null);
     }, [isOpen, seededTeamDraft, seededTeamDraftSignature]);
 
@@ -433,6 +439,30 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         });
         return players;
     }, [teamDraft, sessionShipTypes, ocrCorrections]);
+    const fuzzyMatchByPlayer = useMemo<Record<string, string>>(() => {
+        if (!Array.isArray(pilotRegistry) || pilotRegistry.length === 0) return {};
+        const registryByKey = new Map<string, string>();
+        pilotRegistry.forEach((pilot) => {
+            const key = normalizeNameKey(pilot);
+            if (!key || registryByKey.has(key)) return;
+            registryByKey.set(key, pilot);
+        });
+        const next: Record<string, string> = {};
+        teamDraft.forEach((team) => {
+            (team.players || []).forEach((rawName) => {
+                const cleaned = normalizeSubmittedName(rawName);
+                const key = normalizeNameKey(cleaned);
+                if (!cleaned || !key) return;
+                if (registryByKey.has(key)) return;
+                const threshold = cleaned.length > 8 ? 2 : 1;
+                const match = findClosestMatch(cleaned, pilotRegistry, threshold);
+                if (!match) return;
+                if (normalizeNameKey(match) === key) return;
+                next[key] = match;
+            });
+        });
+        return next;
+    }, [pilotRegistry, teamDraft]);
     const inferredFriendlyTeamIndex = useMemo(() => {
         if (teamDraft.length === 0) return -1;
         const activeUserKey = normalizeNameKey(activeUser || '');
@@ -864,11 +894,27 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         )));
     };
 
+    const updateTeamName = (teamIndex: number, teamName: string) => {
+        setTeamDraft((prev) => prev.map((team, index) => (
+            index === teamIndex ? { ...team, teamName } : team
+        )));
+    };
+
     const updateTeamPlayerName = (teamIndex: number, playerIndex: number, nextName: string) => {
         setTeamDraft((prev) => prev.map((team, index) => {
             if (index !== teamIndex) return team;
             const nextPlayers = [...team.players];
             nextPlayers[playerIndex] = nextName;
+            return { ...team, players: nextPlayers };
+        }));
+    };
+
+    const addTeamPlayer = (teamIndex: number, playerName: string) => {
+        const normalizedPlayer = normalizeSubmittedName(playerName);
+        if (!normalizedPlayer) return;
+        setTeamDraft((prev) => prev.map((team, index) => {
+            if (index !== teamIndex) return team;
+            const nextPlayers = dedupeNames([...(team.players || []), normalizedPlayer]);
             return { ...team, players: nextPlayers };
         }));
     };
@@ -882,15 +928,6 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 players: team.players.filter((_, idx) => idx !== playerIndex),
             };
         }));
-        setActiveTeamPlayerRowKey((current) => (
-            current === getTeamPlayerRowKey(teamIndex, playerIndex) ? null : current
-        ));
-        setDraggedPlayer((current) => {
-            if (!current) return null;
-            if (current.teamIndex !== teamIndex) return current;
-            if (current.playerIndex !== playerIndex) return current;
-            return null;
-        });
         if (removedName) {
             announce(`Removed ${removedName} from team assignment.`, 'polite');
         }
@@ -912,62 +949,10 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         const movedName = teamDraft[fromTeamIndex]?.players[fromPlayerIndex] || '';
         const targetTeamName = teamDraft[toTeamIndex]?.teamName || teamDraft[toTeamIndex]?.color || `Team ${toTeamIndex + 1}`;
         setTeamDraft(preview);
-        setActiveTeamPlayerRowKey(null);
         if (movedName) {
             announce(`Moved ${movedName} to ${targetTeamName}.`, 'polite');
         }
     }, [teamDraft, announce]);
-
-    const allowTeamDrop = (event: React.DragEvent<HTMLElement>, teamIndex: number) => {
-        if (!draggedPlayer) return;
-        event.preventDefault();
-        event.dataTransfer.dropEffect = 'move';
-        setDragHoverTeamIndex(teamIndex);
-    };
-
-    const dropTeamPlayer = (
-        event: React.DragEvent<HTMLElement>,
-        teamIndex: number,
-        playerIndex?: number | null
-    ) => {
-        if (!draggedPlayer) return;
-        event.preventDefault();
-        event.stopPropagation();
-        moveTeamPlayer(
-            draggedPlayer.teamIndex,
-            draggedPlayer.playerIndex,
-            teamIndex,
-            playerIndex
-        );
-        setDraggedPlayer(null);
-        setDragHoverTeamIndex(null);
-    };
-    const focusTeamPlayerInput = useCallback((teamIndex: number, playerIndex: number) => {
-        const rowKey = getTeamPlayerRowKey(teamIndex, playerIndex);
-        setActiveTeamPlayerRowKey(rowKey);
-        const input = teamPlayerInputRefs.current[rowKey];
-        if (!input) return;
-        input.focus();
-        input.select();
-    }, []);
-    const handleTeamPlayerRowClick = useCallback((
-        event: React.MouseEvent<HTMLDivElement>,
-        teamIndex: number,
-        playerIndex: number
-    ) => {
-        const target = event.target as HTMLElement | null;
-        if (target?.closest('button, input, select, a')) return;
-        focusTeamPlayerInput(teamIndex, playerIndex);
-    }, [focusTeamPlayerInput]);
-    const handleTeamPlayerRowKeyDown = useCallback((
-        event: React.KeyboardEvent<HTMLDivElement>,
-        teamIndex: number,
-        playerIndex: number
-    ) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        focusTeamPlayerInput(teamIndex, playerIndex);
-    }, [focusTeamPlayerInput]);
 
     const shortcutsEnabled = isOpen && pendingBatchAction === null && activeInputPlayer === null;
     useKeyboardShortcuts([
@@ -998,7 +983,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         <>
         <div
             className={embedded
-                ? 'w-full h-full flex flex-col min-h-0 overflow-visible'
+                ? 'w-full h-full min-h-0 flex flex-col overflow-hidden'
                 : 'fixed inset-0 md3-dialog-scrim z-top-second flex items-start justify-center p-4 overflow-y-auto animate-fade-in'}
             onClick={embedded ? undefined : onClose}
         >
@@ -1009,25 +994,46 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 aria-labelledby={dialogTitleId}
                 aria-describedby={isHelpBannerDismissed ? undefined : dialogDescriptionId}
                 className={embedded
-                    ? 'ocr-correction-dialog ocr-correction-dialog--embedded w-full h-full min-h-0 flex flex-col rounded-2xl border border-md-sys-outline/10 bg-md-sys-surface-container overflow-visible'
-                    : 'ocr-correction-dialog md3-dialog rounded-modal w-full max-w-2xl max-h-85vh my-2 flex flex-col animate-scale-in overflow-visible'}
+                    ? 'ocr-correction-dialog ocr-correction-dialog--embedded w-full h-full min-h-0 flex flex-col rounded-2xl border border-md-sys-outline/10 bg-md-sys-surface-container overflow-hidden'
+                    : 'ocr-correction-dialog md3-dialog rounded-modal w-full max-w-2xl h-[85vh] max-h-85vh my-2 flex flex-col animate-scale-in overflow-hidden'}
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <User size={20} className="text-md-sys-primary" />
-                        <h2 id={dialogTitleId} className="text-title font-bold">Review and Correct Detected Players</h2>
-                        <span className="md3-chip text-label-sm font-mono">
-                            {detectedPlayers.length} found
+                    <div className="flex items-center gap-2 min-w-0">
+                        <div className="min-w-0">
+                            <h2 id={dialogTitleId} className="text-body font-bold truncate">OCR Review</h2>
+                            <p className="text-label-xs text-md-sys-on-surface/62 truncate">
+                                Review player names, team grouping, and ship assignment.
+                            </p>
+                        </div>
+                        <span className="md3-chip text-label-xs font-mono shrink-0">
+                            {detectedPlayers.length} detected
                         </span>
                     </div>
-                    <button onClick={onClose} className="md3-icon-btn" title="Close" aria-label="Close OCR correction dialog">
-                        <X size={18} />
-                    </button>
+                    {embedded ? (
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="md3-btn-text inline-flex items-center gap-1.5"
+                            title="Back to result tab"
+                            aria-label="Back to result tab"
+                        >
+                            <ArrowLeft size={14} />
+                            Back to Result
+                        </button>
+                    ) : (
+                        <button onClick={onClose} className="md3-icon-btn" title="Close" aria-label="Close OCR correction dialog">
+                            <X size={18} />
+                        </button>
+                    )}
                 </div>
 
-                <div className="ocr-correction-body flex-1 min-h-0 overflow-y-auto custom-scrollbar md3-dialog-content overscroll-contain">
+                <div
+                    ref={scrollBodyRef}
+                    className="ocr-correction-body flex-1 min-h-0 overflow-y-auto custom-scrollbar md3-dialog-content overscroll-contain"
+                    tabIndex={0}
+                >
                 {!isHelpBannerDismissed && (
                     <div className="md3-banner md3-banner--info ocr-correction-help-banner">
                         <Info size={16} className="mt-0.5 flex-shrink-0" />
@@ -1110,14 +1116,14 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 </div>
 
                 {teamDraft.length > 0 && (
-                    <div className="md3-card p-3 mb-3 border border-md-sys-outline/20 ocr-team-assignment-shell">
-                        <div className="flex items-center justify-between gap-2">
+                    <section className="md3-card p-3 mb-3 border border-md-sys-outline/20 ocr-team-assignment-shell">
+                        <div className="flex items-center justify-between gap-2 mb-2">
                             <span className="text-label-sm font-bold uppercase opacity-60 flex items-center gap-1">
                                 <Users size={14} />
                                 Team Assignment
                             </span>
                             <span className="text-label-sm opacity-60">
-                                Click a row to edit quickly, or drag with the grip handle to reassign.
+                                Drag players between cards, then apply to learn.
                             </span>
                         </div>
                         {pilotRegistry.length > 0 && (
@@ -1127,158 +1133,22 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                 ))}
                             </datalist>
                         )}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2 ocr-team-assignment-grid">
-                            {teamDraft.map((team, teamIndex) => (
-                                <div
-                                    key={`${team.key}-${teamIndex}`}
-                                    className={`ocr-team-assignment-card rounded-card border p-3 md3-surface-high ${
-                                        dragHoverTeamIndex === teamIndex ? 'ring-1 ring-md-sys-primary/35 border-md-sys-primary/30' : 'border-md-sys-outline/15'
-                                    }`}
-                                    onDragOver={(event) => allowTeamDrop(event, teamIndex)}
-                                    onDragLeave={() => setDragHoverTeamIndex(null)}
-                                    onDrop={(event) => dropTeamPlayer(event, teamIndex, null)}
-                                >
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <div
-                                            className="w-3 h-3 rounded-full flex-shrink-0 border border-md-sys-outline/20"
-                                            style={{
-                                                backgroundColor: team.color.toLowerCase() === 'unknown'
-                                                    ? 'var(--md-sys-color-outline-variant)'
-                                                    : team.color.toLowerCase()
-                                            }}
-                                        />
-                                        <span className="font-semibold truncate">{team.teamName || `Team ${teamIndex + 1}`}</span>
-                                        <span className="text-label-xs opacity-60 ml-auto">{team.players.length} pilots</span>
-                                        {teamIndex === displayFriendlyTeamIndex && (
-                                            <span className="ocr-teammate-chip ocr-teammate-chip--compact">
-                                                <Shield size={10} />
-                                                Friendly
-                                            </span>
-                                        )}
-                                    </div>
-                                    <label className="text-label-xs font-bold uppercase opacity-60">Ship</label>
-                                    <select
-                                        value={team.shipType}
-                                        onChange={(event) => updateTeamShip(teamIndex, event.target.value)}
-                                        className="ship-select-readable mt-1 w-full md3-textfield md3-textfield--outlined text-body font-semibold"
-                                    >
-                                        <option value="">Unknown ship</option>
-                                        {SHIPS.map((ship) => (
-                                            <option key={ship} value={ship}>{ship}</option>
-                                        ))}
-                                    </select>
-                                    <p className="text-label-xs opacity-60 mt-2">
-                                        Drag rows into this card to reassign player-to-ship mapping.
-                                    </p>
-                                    <div className="space-y-1 mt-1">
-                                        {team.players.length === 0 ? (
-                                            <div className="rounded-control border border-dashed border-md-sys-outline/20 p-2 text-label-xs opacity-60">
-                                                Drop players here
-                                            </div>
-                                        ) : (
-                                            team.players.map((playerName, playerIndex) => {
-                                                const linkedName = ignored.has(playerName)
-                                                    ? playerName
-                                                    : (corrections[playerName] || playerName);
-                                                const isDragged = draggedPlayer?.teamIndex === teamIndex
-                                                    && draggedPlayer?.playerIndex === playerIndex;
-                                                const teamTitle = team.teamName || `Team ${teamIndex + 1}`;
-                                                const isFriendlyTeam = teamIndex === displayFriendlyTeamIndex;
-                                                const teamPlayerRowKey = getTeamPlayerRowKey(teamIndex, playerIndex);
-                                                const isRowEditing = activeTeamPlayerRowKey === teamPlayerRowKey;
-                                                return (
-                                                    <div
-                                                        key={`team-${teamIndex}-player-${playerIndex}`}
-                                                        data-testid={`team-player-row-${teamIndex}-${playerIndex}`}
-                                                        data-team-player-row-key={teamPlayerRowKey}
-                                                        onDragOver={(event) => allowTeamDrop(event, teamIndex)}
-                                                        onDrop={(event) => dropTeamPlayer(event, teamIndex, playerIndex)}
-                                                        onClick={(event) => handleTeamPlayerRowClick(event, teamIndex, playerIndex)}
-                                                        onKeyDown={(event) => handleTeamPlayerRowKeyDown(event, teamIndex, playerIndex)}
-                                                        tabIndex={0}
-                                                        aria-label={`Edit ${linkedName || playerName || `player ${playerIndex + 1}`} in ${teamTitle}`}
-                                                        className={`ocr-team-player-row ocr-team-player-row--quick rounded-control border border-md-sys-outline/20 p-2 bg-md-sys-surface flex items-center gap-2 ${
-                                                            isDragged ? 'opacity-60' : ''
-                                                        } ${
-                                                            isRowEditing ? 'ocr-team-player-row--editing border-md-sys-primary/35' : ''
-                                                        }`}
-                                                    >
-                                                        <button
-                                                            type="button"
-                                                            draggable
-                                                            onMouseDown={(event) => event.preventDefault()}
-                                                            onClick={(event) => event.stopPropagation()}
-                                                            onDragStart={(event) => {
-                                                                event.dataTransfer.effectAllowed = 'move';
-                                                                setDraggedPlayer({ teamIndex, playerIndex });
-                                                            }}
-                                                            onDragEnd={() => {
-                                                                setDraggedPlayer(null);
-                                                                setDragHoverTeamIndex(null);
-                                                            }}
-                                                            className="md3-icon-btn h-6 w-6 text-md-sys-on-surface/60 cursor-grab active:cursor-grabbing shrink-0"
-                                                            title="Drag to move player"
-                                                            aria-label={`Drag ${linkedName || playerName || `player ${playerIndex + 1}`} in ${teamTitle}`}
-                                                        >
-                                                            <GripVertical size={12} />
-                                                        </button>
-                                                        {isFriendlyTeam && (
-                                                            <span
-                                                                className="ocr-teammate-chip ocr-teammate-chip--row"
-                                                                title="Teammate"
-                                                                aria-label="Teammate marker"
-                                                            >
-                                                                <Shield size={10} />
-                                                                Teammate
-                                                            </span>
-                                                        )}
-                                                        <div className="min-w-0 flex-1">
-                                                            <input
-                                                                type="text"
-                                                                ref={(node) => {
-                                                                    teamPlayerInputRefs.current[teamPlayerRowKey] = node;
-                                                                }}
-                                                                value={linkedName}
-                                                                onChange={(event) => updateTeamPlayerName(teamIndex, playerIndex, event.target.value)}
-                                                                onClick={(event) => event.stopPropagation()}
-                                                                onFocus={() => setActiveTeamPlayerRowKey(teamPlayerRowKey)}
-                                                                onBlur={() => {
-                                                                    setActiveTeamPlayerRowKey((current) => (
-                                                                        current === teamPlayerRowKey ? null : current
-                                                                    ));
-                                                                }}
-                                                                onKeyDown={(event) => event.stopPropagation()}
-                                                                list={pilotRegistry.length > 0 ? teamAssignmentRosterListId : undefined}
-                                                                className="w-full md3-textfield md3-textfield--outlined text-body ocr-team-player-input"
-                                                                aria-label={`${teamTitle} player ${playerIndex + 1} name`}
-                                                            />
-                                                            {linkedName !== playerName && (
-                                                                <div className="text-label-xs opacity-60 truncate mt-0.5">OCR: {playerName}</div>
-                                                            )}
-                                                        </div>
-                                                        <Ship size={12} className="opacity-45 flex-shrink-0" />
-                                                        <button
-                                                            type="button"
-                                                            onClick={(event) => {
-                                                                event.stopPropagation();
-                                                                removeTeamPlayer(teamIndex, playerIndex);
-                                                            }}
-                                                            onMouseDown={(event) => event.stopPropagation()}
-                                                            className="md3-icon-btn text-danger"
-                                                            aria-label={`Remove ${linkedName || playerName || `player ${playerIndex + 1}`} from ${teamTitle}`}
-                                                            title="Remove player"
-                                                        >
-                                                            <Trash2 size={12} className="text-danger" />
-                                                        </button>
-                                                    </div>
-                                                );
-                                            })
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                        <OcrTeamAssignmentBoard
+                            teams={teamDraft}
+                            shipOptions={SHIPS}
+                            rosterSuggestionsId={pilotRegistry.length > 0 ? teamAssignmentRosterListId : undefined}
+                            friendlyTeamIndex={displayFriendlyTeamIndex}
+                            compact={embedded}
+                            fuzzyMatches={fuzzyMatchByPlayer}
+                            onTeamNameChange={updateTeamName}
+                            onTeamShipChange={updateTeamShip}
+                            onPlayerChange={updateTeamPlayerName}
+                            onPlayerRemove={removeTeamPlayer}
+                            onPlayerAdd={addTeamPlayer}
+                            onPlayerMove={moveTeamPlayer}
+                            dataTestId="ocr-team-assignment-board"
+                        />
+                    </section>
                 )}
 
                 {/* Player List */}
@@ -1393,9 +1263,8 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                                     <ConfidenceMeter confidence={conf} size="sm" />
                                                 </div>
                                                 {player.shipType && (
-                                                    <div className="flex items-center gap-1 text-label-sm opacity-60 mt-0.5">
-                                                        <Ship size={10} />
-                                                        {player.shipType}
+                                                    <div className="text-label-sm opacity-60 mt-0.5">
+                                                        Ship: {player.shipType}
                                                     </div>
                                                 )}
                                             </div>

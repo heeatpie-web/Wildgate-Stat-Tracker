@@ -278,6 +278,20 @@ export function extractShipType(text: string): string | null {
   return null;
 }
 
+const extractShipMetadataCandidate = (value: string): string | null => {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const withoutBrackets = raw.replace(/^\[+|\]+$/g, '').trim();
+  const withoutCapacity = withoutBrackets.replace(/\s*\(\s*\d+\s*player[s]?\s*\)\s*$/i, '').trim();
+  const fromShipScan = extractShipType(withoutCapacity);
+  if (!fromShipScan) return null;
+  const shipTokenCount = withoutCapacity.split(/\s+/).filter(Boolean).length;
+  if (/\bship\b/i.test(withoutBrackets) || /\(\s*\d+\s*player/i.test(withoutBrackets) || shipTokenCount <= 3) {
+    return fromShipScan;
+  }
+  return null;
+};
+
 /**
  * Detect screenshot type from text content
  */
@@ -592,21 +606,32 @@ export function validateExtractedData(data: OCRExtractedData): OCRExtractedData 
   const validModifiers = data.reachModifiers.filter(m => m.confidence >= 60);
   const validOpponentTeams = data.opponentTeams
     .filter(team => team.confidence >= 40)
-    .map(team => ({
-      ...team,
-      players: capOpponentPlayers(
-        team.players
-          .filter(p => p.confidence >= 50)
-          .filter(p => {
-            // Heuristic: skip players whose normalized name exactly matches a known team name label.
-            // This prevents OCR misclassifying a team banner as a player entry.
-            if (!p.name || knownTeamNameKeys.size === 0) return true;
-            const playerKey = normalizeKey(p.name);
-            if (playerKey.length < 4) return true;
-            return !knownTeamNameKeys.has(playerKey);
-          })
-      ),
-    }))
+    .map(team => {
+      let inferredShipType = String(team.shipType || '').trim();
+      const filteredPlayers = team.players
+        .filter(p => p.confidence >= 50)
+        .filter(p => {
+          // Heuristic: skip players whose normalized name exactly matches a known team name label.
+          // This prevents OCR misclassifying a team banner as a player entry.
+          if (!p.name || knownTeamNameKeys.size === 0) return true;
+          const playerKey = normalizeKey(p.name);
+          if (playerKey.length < 4) return true;
+          return !knownTeamNameKeys.has(playerKey);
+        })
+        .filter(p => {
+          const shipCandidate = extractShipMetadataCandidate(p.name || '');
+          if (!shipCandidate) return true;
+          if (!inferredShipType) {
+            inferredShipType = shipCandidate;
+          }
+          return false;
+        });
+      return {
+        ...team,
+        shipType: inferredShipType,
+        players: capOpponentPlayers(filteredPlayers),
+      };
+    })
     .filter(team => team.players.length > 0 || team.teamName)
     .sort((a, b) => {
       const bySize = b.players.length - a.players.length;

@@ -20,9 +20,11 @@ export const RenameModal: React.FC = () => {
     if (!renameModal) return null;
 
     const handleRegisterUser = (name: string) => {
-        if (!name.trim()) return;
-        addPlayer(name.trim());
-        setToast({ message: `Prospector "${name}" registered!`, type: 'success' });
+        const normalizedName = name.trim();
+        if (!normalizedName) return;
+        addPlayer(normalizedName);
+        setActiveUser(normalizedName);
+        setToast({ message: `Prospector "${normalizedName}" registered!`, type: 'success' });
     };
 
     const handleSubmit = () => {

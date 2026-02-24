@@ -53,10 +53,9 @@ const TIME_RANGE_OPTIONS: { value: AnalyticsTimeRange; label: string }[] = [
 
 const CATEGORY_SUBVIEWS: Record<AnalyticsCategory, AnalyticsView[]> = {
     overview: [],
-    performance: ['momentum', 'streaks', 'killEfficiency', 'placement'],
+    performance: ['momentum', 'streaks', 'killEfficiency', 'placement', 'session', 'period', 'timePatterns'],
     team: ['social', 'insights', 'synergy'],
     environment: ['environment'],
-    narrative: ['essay', 'session', 'period', 'timePatterns'],
 };
 
 type ProCategory = 'all' | 'core' | 'timeline' | 'team' | 'environment' | 'detailed';

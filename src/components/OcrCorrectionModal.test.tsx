@@ -77,7 +77,7 @@ describe('OcrCorrectionModal', () => {
         expect(() => rerender(
             <OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />
         )).not.toThrow();
-        expect(screen.getByText(/review and correct detected players/i)).toBeInTheDocument();
+        expect(screen.getByText(/ocr review/i)).toBeInTheDocument();
     });
 
     it('supports ignore and undo-ignore actions for detected players', async () => {
@@ -117,7 +117,7 @@ describe('OcrCorrectionModal', () => {
         expect(screen.getByRole('button', { name: 'chrismario' })).toBeInTheDocument();
     });
 
-    it('focuses inline player editing when clicking a team row while keeping drag handles available', async () => {
+    it('writes drag payload data on drag start for deterministic reassignment', async () => {
         const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
         const onClose = vi.fn();
         const onAcceptAll = vi.fn();
@@ -128,19 +128,20 @@ describe('OcrCorrectionModal', () => {
 
         render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
 
-        const teamRow = screen.getByTestId('team-player-row-0-0');
-        const teamInput = screen.getByRole('combobox', { name: /red player 1 name/i });
+        const teamInput = screen.getByLabelText(/red player 1 name/i);
         const dragHandle = screen.getByRole('button', { name: /drag pilotone in red/i });
+        const setData = vi.fn();
+        const dataTransfer = {
+            effectAllowed: 'none',
+            setData,
+            getData: vi.fn().mockReturnValue(''),
+            dropEffect: 'none',
+        } as unknown as DataTransfer;
 
         expect(dragHandle).toHaveAttribute('draggable', 'true');
-        expect(teamInput).not.toHaveFocus();
-
-        fireEvent.click(dragHandle);
-        expect(teamInput).not.toHaveFocus();
-
-        fireEvent.click(teamRow);
-        expect(teamInput).toHaveFocus();
-        expect(teamRow).toHaveClass('ocr-team-player-row--editing');
+        fireEvent.dragStart(dragHandle, { dataTransfer });
+        expect(setData).toHaveBeenCalled();
+        expect(teamInput).toBeInTheDocument();
     });
 
     it('allows editing and removing players in team assignment rows before apply', async () => {
@@ -154,7 +155,7 @@ describe('OcrCorrectionModal', () => {
 
         render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
 
-        const teamInput = screen.getByRole('combobox', { name: /red player 1 name/i });
+        const teamInput = screen.getByLabelText(/red player 1 name/i);
         fireEvent.change(teamInput, { target: { value: 'PilotOneEdited' } });
         expect(teamInput).toHaveValue('PilotOneEdited');
 
@@ -165,7 +166,7 @@ describe('OcrCorrectionModal', () => {
         expect(gameData.setSessionTeams).toHaveBeenCalledWith({ red: ['PilotOneEdited'] });
     });
 
-    it('shows friendly teammates with blue teammate markers in assignment and review rows', async () => {
+    it('shows friendly team chip in assignment board and teammate markers in review rows', async () => {
         const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
         const onClose = vi.fn();
         const onAcceptAll = vi.fn();
@@ -178,10 +179,27 @@ describe('OcrCorrectionModal', () => {
 
         const friendlyChip = screen.getByText(/^friendly$/i);
         expect(friendlyChip).toHaveClass('ocr-teammate-chip');
+        expect(screen.getAllByText(/teammate/i).length).toBeGreaterThan(0);
+    });
 
-        const teammateMarker = screen.getByLabelText(/teammate marker/i);
-        expect(teammateMarker).toHaveClass('ocr-teammate-chip--row');
-        expect(screen.getAllByText(/teammate/i).length).toBeGreaterThan(1);
+    it('derives friendly team label from ship before captain name fallback', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = {};
+        gameData.sessionShipTypes = {};
+        gameData.pilotRegistry = ['ActivePilot', 'Wingman'];
+        appStoreState.pendingMatchData = {
+            player: 'ActivePilot',
+            ship: 'Hunter (4 Player)',
+            teammates: ['Wingman'],
+            opponentTeams: [],
+        };
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        expect(screen.getByLabelText(/hunter player 1 name/i)).toBeInTheDocument();
     });
 
     it('commits typed roster input and persists corrected teams to pending match data', async () => {
@@ -231,6 +249,66 @@ describe('OcrCorrectionModal', () => {
         expect(screen.getByText(/screenshot 1 of 1/i)).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: /close screenshot preview/i }));
         expect(screen.queryByText(/screenshot 1 of 1/i)).not.toBeInTheDocument();
+    });
+
+    it('uses a back control in embedded mode instead of a close X action', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['PilotOne'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['PilotOne'];
+
+        render(
+            <OcrCorrectionModal
+                isOpen
+                embedded
+                onClose={onClose}
+                onAcceptAll={onAcceptAll}
+            />
+        );
+
+        const backButton = screen.getByRole('button', { name: /back to result tab/i });
+        expect(backButton).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /close ocr correction dialog/i })).not.toBeInTheDocument();
+
+        fireEvent.click(backButton);
+        expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps embedded modal sizing pinned to full-height and body-owned scrolling', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['PilotOne'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['PilotOne'];
+
+        const { container } = render(
+            <OcrCorrectionModal
+                isOpen
+                embedded
+                onClose={onClose}
+                onAcceptAll={onAcceptAll}
+            />
+        );
+
+        const embeddedRoot = container.querySelector('.w-full.h-full.min-h-0.flex.flex-col.overflow-hidden');
+        const embeddedDialog = container.querySelector('.ocr-correction-dialog--embedded');
+        const body = container.querySelector('.ocr-correction-body');
+
+        expect(embeddedRoot).not.toBeNull();
+        expect(embeddedDialog).not.toBeNull();
+        expect(embeddedDialog).toHaveClass('h-full');
+        expect(embeddedDialog).toHaveClass('min-h-0');
+        expect(embeddedDialog).toHaveClass('flex');
+        expect(embeddedDialog).toHaveClass('flex-col');
+        expect(body).not.toBeNull();
+        expect(body).toHaveClass('flex-1');
+        expect(body).toHaveClass('min-h-0');
+        expect(body).toHaveClass('overflow-y-auto');
     });
 
     it('dismisses the help banner and persists dismissal in localStorage', async () => {

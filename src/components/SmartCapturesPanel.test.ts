@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Match, OpponentTeam } from '../types';
 import type { OCRExtractedData } from '../utils/ocr/ocrTypes';
 import { backfillOpponentTeamShipTypes } from '../utils/ocr/opponentTeamShipTypes';
-import { commitPendingMatchDataForWizard, getRosterCandidateSuggestions } from './SmartCapturesPanel';
+import { commitPendingMatchDataForWizard, getRosterCandidateSuggestions, resolveFriendlyTeamLabel } from './SmartCapturesPanel';
 
 const makeTeam = (overrides: Partial<OpponentTeam> = {}): OpponentTeam => ({
   teamName: 'Enemy Team',
@@ -233,5 +233,16 @@ describe('getRosterCandidateSuggestions', () => {
     expect(suggestions.length).toBeLessThanOrEqual(3);
     expect(suggestions[0].score).toBeGreaterThanOrEqual(suggestions[suggestions.length - 1].score);
     expect(suggestions.every((entry) => entry.score > 0)).toBe(true);
+  });
+});
+
+describe('resolveFriendlyTeamLabel', () => {
+  it('prefers ship-derived label over username', () => {
+    expect(resolveFriendlyTeamLabel('Hunter (4 Player)', '', 'Alec')).toBe('Hunter');
+  });
+
+  it('falls back to existing label and then captain name', () => {
+    expect(resolveFriendlyTeamLabel('', 'Blue Crew', 'Alec')).toBe('Blue Crew');
+    expect(resolveFriendlyTeamLabel('', '', 'Alec')).toBe('Alec');
   });
 });

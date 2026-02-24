@@ -8,6 +8,15 @@ const fs = require('fs');
 const fsPromises = require('fs').promises;
 
 const DB_FILENAME = 'wildgate_db.json';
+const ARTIFACT_BACKUP_FOLDERS = ['match_artifacts', 'screenshots', 'ocr-debug', 'telemetry_archive'];
+
+function safeCopyDirSync(sourceDir, targetDir) {
+  if (!sourceDir || !targetDir) return false;
+  if (!fs.existsSync(sourceDir)) return false;
+  fs.mkdirSync(path.dirname(targetDir), { recursive: true });
+  fs.cpSync(sourceDir, targetDir, { recursive: true });
+  return true;
+}
 
 /**
  * @param {import('electron').App} app
@@ -73,9 +82,10 @@ async function pruneBackups(backupDir, maxKeep = 40) {
  * @param {string} dbPath
  * @param {string} backupDir
  * @param {string} [reason='auto']
+ * @param {{ includeArtifacts?: boolean, userDataDir?: string }} [options]
  * @returns {Promise<{ success: boolean, path?: string, error?: string }>}
  */
-async function createDbBackup(dbPath, backupDir, reason = 'auto') {
+async function createDbBackup(dbPath, backupDir, reason = 'auto', options = {}) {
   try {
     if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -84,8 +94,30 @@ async function createDbBackup(dbPath, backupDir, reason = 'auto') {
       return { success: false, error: 'No database file found to backup.' };
     }
     fs.copyFileSync(dbPath, backupPath);
+    let bundlePath = undefined;
+    if (options?.includeArtifacts && options?.userDataDir) {
+      const folderBase = path.basename(backupPath, '.json');
+      const artifactBundleRoot = path.join(backupDir, `${folderBase}_artifacts`);
+      const copied = [];
+      ARTIFACT_BACKUP_FOLDERS.forEach((folderName) => {
+        const sourceDir = path.join(options.userDataDir, folderName);
+        const targetDir = path.join(artifactBundleRoot, folderName);
+        if (safeCopyDirSync(sourceDir, targetDir)) {
+          copied.push(folderName);
+        }
+      });
+      if (copied.length > 0) {
+        fs.mkdirSync(artifactBundleRoot, { recursive: true });
+        fs.writeFileSync(path.join(artifactBundleRoot, 'manifest.json'), JSON.stringify({
+          createdAt: Date.now(),
+          sourceBackup: backupPath,
+          copiedFolders: copied,
+        }, null, 2));
+        bundlePath = artifactBundleRoot;
+      }
+    }
     void pruneBackups(backupDir);
-    return { success: true, path: backupPath };
+    return { success: true, path: backupPath, bundlePath };
   } catch (e) {
     return { success: false, error: e.message };
   }

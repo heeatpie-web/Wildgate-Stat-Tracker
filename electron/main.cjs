@@ -1534,7 +1534,10 @@ ipcMain.on('window-close', () => {
 });
 
 ipcMain.handle('db-backup', () => {
-  return dbHelpers.createDbBackup(DB_PATH, DB_BACKUP_DIR, 'manual');
+  return dbHelpers.createDbBackup(DB_PATH, DB_BACKUP_DIR, 'manual', {
+    includeArtifacts: true,
+    userDataDir: app.getPath('userData'),
+  });
 });
 
 ipcMain.handle('epic-request', async (event, payload = {}) => {

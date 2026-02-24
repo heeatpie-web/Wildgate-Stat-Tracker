@@ -25,6 +25,7 @@ import { smartAnalyzeScreen } from '../utils/scanService';
 import type { LobbyScanResult, SmartScanResult } from '../utils/scanService';
 import Logger from '../utils/logger';
 import { runtimeConfig } from '../config/runtimeConfig';
+import { resolveTagShipMetadata } from '../utils/scan/tesseractScan';
 
 export interface SavedCapture {
   filePath: string;
@@ -66,6 +67,10 @@ export interface SmartCaptureActions {
   reanalyzeCaptures: (matchId?: string | number | null) => void;
   resetCaptureSession: () => void;
 }
+
+export const resolveLobbyTagShipType = (entry: LobbyScanResult): string => (
+  resolveTagShipMetadata(entry?.name, entry?.shipType || entry?.teamName || '')
+);
 
 interface TemporalNameEvidence {
   displayName: string;
@@ -347,7 +352,34 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       for (const p of players) {
         const rawName = (p?.name || '').trim();
         if (!rawName || rawName.length < 2) continue;
-        if (p?.isTag) continue; // skip non-player tags
+
+        const color = (p?.teamColor || 'Unknown') as string;
+        const teamKey = color && color !== 'Unknown' ? color : 'Unknown';
+        const normalizedRawName = normalizeOcrName(rawName);
+        const normalizedTeamName = normalizeOcrName(String(p?.teamName || ''));
+        const tagShipType = resolveLobbyTagShipType(p);
+        const looksLikeBracketTag = /^\[.+\]$/.test(rawName);
+        const looksLikeTeamBanner = Boolean(
+          normalizedTeamName
+          && normalizedRawName
+          && normalizedTeamName.toLowerCase() === normalizedRawName.toLowerCase()
+        );
+        const looksLikeColoredMetadata = color !== 'Unknown' && (
+          p?.isTag
+          || looksLikeBracketTag
+          || looksLikeTeamBanner
+        );
+        if (looksLikeColoredMetadata) {
+          if (tagShipType) {
+            if (!shipTypesByColor[teamKey]) shipTypesByColor[teamKey] = tagShipType;
+          } else if (p?.shipType) {
+            const normalizedShip = normalizeOcrName(String(p.shipType || ''));
+            if (normalizedShip && !shipTypesByColor[teamKey]) {
+              shipTypesByColor[teamKey] = normalizedShip;
+            }
+          }
+          continue;
+        }
 
         const confidence = Number(p?.confidence || 0);
         if (confidence < SMARTSCAN_REJECT_CONFIDENCE) {
@@ -372,8 +404,6 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
           queueSmartScanReview(rawName, confidence, `${res.mode}: review (ambiguous resolution ${Math.round(score)}% < ${minSimilarity}%)`);
           continue;
         }
-        const color = (p?.teamColor || 'Unknown') as string;
-        const teamKey = color && color !== 'Unknown' ? color : 'Unknown';
         let effectiveTeamKey = teamKey;
         if (!mergedTeams[effectiveTeamKey]) {
           // If the user asked to lock team mapping and we already have a map, avoid exploding new keys.

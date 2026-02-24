@@ -58,6 +58,7 @@ import { QueueItemRichPreview } from './smart-captures/QueueItemRichPreview';
 import OcrRegionEditorModal from './OcrRegionEditorModal';
 import { SmartCaptureSummaryBar } from './smart-captures/detail/SmartCaptureSummaryBar';
 import { SmartCaptureActionBar } from './smart-captures/detail/SmartCaptureActionBar';
+import { OcrTeamAssignmentBoard, type OcrTeamAssignmentTeam } from './ocr/OcrTeamAssignmentBoard';
 import { combinedNameSimilarityScore, findClosestMatch, normalizeOcrName } from '../utils/stringUtils';
 import { getTelemetryEventTimestamp, type TelemetryArchiveEvent } from '../utils/telemetryArchive';
 import {
@@ -73,6 +74,7 @@ import {
     getPrimaryEliminatedByTeamValue,
     isEliminatedByTeamMatch,
 } from '../utils/eliminatorTeam';
+import { rerunMatchArtifacts } from '../utils/ocr/rerunMatchArtifacts';
 
 export { backfillOpponentTeamShipTypes } from '../utils/ocr/opponentTeamShipTypes';
 
@@ -146,6 +148,22 @@ const sameShip = (left: string | null | undefined, right: string | null | undefi
     if (!leftKey) return false;
     return leftKey === toShipKey(right);
 };
+
+const FRIENDLY_SHIP_SUFFIX_PATTERN = /\s*\(\s*\d+\s*player[s]?\s*\)\s*$/i;
+const toShipTeamLabel = (shipName: string | null | undefined): string => (
+    normalizeOcrName(String(shipName || '').replace(FRIENDLY_SHIP_SUFFIX_PATTERN, ''))
+);
+
+export const resolveFriendlyTeamLabel = (
+    shipName: string | null | undefined,
+    existingFriendlyLabel: string | null | undefined,
+    captainName: string | null | undefined
+): string => (
+    toShipTeamLabel(shipName)
+    || normalizeOcrName(String(existingFriendlyLabel || ''))
+    || normalizeOcrName(String(captainName || ''))
+    || 'Friendly Team'
+);
 
 const POSITIONAL_TEAM_COLOR_ORDER = ['red', 'orange', 'yellow', 'green'] as const;
 
@@ -980,9 +998,9 @@ const SmartCapturesPanel: React.FC = () => {
                     </div>
                 )}
                 content={activeSection === 'capture' ? (
-                <div className="h-full min-h-0 flex max-[1200px]:flex-col gap-2">
+                <div className="h-full min-h-0 flex flex-row gap-2 overflow-x-auto">
                     <div
-                        className={`min-h-0 min-w-0 transition-[width] duration-300 ${queueCollapsed ? 'w-[72px] min-w-[72px]' : 'min-w-[260px] max-[1200px]:w-full max-[1200px]:min-w-0'}`}
+                        className={`min-h-0 min-w-0 transition-[width] duration-300 ${queueCollapsed ? 'w-[72px] min-w-[72px]' : 'min-w-[260px]'}`}
                         style={!queueCollapsed ? { width: `${queueWidthPct}%` } : undefined}
                     >
                         <SmartCapturesQueuePane
@@ -1281,7 +1299,8 @@ const SmartCapturesPanel: React.FC = () => {
                                                 || activeUser
                                                 || selectedMatch.player
                                                 || 'You';
-                                            const friendlyTeamKey = `friendly:${captainSeed}`;
+                                            const friendlyTeamLabel = resolveFriendlyTeamLabel(friendlyShipSeed, '', captainSeed);
+                                            const friendlyTeamKey = `friendly:${friendlyTeamLabel}`;
                                             const nextSessionTeams = { ...sessionTeams };
                                             let sessionTeamsChanged = false;
                                             const existingFriendlyKeys = new Set(
@@ -1844,7 +1863,7 @@ const SmartMatchDetail: React.FC<{
                 storeState.setActiveShip(telemetryShip, 'telemetry');
             }
         }
-        if (!shouldReusePendingDraft && !nonCurrentWizardSnapshotRef.current) {
+        if (!nonCurrentWizardSnapshotRef.current) {
             const clonedSessionTeams = Object.fromEntries(
                 Object.entries(storeState.sessionTeams || {}).map(([teamKey, members]) => [teamKey, [...members]])
             );
@@ -1906,7 +1925,6 @@ const SmartMatchDetail: React.FC<{
                 eliminatedByTeam: String(pendingDraft?.eliminatedByTeam || liveMatch.eliminatedByTeam || '') || undefined,
             } as Match)
             : liveMatch;
-        setActiveView('recording');
         const dedupeNames = (names: string[]) => Array.from(new Set(
             names
                 .map((name) => String(name || '').trim())
@@ -1923,8 +1941,10 @@ const SmartMatchDetail: React.FC<{
                 }]
                 : [];
 
-        const friendlySeed = dedupeNames([activeUser || latestMatch.player || 'You', ...(latestMatch.teammates || [])]);
-        const friendlyTeamKey = `friendly:${activeUser || latestMatch.player || 'You'}`;
+        const captainSeed = normalizeOcrName(activeUser || latestMatch.player || 'You') || 'You';
+        const friendlyTeamLabel = resolveFriendlyTeamLabel(latestMatch.ship, '', captainSeed);
+        const friendlySeed = dedupeNames([captainSeed, ...(latestMatch.teammates || [])]);
+        const friendlyTeamKey = `friendly:${friendlyTeamLabel}`;
         const seededSessionTeams: Record<string, string[]> = {};
         const seededShipTypes: Record<string, string> = {};
         if (friendlySeed.length > 0) {
@@ -2017,8 +2037,7 @@ const SmartMatchDetail: React.FC<{
             return;
         }
         setShowWizard('Match Result');
-        setToast({ message: 'Opened wizard for this match', type: 'info' });
-    }, [activeUser, match, setActiveView, setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setShowWizard, setTimeMin, setTimeSec, setToast]);
+    }, [activeUser, match, setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setShowWizard, setTimeMin, setTimeSec, setToast]);
 
     useEffect(() => {
         if (showWizard !== null) return;
@@ -2300,6 +2319,89 @@ const SmartMatchDetail: React.FC<{
         setEditingTeamOpponentValue('');
     }, [editingTeamOpponentValue, match, onUpdate, resolveRosterName, setToast]);
 
+    const dedupeBoardNames = useCallback((names: string[]): string[] => Array.from(new Set(
+        names
+            .map((name) => normalizeOcrName(String(name || '')))
+            .filter(Boolean)
+    )), []);
+    const assignmentBoardTeams = useMemo<OcrTeamAssignmentTeam[]>(() => {
+        const friendlyTeamName = resolveFriendlyTeamLabel(match.ship, '', activeUser || match.player || 'You');
+        const friendlyPlayers = dedupeBoardNames([...(match.teammates || [])]);
+        const normalizedOpponentTeams: OpponentTeam[] = Array.isArray(match.opponentTeams) && match.opponentTeams.length > 0
+            ? match.opponentTeams
+            : (match.opponents || []).length > 0
+                ? [{
+                    teamName: 'Enemy Team',
+                    shipType: '',
+                    color: 'unknown',
+                    players: dedupeBoardNames(match.opponents || []),
+                }]
+                : [];
+        const opponentBoardTeams = normalizedOpponentTeams.map((team, index) => ({
+            key: `${String(team.color || `enemy-${index + 1}`).trim()}:${String(team.teamName || `Enemy Team ${index + 1}`).trim()}`,
+            color: String(team.color || 'unknown').trim() || 'unknown',
+            teamName: String(team.teamName || `Enemy Team ${index + 1}`).trim() || `Enemy Team ${index + 1}`,
+            shipType: String(team.shipType || '').trim(),
+            players: dedupeBoardNames(team.players || []),
+        }));
+        return [{
+            key: `friendly:${friendlyTeamName}`,
+            color: 'friendly',
+            teamName: friendlyTeamName,
+            shipType: String(match.ship || ''),
+            players: friendlyPlayers,
+        }, ...opponentBoardTeams];
+    }, [activeUser, dedupeBoardNames, match.opponentTeams, match.opponents, match.player, match.ship, match.teammates]);
+    const assignmentBoardFuzzyMatches = useMemo<Record<string, string>>(() => {
+        if (!Array.isArray(pilotRegistry) || pilotRegistry.length === 0) return {};
+        const exactRegistryKeys = new Set(
+            pilotRegistry
+                .map((name) => normalizeOcrName(name).toLowerCase())
+                .filter(Boolean)
+        );
+        const next: Record<string, string> = {};
+        assignmentBoardTeams.forEach((team) => {
+            (team.players || []).forEach((name) => {
+                const cleaned = normalizeOcrName(name);
+                const key = cleaned.toLowerCase();
+                if (!cleaned || !key) return;
+                if (exactRegistryKeys.has(key)) return;
+                const fuzzy = resolveRosterName(cleaned, { allowFuzzy: true });
+                const fuzzyKey = normalizeOcrName(fuzzy).toLowerCase();
+                if (!fuzzy || !fuzzyKey || fuzzyKey === key) return;
+                next[key] = fuzzy;
+            });
+        });
+        return next;
+    }, [assignmentBoardTeams, pilotRegistry, resolveRosterName]);
+    const commitAssignmentBoardTeams = useCallback((nextTeams: OcrTeamAssignmentTeam[]) => {
+        if (!Array.isArray(nextTeams) || nextTeams.length === 0) return;
+        const [friendlyTeam, ...opponentTeamsRaw] = nextTeams;
+        const nextOpponentTeams: OpponentTeam[] = opponentTeamsRaw.map((team, index) => ({
+            teamName: String(team.teamName || `Enemy Team ${index + 1}`).trim() || `Enemy Team ${index + 1}`,
+            shipType: String(team.shipType || '').trim(),
+            color: String(team.color || 'unknown').trim() || 'unknown',
+            players: dedupeBoardNames(team.players || []),
+        })).filter((team) => team.players.length > 0 || team.shipType || team.teamName);
+        onUpdate({
+            ...match,
+            ship: String(friendlyTeam.shipType || ''),
+            teammates: dedupeBoardNames(friendlyTeam.players || []),
+            opponents: dedupeBoardNames(nextOpponentTeams.flatMap((team) => team.players || [])),
+            opponentTeams: nextOpponentTeams,
+        });
+    }, [dedupeBoardNames, match, onUpdate]);
+    const mutateAssignmentBoardTeams = useCallback((
+        mutator: (draft: OcrTeamAssignmentTeam[]) => OcrTeamAssignmentTeam[] | void
+    ) => {
+        const draft = assignmentBoardTeams.map((team) => ({
+            ...team,
+            players: [...(team.players || [])],
+        }));
+        const mutated = mutator(draft) || draft;
+        commitAssignmentBoardTeams(mutated);
+    }, [assignmentBoardTeams, commitAssignmentBoardTeams]);
+
     const renderPlayerChips = (players: string[], type: 'teammate' | 'opponent') => {
         const chipClass = type === 'teammate' ? 'sc-player-chip sc-player-chip--teammate' : 'sc-player-chip sc-player-chip--opponent';
         const addBtnClass = type === 'teammate' ? 'sc-player-add-btn sc-player-add-btn--teammate' : 'sc-player-add-btn sc-player-add-btn--opponent';
@@ -2435,159 +2537,84 @@ const SmartMatchDetail: React.FC<{
             setToast({ message: 'No screenshots found for OCR rerun.', type: 'warning' });
             return;
         }
-
-        const cloudLabel = ocrMode === 'local' ? '' : ocrMode === 'cloud' ? 'Cloud OCR' : 'Local + Cloud OCR';
         setRerunProgress({
             phase: 'processing',
             current: 0,
             total: imagePaths.length,
-            status: 'Starting analysis...',
-            cloudStatus: cloudLabel ? `Cloud OCR: ${cloudLabel}` : '',
+            status: `Processing ${imagePaths.length} image${imagePaths.length === 1 ? '' : 's'}...`,
+            cloudStatus: '',
             latestFileStatus: 'Queued',
             latestFile: '',
         });
 
-        let completed = 0;
-        let latestFile = '';
-        let latestFileStatus = '';
-        setRerunProgress({
-            phase: 'processing',
-            current: 0,
-            total: imagePaths.length,
-            status: `Processing ${imagePaths.length} images in parallel...`,
-            cloudStatus: cloudLabel ? `${cloudLabel} active` : '',
-            latestFileStatus: 'Waiting for first completed file',
-            latestFile: '',
-        });
-        const results: RerunResultWithMeta[] = await Promise.all(
-            imagePaths.map(async (path) => {
-                const filename = path.split(/[\\/]/).pop() || 'image';
-                let result: RerunResultWithMeta;
-                let latestStatusForFile = 'Failed: Unknown error';
-                try {
-                    const rerunResult = await rerunOCROnArtifact(path, activeUser, ocrMode, ocrRegions, rerunRuntimeOptions);
-                    latestStatusForFile = rerunResult.success
-                        ? 'Succeeded'
-                        : `Failed: ${String(rerunResult.error || rerunResult.message || 'OCR failed')}`;
-                    result = { ...rerunResult, imagePath: path, filename };
-                } catch (error) {
-                    const failureReason = errorMessage(error);
-                    result = { success: false, error: failureReason, imagePath: path, filename };
-                    latestStatusForFile = `Failed: ${failureReason}`;
-                } finally {
-                    completed += 1;
-                    latestFile = filename;
-                    latestFileStatus = latestStatusForFile;
-                    setRerunProgress(prev => ({
-                        ...prev,
-                        phase: 'processing',
-                        current: completed,
-                        total: imagePaths.length,
-                        status: `Processed ${completed}/${imagePaths.length} files`,
-                        latestFile: filename,
-                        latestFileStatus: latestStatusForFile,
-                    }));
-                }
-                return result;
-            })
-        );
-        setRerunResults(results);
-        setRerunning(false);
-        const successful = results.filter((r): r is RerunResultWithMeta & { success: true; data: OCRExtractedData } => !!(r.success && r.data));
-        const cloudUsed = successful.some(r => r.data?.ocrSource === 'merged' || r.data?.ocrSource === 'cloud');
-        const fallbackReasons = successful
-            .map((r) => String(r.data?.ocrFallbackReason || '').trim())
-            .filter(Boolean);
-        const cloudErrors = successful
-            .map((r) => String(r.data?.ocrCloudError || '').trim())
-            .filter(Boolean);
-        const cloudStatusMessage = cloudUsed
-            ? 'Cloud OCR contributed'
-            : (fallbackReasons[0]
-                ? fallbackReasons[0]
-                : (cloudLabel
-                    ? (cloudErrors[0] ? `Cloud OCR unavailable (${cloudErrors[0]})` : 'Cloud OCR unavailable')
-                    : ''));
+        try {
+            const rerun = await rerunMatchArtifacts({
+                imagePaths,
+                activeUser,
+                ocrMode,
+                ocrRegions,
+                runtimeOptions: rerunRuntimeOptions,
+                normalizeModifierName,
+            });
+            const results: RerunResultWithMeta[] = rerun.perFile.map((entry) => ({
+                success: entry.success,
+                error: entry.error,
+                data: entry.data,
+                imagePath: entry.imagePath,
+                filename: entry.filename,
+            }));
+            setRerunResults(results);
 
-        if (successful.length > 0) {
-            setRerunProgress(prev => ({
-                ...prev,
-                phase: 'merging',
-                status: `Merging ${successful.length} successful OCR result${successful.length === 1 ? '' : 's'}...`,
-                latestFileStatus: `Merging ${successful.length}/${results.length} successful file${successful.length === 1 ? '' : 's'}`,
-            }));
-            let merged: Partial<OCRExtractedData> = {
-                playerShip: undefined,
-                reachModifiers: [],
-                teammates: [],
-                opponentTeams: [],
-                enemyShips: [],
-            };
-            for (const r of successful) {
-                const baseMods = normalizeModifierEntries(
-                    (r.data?.reachModifiers || []) as Array<string | ExtractedModifier>,
-                    normalizeModifierName
-                );
-                const hazardMods: ExtractedModifier[] = (r.data?.hazards || []).map((h: string) => ({
-                    name: normalizeModifierName(h),
-                    confidence: 80,
-                    rawText: h,
-                }));
-                const allMods = [...baseMods, ...hazardMods];
-                merged = mergeOCRData(merged, {
-                    playerShip: r.data.playerShip,
-                    reachModifiers: allMods,
-                    teammates: r.data.teammates || [],
-                    opponentTeams: r.data.opponentTeams || [],
-                    enemyShips: r.data.enemyShips || [],
+            const latestSummary = rerun.perFile[rerun.perFile.length - 1];
+            const latestFileStatus = latestSummary
+                ? (latestSummary.success ? 'Succeeded' : `Failed: ${latestSummary.error || 'OCR failed'}`)
+                : '';
+
+            if (!rerun.mergedData || rerun.successfulCount === 0) {
+                setRerunProgress({
+                    phase: 'error',
+                    current: rerun.total,
+                    total: rerun.total,
+                    status: `Done - 0/${rerun.total} succeeded`,
+                    cloudStatus: rerun.cloudStatusMessage,
+                    latestFile: latestSummary?.filename || '',
+                    latestFileStatus: latestFileStatus || 'No successful OCR output',
                 });
+                onUpdate({ ...match, ocrState: 'error' });
+                setToast({ message: 'OCR re-analysis failed for all screenshots.', type: 'error' });
+                return;
             }
-            const lastData = successful[successful.length - 1].data;
-            const combinedData: OCRExtractedData = {
-                screenshotType: lastData.screenshotType || 'unknown',
-                playerShip: merged.playerShip,
-                reachModifiers: merged.reachModifiers || [],
-                enemyShips: merged.enemyShips || lastData.enemyShips || [],
-                teammates: merged.teammates || [],
-                opponentTeams: merged.opponentTeams || [],
-                artifactType: lastData.artifactType,
-                overallConfidence: calculateOverallConfidence(merged),
-                captureTimestamp: Date.now(),
-                rawText: lastData.rawText,
-                ocrSource: lastData.ocrSource,
-                ocrFallbackReason: lastData.ocrFallbackReason,
-                ocrCloudError: lastData.ocrCloudError,
-                ocrGeminiError: lastData.ocrGeminiError,
-                analysisPathsUsed: lastData.analysisPathsUsed,
-                consensusScore: lastData.consensusScore,
-                providerUsed: lastData.providerUsed,
-                mergeStats: lastData.mergeStats,
-            };
-            setRerunProgress(prev => ({
-                ...prev,
+
+            setRerunProgress({
                 phase: 'ready',
-                status: `Done - ${successful.length}/${results.length} succeeded`,
-                cloudStatus: cloudStatusMessage,
-                latestFile: latestFile || prev.latestFile,
-                latestFileStatus: latestFileStatus || prev.latestFileStatus || 'Completed',
-            }));
-            setReviewData(combinedData);
+                current: rerun.total,
+                total: rerun.total,
+                status: `Done - ${rerun.successfulCount}/${rerun.total} succeeded`,
+                cloudStatus: rerun.cloudStatusMessage,
+                latestFile: latestSummary?.filename || '',
+                latestFileStatus: latestFileStatus || 'Completed',
+            });
+            setReviewData(rerun.mergedData);
             onUpdate({ ...match, ocrState: 'reviewing' });
             setToast({
-                message: `Analysis complete: ${successful.length}/${results.length} screenshot${results.length === 1 ? '' : 's'} processed. Click Apply OCR to sync.`,
-                type: 'success',
+                message: `Analysis complete: ${rerun.successfulCount}/${rerun.total} screenshot${rerun.total === 1 ? '' : 's'} processed. Click Apply OCR to sync.`,
+                type: rerun.failedCount > 0 ? 'warning' : 'success',
             });
-        } else {
-            setRerunProgress(prev => ({
-                ...prev,
+        } catch (error) {
+            const reason = errorMessage(error);
+            setRerunProgress({
                 phase: 'error',
-                status: `Done - ${successful.length}/${results.length} succeeded`,
-                cloudStatus: cloudStatusMessage,
-                latestFile: latestFile || prev.latestFile,
-                latestFileStatus: latestFileStatus || prev.latestFileStatus || 'No successful OCR output',
-            }));
+                current: 0,
+                total: imagePaths.length,
+                status: `OCR rerun failed: ${reason}`,
+                cloudStatus: '',
+                latestFile: '',
+                latestFileStatus: 'Rerun aborted',
+            });
             onUpdate({ ...match, ocrState: 'error' });
-            setToast({ message: 'OCR re-analysis failed for all screenshots.', type: 'error' });
+            setToast({ message: `OCR rerun failed: ${reason}`, type: 'error' });
+        } finally {
+            setRerunning(false);
         }
     };
     const maxTeammatesForShip = (shipType?: string | null) => getMaxTeammatesForShipLimit(shipType);
@@ -2974,285 +3001,90 @@ const SmartMatchDetail: React.FC<{
 
                     <Section title="Players" collapsible collapsed={!!collapsedSections.players} onToggle={() => toggleSection('players')}>
                         <div className="space-y-3">
-                            <div>
-                                <div className="flex items-center justify-between gap-2 mb-1">
-                                    <span className="text-label-sm uppercase font-bold opacity-40 block">Teammates</span>
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="text-label-xs opacity-50 uppercase font-semibold">Friendly ship</span>
-                                        <div className="relative min-w-[12.5rem]">
-                                            <input
-                                                type="text"
-                                                list={shipSuggestionsId}
-                                                value={match.ship || ''}
-                                                onChange={(e) => onUpdate({ ...match, ship: e.target.value })}
-                                                className="text-label-xs md3-surface rounded px-2 py-1 pr-7 font-bold outline-none border border-md-sys-outline/20 bg-md-sys-surface-container-high text-md-sys-on-surface w-full"
-                                                placeholder="No ship"
-                                                title="Friendly team ship"
-                                                aria-label="Friendly team ship type"
-                                                autoComplete="off"
-                                            />
-                                            {match.ship ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onUpdate({ ...match, ship: '' })}
-                                                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-md-sys-on-surface/45 hover:text-md-sys-on-surface/75 transition-colors"
-                                                    title="Clear friendly ship"
-                                                    aria-label="Clear friendly ship"
-                                                >
-                                                    <X size={11} />
-                                                </button>
-                                            ) : null}
-                                        </div>
-                                    </div>
+                            <div className="md3-card p-3 border border-md-sys-outline/20 ocr-team-assignment-shell">
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                    <span className="text-label-sm uppercase font-bold opacity-60">Team Assignment</span>
+                                    <span className="text-label-xs text-md-sys-on-surface/55">
+                                        Drag names between teams to fix grouping and ship ownership.
+                                    </span>
                                 </div>
-                                {renderPlayerChips(match.teammates || [], 'teammate')}
-                            </div>
-
-
-                            {match.opponentTeams && match.opponentTeams.length > 0 ? (
-                                <div className="space-y-2">
-                                    <span className="text-label-sm uppercase font-bold opacity-40 block">Enemy Teams</span>
-                                    <p className="text-label-xs text-md-sys-on-surface/55 -mt-1">
-                                        Multi-capture tip: Teams 3-4 are usually in an extra screenshot. Add that screenshot, rerun OCR, then review merged teams.
-                                    </p>
-                                    {match.opponentTeams.map((team, ti) => {
-                                        const updateTeam = (patch: Partial<OpponentTeam>) => {
-                                            const teams = [...(match.opponentTeams || [])];
-                                            teams[ti] = { ...teams[ti], ...patch };
-                                            onUpdate({ ...match, opponentTeams: teams });
-                                        };
-                                        const removeTeam = () => {
-                                            const teams = (match.opponentTeams || []).filter((_, i) => i !== ti);
-                                            onUpdate({ ...match, opponentTeams: teams });
-                                            setEditingTeamOpponentPlayer((current) => {
-                                                if (!current) return null;
-                                                if (current.teamIndex !== ti) return current;
-                                                return null;
-                                            });
-                                        };
-                                        const teamIsEliminator = isEliminatedByTeamMatch(match.eliminatedByTeam, team);
-                                        const COLORS = ['red', 'orange', 'yellow', 'green', 'blue', 'cyan', 'purple', 'unknown'];
-                                        return (
-                                            <div
-                                                key={ti}
-                                                className={`md3-surface-high rounded-lg p-2 space-y-1.5 group/team ${dragHoverTeamIndex === ti ? 'ring-1 ring-md-sys-primary/30' : ''
-                                                    }`}
-                                                onDragOver={(event) => allowOpponentDrop(event, ti)}
-                                                onDragLeave={() => setDragHoverTeamIndex(null)}
-                                                onDrop={(event) => dropOpponentPlayer(event, ti, null)}
-                                            >
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        onClick={() => {
-                                                            const idx = COLORS.indexOf(normalizeTeamColor(team.color));
-                                                            updateTeam({ color: COLORS[(idx + 1) % COLORS.length] });
-                                                        }}
-                                                        className={`w-2.5 h-2.5 rounded-full ${TEAM_COLOR_MAP[team.color] || 'bg-gray-500'} hover:ring-2 ring-md-sys-on-surface/20 transition-all cursor-pointer`}
-                                                        title="Click to cycle color"
-                                                        type="button"
-                                                    />
-                                                    <div className="flex items-center gap-1 flex-1 min-w-0">
-                                                        <Edit3 size={11} className="opacity-50 shrink-0" />
-                                                        <input
-                                                            value={team.teamName}
-                                                            onChange={(e) => updateTeam({ teamName: e.target.value })}
-                                                            className={`md3-textfield md3-textfield--outlined text-label-sm font-bold px-2 py-1 rounded-control w-full min-w-0 ${TEAM_TEXT_MAP[team.color] || 'text-gray-400'}`}
-                                                            placeholder={`Team ${ti + 1}`}
-                                                            title="Edit team name"
-                                                            aria-label={`Enemy team ${ti + 1} name`}
-                                                        />
-                                                    </div>
-                                                    <div className="relative min-w-[10.5rem]">
-                                                        <input
-                                                            type="text"
-                                                            list={shipSuggestionsId}
-                                                            value={team.shipType || ''}
-                                                            onChange={(e) => updateTeam({ shipType: e.target.value })}
-                                                            className="text-label-sm md3-surface rounded px-2 py-1 pr-7 font-bold outline-none border border-md-sys-outline/20 bg-md-sys-surface-container-high text-md-sys-on-surface w-full"
-                                                            placeholder="No ship"
-                                                            title="Ship type"
-                                                            aria-label={`Enemy team ${ti + 1} ship type`}
-                                                            autoComplete="off"
-                                                        />
-                                                        {team.shipType ? (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => updateTeam({ shipType: '' })}
-                                                                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-md-sys-on-surface/45 hover:text-md-sys-on-surface/75 transition-colors"
-                                                                title="Clear ship type"
-                                                                aria-label={`Clear enemy team ${ti + 1} ship type`}
-                                                            >
-                                                                <X size={11} />
-                                                            </button>
-                                                        ) : null}
-                                                    </div>
-                                                    {teamIsEliminator ? (
-                                                        <span className="ml-auto text-label-xs px-1.5 py-0.5 bg-danger-soft text-danger rounded font-bold flex items-center gap-1">
-                                                            <Skull size={10} /> Eliminated you
-                                                        </span>
-                                                    ) : match.result === 'Loss' && (
-                                                        <button
-                                                            onClick={() => onUpdate({
-                                                                ...match,
-                                                                eliminatedByTeam: getPrimaryEliminatedByTeamValue(team) || undefined,
-                                                            })}
-                                                            className="ml-auto text-label-xs px-1.5 py-0.5 bg-md-sys-on-surface/5 hover:bg-danger-soft opacity-40 hover:opacity-100 hover:text-danger rounded font-bold transition-colors"
-                                                            type="button"
-                                                        >
-                                                            Mark as eliminator
-                                                        </button>
-                                                    )}
-                                                    <button
-                                                        onClick={removeTeam}
-                                                        className="opacity-0 group-hover/team:opacity-40 hover:!opacity-100 hover:text-danger transition-all"
-                                                        title="Remove team"
-                                                        type="button"
-                                                    >
-                                                        <Trash2 size={12} />
-                                                    </button>
-                                                </div>
-                                                <p className="text-label-xs opacity-50 pl-4">
-                                                    Drag opponent chips between teams to reassign ship/team.
-                                                </p>
-                                                <div className="flex flex-wrap gap-1 pl-4 items-center">
-                                                    {team.players.map((p, pi) => {
-                                                        const isEditing = editingTeamOpponentPlayer?.teamIndex === ti
-                                                            && editingTeamOpponentPlayer?.playerIndex === pi;
-                                                        if (isEditing) {
-                                                            return (
-                                                                <div key={pi} className="flex items-center gap-1">
-                                                                    <input
-                                                                        type="text"
-                                                                        value={editingTeamOpponentValue}
-                                                                        onChange={(event) => setEditingTeamOpponentValue(event.target.value)}
-                                                                        onKeyDown={(event) => {
-                                                                            if (event.key === 'Enter') {
-                                                                                saveOpponentTeamPlayerEdit(ti, pi);
-                                                                            } else if (event.key === 'Escape') {
-                                                                                setEditingTeamOpponentPlayer(null);
-                                                                                setEditingTeamOpponentValue('');
-                                                                            }
-                                                                        }}
-                                                                        className="md3-surface rounded px-2 py-1 text-label-sm outline-none w-28"
-                                                                        list={pilotRegistry.length > 0 ? rosterSuggestionsId : undefined}
-                                                                        autoFocus
-                                                                    />
-                                                                    <button onClick={() => saveOpponentTeamPlayerEdit(ti, pi)} className="hover:text-success" type="button">
-                                                                        <Check size={10} />
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            setEditingTeamOpponentPlayer(null);
-                                                                            setEditingTeamOpponentValue('');
-                                                                        }}
-                                                                        className="hover:text-danger"
-                                                                        type="button"
-                                                                    >
-                                                                        <X size={10} />
-                                                                    </button>
-                                                                </div>
-                                                            );
-                                                        }
-                                                        return (
-                                                            <span
-                                                                key={pi}
-                                                                className={`px-2 py-0.5 bg-danger-soft text-danger rounded-md text-label-sm font-bold flex items-center gap-1 group/player cursor-grab ${draggedOpponentPlayer?.teamIndex === ti
-                                                                    && draggedOpponentPlayer?.playerIndex === pi
-                                                                    ? 'opacity-60'
-                                                                    : ''
-                                                                    }`}
-                                                                draggable
-                                                                onDragStart={(event) => {
-                                                                    event.dataTransfer.effectAllowed = 'move';
-                                                                    setDraggedOpponentPlayer({ teamIndex: ti, playerIndex: pi });
-                                                                }}
-                                                                onDragEnd={() => {
-                                                                    setDraggedOpponentPlayer(null);
-                                                                    setDragHoverTeamIndex(null);
-                                                                }}
-                                                                onDragOver={(event) => allowOpponentDrop(event, ti)}
-                                                                onDrop={(event) => dropOpponentPlayer(event, ti, pi)}
-                                                            >
-                                                                <button
-                                                                    type="button"
-                                                                    className="truncate max-w-[180px] text-left"
-                                                                    onClick={(event) => {
-                                                                        event.stopPropagation();
-                                                                        setEditingTeamOpponentPlayer({ teamIndex: ti, playerIndex: pi });
-                                                                        setEditingTeamOpponentValue(p);
-                                                                    }}
-                                                                    title="Edit opponent name"
-                                                                >
-                                                                    {p}
-                                                                </button>
-                                                                <button
-                                                                    onClick={(event) => {
-                                                                        event.stopPropagation();
-                                                                        setEditingTeamOpponentPlayer({ teamIndex: ti, playerIndex: pi });
-                                                                        setEditingTeamOpponentValue(p);
-                                                                    }}
-                                                                    className="opacity-0 group-hover/player:opacity-60 hover:!opacity-100 transition-opacity"
-                                                                    type="button"
-                                                                    title="Edit name"
-                                                                >
-                                                                    <Edit3 size={10} />
-                                                                </button>
-                                                                <button
-                                                                    onClick={(event) => {
-                                                                        event.stopPropagation();
-                                                                        const players = team.players.filter((_, i) => i !== pi);
-                                                                        updateTeam({ players });
-                                                                        setEditingTeamOpponentPlayer((current) => {
-                                                                            if (!current) return null;
-                                                                            if (current.teamIndex !== ti || current.playerIndex !== pi) return current;
-                                                                            return null;
-                                                                        });
-                                                                    }}
-                                                                    className="opacity-0 group-hover/player:opacity-60 hover:!opacity-100 transition-opacity"
-                                                                    type="button"
-                                                                    title="Remove player"
-                                                                >
-                                                                    <X size={10} />
-                                                                </button>
-                                                            </span>
-                                                        );
-                                                    })}
-                                                    <InlinePlayerAdd
-                                                        onAdd={(name) => {
-                                                            const resolved = resolveRosterName(name, { allowFuzzy: false });
-                                                            if (!resolved) return;
-                                                            const key = normalizeOcrName(resolved).toLowerCase();
-                                                            const existingKeys = new Set(team.players.map((playerName) => normalizeOcrName(playerName).toLowerCase()));
-                                                            if (!key || existingKeys.has(key)) return;
-                                                            updateTeam({ players: [...team.players, resolved] });
-                                                        }}
-                                                        pilotRegistry={pilotRegistry}
-                                                        onAddToRoster={onAddPilotToRoster ? (name) => {
-                                                            addPilotToRosterQuick(name);
-                                                        } : undefined}
-                                                    />
-                                                </div>
-                                            </div>
-                                        );
+                                <OcrTeamAssignmentBoard
+                                    teams={assignmentBoardTeams}
+                                    shipOptions={SHIPS}
+                                    rosterSuggestionsId={pilotRegistry.length > 0 ? rosterSuggestionsId : undefined}
+                                    friendlyTeamIndex={0}
+                                    compact={true}
+                                    allowColorEdit={true}
+                                    allowTeamAddRemove={true}
+                                    fuzzyMatches={assignmentBoardFuzzyMatches}
+                                    dataTestId="sc-detail-players-assignment-board"
+                                    onTeamAdd={() => mutateAssignmentBoardTeams((draft) => {
+                                        draft.push({
+                                            key: `enemy-${draft.length}:Enemy Team ${draft.length}`,
+                                            color: 'unknown',
+                                            teamName: `Enemy Team ${draft.length}`,
+                                            shipType: '',
+                                            players: [],
+                                        });
                                     })}
-                                    {match.eliminatedByTeam && (
-                                        <button
-                                            onClick={() => onUpdate({ ...match, eliminatedByTeam: undefined })}
-                                            className="text-label-xs opacity-40 hover:opacity-60 transition-colors"
-                                            type="button"
-                                        >
-                                            Clear eliminator selection
-                                        </button>
-                                    )}
-                                </div>
-                            ) : (
-                                <div>
-                                    <span className="text-label-sm uppercase font-bold opacity-40 block mb-1">Opponents</span>
-                                    <p className="text-label-xs text-md-sys-on-surface/55 mb-1">
-                                        Need teams 3-4? Capture an additional crew screenshot and rerun OCR to pull the extra enemy teams.
-                                    </p>
-                                    {renderPlayerChips(match.opponents || [], 'opponent')}
-                                </div>
+                                    onTeamRemove={(teamIndex) => mutateAssignmentBoardTeams((draft) => {
+                                        if (teamIndex <= 0 || teamIndex >= draft.length) return;
+                                        draft.splice(teamIndex, 1);
+                                    })}
+                                    onTeamNameChange={(teamIndex, value) => mutateAssignmentBoardTeams((draft) => {
+                                        if (teamIndex < 0 || teamIndex >= draft.length) return;
+                                        draft[teamIndex] = { ...draft[teamIndex], teamName: value };
+                                    })}
+                                    onTeamColorChange={(teamIndex, value) => mutateAssignmentBoardTeams((draft) => {
+                                        if (teamIndex <= 0 || teamIndex >= draft.length) return;
+                                        draft[teamIndex] = { ...draft[teamIndex], color: value };
+                                    })}
+                                    onTeamShipChange={(teamIndex, value) => mutateAssignmentBoardTeams((draft) => {
+                                        if (teamIndex < 0 || teamIndex >= draft.length) return;
+                                        draft[teamIndex] = { ...draft[teamIndex], shipType: value };
+                                    })}
+                                    onPlayerChange={(teamIndex, playerIndex, value) => mutateAssignmentBoardTeams((draft) => {
+                                        if (teamIndex < 0 || teamIndex >= draft.length) return;
+                                        const team = draft[teamIndex];
+                                        if (playerIndex < 0 || playerIndex >= team.players.length) return;
+                                        const nextPlayers = [...team.players];
+                                        nextPlayers[playerIndex] = value;
+                                        draft[teamIndex] = { ...team, players: nextPlayers };
+                                    })}
+                                    onPlayerRemove={(teamIndex, playerIndex) => mutateAssignmentBoardTeams((draft) => {
+                                        if (teamIndex < 0 || teamIndex >= draft.length) return;
+                                        const team = draft[teamIndex];
+                                        draft[teamIndex] = {
+                                            ...team,
+                                            players: team.players.filter((_, idx) => idx !== playerIndex),
+                                        };
+                                    })}
+                                    onPlayerAdd={(teamIndex, value) => mutateAssignmentBoardTeams((draft) => {
+                                        if (teamIndex < 0 || teamIndex >= draft.length) return;
+                                        const team = draft[teamIndex];
+                                        draft[teamIndex] = {
+                                            ...team,
+                                            players: dedupeBoardNames([...(team.players || []), value]),
+                                        };
+                                    })}
+                                    onPlayerMove={(fromTeamIndex, fromPlayerIndex, toTeamIndex, toPlayerIndex) => mutateAssignmentBoardTeams((draft) => (
+                                        moveOpponentPlayerBetweenTeams(draft, {
+                                            fromTeamIndex,
+                                            fromPlayerIndex,
+                                            toTeamIndex,
+                                            toPlayerIndex,
+                                        }) as OcrTeamAssignmentTeam[]
+                                    ))}
+                                />
+                            </div>
+                            {match.eliminatedByTeam && (
+                                <button
+                                    onClick={() => onUpdate({ ...match, eliminatedByTeam: undefined })}
+                                    className="text-label-xs opacity-40 hover:opacity-60 transition-colors"
+                                    type="button"
+                                >
+                                    Clear eliminator selection
+                                </button>
                             )}
                         </div>
                     </Section>

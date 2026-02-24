@@ -1,7 +1,7 @@
 import React from 'react';
-import { LayoutDashboard, Gauge, Users, Globe, BookOpen } from 'lucide-react';
+import { LayoutDashboard, Gauge, Users, Globe } from 'lucide-react';
 
-export type AnalyticsCategory = 'overview' | 'performance' | 'team' | 'environment' | 'narrative';
+export type AnalyticsCategory = 'overview' | 'performance' | 'team' | 'environment';
 
 interface AnalyticsNavigationProps {
     activeCategory: AnalyticsCategory;
@@ -13,7 +13,6 @@ const CATEGORIES: { id: AnalyticsCategory; label: string; icon: React.ReactNode;
     { id: 'performance', label: 'Performance', icon: <Gauge size={16} />, tone: 'text-success', activeTone: 'bg-success-soft text-success border border-success/25' },
     { id: 'team', label: 'Team', icon: <Users size={16} />, tone: 'text-info', activeTone: 'bg-info-soft text-info border border-info/25' },
     { id: 'environment', label: 'Environment', icon: <Globe size={16} />, tone: 'text-warning', activeTone: 'bg-warning-soft text-warning border border-warning/25' },
-    { id: 'narrative', label: 'Narrative', icon: <BookOpen size={16} />, tone: 'text-accent', activeTone: 'bg-accent-soft text-accent border border-accent/25' },
 ];
 
 export const AnalyticsNavigation: React.FC<AnalyticsNavigationProps> = ({ activeCategory, onSelectCategory }) => {

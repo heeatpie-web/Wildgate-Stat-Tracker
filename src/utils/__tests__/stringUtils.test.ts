@@ -14,6 +14,7 @@ import {
   normalizeOcrText,
   isOcrNoise,
   cleanPlayerName,
+  normalizeOcrName,
   cleanMissionName,
   tokenOverlapNameScore,
   tokenizeForNameSimilarity,
@@ -196,5 +197,16 @@ describe('cleanMissionName', () => {
 
   it('trims whitespace', () => {
     expect(cleanMissionName('  Some Name  ')).toBe('Some Name');
+  });
+});
+
+describe('normalizeOcrName', () => {
+  it('removes leading decorative glyphs', () => {
+    expect(normalizeOcrName('🚢   Alec')).toBe('Alec');
+    expect(normalizeOcrName('⚓Ghost')).toBe('Ghost');
+  });
+
+  it('removes trailing decorative glyphs', () => {
+    expect(normalizeOcrName('Alec 🚀')).toBe('Alec');
   });
 });

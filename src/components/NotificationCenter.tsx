@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell, CheckCheck, Sparkles, Trash2, X, XCircle } from 'lucide-react';
+import { Bell, CheckCheck, ChevronLeft, ChevronRight, Sparkles, Trash2, X, XCircle } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
 import type { AppNotification, NotificationDeepLink } from '../store/slices/createUISlice';
@@ -76,6 +76,20 @@ export const NotificationCenter: React.FC = () => {
     const unreadCount = visibleNotifications.reduce((count, item) => count + (item.readAt ? 0 : 1), 0);
     const unread = visibleNotifications.filter((item) => !item.readAt);
     const read = visibleNotifications.filter((item) => !!item.readAt);
+    const tipNotifications = React.useMemo(
+        () => [...visibleNotifications.filter((item) => item.type === 'tip')].sort((a, b) => b.createdAt - a.createdAt),
+        [visibleNotifications]
+    );
+    const [tipIndex, setTipIndex] = React.useState(0);
+    React.useEffect(() => {
+        setTipIndex((current) => {
+            if (tipNotifications.length === 0) return 0;
+            return Math.min(current, tipNotifications.length - 1);
+        });
+    }, [tipNotifications.length]);
+    const pinnedTip = tipNotifications[tipIndex] || null;
+    const unreadNonTips = unread.filter((item) => item.type !== 'tip');
+    const readNonTips = read.filter((item) => item.type !== 'tip');
 
     const executeDeepLink = React.useCallback((deepLink?: NotificationDeepLink) => {
         if (!deepLink) return;
@@ -197,7 +211,7 @@ export const NotificationCenter: React.FC = () => {
                     id="notification-center-panel"
                     role="dialog"
                     aria-label="Notification inbox"
-                    className="fixed right-4 top-16 z-top-second w-[min(30rem,calc(100vw-2rem))] max-h-[calc(100vh-6rem)] rounded-2xl border border-md-sys-outline/30 bg-md-sys-surface-container-highest text-md-sys-on-surface shadow-[0_24px_56px_rgba(0,0,0,0.52)] overflow-hidden backdrop-blur-sm"
+                    className="fixed right-4 top-20 z-top-second w-[min(30rem,calc(100vw-2rem))] max-h-[calc(100vh-7rem)] rounded-2xl border border-md-sys-outline/30 bg-md-sys-surface-container-highest text-md-sys-on-surface shadow-[0_24px_56px_rgba(0,0,0,0.52)] overflow-hidden backdrop-blur-sm"
                 >
                     <div className="px-4 py-3 border-b border-md-sys-outline/14 flex items-center justify-between">
                         <div className="text-label-sm font-bold uppercase tracking-wide">Notifications</div>
@@ -230,10 +244,75 @@ export const NotificationCenter: React.FC = () => {
                             </div>
                         )}
 
-                        {unread.length > 0 && (
+                        {pinnedTip && (
+                            <div
+                                onClick={() => onItemClick(pinnedTip)}
+                                onKeyDown={(event) => onItemKeyDown(event, pinnedTip)}
+                                role="button"
+                                tabIndex={0}
+                                className="w-full text-left rounded-xl border border-accent/35 bg-accent-soft px-3 py-3 hover:bg-accent-soft-strong transition-colors cursor-pointer"
+                            >
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <Sparkles size={14} className="text-accent" />
+                                        <span className="text-label-xs font-bold uppercase tracking-wide text-accent">
+                                            Tip {tipNotifications.length > 0 ? tipIndex + 1 : 0}/{tipNotifications.length}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        {tipNotifications.length > 1 && (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    className="w-6 h-6 rounded-full inline-flex items-center justify-center text-md-sys-on-surface/60 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10"
+                                                    aria-label="Previous tip"
+                                                    title="Previous tip"
+                                                    onClick={(event) => {
+                                                        event.preventDefault();
+                                                        event.stopPropagation();
+                                                        setTipIndex((current) => (
+                                                            current <= 0 ? tipNotifications.length - 1 : current - 1
+                                                        ));
+                                                    }}
+                                                >
+                                                    <ChevronLeft size={12} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="w-6 h-6 rounded-full inline-flex items-center justify-center text-md-sys-on-surface/60 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10"
+                                                    aria-label="Next tip"
+                                                    title="Next tip"
+                                                    onClick={(event) => {
+                                                        event.preventDefault();
+                                                        event.stopPropagation();
+                                                        setTipIndex((current) => (
+                                                            current >= tipNotifications.length - 1 ? 0 : current + 1
+                                                        ));
+                                                    }}
+                                                >
+                                                    <ChevronRight size={12} />
+                                                </button>
+                                            </>
+                                        )}
+                                        <button
+                                            type="button"
+                                            className="w-6 h-6 rounded-full inline-flex items-center justify-center text-md-sys-on-surface/55 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10"
+                                            aria-label="Dismiss tip"
+                                            title="Dismiss tip"
+                                            onClick={(event) => onItemDismiss(event, pinnedTip.id)}
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="mt-1 text-body-sm font-semibold leading-snug">{pinnedTip.message}</div>
+                            </div>
+                        )}
+
+                        {unreadNonTips.length > 0 && (
                             <div className="px-2 pt-1 text-label-xs font-bold uppercase tracking-wide opacity-60">Unread</div>
                         )}
-                        {unread.map((item) => (
+                        {unreadNonTips.map((item) => (
                             <div
                                 key={item.id}
                                 onClick={() => onItemClick(item)}
@@ -268,10 +347,10 @@ export const NotificationCenter: React.FC = () => {
                             </div>
                         ))}
 
-                        {read.length > 0 && (
+                        {readNonTips.length > 0 && (
                             <div className="px-2 pt-1 text-label-xs font-bold uppercase tracking-wide opacity-60">Earlier</div>
                         )}
-                        {read.map((item) => (
+                        {readNonTips.map((item) => (
                             <div
                                 key={item.id}
                                 onClick={() => onItemClick(item)}

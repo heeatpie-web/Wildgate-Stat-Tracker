@@ -55,6 +55,12 @@ export const RosterPanel: React.FC = () => {
 
     const hasTeammates = selectedTeammates.length > 0;
     const hasOpponents = selectedOpponents.length > 0;
+    const clearTeammates = () => {
+        [...selectedTeammates].forEach((name) => toggleTeammate(name));
+    };
+    const clearHostiles = () => {
+        [...selectedOpponents].forEach((name) => toggleOpponent(name));
+    };
 
     const filtered = Array.from(new Set(pilotRegistry))
         .filter((p: string) => !selectedTeammates.includes(p) && !selectedOpponents.includes(p))
@@ -144,7 +150,20 @@ export const RosterPanel: React.FC = () => {
                 <div className="mg-surface rounded-card p-3 border border-md-sys-outline/10 flex flex-col gap-2 min-h-128px">
                     <div className="flex items-center justify-between">
                         <span className={`text-label-sm font-bold ${hasTeammates ? 'text-md-sys-primary' : 'text-md-sys-on-surface/60'}`}>Teammates</span>
-                        <span className="text-label-sm px-1.5 py-0.5 rounded-full md3-surface">{selectedTeammates.length}</span>
+                        <div className="flex items-center gap-1">
+                            {hasTeammates && (
+                                <button
+                                    type="button"
+                                    onClick={clearTeammates}
+                                    className="w-5 h-5 rounded-full inline-flex items-center justify-center text-md-sys-on-surface/55 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10"
+                                    title="Clear teammates"
+                                    aria-label="Clear teammates"
+                                >
+                                    <X size={11} />
+                                </button>
+                            )}
+                            <span className="text-label-sm px-1.5 py-0.5 rounded-full md3-surface">{selectedTeammates.length}</span>
+                        </div>
                     </div>
                     {hasTeammates ? (
                         <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto custom-scrollbar pr-1">
@@ -163,9 +182,22 @@ export const RosterPanel: React.FC = () => {
                     )}
                 </div>
                 <div className="mg-surface rounded-card p-3 border border-md-sys-outline/10 flex flex-col gap-2 min-h-104px">
-                    <span className={`text-label-sm font-bold ${hasOpponents ? 'text-danger' : 'text-md-sys-on-surface/60'}`}>
-                        Hostiles
-                    </span>
+                    <div className="flex items-center justify-between">
+                        <span className={`text-label-sm font-bold ${hasOpponents ? 'text-danger' : 'text-md-sys-on-surface/60'}`}>
+                            Hostiles
+                        </span>
+                        {hasOpponents && (
+                            <button
+                                type="button"
+                                onClick={clearHostiles}
+                                className="w-5 h-5 rounded-full inline-flex items-center justify-center text-md-sys-on-surface/55 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10"
+                                title="Clear hostiles"
+                                aria-label="Clear hostiles"
+                            >
+                                <X size={11} />
+                            </button>
+                        )}
+                    </div>
                     {hasOpponents && (() => {
                         const teamEntries = Object.entries(sessionTeams || {});
                         const grouped: Record<string, string[]> = {};

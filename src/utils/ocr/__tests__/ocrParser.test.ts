@@ -644,4 +644,23 @@ describe('validateExtractedData', () => {
     const validated = validateExtractedData(data);
     expect(validated.opponentTeams[0].players).toHaveLength(1);
   });
+
+  it('promotes ship-like player artifacts into team shipType metadata', () => {
+    const data = makeData({
+      opponentTeams: [{
+        teamName: 'Team',
+        shipType: '',
+        color: 'red',
+        players: [
+          { name: 'Hunter (4 Player)', confidence: 84, isTeammate: false },
+          { name: 'Enemy One', confidence: 82, isTeammate: false },
+        ],
+        confidence: 74,
+      }],
+    });
+    const validated = validateExtractedData(data);
+    expect(validated.opponentTeams[0].shipType).toBe('Hunter');
+    expect(validated.opponentTeams[0].players).toHaveLength(1);
+    expect(validated.opponentTeams[0].players[0].name).toBe('Enemy One');
+  });
 });

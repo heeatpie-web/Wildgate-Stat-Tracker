@@ -536,7 +536,7 @@ export const StorageService = {
     try {
       const normalized = coerceStorageData(rawData);
       if (!normalized) {
-        return { success: false, error: 'Invalid backup data format — could not parse the file.' };
+        return { success: false, error: 'Invalid backup data format - could not parse the file.' };
       }
       const seeded = await applyUidSeed(normalized);
       const ok = await writeNow(seeded);

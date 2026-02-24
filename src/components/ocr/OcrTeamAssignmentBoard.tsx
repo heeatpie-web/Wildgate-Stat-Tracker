@@ -1,0 +1,384 @@
+import React, { useMemo, useRef, useState } from 'react';
+import { GripVertical, Plus, Shield, Trash2, X } from 'lucide-react';
+
+export interface OcrTeamAssignmentTeam {
+    key: string;
+    color: string;
+    teamName: string;
+    shipType: string;
+    players: string[];
+}
+
+interface DraggedPlayerPayload {
+    teamIndex: number;
+    playerIndex: number;
+}
+
+interface OcrTeamAssignmentBoardProps {
+    teams: OcrTeamAssignmentTeam[];
+    shipOptions: string[];
+    rosterSuggestionsId?: string;
+    compact?: boolean;
+    className?: string;
+    dataTestId?: string;
+    friendlyTeamIndex?: number;
+    allowColorEdit?: boolean;
+    allowTeamAddRemove?: boolean;
+    fuzzyMatches?: Record<string, string>;
+    onTeamNameChange?: (teamIndex: number, value: string) => void;
+    onTeamColorChange?: (teamIndex: number, value: string) => void;
+    onTeamShipChange: (teamIndex: number, value: string) => void;
+    onTeamRemove?: (teamIndex: number) => void;
+    onTeamAdd?: () => void;
+    onPlayerChange: (teamIndex: number, playerIndex: number, value: string) => void;
+    onPlayerRemove: (teamIndex: number, playerIndex: number) => void;
+    onPlayerAdd: (teamIndex: number, value: string) => void;
+    onPlayerMove: (
+        fromTeamIndex: number,
+        fromPlayerIndex: number,
+        toTeamIndex: number,
+        toPlayerIndex?: number | null
+    ) => void;
+}
+
+const TEAM_COLOR_OPTIONS = ['red', 'orange', 'yellow', 'green', 'blue', 'cyan', 'purple', 'unknown'] as const;
+const DRAG_DATA_KEY = 'application/x-wildgate-player-drag';
+
+const normalizeColorToken = (value: string): string => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return 'unknown';
+    if (TEAM_COLOR_OPTIONS.includes(normalized as typeof TEAM_COLOR_OPTIONS[number])) return normalized;
+    return 'unknown';
+};
+
+const parseDragPayload = (raw: string): DraggedPlayerPayload | null => {
+    try {
+        const parsed = JSON.parse(raw) as DraggedPlayerPayload;
+        if (!Number.isInteger(parsed?.teamIndex) || !Number.isInteger(parsed?.playerIndex)) return null;
+        if (parsed.teamIndex < 0 || parsed.playerIndex < 0) return null;
+        return parsed;
+    } catch {
+        return null;
+    }
+};
+
+const buildDragPayload = (payload: DraggedPlayerPayload): string => JSON.stringify(payload);
+const normalizePlayerKey = (value: string): string => String(value || '').trim().toLowerCase();
+
+export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
+    teams,
+    shipOptions,
+    rosterSuggestionsId,
+    compact = false,
+    className = '',
+    dataTestId = 'ocr-team-assignment-board',
+    friendlyTeamIndex = -1,
+    allowColorEdit = false,
+    allowTeamAddRemove = false,
+    fuzzyMatches = {},
+    onTeamNameChange,
+    onTeamColorChange,
+    onTeamShipChange,
+    onTeamRemove,
+    onTeamAdd,
+    onPlayerChange,
+    onPlayerRemove,
+    onPlayerAdd,
+    onPlayerMove,
+}) => {
+    const [draggedPlayer, setDraggedPlayer] = useState<DraggedPlayerPayload | null>(null);
+    const [dragHoverTeamIndex, setDragHoverTeamIndex] = useState<number | null>(null);
+    const [draftPlayers, setDraftPlayers] = useState<Record<number, string>>({});
+    const draggedPlayerRef = useRef<DraggedPlayerPayload | null>(null);
+
+    const densityClass = compact ? 'ocr-assignment-board--compact' : 'ocr-assignment-board--full';
+    const shipOptionsWithUnknown = useMemo(() => {
+        const deduped = new Set<string>();
+        const list: string[] = [];
+        shipOptions.forEach((ship) => {
+            const cleaned = String(ship || '').trim();
+            if (!cleaned || deduped.has(cleaned.toLowerCase())) return;
+            deduped.add(cleaned.toLowerCase());
+            list.push(cleaned);
+        });
+        return list;
+    }, [shipOptions]);
+
+    const resolveDraggedPlayer = (event: React.DragEvent<HTMLElement>): DraggedPlayerPayload | null => {
+        if (draggedPlayer) return draggedPlayer;
+        if (draggedPlayerRef.current) return draggedPlayerRef.current;
+        const nativePayload = event.dataTransfer.getData(DRAG_DATA_KEY)
+            || event.dataTransfer.getData('text/plain')
+            || event.dataTransfer.getData('text')
+            || event.dataTransfer.getData('application/json');
+        return parseDragPayload(nativePayload);
+    };
+
+    const allowDrop = (event: React.DragEvent<HTMLElement>, teamIndex: number) => {
+        const dragTypes = Array.from(event.dataTransfer.types || []);
+        const hasKnownDragType = dragTypes.includes(DRAG_DATA_KEY) || dragTypes.includes('text/plain');
+        const payload = resolveDraggedPlayer(event);
+        if (!payload && !draggedPlayer && !hasKnownDragType) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        setDragHoverTeamIndex(teamIndex);
+    };
+
+    const dropPlayer = (
+        event: React.DragEvent<HTMLElement>,
+        teamIndex: number,
+        playerIndex?: number | null
+    ) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const payload = resolveDraggedPlayer(event);
+        if (!payload) return;
+        onPlayerMove(
+            payload.teamIndex,
+            payload.playerIndex,
+            teamIndex,
+            playerIndex
+        );
+        setDraggedPlayer(null);
+        draggedPlayerRef.current = null;
+        setDragHoverTeamIndex(null);
+    };
+
+    const startDrag = (
+        event: React.DragEvent<HTMLButtonElement>,
+        teamIndex: number,
+        playerIndex: number
+    ) => {
+        const payload: DraggedPlayerPayload = { teamIndex, playerIndex };
+        const serialized = buildDragPayload(payload);
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData(DRAG_DATA_KEY, serialized);
+        event.dataTransfer.setData('text/plain', serialized);
+        event.dataTransfer.setData('text', serialized);
+        event.dataTransfer.setData('application/json', serialized);
+        setDraggedPlayer(payload);
+        draggedPlayerRef.current = payload;
+    };
+
+    const addPlayer = (teamIndex: number) => {
+        const candidate = String(draftPlayers[teamIndex] || '').trim();
+        if (!candidate) return;
+        const existing = new Set(
+            (teams[teamIndex]?.players || [])
+                .map((playerName) => String(playerName || '').trim().toLowerCase())
+                .filter(Boolean)
+        );
+        if (existing.has(candidate.toLowerCase())) {
+            setDraftPlayers((prev) => ({ ...prev, [teamIndex]: '' }));
+            return;
+        }
+        onPlayerAdd(teamIndex, candidate);
+        setDraftPlayers((prev) => ({ ...prev, [teamIndex]: '' }));
+    };
+
+    return (
+        <div
+            data-testid={dataTestId}
+            className={`ocr-assignment-board ${densityClass} ${className}`.trim()}
+        >
+            <div className="ocr-assignment-board-grid">
+                {teams.map((team, teamIndex) => {
+                    const normalizedColor = normalizeColorToken(team.color);
+                    const friendlyTeam = teamIndex === friendlyTeamIndex;
+                    return (
+                        <div
+                            key={`${team.key}-${teamIndex}`}
+                            data-testid={`ocr-team-card-${teamIndex}`}
+                            className={`ocr-assignment-team-card md3-surface-high ${
+                                dragHoverTeamIndex === teamIndex ? 'ocr-assignment-team-card--hover' : ''
+                            }`}
+                            onDragOver={(event) => allowDrop(event, teamIndex)}
+                            onDragLeave={() => setDragHoverTeamIndex(null)}
+                            onDrop={(event) => dropPlayer(event, teamIndex, null)}
+                        >
+                            <div className="ocr-assignment-team-head">
+                                <div
+                                    className={`ocr-assignment-team-dot ocr-assignment-team-dot--${normalizedColor}`}
+                                    aria-hidden="true"
+                                />
+                                {onTeamNameChange ? (
+                                    <input
+                                        type="text"
+                                        value={team.teamName}
+                                        onChange={(event) => onTeamNameChange(teamIndex, event.target.value)}
+                                        className="md3-textfield md3-textfield--outlined ocr-assignment-team-name"
+                                        placeholder={`Team ${teamIndex + 1}`}
+                                        aria-label={`Team ${teamIndex + 1} name`}
+                                    />
+                                ) : (
+                                    <span className="ocr-assignment-team-title">
+                                        {team.teamName || `Team ${teamIndex + 1}`}
+                                    </span>
+                                )}
+                                <span className="ocr-assignment-team-meta">
+                                    {team.players.length} players
+                                </span>
+                                {friendlyTeam && (
+                                    <span className="ocr-teammate-chip ocr-teammate-chip--compact">
+                                        <Shield size={10} />
+                                        Friendly
+                                    </span>
+                                )}
+                                {allowTeamAddRemove && onTeamRemove && !friendlyTeam && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onTeamRemove(teamIndex)}
+                                        className="md3-icon-btn text-danger"
+                                        title="Remove team"
+                                        aria-label={`Remove team ${team.teamName || teamIndex + 1}`}
+                                    >
+                                        <Trash2 size={12} />
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="ocr-assignment-team-controls">
+                                <label className="ocr-assignment-control-label">Ship</label>
+                                <select
+                                    value={team.shipType}
+                                    onChange={(event) => onTeamShipChange(teamIndex, event.target.value)}
+                                    className="md3-textfield md3-textfield--outlined ocr-assignment-ship-select"
+                                >
+                                    <option value="">Unknown ship</option>
+                                    {shipOptionsWithUnknown.map((ship) => (
+                                        <option key={ship} value={ship}>{ship}</option>
+                                    ))}
+                                </select>
+                                {allowColorEdit && onTeamColorChange && (
+                                    <>
+                                        <label className="ocr-assignment-control-label">Color</label>
+                                        <select
+                                            value={normalizedColor}
+                                            onChange={(event) => onTeamColorChange(teamIndex, event.target.value)}
+                                            className="md3-textfield md3-textfield--outlined ocr-assignment-color-select"
+                                            aria-label={`Team ${teamIndex + 1} color`}
+                                        >
+                                            {TEAM_COLOR_OPTIONS.map((color) => (
+                                                <option key={color} value={color}>
+                                                    {color.charAt(0).toUpperCase() + color.slice(1)}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </>
+                                )}
+                            </div>
+
+                            <div className="ocr-assignment-players">
+                                {team.players.length === 0 ? (
+                                    <div className="ocr-assignment-empty">
+                                        Drop players here
+                                    </div>
+                                ) : (
+                                    team.players.map((playerName, playerIndex) => {
+                                        const isDragged = draggedPlayer?.teamIndex === teamIndex
+                                            && draggedPlayer?.playerIndex === playerIndex;
+                                        const displayName = String(playerName || '');
+                                        const fuzzyMatch = fuzzyMatches[normalizePlayerKey(displayName)] || '';
+                                        const showFuzzyBadge = fuzzyMatch
+                                            && normalizePlayerKey(fuzzyMatch) !== normalizePlayerKey(displayName);
+                                        return (
+                                            <div
+                                                key={`${teamIndex}-${playerIndex}`}
+                                                data-testid={`ocr-board-player-row-${teamIndex}-${playerIndex}`}
+                                                className={`ocr-team-player-row ocr-team-player-row--quick ${
+                                                    isDragged ? 'opacity-60' : ''
+                                                }`}
+                                                onDragOver={(event) => allowDrop(event, teamIndex)}
+                                                onDrop={(event) => dropPlayer(event, teamIndex, playerIndex)}
+                                            >
+                                                <button
+                                                    type="button"
+                                                    draggable
+                                                    data-testid={`ocr-board-drag-handle-${teamIndex}-${playerIndex}`}
+                                                    onDragStart={(event) => startDrag(event, teamIndex, playerIndex)}
+                                                    onDragEnd={() => {
+                                                        setDraggedPlayer(null);
+                                                        draggedPlayerRef.current = null;
+                                                        setDragHoverTeamIndex(null);
+                                                    }}
+                                                    className="md3-icon-btn h-6 w-6 text-md-sys-on-surface/60 cursor-grab active:cursor-grabbing shrink-0"
+                                                    title="Drag to move player"
+                                                    aria-label={`Drag ${displayName || `player ${playerIndex + 1}`} in ${team.teamName || `team ${teamIndex + 1}`}`}
+                                                >
+                                                    <GripVertical size={12} />
+                                                </button>
+                                                <input
+                                                    type="text"
+                                                    value={displayName}
+                                                    onChange={(event) => onPlayerChange(teamIndex, playerIndex, event.target.value)}
+                                                    onDragOver={(event) => allowDrop(event, teamIndex)}
+                                                    onDrop={(event) => dropPlayer(event, teamIndex, playerIndex)}
+                                                    list={rosterSuggestionsId}
+                                                    className="md3-textfield md3-textfield--outlined ocr-assignment-player-input"
+                                                    aria-label={`${team.teamName || `team ${teamIndex + 1}`} player ${playerIndex + 1} name`}
+                                                />
+                                                {showFuzzyBadge && (
+                                                    <span
+                                                        className="ocr-assignment-fuzzy-badge"
+                                                        title={`Fuzzy matched to ${fuzzyMatch}`}
+                                                    >
+                                                        ~ {fuzzyMatch}
+                                                    </span>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onPlayerRemove(teamIndex, playerIndex)}
+                                                    className="md3-icon-btn text-danger"
+                                                    aria-label={`Remove ${displayName || `player ${playerIndex + 1}`} from ${team.teamName || `team ${teamIndex + 1}`}`}
+                                                    title="Remove player"
+                                                >
+                                                    <X size={12} />
+                                                </button>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+
+                            <div className="ocr-assignment-add-row">
+                                <input
+                                    type="text"
+                                    value={draftPlayers[teamIndex] || ''}
+                                    onChange={(event) => setDraftPlayers((prev) => ({ ...prev, [teamIndex]: event.target.value }))}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter') {
+                                            event.preventDefault();
+                                            addPlayer(teamIndex);
+                                        }
+                                    }}
+                                    list={rosterSuggestionsId}
+                                    className="md3-textfield md3-textfield--outlined ocr-assignment-add-input"
+                                    placeholder="Add player..."
+                                    aria-label={`Add player to ${team.teamName || `team ${teamIndex + 1}`}`}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => addPlayer(teamIndex)}
+                                    className="md3-btn-tonal ocr-assignment-add-btn"
+                                >
+                                    <Plus size={12} />
+                                    Add
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+            {allowTeamAddRemove && onTeamAdd && (
+                <button
+                    type="button"
+                    onClick={onTeamAdd}
+                    className="md3-btn-text ocr-assignment-add-team"
+                >
+                    <Plus size={14} />
+                    Add Opponent Team
+                </button>
+            )}
+        </div>
+    );
+};

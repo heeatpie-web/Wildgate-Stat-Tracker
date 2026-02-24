@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 const gameData = {
@@ -48,6 +48,7 @@ const uiState = {
 
 const processFinalSubmission = vi.fn();
 const setPendingMatchDataFromStore = vi.fn();
+const rerunMatchArtifacts = vi.fn();
 
 vi.mock('../providers/GameDataProvider', () => ({
     useGameData: () => gameData,
@@ -64,9 +65,24 @@ vi.mock('../hooks/useMatchSubmission', () => ({
     }),
 }));
 
+vi.mock('../utils/ocr/rerunMatchArtifacts', () => ({
+    rerunMatchArtifacts,
+}));
+
 vi.mock('../store/useAppStore', () => {
-    const hook = (() => ({})) as unknown as {
-        (): Record<string, never>;
+    const state = {
+        ocrMode: 'both',
+        ocrRegions: undefined,
+        externalFallbackEnabled: true,
+        externalFallbackThreshold: 0.66,
+        externalOnDetectorDisagreement: true,
+        forceMaxAnalysis: false,
+        setPendingMatchData: setPendingMatchDataFromStore,
+    };
+    const hook = ((selector?: (value: typeof state) => unknown) => (
+        typeof selector === 'function' ? selector(state) : state
+    )) as unknown as {
+        (selector?: (value: typeof state) => unknown): unknown;
         getState: () => { setPendingMatchData: typeof setPendingMatchDataFromStore };
     };
     hook.getState = () => ({ setPendingMatchData: setPendingMatchDataFromStore });
@@ -74,7 +90,11 @@ vi.mock('../store/useAppStore', () => {
 });
 
 vi.mock('./OcrCorrectionModal', () => ({
-    OcrCorrectionModal: () => null,
+    OcrCorrectionModal: () => (
+        <div data-testid="ocr-correction-embedded-shell" className="ocr-correction-dialog--embedded">
+            <div data-testid="ocr-correction-scroll-body" className="ocr-correction-body" />
+        </div>
+    ),
 }));
 
 describe('Wizard', () => {
@@ -85,6 +105,15 @@ describe('Wizard', () => {
         gameData.sessionTeams = {};
         uiState.showWizard = null;
         vi.clearAllMocks();
+        rerunMatchArtifacts.mockResolvedValue({
+            total: 0,
+            successfulCount: 0,
+            failedCount: 0,
+            perFile: [],
+            mergedData: null,
+            cloudUsed: false,
+            cloudStatusMessage: '',
+        });
         uiState.setShowWizard.mockImplementation((next: 'Win' | 'Loss' | 'Draw' | 'Match Result' | null) => {
             uiState.showWizard = next;
         });
@@ -391,5 +420,117 @@ describe('Wizard', () => {
         fireEvent.keyDown(document, { key: 'Escape' });
 
         expect(uiState.setShowWizard).toHaveBeenCalledWith(null);
+    });
+
+    it('keeps OCR review tab in a non-clipping flex layout chain', async () => {
+        const { Wizard } = await import('./Wizard');
+        gameData.pendingMatchData = {
+            id: 910,
+            loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                weapons: [],
+                equipment: [],
+            },
+            kills: { 'AI Legion': 0 },
+        };
+        uiState.showWizard = 'Match Result';
+
+        const { container } = render(<Wizard />);
+        fireEvent.click(screen.getByRole('button', { name: /ocr review/i }));
+
+        const ocrPanel = screen.getByTestId('wizard-ocr-tab-panel');
+        const embeddedShell = screen.getByTestId('ocr-correction-embedded-shell');
+        const innerWrapper = container.querySelector('[data-testid=\"wizard-ocr-tab-panel\"] > .flex-1') as HTMLDivElement | null;
+
+        expect(ocrPanel).toHaveClass('flex-1');
+        expect(ocrPanel).toHaveClass('min-h-0');
+        expect(ocrPanel).toHaveClass('flex');
+        expect(ocrPanel).toHaveClass('flex-col');
+        expect(innerWrapper).not.toBeNull();
+        expect(innerWrapper).toHaveClass('flex-1');
+        expect(innerWrapper).toHaveClass('min-h-0');
+        expect(innerWrapper).toHaveClass('flex');
+        expect(innerWrapper).toHaveClass('flex-col');
+        expect(innerWrapper).toHaveClass('overflow-hidden');
+        expect(embeddedShell).toBeInTheDocument();
+    });
+
+    it('reruns OCR from the OCR tab and updates pending data with rerun output', async () => {
+        const { Wizard } = await import('./Wizard');
+        gameData.pendingMatchData = {
+            id: 911,
+            ship: 'Hunter',
+            teammates: ['Wingman'],
+            opponents: ['Enemy'],
+            opponentTeams: [],
+            reachModifiers: [],
+            artifacts: ['C:\\captures\\wizard-1.png'],
+            loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                weapons: [],
+                equipment: [],
+            },
+            kills: { 'AI Legion': 0 },
+        };
+        uiState.showWizard = 'Match Result';
+        rerunMatchArtifacts.mockResolvedValue({
+            total: 1,
+            successfulCount: 1,
+            failedCount: 0,
+            perFile: [{
+                imagePath: 'C:\\captures\\wizard-1.png',
+                filename: 'wizard-1.png',
+                success: true,
+                data: undefined,
+            }],
+            mergedData: {
+                screenshotType: 'crew_hub',
+                playerShip: { shipType: 'Bastion', confidence: 88, rawText: 'Bastion' },
+                reachModifiers: [{ name: 'Ice Storm', confidence: 84, rawText: 'ICE STORM' }],
+                enemyShips: [],
+                teammates: [{ name: 'Wingman', confidence: 86, isTeammate: true }],
+                opponentTeams: [{
+                    teamName: 'Red Team',
+                    shipType: 'Scout',
+                    color: 'red',
+                    players: [{ name: 'EnemyOne', confidence: 82, isTeammate: false }],
+                    confidence: 80,
+                }],
+                overallConfidence: 86,
+                captureTimestamp: Date.now(),
+                rawText: 'sample',
+                ocrSource: 'merged',
+            },
+            cloudUsed: true,
+            cloudStatusMessage: 'Cloud OCR contributed',
+        });
+
+        render(<Wizard />);
+        fireEvent.click(screen.getByRole('button', { name: /ocr review/i }));
+        fireEvent.click(screen.getByRole('button', { name: /re-run ocr/i }));
+
+        await waitFor(() => {
+            expect(rerunMatchArtifacts).toHaveBeenCalledWith(expect.objectContaining({
+                imagePaths: ['C:\\captures\\wizard-1.png'],
+            }));
+        });
+        expect(setPendingMatchDataFromStore).toHaveBeenCalledWith(expect.objectContaining({
+            ship: 'Bastion',
+            teammates: ['Wingman'],
+            opponents: ['EnemyOne'],
+            opponentTeams: expect.arrayContaining([
+                expect.objectContaining({ teamName: 'Red Team', shipType: 'Scout' }),
+            ]),
+            reachModifiers: ['Ice Storm'],
+            ocrState: 'reviewing',
+        }));
+        expect(uiState.pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+            message: expect.stringMatching(/OCR rerun complete/i),
+        }));
+        expect(uiState.pushNotification).not.toHaveBeenCalledWith(expect.objectContaining({
+            message: 'Smart Capture requested from wizard.',
+        }));
     });
 });

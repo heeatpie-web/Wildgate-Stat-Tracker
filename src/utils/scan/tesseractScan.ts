@@ -2,6 +2,7 @@ import Logger from '../logger';
 import { ocrProcessCapture } from '../electronBridge';
 import type { LobbyScanResult, SmartScanResult, ScanOptions, TeamColor } from './types';
 import { getPlayerName, getPlayerConfidence, getModifierName } from './types';
+import { normalizeShipName } from '../../types';
 
 /**
  * Map internal color names to TeamColor type
@@ -21,6 +22,28 @@ export const mapTeamColor = (color: string | undefined): TeamColor => {
 };
 export const isSpectatorColor = (color: string | undefined): boolean => {
     return color?.toLowerCase() === 'spectator';
+};
+
+const KNOWN_SHIPS = new Set(['hunter', 'bastion', 'privateer', 'scout', 'outlaw', 'solo outlaw']);
+
+export const resolveTagShipMetadata = (
+    rawLabel: string | null | undefined,
+    explicitShipType?: string | null
+): string => {
+    const explicit = normalizeShipName(String(explicitShipType || ''));
+    if (KNOWN_SHIPS.has(explicit.toLowerCase())) {
+        return explicit;
+    }
+    const cleanedLabel = String(rawLabel || '')
+        .replace(/^\[+|\]+$/g, '')
+        .replace(/\s*\(\s*\d+\s*player[s]?\s*\)\s*$/i, '')
+        .trim();
+    if (!cleanedLabel) return '';
+    const normalized = normalizeShipName(cleanedLabel);
+    if (KNOWN_SHIPS.has(normalized.toLowerCase())) {
+        return normalized;
+    }
+    return '';
 };
 
 export const processWithTesseractOCR = async (
@@ -64,7 +87,7 @@ export const processWithTesseractOCR = async (
                         teamName: ocrData.playerTeamName || 'My Crew',
                         confidence: getPlayerConfidence(t, 80),
                         source: 'OCR',
-                        isTag: true,
+                        isTag: false,
                     });
                 }
             });
@@ -82,7 +105,7 @@ export const processWithTesseractOCR = async (
                             shipType: team.shipType,
                             confidence: getPlayerConfidence(p, 75),
                             source: 'OCR',
-                            isTag: teamColor !== 'Unknown',
+                            isTag: false,
                         });
                     }
                 });
@@ -120,7 +143,7 @@ export const processWithTesseractOCR = async (
                         name: `[${team.teamName}]`,
                         teamColor,
                         teamName: team.teamName,
-                        shipType: team.shipType,
+                        shipType: resolveTagShipMetadata(team.teamName, team.shipType) || team.shipType,
                         confidence: team.confidence || 70,
                         source: 'OCR',
                         isTag: true,

@@ -20,6 +20,8 @@ import { useMatchSubmission } from '../hooks/useMatchSubmission';
 import { OcrCorrectionModal } from './OcrCorrectionModal';
 import { useAppStore } from '../store/useAppStore';
 import { getElectronAPI } from '../utils/electronAPI';
+import type { OCRProcessRuntimeOptions } from '../utils/electronBridge';
+import { rerunMatchArtifacts } from '../utils/ocr/rerunMatchArtifacts';
 import {
     getEliminatorDisplayLabel,
     getPrimaryEliminatedByTeamValue,
@@ -82,10 +84,17 @@ export const Wizard: React.FC = () => {
 
     const { showWizard, setShowWizard, isOverlayMode, activeMode, activeUser, pushNotification, requestSmartCapture } = useUIState();
     const { processFinalSubmission, submitting } = useMatchSubmission();
+    const ocrMode = useAppStore((state) => state.ocrMode);
+    const ocrRegions = useAppStore((state) => state.ocrRegions);
+    const externalFallbackEnabled = useAppStore((state) => state.externalFallbackEnabled);
+    const externalFallbackThreshold = useAppStore((state) => state.externalFallbackThreshold);
+    const externalOnDetectorDisagreement = useAppStore((state) => state.externalOnDetectorDisagreement);
+    const forceMaxAnalysis = useAppStore((state) => state.forceMaxAnalysis);
     const [selectedWinType, setSelectedWinType] = useState<'Combat' | 'Artifact' | null>(null);
     const [requestedOcrReviewMatchId, setRequestedOcrReviewMatchId] = useState<number | null | undefined>(undefined);
     const [activeTab, setActiveTab] = useState<WizardTab>('result');
     const [loadoutExpanded, setLoadoutExpanded] = useState(false);
+    const [isRerunningOcr, setIsRerunningOcr] = useState(false);
     const isWizardOpen = Boolean(showWizard);
     const lastTimeSyncMatchIdRef = React.useRef<number | null>(null);
     const dialogRef = React.useRef<HTMLDivElement | null>(null);
@@ -373,7 +382,7 @@ export const Wizard: React.FC = () => {
         });
     };
 
-    const handleWizardSmartCapture = () => {
+    const handleWizardSmartCaptureRequest = () => {
         setActiveTab('ocr');
         const pendingMatchId = Number((pendingMatchData as Match | null)?.id || 0);
         const requestId = requestSmartCapture({
@@ -400,8 +409,118 @@ export const Wizard: React.FC = () => {
         });
     };
 
+    const handleWizardRerunOcr = async () => {
+        const imagePaths = wizardReviewScreenshots;
+        if (imagePaths.length === 0) {
+            pushNotification({
+                message: 'No screenshot artifacts are attached to this match.',
+                type: 'warning',
+                source: 'wizard',
+                durationMs: 7000,
+                deepLink: { type: 'openWizard', result: selectedResult || undefined },
+            });
+            return;
+        }
+
+        const runtimeOptions: OCRProcessRuntimeOptions = {
+            externalFallbackEnabled,
+            externalFallbackThreshold,
+            externalOnDetectorDisagreement,
+            forceMaxAnalysis,
+            forceUncached: forceMaxAnalysis,
+        };
+
+        setIsRerunningOcr(true);
+        pushNotification({
+            message: `Re-running OCR for ${imagePaths.length} screenshot${imagePaths.length === 1 ? '' : 's'}...`,
+            type: 'info',
+            source: 'wizard',
+            durationMs: 8000,
+            deepLink: { type: 'openWizard', result: selectedResult || undefined },
+        });
+
+        try {
+            const rerun = await rerunMatchArtifacts({
+                imagePaths,
+                activeUser: activeUser || '',
+                ocrMode,
+                ocrRegions,
+                runtimeOptions,
+            });
+            if (!rerun.mergedData || rerun.successfulCount === 0) {
+                pushNotification({
+                    message: 'OCR rerun failed for all artifacts.',
+                    type: 'error',
+                    source: 'wizard',
+                    durationMs: 9000,
+                    deepLink: { type: 'openWizard', result: selectedResult || undefined },
+                });
+                return;
+            }
+
+            const dedupeNames = (names: string[]): string[] => Array.from(new Set(
+                names
+                    .map((entry) => String(entry || '').trim())
+                    .filter(Boolean)
+            ));
+            const nextTeammates = dedupeNames((rerun.mergedData.teammates || []).map((entry) => entry.name));
+            const nextOpponentTeams = (rerun.mergedData.opponentTeams || []).map((team, index) => ({
+                teamName: String(team.teamName || `Enemy Team ${index + 1}`).trim() || `Enemy Team ${index + 1}`,
+                shipType: String(team.shipType || '').trim(),
+                color: String(team.color || 'unknown').trim() || 'unknown',
+                players: dedupeNames((team.players || []).map((entry) => entry.name)),
+            })).filter((team) => team.players.length > 0 || team.shipType || team.teamName);
+            const nextOpponents = dedupeNames(nextOpponentTeams.flatMap((team) => team.players));
+            const nextModifiers = dedupeNames((rerun.mergedData.reachModifiers || []).map((entry) => String(entry.name || '').trim()));
+            const rerunShip = String(rerun.mergedData.playerShip?.shipType || '').trim();
+
+            useAppStore.getState().setPendingMatchData({
+                ...pendingMatchData,
+                ship: rerunShip || String(pendingMatchData.ship || ''),
+                teammates: nextTeammates.length > 0 ? nextTeammates : (pendingMatchData.teammates || []),
+                opponents: nextOpponents.length > 0 ? nextOpponents : (pendingMatchData.opponents || []),
+                opponentTeams: nextOpponentTeams.length > 0 ? nextOpponentTeams : (pendingMatchData.opponentTeams || []),
+                reachModifiers: nextModifiers.length > 0 ? nextModifiers : (pendingMatchData.reachModifiers || []),
+                ocrState: 'reviewing',
+                ocrDebug: {
+                    ...(pendingMatchData.ocrDebug || {}),
+                    rawText: rerun.mergedData.rawText,
+                    confidence: rerun.mergedData.overallConfidence,
+                    source: rerun.mergedData.ocrSource || pendingMatchData.ocrDebug?.source,
+                    fallbackReason: rerun.mergedData.ocrFallbackReason,
+                    cloudError: rerun.mergedData.ocrCloudError,
+                    geminiError: rerun.mergedData.ocrGeminiError,
+                    mergeStats: rerun.mergedData.mergeStats,
+                    timestamp: Date.now(),
+                },
+            });
+
+            const rerunSummary = rerun.failedCount > 0
+                ? `OCR rerun complete: ${rerun.successfulCount}/${rerun.total} succeeded.`
+                : `OCR rerun complete: ${rerun.successfulCount}/${rerun.total} succeeded.`;
+            pushNotification({
+                message: rerunSummary,
+                type: rerun.failedCount > 0 ? 'warning' : 'success',
+                source: 'wizard',
+                durationMs: 10_000,
+                deepLink: { type: 'openWizard', result: selectedResult || undefined },
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'OCR rerun failed';
+            pushNotification({
+                message: `OCR rerun failed: ${message}`,
+                type: 'error',
+                source: 'wizard',
+                durationMs: 10_000,
+                deepLink: { type: 'openWizard', result: selectedResult || undefined },
+            });
+        } finally {
+            setIsRerunningOcr(false);
+        }
+    };
+
     return (
-        <div className="wizard-scrim fixed inset-0 md3-dialog-scrim backdrop-blur-none z-top flex items-start justify-center p-4 overflow-y-auto animate-fade-in" onClick={() => setShowWizard(null)}>
+        <div className="wizard-scrim fixed inset-0 md3-dialog-scrim backdrop-blur-none z-top flex items-start justify-center p-4 overflow-hidden animate-fade-in" onClick={() => setShowWizard(null)}>
             <div
                 ref={dialogRef}
                 role="dialog"
@@ -409,7 +528,7 @@ export const Wizard: React.FC = () => {
                 aria-labelledby={titleId}
                 aria-describedby={descriptionId}
                 tabIndex={-1}
-                className={`wizard-shell overflow-hidden rounded-2_5rem w-full my-2 shadow-2xl flex flex-col animate-scale-in border border-md-sys-outline/24 bg-md-sys-surface-container-highest text-md-sys-on-surface ${isOverlayMode ? 'max-w-2xl max-h-90vh' : 'max-w-3xl max-h-95vh'}`}
+                className={`wizard-shell overflow-hidden rounded-2_5rem w-full my-2 shadow-2xl flex flex-col animate-scale-in border border-md-sys-outline/24 bg-md-sys-surface-container-highest text-md-sys-on-surface ${isOverlayMode ? 'max-w-2xl h-[calc(100vh-2rem)] max-h-90vh' : 'max-w-3xl h-[calc(100vh-2rem)] max-h-95vh'}`}
                 onClick={e => e.stopPropagation()}
             >
                 <span id={descriptionId} className="sr-only">
@@ -791,7 +910,7 @@ export const Wizard: React.FC = () => {
                             </div>
                         )}
 
-                        <button onClick={handleWizardSmartCapture} className="w-full py-3 rounded-2xl mg-surface-high border border-md-sys-outline/15 text-label-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:border-md-sys-primary/30 hover:bg-md-sys-primary/5 transition-all">
+                        <button onClick={handleWizardSmartCaptureRequest} className="w-full py-3 rounded-2xl mg-surface-high border border-md-sys-outline/15 text-label-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:border-md-sys-primary/30 hover:bg-md-sys-primary/5 transition-all">
                             <Scan size={14} /> Smart Capture
                         </button>
 
@@ -805,20 +924,31 @@ export const Wizard: React.FC = () => {
                         </button>
                     </div>
                 ) : (
-                    <div className={`flex-1 min-h-0 flex flex-col ${isOverlayMode ? 'px-4 py-4 gap-3' : 'px-8 py-6 gap-4'}`}>
-                        <div className="flex items-center justify-between rounded-xl border border-md-sys-outline/10 mg-surface-high px-3 py-2">
-                            <span className="text-label-sm font-bold uppercase tracking-widest text-md-sys-on-surface/80">OCR Review Tools</span>
+                    <div
+                        data-testid="wizard-ocr-tab-panel"
+                        className={`flex-1 min-h-0 flex flex-col ${isOverlayMode ? 'px-4 py-4 gap-3' : 'px-8 py-6 gap-4'}`}
+                    >
+                        <div className="flex items-center justify-between gap-3 rounded-xl border border-md-sys-outline/12 bg-md-sys-surface-container px-3 py-2">
+                            <div className="min-w-0">
+                                <span className="text-label-sm font-bold text-md-sys-on-surface/78">OCR Review</span>
+                                <p className="text-label-xs text-md-sys-on-surface/58 truncate">
+                                    Re-run OCR or correct players before final submit.
+                                </p>
+                            </div>
                             <button
                                 type="button"
-                                onClick={handleWizardSmartCapture}
-                                className="px-2.5 py-1 rounded-lg text-label-sm font-bold md3-btn-tonal inline-flex items-center gap-1.5"
-                                title="Capture and process a fresh screenshot for OCR review"
+                                onClick={() => {
+                                    void handleWizardRerunOcr();
+                                }}
+                                disabled={isRerunningOcr}
+                                className="px-2.5 py-1 rounded-lg text-label-sm font-bold md3-btn-tonal inline-flex items-center gap-1.5 shrink-0"
+                                title="Re-run OCR across bundled screenshot artifacts"
                             >
                                 <RefreshCw size={12} />
-                                Re-run OCR
+                                {isRerunningOcr ? 'Re-running...' : 'Re-run OCR'}
                             </button>
                         </div>
-                        <div className="flex-1 min-h-0 overflow-visible">
+                        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                         <OcrCorrectionModal
                             isOpen={true}
                             embedded={true}
