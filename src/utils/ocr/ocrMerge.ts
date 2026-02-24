@@ -196,6 +196,10 @@ export function mergeFullOCRData(
     ? (existing.rawText || '') + (existing.rawText && incoming.rawText ? '\n---MERGE---\n' : '') + (incoming.rawText || '')
     : undefined;
 
+  // isPartialCapture: incoming takes precedence; if incoming cleared it, respect that.
+  // If incoming doesn't have an opinion (undefined), carry forward existing.
+  const mergedIsPartialCapture = incoming.isPartialCapture ?? existing.isPartialCapture;
+
   const merged: OCRExtractedData = {
     screenshotType: mergedType,
     playerShip: mergedPlayerShip,
@@ -209,6 +213,7 @@ export function mergeFullOCRData(
     ...(mergedHazards !== undefined && { hazards: mergedHazards }),
     ...(mergedArtifactType !== undefined && { artifactType: mergedArtifactType }),
     ...(mergedRawText !== undefined && { rawText: mergedRawText }),
+    ...(mergedIsPartialCapture !== undefined && { isPartialCapture: mergedIsPartialCapture }),
   };
 
   console.log('[OCR Merge] Merge complete:', {

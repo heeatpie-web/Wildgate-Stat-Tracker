@@ -693,7 +693,10 @@ export const Wizard: React.FC = () => {
                                         placeholder="00"
                                         aria-label="Minutes"
                                         value={timeMin}
-                                        onChange={(e) => setTimeMin(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))}
+                                        onChange={(e) => {
+                                            const next = e.target.value.replace(/[^0-9]/g, '').slice(0, 2);
+                                            setTimeMin(next);
+                                        }}
                                         className={`wizard-time-input font-mono tabular-nums h-11 leading-tight ${inputBaseClass} ${isOverlayMode ? 'text-base py-1' : 'text-xl py-2'}`}
                                     />
                                     <span className="wizard-time-separator">:</span>
@@ -704,7 +707,15 @@ export const Wizard: React.FC = () => {
                                         placeholder="00"
                                         aria-label="Seconds"
                                         value={timeSec}
-                                        onChange={(e) => setTimeSec(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))}
+                                        onChange={(e) => {
+                                            const next = e.target.value.replace(/[^0-9]/g, '').slice(0, 2);
+                                            if (!next) {
+                                                setTimeSec('');
+                                                return;
+                                            }
+                                            const bounded = Math.min(59, Number(next));
+                                            setTimeSec(String(bounded).padStart(next.length, '0'));
+                                        }}
                                         className={`wizard-time-input font-mono tabular-nums h-11 leading-tight ${inputBaseClass} ${isOverlayMode ? 'text-base py-1' : 'text-xl py-2'}`}
                                     />
                                 </div>
@@ -1042,7 +1053,7 @@ export const Wizard: React.FC = () => {
                                 {isRerunningOcr ? 'Re-running...' : 'Re-run OCR'}
                             </button>
                         </div>
-                        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                        <div className="flex-1 min-h-0 flex flex-col overflow-y-auto custom-scrollbar">
                         <OcrCorrectionModal
                             isOpen={true}
                             embedded={true}

@@ -112,6 +112,7 @@ export interface OCRExtractedData {
     fontProfile: 'default' | 'ealing-black-italic';
   };
   ocrCorpusSampleId?: string;
+  isPartialCapture?: boolean;
 }
 
 /**

@@ -76,10 +76,19 @@ function mergeCrewHubData(existing, newData) {
   const newConf = newData.confidence || 0;
   result.confidence = Math.round((existingConf + newConf) / 2);
 
-  // Update partial capture status
-  if (result.enemyTeams.some(t => t.players.length < 4)) {
-    result.isPartialCapture = true;
-  }
+  // Update partial capture status using the same heuristic as the extractor:
+  // flag only when counts are inconsistent (some teams much larger than others)
+  // OR when universally sparse. Also require that the roster actually grew during
+  // this merge — if it's stable, the teams are probably legitimately small.
+  const existingTotal = (existing.enemyTeams || []).reduce((s, t) => s + (t.players?.length || 0), 0);
+  const mergedTotal = result.enemyTeams.reduce((s, t) => s + t.players.length, 0);
+  const rosterGrew = mergedTotal > existingTotal;
+  const counts = result.enemyTeams.map(t => t.players.length);
+  const maxCount = counts.length > 0 ? Math.max(...counts) : 0;
+  const minCount = counts.length > 0 ? Math.min(...counts) : 0;
+  const isInconsistent = maxCount - minCount >= 2;
+  const isUniversallySparse = maxCount <= 1 && result.enemyTeams.length >= 2;
+  result.isPartialCapture = (isInconsistent || isUniversallySparse) && rosterGrew;
 
   return result;
 }
@@ -194,12 +203,22 @@ function mergeEnemyTeams(existingTeams = [], newTeams = []) {
  * @returns {number} Index of matching team, or -1
  */
 function findMatchingTeam(teams, target) {
-  // Priority 1: Exact name match (case-insensitive)
+  // Priority 1: Exact name match — but reject if both sides have known, differing colors.
+  // A color contradiction almost always means an OCR mis-read produced a colliding name;
+  // in that case we trust the color signal over the name.
   const nameNormalized = normalizeTeamName(target.name);
   let idx = teams.findIndex(t => normalizeTeamName(t.name) === nameNormalized);
-  if (idx >= 0) return idx;
+  if (idx >= 0) {
+    const candidate = teams[idx];
+    const colorContradicts =
+      target.color && target.color !== 'unknown' &&
+      candidate.color && candidate.color !== 'unknown' &&
+      target.color !== candidate.color;
+    if (!colorContradicts) return idx;
+    // Fall through — name matched but colors conflict; let color matching decide.
+  }
 
-  // Priority 2: Color match (if both have colors)
+  // Priority 2: Color match (if both have known colors)
   if (target.color && target.color !== 'unknown') {
     idx = teams.findIndex(t => t.color === target.color);
     if (idx >= 0) return idx;
