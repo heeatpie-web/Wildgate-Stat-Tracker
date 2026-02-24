@@ -171,18 +171,19 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
     ], true);
 
     useEffect(() => {
-        if (step.view && step.view !== activeView) {
+        if (step.view) {
             setActiveView(step.view);
         }
 
-        if (step.openSettings && !showSettings) {
+        if (step.openSettings) {
             setShowSettings(true);
             openedSettingsRef.current = true;
-        } else if (!step.openSettings && openedSettingsRef.current) {
+        } else if (openedSettingsRef.current) {
             setShowSettings(false);
             openedSettingsRef.current = false;
         }
-    }, [activeView, setActiveView, showSettings, setShowSettings, step.openSettings, step.view]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [stepIndex]);
 
     useEffect(() => {
         let cancelled = false;

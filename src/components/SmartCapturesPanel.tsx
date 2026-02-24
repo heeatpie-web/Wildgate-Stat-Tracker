@@ -1108,23 +1108,21 @@ const SmartCapturesPanel: React.FC = () => {
                                                     </select>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <div className="sc-seg sc-bordered flex-1">
-                                                        <button type="button" className="sc-seg-btn" data-active={!queueOnly} onClick={() => setQueueOnly(false)}>All Matches</button>
-                                                        <button type="button" className="sc-seg-btn" data-active={queueOnly} onClick={() => setQueueOnly(true)}>Queue{workQueueOpenCount > 0 ? ` (${workQueueOpenCount})` : ''}</button>
-                                                    </div>
-                                                    {queueOnly && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setShowResolved(!showResolved)}
-                                                            className={`px-2.5 py-2 rounded-pill text-label-xs font-bold transition-colors ${showResolved ? 'bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer' : 'text-md-sys-on-surface/40 hover:bg-md-sys-on-surface/5'
-                                                                }`}
-                                                        >
-                                                            {showResolved ? 'Showing resolved' : 'Show resolved'}
-                                                        </button>
-                                                    )}
+                                                    <span className="text-label-xs font-bold text-md-sys-on-surface/50 uppercase tracking-wider">
+                                                        {filteredMatches.length} match{filteredMatches.length !== 1 ? 'es' : ''}
+                                                        {workQueueOpenCount > 0 && <span className="text-warning ml-1">· {workQueueOpenCount} open</span>}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowResolved(!showResolved)}
+                                                        className={`ml-auto px-2 py-1 rounded-pill text-label-xs font-bold transition-colors ${showResolved ? 'bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer' : 'text-md-sys-on-surface/40 hover:bg-md-sys-on-surface/5'
+                                                            }`}
+                                                    >
+                                                        {showResolved ? 'Showing resolved' : 'Show resolved'}
+                                                    </button>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <div className="sc-seg sc-bordered">
+                                                    <div className="sc-seg sc-bordered sc-seg--compact">
                                                         <button
                                                             type="button"
                                                             onClick={() => {
@@ -1134,14 +1132,14 @@ const SmartCapturesPanel: React.FC = () => {
                                                                     setExternalFallbackThreshold(0.66);
                                                                 }
                                                             }}
-                                                            className={`sc-seg-btn ${externalFallbackEnabled
+                                                            className={`sc-seg-btn sc-seg-btn--compact ${externalFallbackEnabled
                                                                 ? 'text-info'
                                                                 : 'text-md-sys-on-surface/60'
                                                                 }`}
                                                             data-active={externalFallbackEnabled}
                                                             title="Lower-barrier external feedback assist for OCR reruns"
                                                         >
-                                                            External Assist {Math.round(externalFallbackThreshold * 100)}%
+                                                            Ext. Assist {Math.round(externalFallbackThreshold * 100)}%
                                                         </button>
                                                         <button
                                                             type="button"
@@ -1155,14 +1153,14 @@ const SmartCapturesPanel: React.FC = () => {
                                                                     }
                                                                 }
                                                             }}
-                                                            className={`sc-seg-btn ${forceMaxAnalysis
+                                                            className={`sc-seg-btn sc-seg-btn--compact ${forceMaxAnalysis
                                                                 ? 'text-warning'
                                                                 : 'text-md-sys-on-surface/60'
                                                                 }`}
                                                             data-active={forceMaxAnalysis}
                                                             title="Force max analysis using all available avenues"
                                                         >
-                                                            All Avenues {forceMaxAnalysis ? 'On' : 'Off'}
+                                                            Avenues {forceMaxAnalysis ? 'On' : 'Off'}
                                                         </button>
                                                     </div>
                                                 </div>
@@ -2925,7 +2923,7 @@ const SmartMatchDetail: React.FC<{
         }, [applyResult, applyReviewDataToSession, match, queueOnly, onNext, onPrev, onResolve, rerunning, onApplyToSession]);
 
         return (
-            <div className="p-4 lg:p-5 space-y-3 sc-detail-workspace">
+            <div className="px-3 lg:px-4 pb-3 lg:pb-4 sc-detail-workspace">
                 {pilotRegistry.length > 0 && (
                     <datalist id={rosterSuggestionsId}>
                         {pilotRegistry.map((pilot) => (
@@ -2939,7 +2937,7 @@ const SmartMatchDetail: React.FC<{
                     ))}
                 </datalist>
 
-                <div className="sticky top-0 z-40 -mx-4 lg:-mx-5 px-4 lg:px-5 pt-2.5 pb-2.5 bg-md-sys-surface-container-highest border-b border-md-sys-outline/14 shadow-sm sc-detail-sticky-header">
+                <div className="sticky top-0 z-40 -mx-3 lg:-mx-4 px-3 lg:px-4 pt-2 pb-2 bg-md-sys-surface-container-highest border-b border-md-sys-outline/14 shadow-sm sc-detail-sticky-header">
                     <SmartCaptureSummaryBar>
                         {!queueOnly && (
                             <div className="sc-detail-summary-top">
@@ -3096,7 +3094,7 @@ const SmartMatchDetail: React.FC<{
                 </div>
 
 
-                <div className="sc-detail-main-grid">
+                <div className="sc-detail-main-grid mt-3">
                     <div className="lg:col-span-9 lg:col-start-1 space-y-3 min-w-0 sc-detail-editor-block">
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sc-detail-stats-grid">
                             <EditableStatCard
@@ -3281,31 +3279,81 @@ const SmartMatchDetail: React.FC<{
                         </Section>
 
                         <Section title="Loadout" collapsible collapsed={!!collapsedSections.loadout} onToggle={() => toggleSection('loadout')}>
-                            <div className="space-y-4">
+                            <div className="space-y-3">
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="flex flex-col gap-1.5">
-                                        <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Prospector</span>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Prospector</span>
+                                            {loadoutTelemetrySourceBadgeLabel && (
+                                                <span className="px-1 py-px rounded text-[9px] font-bold bg-success-soft text-success leading-tight">{loadoutTelemetrySourceBadgeLabel}</span>
+                                            )}
+                                        </div>
                                         <select
                                             value={match.hero || ''}
                                             onChange={(e) => onUpdate({ ...match, hero: e.target.value })}
-                                            className="h-9 md3-surface-high rounded-xl px-3 text-label-sm font-bold outline-none border border-md-sys-outline/10 focus:border-md-sys-primary/40 focus:ring-1 focus:ring-md-sys-primary/40 transition-all"
+                                            className="h-8 md3-surface-high rounded-lg px-2.5 text-label-xs font-bold outline-none border border-md-sys-outline/10 focus:border-md-sys-primary/40 focus:ring-1 focus:ring-md-sys-primary/40 transition-all"
                                         >
                                             <option value="">--</option>
                                             {CHARACTERS.map(c => <option key={c} value={c}>{c}</option>)}
                                         </select>
                                     </div>
                                     <div className="flex flex-col gap-1.5">
-                                        <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Ship</span>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Ship</span>
+                                            {loadoutTelemetrySourceBadgeLabel && (
+                                                <span className="px-1 py-px rounded text-[9px] font-bold bg-success-soft text-success leading-tight">{loadoutTelemetrySourceBadgeLabel}</span>
+                                            )}
+                                        </div>
                                         <select
                                             value={match.ship || ''}
                                             onChange={(e) => onUpdate({ ...match, ship: e.target.value })}
-                                            className="h-9 md3-surface-high rounded-xl px-3 text-label-sm font-bold outline-none border border-md-sys-outline/10 focus:border-md-sys-primary/40 focus:ring-1 focus:ring-md-sys-primary/40 transition-all"
+                                            className="h-8 md3-surface-high rounded-lg px-2.5 text-label-xs font-bold outline-none border border-md-sys-outline/10 focus:border-md-sys-primary/40 focus:ring-1 focus:ring-md-sys-primary/40 transition-all"
                                         >
                                             <option value="">--</option>
                                             {SHIPS.map(s => <option key={s} value={s}>{s}</option>)}
                                         </select>
                                     </div>
                                 </div>
+
+                                {((match.loadout?.characterWeapons && match.loadout.characterWeapons.filter(Boolean).slice(0, 2).length > 0) ||
+                                  (match.loadout?.characterEquipment && match.loadout.characterEquipment.filter(Boolean).slice(0, 2).length > 0)) && (
+                                    <>
+                                        <div className="h-px w-full bg-md-sys-outline/10" />
+                                        <div className="space-y-2">
+                                            {match.loadout?.characterWeapons && match.loadout.characterWeapons.filter(Boolean).slice(0, 2).length > 0 && (
+                                                <div className="flex gap-2 items-center">
+                                                    <div className="w-24 shrink-0 flex items-center gap-1">
+                                                        <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Weapons</span>
+                                                        {loadoutTelemetrySourceBadgeLabel && (
+                                                            <span className="px-1 py-px rounded text-[9px] font-bold bg-success-soft text-success leading-tight">{loadoutTelemetrySourceBadgeLabel}</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {match.loadout.characterWeapons.filter(Boolean).slice(0, 2).map((weapon, i) => (
+                                                            <span key={i} className="px-2 py-0.5 bg-success-soft text-success rounded-md text-label-xs font-bold">{weapon}</span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {match.loadout?.characterEquipment && match.loadout.characterEquipment.filter(Boolean).slice(0, 2).length > 0 && (
+                                                <div className="flex gap-2 items-center">
+                                                    <div className="w-24 shrink-0 flex items-center gap-1">
+                                                        <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Equipment</span>
+                                                        {loadoutTelemetrySourceBadgeLabel && (
+                                                            <span className="px-1 py-px rounded text-[9px] font-bold bg-success-soft text-success leading-tight">{loadoutTelemetrySourceBadgeLabel}</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {match.loadout.characterEquipment.filter(Boolean).slice(0, 2).map((equipment, i) => (
+                                                            <span key={i} className="px-2 py-0.5 bg-success-soft text-success rounded-md text-label-xs font-bold">{equipment}</span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
+
                                 <div className="h-px w-full bg-md-sys-outline/10" />
                                 <div className="space-y-1.5">
                                     <div className="w-full flex items-center justify-between">
@@ -3316,26 +3364,26 @@ const SmartMatchDetail: React.FC<{
                                     </div>
                                     <div className="space-y-1">
                                         {Object.entries(detailShipWeaponCounts).length === 0 ? (
-                                            <span className="text-label-sm opacity-55">No ship weapons selected.</span>
+                                            <span className="text-label-xs opacity-55">No ship weapons selected.</span>
                                         ) : (
                                             Object.entries(detailShipWeaponCounts).map(([weaponName, qty]) => (
-                                                <div key={weaponName} className="flex items-center justify-between gap-2 rounded-md px-2 py-1 md3-surface-high">
-                                                    <span className="text-label-sm font-bold">{weaponName}</span>
+                                                <div key={weaponName} className="flex items-center justify-between gap-2 rounded-md px-2 py-0.5 md3-surface-high">
+                                                    <span className="text-label-xs font-bold">{weaponName}</span>
                                                     <div className="inline-flex items-center gap-1">
                                                         <button
                                                             type="button"
                                                             onClick={() => setDetailShipWeaponQuantity(weaponName, qty - 1)}
-                                                            className="w-6 h-6 rounded-control md3-surface inline-flex items-center justify-center text-md-sys-on-surface/70 hover:text-md-sys-on-surface"
+                                                            className="w-5 h-5 rounded-control md3-surface inline-flex items-center justify-center text-label-xs text-md-sys-on-surface/70 hover:text-md-sys-on-surface"
                                                             aria-label={`Decrease ${weaponName}`}
                                                         >
                                                             -
                                                         </button>
-                                                        <span className="min-w-[1.5rem] text-center text-label-sm font-black">{qty}</span>
+                                                        <span className="min-w-[1.25rem] text-center text-label-xs font-black">{qty}</span>
                                                         <button
                                                             type="button"
                                                             disabled={detailShipWeaponTotal >= 10}
                                                             onClick={() => setDetailShipWeaponQuantity(weaponName, qty + 1)}
-                                                            className="w-6 h-6 rounded-control md3-surface inline-flex items-center justify-center text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
+                                                            className="w-5 h-5 rounded-control md3-surface inline-flex items-center justify-center text-label-xs text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
                                                             aria-label={`Increase ${weaponName}`}
                                                         >
                                                             +
@@ -3354,51 +3402,13 @@ const SmartMatchDetail: React.FC<{
                                                     type="button"
                                                     disabled={detailShipWeaponTotal >= 10}
                                                     onClick={() => setDetailShipWeaponQuantity(weapon, 1)}
-                                                    className="px-2 py-0.5 rounded-md text-label-sm font-bold md3-surface-high text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
+                                                    className="px-1.5 py-0.5 rounded-md text-label-xs font-bold md3-surface-high text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
                                                 >
                                                     + {weapon}
                                                 </button>
                                             ))}
                                     </div>
                                 </div>
-                                {match.loadout?.characterWeapons && match.loadout.characterWeapons.filter(Boolean).slice(0, 2).length > 0 && (
-                                    <div className="flex gap-2 items-center">
-                                        <div className="w-40 shrink-0 flex items-center gap-1.5">
-                                            <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Weapons</span>
-                                            {loadoutTelemetrySourceBadgeLabel && (
-                                                <span
-                                                    className="px-1.5 py-0.5 rounded text-label-xs font-bold bg-success-soft text-success"
-                                                >
-                                                    {loadoutTelemetrySourceBadgeLabel}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-wrap gap-1">
-                                            {match.loadout.characterWeapons.filter(Boolean).slice(0, 2).map((weapon, i) => (
-                                                <span key={i} className="px-2 py-0.5 bg-success-soft text-success rounded-md text-label-sm font-bold">{weapon}</span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                                {match.loadout?.characterEquipment && match.loadout.characterEquipment.filter(Boolean).slice(0, 2).length > 0 && (
-                                    <div className="flex gap-2 items-center">
-                                        <div className="w-40 shrink-0 flex items-center gap-1.5">
-                                            <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Equipment</span>
-                                            {loadoutTelemetrySourceBadgeLabel && (
-                                                <span
-                                                    className="px-1.5 py-0.5 rounded text-label-xs font-bold bg-success-soft text-success"
-                                                >
-                                                    {loadoutTelemetrySourceBadgeLabel}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-wrap gap-1">
-                                            {match.loadout.characterEquipment.filter(Boolean).slice(0, 2).map((equipment, i) => (
-                                                <span key={i} className="px-2 py-0.5 bg-success-soft text-success rounded-md text-label-sm font-bold">{equipment}</span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
 
                             </div>
                         </Section>
@@ -3406,21 +3416,30 @@ const SmartMatchDetail: React.FC<{
                         <Section title="Points of Interest">
                             <div className="grid grid-cols-3 gap-2">
                                 <div className="md3-surface rounded-xl sc-bordered py-2.5 px-2 flex flex-col items-center justify-center gap-1 sc-editor-stat-card">
-                                    <span className="text-label-xs font-semibold text-md-sys-on-surface/60 uppercase tracking-wider">Easy</span>
+                                    <span className="text-label-xs font-semibold uppercase tracking-wider flex items-center gap-1">
+                                        <span className="w-2 h-2 rounded-full bg-success inline-block" />
+                                        <span className="text-success">Easy</span>
+                                    </span>
                                     <input type="number" min="0" value={match.poiEasy || 0}
                                         onChange={(e) => onUpdate({ ...match, poiEasy: parseInt(e.target.value) || 0 })}
                                         className="w-full bg-transparent text-title-sm font-bold outline-none text-center focus:bg-md-sys-surface-container rounded"
                                     />
                                 </div>
                                 <div className="md3-surface rounded-xl sc-bordered py-2.5 px-2 flex flex-col items-center justify-center gap-1 sc-editor-stat-card">
-                                    <span className="text-label-xs font-semibold text-md-sys-on-surface/60 uppercase tracking-wider">Medium</span>
+                                    <span className="text-label-xs font-semibold uppercase tracking-wider flex items-center gap-1">
+                                        <span className="w-2 h-2 rounded-full bg-warning inline-block" />
+                                        <span className="text-warning">Medium</span>
+                                    </span>
                                     <input type="number" min="0" value={match.poiMedium || 0}
                                         onChange={(e) => onUpdate({ ...match, poiMedium: parseInt(e.target.value) || 0 })}
                                         className="w-full bg-transparent text-title-sm font-bold outline-none text-center focus:bg-md-sys-surface-container rounded"
                                     />
                                 </div>
                                 <div className="md3-surface rounded-xl sc-bordered py-2.5 px-2 flex flex-col items-center justify-center gap-1 sc-editor-stat-card">
-                                    <span className="text-label-xs font-semibold text-md-sys-on-surface/60 uppercase tracking-wider">Epic</span>
+                                    <span className="text-label-xs font-semibold uppercase tracking-wider flex items-center gap-1">
+                                        <span className="w-2 h-2 rounded-full bg-accent inline-block" />
+                                        <span className="text-accent">Epic</span>
+                                    </span>
                                     <input type="number" min="0" value={match.poiEpic || 0}
                                         onChange={(e) => onUpdate({ ...match, poiEpic: parseInt(e.target.value) || 0 })}
                                         className="w-full bg-transparent text-title-sm font-bold outline-none text-center focus:bg-md-sys-surface-container rounded"
@@ -3496,7 +3515,7 @@ const SmartMatchDetail: React.FC<{
                                             title="Run OCR analysis on the bundled screenshots"
                                         >
                                             <RefreshCw size={12} className={rerunning ? 'animate-spin' : ''} />
-                                            {rerunning ? 'Analyzing...' : `Re-analyze ${countImages(artifacts.images.length > 0 ? artifacts.images : (match.artifacts || []))} Shot${countImages(artifacts.images.length > 0 ? artifacts.images : (match.artifacts || [])) !== 1 ? 's' : ''}`}
+                                            {rerunning ? 'Analyzing...' : `Re-analyze ${countImages(artifacts.images.length > 0 ? artifacts.images : (match.artifacts || []))}`}
                                         </button>
                                         <label className="inline-flex items-center gap-1.5 text-label-xs font-semibold text-md-sys-on-surface/70 w-full mt-1">
                                             <input

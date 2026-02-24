@@ -229,9 +229,29 @@ const createDefaultStorageData = (): StorageData => ({
 const coerceStorageData = (value: unknown): StorageData | null => {
   if (!isRecord(value)) return null;
   const defaults = createDefaultStorageData();
-  const matches = Array.isArray(value.matches)
+  const TELEMETRY_NOTE_PATTERNS = [
+    'Telemetry draft created automatically. Awaiting result and optional Smart Capture/OCR review.',
+    /Telemetry detected mission end\. .+/,
+  ];
+  const stripTelemetryNotes = (notes: unknown): string => {
+    if (typeof notes !== 'string') return '';
+    let cleaned = notes;
+    for (const pattern of TELEMETRY_NOTE_PATTERNS) {
+      if (typeof pattern === 'string') {
+        cleaned = cleaned.split(pattern).join('');
+      } else {
+        cleaned = cleaned.replace(pattern, '');
+      }
+    }
+    return cleaned.replace(/\n{2,}/g, '\n').trim();
+  };
+  const rawMatches = Array.isArray(value.matches)
     ? value.matches.filter((item): item is Match => isRecord(item))
     : defaults.matches;
+  const matches = rawMatches.map((m) => {
+    const cleaned = stripTelemetryNotes(m.notes);
+    return cleaned !== (m.notes || '') ? { ...m, notes: cleaned } : m;
+  });
   return {
     ...defaults,
     matches,

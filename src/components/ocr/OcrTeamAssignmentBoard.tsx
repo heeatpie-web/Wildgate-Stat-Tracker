@@ -324,18 +324,20 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                                 {isRosterMatch && !showFuzzyBadge && (
                                                     <span
                                                         className="ocr-assignment-fuzzy-badge !border-success !text-success !bg-success-soft"
-                                                        title="Verified Roster Member"
+                                                        title="Matched to roster"
                                                     >
-                                                        Verified
+                                                        Roster
                                                     </span>
                                                 )}
                                                 {showFuzzyBadge && (
-                                                    <span
-                                                        className="ocr-assignment-fuzzy-badge"
-                                                        title={`Fuzzy matched to ${fuzzyMatch}`}
+                                                    <button
+                                                        type="button"
+                                                        className="ocr-assignment-fuzzy-badge ocr-assignment-fuzzy-badge--apply"
+                                                        title={`Click to apply fuzzy match: ${fuzzyMatch}`}
+                                                        onClick={() => onPlayerChange(teamIndex, playerIndex, fuzzyMatch)}
                                                     >
                                                         ~ {fuzzyMatch}
-                                                    </span>
+                                                    </button>
                                                 )}
                                                 <button
                                                     type="button"

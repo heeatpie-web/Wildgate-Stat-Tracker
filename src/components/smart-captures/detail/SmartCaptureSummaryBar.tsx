@@ -6,7 +6,7 @@ interface SmartCaptureSummaryBarProps {
 
 export const SmartCaptureSummaryBar: React.FC<SmartCaptureSummaryBarProps> = ({ children }) => {
   return (
-    <div className="sc-detail-summary-bar md3-surface-high rounded-card p-4 space-y-3">
+    <div className="sc-detail-summary-bar space-y-1.5">
       {children}
     </div>
   );

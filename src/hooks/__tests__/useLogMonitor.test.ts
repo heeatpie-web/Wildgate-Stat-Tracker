@@ -637,7 +637,7 @@ describe('useLogMonitor', () => {
         time?: string;
         telemetryConsistency?: { telemetryDurationSeconds?: number };
       })
-      .find((match) => typeof match.notes === 'string' && match.notes.includes('Telemetry detected mission end'));
+      .find((match) => typeof match.time === 'string' && match.telemetryConsistency !== undefined);
 
     expect(finalizedDraft).toBeTruthy();
     expect(finalizedDraft?.time).toBe('00:00');

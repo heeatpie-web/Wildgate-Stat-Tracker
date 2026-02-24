@@ -256,7 +256,7 @@ export const useLogMonitor = (activeUser?: string) => {
         subType: 'Telemetry Draft',
         time: '00:00',
         damageTaken: 0,
-        notes: 'Telemetry draft created automatically. Awaiting result and optional Smart Capture/OCR review.',
+        notes: '',
         timelineEvents: [],
         artifacts: [],
         ocrState: 'queued',
@@ -456,7 +456,7 @@ export const useLogMonitor = (activeUser?: string) => {
                 ...match,
                 timestamp: startedAt,
                 time: duration,
-                notes: `${match.notes || ''}\n${completionNote}`.trim(),
+                notes: match.notes || '',
                 telemetryConsistency: nextConsistency,
             });
             window.dispatchEvent(new CustomEvent('telemetry:draft-ready', {
