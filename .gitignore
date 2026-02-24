@@ -35,6 +35,9 @@ build/
 *.tsbuildinfo
 
 # Debug and temporary files
+tmp_*
+tmp-*
+devserver*.log
 *.txt
 !README.txt
 blind_output.txt
