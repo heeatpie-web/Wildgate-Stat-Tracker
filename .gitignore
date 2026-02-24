@@ -59,6 +59,7 @@ dataset/
 .autogenstudio/
 .cursor/
 .claude/
+.codex-temp/
 .codemachine/
 .windsurf/
 

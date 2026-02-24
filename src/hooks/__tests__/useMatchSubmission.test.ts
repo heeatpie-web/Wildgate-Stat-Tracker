@@ -637,7 +637,7 @@ describe('useMatchSubmission', () => {
 
     expect(updatedWithArtifact).toBeDefined();
     expect(bundleMatchArtifacts).toHaveBeenCalled();
-    expect(getMatchArtifactsStructured).toHaveBeenCalledWith(555);
+    expect(getMatchArtifactsStructured).toHaveBeenCalledWith(555, expect.any(Array));
   });
 
   it('defaults placement to first when submitting a win without explicit placement', async () => {

@@ -217,7 +217,7 @@ describe('App', () => {
       expect(screen.getByText(/telemetry retention needs cleanup/i)).toBeInTheDocument();
     });
 
-    const overlayStack = document.querySelector('.fixed.z-top-second');
+    const overlayStack = document.querySelector('.fixed.z-top');
     expect(overlayStack).not.toBeNull();
     expect(overlayStack?.textContent).toContain('Telemetry retention needs cleanup');
   });

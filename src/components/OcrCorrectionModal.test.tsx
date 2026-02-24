@@ -205,7 +205,7 @@ describe('OcrCorrectionModal', () => {
 
         render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
 
-        expect(screen.getByRole('button', { name: /team 1 color/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /team 2 color/i })).toBeInTheDocument();
         expect(screen.getByLabelText(/team 1 name/i)).toBeInTheDocument();
         expect(screen.getByLabelText(/team 1 ship/i)).toBeInTheDocument();
     });

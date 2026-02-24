@@ -8,6 +8,7 @@
 
 import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
+import reactHooksPlugin from 'eslint-plugin-react-hooks';
 
 const baseIgnores = [
   'dist/**',
@@ -18,6 +19,7 @@ const baseIgnores = [
   // Temp folders in this repo (used by release tooling / history rewrite scripts).
   '_*/**',
   '.claude/**',
+  '.codex-temp/**',
   '.venv*/**',
 ];
 
@@ -60,6 +62,7 @@ export default [
     },
     plugins: {
       '@typescript-eslint': tsPlugin,
+      'react-hooks': reactHooksPlugin,
     },
     rules: {
       // Keep lint non-blocking for release. TypeScript + tests already enforce correctness.
@@ -68,6 +71,7 @@ export default [
       '@typescript-eslint/no-unused-vars': 'off',
       '@typescript-eslint/ban-ts-comment': 'off',
       '@typescript-eslint/no-empty-object-type': 'off',
+      'react-hooks/exhaustive-deps': 'warn',
     },
   },
 

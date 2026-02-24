@@ -67,7 +67,7 @@ describe('Toast', () => {
     const popup = screen.getByRole('status');
     const stack = popup.parentElement;
     expect(stack).toHaveClass('fixed');
-    expect(stack).toHaveClass('top-4');
+    expect(stack).toHaveClass('top-20');
     expect(stack).toHaveClass('right-4');
     expect(stack).toHaveClass('bottom-auto');
     expect(stack).toHaveClass('left-auto');

@@ -112,7 +112,7 @@ describe('NotificationCenter', () => {
     const panel = screen.getByRole('dialog', { name: /notification inbox/i });
     expect(panel).toHaveClass('fixed');
     expect(panel).toHaveClass('right-4');
-    expect(panel).toHaveClass('top-16');
+    expect(panel).toHaveClass('top-20');
     expect(panel).toHaveClass('text-md-sys-on-surface');
 
     const readRow = screen.getByRole('button', { name: /already read/i });

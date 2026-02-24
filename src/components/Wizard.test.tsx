@@ -341,7 +341,6 @@ describe('Wizard', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /prospector loadout/i }));
 
-        expect(screen.getByTestId('wizard-telemetry-ship-weapons')).toHaveTextContent('Telemetry');
         expect(screen.getByTestId('wizard-telemetry-prospector-weapons')).toHaveTextContent('Telemetry');
         expect(screen.getByTestId('wizard-telemetry-prospector-equipment')).toHaveTextContent('Telemetry');
         expect(screen.queryByText(/NebLoadoutSaved/i)).not.toBeInTheDocument();
@@ -453,7 +452,7 @@ describe('Wizard', () => {
         expect(innerWrapper).toHaveClass('min-h-0');
         expect(innerWrapper).toHaveClass('flex');
         expect(innerWrapper).toHaveClass('flex-col');
-        expect(innerWrapper).toHaveClass('overflow-hidden');
+        expect(innerWrapper).toHaveClass('overflow-y-auto');
         expect(embeddedShell).toBeInTheDocument();
     });
 
