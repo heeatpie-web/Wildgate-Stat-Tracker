@@ -58,7 +58,7 @@ describe('artifactService', () => {
       expect(mockInvoke).not.toHaveBeenCalled();
     });
 
-    it('invokes get-match-artifacts with matchId and returns object format', async () => {
+    it('invokes get-match-artifacts with structured payload and returns object format', async () => {
       mockInvoke.mockResolvedValue({
         success: true,
         data: {
@@ -68,18 +68,32 @@ describe('artifactService', () => {
         },
       });
       const result = await getMatchArtifactsStructured(5);
-      expect(mockInvoke).toHaveBeenCalledWith('get-match-artifacts', 5);
+      expect(mockInvoke).toHaveBeenCalledWith('get-match-artifacts', { matchId: 5, fallbackImages: [] });
       expect(result).toEqual({
-        images: ['/a.png'],
+        images: ['\\a.png'],
         imageFiles: [{ artifactId: 'tok_1', filename: 'a.png', path: '/a.png' }],
         telemetry: [[{ event: 'test' }]],
       });
     });
 
+    it('prefers primary artifact images over fallback duplicates by filename', async () => {
+      mockInvoke.mockResolvedValue({
+        success: true,
+        data: {
+          images: ['C:\\\\new\\\\match_artifacts\\\\12\\\\shot_1.png'],
+          imageFiles: [{ artifactId: 'tok_1', filename: 'shot_1.png', path: 'C:\\\\new\\\\match_artifacts\\\\12\\\\shot_1.png' }],
+          telemetry: [],
+        },
+      });
+      const result = await getMatchArtifactsStructured(12, ['D:\\\\old\\\\match_artifacts\\\\12\\\\shot_1.png']);
+      expect(result.images).toEqual(['C:\\new\\match_artifacts\\12\\shot_1.png']);
+      expect(result.imageFiles[0]?.path).toBe('C:\\\\new\\\\match_artifacts\\\\12\\\\shot_1.png');
+    });
+
     it('handles legacy array result (backward compatibility)', async () => {
       mockInvoke.mockResolvedValue(['/img1.png', '/img2.png']);
       const result = await getMatchArtifactsStructured(1);
-      expect(result).toEqual({ images: ['/img1.png', '/img2.png'], imageFiles: [], telemetry: [] });
+      expect(result).toEqual({ images: ['\\img1.png', '\\img2.png'], imageFiles: [], telemetry: [] });
     });
 
     it('returns empty structure when invoke throws', async () => {
@@ -93,7 +107,7 @@ describe('artifactService', () => {
     it('returns images from getMatchArtifactsStructured', async () => {
       mockInvoke.mockResolvedValue({ images: ['/a.png'], imageFiles: [], telemetry: [] });
       const result = await getArtifactsForMatch(1);
-      expect(result).toEqual(['/a.png']);
+      expect(result).toEqual(['\\a.png']);
     });
   });
 

@@ -71,6 +71,16 @@ describe('createDataSlice', () => {
       expect(store.getState().matches[0].result).toBe('Loss');
     });
 
+    it('extracts artifact source from reach modifiers and strips artifact-prefixed modifier entries', () => {
+      store.getState().addMatch(createMatch({
+        id: 99,
+        reachModifiers: ['Artifact: Ancient Relic', 'High Gravity'],
+      }));
+      const saved = store.getState().matches[0];
+      expect(saved.artifactSource).toBe('Ancient Relic');
+      expect(saved.reachModifiers).toEqual(['High Gravity']);
+    });
+
     it('assigns stable canonical match numbers to new matches', () => {
       store.getState().addMatch(createMatch({ id: 1 }));
       store.getState().addMatch(createMatch({ id: 2 }));

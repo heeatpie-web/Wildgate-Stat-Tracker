@@ -37,9 +37,17 @@ export interface KillMap {
 }
 
 /** A player's equipped loadout detected from telemetry or OCR. */
+export interface ShipWeaponEntry {
+  name: string;
+  quantity: number;
+}
+
+/** A player's equipped loadout detected from telemetry or OCR. */
 export interface Loadout {
   hero: string | null;
   ship: string | null;
+  /** Explicit ship weapon quantities. Falls back to `weapons[]` when absent. */
+  shipWeapons?: ShipWeaponEntry[];
   weapons: string[];
   equipment: string[];
   characterWeapons?: string[];
@@ -59,6 +67,13 @@ export interface TelemetryLoadoutSaveSnapshot {
   inGame: boolean;
   source: 'NebLoadoutSaved' | 'NebCloudSaveRecordSize';
 }
+
+export const getTelemetryLoadoutSourceLabel = (
+  source?: TelemetryLoadoutSaveSnapshot['source'] | null
+): string => {
+  if (!source) return '';
+  return 'Telemetry';
+};
 
 export interface TelemetryConsistency {
   expectedTeammateCount?: number;
@@ -161,6 +176,24 @@ export const normalizeShipName = (ship: string | null | undefined): string => {
   const cleaned = String(ship || '').trim();
   if (!cleaned) return '';
   if (SHIP_CAPACITY[cleaned] != null) return cleaned;
+  const compactKey = cleaned.toLowerCase().replace(/[^a-z]/g, '');
+  const OCR_SHIP_CORRECTIONS: Record<string, string> = {
+    bastlon: 'Bastion',
+    bastionn: 'Bastion',
+    hunler: 'Hunter',
+    hunier: 'Hunter',
+    privatear: 'Privateer',
+    prlvateer: 'Privateer',
+    privateerr: 'Privateer',
+    scut: 'Scout',
+    scoui: 'Scout',
+    scuut: 'Scout',
+    outiaw: 'Outlaw',
+    outlavv: 'Outlaw',
+    solooutiaw: 'Solo Outlaw',
+    solooutlaww: 'Solo Outlaw',
+  };
+  if (OCR_SHIP_CORRECTIONS[compactKey]) return OCR_SHIP_CORRECTIONS[compactKey];
   if (SHIP_NAME_ALIASES[cleaned]) return SHIP_NAME_ALIASES[cleaned];
   if (/solo\s*outlaw/i.test(cleaned)) return 'Solo Outlaw';
   if (/outlaw/i.test(cleaned)) return 'Outlaw';

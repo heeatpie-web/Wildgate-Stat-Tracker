@@ -72,6 +72,23 @@ export interface OcrLearningDecisionInput {
     explanation?: string[];
 }
 
+export interface TeamIdentityCorrection {
+    rawTeamName: string;
+    rawColor: string;
+    correctedTeamName: string;
+    correctedColor: string;
+    updatedAt: number;
+    count: number;
+    source?: OcrAliasSource;
+    contexts?: Record<OcrAliasContext, number>;
+}
+
+export interface TeamIdentityResolution {
+    teamName: string;
+    color: string;
+    matched: boolean;
+}
+
 export interface UidMappings {
     players: Record<string, string>;
     ships: Record<string, string>;
@@ -94,6 +111,7 @@ export interface MappingSlice {
     ocrAliasModel: OcrAliasModel;
     ocrLearningEvents: OcrLearningEvent[];
     ocrLearningQueue: OcrLearningQueueItem[];
+    teamIdentityCorrections: Record<string, TeamIdentityCorrection>;
 
     // Profile management
     recordPlayerSighting: (playerId: string, teamColor: string, allTeamPlayers: string[], allOpponentPlayers: string[], shipType?: string, source?: 'ocr' | 'manual') => void;
@@ -129,6 +147,17 @@ export interface MappingSlice {
     rejectOcrLearningEvent: (eventId: string, reason?: string) => OcrLearningEvent | null;
     rollbackOcrLearningEvent: (eventId: string, note?: string) => OcrLearningEvent | null;
     clearResolvedOcrLearningEvents: (olderThanMs?: number) => void;
+    recordTeamIdentityCorrection: (
+        rawTeamName: string,
+        correctedTeamName: string,
+        opts?: {
+            rawColor?: string;
+            correctedColor?: string;
+            context?: OcrAliasContext;
+            source?: OcrAliasSource;
+        }
+    ) => void;
+    resolveTeamIdentity: (teamName: string, color?: string) => TeamIdentityResolution;
 
     // Legacy actions
     addMapping: (id: string, name: string) => void;
@@ -218,6 +247,28 @@ const removeLegacyCorrection = (
     return rest;
 };
 
+const normalizeTeamIdentityName = (value: string): string =>
+    normalizeOcrName(value || '').toLowerCase();
+
+const normalizeTeamIdentityColor = (value: string | null | undefined): string => {
+    const normalized = String(value || '').trim().toLowerCase();
+    return normalized || 'unknown';
+};
+
+const buildTeamIdentityKey = (teamName: string, color?: string): string => {
+    const normalizedName = normalizeTeamIdentityName(teamName);
+    if (!normalizedName) return '';
+    return `${normalizedName}|${normalizeTeamIdentityColor(color)}`;
+};
+
+const emptyTeamIdentityContexts = (): Record<OcrAliasContext, number> => ({
+    lobby: 0,
+    tactical: 0,
+    social: 0,
+    matchstats: 0,
+    unknown: 0,
+});
+
 // ============================================================================
 // SLICE
 // ============================================================================
@@ -232,6 +283,7 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
     ocrAliasModel: createEmptyOcrAliasModel(),
     ocrLearningEvents: [],
     ocrLearningQueue: [],
+    teamIdentityCorrections: {},
 
     recordPlayerSighting: (playerId, teamColor, allTeamPlayers, allOpponentPlayers, shipType, source = 'manual') => {
         set((state) => {
@@ -611,6 +663,84 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
                 ocrLearningQueue: keptQueue,
             };
         });
+    },
+
+    recordTeamIdentityCorrection: (rawTeamName, correctedTeamName, opts = {}) => {
+        const rawName = String(rawTeamName || '').trim();
+        const targetName = String(correctedTeamName || '').trim() || rawName;
+        const normalizedRawName = normalizeTeamIdentityName(rawName);
+        if (!normalizedRawName) return;
+        const rawColor = normalizeTeamIdentityColor(opts.rawColor);
+        const correctedColor = normalizeTeamIdentityColor(opts.correctedColor || rawColor);
+        const key = buildTeamIdentityKey(rawName, rawColor);
+        if (!key) return;
+        const source = opts.source || 'manual_correction';
+        const context = opts.context || 'unknown';
+
+        set((state) => {
+            const existing = state.teamIdentityCorrections[key];
+            const contexts = {
+                ...(existing?.contexts || emptyTeamIdentityContexts()),
+                [context]: ((existing?.contexts || emptyTeamIdentityContexts())[context] || 0) + 1,
+            };
+            return {
+                teamIdentityCorrections: {
+                    ...state.teamIdentityCorrections,
+                    [key]: {
+                        rawTeamName: rawName,
+                        rawColor,
+                        correctedTeamName: targetName,
+                        correctedColor,
+                        updatedAt: Date.now(),
+                        count: (existing?.count || 0) + 1,
+                        source,
+                        contexts,
+                    },
+                },
+            };
+        });
+    },
+
+    resolveTeamIdentity: (teamName, color = 'unknown') => {
+        const rawName = String(teamName || '').trim();
+        const normalizedName = normalizeTeamIdentityName(rawName);
+        const normalizedColor = normalizeTeamIdentityColor(color);
+        if (!normalizedName) {
+            return {
+                teamName: rawName,
+                color: normalizedColor,
+                matched: false,
+            };
+        }
+
+        const corrections = get().teamIdentityCorrections || {};
+        const directKey = buildTeamIdentityKey(rawName, normalizedColor);
+        const unknownColorKey = buildTeamIdentityKey(rawName, 'unknown');
+        const direct = (directKey && corrections[directKey]) || corrections[unknownColorKey];
+        if (direct) {
+            return {
+                teamName: String(direct.correctedTeamName || rawName).trim() || rawName,
+                color: normalizeTeamIdentityColor(direct.correctedColor || normalizedColor),
+                matched: true,
+            };
+        }
+
+        const bestByName = Object.values(corrections)
+            .filter((entry) => normalizeTeamIdentityName(entry.rawTeamName) === normalizedName)
+            .sort((a, b) => (b.count - a.count) || (b.updatedAt - a.updatedAt))[0];
+        if (bestByName) {
+            return {
+                teamName: String(bestByName.correctedTeamName || rawName).trim() || rawName,
+                color: normalizeTeamIdentityColor(bestByName.correctedColor || normalizedColor),
+                matched: true,
+            };
+        }
+
+        return {
+            teamName: rawName,
+            color: normalizedColor,
+            matched: false,
+        };
     },
 
     getPlayerRole: (playerId) => {

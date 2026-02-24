@@ -60,6 +60,91 @@ const OCR_CORPUS_DIR = path.join(USER_DATA_ROOT, 'ocr-corpus');
 const OCR_CORPUS_REPORTS_DIR = path.join(OCR_CORPUS_DIR, 'reports');
 const REPO_OCR_CORPUS_DIR = path.resolve(app.getAppPath(), 'dataset', 'ocr-corpus');
 const AUTO_SYNC_CORPUS_TO_REPO = process.env.WILDGATE_AUTO_SYNC_CORPUS_TO_REPO !== '0';
+const GCLOUD_DEFAULT_KEY_PATH = path.join(app.getPath('documents'), 'GCloudInfo', 'service-account.json');
+const getConfiguredGCloudKeyPath = () => (
+  process.env.WILDGATE_GCLOUD_KEY
+  || process.env.GOOGLE_APPLICATION_CREDENTIALS
+  || GCLOUD_DEFAULT_KEY_PATH
+);
+const getConfiguredGCloudBucket = () => (
+  process.env.WILDGATE_GCLOUD_BUCKET || 'wildgate-training-heeatpie'
+);
+const normalizeCloudCohortToken = (value) => String(value || '').trim().toLowerCase();
+const CLOUD_BETA_COHORT = new Set(
+  (process.env.WILDGATE_CLOUD_BETA_COHORT || '')
+    .split(',')
+    .map(normalizeCloudCohortToken)
+    .filter(Boolean)
+);
+const CLOUD_BETA_FORCE = String(process.env.WILDGATE_CLOUD_BETA_FORCE || '').trim();
+const cloudReadinessState = {
+  lastInitError: null,
+  lastCheckedAt: 0,
+};
+const CLOUD_READINESS_REASON_LABELS = Object.freeze({
+  beta_cohort_disabled: 'Cloud beta is disabled for this user/machine.',
+  credentials_missing: 'Google Cloud credential file is missing.',
+  vision_unavailable: 'Vision OCR service is not initialized.',
+  gemini_unavailable: 'Gemini refinement service is not initialized.',
+  storage_unavailable: 'Cloud storage sync service is not initialized.',
+  storage_error: 'Cloud storage reported a recent upload error.',
+  initialization_error: 'Cloud service initialization failed.',
+});
+const setCloudInitError = (error) => {
+  if (!error) {
+    cloudReadinessState.lastInitError = null;
+    cloudReadinessState.lastCheckedAt = Date.now();
+    return;
+  }
+  cloudReadinessState.lastInitError = String(error?.message || error);
+  cloudReadinessState.lastCheckedAt = Date.now();
+};
+const isCloudBetaEnabled = () => {
+  if (CLOUD_BETA_FORCE === '1') return true;
+  if (CLOUD_BETA_FORCE === '0') return false;
+  if (CLOUD_BETA_COHORT.size === 0) return true;
+  const tokens = [
+    process.env.USERNAME,
+    process.env.COMPUTERNAME,
+    process.env.USERDOMAIN,
+  ]
+    .map(normalizeCloudCohortToken)
+    .filter(Boolean);
+  return tokens.some((token) => CLOUD_BETA_COHORT.has(token));
+};
+const buildCloudReadinessStatus = (storageStats) => {
+  const betaEnabled = isCloudBetaEnabled();
+  const keyPath = getConfiguredGCloudKeyPath();
+  const keyPresent = fs.existsSync(keyPath);
+  const bucketName = getConfiguredGCloudBucket();
+  const reasons = [];
+  if (!betaEnabled) reasons.push('beta_cohort_disabled');
+  if (!keyPresent) reasons.push('credentials_missing');
+  if (betaEnabled && keyPresent && !gcloudService.isInitialized) reasons.push('vision_unavailable');
+  if (betaEnabled && keyPresent && !geminiService.isInitialized) reasons.push('gemini_unavailable');
+  if (betaEnabled && keyPresent && !gcloudSyncService.isInitialized) reasons.push('storage_unavailable');
+  if (storageStats?.lastError) reasons.push('storage_error');
+  if (cloudReadinessState.lastInitError) reasons.push('initialization_error');
+
+  const dedupedReasons = Array.from(new Set(reasons));
+  const summary = dedupedReasons.length > 0
+    ? dedupedReasons.map((reason) => CLOUD_READINESS_REASON_LABELS[reason] || reason).join(' ')
+    : 'Cloud services are ready.';
+
+  return {
+    betaEnabled,
+    degraded: dedupedReasons.length > 0,
+    reasons: dedupedReasons,
+    summary,
+    diagnostics: {
+      keyPath,
+      keyPresent,
+      bucketName,
+      lastInitError: cloudReadinessState.lastInitError,
+      lastCheckedAt: Date.now(),
+    },
+  };
+};
 const ALLOWED_FILE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.webp', '.gif']);
 const ROI_PICKER_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.webp', '.gif']);
 const ROI_MIME_BY_EXT = Object.freeze({
@@ -181,6 +266,56 @@ function resolveAllowedRendererPath(inputPath) {
 
 function isAllowedRendererPath(inputPath) {
   return resolveAllowedRendererPath(inputPath).success;
+}
+
+const RENDERER_ARTIFACT_PATH_PATTERN = /match_artifacts[\\/](\d+)[\\/](.+)$/i;
+
+function decodeRendererFileUrl(inputPath) {
+  const raw = String(inputPath || '').trim();
+  if (!raw) return '';
+  if (!/^file:/i.test(raw)) return raw;
+  try {
+    const parsed = new URL(raw);
+    let pathname = decodeURIComponent(parsed.pathname || '');
+    if (/^\/[a-z]:/i.test(pathname)) pathname = pathname.slice(1);
+    if (parsed.hostname && parsed.hostname !== 'localhost') {
+      return `\\\\${parsed.hostname}${pathname.replace(/\//g, '\\')}`;
+    }
+    return pathname.replace(/\//g, '\\');
+  } catch {
+    return raw.replace(/^file:\/+/i, '');
+  }
+}
+
+function buildRendererReadCandidates(inputPath) {
+  const decoded = decodeRendererFileUrl(inputPath);
+  const normalized = path.normalize(decoded || '');
+  const candidates = [];
+  const seen = new Set();
+  const addCandidate = (candidatePath) => {
+    const trimmed = String(candidatePath || '').trim();
+    if (!trimmed) return;
+    const key = trimmed.replace(/[\\/]+/g, '\\').toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push(trimmed);
+  };
+
+  addCandidate(decoded);
+  addCandidate(normalized);
+  addCandidate(normalized.replace(/\\/g, '/'));
+  addCandidate(normalized.replace(/\//g, '\\'));
+
+  const relMatch = normalized.match(RENDERER_ARTIFACT_PATH_PATTERN);
+  if (relMatch?.[1] && relMatch?.[2]) {
+    const folder = relMatch[1];
+    const filename = path.basename(relMatch[2]);
+    if (filename) {
+      addCandidate(path.join(USER_DATA_ROOT, 'match_artifacts', folder, filename));
+    }
+  }
+
+  return candidates;
 }
 
 function isAllowedEpicHost(hostname) {
@@ -2347,12 +2482,10 @@ app.whenReady().then(async () => {
   if (isDev) setSplashProgress(win, 50, 'OCR ready', 'Checking cloud integrations');
 
   // Initialize GCloud services (only if key file exists on this machine)
-  const GCLOUD_KEY =
-    process.env.WILDGATE_GCLOUD_KEY ||
-    process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-    path.join(app.getPath('documents'), 'GCloudInfo', 'service-account.json');
-  const GCLOUD_BUCKET = process.env.WILDGATE_GCLOUD_BUCKET || 'wildgate-training-heeatpie';
-  if (fs.existsSync(GCLOUD_KEY)) {
+  const GCLOUD_KEY = getConfiguredGCloudKeyPath();
+  const GCLOUD_BUCKET = getConfiguredGCloudBucket();
+  const cloudBetaEnabled = isCloudBetaEnabled();
+  if (cloudBetaEnabled && fs.existsSync(GCLOUD_KEY)) {
     if (isDev) setSplashProgress(win, 60, 'Initializing cloud OCR...', 'Connecting to Google Cloud');
     // Keep cloud init in the background so dev splash can appear immediately.
     void (async () => {
@@ -2360,15 +2493,23 @@ app.whenReady().then(async () => {
         gcloudService.initialize(GCLOUD_KEY);
         await gcloudSyncService.initialize(GCLOUD_KEY, GCLOUD_BUCKET);
         geminiService.initialize(GCLOUD_KEY);
+        setCloudInitError(null);
         if (isDev) setSplashProgress(win, 92, 'Cloud services ready', 'Renderer loading');
       } catch (e) {
         console.warn('[GCloud] Background init failed:', e?.message || e);
+        setCloudInitError(e);
         if (isDev) setSplashProgress(win, 72, 'Cloud OCR disabled', 'Background init failed');
       }
     })();
   } else {
-    console.warn('[GCloud] Key file not found, GCloud services disabled');
-    if (isDev) setSplashProgress(win, 72, 'Cloud OCR disabled', 'No credentials found');
+    if (!cloudBetaEnabled) {
+      console.warn('[GCloud] Cloud beta cohort disabled for this machine/user, cloud services skipped');
+      if (isDev) setSplashProgress(win, 72, 'Cloud OCR disabled', 'Beta cohort disabled');
+    } else {
+      console.warn('[GCloud] Key file not found, GCloud services disabled');
+      if (isDev) setSplashProgress(win, 72, 'Cloud OCR disabled', 'No credentials found');
+    }
+    setCloudInitError(null);
   }
   if (!isDev) autoUpdater.checkForUpdates();
   if (isDev) setSplashProgress(win, 84, 'Initializing presence...', 'Connecting Discord RPC');
@@ -2621,12 +2762,21 @@ ipcMain.handle('pick-roi-image', async (event) => {
 
 ipcMain.handle('read-file-base64', async (event, filePath) => {
   try {
-    if (!isAllowedRendererPath(filePath)) return null;
-    const resolved = path.resolve(filePath);
-    const ext = path.extname(resolved).toLowerCase();
-    if (!ALLOWED_FILE_EXTENSIONS.has(ext)) return null;
-    const data = await fsPromises.readFile(resolved);
-    return data.toString('base64');
+    const candidates = buildRendererReadCandidates(filePath);
+    for (const candidate of candidates) {
+      const pathCheck = resolveAllowedRendererPath(candidate);
+      if (!pathCheck.success) continue;
+      const resolved = pathCheck.data?.resolved || path.resolve(candidate);
+      const ext = path.extname(resolved).toLowerCase();
+      if (!ALLOWED_FILE_EXTENSIONS.has(ext)) continue;
+      try {
+        const data = await fsPromises.readFile(resolved);
+        return data.toString('base64');
+      } catch {
+        // try next candidate
+      }
+    }
+    return null;
   } catch (e) {
     return null;
   }
@@ -3076,11 +3226,14 @@ ipcMain.handle('open-path', async (event, targetPath) => {
 
 // GCloud status check (renderer queries this to show availability in settings)
 ipcMain.handle('get-gcloud-status', async () => {
+  const storageStats = gcloudSyncService.getStats();
+  const readiness = buildCloudReadinessStatus(storageStats);
   return {
     visionReady: gcloudService.isInitialized || false,
     geminiReady: geminiService.isInitialized || false,
     storageReady: gcloudSyncService.isInitialized || false,
-    storageStats: gcloudSyncService.getStats(),
+    storageStats,
+    readiness,
   };
 });
 

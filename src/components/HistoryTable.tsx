@@ -322,7 +322,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
         <div data-tour="view-history" className="w-full min-h-full pr-1 flex flex-col gap-4 animate-slide-up">
             {/* ── Stats Summary Strip ── */}
             {filteredMatches.length > 0 && (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                     <div className="relative overflow-hidden rounded-card border border-md-sys-outline/10 p-4 backdrop-blur-xl" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 25%)' }}>
                         <div className="absolute -right-3 -top-3 w-16 h-16 rounded-full opacity-10 bg-md-sys-primary blur-xl" />
                         <div className="text-label-sm font-bold uppercase tracking-wide-12 text-md-sys-on-surface/60 mb-1">Total Matches</div>
@@ -346,15 +346,6 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                             <span className={`text-2xl font-black tracking-tight ${currentStreak.type === 'Win' ? 'text-success' : currentStreak.type === 'Loss' ? 'text-danger' : 'text-md-sys-on-surface/40'}`}>
                                 {currentStreak.count > 0 ? `${currentStreak.count}${currentStreak.type === 'Win' ? 'W' : 'L'}` : '--'}
                             </span>
-                        </div>
-                    </div>
-                    <div className="relative overflow-hidden rounded-card border border-md-sys-outline/10 p-4 backdrop-blur-xl" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 25%)' }}>
-                        <div className="absolute -right-3 -top-3 w-16 h-16 rounded-full opacity-10 bg-md-sys-tertiary blur-xl" />
-                        <div className="text-label-sm font-bold uppercase tracking-wide-12 text-md-sys-on-surface/60 mb-1">Win Rate Bar</div>
-                        <div className="flex items-center gap-3 mt-1">
-                            <div className="flex-1 h-2.5 rounded-full bg-md-sys-on-surface/[0.06] overflow-hidden">
-                                <div className="h-full rounded-full bg-gradient-to-r from-success to-success/70 transition-all duration-700" style={{ width: `${winRate}%` }} />
-                            </div>
                         </div>
                     </div>
                 </div>

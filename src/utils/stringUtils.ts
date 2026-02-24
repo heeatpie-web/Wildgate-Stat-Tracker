@@ -231,6 +231,12 @@ export const cleanMissionName = (name: string): string => {
 export const normalizeOcrName = (name: string): string => {
     if (!name) return '';
     let cleaned = cleanPlayerName(name);
+    // Normalize common OCR confusions inside alphanumeric names.
+    cleaned = cleaned
+        .replace(/(?<=\p{L})0(?=\p{L})/gu, 'o')
+        .replace(/(?<=\p{L})1(?=\p{L})/gu, 'l')
+        .replace(/(?<=\p{L})5(?=\p{L})/gu, 's')
+        .replace(/[`´’‘]/g, "'");
     // OCR occasionally prepends decorative glyphs (ship/emoji markers) before names.
     cleaned = cleaned.replace(/^[^\p{L}\p{N}]+/gu, '');
     cleaned = cleaned.replace(/[^\p{L}\p{N}]+$/gu, '');

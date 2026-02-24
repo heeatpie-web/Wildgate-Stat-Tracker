@@ -779,6 +779,36 @@ body[data-mode='twilight'] .sc-bordered {
   overflow: visible;
 }
 
+.sc-queue-item--rich.sc-queue-item--result-win {
+  background: color-mix(in srgb, var(--md-sys-color-success), transparent 92%);
+  border-color: color-mix(in srgb, var(--md-sys-color-success), transparent 56%);
+}
+
+.sc-queue-item--rich.sc-queue-item--result-loss {
+  background: color-mix(in srgb, var(--md-sys-color-danger), transparent 92%);
+  border-color: color-mix(in srgb, var(--md-sys-color-danger), transparent 56%);
+}
+
+.sc-queue-item--rich.sc-queue-item--result-draw {
+  background: color-mix(in srgb, var(--md-sys-color-info), transparent 92%);
+  border-color: color-mix(in srgb, var(--md-sys-color-info), transparent 56%);
+}
+
+body[data-mode='twilight'] .sc-queue-item--rich.sc-queue-item--result-win {
+  background: color-mix(in srgb, var(--md-sys-color-success), transparent 90%);
+  border-color: color-mix(in srgb, var(--md-sys-color-success), transparent 42%);
+}
+
+body[data-mode='twilight'] .sc-queue-item--rich.sc-queue-item--result-loss {
+  background: color-mix(in srgb, var(--md-sys-color-danger), transparent 90%);
+  border-color: color-mix(in srgb, var(--md-sys-color-danger), transparent 42%);
+}
+
+body[data-mode='twilight'] .sc-queue-item--rich.sc-queue-item--result-draw {
+  background: color-mix(in srgb, var(--md-sys-color-info), transparent 90%);
+  border-color: color-mix(in srgb, var(--md-sys-color-info), transparent 42%);
+}
+
 .sc-queue-item__title-wrap {
   min-width: 0;
 }
@@ -864,12 +894,12 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 }
 
 .ocr-threshold-slider {
-  --ocr-threshold-track-height: 28px;
-  --ocr-threshold-thumb-size: 40px;
+  --ocr-threshold-track-height: 12px;
+  --ocr-threshold-thumb-size: 22px;
   appearance: none;
   -webkit-appearance: none;
-  height: 44px;
-  min-height: 44px;
+  height: 28px;
+  min-height: 28px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--md-sys-color-primary), transparent 82%);
   border: 1px solid color-mix(in srgb, var(--md-sys-color-primary), transparent 58%);
@@ -960,16 +990,16 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 
 .ocr-assignment-board-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px;
 }
 
 .ocr-assignment-team-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   border-radius: 14px;
-  padding: 10px;
+  padding: 9px;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 68%);
   background:
     radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--md-sys-color-primary), transparent 86%), transparent 52%),
@@ -984,15 +1014,43 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 .ocr-assignment-team-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.ocr-assignment-team-name-field {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1 1 auto;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 66%);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), transparent 6%);
+  border-radius: 10px;
+  min-height: 32px;
+  padding: 0 8px;
+}
+
+.ocr-assignment-team-head-side {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex: 0 0 auto;
 }
 
 .ocr-assignment-team-dot {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 62%);
   flex-shrink: 0;
+}
+
+.ocr-assignment-team-color-btn {
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-on-surface), transparent 78%);
 }
 
 .ocr-assignment-team-dot--red { background: #ef4444; }
@@ -1009,6 +1067,10 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
   min-width: 0;
   flex: 1;
   font-weight: 700;
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  padding: 0;
 }
 
 .ocr-assignment-team-title {
@@ -1022,35 +1084,25 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 
 .ocr-assignment-team-meta {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 10px;
   opacity: 0.62;
   white-space: nowrap;
 }
 
-.ocr-assignment-team-controls {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.ocr-assignment-control-label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  opacity: 0.65;
-}
-
-.ocr-assignment-ship-select,
-.ocr-assignment-color-select {
-  width: 100%;
-  min-height: 34px;
+.ocr-assignment-team-ship-inline {
+  min-width: 120px;
+  min-height: 30px;
+  max-width: 190px;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 66%);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), transparent 6%);
+  padding: 0 8px;
 }
 
 .ocr-assignment-players {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 }
 
 .ocr-assignment-empty {
@@ -1062,19 +1114,23 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 }
 
 .ocr-team-player-row--quick {
-  min-height: 40px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 66%);
+  min-height: 32px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 74%);
   background: color-mix(in srgb, var(--md-sys-color-surface), transparent 6%);
-  padding: 6px;
+  padding: 3px 4px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .ocr-assignment-player-input {
   flex: 1;
   min-width: 0;
+  min-height: 26px;
+  border: 0;
+  background: transparent;
+  padding: 0 2px;
 }
 
 .ocr-assignment-fuzzy-badge {
@@ -1096,41 +1152,55 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 .ocr-assignment-add-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .ocr-assignment-add-input {
   flex: 1;
   min-width: 0;
+  min-height: 28px;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 70%);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), transparent 6%);
+  padding: 0 8px;
 }
 
 .ocr-assignment-add-btn {
-  min-height: 34px;
-  padding: 0 10px;
-  border-radius: 10px;
+  min-height: 28px;
+  padding: 0 7px;
+  border-radius: 9px;
+  font-size: 11px;
 }
 
 .ocr-assignment-add-team {
   align-self: flex-start;
-  padding: 8px 0;
+  padding: 6px 0;
 }
 
 .ocr-assignment-board--compact .ocr-assignment-team-card {
-  padding: 8px;
-  gap: 6px;
+  padding: 7px;
+  gap: 5px;
 }
 
 .ocr-assignment-board--compact .ocr-assignment-team-name,
 .ocr-assignment-board--compact .ocr-assignment-team-title {
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .ocr-assignment-board--compact .ocr-assignment-team-meta {
-  font-size: 10px;
+  font-size: 9px;
 }
 
-.ocr-assignment-board--compact .ocr-assignment-control-label {
-  font-size: 9px;
+@media (max-width: 960px) {
+  .ocr-assignment-team-head {
+    flex-wrap: wrap;
+  }
+
+  .ocr-assignment-team-head-side {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
 }
 
 .ocr-teammate-chip {
@@ -1206,9 +1276,9 @@ body[data-mode='twilight'] .ocr-teammate-chip {
 .ocr-review-dialog .md3-textfield--outlined,
 .review-queue-dialog .md3-textfield--outlined {
   min-height: 38px;
-  border-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 62%);
+  border-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 74%);
   background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), transparent 6%);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--md-sys-color-on-surface), transparent 96%);
+  box-shadow: none;
 }
 
 .ocr-correction-dialog .md3-textfield--outlined:focus-within,
@@ -1238,7 +1308,7 @@ body[data-mode='twilight'] .ocr-teammate-chip {
 }
 
 .ocr-team-player-row--quick {
-  min-height: 42px;
+  min-height: 32px;
 }
 
 .ocr-team-player-input {
@@ -1737,11 +1807,20 @@ body[data-mode='twilight'] .sc-detail-meta-line {
   align-items: start;
 }
 
+.sc-workspace-top-row {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .sc-detail-editor-block,
 .sc-detail-rail-block {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .sc-detail-lane-kicker {
@@ -1786,10 +1865,16 @@ body[data-mode='twilight'] .sc-detail-meta-line {
 }
 
 .sc-editor-stat-card {
-  min-height: 82px;
+  min-height: 112px;
+  padding-top: 12px;
+  padding-bottom: 12px;
   justify-content: center;
   border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 72%);
   background: color-mix(in srgb, var(--md-sys-color-surface-container), transparent 3%);
+}
+
+.sc-detail-stats-grid {
+  margin-bottom: 8px;
 }
 
 .sc-detail-stats-grid .sc-editor-stat-card:hover {

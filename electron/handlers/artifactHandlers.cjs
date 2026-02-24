@@ -27,6 +27,7 @@ const artifactTokenRegistry = createScopedTokenRegistry({
   maxEntriesPerScope: Number(process.env.WILDGATE_ARTIFACT_TOKEN_MAX || 10000),
 });
 const blockedSecurityCounters = new Map();
+const MATCH_ARTIFACT_REL_PATTERN = /match_artifacts[\\/](\d+)[\\/](.+)$/i;
 
 function recordSecurityBlock(channel, code, message) {
   const key = `${channel}:${code}`;
@@ -36,6 +37,68 @@ function recordSecurityBlock(channel, code, message) {
 }
 
 const getArtifactScope = (webContentsId, matchId) => `artifact:${String(webContentsId)}:${String(matchId)}`;
+
+const normalizeArtifactPath = (value) => String(value || '').trim().replace(/[\\/]+/g, '\\');
+
+const toArtifactFilenameKey = (value) => {
+  const normalized = normalizeArtifactPath(value);
+  if (!normalized) return '';
+  return (normalized.split('\\').pop() || '').toLowerCase();
+};
+
+const parseGetMatchArtifactsPayload = (payload) => {
+  if (typeof payload === 'number') return { matchId: payload, fallbackImages: [] };
+  if (!payload || typeof payload !== 'object') return { matchId: 0, fallbackImages: [] };
+  const matchId = Number(payload.matchId || 0);
+  const fallbackImages = Array.isArray(payload.fallbackImages)
+    ? payload.fallbackImages.filter((entry) => typeof entry === 'string')
+    : [];
+  return { matchId, fallbackImages };
+};
+
+const buildFallbackArtifactCandidates = ({ fallbackImages, matchArtifactsRoot, matchId, canonicalMatchNumber }) => {
+  const candidates = [];
+  const seen = new Set();
+  const addCandidate = (candidatePath) => {
+    const normalized = normalizeArtifactPath(candidatePath);
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push(normalized);
+  };
+
+  fallbackImages.forEach((rawPath) => {
+    const normalizedFallback = normalizeArtifactPath(rawPath);
+    if (!normalizedFallback) return;
+    const filename = path.basename(normalizedFallback);
+    const ext = path.extname(filename).toLowerCase();
+    if (!IMAGE_EXTENSIONS.has(ext)) return;
+
+    const folderCandidates = new Set();
+    const relMatch = normalizedFallback.match(MATCH_ARTIFACT_REL_PATTERN);
+    if (relMatch?.[1]) folderCandidates.add(String(relMatch[1]));
+    if (Number.isInteger(canonicalMatchNumber) && canonicalMatchNumber > 0) {
+      folderCandidates.add(String(canonicalMatchNumber));
+    }
+    if (Number.isInteger(matchId) && matchId > 0) {
+      folderCandidates.add(String(matchId));
+    }
+
+    let mapped = false;
+    for (const folderName of folderCandidates) {
+      const candidate = path.join(matchArtifactsRoot, folderName, filename);
+      if (fs.existsSync(candidate)) {
+        addCandidate(candidate);
+        mapped = true;
+        break;
+      }
+    }
+    if (mapped) return;
+  });
+
+  return candidates;
+};
 
 function sanitizeRepairScope(scopePayload) {
   if (!scopePayload || typeof scopePayload !== 'object') return undefined;
@@ -115,21 +178,36 @@ function registerArtifactHandlers(ipcMain, ctx) {
     }
   });
 
-  ipcMain.handle('get-match-artifacts', async (event, matchId) => {
+  ipcMain.handle('get-match-artifacts', async (event, payload) => {
     try {
-      const validated = getValidatedMatchDir(app, artifactHelpers, matchId, { mode: 'read' });
+      const parsed = parseGetMatchArtifactsPayload(payload);
+      const validated = getValidatedMatchDir(app, artifactHelpers, parsed.matchId, { mode: 'read' });
       if (!validated.success) {
         recordSecurityBlock('get-match-artifacts', validated.code, validated.message);
         return ok({ images: [], imageFiles: [], telemetry: [] });
       }
-      const { matchDir, matchId: safeMatchId } = validated.data;
-      if (!fs.existsSync(matchDir)) return ok({ images: [], imageFiles: [], telemetry: [] });
+      const {
+        matchDir,
+        matchId: safeMatchId,
+        canonicalMatchNumber,
+        paths,
+      } = validated.data;
+      const fallbackCandidates = buildFallbackArtifactCandidates({
+        fallbackImages: parsed.fallbackImages,
+        matchArtifactsRoot: paths.matchArtifactsRoot,
+        matchId: safeMatchId,
+        canonicalMatchNumber,
+      });
+      if (!fs.existsSync(matchDir)) {
+        return ok({ images: fallbackCandidates, imageFiles: [], telemetry: [] });
+      }
 
       const files = await fsPromises.readdir(matchDir);
       const images = [];
       const imageFiles = [];
       const telemetry = [];
       const scope = getArtifactScope(event.sender.id, safeMatchId);
+      const imageByFilename = new Map();
 
       for (const f of files) {
         const fullPath = path.join(matchDir, f);
@@ -141,9 +219,17 @@ function registerArtifactHandlers(ipcMain, ctx) {
           } catch (e) { /* skip unparseable */ }
         } else if (IMAGE_EXTENSIONS.has(ext)) {
           images.push(fullPath);
+          imageByFilename.set(toArtifactFilenameKey(fullPath), fullPath);
           const artifactId = artifactTokenRegistry.issue(scope, { filename: f, fullPath });
           imageFiles.push({ artifactId, filename: f, path: fullPath });
         }
+      }
+      for (const fallbackPath of fallbackCandidates) {
+        const filenameKey = toArtifactFilenameKey(fallbackPath);
+        if (!filenameKey) continue;
+        if (imageByFilename.has(filenameKey)) continue;
+        images.push(fallbackPath);
+        imageByFilename.set(filenameKey, fallbackPath);
       }
       return ok({ images, imageFiles, telemetry });
     } catch (e) {

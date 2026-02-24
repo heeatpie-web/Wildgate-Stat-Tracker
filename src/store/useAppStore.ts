@@ -177,6 +177,7 @@ const customStorage: PersistStorage<AppState> = {
           uidSeedVersionApplied: data.uidSeedState?.seedVersionApplied ?? null,
           playerProfiles: data.playerProfiles || {},
           ocrCorrections: legacyOcrCorrections,
+          teamIdentityCorrections: data.teamIdentityCorrections || {},
           ocrAliasModel: persistedAliasModel || createEmptyOcrAliasModel(),
           ocrLearningEvents: Array.isArray(data.ocrLearningEvents) ? data.ocrLearningEvents : [],
           ocrLearningQueue: Array.isArray(data.ocrLearningQueue) ? data.ocrLearningQueue : [],
@@ -375,6 +376,7 @@ const customStorage: PersistStorage<AppState> = {
       layouts: state.layouts,
       timelineEvents: state.timelineEvents,
       ocrCorrections: state.ocrCorrections,
+      teamIdentityCorrections: state.teamIdentityCorrections,
       ocrAliasModel: state.ocrAliasModel
     };
     await StorageService.save(dbData);
@@ -466,6 +468,7 @@ export const useAppStore = create<AppState>()(
         layouts: state.layouts,
         timelineEvents: state.timelineEvents,
         ocrCorrections: state.ocrCorrections,
+        teamIdentityCorrections: state.teamIdentityCorrections,
         ocrAliasModel: state.ocrAliasModel,
         ocrLearningEvents: state.ocrLearningEvents,
         ocrLearningQueue: state.ocrLearningQueue

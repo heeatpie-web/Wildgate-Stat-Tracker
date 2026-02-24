@@ -16,6 +16,15 @@ const readEnvNumber = (
   return Math.min(max, Math.max(min, Math.round(parsed)));
 };
 
+const readEnvBoolean = (key: string, fallback: boolean): boolean => {
+  const raw = import.meta.env[key];
+  if (raw == null || raw === '') return fallback;
+  const normalized = String(raw).trim().toLowerCase();
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true;
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false;
+  return fallback;
+};
+
 export const runtimeConfig = {
   storage: {
     saveDebounceMs: readEnvNumber('VITE_STORAGE_SAVE_DEBOUNCE_MS', 300, 50, 5_000),
@@ -57,5 +66,9 @@ export const runtimeConfig = {
   },
   ui: {
     toastDurationMs: readEnvNumber('VITE_TOAST_DURATION_MS', 3_200, 1_000, 60_000),
+  },
+  cloud: {
+    statusPollIntervalMs: readEnvNumber('VITE_CLOUD_STATUS_POLL_MS', 20_000, 5_000, 120_000),
+    showBetaDiagnostics: readEnvBoolean('VITE_CLOUD_SHOW_BETA_DIAGNOSTICS', true),
   },
 } as const;

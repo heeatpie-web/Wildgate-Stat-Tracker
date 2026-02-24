@@ -13,7 +13,7 @@ import {
     Wrench,
     RefreshCw,
 } from 'lucide-react';
-import { Match, SHIPS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT } from '../types';
+import { Match, SHIPS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT, getTelemetryLoadoutSourceLabel } from '../types';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useMatchSubmission } from '../hooks/useMatchSubmission';
@@ -307,29 +307,50 @@ export const Wizard: React.FC = () => {
     const pendingLoadout = pendingMatchData.loadout || {
         hero: null,
         ship: null,
+        shipWeapons: [],
         weapons: [],
         equipment: [],
         characterWeapons: [],
         characterEquipment: [],
     };
-    const hasTelemetryLoadout = (pendingLoadout.weapons?.length || 0) > 0
+    const shipWeaponEntriesFromLegacy = (pendingLoadout.weapons || [])
+        .filter((entry) => !/tertiary\s+(weapon|equipment)/i.test(String(entry || '')))
+        .slice(0, MAX_SHIP_WEAPONS)
+        .reduce<Record<string, number>>((acc, weapon) => {
+            const cleaned = String(weapon || '').trim();
+            if (!cleaned) return acc;
+            acc[cleaned] = (acc[cleaned] || 0) + 1;
+            return acc;
+        }, {});
+    const shipWeaponEntries = (pendingLoadout.shipWeapons || []).length > 0
+        ? (pendingLoadout.shipWeapons || [])
+            .map((entry) => ({
+                name: String(entry?.name || '').trim(),
+                quantity: Math.max(0, Math.min(MAX_SHIP_WEAPONS, Math.floor(Number(entry?.quantity || 0)))),
+            }))
+            .filter((entry) => entry.name && entry.quantity > 0)
+            .slice(0, MAX_SHIP_WEAPONS)
+        : Object.entries(shipWeaponEntriesFromLegacy).map(([name, quantity]) => ({ name, quantity }));
+    const shipWeaponCountMap = shipWeaponEntries.reduce<Record<string, number>>((acc, entry) => {
+        acc[entry.name] = entry.quantity;
+        return acc;
+    }, {});
+    const shipWeaponTotal = Object.values(shipWeaponCountMap).reduce((sum, quantity) => sum + quantity, 0);
+    const hasTelemetryLoadout = shipWeaponTotal > 0
         || (pendingLoadout.characterWeapons?.length || 0) > 0
+        || (pendingLoadout.characterEquipment?.length || 0) > 0;
+    const hasTelemetryShipLoadout = shipWeaponTotal > 0;
+    const hasTelemetryProspectorLoadout = (pendingLoadout.characterWeapons?.length || 0) > 0
         || (pendingLoadout.characterEquipment?.length || 0) > 0;
     const latestTelemetryLoadoutSource = pendingMatchData?.telemetryConsistency?.loadoutSaves?.length
         ? pendingMatchData.telemetryConsistency.loadoutSaves[pendingMatchData.telemetryConsistency.loadoutSaves.length - 1].source
         : null;
-    const loadoutSourceBadgeLabel = latestTelemetryLoadoutSource
-        ? `Source: ${latestTelemetryLoadoutSource}`
-        : 'Source: Telemetry';
-    const displayedShipWeapons = (pendingLoadout.weapons || [])
-        .filter((entry) => !/tertiary\s+(weapon|equipment)/i.test(String(entry || '')))
-        .slice(0, MAX_SHIP_WEAPONS);
+    const loadoutSourceBadgeLabel = getTelemetryLoadoutSourceLabel(latestTelemetryLoadoutSource) || 'Telemetry';
     const displayedCharacterWeapons = (pendingLoadout.characterWeapons || []).slice(0, 2);
     const displayedCharacterEquipment = (pendingLoadout.characterEquipment || []).slice(0, 2);
-    const loadoutSummary = [
-        displayedShipWeapons.length > 0 ? `Ship Weapons: ${displayedShipWeapons.join(', ')}` : 'Ship Weapons: --',
-        displayedCharacterWeapons.length > 0 ? `Prospector Weapons: ${displayedCharacterWeapons.join(', ')}` : 'Prospector Weapons: --',
-        displayedCharacterEquipment.length > 0 ? `Prospector Equipment: ${displayedCharacterEquipment.join(', ')}` : 'Prospector Equipment: --',
+    const prospectorLoadoutSummary = [
+        displayedCharacterWeapons.length > 0 ? `Weapons: ${displayedCharacterWeapons.join(', ')}` : 'Weapons: --',
+        displayedCharacterEquipment.length > 0 ? `Equipment: ${displayedCharacterEquipment.join(', ')}` : 'Equipment: --',
     ].join(' | ');
     const telemetryDurationSeconds = typeof pendingMatchData?.telemetryConsistency?.telemetryDurationSeconds === 'number'
         ? pendingMatchData.telemetryConsistency.telemetryDurationSeconds
@@ -350,10 +371,10 @@ export const Wizard: React.FC = () => {
     const hasDurationMismatch = telemetryDurationDelta != null && telemetryDurationDelta > telemetryDurationToleranceSeconds;
 
     const updatePendingLoadout = (
-        key: 'weapons' | 'characterWeapons' | 'characterEquipment',
+        key: 'characterWeapons' | 'characterEquipment',
         item: string
     ) => {
-        const maxSlots = key === 'weapons' ? MAX_SHIP_WEAPONS : MAX_PROSPECTOR_SLOTS;
+        const maxSlots = MAX_PROSPECTOR_SLOTS;
         const existing = Array.isArray(pendingLoadout[key]) ? [...pendingLoadout[key]] : [];
         const idx = existing.findIndex((entry) => entry.toLowerCase() === item.toLowerCase());
         let next = existing;
@@ -367,6 +388,36 @@ export const Wizard: React.FC = () => {
             loadout: {
                 ...pendingLoadout,
                 [key]: next,
+            },
+        });
+    };
+    const updateShipWeaponQuantity = (weaponName: string, quantity: number) => {
+        const normalizedName = String(weaponName || '').trim();
+        if (!normalizedName) return;
+        const boundedQty = Math.max(0, Math.min(MAX_SHIP_WEAPONS, Math.floor(quantity)));
+        const nextMap: Record<string, number> = { ...shipWeaponCountMap };
+        if (boundedQty === 0) {
+            delete nextMap[normalizedName];
+        } else {
+            nextMap[normalizedName] = boundedQty;
+        }
+        const nextEntries = Object.entries(nextMap)
+            .map(([name, qty]) => ({ name, quantity: qty }))
+            .filter((entry) => entry.quantity > 0)
+            .slice(0, MAX_SHIP_WEAPONS);
+        const flatWeapons: string[] = [];
+        nextEntries.forEach((entry) => {
+            for (let idx = 0; idx < entry.quantity; idx += 1) {
+                if (flatWeapons.length >= MAX_SHIP_WEAPONS) break;
+                flatWeapons.push(entry.name);
+            }
+        });
+        useAppStore.getState().setPendingMatchData({
+            ...pendingMatchData,
+            loadout: {
+                ...pendingLoadout,
+                shipWeapons: nextEntries,
+                weapons: flatWeapons,
             },
         });
     };
@@ -747,6 +798,61 @@ export const Wizard: React.FC = () => {
                         </div>
 
                         <div className={cardClass}>
+                            <div className="flex items-center justify-between mb-2">
+                                <span className={labelClass + ' mb-0 flex items-center gap-2'}>
+                                    <Wrench size={14} /> Ship Weapons
+                                </span>
+                                <span className="text-label-sm text-md-sys-on-surface/70">
+                                    {shipWeaponTotal}/{MAX_SHIP_WEAPONS}
+                                </span>
+                            </div>
+                            <div className="space-y-2">
+                                {shipWeaponEntries.length > 0 ? (
+                                    shipWeaponEntries.map((entry) => (
+                                        <div key={entry.name} className="flex items-center justify-between gap-2 rounded-xl border border-md-sys-outline/12 px-2.5 py-1.5 mg-surface-high">
+                                            <span className="text-label-sm font-bold">{entry.name}</span>
+                                            <div className="inline-flex items-center gap-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => updateShipWeaponQuantity(entry.name, entry.quantity - 1)}
+                                                    className="w-7 h-7 rounded-control md3-surface inline-flex items-center justify-center text-md-sys-on-surface/70 hover:text-md-sys-on-surface"
+                                                >
+                                                    -
+                                                </button>
+                                                <span className="min-w-[1.5rem] text-center font-black text-label-sm">{entry.quantity}</span>
+                                                <button
+                                                    type="button"
+                                                    disabled={shipWeaponTotal >= MAX_SHIP_WEAPONS}
+                                                    onClick={() => updateShipWeaponQuantity(entry.name, entry.quantity + 1)}
+                                                    className="w-7 h-7 rounded-control md3-surface inline-flex items-center justify-center text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-label-sm text-md-sys-on-surface/62">No ship weapons selected.</div>
+                                )}
+                                <div className="flex flex-wrap gap-1.5">
+                                    {WEAPONS
+                                        .filter((weapon) => shipWeaponCountMap[weapon] == null)
+                                        .map((weapon) => (
+                                            <button
+                                                key={weapon}
+                                                type="button"
+                                                disabled={shipWeaponTotal >= MAX_SHIP_WEAPONS}
+                                                onClick={() => updateShipWeaponQuantity(weapon, 1)}
+                                                className="px-2 py-1 rounded-md text-label-sm font-semibold transition-all mg-surface-high opacity-80 hover:opacity-100 disabled:opacity-40"
+                                            >
+                                                + {weapon}
+                                            </button>
+                                        ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className={cardClass}>
                             <button
                                 type="button"
                                 onClick={() => setLoadoutExpanded((prev) => !prev)}
@@ -754,52 +860,40 @@ export const Wizard: React.FC = () => {
                             >
                                 <span className={labelClass + ' mb-0 flex items-center gap-2'}>
                                     <Wrench size={14} /> Prospector Loadout
-                                    {hasTelemetryLoadout && (
+                                    {hasTelemetryProspectorLoadout && (
                                         <span className="inline-flex items-center gap-1.5 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold" title="Detected loadout data">
                                             <span className="w-1.5 h-1.5 rounded-full bg-success" />
                                             Telemetry
                                         </span>
                                     )}
                                 </span>
-                                <span className="text-label-sm text-md-sys-on-surface/80 truncate">{loadoutSummary}</span>
+                                <span className="text-label-sm text-md-sys-on-surface/80 truncate">{prospectorLoadoutSummary}</span>
                             </button>
                             {(loadoutExpanded || !hasTelemetryLoadout) && (
                                 <div className="mt-3 space-y-3">
-                                    <div>
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-label-xs font-bold uppercase opacity-50">Ship Weapons (max 10)</span>
-                                            {hasTelemetryLoadout && displayedShipWeapons.length > 0 && (
-                                                <span
-                                                    data-testid="wizard-telemetry-ship-weapons"
-                                                    className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold"
-                                                    title="Loadout source from telemetry"
-                                                >
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                                                    {loadoutSourceBadgeLabel}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-wrap gap-1.5 mt-1">
-                                            {WEAPONS.map((weapon) => {
-                                                const selected = displayedShipWeapons.some((entry) => entry.toLowerCase() === weapon.toLowerCase());
-                                                const disabled = !selected && displayedShipWeapons.length >= MAX_SHIP_WEAPONS;
-                                                return (
-                                                    <button
-                                                        key={weapon}
-                                                        type="button"
-                                                        disabled={disabled}
-                                                        onClick={() => updatePendingLoadout('weapons', weapon)}
-                                                        className={`px-2 py-1 rounded-md text-label-sm font-semibold transition-all ${selected ? 'bg-md-sys-primary/20 text-md-sys-primary ring-1 ring-md-sys-primary/40' : 'mg-surface-high opacity-70 hover:opacity-100'} disabled:opacity-40`}
-                                                    >
-                                                        {weapon}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="inline-flex items-center gap-1 rounded-pill bg-md-sys-surface-container-high px-2 py-0.5 text-label-xs font-semibold text-md-sys-on-surface/80">
+                                            Ship: {String(pendingLoadout.ship || pendingMatchData.ship || '--')}
+                                        </span>
+                                        {hasTelemetryShipLoadout && (
+                                            <span className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                                                Ship Telemetry
+                                            </span>
+                                        )}
+                                        <span className="inline-flex items-center gap-1 rounded-pill bg-md-sys-surface-container-high px-2 py-0.5 text-label-xs font-semibold text-md-sys-on-surface/80">
+                                            Prospector: {String(pendingLoadout.hero || pendingMatchData.hero || '--')}
+                                        </span>
+                                        {hasTelemetryProspectorLoadout && (
+                                            <span className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                                                Prospector Telemetry
+                                            </span>
+                                        )}
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-1.5">
-                                            <span className="text-label-xs font-bold uppercase opacity-50">Prospector Weapons (max 2)</span>
+                                            <span className="text-label-xs font-bold uppercase opacity-50">Weapons (max 2)</span>
                                             {hasTelemetryLoadout && displayedCharacterWeapons.length > 0 && (
                                                 <span
                                                     data-testid="wizard-telemetry-prospector-weapons"
@@ -821,7 +915,7 @@ export const Wizard: React.FC = () => {
                                                         type="button"
                                                         disabled={disabled}
                                                         onClick={() => updatePendingLoadout('characterWeapons', weapon)}
-                                                        className={`px-2 py-1 rounded-md text-label-sm font-semibold transition-all ${selected ? 'bg-info-soft text-info ring-1 ring-info/40' : 'mg-surface-high opacity-70 hover:opacity-100'} disabled:opacity-40`}
+                                                        className={`px-2 py-1 rounded-md text-label-sm font-semibold transition-all ${selected ? 'bg-success-soft text-success ring-1 ring-success/40' : 'mg-surface-high opacity-70 hover:opacity-100'} disabled:opacity-40`}
                                                     >
                                                         {weapon}
                                                     </button>
@@ -831,7 +925,7 @@ export const Wizard: React.FC = () => {
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-1.5">
-                                            <span className="text-label-xs font-bold uppercase opacity-50">Prospector Equipment (max 2)</span>
+                                            <span className="text-label-xs font-bold uppercase opacity-50">Equipment (max 2)</span>
                                             {hasTelemetryLoadout && displayedCharacterEquipment.length > 0 && (
                                                 <span
                                                     data-testid="wizard-telemetry-prospector-equipment"

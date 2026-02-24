@@ -132,11 +132,35 @@ export interface GCloudStorageStats {
   lastError: string | null;
 }
 
+export type CloudReadinessReason =
+  | 'beta_cohort_disabled'
+  | 'credentials_missing'
+  | 'vision_unavailable'
+  | 'gemini_unavailable'
+  | 'storage_unavailable'
+  | 'storage_error'
+  | 'initialization_error';
+
+export interface CloudReadinessStatus {
+  betaEnabled: boolean;
+  degraded: boolean;
+  reasons: CloudReadinessReason[];
+  summary: string;
+  diagnostics: {
+    keyPath: string;
+    keyPresent: boolean;
+    bucketName: string;
+    lastInitError: string | null;
+    lastCheckedAt: number;
+  };
+}
+
 export interface GCloudStatus {
   visionReady: boolean;
   geminiReady?: boolean;
   storageReady: boolean;
   storageStats: GCloudStorageStats;
+  readiness: CloudReadinessStatus;
 }
 
 export async function getGCloudStatus(): Promise<GCloudStatus | null> {

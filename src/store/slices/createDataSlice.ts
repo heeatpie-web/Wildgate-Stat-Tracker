@@ -9,6 +9,10 @@
 import { StateCreator } from 'zustand';
 import { Match, Loadout } from '../../types';
 import { normalizeOcrName } from '../../utils/stringUtils';
+import {
+  extractArtifactSourceFromReachModifiers,
+  stripArtifactSourceModifiers,
+} from '../../utils/artifactSource';
 
 /**
  * Origin of a data value. Priority: manual (3) > telemetry (2) > ocr (1).
@@ -35,12 +39,39 @@ const sanitizeLoadoutSlots = (loadout: Loadout | null): Loadout | null => {
       .filter((entry) => !/tertiary\s+(weapon|equipment)/i.test(entry))
       .slice(0, Math.max(1, maxSlots))
   );
+  const sanitizeShipWeaponEntries = (entries: Loadout['shipWeapons'] | undefined) => (
+    (entries || [])
+      .map((entry) => ({
+        name: String(entry?.name || '').trim(),
+        quantity: Math.max(0, Math.min(10, Math.floor(Number(entry?.quantity || 0)))),
+      }))
+      .filter((entry) => entry.name && entry.quantity > 0)
+      .slice(0, 10)
+  );
   return {
     ...loadout,
+    shipWeapons: sanitizeShipWeaponEntries(loadout.shipWeapons),
     weapons: sanitizeSlotList(loadout.weapons, 10),
     equipment: sanitizeSlotList(loadout.equipment, 2),
     characterWeapons: sanitizeSlotList(loadout.characterWeapons, 2),
     characterEquipment: sanitizeSlotList(loadout.characterEquipment, 2),
+  };
+};
+
+const sanitizeMatchArtifactFields = (match: Match): Match => {
+  const currentModifiers = Array.isArray(match.reachModifiers)
+    ? match.reachModifiers.map((entry) => String(entry || '').trim()).filter(Boolean)
+    : [];
+  const normalizedModifiers = stripArtifactSourceModifiers(currentModifiers);
+  const extractedArtifactSource = extractArtifactSourceFromReachModifiers(currentModifiers);
+  const existingArtifactSource = String(match.artifactSource || '').trim();
+  const reachChanged = normalizedModifiers.length !== currentModifiers.length
+    || normalizedModifiers.some((entry, index) => entry !== currentModifiers[index]);
+  if (!reachChanged && (!extractedArtifactSource || existingArtifactSource)) return match;
+  return {
+    ...match,
+    reachModifiers: normalizedModifiers,
+    artifactSource: existingArtifactSource || extractedArtifactSource || undefined,
   };
 };
 
@@ -298,7 +329,8 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
   mergeHistory: [],
 
   setMatches: (matches) => set((state) => {
-    const assigned = assignCanonicalMatchNumbers(matches, state.nextCanonicalMatchNumber);
+    const sanitized = (matches || []).map((entry) => sanitizeMatchArtifactFields({ ...entry }));
+    const assigned = assignCanonicalMatchNumbers(sanitized, state.nextCanonicalMatchNumber);
     return {
       matches: assigned.matches,
       nextCanonicalMatchNumber: assigned.nextCanonicalMatchNumber,
@@ -306,12 +338,13 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     };
   }),
   addMatch: (match) => set((state) => {
+    const sanitizedMatch = sanitizeMatchArtifactFields({ ...match });
     const taken = new Set(
       state.matches
         .map((entry) => toPositiveInt(entry.canonicalMatchNumber))
         .filter((value): value is number => Number.isInteger(value))
     );
-    let canonical = toPositiveInt(match.canonicalMatchNumber);
+    let canonical = toPositiveInt(sanitizedMatch.canonicalMatchNumber);
     let nextCanonical = Math.max(1, toPositiveInt(state.nextCanonicalMatchNumber) || 1);
     if (!canonical || taken.has(canonical)) {
       canonical = nextCanonical;
@@ -319,12 +352,13 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     }
     nextCanonical = Math.max(nextCanonical, canonical + 1);
     return {
-      matches: [{ ...match, canonicalMatchNumber: canonical }, ...state.matches],
+      matches: [{ ...sanitizedMatch, canonicalMatchNumber: canonical }, ...state.matches],
       nextCanonicalMatchNumber: nextCanonical,
       lastActivity: Date.now(),
     };
   }),
   updateMatch: (updatedMatch) => set((state) => {
+    const sanitizedUpdatedMatch = sanitizeMatchArtifactFields({ ...updatedMatch });
     const existing = state.matches.find((entry) => entry.id === updatedMatch.id);
     if (!existing) {
       return { lastActivity: Date.now() };
@@ -335,7 +369,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
         .map((entry) => toPositiveInt(entry.canonicalMatchNumber))
         .filter((value): value is number => Number.isInteger(value))
     );
-    let canonical = toPositiveInt(updatedMatch.canonicalMatchNumber)
+    let canonical = toPositiveInt(sanitizedUpdatedMatch.canonicalMatchNumber)
       || toPositiveInt(existing?.canonicalMatchNumber);
     let nextCanonical = Math.max(1, toPositiveInt(state.nextCanonicalMatchNumber) || 1);
     if (!canonical || taken.has(canonical)) {
@@ -343,7 +377,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
       while (taken.has(canonical)) canonical += 1;
     }
     nextCanonical = Math.max(nextCanonical, canonical + 1);
-    const nextMatch: Match = { ...updatedMatch, canonicalMatchNumber: canonical };
+    const nextMatch: Match = { ...sanitizedUpdatedMatch, canonicalMatchNumber: canonical };
     return {
       matches: state.matches.map(m => m.id === updatedMatch.id ? nextMatch : m),
       nextCanonicalMatchNumber: nextCanonical,
@@ -365,11 +399,35 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
   })),
   deletePlayer: (name) => set((state) => ({ players: state.players.filter(p => p !== name) })),
 
-  setPilotRegistry: (pilotRegistry) => set({ pilotRegistry }),
-  addToRegistry: (name) => set((state) => ({
-    pilotRegistry: state.pilotRegistry.includes(name) ? state.pilotRegistry : [...state.pilotRegistry, name]
-  })),
-  removeFromRegistry: (name) => set((state) => ({ pilotRegistry: state.pilotRegistry.filter(p => p !== name) })),
+  setPilotRegistry: (pilotRegistry) => set(() => {
+    const seen = new Set<string>();
+    const normalized = (pilotRegistry || [])
+      .map((name) => String(name || '').trim())
+      .filter(Boolean)
+      .filter((name) => {
+        const key = normalizeOcrName(name).toLowerCase();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    return { pilotRegistry: normalized };
+  }),
+  addToRegistry: (name) => set((state) => {
+    const cleaned = String(name || '').trim();
+    if (!cleaned) return {};
+    const nextKey = normalizeOcrName(cleaned).toLowerCase();
+    if (!nextKey) return {};
+    const exists = state.pilotRegistry.some((entry) => normalizeOcrName(entry).toLowerCase() === nextKey);
+    if (exists) return {};
+    return { pilotRegistry: [...state.pilotRegistry, cleaned] };
+  }),
+  removeFromRegistry: (name) => set((state) => {
+    const targetKey = normalizeOcrName(name).toLowerCase();
+    if (!targetKey) return {};
+    return {
+      pilotRegistry: state.pilotRegistry.filter((entry) => normalizeOcrName(entry).toLowerCase() !== targetKey),
+    };
+  }),
 
   renamePilot: (oldName, newName) => set((state) => {
     const newRegistry = state.pilotRegistry.map(p => p === oldName ? newName : p);

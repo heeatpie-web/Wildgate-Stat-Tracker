@@ -43,6 +43,7 @@ interface OcrTeamAssignmentBoardProps {
 
 const TEAM_COLOR_OPTIONS = ['red', 'orange', 'yellow', 'green', 'blue', 'cyan', 'purple', 'unknown'] as const;
 const DRAG_DATA_KEY = 'application/x-wildgate-player-drag';
+const TEAM_COLOR_OPTION_LIST = [...TEAM_COLOR_OPTIONS];
 
 const normalizeColorToken = (value: string): string => {
     const normalized = String(value || '').trim().toLowerCase();
@@ -64,6 +65,13 @@ const parseDragPayload = (raw: string): DraggedPlayerPayload | null => {
 
 const buildDragPayload = (payload: DraggedPlayerPayload): string => JSON.stringify(payload);
 const normalizePlayerKey = (value: string): string => String(value || '').trim().toLowerCase();
+const nextTeamColor = (current: string): string => {
+    const normalized = normalizeColorToken(current);
+    const currentIndex = TEAM_COLOR_OPTION_LIST.indexOf(normalized as typeof TEAM_COLOR_OPTION_LIST[number]);
+    if (currentIndex < 0) return 'unknown';
+    const nextIndex = (currentIndex + 1) % TEAM_COLOR_OPTION_LIST.length;
+    return TEAM_COLOR_OPTION_LIST[nextIndex];
+};
 
 export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
     teams,
@@ -185,6 +193,7 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                 {teams.map((team, teamIndex) => {
                     const normalizedColor = normalizeColorToken(team.color);
                     const friendlyTeam = teamIndex === friendlyTeamIndex;
+                    const displayColor = friendlyTeam ? 'blue' : normalizedColor;
                     return (
                         <div
                             key={`${team.key}-${teamIndex}`}
@@ -197,33 +206,58 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                             onDrop={(event) => dropPlayer(event, teamIndex, null)}
                         >
                             <div className="ocr-assignment-team-head">
-                                <div
-                                    className={`ocr-assignment-team-dot ocr-assignment-team-dot--${normalizedColor}`}
-                                    aria-hidden="true"
-                                />
-                                {onTeamNameChange ? (
-                                    <input
-                                        type="text"
-                                        value={team.teamName}
-                                        onChange={(event) => onTeamNameChange(teamIndex, event.target.value)}
-                                        className="md3-textfield md3-textfield--outlined ocr-assignment-team-name"
-                                        placeholder={`Team ${teamIndex + 1}`}
-                                        aria-label={`Team ${teamIndex + 1} name`}
-                                    />
-                                ) : (
-                                    <span className="ocr-assignment-team-title">
-                                        {team.teamName || `Team ${teamIndex + 1}`}
+                                <div className="ocr-assignment-team-name-field">
+                                    {allowColorEdit && onTeamColorChange && !friendlyTeam ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => onTeamColorChange(teamIndex, nextTeamColor(displayColor))}
+                                            className={`ocr-assignment-team-color-btn ocr-assignment-team-dot ocr-assignment-team-dot--${displayColor}`}
+                                            title={`Team color: ${displayColor}. Click to cycle.`}
+                                            aria-label={`Team ${teamIndex + 1} color ${displayColor}`}
+                                        />
+                                    ) : (
+                                        <span
+                                            className={`ocr-assignment-team-dot ocr-assignment-team-dot--${displayColor}`}
+                                            aria-hidden="true"
+                                        />
+                                    )}
+                                    {onTeamNameChange ? (
+                                        <input
+                                            type="text"
+                                            value={team.teamName}
+                                            onChange={(event) => onTeamNameChange(teamIndex, event.target.value)}
+                                            className="md3-textfield ocr-assignment-team-name"
+                                            placeholder={`Team ${teamIndex + 1}`}
+                                            aria-label={`Team ${teamIndex + 1} name`}
+                                        />
+                                    ) : (
+                                        <span className="ocr-assignment-team-title">
+                                            {team.teamName || `Team ${teamIndex + 1}`}
+                                        </span>
+                                    )}
+                                    {friendlyTeam && (
+                                        <span className="ocr-teammate-chip ocr-teammate-chip--compact">
+                                            <Shield size={10} />
+                                            Friendly
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="ocr-assignment-team-head-side">
+                                    <select
+                                        value={team.shipType}
+                                        onChange={(event) => onTeamShipChange(teamIndex, event.target.value)}
+                                        className="md3-textfield ocr-assignment-team-ship-inline"
+                                        aria-label={`Team ${teamIndex + 1} ship`}
+                                    >
+                                        <option value="">Unknown ship</option>
+                                        {shipOptionsWithUnknown.map((ship) => (
+                                            <option key={ship} value={ship}>{ship}</option>
+                                        ))}
+                                    </select>
+                                    <span className="ocr-assignment-team-meta">
+                                        {team.players.length} players
                                     </span>
-                                )}
-                                <span className="ocr-assignment-team-meta">
-                                    {team.players.length} players
-                                </span>
-                                {friendlyTeam && (
-                                    <span className="ocr-teammate-chip ocr-teammate-chip--compact">
-                                        <Shield size={10} />
-                                        Friendly
-                                    </span>
-                                )}
+                                </div>
                                 {allowTeamAddRemove && onTeamRemove && !friendlyTeam && (
                                     <button
                                         type="button"
@@ -234,37 +268,6 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                     >
                                         <Trash2 size={12} />
                                     </button>
-                                )}
-                            </div>
-
-                            <div className="ocr-assignment-team-controls">
-                                <label className="ocr-assignment-control-label">Ship</label>
-                                <select
-                                    value={team.shipType}
-                                    onChange={(event) => onTeamShipChange(teamIndex, event.target.value)}
-                                    className="md3-textfield md3-textfield--outlined ocr-assignment-ship-select"
-                                >
-                                    <option value="">Unknown ship</option>
-                                    {shipOptionsWithUnknown.map((ship) => (
-                                        <option key={ship} value={ship}>{ship}</option>
-                                    ))}
-                                </select>
-                                {allowColorEdit && onTeamColorChange && (
-                                    <>
-                                        <label className="ocr-assignment-control-label">Color</label>
-                                        <select
-                                            value={normalizedColor}
-                                            onChange={(event) => onTeamColorChange(teamIndex, event.target.value)}
-                                            className="md3-textfield md3-textfield--outlined ocr-assignment-color-select"
-                                            aria-label={`Team ${teamIndex + 1} color`}
-                                        >
-                                            {TEAM_COLOR_OPTIONS.map((color) => (
-                                                <option key={color} value={color}>
-                                                    {color.charAt(0).toUpperCase() + color.slice(1)}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </>
                                 )}
                             </div>
 
@@ -314,7 +317,7 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                                     onDragOver={(event) => allowDrop(event, teamIndex)}
                                                     onDrop={(event) => dropPlayer(event, teamIndex, playerIndex)}
                                                     list={rosterSuggestionsId}
-                                                    className="md3-textfield md3-textfield--outlined ocr-assignment-player-input"
+                                                    className="md3-textfield ocr-assignment-player-input"
                                                     aria-label={`${team.teamName || `team ${teamIndex + 1}`} player ${playerIndex + 1} name`}
                                                 />
                                                 {showFuzzyBadge && (
@@ -352,7 +355,7 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                         }
                                     }}
                                     list={rosterSuggestionsId}
-                                    className="md3-textfield md3-textfield--outlined ocr-assignment-add-input"
+                                    className="md3-textfield ocr-assignment-add-input"
                                     placeholder="Add player..."
                                     aria-label={`Add player to ${team.teamName || `team ${teamIndex + 1}`}`}
                                 />

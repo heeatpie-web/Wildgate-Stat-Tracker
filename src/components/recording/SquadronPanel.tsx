@@ -24,8 +24,16 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
   const sameShip = (a: string | null | undefined, b: string | null | undefined) => toShipKey(a) && toShipKey(a) === toShipKey(b);
   const hasShipManualOverride = Boolean(telemetryDetectedShip && activeShip && !sameShip(telemetryDetectedShip, activeShip));
   const hasHeroManualOverride = Boolean(telemetryDetectedHero && activeHero && telemetryDetectedHero !== activeHero);
-  const hasAutoWeapons = Array.isArray(currentLoadout?.weapons) && currentLoadout.weapons.length > 0;
-  const hasAutoEquipment = Array.isArray(currentLoadout?.equipment) && currentLoadout.equipment.length > 0;
+  const shipWeapons = Array.isArray(currentLoadout?.shipWeapons) && currentLoadout.shipWeapons.length > 0
+    ? currentLoadout.shipWeapons
+        .flatMap((entry) => Array.from({ length: Math.max(1, Number(entry?.quantity || 1)) }, () => String(entry?.name || '').trim()))
+        .filter(Boolean)
+    : (currentLoadout?.weapons || []);
+  const prospectorWeapons = currentLoadout?.characterWeapons || [];
+  const prospectorEquipment = currentLoadout?.characterEquipment || currentLoadout?.equipment || [];
+  const hasShipWeapons = shipWeapons.length > 0;
+  const hasProspectorWeapons = prospectorWeapons.length > 0;
+  const hasProspectorEquipment = prospectorEquipment.length > 0;
 
   const sourceChip = (label: string, source?: 'manual' | 'telemetry' | 'ocr') => {
     if (!source || source === 'manual' || source === 'telemetry') return null;
@@ -73,21 +81,29 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
         </div>
 
         {telemetryOverrideSummary}
-        {(hasAutoWeapons || hasAutoEquipment) && (
+        {(hasShipWeapons || hasProspectorWeapons || hasProspectorEquipment) && (
           <div className="mg-surface rounded-card p-2 border border-info/15 space-y-1.5">
-            {hasAutoWeapons && (
+            {hasShipWeapons && (
               <div className="flex items-start gap-2 text-label-sm">
-                <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
+                <span className="font-bold uppercase tracking-wide text-info">Ship Weapons</span>
                 <span className="text-md-sys-on-surface/80 break-words">
-                  {currentLoadout?.weapons?.join(', ')}
+                  {shipWeapons.join(', ')}
                 </span>
               </div>
             )}
-            {hasAutoEquipment && (
+            {hasProspectorWeapons && (
+              <div className="flex items-start gap-2 text-label-sm">
+                <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
+                <span className="text-md-sys-on-surface/80 break-words">
+                  {prospectorWeapons.join(', ')}
+                </span>
+              </div>
+            )}
+            {hasProspectorEquipment && (
               <div className="flex items-start gap-2 text-label-sm">
                 <span className="font-bold uppercase tracking-wide text-info">Equipment</span>
                 <span className="text-md-sys-on-surface/80 break-words">
-                  {currentLoadout?.equipment?.join(', ')}
+                  {prospectorEquipment.join(', ')}
                 </span>
               </div>
             )}
@@ -155,21 +171,29 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
       </div>
 
       {telemetryOverrideSummary}
-      {(hasAutoWeapons || hasAutoEquipment) && (
+      {(hasShipWeapons || hasProspectorWeapons || hasProspectorEquipment) && (
         <div className="mg-surface rounded-card p-2 border border-info/15 space-y-1.5">
-          {hasAutoWeapons && (
+          {hasShipWeapons && (
             <div className="flex items-start gap-2 text-label-sm">
-              <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
+              <span className="font-bold uppercase tracking-wide text-info">Ship Weapons</span>
               <span className="text-md-sys-on-surface/80 break-words">
-                {currentLoadout?.weapons?.join(', ')}
+                {shipWeapons.join(', ')}
               </span>
             </div>
           )}
-          {hasAutoEquipment && (
+          {hasProspectorWeapons && (
+            <div className="flex items-start gap-2 text-label-sm">
+              <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
+              <span className="text-md-sys-on-surface/80 break-words">
+                {prospectorWeapons.join(', ')}
+              </span>
+            </div>
+          )}
+          {hasProspectorEquipment && (
             <div className="flex items-start gap-2 text-label-sm">
               <span className="font-bold uppercase tracking-wide text-info">Equipment</span>
               <span className="text-md-sys-on-surface/80 break-words">
-                {currentLoadout?.equipment?.join(', ')}
+                {prospectorEquipment.join(', ')}
               </span>
             </div>
           )}

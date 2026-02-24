@@ -7,6 +7,20 @@ export interface MoveOpponentPlayerParams {
   fromPlayerIndex: number;
   toTeamIndex: number;
   toPlayerIndex?: number | null;
+  preventDuplicateNames?: boolean;
+  normalizeName?: (player: unknown) => string;
+}
+
+export type MoveOpponentPlayerReason =
+  | 'moved'
+  | 'invalid'
+  | 'noop'
+  | 'duplicate';
+
+export interface MoveOpponentPlayerResult<TTeam> {
+  teams: TTeam[];
+  reason: MoveOpponentPlayerReason;
+  movedPlayer?: string;
 }
 
 const clampIndex = (value: number, min: number, max: number): number => {
@@ -22,15 +36,35 @@ export const moveOpponentPlayerBetweenTeams = <
   teams: TTeam[],
   params: MoveOpponentPlayerParams
 ): TTeam[] => {
-  const { fromTeamIndex, fromPlayerIndex, toTeamIndex, toPlayerIndex } = params;
+  return tryMoveOpponentPlayerBetweenTeams(teams, params).teams;
+};
 
-  if (!Array.isArray(teams) || teams.length === 0) return teams;
-  if (fromTeamIndex < 0 || fromTeamIndex >= teams.length) return teams;
-  if (toTeamIndex < 0 || toTeamIndex >= teams.length) return teams;
+export const tryMoveOpponentPlayerBetweenTeams = <
+  TPlayer,
+  TTeam extends TeamWithPlayers<TPlayer>
+>(
+  teams: TTeam[],
+  params: MoveOpponentPlayerParams
+): MoveOpponentPlayerResult<TTeam> => {
+  const { fromTeamIndex, fromPlayerIndex, toTeamIndex, toPlayerIndex } = params;
+  const preventDuplicateNames = params.preventDuplicateNames !== false;
+  const normalizeName = params.normalizeName || ((value: unknown) => (
+    String(value || '').trim().toLowerCase()
+  ));
+
+  if (!Array.isArray(teams) || teams.length === 0) {
+    return { teams, reason: 'invalid' };
+  }
+  if (fromTeamIndex < 0 || fromTeamIndex >= teams.length) {
+    return { teams, reason: 'invalid' };
+  }
+  if (toTeamIndex < 0 || toTeamIndex >= teams.length) {
+    return { teams, reason: 'invalid' };
+  }
 
   const fromTeam = teams[fromTeamIndex];
   if (!fromTeam || fromPlayerIndex < 0 || fromPlayerIndex >= fromTeam.players.length) {
-    return teams;
+    return { teams, reason: 'invalid' };
   }
 
   const normalizedTargetIndex = toPlayerIndex == null
@@ -41,7 +75,7 @@ export const moveOpponentPlayerBetweenTeams = <
     fromTeamIndex === toTeamIndex &&
     (normalizedTargetIndex === fromPlayerIndex || normalizedTargetIndex === fromPlayerIndex + 1)
   ) {
-    return teams;
+    return { teams, reason: 'noop' };
   }
 
   const nextTeams = teams.map((team) => ({
@@ -50,7 +84,22 @@ export const moveOpponentPlayerBetweenTeams = <
   }));
 
   const [movedPlayer] = nextTeams[fromTeamIndex].players.splice(fromPlayerIndex, 1);
-  if (movedPlayer === undefined) return teams;
+  if (movedPlayer === undefined) {
+    return { teams, reason: 'invalid' };
+  }
+
+  const movedName = normalizeName(movedPlayer);
+  if (preventDuplicateNames && movedName) {
+    const targetPlayers = nextTeams[toTeamIndex].players;
+    const duplicateExists = targetPlayers.some((player) => normalizeName(player) === movedName);
+    if (duplicateExists) {
+      return {
+        teams,
+        reason: 'duplicate',
+        movedPlayer: String(movedPlayer || ''),
+      };
+    }
+  }
 
   let insertionIndex = normalizedTargetIndex;
   if (fromTeamIndex === toTeamIndex && insertionIndex > fromPlayerIndex) {
@@ -61,6 +110,9 @@ export const moveOpponentPlayerBetweenTeams = <
   const safeInsertionIndex = clampIndex(insertionIndex, 0, targetPlayers.length);
   targetPlayers.splice(safeInsertionIndex, 0, movedPlayer);
 
-  return nextTeams as TTeam[];
+  return {
+    teams: nextTeams as TTeam[],
+    reason: 'moved',
+    movedPlayer: String(movedPlayer || ''),
+  };
 };
-

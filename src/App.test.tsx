@@ -183,6 +183,45 @@ describe('App', () => {
     });
   });
 
+  it('renders retention prompts in the top overlay layer via portal', async () => {
+    const { default: App } = await import('./App');
+    const api = {
+      invoke: vi.fn((channel: string) => {
+        if (channel === 'telemetry-retention-status') {
+          return Promise.resolve({
+            exceedsLimits: true,
+            exceedsSize: true,
+            exceedsAge: false,
+            totalEntries: 12,
+            sizeBytes: 1024,
+            maxBytes: 512,
+            maxAgeMs: 86400000,
+            prunePreview: {
+              wouldRemoveEntries: 4,
+              wouldFreeBytes: 512,
+              remainingBytes: 512,
+            },
+          });
+        }
+        return Promise.resolve(null);
+      }),
+      send: vi.fn(),
+      on: vi.fn(() => vi.fn()),
+      removeAllListeners: vi.fn(),
+    };
+    getElectronAPIMock.mockReturnValue(api);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/telemetry retention needs cleanup/i)).toBeInTheDocument();
+    });
+
+    const overlayStack = document.querySelector('.fixed.z-top-second');
+    expect(overlayStack).not.toBeNull();
+    expect(overlayStack?.textContent).toContain('Telemetry retention needs cleanup');
+  });
+
   it('renders changelog dialog semantics and closes on Escape', async () => {
     uiState.showChangelog = true;
     const { default: App } = await import('./App');

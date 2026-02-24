@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import { useUIState } from './providers/UIStateProvider';
 import { useGameData } from './providers/GameDataProvider';
 import { useUserPreferences } from './providers/UserPreferencesProvider';
@@ -2218,8 +2219,8 @@ const App: React.FC = () => {
             {(telemetryPruneStatus
                 || telemetryDraftPrompt
                 || (showFuzzyReviewPrompt && fuzzyRosterCandidates.length > 0 && !showReviewQueue)
-                || (showIdInfoPrompt && unknownIdCount > 0 && !showIdMapper)) && (
-                <div className="fixed z-popover top-20 right-4 left-4 md:left-auto md:w-[28rem] pointer-events-none space-y-3">
+                || (showIdInfoPrompt && unknownIdCount > 0 && !showIdMapper)) && createPortal((
+                <div className="fixed z-top top-20 right-4 left-4 md:left-auto md:w-[28rem] pointer-events-none space-y-3">
                     {telemetryPruneStatus && (
                         <div className="pointer-events-auto rounded-2xl border border-warning/45 bg-md-sys-surface-container-highest shadow-2xl p-4">
                             <div className="text-body font-bold">Telemetry retention needs cleanup</div>
@@ -2395,7 +2396,7 @@ const App: React.FC = () => {
                         </div>
                     )}
                 </div>
-            )}
+            ), document.body)}
 
         </div>
     );

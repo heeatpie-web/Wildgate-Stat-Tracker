@@ -316,7 +316,7 @@ describe('Wizard', () => {
         expect(gameData.setTimeSec).toHaveBeenCalledWith('34');
     });
 
-    it('shows telemetry source badges beside loadout detail sections', async () => {
+    it('shows friendly telemetry badges and hides raw event source names', async () => {
         const { Wizard } = await import('./Wizard');
         gameData.pendingMatchData = {
             id: 606,
@@ -341,9 +341,10 @@ describe('Wizard', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /prospector loadout/i }));
 
-        expect(screen.getByTestId('wizard-telemetry-ship-weapons')).toHaveTextContent('Source: NebLoadoutSaved');
-        expect(screen.getByTestId('wizard-telemetry-prospector-weapons')).toHaveTextContent('Source: NebLoadoutSaved');
-        expect(screen.getByTestId('wizard-telemetry-prospector-equipment')).toHaveTextContent('Source: NebLoadoutSaved');
+        expect(screen.getByTestId('wizard-telemetry-ship-weapons')).toHaveTextContent('Telemetry');
+        expect(screen.getByTestId('wizard-telemetry-prospector-weapons')).toHaveTextContent('Telemetry');
+        expect(screen.getByTestId('wizard-telemetry-prospector-equipment')).toHaveTextContent('Telemetry');
+        expect(screen.queryByText(/NebLoadoutSaved/i)).not.toBeInTheDocument();
     });
 
     it('uses non-clipping time input classes and AI Legion highlight treatment', async () => {

@@ -22,6 +22,44 @@ const setCached = (key: string, value: string) => {
     }
 };
 
+const decodeFileUrl = (value: string): string => {
+    const raw = String(value || '').trim();
+    if (!/^file:/i.test(raw)) return raw;
+    try {
+        const parsed = new URL(raw);
+        let pathname = decodeURIComponent(parsed.pathname || '');
+        if (/^\/[a-z]:/i.test(pathname)) pathname = pathname.slice(1);
+        if (parsed.hostname && parsed.hostname !== 'localhost') {
+            return `\\\\${parsed.hostname}${pathname.replace(/\//g, '\\')}`;
+        }
+        return pathname.replace(/\//g, '\\');
+    } catch {
+        return raw.replace(/^file:\/+/i, '');
+    }
+};
+
+const normalizeCacheKey = (value: string): string =>
+    String(value || '').trim().replace(/[\\/]+/g, '\\').toLowerCase();
+
+const buildSourceCandidates = (value: string): string[] => {
+    const decoded = decodeFileUrl(value);
+    const normalized = String(decoded || '').trim();
+    const candidates = [
+        normalized,
+        normalized.replace(/\//g, '\\'),
+        normalized.replace(/\\/g, '/'),
+    ].filter(Boolean);
+    const deduped: string[] = [];
+    const seen = new Set<string>();
+    candidates.forEach((candidate) => {
+        const key = normalizeCacheKey(candidate);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        deduped.push(candidate);
+    });
+    return deduped;
+};
+
 interface LocalImageProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'> {
     src: string;
     fallback?: React.ReactNode;
@@ -33,9 +71,10 @@ interface LocalImageProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>
  * Caches loaded data URLs to avoid re-reading.
  */
 export const LocalImage: React.FC<LocalImageProps> = ({ src, fallback, ...imgProps }) => {
+    const sourceCacheKey = normalizeCacheKey(src);
     const [dataUrl, setDataUrl] = useState<string | null>(() => {
         if (src.startsWith('data:')) return src;
-        return getCached(src);
+        return getCached(sourceCacheKey);
     });
     const [failed, setFailed] = useState(false);
     const mountedRef = useRef(true);
@@ -51,8 +90,8 @@ export const LocalImage: React.FC<LocalImageProps> = ({ src, fallback, ...imgPro
             setFailed(false);
             return;
         }
-        if (cache.has(src)) {
-            setDataUrl(getCached(src));
+        if (cache.has(sourceCacheKey)) {
+            setDataUrl(getCached(sourceCacheKey));
             setFailed(false);
             return;
         }
@@ -63,21 +102,31 @@ export const LocalImage: React.FC<LocalImageProps> = ({ src, fallback, ...imgPro
         const api = getElectronAPI();
         if (!api) { setFailed(true); return; }
 
-        api.invoke('read-file-base64', src).then((base64: string | null) => {
-            if (!mountedRef.current) return;
-            if (!base64) { setFailed(true); return; }
-            const ext = src.split('.').pop()?.toLowerCase() || 'png';
-            const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
-                : ext === 'webp' ? 'image/webp'
-                : ext === 'bmp' ? 'image/bmp'
-                : 'image/png';
-            const url = `data:${mime};base64,${base64}`;
-            setCached(src, url);
-            setDataUrl(url);
-        }).catch(() => {
+        const candidates = buildSourceCandidates(src);
+        (async () => {
+            for (const candidate of candidates) {
+                try {
+                    const base64 = await api.invoke('read-file-base64', candidate) as string | null;
+                    if (!mountedRef.current) return;
+                    if (!base64) continue;
+                    const ext = candidate.split('.').pop()?.toLowerCase() || 'png';
+                    const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
+                        : ext === 'webp' ? 'image/webp'
+                            : ext === 'bmp' ? 'image/bmp'
+                                : 'image/png';
+                    const url = `data:${mime};base64,${base64}`;
+                    setCached(sourceCacheKey, url);
+                    setCached(normalizeCacheKey(candidate), url);
+                    setDataUrl(url);
+                    setFailed(false);
+                    return;
+                } catch {
+                    // continue to next candidate
+                }
+            }
             if (mountedRef.current) setFailed(true);
-        });
-    }, [src]);
+        })();
+    }, [sourceCacheKey, src]);
 
     if (failed) {
         return fallback ? <>{fallback}</> : (

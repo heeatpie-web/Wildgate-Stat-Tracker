@@ -6,7 +6,7 @@ import {
     ScanEye, RefreshCw, Plus, ImageOff, Trash2, Upload, Zap, FolderOpen,
     FlaskConical, MoreHorizontal, Settings,
 } from 'lucide-react';
-import { Match, SHIPS, getShipColor, OpponentTeam, Loadout } from '../types';
+import { Match, SHIPS, getShipColor, OpponentTeam, Loadout, getTelemetryLoadoutSourceLabel } from '../types';
 import { UI_REACH_MODIFIERS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT, SYSTEMS } from '../utils/constants';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
@@ -68,13 +68,17 @@ import {
 } from '../utils/telemetryConsistency';
 import type { TimelineEvent } from '../store/slices/createDataSlice';
 import { capTeammateNames, getMaxTeammatesForShip as getMaxTeammatesForShipLimit } from '../utils/teamLimits';
-import { moveOpponentPlayerBetweenTeams } from '../utils/opponentTeamTransfer';
+import { tryMoveOpponentPlayerBetweenTeams } from '../utils/opponentTeamTransfer';
 import Logger from '../utils/logger';
 import {
     getPrimaryEliminatedByTeamValue,
     isEliminatedByTeamMatch,
 } from '../utils/eliminatorTeam';
 import { rerunMatchArtifacts } from '../utils/ocr/rerunMatchArtifacts';
+import {
+    extractArtifactSourceFromReachModifiers,
+    stripArtifactSourceModifiers,
+} from '../utils/artifactSource';
 
 export { backfillOpponentTeamShipTypes } from '../utils/ocr/opponentTeamShipTypes';
 
@@ -122,13 +126,14 @@ const toCanonicalModifierNames = (
 ): string[] => {
     const modifierNames = normalizeModifierEntries(modifierEntries || [], normalizeModifierName)
         .map((entry) => entry.name);
-    return Array.from(
+    const combined = Array.from(
         new Set(
             [...modifierNames, ...(hazards || [])]
                 .map((name) => normalizeModifierName(String(name || '')))
                 .filter(Boolean)
         )
     );
+    return stripArtifactSourceModifiers(combined);
 };
 
 const hasTelemetrySelection = (value: unknown): value is string => {
@@ -682,13 +687,38 @@ const SmartCapturesPanel: React.FC = () => {
                 mergedKills[ship] = Math.max(Number(mergedKills[ship]) || 0, nextCount);
             });
         });
+        const mergedShipWeaponCounts: Record<string, number> = {};
+        [keep, ...mergeFrom].forEach((candidateMatch) => {
+            const explicitEntries = candidateMatch.loadout?.shipWeapons || [];
+            if (explicitEntries.length > 0) {
+                explicitEntries.forEach((entry) => {
+                    const name = String(entry?.name || '').trim();
+                    const qty = Math.max(0, Math.floor(Number(entry?.quantity || 0)));
+                    if (!name || qty <= 0) return;
+                    mergedShipWeaponCounts[name] = Math.max(mergedShipWeaponCounts[name] || 0, qty);
+                });
+                return;
+            }
+            (candidateMatch.loadout?.weapons || []).forEach((weapon) => {
+                const name = String(weapon || '').trim();
+                if (!name) return;
+                mergedShipWeaponCounts[name] = Math.max(1, mergedShipWeaponCounts[name] || 0);
+            });
+        });
+        const mergedShipWeapons = Object.entries(mergedShipWeaponCounts)
+            .map(([name, quantity]) => ({
+                name,
+                quantity: Math.max(1, Math.min(10, quantity)),
+            }))
+            .slice(0, 10);
+        const mergedShipWeaponFlat = mergedShipWeapons.flatMap((entry) => (
+            Array.from({ length: entry.quantity }, () => entry.name)
+        )).slice(0, 10);
         const mergedLoadout = {
             hero: keep.loadout?.hero || mergeFrom.find((match) => match.loadout?.hero)?.loadout?.hero || null,
             ship: keep.loadout?.ship || mergeFrom.find((match) => match.loadout?.ship)?.loadout?.ship || null,
-            weapons: toUnique([
-                ...(keep.loadout?.weapons || []),
-                ...mergeFrom.flatMap((match) => match.loadout?.weapons || []),
-            ]).slice(0, 10),
+            shipWeapons: mergedShipWeapons,
+            weapons: mergedShipWeaponFlat,
             equipment: toUnique([
                 ...(keep.loadout?.equipment || []),
                 ...mergeFrom.flatMap((match) => match.loadout?.equipment || []),
@@ -770,7 +800,20 @@ const SmartCapturesPanel: React.FC = () => {
             return;
         }
         const selectedMatches = matches.filter(m => selectedIds.has(m.id));
-        const hasAnyArtifacts = selectedMatches.some(m => (m.artifacts || []).some(p => IMAGE_EXTS.some(ext => p.toLowerCase().endsWith(ext))));
+        const artifactPathsByMatch = new Map<number, string[]>();
+        for (const selectedMatch of selectedMatches) {
+            try {
+                const structured = await getMatchArtifactsStructured(selectedMatch.id, selectedMatch.artifacts || []);
+                artifactPathsByMatch.set(selectedMatch.id, structured.images || []);
+            } catch {
+                artifactPathsByMatch.set(selectedMatch.id, selectedMatch.artifacts || []);
+            }
+        }
+        const hasAnyArtifacts = selectedMatches.some((selectedMatch) =>
+            (artifactPathsByMatch.get(selectedMatch.id) || []).some((path) =>
+                IMAGE_EXTS.some((ext) => path.toLowerCase().endsWith(ext))
+            )
+        );
         if (!hasAnyArtifacts) {
             setToast({ message: 'Selected matches have no screenshots to OCR', type: 'warning' });
             return;
@@ -781,7 +824,8 @@ const SmartCapturesPanel: React.FC = () => {
             setToast({ message: `Rerunning OCR for ${ids.length} match${ids.length === 1 ? '' : 'es'}...`, type: 'info' });
 
             for (const match of selectedMatches) {
-                const imagePaths = (match.artifacts || []).filter(p => IMAGE_EXTS.some(ext => p.toLowerCase().endsWith(ext)));
+                const imagePaths = (artifactPathsByMatch.get(match.id) || [])
+                    .filter((path) => IMAGE_EXTS.some((ext) => path.toLowerCase().endsWith(ext)));
                 if (imagePaths.length === 0) continue;
 
                 updateMatch({ ...match, ocrState: 'processing' });
@@ -864,6 +908,12 @@ const SmartCapturesPanel: React.FC = () => {
                 const nextOpponents = nextOppTeams.flatMap(t => t.players);
                 const shipForTeammateCap = combined.playerShip?.shipType || match.ship || '';
                 const cappedTeammates = capTeammateNames(nextTeammates, shipForTeammateCap);
+                const mergedArtifactSource = extractArtifactSourceFromReachModifiers(
+                    (combined.reachModifiers || []) as Array<string | ExtractedModifier>
+                );
+                const mergedModifierNames = stripArtifactSourceModifiers(
+                    (combined.reachModifiers || []).map((modifier) => String(modifier?.name || '')).filter(Boolean)
+                );
 
                 const updated: Match = {
                     ...match,
@@ -871,7 +921,8 @@ const SmartCapturesPanel: React.FC = () => {
                     teammates: cappedTeammates.length > 0 ? cappedTeammates : match.teammates,
                     opponents: nextOpponents.length > 0 ? nextOpponents : match.opponents,
                     opponentTeams: nextOppTeams.length > 0 ? nextOppTeams : match.opponentTeams,
-                    reachModifiers: (combined.reachModifiers || []).map(m => m.name).filter(Boolean) as string[],
+                    reachModifiers: mergedModifierNames.length > 0 ? mergedModifierNames : (match.reachModifiers || []),
+                    artifactSource: mergedArtifactSource || match.artifactSource,
                     ocrDebug: {
                         rawText: combined.rawText,
                         confidence: combined.overallConfidence,
@@ -990,11 +1041,8 @@ const SmartCapturesPanel: React.FC = () => {
         <>
             <SmartCapturesShell
                 topNav={(
-                    <div className="flex items-center justify-start gap-2">
+                    <div className="flex items-center justify-start gap-2 sc-workspace-top-row">
                         {renderSectionTabs('sc-workspace-tabs--inline')}
-                        {activeSection === 'capture' && (
-                            <QueueCollapseToggle collapsed={queueCollapsed} onToggle={toggleQueueCollapsed} />
-                        )}
                     </div>
                 )}
                 content={activeSection === 'capture' ? (
@@ -1007,19 +1055,41 @@ const SmartCapturesPanel: React.FC = () => {
                             className="h-full"
                             header={
                                 <div className="px-3 pt-3 pb-2 space-y-2 border-b border-md-sys-outline/10">
+                                    <div className={`flex items-center gap-2 ${queueCollapsed ? 'justify-center' : 'justify-between'}`}>
+                                        <QueueCollapseToggle collapsed={queueCollapsed} onToggle={toggleQueueCollapsed} />
+                                        {!queueCollapsed && (
+                                            <>
+                                                <div className="relative flex-1 min-w-0">
+                                                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Search players, heroes, ships..."
+                                                        value={searchQuery}
+                                                        onChange={e => setSearchQuery(e.target.value)}
+                                                        className="w-full h-10 md3-surface rounded-control pl-9 pr-3 text-label-sm outline-none placeholder:opacity-40"
+                                                    />
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        dispatchSettingsFocusRequest({
+                                                            tab: 'ocr-capture',
+                                                            search: 'capture mode',
+                                                        });
+                                                        setShowSettings(true);
+                                                    }}
+                                                    className="h-9 w-9 md3-surface rounded-control inline-flex items-center justify-center text-md-sys-on-surface/70 hover:text-md-sys-primary transition-colors"
+                                                    title="Open Smart Capture settings"
+                                                    aria-label="Open Smart Capture settings"
+                                                >
+                                                    <Settings size={14} />
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
                                     {!queueCollapsed && (
                                         <>
-                                            <div className="relative">
-                                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" />
-                                                <input
-                                                    type="text"
-                                                    placeholder="Search players, heroes, ships..."
-                                                    value={searchQuery}
-                                                    onChange={e => setSearchQuery(e.target.value)}
-                                                    className="w-full h-10 md3-surface rounded-control pl-9 pr-3 text-label-sm outline-none placeholder:opacity-40"
-                                                />
-                                            </div>
-                                            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+                                            <div className="grid grid-cols-1 gap-2 items-center">
                                                 <select
                                                     aria-label="Match day"
                                                     value={queueDayFilter}
@@ -1037,21 +1107,6 @@ const SmartCapturesPanel: React.FC = () => {
                                                             </option>
                                                         ))}
                                                 </select>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        dispatchSettingsFocusRequest({
-                                                            tab: 'ocr-capture',
-                                                            search: 'capture mode',
-                                                        });
-                                                        setShowSettings(true);
-                                                    }}
-                                                    className="h-9 w-9 md3-surface rounded-control inline-flex items-center justify-center text-md-sys-on-surface/70 hover:text-md-sys-primary transition-colors"
-                                                    title="Open Smart Capture settings"
-                                                    aria-label="Open Smart Capture settings"
-                                                >
-                                                    <Settings size={14} />
-                                                </button>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <div className="sc-seg sc-bordered flex-1">
@@ -1372,6 +1427,9 @@ const SmartCapturesPanel: React.FC = () => {
                                         }
                                         const reachModifiers = data.reachModifiers ?? [];
                                         const hazards = data.hazards ?? [];
+                                        const extractedArtifactSource = extractArtifactSourceFromReachModifiers(
+                                            reachModifiers as Array<string | ExtractedModifier>
+                                        );
                                         const canonicalSessionModifiers = toCanonicalModifierNames(
                                             reachModifiers as Array<string | ExtractedModifier>,
                                             hazards,
@@ -1379,6 +1437,12 @@ const SmartCapturesPanel: React.FC = () => {
                                         );
                                         if (shouldSyncCurrentSession && canonicalSessionModifiers.length > 0) {
                                             setSelectedReachModifiers(canonicalSessionModifiers, 'ocr');
+                                        }
+                                        if (shouldSyncCurrentSession && extractedArtifactSource) {
+                                            useAppStore.getState().setPendingMatchData({
+                                                ...(useAppStore.getState().pendingMatchData || {}),
+                                                artifactSource: extractedArtifactSource,
+                                            });
                                         }
                                         setToast({
                                             message: shouldSyncCurrentSession
@@ -1432,6 +1496,9 @@ const SmartCapturesPanel: React.FC = () => {
                                             );
                                             if (canonicalMatchModifiers.length > 0) {
                                                 matchUpdates.reachModifiers = canonicalMatchModifiers;
+                                            }
+                                            if (extractedArtifactSource) {
+                                                matchUpdates.artifactSource = extractedArtifactSource;
                                             }
                                             const latest = useAppStore.getState().matches.find(m => m.id === selectedMatch.id) || selectedMatch;
                                             const nextMatch: Match = { ...latest, ...matchUpdates };
@@ -1767,11 +1834,11 @@ const SmartMatchDetail: React.FC<{
         players: false,
         modifiers: false,
         loadout: false,
-        poi: true,
+        poi: false,
         ocrMeta: true,
         telemetry: true,
-        kills: true,
-        details: true,
+        kills: false,
+        details: false,
         rerun: false,
     });
     const { setToast, setActiveView, setShowWizard, showWizard } = useUIState();
@@ -2111,12 +2178,12 @@ const SmartMatchDetail: React.FC<{
         setRerunProgress({ ...INITIAL_RERUN_PROGRESS });
         setEditingTeamOpponentPlayer(null);
         setEditingTeamOpponentValue('');
-        getMatchArtifactsStructured(match.id)
+        getMatchArtifactsStructured(match.id, match.artifacts || [])
             .then(setArtifacts)
             .catch((error: unknown) => {
                 Logger.warn('SmartCapturesPanel', `Failed to load artifacts for match ${match.id}`, error);
             });
-    }, [match.id]);
+    }, [match.artifacts, match.id]);
 
     const totalKills = Object.values(match.kills || {}).reduce((a, b) => a + (Number(b) || 0), 0);
     const startEdit = (field: string, currentValue: string) => {
@@ -2247,19 +2314,28 @@ const SmartMatchDetail: React.FC<{
         toPlayerIndex?: number | null
     ) => {
         const currentTeams = match.opponentTeams || [];
-        const movedTeams = moveOpponentPlayerBetweenTeams(currentTeams, {
+        const moveResult = tryMoveOpponentPlayerBetweenTeams(currentTeams, {
             fromTeamIndex,
             fromPlayerIndex,
             toTeamIndex,
             toPlayerIndex,
+            preventDuplicateNames: true,
+            normalizeName: (value) => normalizeOcrName(String(value || '')).toLowerCase(),
         });
-        if (movedTeams === currentTeams) return;
+        if (moveResult.reason === 'duplicate') {
+            const movedName = moveResult.movedPlayer || 'Player';
+            const targetTeamLabel = currentTeams[toTeamIndex]?.teamName || `Team ${toTeamIndex + 1}`;
+            setToast({ message: `${movedName} already exists in ${targetTeamLabel}.`, type: 'warning' });
+            return;
+        }
+        if (moveResult.reason !== 'moved') return;
+        const movedTeams = moveResult.teams;
         onUpdate({
             ...match,
             opponentTeams: movedTeams,
             opponents: movedTeams.flatMap((team) => team.players).filter(Boolean),
         });
-    }, [match, onUpdate]);
+    }, [match, onUpdate, setToast]);
     const allowOpponentDrop = useCallback((event: React.DragEvent<HTMLElement>, teamIndex: number) => {
         if (!draggedOpponentPlayer) return;
         event.preventDefault();
@@ -2491,7 +2567,8 @@ const SmartMatchDetail: React.FC<{
         }
         const result = await removeMatchArtifact(match.id, file.artifactId);
         if (result.success) {
-            const updated = await getMatchArtifactsStructured(match.id);
+            const fallbackArtifacts = (match.artifacts || []).filter((path) => path !== file.path);
+            const updated = await getMatchArtifactsStructured(match.id, fallbackArtifacts);
             setArtifacts(updated);
             if (match.artifacts) {
                 const newArtifacts = match.artifacts.filter(p => p !== file.path);
@@ -2506,14 +2583,16 @@ const SmartMatchDetail: React.FC<{
     const handleAddScreenshot = async () => {
         const result = await addMatchArtifact(match.id);
         if (result.success && result.added) {
-            const updated = await getMatchArtifactsStructured(match.id);
-            setArtifacts(updated);
             const currentArtifacts = match.artifacts || [];
+            const mergedFallback = [...currentArtifacts, ...result.added];
+            const updated = await getMatchArtifactsStructured(match.id, mergedFallback);
+            setArtifacts(updated);
             onUpdate({ ...match, artifacts: [...currentArtifacts, ...result.added], ocrState: match.ocrState || 'queued' });
         }
     };
     const handleRerunAnalysis = async () => {
-        if (!match.artifacts || match.artifacts.length === 0) return;
+        const artifactCandidates = artifacts.images.length > 0 ? artifacts.images : (match.artifacts || []);
+        if (!artifactCandidates || artifactCandidates.length === 0) return;
         setRerunning(true);
         setRerunResults(null);
         setRerunProgress({
@@ -2525,7 +2604,7 @@ const SmartMatchDetail: React.FC<{
         setReviewData(null);
         onUpdate({ ...match, ocrState: 'processing' });
         const imageExts = ['.png', '.jpg', '.jpeg', '.bmp', '.webp'];
-        const imagePaths = match.artifacts.filter(p => imageExts.some(ext => p.toLowerCase().endsWith(ext)));
+        const imagePaths = artifactCandidates.filter(p => imageExts.some(ext => p.toLowerCase().endsWith(ext)));
         if (imagePaths.length === 0) {
             setRerunning(false);
             setRerunProgress({
@@ -2694,9 +2773,91 @@ const SmartMatchDetail: React.FC<{
     const latestLoadoutTelemetrySnapshot = telemetryConsistency?.loadoutSaves?.length
         ? telemetryConsistency.loadoutSaves[telemetryConsistency.loadoutSaves.length - 1]
         : null;
-    const loadoutTelemetrySourceBadgeLabel = latestLoadoutTelemetrySnapshot?.source
-        ? `Source: ${latestLoadoutTelemetrySnapshot.source}`
-        : null;
+    const loadoutTelemetrySourceBadgeLabel = getTelemetryLoadoutSourceLabel(latestLoadoutTelemetrySnapshot?.source);
+    const detailShipWeaponCounts = useMemo(() => {
+        const counts: Record<string, number> = {};
+        const explicitShipWeapons = (match.loadout?.shipWeapons || [])
+            .map((entry) => ({
+                name: String(entry?.name || '').trim(),
+                quantity: Math.max(0, Math.floor(Number(entry?.quantity || 0))),
+            }))
+            .filter((entry) => entry.name && entry.quantity > 0);
+        if (explicitShipWeapons.length > 0) {
+            explicitShipWeapons.forEach((entry) => {
+                counts[entry.name] = entry.quantity;
+            });
+            return counts;
+        }
+        (match.loadout?.weapons || [])
+            .filter((weapon) => !/tertiary\s+(weapon|equipment)/i.test(String(weapon || '')))
+            .slice(0, 10)
+            .forEach((weapon) => {
+                const cleaned = String(weapon || '').trim();
+                if (!cleaned) return;
+                counts[cleaned] = (counts[cleaned] || 0) + 1;
+            });
+        return counts;
+    }, [match.loadout?.shipWeapons, match.loadout?.weapons]);
+    const detailShipWeaponTotal = useMemo(
+        () => Object.values(detailShipWeaponCounts).reduce((sum, qty) => sum + qty, 0),
+        [detailShipWeaponCounts]
+    );
+    const setDetailShipWeaponQuantity = useCallback((weaponName: string, quantity: number) => {
+        const currentLoadout: Loadout = match.loadout || {
+            hero: match.hero || null,
+            ship: match.ship || null,
+            shipWeapons: [],
+            weapons: [],
+            equipment: [],
+            characterWeapons: [],
+            characterEquipment: [],
+        };
+        const normalizedKey = String(weaponName || '').trim().toLowerCase();
+        if (!normalizedKey) return;
+        const clampedQty = Math.max(0, Math.min(10, Math.floor(quantity)));
+        const existingCounts: Record<string, { label: string; qty: number }> = {};
+        (currentLoadout.weapons || [])
+            .filter((weapon) => !/tertiary\s+(weapon|equipment)/i.test(String(weapon || '')))
+            .slice(0, 10)
+            .forEach((weapon) => {
+                const cleaned = String(weapon || '').trim();
+                const key = cleaned.toLowerCase();
+                if (!cleaned || !key) return;
+                if (!existingCounts[key]) {
+                    existingCounts[key] = { label: cleaned, qty: 0 };
+                }
+                existingCounts[key].qty += 1;
+            });
+        if (clampedQty === 0) {
+            delete existingCounts[normalizedKey];
+        } else {
+            const preferredLabel = WEAPONS.find((item) => item.toLowerCase() === normalizedKey) || weaponName;
+            existingCounts[normalizedKey] = { label: preferredLabel, qty: clampedQty };
+        }
+        const nextWeapons: string[] = [];
+        Object.values(existingCounts).forEach(({ label, qty }) => {
+            for (let idx = 0; idx < qty; idx += 1) {
+                if (nextWeapons.length >= 10) break;
+                nextWeapons.push(label);
+            }
+        });
+        onUpdate({
+            ...match,
+            loadout: {
+                ...currentLoadout,
+                shipWeapons: nextWeapons.reduce<Array<{ name: string; quantity: number }>>((acc, weapon) => {
+                    const existing = acc.find((entry) => entry.name.toLowerCase() === weapon.toLowerCase());
+                    if (existing) {
+                        existing.quantity += 1;
+                    } else {
+                        acc.push({ name: weapon, quantity: 1 });
+                    }
+                    return acc;
+                }, []),
+                weapons: nextWeapons,
+            },
+        });
+    }, [match, onUpdate]);
     const applyTelemetryConsistencyChip = useCallback((chipKey: 'team-count-mismatch' | 'duration-mismatch' | 'mode-mismatch') => {
         if (chipKey !== 'duration-mismatch') return;
         const telemetryDuration = telemetryConsistency?.telemetryDurationSeconds;
@@ -2935,7 +3096,7 @@ const SmartMatchDetail: React.FC<{
 
 
             <div className="sc-detail-main-grid">
-                <div className="lg:col-span-7 lg:col-start-1 space-y-3 min-w-0 sc-detail-editor-block">
+                <div className="lg:col-span-9 lg:col-start-1 space-y-3 min-w-0 sc-detail-editor-block">
                     <div className="sc-detail-lane-kicker">
                         <Edit3 size={12} />
                         Match Editor
@@ -3067,14 +3228,23 @@ const SmartMatchDetail: React.FC<{
                                             players: dedupeBoardNames([...(team.players || []), value]),
                                         };
                                     })}
-                                    onPlayerMove={(fromTeamIndex, fromPlayerIndex, toTeamIndex, toPlayerIndex) => mutateAssignmentBoardTeams((draft) => (
-                                        moveOpponentPlayerBetweenTeams(draft, {
+                                    onPlayerMove={(fromTeamIndex, fromPlayerIndex, toTeamIndex, toPlayerIndex) => mutateAssignmentBoardTeams((draft) => {
+                                        const moveResult = tryMoveOpponentPlayerBetweenTeams(draft, {
                                             fromTeamIndex,
                                             fromPlayerIndex,
                                             toTeamIndex,
                                             toPlayerIndex,
-                                        }) as OcrTeamAssignmentTeam[]
-                                    ))}
+                                            preventDuplicateNames: true,
+                                            normalizeName: (value) => normalizeOcrName(String(value || '')).toLowerCase(),
+                                        });
+                                        if (moveResult.reason === 'duplicate') {
+                                            const movedName = moveResult.movedPlayer || 'Player';
+                                            const targetTeamName = draft[toTeamIndex]?.teamName || `Team ${toTeamIndex + 1}`;
+                                            setToast({ message: `${movedName} already exists in ${targetTeamName}.`, type: 'warning' });
+                                            return draft;
+                                        }
+                                        return moveResult.teams as OcrTeamAssignmentTeam[];
+                                    })}
                                 />
                             </div>
                             {match.eliminatedByTeam && (
@@ -3137,29 +3307,64 @@ const SmartMatchDetail: React.FC<{
                                     {SHIPS.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
-                            {match.loadout?.weapons && match.loadout.weapons.filter((weapon) => !/tertiary\s+(weapon|equipment)/i.test(String(weapon || ''))).slice(0, 10).length > 0 && (
-                                <div className="flex gap-2 items-start">
-                                    <div className="w-40 shrink-0 flex items-center gap-1.5">
-                                        <span className="opacity-40">Ship Weapons:</span>
-                                        {loadoutTelemetrySourceBadgeLabel && (
-                                            <span
-                                                className="px-1.5 py-0.5 rounded text-label-xs font-bold bg-success-soft text-success"
-                                            >
-                                                {loadoutTelemetrySourceBadgeLabel}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="flex flex-wrap gap-1">
-                                        {match.loadout.weapons.filter((weapon) => !/tertiary\s+(weapon|equipment)/i.test(String(weapon || ''))).slice(0, 10).map((w, i) => (
-                                            <span key={i} className="px-2 py-0.5 bg-info-soft text-info rounded-md text-label-sm font-bold">{w}</span>
-                                        ))}
-                                    </div>
+                            <div className="space-y-1.5">
+                                <div className="w-full flex items-center gap-1.5">
+                                    <span className="opacity-40 shrink-0">Ship Weapons:</span>
+                                    <span className="text-label-xs opacity-60">
+                                        {detailShipWeaponTotal}/10 slots
+                                    </span>
                                 </div>
-                            )}
+                                <div className="space-y-1">
+                                    {Object.entries(detailShipWeaponCounts).length === 0 ? (
+                                        <span className="text-label-sm opacity-55">No ship weapons selected.</span>
+                                    ) : (
+                                        Object.entries(detailShipWeaponCounts).map(([weaponName, qty]) => (
+                                            <div key={weaponName} className="flex items-center justify-between gap-2 rounded-md px-2 py-1 md3-surface-high">
+                                                <span className="text-label-sm font-bold">{weaponName}</span>
+                                                <div className="inline-flex items-center gap-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDetailShipWeaponQuantity(weaponName, qty - 1)}
+                                                        className="w-6 h-6 rounded-control md3-surface inline-flex items-center justify-center text-md-sys-on-surface/70 hover:text-md-sys-on-surface"
+                                                        aria-label={`Decrease ${weaponName}`}
+                                                    >
+                                                        -
+                                                    </button>
+                                                    <span className="min-w-[1.5rem] text-center text-label-sm font-black">{qty}</span>
+                                                    <button
+                                                        type="button"
+                                                        disabled={detailShipWeaponTotal >= 10}
+                                                        onClick={() => setDetailShipWeaponQuantity(weaponName, qty + 1)}
+                                                        className="w-6 h-6 rounded-control md3-surface inline-flex items-center justify-center text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
+                                                        aria-label={`Increase ${weaponName}`}
+                                                    >
+                                                        +
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                    {WEAPONS
+                                        .filter((weapon) => !detailShipWeaponCounts[weapon])
+                                        .map((weapon) => (
+                                            <button
+                                                key={weapon}
+                                                type="button"
+                                                disabled={detailShipWeaponTotal >= 10}
+                                                onClick={() => setDetailShipWeaponQuantity(weapon, 1)}
+                                                className="px-2 py-0.5 rounded-md text-label-sm font-bold md3-surface-high text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
+                                            >
+                                                + {weapon}
+                                            </button>
+                                        ))}
+                                </div>
+                            </div>
                             {match.loadout?.characterWeapons && match.loadout.characterWeapons.filter(Boolean).slice(0, 2).length > 0 && (
                                 <div className="flex gap-2 items-start">
                                     <div className="w-40 shrink-0 flex items-center gap-1.5">
-                                        <span className="opacity-40">Prospector Weapons:</span>
+                                        <span className="opacity-40">Weapons:</span>
                                         {loadoutTelemetrySourceBadgeLabel && (
                                             <span
                                                 className="px-1.5 py-0.5 rounded text-label-xs font-bold bg-success-soft text-success"
@@ -3170,7 +3375,7 @@ const SmartMatchDetail: React.FC<{
                                     </div>
                                     <div className="flex flex-wrap gap-1">
                                         {match.loadout.characterWeapons.filter(Boolean).slice(0, 2).map((weapon, i) => (
-                                            <span key={i} className="px-2 py-0.5 bg-info-soft text-info rounded-md text-label-sm font-bold">{weapon}</span>
+                                            <span key={i} className="px-2 py-0.5 bg-success-soft text-success rounded-md text-label-sm font-bold">{weapon}</span>
                                         ))}
                                     </div>
                                 </div>
@@ -3178,7 +3383,7 @@ const SmartMatchDetail: React.FC<{
                             {match.loadout?.characterEquipment && match.loadout.characterEquipment.filter(Boolean).slice(0, 2).length > 0 && (
                                 <div className="flex gap-2 items-start">
                                     <div className="w-40 shrink-0 flex items-center gap-1.5">
-                                        <span className="opacity-40">Prospector Equipment:</span>
+                                        <span className="opacity-40">Equipment:</span>
                                         {loadoutTelemetrySourceBadgeLabel && (
                                             <span
                                                 className="px-1.5 py-0.5 rounded text-label-xs font-bold bg-success-soft text-success"
@@ -3197,7 +3402,7 @@ const SmartMatchDetail: React.FC<{
                         </div>
                     </Section>
 
-                    <Section title="Points of Interest" collapsible collapsed={!!collapsedSections.poi} onToggle={() => toggleSection('poi')}>
+                    <Section title="Points of Interest">
                         <div className="flex items-center gap-4 text-label-sm">
                             <div className="flex items-center gap-1.5">
                                 <span className="opacity-40">Easy:</span>
@@ -3223,7 +3428,7 @@ const SmartMatchDetail: React.FC<{
                         </div>
                     </Section>
 
-                    <Section title="Ship Eliminations" collapsible collapsed={!!collapsedSections.kills} onToggle={() => toggleSection('kills')}>
+                    <Section title="Ship Eliminations">
                         <div className="flex flex-wrap gap-1.5 items-center">
                             {Object.entries(match.kills || {}).filter(([, v]) => v > 0).map(([ship, count]) => {
                                 const isAiLegionKill = ship.trim().toLowerCase() === 'ai legion';
@@ -3267,7 +3472,7 @@ const SmartMatchDetail: React.FC<{
                         </div>
                     </Section>
 
-                    <Section title="Match Details" collapsible collapsed={!!collapsedSections.details} onToggle={() => toggleSection('details')}>
+                    <Section title="Match Details">
                         <div className="space-y-2">
                             {renderEditableField('killedBy', match.killedBy || '', 'Killed By')}
                             {renderEditableField('killedByShip', match.killedByShip || '', 'Killer Ship')}
@@ -3277,7 +3482,7 @@ const SmartMatchDetail: React.FC<{
                     </Section>
                 </div>
 
-                <div className="lg:col-span-5 lg:col-start-8 space-y-3 min-w-0 sc-detail-rail-block" ref={screenshotsSectionRef}>
+                <div className="lg:col-span-3 lg:col-start-10 space-y-3 min-w-0 sc-detail-rail-block" ref={screenshotsSectionRef}>
                     <div className="sc-detail-lane-kicker sc-detail-lane-kicker--rail">
                         <ScanEye size={12} />
                         Screenshots and OCR
@@ -3305,7 +3510,7 @@ const SmartMatchDetail: React.FC<{
                                         title="Run OCR analysis on the bundled screenshots"
                                     >
                                         <RefreshCw size={12} className={rerunning ? 'animate-spin' : ''} />
-                                        {rerunning ? 'Analyzing...' : `Re-analyze ${countImages(match.artifacts || [])} Screenshot${countImages(match.artifacts || []) !== 1 ? 's' : ''}`}
+                                        {rerunning ? 'Analyzing...' : `Re-analyze ${countImages(artifacts.images.length > 0 ? artifacts.images : (match.artifacts || []))} Screenshot${countImages(artifacts.images.length > 0 ? artifacts.images : (match.artifacts || [])) !== 1 ? 's' : ''}`}
                                     </button>
                                 </div>
                             </div>

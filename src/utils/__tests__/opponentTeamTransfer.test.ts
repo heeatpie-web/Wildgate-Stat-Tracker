@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { moveOpponentPlayerBetweenTeams } from '../opponentTeamTransfer';
+import {
+  moveOpponentPlayerBetweenTeams,
+  tryMoveOpponentPlayerBetweenTeams,
+} from '../opponentTeamTransfer';
 
 describe('moveOpponentPlayerBetweenTeams', () => {
   it('moves a player to another team and appends when no target index is provided', () => {
@@ -59,5 +62,21 @@ describe('moveOpponentPlayerBetweenTeams', () => {
 
     expect(moved).toBe(teams);
   });
-});
 
+  it('blocks duplicate target player names when duplicate prevention is enabled', () => {
+    const teams = [
+      { teamName: 'Red', players: ['Alpha'] },
+      { teamName: 'Blue', players: ['alpha', 'Bravo'] },
+    ];
+    const result = tryMoveOpponentPlayerBetweenTeams(teams, {
+      fromTeamIndex: 0,
+      fromPlayerIndex: 0,
+      toTeamIndex: 1,
+      preventDuplicateNames: true,
+      normalizeName: (value) => String(value || '').trim().toLowerCase(),
+    });
+
+    expect(result.reason).toBe('duplicate');
+    expect(result.teams).toEqual(teams);
+  });
+});

@@ -16,7 +16,7 @@ import {
     OCR_BATCH_THRESHOLD_STEP,
 } from '../utils/ocrBatchActions';
 import { normalizeOcrCalibrationMode } from '../utils/ocrCalibration';
-import { moveOpponentPlayerBetweenTeams } from '../utils/opponentTeamTransfer';
+import { tryMoveOpponentPlayerBetweenTeams } from '../utils/opponentTeamTransfer';
 import { ConfidenceMeter } from './ConfidenceMeter';
 import { BatchActionConfirmDialog } from './BatchActionConfirmDialog';
 import { LocalImage } from './LocalImage';
@@ -262,11 +262,13 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         setSessionTeams,
         setSessionShipTypes,
     } = useGameData();
-    const { activeUser } = useUIState();
+    const { activeUser, setToast } = useUIState();
     const {
         setPlayerName,
         recordOcrCorrection,
         recordOcrAliasCorrection,
+        recordTeamIdentityCorrection,
+        resolveTeamIdentity,
         ocrCorrections,
         ocrAliasModel,
         recordCalibrationSample,
@@ -282,10 +284,17 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     const [searchQuery, setSearchQuery] = useState<Record<string, string>>({});
     const [activeInputPlayer, setActiveInputPlayer] = useState<string | null>(null);
     const [pendingBatchAction, setPendingBatchAction] = useState<PendingBatchAction>(null);
-    const seededTeamDraft = useMemo(
-        () => buildTeamDraftFromPendingData(pendingMatchData, activeUser, sessionTeams, sessionShipTypes),
-        [activeUser, pendingMatchData, sessionShipTypes, sessionTeams]
-    );
+    const seededTeamDraft = useMemo(() => {
+        const base = buildTeamDraftFromPendingData(pendingMatchData, activeUser, sessionTeams, sessionShipTypes);
+        return base.map((team) => {
+            const resolved = resolveTeamIdentity(team.teamName, team.color);
+            return {
+                ...team,
+                teamName: resolved.teamName || team.teamName,
+                color: resolved.color || team.color,
+            };
+        });
+    }, [activeUser, pendingMatchData, resolveTeamIdentity, sessionShipTypes, sessionTeams]);
     const seededTeamDraftSignature = useMemo(
         () => serializeTeamDraftSeed(seededTeamDraft),
         [seededTeamDraft]
@@ -299,6 +308,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     const scrollBodyRef = useRef<HTMLDivElement | null>(null);
     const suppressSeedSyncRef = useRef(false);
     const teamDraftSeedRef = useRef<string>('');
+    const initialTeamDraftRef = useRef<TeamDraft[]>([]);
     const [dropdownAnchor, setDropdownAnchor] = useState<DropdownAnchor | null>(null);
     const teamAssignmentRosterListId = useId();
     const dialogTitleId = useId();
@@ -374,6 +384,10 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         setDropdownAnchor(null);
         setPendingBatchAction(null);
         setTeamDraft(seededTeamDraft);
+        initialTeamDraftRef.current = seededTeamDraft.map((team) => ({
+            ...team,
+            players: [...(team.players || [])],
+        }));
         teamDraftSeedRef.current = seededTeamDraftSignature;
         setLightboxIdx(null);
     }, [isOpen, seededTeamDraft, seededTeamDraftSignature]);
@@ -716,6 +730,28 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 nextShipTypes[playerName] = team.shipType;
             });
         });
+        const baselineByKey = new Map(
+            (initialTeamDraftRef.current || []).map((team, index) => [
+                String(team.key || `${index}`),
+                team,
+            ])
+        );
+        resolvedTeams.forEach((team, index) => {
+            const baselineTeam = baselineByKey.get(String(team.key || `${index}`))
+                || initialTeamDraftRef.current[index];
+            if (!baselineTeam) return;
+            const previousName = normalizeSubmittedName(String(baselineTeam.teamName || `Team ${index + 1}`));
+            const nextName = normalizeSubmittedName(String(team.teamName || `Team ${index + 1}`));
+            const previousColor = normalizeSubmittedName(String(baselineTeam.color || 'unknown')).toLowerCase() || 'unknown';
+            const nextColor = normalizeSubmittedName(String(team.color || 'unknown')).toLowerCase() || 'unknown';
+            if (previousName === nextName && previousColor === nextColor) return;
+            recordTeamIdentityCorrection?.(previousName, nextName, {
+                rawColor: previousColor,
+                correctedColor: nextColor,
+                context: correctionContext,
+                source: 'review_modal',
+            });
+        });
 
         setSessionTeams(nextSessionTeams);
         setSessionShipTypes(nextShipTypes, 'manual');
@@ -900,6 +936,12 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         )));
     };
 
+    const updateTeamColor = (teamIndex: number, color: string) => {
+        setTeamDraft((prev) => prev.map((team, index) => (
+            index === teamIndex ? { ...team, color } : team
+        )));
+    };
+
     const updateTeamPlayerName = (teamIndex: number, playerIndex: number, nextName: string) => {
         setTeamDraft((prev) => prev.map((team, index) => {
             if (index !== teamIndex) return team;
@@ -939,20 +981,29 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         toTeamIndex: number,
         toPlayerIndex?: number | null
     ) => {
-        const preview = moveOpponentPlayerBetweenTeams(teamDraft, {
+        const moveResult = tryMoveOpponentPlayerBetweenTeams(teamDraft, {
             fromTeamIndex,
             fromPlayerIndex,
             toTeamIndex,
             toPlayerIndex,
+            preventDuplicateNames: true,
+            normalizeName: (value) => normalizeNameKey(String(value || '')),
         });
-        if (preview === teamDraft) return;
+        if (moveResult.reason === 'duplicate') {
+            const duplicateName = moveResult.movedPlayer || 'Player';
+            const targetTeamName = teamDraft[toTeamIndex]?.teamName || `Team ${toTeamIndex + 1}`;
+            announce(`${duplicateName} is already in ${targetTeamName}.`, 'assertive');
+            setToast({ message: `${duplicateName} already exists in ${targetTeamName}.`, type: 'warning' });
+            return;
+        }
+        if (moveResult.reason !== 'moved') return;
         const movedName = teamDraft[fromTeamIndex]?.players[fromPlayerIndex] || '';
         const targetTeamName = teamDraft[toTeamIndex]?.teamName || teamDraft[toTeamIndex]?.color || `Team ${toTeamIndex + 1}`;
-        setTeamDraft(preview);
+        setTeamDraft(moveResult.teams);
         if (movedName) {
             announce(`Moved ${movedName} to ${targetTeamName}.`, 'polite');
         }
-    }, [teamDraft, announce]);
+    }, [teamDraft, announce, setToast]);
 
     const shortcutsEnabled = isOpen && pendingBatchAction === null && activeInputPlayer === null;
     useKeyboardShortcuts([
@@ -1007,9 +1058,11 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                 Review player names, team grouping, and ship assignment.
                             </p>
                         </div>
-                        <span className="md3-chip text-label-xs font-mono shrink-0">
-                            {detectedPlayers.length} detected
-                        </span>
+                        {!embedded && (
+                            <span className="md3-chip text-label-xs font-mono shrink-0">
+                                {detectedPlayers.length} detected
+                            </span>
+                        )}
                     </div>
                     {embedded ? (
                         <button
@@ -1073,7 +1126,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                         >
                             <Minus size={14} />
                         </button>
-                        <div className="flex-1 px-1 py-2">
+                        <div className="flex-1 px-1 py-1">
                             <input
                                 type="range"
                                 min={OCR_BATCH_THRESHOLD_MIN}
@@ -1081,7 +1134,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                 step={OCR_BATCH_THRESHOLD_STEP}
                                 value={ocrBatchAcceptThreshold}
                                 onChange={(event) => setOcrBatchAcceptThreshold(Number(event.target.value))}
-                                className="ocr-threshold-slider w-full h-12 cursor-pointer touch-manipulation"
+                                className="ocr-threshold-slider w-full h-8 cursor-pointer touch-manipulation"
                                 aria-label="Batch confidence threshold"
                             />
                         </div>
@@ -1139,8 +1192,10 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                             rosterSuggestionsId={pilotRegistry.length > 0 ? teamAssignmentRosterListId : undefined}
                             friendlyTeamIndex={displayFriendlyTeamIndex}
                             compact={embedded}
+                            allowColorEdit={true}
                             fuzzyMatches={fuzzyMatchByPlayer}
                             onTeamNameChange={updateTeamName}
+                            onTeamColorChange={updateTeamColor}
                             onTeamShipChange={updateTeamShip}
                             onPlayerChange={updateTeamPlayerName}
                             onPlayerRemove={removeTeamPlayer}

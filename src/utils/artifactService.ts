@@ -130,26 +130,83 @@ export type RerunOcrResult = OCRProcessResult & {
     [key: string]: unknown;
 };
 
-export const getMatchArtifactsStructured = async (matchId: number): Promise<MatchArtifactsStructured> => {
+const normalizeArtifactPath = (value: string): string =>
+    String(value || '').trim().replace(/[\\/]+/g, '\\');
+
+const mergeArtifactPaths = (primary: string[], fallback: string[] = []): string[] => {
+    const merged: string[] = [];
+    const seenPaths = new Set<string>();
+    const primaryFilenames = new Set<string>();
+    const toFilenameKey = (entry: string): string => {
+        const normalized = normalizeArtifactPath(entry);
+        if (!normalized) return '';
+        const filename = normalized.split('\\').pop() || '';
+        return filename.trim().toLowerCase();
+    };
+    const pushPath = (entry: string) => {
+        const normalized = normalizeArtifactPath(entry);
+        if (!normalized) return;
+        const key = normalized.toLowerCase();
+        if (seenPaths.has(key)) return;
+        seenPaths.add(key);
+        merged.push(normalized);
+    };
+    primary.forEach((entry) => {
+        pushPath(entry);
+        const filenameKey = toFilenameKey(entry);
+        if (filenameKey) primaryFilenames.add(filenameKey);
+    });
+    fallback.forEach((entry) => {
+        const filenameKey = toFilenameKey(entry);
+        if (filenameKey && primaryFilenames.has(filenameKey)) return;
+        pushPath(entry);
+    });
+    return merged;
+};
+
+export const getMatchArtifactsStructured = async (
+    matchId: number,
+    fallbackImages: string[] = []
+): Promise<MatchArtifactsStructured> => {
     const api = getElectronAPI();
-    if (!api) return { images: [], imageFiles: [], telemetry: [] };
+    if (!api) return { images: mergeArtifactPaths([], fallbackImages), imageFiles: [], telemetry: [] };
     try {
-        const raw = await api.invoke('get-match-artifacts', matchId);
+        const raw = await api.invoke('get-match-artifacts', { matchId, fallbackImages });
         const result = unwrapIpcResult<MatchArtifactsPayload | string[]>(raw);
         if (!result.ok) {
             console.warn('[artifactService] get-match-artifacts failed:', result.code, result.message);
-            return { images: [], imageFiles: [], telemetry: [] };
+            return { images: mergeArtifactPaths([], fallbackImages), imageFiles: [], telemetry: [] };
         }
         // Handle both old (string[]) and new ({images, imageFiles, telemetry}) formats
-        if (Array.isArray(result.data)) return { images: result.data, imageFiles: [], telemetry: [] };
+        if (Array.isArray(result.data)) {
+            return { images: mergeArtifactPaths(result.data, fallbackImages), imageFiles: [], telemetry: [] };
+        }
         const payload = isRecord(result.data) ? result.data : {};
+        const payloadImages = Array.isArray(payload.images)
+            ? payload.images.filter((img): img is string => typeof img === 'string')
+            : [];
+        const mergedImages = mergeArtifactPaths(payloadImages, fallbackImages);
+        const payloadImageFiles = Array.isArray(payload.imageFiles) ? payload.imageFiles.filter(isArtifactFile) : [];
+        const fileByPath = new Map(
+            payloadImageFiles.map((entry) => [normalizeArtifactPath(entry.path).toLowerCase(), entry])
+        );
+        const mergedImageFiles = mergedImages.map((imagePath) => {
+            const key = normalizeArtifactPath(imagePath).toLowerCase();
+            const existing = fileByPath.get(key);
+            if (existing) return existing;
+            return {
+                artifactId: '',
+                filename: imagePath.split(/[\\/]/).pop() || imagePath,
+                path: imagePath,
+            } as ArtifactFile;
+        });
         return {
-            images: Array.isArray(payload.images) ? payload.images.filter((img): img is string => typeof img === 'string') : [],
-            imageFiles: Array.isArray(payload.imageFiles) ? payload.imageFiles.filter(isArtifactFile) : [],
+            images: mergedImages,
+            imageFiles: mergedImageFiles,
             telemetry: normalizeTelemetryArchiveCollection(payload.telemetry),
         };
     } catch (e) {
-        return { images: [], imageFiles: [], telemetry: [] };
+        return { images: mergeArtifactPaths([], fallbackImages), imageFiles: [], telemetry: [] };
     }
 };
 

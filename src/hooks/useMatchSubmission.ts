@@ -10,6 +10,10 @@ import { StorageService } from '../utils/storage';
 import Logger from '../utils/logger';
 import { capTeammateNames } from '../utils/teamLimits';
 import { evaluateTelemetryConsistencyChecks, formatDurationOffset } from '../utils/telemetryConsistency';
+import {
+    extractArtifactSourceFromReachModifiers,
+    stripArtifactSourceModifiers,
+} from '../utils/artifactSource';
 
 const DEFAULT_ARTIFACT_LOOKBACK_MS = 10 * 60 * 1000;
 const MAX_SHIP_WEAPON_SLOTS = 10;
@@ -30,8 +34,18 @@ const sanitizeLoadoutSlots = (loadout: Match['loadout'] | null) => {
             .filter((entry) => !/tertiary\s+(weapon|equipment)/i.test(entry))
             .slice(0, Math.max(1, maxSlots))
     );
+    const sanitizeShipWeaponEntries = (entries: Array<{ name: string; quantity: number }> | undefined) => (
+        (entries || [])
+            .map((entry) => ({
+                name: String(entry?.name || '').trim(),
+                quantity: Math.max(0, Math.min(MAX_SHIP_WEAPON_SLOTS, Math.floor(Number(entry?.quantity || 0)))),
+            }))
+            .filter((entry) => entry.name && entry.quantity > 0)
+            .slice(0, MAX_SHIP_WEAPON_SLOTS)
+    );
     return {
         ...loadout,
+        shipWeapons: sanitizeShipWeaponEntries(loadout.shipWeapons),
         weapons: sanitizeSlotList(loadout.weapons, MAX_SHIP_WEAPON_SLOTS),
         equipment: sanitizeSlotList(loadout.equipment, MAX_PROSPECTOR_SLOTS),
         characterWeapons: sanitizeSlotList(loadout.characterWeapons, MAX_PROSPECTOR_SLOTS),
@@ -154,9 +168,13 @@ export const useMatchSubmission = () => {
         const resolvedOpponents = (selectedOpponents && selectedOpponents.length > 0)
             ? selectedOpponents
             : (unresolvedDraft?.opponents || []);
-        const resolvedModifiers = (selectedReachModifiers && selectedReachModifiers.length > 0)
+        const resolvedModifiersRaw = (selectedReachModifiers && selectedReachModifiers.length > 0)
             ? selectedReachModifiers
             : (unresolvedDraft?.reachModifiers || []);
+        const resolvedModifiers = stripArtifactSourceModifiers(resolvedModifiersRaw);
+        const extractedArtifactSource = extractArtifactSourceFromReachModifiers(
+            resolvedModifiersRaw as Array<string | { name?: string; rawText?: string }>
+        );
         const resolvedKills = hasActiveKills ? kills : (unresolvedDraft?.kills || kills);
         const teammateShipForCap = pickFirstKnown(
             activeShip,
@@ -179,6 +197,7 @@ export const useMatchSubmission = () => {
             loadout: sanitizeLoadoutSlots(currentLoadout || unresolvedDraft?.loadout || null),
             weapons: activeWeapons,
             reachModifiers: resolvedModifiers,
+            artifactSource: extractedArtifactSource || unresolvedDraft?.artifactSource || undefined,
             kills: resolvedKills,
             time: timeStr || unresolvedDraft?.time || '',
             poiEasy,
@@ -446,7 +465,10 @@ export const useMatchSubmission = () => {
             } catch (repairError) {
                 Logger.warn('Submission', `Scoped artifact repair failed for match ${newMatch.id}`, repairError);
             }
-            const structuredArtifacts = await getMatchArtifactsStructured(newMatch.id);
+            const structuredArtifacts = await getMatchArtifactsStructured(newMatch.id, [
+                ...(newMatch.artifacts || []),
+                ...bundledArtifacts,
+            ]);
             const diskArtifacts = Array.isArray(structuredArtifacts.images) ? structuredArtifacts.images : [];
             const mergedArtifacts: string[] = [];
             const seenArtifactKeys = new Set<string>();

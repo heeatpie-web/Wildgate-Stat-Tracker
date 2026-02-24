@@ -315,6 +315,40 @@ describe('createMappingSlice', () => {
       expect(store.getState().ocrLearningQueue[0].eventId).toBe(queued!.eventId);
     });
   });
+
+  describe('team identity learning', () => {
+    it('records and resolves team name/color corrections', () => {
+      store.getState().recordTeamIdentityCorrection('red raptors', 'Red Raptors', {
+        rawColor: 'red',
+        correctedColor: 'crimson',
+        context: 'matchstats',
+        source: 'review_modal',
+      });
+
+      const resolved = store.getState().resolveTeamIdentity('Red Raptors', 'red');
+      expect(resolved.matched).toBe(true);
+      expect(resolved.teamName).toBe('Red Raptors');
+      expect(resolved.color).toBe('crimson');
+    });
+
+    it('falls back to highest-confidence name match when color key differs', () => {
+      store.getState().recordTeamIdentityCorrection('blue fleet', 'Blue Fleet', {
+        rawColor: 'blue',
+        correctedColor: 'azure',
+        context: 'lobby',
+      });
+      store.getState().recordTeamIdentityCorrection('blue fleet', 'Blue Fleet', {
+        rawColor: 'blue',
+        correctedColor: 'azure',
+        context: 'matchstats',
+      });
+
+      const resolved = store.getState().resolveTeamIdentity('Blue Fleet', 'green');
+      expect(resolved.matched).toBe(true);
+      expect(resolved.teamName).toBe('Blue Fleet');
+      expect(resolved.color).toBe('azure');
+    });
+  });
   // ── Legacy Mapping Operations ──
 
   describe('addMapping / removeMapping', () => {

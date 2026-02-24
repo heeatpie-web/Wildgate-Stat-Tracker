@@ -1,7 +1,7 @@
 import { getElectronAPI } from './electronAPI';
 import type { Match } from '../types';
 import type { TimelineEvent } from '../store/slices/createDataSlice';
-import type { OcrCorrection, PlayerProfile } from '../store/slices/createMappingSlice';
+import type { OcrCorrection, PlayerProfile, TeamIdentityCorrection } from '../store/slices/createMappingSlice';
 import type { OcrAliasModel, OcrLearningEvent, OcrLearningQueueItem } from './ocrAliasEngine';
 import Logger from './logger';
 import { runtimeConfig } from '../config/runtimeConfig';
@@ -41,6 +41,7 @@ export interface StorageData {
   pilotNotes: Record<string, string>;
   playerIdMap?: StringMap;
   ocrCorrections?: Record<string, OcrCorrection>;
+  teamIdentityCorrections?: Record<string, TeamIdentityCorrection>;
   ocrAliasModel?: OcrAliasModel;
   ocrLearningEvents?: OcrLearningEvent[];
   ocrLearningQueue?: OcrLearningQueueItem[];
@@ -148,6 +149,16 @@ const toOcrCorrections = (value: unknown): Record<string, OcrCorrection> => {
   return corrections;
 };
 
+const toTeamIdentityCorrections = (value: unknown): Record<string, TeamIdentityCorrection> => {
+  if (!isRecord(value)) return {};
+  const corrections: Record<string, TeamIdentityCorrection> = {};
+  Object.entries(value).forEach(([key, raw]) => {
+    if (!isRecord(raw)) return;
+    corrections[key] = raw as unknown as TeamIdentityCorrection;
+  });
+  return corrections;
+};
+
 const toNumberOr = (value: unknown, fallback: number) => {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
@@ -230,6 +241,7 @@ const coerceStorageData = (value: unknown): StorageData | null => {
     pilotNotes: toStringMap(value.pilotNotes),
     playerIdMap: toStringMap(value.playerIdMap),
     ocrCorrections: toOcrCorrections(value.ocrCorrections),
+    teamIdentityCorrections: toTeamIdentityCorrections(value.teamIdentityCorrections),
     ocrAliasModel: isRecord(value.ocrAliasModel) ? value.ocrAliasModel as unknown as OcrAliasModel : undefined,
     ocrLearningEvents: Array.isArray(value.ocrLearningEvents)
       ? value.ocrLearningEvents.filter((item): item is OcrLearningEvent => isRecord(item))

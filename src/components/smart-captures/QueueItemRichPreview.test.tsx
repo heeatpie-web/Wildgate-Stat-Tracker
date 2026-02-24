@@ -41,7 +41,8 @@ describe('QueueItemRichPreview', () => {
     const previewButton = screen.getByRole('button', { name: /match #73/i });
     expect(previewButton).toHaveAttribute('title', expect.stringContaining('Match 73 - '));
     expect(previewButton).toHaveAttribute('title', expect.stringContaining('14th'));
-    expect(screen.queryByText(/\d{1,2}(st|nd|rd|th)/i)).toBeNull();
+    expect(screen.getByText(/Feb 14th 10:45am/i)).toBeInTheDocument();
+    expect(screen.getByText('Hunter (4 Player)')).toBeInTheDocument();
     expect(screen.queryByText(/ID 12345/)).toBeNull();
     expect(screen.getByText('Win')).toBeInTheDocument();
     expect(screen.getByLabelText('Status Ready')).toBeInTheDocument();

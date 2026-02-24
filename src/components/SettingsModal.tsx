@@ -27,6 +27,7 @@ import { Button, Input } from './ui';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import OcrRegionEditorModal from './OcrRegionEditorModal';
+import { runtimeConfig } from '../config/runtimeConfig';
 
 type SettingsTabId = 'identity' | 'interface' | 'ocr-capture' | 'data';
 type DashboardStatView = 'analytics' | 'history' | 'smart-captures' | 'players' | 'dev-ocr';
@@ -78,6 +79,16 @@ interface ThresholdRecommendationPayload {
         lowConfidenceBump: number;
     };
 }
+
+const CLOUD_READINESS_REASON_COPY: Record<string, string> = {
+    beta_cohort_disabled: 'Cloud beta is disabled for this machine/user.',
+    credentials_missing: 'Google Cloud credential file is missing.',
+    vision_unavailable: 'Vision OCR service is not initialized.',
+    gemini_unavailable: 'Gemini refinement service is not initialized.',
+    storage_unavailable: 'Cloud storage sync service is not initialized.',
+    storage_error: 'Cloud storage reported a recent upload error.',
+    initialization_error: 'Cloud initialization failed.',
+};
 
 const SettingsModalContent: React.FC = () => {
     const {
@@ -238,13 +249,29 @@ const SettingsModalContent: React.FC = () => {
     };
 
     useEffect(() => {
-        if (showSettings) {
-            getGCloudStatus().then(status => setGcloudStatus(status));
-        } else {
+        if (!showSettings) {
             setShowRoiEditor(false);
             setShowAdvancedRoiInputs(false);
             setSettingsSearch('');
+            setGcloudStatus(null);
+            return;
         }
+
+        let active = true;
+        const refreshCloudStatus = async () => {
+            const status = await getGCloudStatus();
+            if (!active) return;
+            setGcloudStatus(status);
+        };
+        void refreshCloudStatus();
+        const pollId = window.setInterval(() => {
+            void refreshCloudStatus();
+        }, runtimeConfig.cloud.statusPollIntervalMs);
+
+        return () => {
+            active = false;
+            window.clearInterval(pollId);
+        };
     }, [showSettings]);
 
     const [saved, setSaved] = useState(false);
@@ -256,7 +283,9 @@ const SettingsModalContent: React.FC = () => {
     useKeyboardShortcuts([
         { key: 'Escape', handler: () => setShowSettings(false) },
     ], showSettings);
-    const cloudReady = !!gcloudStatus?.visionReady;
+    const cloudReadiness = gcloudStatus?.readiness;
+    const cloudReady = !!gcloudStatus?.visionReady && !!cloudReadiness?.betaEnabled;
+    const cloudDegradedReasons = cloudReadiness?.reasons || [];
     useEffect(() => {
         if (isOverlayMode && activeTab === 'data') {
             setActiveTab('interface');
@@ -1115,6 +1144,22 @@ const SettingsModalContent: React.FC = () => {
                                 </div>
                             )}
                         </div>
+                        {gcloudStatus && cloudReadiness?.degraded && runtimeConfig.cloud.showBetaDiagnostics && (
+                            <div className="mb-3 rounded-control border border-warning-soft-strong bg-warning-soft px-3 py-2 space-y-1">
+                                <div className="text-label-sm font-bold uppercase tracking-wide text-warning">
+                                    Cloud Degraded Mode
+                                </div>
+                                <div className="text-label-sm text-warning/90">
+                                    {cloudReadiness.summary}
+                                </div>
+                                <div className="text-label-sm text-warning/90">
+                                    {cloudDegradedReasons.map((reason) => CLOUD_READINESS_REASON_COPY[reason] || reason).join(' ')}
+                                </div>
+                                <div className="text-label-xs text-warning/80 font-mono">
+                                    creds:{cloudReadiness.diagnostics.keyPresent ? 'ok' : 'missing'} | bucket:{cloudReadiness.diagnostics.bucketName || 'unset'} | checked:{new Date(cloudReadiness.diagnostics.lastCheckedAt).toLocaleTimeString()}
+                                </div>
+                            </div>
+                        )}
                         <div className="grid grid-cols-4 gap-2">
                             {[
                                 { id: 'local' as OcrMode, label: 'Local', desc: 'Tesseract only', icon: Monitor },

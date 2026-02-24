@@ -44,6 +44,11 @@ const friendlyError = (raw: string): string => {
     return raw.replace(/[A-Z]:\\[^\s]+/gi, '[path]').replace(/\b[a-z-]+:[a-z-]+\b/gi, '[channel]');
 };
 
+const CORPUS_DESKTOP_UNAVAILABLE_STATUS =
+    'Desktop services unavailable. OCR Corpus tools run only in the desktop app build.';
+const CORPUS_DESKTOP_UNAVAILABLE_DETAIL =
+    'Open the desktop app to load corpus files, run pipeline/eval, import images, and sync corpus changes.';
+
 interface PlainOpponentTeamDraft {
     teamName: string;
     color: string;
@@ -169,6 +174,16 @@ const DevOCRPanel: React.FC = () => {
     const [showRegionEditor, setShowRegionEditor] = useState(false);
     const [a11yIssues, setA11yIssues] = useState<AccessibilityIssue[]>([]);
     const [a11yLastRunAt, setA11yLastRunAt] = useState<number | null>(null);
+    const desktopServicesAvailable = !!getElectronAPI();
+
+    const requireCorpusApi = () => {
+        const api = getElectronAPI();
+        if (!api) {
+            setCorpusStatus(CORPUS_DESKTOP_UNAVAILABLE_STATUS);
+            return null;
+        }
+        return api;
+    };
 
     useEffect(() => {
         loadRecentFiles();
@@ -176,10 +191,15 @@ const DevOCRPanel: React.FC = () => {
 
     useEffect(() => {
         if (tab === 'Corpus') {
+            if (!desktopServicesAvailable) {
+                setCorpusStatus(CORPUS_DESKTOP_UNAVAILABLE_STATUS);
+                setCorpusBusy(false);
+                return;
+            }
             void loadCorpusFiles();
             void refreshCorpusImages();
         }
-    }, [tab]);
+    }, [desktopServicesAvailable, tab]);
 
     useEffect(() => {
         let mounted = true;
@@ -435,8 +455,8 @@ const DevOCRPanel: React.FC = () => {
 
     const loadCorpusFiles = async () => {
         try {
-            const api = getElectronAPI();
-            if (!api) throw new Error('IPC not available');
+            const api = requireCorpusApi();
+            if (!api) return;
             setCorpusBusy(true);
             setCorpusStatus('Loading corpus files...');
 
@@ -457,7 +477,7 @@ const DevOCRPanel: React.FC = () => {
             await refreshCorpusImages();
             setCorpusStatus('Corpus files loaded');
         } catch (error: unknown) {
-            setCorpusStatus(`Load failed: ${friendlyError(toErrorMessage(error, 'Load failed'))}`);
+            setCorpusStatus(`Corpus load failed: ${friendlyError(toErrorMessage(error, 'Load failed'))}`);
         } finally {
             setCorpusBusy(false);
         }
@@ -465,8 +485,8 @@ const DevOCRPanel: React.FC = () => {
 
     const refreshCorpusImages = async () => {
         try {
-            const api = getElectronAPI();
-            if (!api) throw new Error('IPC not available');
+            const api = requireCorpusApi();
+            if (!api) return;
             const res = await api.invoke('ocr-corpus-list-images');
             if (!res?.success || !Array.isArray(res.files)) {
                 setCorpusImageList([]);
@@ -480,8 +500,8 @@ const DevOCRPanel: React.FC = () => {
 
     const saveCorpusFile = async (name: 'ground-truth.json' | 'predictions.latest.json', content: string) => {
         try {
-            const api = getElectronAPI();
-            if (!api) throw new Error('IPC not available');
+            const api = requireCorpusApi();
+            if (!api) return;
             setCorpusBusy(true);
             setCorpusStatus(`Saving ${name}...`);
             const res = await api.invoke('ocr-corpus-save', name, content);
@@ -496,8 +516,8 @@ const DevOCRPanel: React.FC = () => {
 
     const runCorpusEval = async () => {
         try {
-            const api = getElectronAPI();
-            if (!api) throw new Error('IPC not available');
+            const api = requireCorpusApi();
+            if (!api) return;
             setCorpusBusy(true);
             setCorpusStatus('Running corpus evaluation...');
             const res = await api.invoke('ocr-corpus-eval');
@@ -514,8 +534,8 @@ const DevOCRPanel: React.FC = () => {
 
     const importCorpusImages = async () => {
         try {
-            const api = getElectronAPI();
-            if (!api) throw new Error('IPC not available');
+            const api = requireCorpusApi();
+            if (!api) return;
             setCorpusBusy(true);
             setCorpusStatus('Importing images into corpus...');
             const res = await api.invoke('ocr-corpus-import-images');
@@ -540,8 +560,8 @@ const DevOCRPanel: React.FC = () => {
             return;
         }
         try {
-            const api = getElectronAPI();
-            if (!api) throw new Error('IPC not available');
+            const api = requireCorpusApi();
+            if (!api) return;
             setCorpusBusy(true);
             setCorpusStatus(`Importing ${filePaths.length} dropped image(s) into corpus...`);
             const res = await api.invoke('ocr-corpus-import-images-from-paths', filePaths);
@@ -571,6 +591,10 @@ const DevOCRPanel: React.FC = () => {
     const handleCorpusDropZoneEnter = (event: React.DragEvent<HTMLDivElement>) => {
         event.preventDefault();
         event.stopPropagation();
+        if (!desktopServicesAvailable) {
+            setCorpusStatus(CORPUS_DESKTOP_UNAVAILABLE_STATUS);
+            return;
+        }
         if (!corpusBusy) {
             setCorpusDropActive(true);
         }
@@ -579,6 +603,10 @@ const DevOCRPanel: React.FC = () => {
     const handleCorpusDropZoneOver = (event: React.DragEvent<HTMLDivElement>) => {
         event.preventDefault();
         event.stopPropagation();
+        if (!desktopServicesAvailable) {
+            setCorpusStatus(CORPUS_DESKTOP_UNAVAILABLE_STATUS);
+            return;
+        }
         event.dataTransfer.dropEffect = 'copy';
         if (!corpusBusy) {
             setCorpusDropActive(true);
@@ -598,6 +626,10 @@ const DevOCRPanel: React.FC = () => {
         event.preventDefault();
         event.stopPropagation();
         setCorpusDropActive(false);
+        if (!desktopServicesAvailable) {
+            setCorpusStatus(CORPUS_DESKTOP_UNAVAILABLE_STATUS);
+            return;
+        }
         if (corpusBusy) {
             setCorpusStatus('Please wait for the current corpus task to finish.');
             return;
@@ -608,8 +640,8 @@ const DevOCRPanel: React.FC = () => {
 
     const runCorpusPipeline = async () => {
         try {
-            const api = getElectronAPI();
-            if (!api) throw new Error('IPC not available');
+            const api = requireCorpusApi();
+            if (!api) return;
             setCorpusBusy(true);
             setCorpusStatus(`Running corpus OCR pipeline (${ocrMode})...`);
             const res = await api.invoke('ocr-corpus-run-pipeline', {
@@ -629,8 +661,8 @@ const DevOCRPanel: React.FC = () => {
 
     const promoteCorpusBaseline = async () => {
         try {
-            const api = getElectronAPI();
-            if (!api) throw new Error('IPC not available');
+            const api = requireCorpusApi();
+            if (!api) return;
             setCorpusBusy(true);
             setCorpusStatus('Promoting baseline from latest report...');
             const res = await api.invoke('ocr-corpus-promote-baseline');
@@ -646,8 +678,8 @@ const DevOCRPanel: React.FC = () => {
 
     const syncCorpusToRepoNow = async () => {
         try {
-            const api = getElectronAPI();
-            if (!api) throw new Error('IPC not available');
+            const api = requireCorpusApi();
+            if (!api) return;
             setCorpusBusy(true);
             setCorpusStatus('Syncing corpus to repo...');
             const res = await api.invoke('ocr-corpus-sync-to-repo');
@@ -683,8 +715,8 @@ const DevOCRPanel: React.FC = () => {
 
     const regenerateOcrDictionary = async () => {
         try {
-            const api = getElectronAPI();
-            if (!api) throw new Error('IPC not available');
+            const api = requireCorpusApi();
+            if (!api) return;
 
             const pilots = Array.from(new Set(
                 (pilotRegistry || [])
@@ -1101,6 +1133,12 @@ const DevOCRPanel: React.FC = () => {
                                 {corpusBusy ? 'Working...' : corpusStatus || 'Ready'}
                             </div>
                         </div>
+                        {!desktopServicesAvailable && (
+                            <div className="mt-3 rounded-control border border-warning-soft-strong bg-warning-soft px-3 py-2 text-label-sm text-warning">
+                                <div className="font-bold uppercase tracking-wide">Desktop Services Unavailable</div>
+                                <div className="opacity-90 mt-1">{CORPUS_DESKTOP_UNAVAILABLE_DETAIL}</div>
+                            </div>
+                        )}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
                             <div className="md3-surface-low rounded-control p-2 border border-md-sys-outline/10">
                                 <div className="text-label-xs uppercase opacity-secondary">Truth Samples</div>
@@ -1124,26 +1162,30 @@ const DevOCRPanel: React.FC = () => {
                     <div className="md3-card md3-surface-high rounded-card border border-md-sys-outline/10 p-4 mb-4">
                         <div className="text-label-sm font-bold uppercase opacity-secondary mb-3">Pipeline Actions</div>
                         <div className="flex flex-wrap gap-2">
-                            <button onClick={loadCorpusFiles} disabled={corpusBusy} className="px-3 py-2 rounded-control md3-surface-low font-bold text-label-sm disabled:opacity-disabled">Reload Files</button>
-                            <button onClick={syncCorpusToRepoNow} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-warning-soft text-warning border border-warning-soft-strong font-bold text-label-sm disabled:opacity-disabled">Sync Corpus Now</button>
-                            <button onClick={importCorpusImages} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-info-soft text-info border border-info-soft-strong font-bold text-label-sm disabled:opacity-disabled">Import Images</button>
-                            <button onClick={runCorpusPipeline} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-info-soft text-info border border-info-soft-strong font-bold text-label-sm disabled:opacity-disabled">Run Corpus OCR</button>
-                            <button onClick={runCorpusEval} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-md-sys-primary text-md-sys-on-primary font-bold text-label-sm disabled:opacity-disabled">Run Eval</button>
-                            <button onClick={promoteCorpusBaseline} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-success-soft text-success border border-success-soft-strong font-bold text-label-sm disabled:opacity-disabled">Promote Baseline</button>
-                            <button onClick={exportCorrectionCorpus} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-accent-soft text-accent border border-accent-soft-strong font-bold text-label-sm disabled:opacity-disabled">Export Training Data</button>
-                            <button onClick={regenerateOcrDictionary} disabled={corpusBusy} className="px-3 py-2 rounded-control bg-info-soft text-info border border-info-soft-strong font-bold text-label-sm disabled:opacity-disabled">Regenerate OCR Dictionary</button>
+                            <button onClick={loadCorpusFiles} disabled={corpusBusy || !desktopServicesAvailable} className="px-3 py-2 rounded-control md3-surface-low font-bold text-label-sm disabled:opacity-disabled">Reload Files</button>
+                            <button onClick={syncCorpusToRepoNow} disabled={corpusBusy || !desktopServicesAvailable} className="px-3 py-2 rounded-control bg-warning-soft text-warning border border-warning-soft-strong font-bold text-label-sm disabled:opacity-disabled">Sync Corpus Now</button>
+                            <button onClick={importCorpusImages} disabled={corpusBusy || !desktopServicesAvailable} className="px-3 py-2 rounded-control bg-info-soft text-info border border-info-soft-strong font-bold text-label-sm disabled:opacity-disabled">Import Images</button>
+                            <button onClick={runCorpusPipeline} disabled={corpusBusy || !desktopServicesAvailable} className="px-3 py-2 rounded-control bg-info-soft text-info border border-info-soft-strong font-bold text-label-sm disabled:opacity-disabled">Run Corpus OCR</button>
+                            <button onClick={runCorpusEval} disabled={corpusBusy || !desktopServicesAvailable} className="px-3 py-2 rounded-control bg-md-sys-primary text-md-sys-on-primary font-bold text-label-sm disabled:opacity-disabled">Run Eval</button>
+                            <button onClick={promoteCorpusBaseline} disabled={corpusBusy || !desktopServicesAvailable} className="px-3 py-2 rounded-control bg-success-soft text-success border border-success-soft-strong font-bold text-label-sm disabled:opacity-disabled">Promote Baseline</button>
+                            <button onClick={exportCorrectionCorpus} disabled={corpusBusy || !desktopServicesAvailable} className="px-3 py-2 rounded-control bg-accent-soft text-accent border border-accent-soft-strong font-bold text-label-sm disabled:opacity-disabled">Export Training Data</button>
+                            <button onClick={regenerateOcrDictionary} disabled={corpusBusy || !desktopServicesAvailable} className="px-3 py-2 rounded-control bg-info-soft text-info border border-info-soft-strong font-bold text-label-sm disabled:opacity-disabled">Regenerate OCR Dictionary</button>
                         </div>
                         <div
                             onDragEnter={handleCorpusDropZoneEnter}
                             onDragOver={handleCorpusDropZoneOver}
                             onDragLeave={handleCorpusDropZoneLeave}
                             onDrop={handleCorpusDropZoneDrop}
-                            className={`mt-3 rounded-control border-2 border-dashed p-4 text-center text-label-sm transition-colors ${corpusDropActive
+                            className={`mt-3 rounded-control border-2 border-dashed p-4 text-center text-label-sm transition-colors ${!desktopServicesAvailable
+                                ? 'border-md-sys-outline/25 text-md-sys-on-surface/45'
+                                : corpusDropActive
                                 ? 'border-md-sys-primary bg-md-sys-primary/10 text-md-sys-primary'
                                 : 'border-md-sys-outline/25 text-md-sys-on-surface/65'
                                 }`}
                         >
-                            {corpusDropActive
+                            {!desktopServicesAvailable
+                                ? 'Desktop services are unavailable in this runtime. Drag-and-drop import is disabled.'
+                                : corpusDropActive
                                 ? 'Drop images now to import into OCR Corpus.'
                                 : 'Drag and drop image files here to import into OCR Corpus.'}
                         </div>
@@ -1386,6 +1428,13 @@ const DevOCRPanel: React.FC = () => {
                                 >
                                     Open ROI Visual Editor
                                 </button>
+                                <div className="md3-card md3-surface-high rounded-xl border border-md-sys-outline/10 p-3">
+                                    <div className="text-label-sm font-bold uppercase opacity-60">ROI Boxes</div>
+                                    <p className="mt-1 text-label-sm text-md-sys-on-surface/72">
+                                        ROI boxes define the exact crop sent to OCR. Tighter boxes reduce noise, raise confidence,
+                                        and improve teammate/opponent extraction consistency over repeated captures.
+                                    </p>
+                                </div>
 
                                 <div className="md3-card md3-surface-high rounded-xl border border-md-sys-outline/10 p-3">
                                     <div className="text-label-sm font-bold uppercase opacity-60">Fast OCR Improvement Loop</div>

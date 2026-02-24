@@ -44,6 +44,13 @@ const STATUS_PILL_BY_TONE: Record<'success' | 'warning' | 'danger' | 'info' | 'n
   neutral: 'bg-md-sys-outline/20 text-md-sys-on-surface/70',
 };
 
+const ROW_TONE_BY_RESULT: Record<Match['result'], string> = {
+  Win: 'bg-success/[0.08] border-success/30',
+  Loss: 'bg-danger/[0.08] border-danger/30',
+  Draw: 'bg-info/[0.08] border-info/30',
+  Ongoing: 'bg-md-sys-on-surface/[0.04] border-md-sys-outline/18',
+};
+
 const getDayOrdinal = (day: number): string => {
   const mod100 = day % 100;
   if (mod100 >= 11 && mod100 <= 13) return `${day}th`;
@@ -81,6 +88,15 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
   const tooltipLabel = `Match ${displayNumber} - ${timestampLabel}`;
   const tone = getSemanticStatusTone(qs.key);
   const displayTone = statusMeta.tone;
+  const resultClass = match.result === 'Win'
+    ? 'sc-queue-item--result-win'
+    : match.result === 'Loss'
+      ? 'sc-queue-item--result-loss'
+      : match.result === 'Draw'
+        ? 'sc-queue-item--result-draw'
+        : 'sc-queue-item--result-ongoing';
+  const artifactCount = Array.isArray(match.artifacts) ? match.artifacts.length : 0;
+  const teammateCount = Array.isArray(match.teammates) ? match.teammates.length : 0;
 
   const collapsedGlyph = getCollapsedQueueGlyph(match);
   const collapsedIcon = (() => {
@@ -114,9 +130,9 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
     <button
       type="button"
       onClick={onClick}
-      className={`group sc-queue-item sc-queue-item--rich w-full text-left rounded-card border-l-[11px] transition-all relative min-h-[100px] overflow-visible ${isSelected
+      className={`group sc-queue-item sc-queue-item--rich ${resultClass} w-full text-left rounded-card border-l-[11px] transition-all relative min-h-[88px] overflow-visible ${isSelected
         ? 'bg-md-sys-primary/16 text-md-sys-on-surface border-l-md-sys-primary border border-md-sys-primary/38 p-3 ring-1 ring-md-sys-primary/26 shadow-sm font-semibold'
-        : 'bg-md-sys-surface/48 border-l-md-sys-outline/30 border border-md-sys-outline/10 hover:bg-md-sys-on-surface/8 p-3'
+        : `border-l-md-sys-outline/30 border hover:bg-md-sys-on-surface/8 p-3 ${ROW_TONE_BY_RESULT[match.result]}`
         }`}
       style={{ borderLeftColor: isSelected ? 'var(--md-sys-color-primary)' : BORDER_BY_TONE[displayTone] }}
       title={tooltipLabel}
@@ -152,6 +168,22 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
                 {statusMeta.label}
               </span>
             </div>
+          </div>
+          <div className="flex items-center gap-2 min-w-0 text-label-xs text-md-sys-on-surface/58 font-semibold">
+            <span className="truncate">{timestampLabel}</span>
+            <span aria-hidden="true" className="opacity-45">|</span>
+            <span className="truncate">{match.ship || 'Unknown ship'}</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 text-label-xs text-md-sys-on-surface/62 font-semibold">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-pill bg-md-sys-on-surface/8">
+              Shots {artifactCount}
+            </span>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-pill bg-md-sys-on-surface/8">
+              Team {teammateCount}
+            </span>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-pill bg-md-sys-on-surface/8">
+              OCR {match.ocrState || 'queued'}
+            </span>
           </div>
         </div>
       </div>

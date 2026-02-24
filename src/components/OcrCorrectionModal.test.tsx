@@ -21,6 +21,13 @@ const gameData = {
 const appStoreState = {
     setPlayerName: vi.fn(),
     recordOcrCorrection: vi.fn(),
+    recordOcrAliasCorrection: vi.fn(),
+    recordTeamIdentityCorrection: vi.fn(),
+    resolveTeamIdentity: vi.fn((teamName: string, color?: string) => ({
+        teamName,
+        color: color || 'unknown',
+        matched: false,
+    })),
     ocrCorrections: {} as Record<string, { correctedTo: string }>,
     ocrAliasModel: { version: 1, entries: {}, recentlyUsed: [], lastUpdated: Date.now() },
     recordCalibrationSample: vi.fn(),
@@ -56,6 +63,11 @@ describe('OcrCorrectionModal', () => {
         gameData.selectedTeammates = [];
         appStoreState.ocrCorrections = {};
         appStoreState.pendingMatchData = null;
+        appStoreState.resolveTeamIdentity.mockImplementation((teamName: string, color?: string) => ({
+            teamName,
+            color: color || 'unknown',
+            matched: false,
+        }));
         window.localStorage.removeItem(OCR_REVIEW_HELP_DISMISSED_STORAGE_KEY);
         vi.clearAllMocks();
     });
@@ -180,6 +192,40 @@ describe('OcrCorrectionModal', () => {
         const friendlyChip = screen.getByText(/^friendly$/i);
         expect(friendlyChip).toHaveClass('ocr-teammate-chip');
         expect(screen.getAllByText(/teammate/i).length).toBeGreaterThan(0);
+    });
+
+    it('renders inline team color control with adjacent team name and ship selector', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['PilotOne'], blue: ['EnemyOne'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)', blue: 'Scout' };
+        gameData.pilotRegistry = ['PilotOne', 'EnemyOne'];
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        expect(screen.getByRole('button', { name: /team 1 color/i })).toBeInTheDocument();
+        expect(screen.getByLabelText(/team 1 name/i)).toBeInTheDocument();
+        expect(screen.getByLabelText(/team 1 ship/i)).toBeInTheDocument();
+    });
+
+    it('records team identity learning when team name changes on apply', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['PilotOne'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['PilotOne'];
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        const teamNameInput = screen.getByLabelText(/team 1 name/i);
+        fireEvent.change(teamNameInput, { target: { value: 'Renamed Team' } });
+        fireEvent.click(screen.getByRole('button', { name: /apply and learn/i }));
+
+        expect(appStoreState.recordTeamIdentityCorrection).toHaveBeenCalled();
     });
 
     it('derives friendly team label from ship before captain name fallback', async () => {
