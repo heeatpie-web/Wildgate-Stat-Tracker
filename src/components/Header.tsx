@@ -10,7 +10,7 @@ import { useUIState } from '../providers/UIStateProvider';
 import SystemPulse from './SystemPulse';
 import { useAppStore } from '../store/useAppStore';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
-import type { Match } from '../types';
+import { APP_VERSION, Match } from '../types';
 import { Button } from './ui';
 import NotificationCenter from './NotificationCenter';
 
@@ -124,6 +124,9 @@ export const Header: React.FC<HeaderProps> = ({
                     >
                         <div className="text-label-sm uppercase tracking-wide-16 font-bold text-md-sys-on-surface whitespace-nowrap">
                             Wildgate Stat Tracker
+                            <span className="ml-2 text-[10px] text-md-sys-on-surface/50 font-mono font-medium lowercase tracking-normal">
+                                {APP_VERSION}
+                            </span>
                         </div>
                     </button>
                     {devMode && (

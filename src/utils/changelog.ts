@@ -1,4 +1,11 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v2.18.0": [
+    "Polish: Refined Smart Captures Queue layout, simplifying match summary and reducing visual intensity.",
+    "Polish: Enhanced Players OCR Team Assignment Board with improved alignment and deterministic colors.",
+    "Polish: Implemented glassmorphism on Smart Captures Detail Panes and resolved notification z-index issues.",
+    "Polish: Reorganized Smart Capture Tools and Dev OCR Utility sections into denser grid layouts.",
+    "Polish: Redesigned OCR Review Wizard with larger toggleable screenshot reference images and consolidated actions."
+  ],
   "v2.17.3": [
     "Fix: Smart Captures telemetry consistency now re-evaluates from live match values so mismatch chips clear immediately after edits.",
     "Fix: Smart Captures teammate editor now blocks removing your own profile name and shows a validation error toast.",

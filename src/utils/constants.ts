@@ -6,7 +6,7 @@
  */
 import { EQUIPMENT_DB } from './equipmentDb';
 
-export const APP_VERSION = "v2.17.3";
+export const APP_VERSION = "v2.18.0";
 
 /** Prefix used for unnamed players discovered via telemetry (e.g. "Member 1"). */
 export const UNNAMED_PLAYER_PREFIX = 'Member ';

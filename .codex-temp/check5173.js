@@ -1,0 +1,1 @@
+const http=require('http');const req=http.get('http://127.0.0.1:5173',(res)=,res.statusCode);res.resume();});req.on('error',(e)=,e.message);process.exit(1);});req.setTimeout(2000,()=;req.destroy();process.exit(1);}); 

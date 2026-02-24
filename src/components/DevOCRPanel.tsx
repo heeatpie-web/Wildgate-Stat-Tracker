@@ -965,162 +965,166 @@ const DevOCRPanel: React.FC = () => {
 
             {/* Content Area */}
             {tab === 'Utils' ? (
-                <div className="w-full max-w-2xl mx-auto h-full min-h-0 bg-md-sys-surface2 rounded-xl p-6 flex flex-col">
+                <div className="w-full h-full min-h-0 bg-md-sys-surface2 rounded-xl p-6 flex flex-col">
                     <h2 className="text-xl font-black uppercase text-md-sys-primary shrink-0">Data Utilities</h2>
 
-                    <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4 mt-4">
-                    <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
-                        <div className="flex items-center justify-between gap-2">
-                            <h3 className="font-bold">Accessibility Audit</h3>
-                            <span className="text-label-sm font-mono opacity-60">
-                                {a11ySummary.errors}E / {a11ySummary.warnings}W
-                            </span>
+                    <div className="flex-1 min-h-0 overflow-y-auto pr-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-4 items-start content-start mt-4">
+                        <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
+                            <div className="flex items-center justify-between gap-2">
+                                <h3 className="font-bold">Accessibility Audit</h3>
+                                <span className="text-label-sm font-mono opacity-60">
+                                    {a11ySummary.errors}E / {a11ySummary.warnings}W
+                                </span>
+                            </div>
+                            <p className="text-label-sm opacity-60 mt-1 mb-4">
+                                Run static WCAG checks for dialogs, labels, controls, and image alt text.
+                            </p>
+                            <button
+                                onClick={runAccessibilityAudit}
+                                className="px-6 py-3 bg-info-soft text-info border border-info-soft-strong rounded-lg font-bold hover:bg-info hover:text-on-scrim transition-all flex items-center justify-center w-full"
+                            >
+                                Run A11y Audit
+                            </button>
+                            {
+                                a11yLastRunAt && (
+                                    <div className="mt-3 text-label-sm opacity-60">
+                                        Last run: {new Date(a11yLastRunAt).toLocaleTimeString()}
+                                    </div>
+                                )
+                            }
+                            {
+                                a11yIssues.length > 0 && (
+                                    <div className="mt-3 max-h-32 overflow-auto space-y-1 rounded-control border border-md-sys-outline/10 p-2 bg-md-sys-surface2">
+                                        {a11yIssues.slice(0, 8).map((issue, index) => (
+                                            <div key={`${issue.rule}-${issue.selector}-${index}`} className="text-label-sm">
+                                                <span className={`font-bold ${issue.severity === 'error' ? 'text-danger' : 'text-warning'}`}>
+                                                    {issue.severity.toUpperCase()}
+                                                </span>
+                                                <span className="opacity-60"> [{issue.rule}] </span>
+                                                <span>{issue.message}</span>
+                                                <span className="opacity-60"> ({issue.selector})</span>
+                                            </div>
+                                        ))}
+                                        {a11yIssues.length > 8 && (
+                                            <div className="text-label-sm opacity-60">
+                                                ...and {a11yIssues.length - 8} more issue(s).
+                                            </div>
+                                        )}
+                                    </div>
+                                )
+                            }
+                        </div >
+
+                        <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
+                            <h3 className="font-bold mb-2">Retroactive Artifact Bundling</h3>
+                            <p className="text-label-sm opacity-60 mb-4">Scan the 'ocr-debug' folder for screenshots that match the timestamps of your existing match history. Useful if feature was added late.</p>
+                            <button
+                                onClick={runRetroactiveBundling}
+                                disabled={loading}
+                                className="px-6 py-3 bg-md-sys-primary text-md-sys-on-primary rounded-lg font-bold disabled:opacity-disabled hover:brightness-110 transition-all flex items-center justify-center w-full"
+                            >
+                                {loading ? 'Processing...' : 'Run Bundle Scan'}
+                            </button>
+                            {status && <div className="mt-4 text-label-sm font-mono p-2 bg-scrim-20 rounded text-center">{status}</div>}
                         </div>
-                        <p className="text-label-sm opacity-60 mt-1 mb-4">
-                            Run static WCAG checks for dialogs, labels, controls, and image alt text.
-                        </p>
-                        <button
-                            onClick={runAccessibilityAudit}
-                            className="px-6 py-3 bg-info-soft text-info border border-info-soft-strong rounded-lg font-bold hover:bg-info hover:text-on-scrim transition-all flex items-center justify-center w-full"
-                        >
-                            Run A11y Audit
-                        </button>
-                        {a11yLastRunAt && (
-                            <div className="mt-3 text-label-sm opacity-60">
-                                Last run: {new Date(a11yLastRunAt).toLocaleTimeString()}
-                            </div>
-                        )}
-                        {a11yIssues.length > 0 && (
-                            <div className="mt-3 max-h-32 overflow-auto space-y-1 rounded-control border border-md-sys-outline/10 p-2 bg-md-sys-surface2">
-                                {a11yIssues.slice(0, 8).map((issue, index) => (
-                                    <div key={`${issue.rule}-${issue.selector}-${index}`} className="text-label-sm">
-                                        <span className={`font-bold ${issue.severity === 'error' ? 'text-danger' : 'text-warning'}`}>
-                                            {issue.severity.toUpperCase()}
-                                        </span>
-                                        <span className="opacity-60"> [{issue.rule}] </span>
-                                        <span>{issue.message}</span>
-                                        <span className="opacity-60"> ({issue.selector})</span>
-                                    </div>
-                                ))}
-                                {a11yIssues.length > 8 && (
-                                    <div className="text-label-sm opacity-60">
-                                        ...and {a11yIssues.length - 8} more issue(s).
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
 
-                    <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
-                        <h3 className="font-bold mb-2">Retroactive Artifact Bundling</h3>
-                        <p className="text-label-sm opacity-60 mb-4">Scan the 'ocr-debug' folder for screenshots that match the timestamps of your existing match history. Useful if feature was added late.</p>
-                        <button
-                            onClick={runRetroactiveBundling}
-                            disabled={loading}
-                            className="px-6 py-3 bg-md-sys-primary text-md-sys-on-primary rounded-lg font-bold disabled:opacity-disabled hover:brightness-110 transition-all flex items-center justify-center w-full"
-                        >
-                            {loading ? 'Processing...' : 'Run Bundle Scan'}
-                        </button>
-                        {status && <div className="mt-4 text-label-sm font-mono p-2 bg-scrim-20 rounded text-center">{status}</div>}
-                    </div>
+                        <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
+                            <h3 className="font-bold mb-2">Telemetry Decoder</h3>
+                            <p className="text-label-sm opacity-60 mb-4">Convert the binary 'AccelByteTelemetryCache' file into a readable JSON file to verify raw game data.</p>
+                            <button
+                                onClick={runTelemetryDecode}
+                                disabled={loading}
+                                className="px-6 py-3 bg-md-sys-surface3 text-md-sys-on-surface rounded-lg font-bold disabled:opacity-disabled hover:brightness-110 transition-all flex items-center justify-center w-full"
+                            >
+                                {loading ? 'Processing...' : 'Decode Cache File'}
+                            </button>
+                        </div>
 
-                    <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
-                        <h3 className="font-bold mb-2">Telemetry Decoder</h3>
-                        <p className="text-label-sm opacity-60 mb-4">Convert the binary 'AccelByteTelemetryCache' file into a readable JSON file to verify raw game data.</p>
-                        <button
-                            onClick={runTelemetryDecode}
-                            disabled={loading}
-                            className="px-6 py-3 bg-md-sys-surface3 text-md-sys-on-surface rounded-lg font-bold disabled:opacity-disabled hover:brightness-110 transition-all flex items-center justify-center w-full"
-                        >
-                            {loading ? 'Processing...' : 'Decode Cache File'}
-                        </button>
-                    </div>
+                        <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
+                            <h3 className="font-bold mb-2">Simulated Archive Cleanup</h3>
+                            <p className="text-label-sm opacity-60 mb-4">Clear all files in the 'telemetry_archive' folder. Use this to reset the simulator list.</p>
+                            <button
+                                onClick={async () => {
+                                    if (window.confirm("Clear all archived telemetry files?")) {
+                                        setLoading(true);
+                                        setStatus("Clearing archives...");
+                                        try {
+                                            const api = getElectronAPI();
+                                            if (!api) throw new Error("IPC not available");
 
-                    <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
-                        <h3 className="font-bold mb-2">Simulated Archive Cleanup</h3>
-                        <p className="text-label-sm opacity-60 mb-4">Clear all files in the 'telemetry_archive' folder. Use this to reset the simulator list.</p>
-                        <button
-                            onClick={async () => {
-                                if (window.confirm("Clear all archived telemetry files?")) {
+                                            const res = await api.invoke('clear-telemetry-archives');
+                                            if (res.success) setStatus(`Cleared ${res.count} file(s).`);
+                                            else setStatus(`Cleanup failed: ${friendlyError(res.message)}`);
+                                        } catch (error: unknown) {
+                                            setStatus(`Cleanup failed: ${friendlyError(toErrorMessage(error, 'Cleanup failed'))}`);
+                                        }
+                                        setLoading(false);
+                                    }
+                                }}
+                                disabled={loading}
+                                className="px-6 py-3 bg-md-sys-error/10 text-md-sys-error border border-md-sys-error/20 rounded-lg font-bold disabled:opacity-disabled hover:bg-md-sys-error hover:text-on-scrim transition-all flex items-center justify-center w-full"
+                            >
+                                {loading ? 'Processing...' : 'Clear All Archives'}
+                            </button>
+                        </div>
+
+                        <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
+                            <h3 className="font-bold mb-2">OCR Preprocessed Image Cleanup</h3>
+                            <p className="text-label-sm opacity-60 mb-4">Clear preprocessed OCR images (keeps raw captures for ML training). Use this to free disk space.</p>
+                            <button
+                                onClick={async () => {
+                                    if (window.confirm("Clear all preprocessed OCR images? Raw captures will be kept for ML training.")) {
+                                        setLoading(true);
+                                        setStatus("Clearing preprocessed images...");
+                                        try {
+                                            const api = getElectronAPI();
+                                            if (!api) throw new Error("IPC not available");
+
+                                            const res = await api.invoke('clear-ocr-preprocessed');
+                                            if (res.success) setStatus(`Cleared ${res.deletedCount} preprocessed image(s).`);
+                                            else setStatus(`Cleanup failed: ${friendlyError(res.error)}`);
+                                        } catch (error: unknown) {
+                                            setStatus(`Cleanup failed: ${friendlyError(toErrorMessage(error, 'Cleanup failed'))}`);
+                                        }
+                                        setLoading(false);
+                                    }
+                                }}
+                                disabled={loading}
+                                className="px-6 py-3 bg-warning-soft text-warning border border-warning-soft rounded-lg font-bold disabled:opacity-disabled hover:bg-warning hover:text-ink-strong transition-all flex items-center justify-center w-full"
+                            >
+                                {loading ? 'Processing...' : 'Clear Preprocessed Images'}
+                            </button>
+                        </div>
+
+                        <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
+                            <h3 className="font-bold mb-2">ML Dataset Integration</h3>
+                            <p className="text-label-sm opacity-60 mb-4">Move current OCR captures to ML training dataset folder for YOLO labeling.</p>
+                            <button
+                                onClick={async () => {
                                     setLoading(true);
-                                    setStatus("Clearing archives...");
+                                    setStatus("Getting OCR debug directory...");
                                     try {
                                         const api = getElectronAPI();
                                         if (!api) throw new Error("IPC not available");
 
-                                        const res = await api.invoke('clear-telemetry-archives');
-                                        if (res.success) setStatus(`Cleared ${res.count} file(s).`);
-                                        else setStatus(`Cleanup failed: ${friendlyError(res.message)}`);
+                                        const debugDir = await api.invoke('get-ocr-debug-dir');
+                                        setStatus(`OCR Debug Dir: ${debugDir}`);
+
+                                        // Open the folder in explorer
+                                        await api.invoke('open-path', debugDir);
                                     } catch (error: unknown) {
-                                        setStatus(`Cleanup failed: ${friendlyError(toErrorMessage(error, 'Cleanup failed'))}`);
+                                        setStatus(`Could not open folder: ${friendlyError(toErrorMessage(error, 'Could not open folder'))}`);
                                     }
                                     setLoading(false);
-                                }
-                            }}
-                            disabled={loading}
-                            className="px-6 py-3 bg-md-sys-error/10 text-md-sys-error border border-md-sys-error/20 rounded-lg font-bold disabled:opacity-disabled hover:bg-md-sys-error hover:text-on-scrim transition-all flex items-center justify-center w-full"
-                        >
-                            {loading ? 'Processing...' : 'Clear All Archives'}
-                        </button>
-                    </div>
-
-                    <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
-                        <h3 className="font-bold mb-2">OCR Preprocessed Image Cleanup</h3>
-                        <p className="text-label-sm opacity-60 mb-4">Clear preprocessed OCR images (keeps raw captures for ML training). Use this to free disk space.</p>
-                        <button
-                            onClick={async () => {
-                                if (window.confirm("Clear all preprocessed OCR images? Raw captures will be kept for ML training.")) {
-                                    setLoading(true);
-                                    setStatus("Clearing preprocessed images...");
-                                    try {
-                                        const api = getElectronAPI();
-                                        if (!api) throw new Error("IPC not available");
-
-                                        const res = await api.invoke('clear-ocr-preprocessed');
-                                        if (res.success) setStatus(`Cleared ${res.deletedCount} preprocessed image(s).`);
-                                        else setStatus(`Cleanup failed: ${friendlyError(res.error)}`);
-                                    } catch (error: unknown) {
-                                        setStatus(`Cleanup failed: ${friendlyError(toErrorMessage(error, 'Cleanup failed'))}`);
-                                    }
-                                    setLoading(false);
-                                }
-                            }}
-                            disabled={loading}
-                            className="px-6 py-3 bg-warning-soft text-warning border border-warning-soft rounded-lg font-bold disabled:opacity-disabled hover:bg-warning hover:text-ink-strong transition-all flex items-center justify-center w-full"
-                        >
-                            {loading ? 'Processing...' : 'Clear Preprocessed Images'}
-                        </button>
-                    </div>
-
-                    <div className="bg-md-sys-surface1 p-6 rounded-xl border border-md-sys-outline/10">
-                        <h3 className="font-bold mb-2">ML Dataset Integration</h3>
-                        <p className="text-label-sm opacity-60 mb-4">Move current OCR captures to ML training dataset folder for YOLO labeling.</p>
-                        <button
-                            onClick={async () => {
-                                setLoading(true);
-                                setStatus("Getting OCR debug directory...");
-                                try {
-                                    const api = getElectronAPI();
-                                    if (!api) throw new Error("IPC not available");
-
-                                    const debugDir = await api.invoke('get-ocr-debug-dir');
-                                    setStatus(`OCR Debug Dir: ${debugDir}`);
-
-                                    // Open the folder in explorer
-                                    await api.invoke('open-path', debugDir);
-                                } catch (error: unknown) {
-                                    setStatus(`Could not open folder: ${friendlyError(toErrorMessage(error, 'Could not open folder'))}`);
-                                }
-                                setLoading(false);
-                            }}
-                            disabled={loading}
-                            className="px-6 py-3 bg-info-soft text-info border border-info-soft rounded-lg font-bold disabled:opacity-disabled hover:bg-info hover:text-on-scrim transition-all flex items-center justify-center w-full"
-                        >
-                            {loading ? 'Processing...' : 'Open OCR Captures Folder'}
-                        </button>
-                    </div>
-                    </div>
-                </div>
+                                }}
+                                disabled={loading}
+                                className="px-6 py-3 bg-info-soft text-info border border-info-soft rounded-lg font-bold disabled:opacity-disabled hover:bg-info hover:text-on-scrim transition-all flex items-center justify-center w-full"
+                            >
+                                {loading ? 'Processing...' : 'Open OCR Captures Folder'}
+                            </button>
+                        </div>
+                    </div >
+                </div >
             ) : tab === 'Corpus' ? (
                 <div className="w-full max-w-7xl h-full overflow-auto md3-surface rounded-card p-5 border border-md-sys-outline/10">
                     <div className="md3-card mg-surface p-4 rounded-card border border-md-sys-outline/10 mb-4">
@@ -1179,15 +1183,15 @@ const DevOCRPanel: React.FC = () => {
                             className={`mt-3 rounded-control border-2 border-dashed p-4 text-center text-label-sm transition-colors ${!desktopServicesAvailable
                                 ? 'border-md-sys-outline/25 text-md-sys-on-surface/45'
                                 : corpusDropActive
-                                ? 'border-md-sys-primary bg-md-sys-primary/10 text-md-sys-primary'
-                                : 'border-md-sys-outline/25 text-md-sys-on-surface/65'
+                                    ? 'border-md-sys-primary bg-md-sys-primary/10 text-md-sys-primary'
+                                    : 'border-md-sys-outline/25 text-md-sys-on-surface/65'
                                 }`}
                         >
                             {!desktopServicesAvailable
                                 ? 'Desktop services are unavailable in this runtime. Drag-and-drop import is disabled.'
                                 : corpusDropActive
-                                ? 'Drop images now to import into OCR Corpus.'
-                                : 'Drag and drop image files here to import into OCR Corpus.'}
+                                    ? 'Drop images now to import into OCR Corpus.'
+                                    : 'Drag and drop image files here to import into OCR Corpus.'}
                         </div>
                         <p className="text-label-sm opacity-secondary mt-3">
                             Workflow: 1) Import images 2) curate ground truth 3) run corpus OCR 4) run eval 5) promote baseline.
@@ -1592,7 +1596,7 @@ const DevOCRPanel: React.FC = () => {
                                                     <span className="text-label-sm bg-md-sys-primary/20 text-md-sys-primary px-2 py-0.5 rounded">{ocrResult.screenshotType}</span>
                                                     {ocrResult.cloudContributed && (
                                                         <span className="text-label-sm bg-info-soft text-info px-2 py-0.5 rounded font-bold flex items-center gap-1" title="Cloud Vision OCR contributed to this result">
-                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" /></svg>
                                                             Cloud
                                                         </span>
                                                     )}
@@ -1760,25 +1764,27 @@ const DevOCRPanel: React.FC = () => {
             )}
 
             {/* Lightbox Overlay */}
-            {lightboxSrc && (
-                <div
-                    className="fixed inset-0 z-overlay bg-scrim-90 flex items-center justify-center cursor-zoom-out"
-                    onClick={() => setLightboxSrc(null)}
-                >
-                    <img
-                        src={lightboxSrc}
-                        className="max-w-95vw max-h-95vh object-contain select-none"
-                        alt="Full size preview"
-                        draggable={false}
-                    />
-                    <button
+            {
+                lightboxSrc && (
+                    <div
+                        className="fixed inset-0 z-overlay bg-scrim-90 flex items-center justify-center cursor-zoom-out"
                         onClick={() => setLightboxSrc(null)}
-                        className="absolute top-4 right-4 w-10 h-10 rounded-full bg-frost-10 hover:bg-frost-20 flex items-center justify-center text-on-scrim text-xl transition-colors"
                     >
-                        &times;
-                    </button>
-                </div>
-            )}
+                        <img
+                            src={lightboxSrc}
+                            className="max-w-95vw max-h-95vh object-contain select-none"
+                            alt="Full size preview"
+                            draggable={false}
+                        />
+                        <button
+                            onClick={() => setLightboxSrc(null)}
+                            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-frost-10 hover:bg-frost-20 flex items-center justify-center text-on-scrim text-xl transition-colors"
+                        >
+                            &times;
+                        </button>
+                    </div>
+                )
+            }
 
             <OcrRegionEditorModal
                 isOpen={showRegionEditor}
@@ -1793,7 +1799,7 @@ const DevOCRPanel: React.FC = () => {
                 }}
                 onClose={() => setShowRegionEditor(false)}
             />
-        </div>
+        </div >
     );
 };
 

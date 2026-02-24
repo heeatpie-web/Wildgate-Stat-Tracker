@@ -5,9 +5,17 @@
 
 /* Window restore/maximize animation */
 @keyframes window-restore {
-  from { opacity: 0.7; transform: scale(0.97); }
-  to   { opacity: 1;   transform: scale(1); }
+  from {
+    opacity: 0.7;
+    transform: scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
+
 .window-restore-anim {
   animation: window-restore 200ms cubic-bezier(0, 0, 0.2, 1) both;
 }
@@ -17,6 +25,7 @@
     opacity: 0;
     transform: translateY(8px) scale(0.997);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -833,8 +842,10 @@ body[data-mode='twilight'] .sc-queue-item__title {
 }
 
 body[data-mode='twilight'] .sc-queue-item--rich {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 4%);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), transparent 12%);
   border-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 54%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 body[data-mode='twilight'] .sc-queue-item--rich:hover {
@@ -997,13 +1008,11 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 .ocr-assignment-team-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  border-radius: 14px;
-  padding: 9px;
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 68%);
-  background:
-    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--md-sys-color-primary), transparent 86%), transparent 52%),
-    color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 6%);
+  gap: 8px;
+  border-radius: 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 80%);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container), transparent 50%);
 }
 
 .ocr-assignment-team-card--hover {
@@ -1014,7 +1023,7 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 .ocr-assignment-team-head {
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -1023,7 +1032,7 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
   display: flex;
   align-items: center;
   gap: 7px;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 66%);
   background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), transparent 6%);
   border-radius: 10px;
@@ -1036,7 +1045,6 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-left: auto;
   flex: 0 0 auto;
 }
 
@@ -1053,15 +1061,41 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-on-surface), transparent 78%);
 }
 
-.ocr-assignment-team-dot--red { background: #ef4444; }
-.ocr-assignment-team-dot--orange { background: #f59e0b; }
-.ocr-assignment-team-dot--yellow { background: #facc15; }
-.ocr-assignment-team-dot--green { background: #22c55e; }
-.ocr-assignment-team-dot--blue { background: #3b82f6; }
-.ocr-assignment-team-dot--cyan { background: #06b6d4; }
-.ocr-assignment-team-dot--purple { background: #a855f7; }
-.ocr-assignment-team-dot--friendly { background: #2563eb; }
-.ocr-assignment-team-dot--unknown { background: color-mix(in srgb, var(--md-sys-color-outline), transparent 36%); }
+.ocr-assignment-team-dot--red {
+  background: #ef4444;
+}
+
+.ocr-assignment-team-dot--orange {
+  background: #f59e0b;
+}
+
+.ocr-assignment-team-dot--yellow {
+  background: #facc15;
+}
+
+.ocr-assignment-team-dot--green {
+  background: #22c55e;
+}
+
+.ocr-assignment-team-dot--blue {
+  background: #3b82f6;
+}
+
+.ocr-assignment-team-dot--cyan {
+  background: #06b6d4;
+}
+
+.ocr-assignment-team-dot--purple {
+  background: #a855f7;
+}
+
+.ocr-assignment-team-dot--friendly {
+  background: #2563eb;
+}
+
+.ocr-assignment-team-dot--unknown {
+  background: color-mix(in srgb, var(--md-sys-color-outline), transparent 36%);
+}
 
 .ocr-assignment-team-name {
   min-width: 0;
@@ -1091,18 +1125,21 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 
 .ocr-assignment-team-ship-inline {
   min-width: 120px;
-  min-height: 30px;
+  min-height: 26px;
   max-width: 190px;
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 66%);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), transparent 6%);
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-primary), transparent 40%);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--md-sys-color-primary), transparent 90%);
+  color: var(--md-sys-color-primary);
+  font-weight: 700;
+  font-size: 11px;
   padding: 0 8px;
 }
 
 .ocr-assignment-players {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
 }
 
 .ocr-assignment-empty {
@@ -1114,23 +1151,27 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 }
 
 .ocr-team-player-row--quick {
-  min-height: 32px;
-  border-radius: 9px;
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 74%);
-  background: color-mix(in srgb, var(--md-sys-color-surface), transparent 6%);
-  padding: 3px 4px;
+  min-height: 28px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 68%);
+  background: color-mix(in srgb, var(--md-sys-color-surface), transparent 12%);
+  padding: 2px 6px;
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
 .ocr-assignment-player-input {
-  flex: 1;
-  min-width: 0;
-  min-height: 26px;
-  border: 0;
-  background: transparent;
+  flex: 1 1 auto;
+  min-width: 60px;
+  min-height: 24px;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
   padding: 0 2px;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 .ocr-assignment-fuzzy-badge {
@@ -1206,14 +1247,15 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 .ocr-teammate-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   white-space: nowrap;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, #2563eb, transparent 56%);
-  background: color-mix(in srgb, #2563eb, transparent 88%);
+  border: 1px solid color-mix(in srgb, #2563eb, transparent 50%);
+  background: color-mix(in srgb, #2563eb, transparent 82%);
   color: #1d4ed8;
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1;
+  padding: 4px 10px;
 }
 
 .ocr-teammate-chip svg {
@@ -1221,8 +1263,8 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 }
 
 .ocr-teammate-chip--compact {
-  font-size: 11px;
-  padding: 2px 8px;
+  font-size: 12px;
+  padding: 4px 10px;
 }
 
 .ocr-teammate-chip--row {
@@ -1676,7 +1718,7 @@ body[data-mode='twilight'] .sc-detail-meta-line {
 .sc-detail-action-menu-popover {
   position: absolute;
   top: calc(100% + 8px);
-  right: 0;
+  left: 0;
   z-index: 36;
   min-width: 168px;
   display: flex;
@@ -2302,6 +2344,7 @@ body[data-mode='twilight'] .sc-detail-meta-line {
     opacity: 1;
     transform: translate(-50%, -50%) scale(0.1);
   }
+
   to {
     opacity: 0;
     transform: translate(-50%, -50%) scale(1);
@@ -2778,11 +2821,9 @@ body[data-mode='twilight'] .sc-detail-meta-line {
   border-color: color-mix(in srgb, var(--theme-amethyst), transparent 58%) !important;
   background:
     radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--theme-amethyst), transparent 78%), transparent 54%),
-    linear-gradient(
-      135deg,
+    linear-gradient(135deg,
       color-mix(in srgb, var(--theme-amethyst), transparent 90%) 0%,
-      color-mix(in srgb, var(--color-accent), transparent 82%) 100%
-    ) !important;
+      color-mix(in srgb, var(--color-accent), transparent 82%) 100%) !important;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--theme-amethyst), transparent 74%);
 }
 
@@ -2846,11 +2887,9 @@ body[data-mode='twilight'] .ai-legion-chip {
   border-color: color-mix(in srgb, var(--theme-amethyst), transparent 44%) !important;
   background:
     radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--theme-amethyst), transparent 66%), transparent 56%),
-    linear-gradient(
-      135deg,
+    linear-gradient(135deg,
       color-mix(in srgb, var(--theme-amethyst), transparent 82%) 0%,
-      color-mix(in srgb, var(--color-accent), transparent 72%) 100%
-    ) !important;
+      color-mix(in srgb, var(--color-accent), transparent 72%) 100%) !important;
 }
 
 body[data-mode='twilight'] .ai-legion-chip__label,
@@ -3237,7 +3276,10 @@ body.perf-lite * {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+
+  *,
+  *::before,
+  *::after {
     animation: none !important;
     transition-duration: 0ms !important;
     scroll-behavior: auto !important;
@@ -3401,23 +3443,62 @@ body.perf-lite .shadow-2xl {
 }
 
 /* --- Semantic Opacity Hierarchy --- */
-.opacity-primary   { opacity: 1; }
-.opacity-secondary { opacity: 0.60; }
-.opacity-muted     { opacity: 0.40; }
-.opacity-disabled  { opacity: 0.38; }
+.opacity-primary {
+  opacity: 1;
+}
+
+.opacity-secondary {
+  opacity: 0.60;
+}
+
+.opacity-muted {
+  opacity: 0.40;
+}
+
+.opacity-disabled {
+  opacity: 0.38;
+}
 
 /* --- Semantic Border Colors (status) --- */
-.border-success { border-color: var(--color-success); }
-.border-warning { border-color: var(--color-warning); }
-.border-danger  { border-color: var(--color-danger); }
-.border-info    { border-color: var(--color-info); }
-.border-accent  { border-color: var(--color-accent); }
+.border-success {
+  border-color: var(--color-success);
+}
 
-.border-success-soft { border-color: color-mix(in srgb, var(--color-success), transparent 70%); }
-.border-warning-soft { border-color: color-mix(in srgb, var(--color-warning), transparent 70%); }
-.border-danger-soft  { border-color: color-mix(in srgb, var(--color-danger), transparent 70%); }
-.border-info-soft    { border-color: color-mix(in srgb, var(--color-info), transparent 70%); }
-.border-accent-soft  { border-color: color-mix(in srgb, var(--color-accent), transparent 70%); }
+.border-warning {
+  border-color: var(--color-warning);
+}
+
+.border-danger {
+  border-color: var(--color-danger);
+}
+
+.border-info {
+  border-color: var(--color-info);
+}
+
+.border-accent {
+  border-color: var(--color-accent);
+}
+
+.border-success-soft {
+  border-color: color-mix(in srgb, var(--color-success), transparent 70%);
+}
+
+.border-warning-soft {
+  border-color: color-mix(in srgb, var(--color-warning), transparent 70%);
+}
+
+.border-danger-soft {
+  border-color: color-mix(in srgb, var(--color-danger), transparent 70%);
+}
+
+.border-info-soft {
+  border-color: color-mix(in srgb, var(--color-info), transparent 70%);
+}
+
+.border-accent-soft {
+  border-color: color-mix(in srgb, var(--color-accent), transparent 70%);
+}
 
 :where(input, textarea):focus-visible {
   outline: 1px solid color-mix(in srgb, var(--md-sys-color-primary), transparent 45%);
@@ -3649,9 +3730,20 @@ body[data-mode='light'] select.md3-textfield--outlined {
 }
 
 @keyframes telemetryPulse {
-  0% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.16); opacity: 0.7; }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.16);
+    opacity: 0.7;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .recording-result-btn {
@@ -3718,6 +3810,7 @@ body[data-mode='light'] select.md3-textfield--outlined {
     opacity: 0.65;
     transform: translate(-50%, -50%) scale(0.1);
   }
+
   to {
     opacity: 0;
     transform: translate(-50%, -50%) scale(8);
@@ -3737,21 +3830,45 @@ body[data-mode='light'] select.md3-textfield--outlined {
 }
 
 @keyframes recordingResultPulseWin {
-  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-win), transparent 20%); }
-  55% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-win), transparent 70%); }
-  100% { box-shadow: 0 0 0 0 transparent; }
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-win), transparent 20%);
+  }
+
+  55% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-win), transparent 70%);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
 }
 
 @keyframes recordingResultPulseLoss {
-  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-loss), transparent 20%); }
-  55% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-loss), transparent 70%); }
-  100% { box-shadow: 0 0 0 0 transparent; }
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-loss), transparent 20%);
+  }
+
+  55% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-loss), transparent 70%);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
 }
 
 @keyframes recordingResultPulseDraw {
-  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-draw), transparent 20%); }
-  55% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-draw), transparent 70%); }
-  100% { box-shadow: 0 0 0 0 transparent; }
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-draw), transparent 20%);
+  }
+
+  55% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-draw), transparent 70%);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
 }
 
 .recording-result-btn--win {

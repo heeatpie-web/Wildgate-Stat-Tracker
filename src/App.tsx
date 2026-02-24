@@ -1760,44 +1760,12 @@ const App: React.FC = () => {
                 players: uniquePlayers,
             };
         });
-        const playerColorHints = buildPlayerColorHints(sessionTeams);
-        const assignedColors = assignDeterministicTeamColors(unresolvedTeams, { playerColorHints });
         const preferredFallbackOrder: TeamColor[] = ['red', 'orange', 'yellow', 'green'];
-        const teamHasHintedColor = (team: { players: string[] }) => (
-            team.players.some((player) => {
-                const hinted = normalizeTeamColor(playerColorHints[normalizeOcrName(player).toLowerCase()]);
-                return hinted !== 'unknown';
-            })
-        );
-        const claimedColors = new Set<TeamColor>();
-        unresolvedTeams.forEach((team, index) => {
-            const parsed = normalizeTeamColor(team.color);
-            if (parsed !== 'unknown') {
-                claimedColors.add(parsed);
-                return;
-            }
-            const deterministic = normalizeTeamColor(assignedColors[index]);
-            if (teamHasHintedColor(team) && deterministic !== 'unknown') {
-                claimedColors.add(deterministic);
-            }
-        });
-        const fallbackQueue = preferredFallbackOrder.filter((color) => !claimedColors.has(color));
-        let fallbackCursor = 0;
         const colorAssignedTeams = unresolvedTeams
             .map((team, index) => {
-                const parsed = normalizeTeamColor(team.color);
-                if (parsed !== 'unknown') {
-                    return { ...team, color: parsed };
-                }
-                const deterministic = normalizeTeamColor(assignedColors[index]);
-                if (teamHasHintedColor(team) && deterministic !== 'unknown') {
-                    return { ...team, color: deterministic };
-                }
-                const positionalFallback = fallbackQueue[fallbackCursor] || 'unknown';
-                if (fallbackCursor < fallbackQueue.length) fallbackCursor += 1;
                 return {
                     ...team,
-                    color: positionalFallback,
+                    color: preferredFallbackOrder[index] || 'unknown',
                 };
             })
             .filter((team) => team.players.length > 0 || team.teamName || team.shipType);
@@ -1981,19 +1949,19 @@ const App: React.FC = () => {
                 return <RecordingView onSmartCaptureData={handleSmartCaptureData} />;
             case 'analytics':
                 return (
-                    <div className="h-full min-h-0 overflow-y-scroll custom-scrollbar p-3">
+                    <div className="h-full min-h-0 overflow-y-auto custom-scrollbar p-3">
                         <AnalyticsPanel />
                     </div>
                 );
             case 'history':
                 return (
-                    <div className="h-full min-h-0 overflow-y-scroll custom-scrollbar p-3">
+                    <div className="h-full min-h-0 overflow-y-auto custom-scrollbar p-3">
                         <HistoryTable />
                     </div>
                 );
             case 'smart-captures':
                 return (
-                    <div className="h-full min-h-0 overflow-y-scroll custom-scrollbar p-3">
+                    <div className="h-full min-h-0 overflow-y-auto custom-scrollbar p-3">
                         <SmartCapturesPanel />
                     </div>
                 );
@@ -2005,7 +1973,7 @@ const App: React.FC = () => {
                 );
             case 'dev-ocr':
                 return (
-                    <div className="h-full min-h-0 overflow-y-scroll custom-scrollbar p-3">
+                    <div className="h-full min-h-0 overflow-y-auto custom-scrollbar p-3">
                         <DevOCRPanel />
                     </div>
                 );
@@ -2220,183 +2188,183 @@ const App: React.FC = () => {
                 || telemetryDraftPrompt
                 || (showFuzzyReviewPrompt && fuzzyRosterCandidates.length > 0 && !showReviewQueue)
                 || (showIdInfoPrompt && unknownIdCount > 0 && !showIdMapper)) && createPortal((
-                <div className="fixed z-top top-20 right-4 left-4 md:left-auto md:w-[28rem] pointer-events-none space-y-3">
-                    {telemetryPruneStatus && (
-                        <div className="pointer-events-auto rounded-2xl border border-warning/45 bg-md-sys-surface-container-highest shadow-2xl p-4">
-                            <div className="text-body font-bold">Telemetry retention needs cleanup</div>
-                            <div className="mt-1 text-label-sm opacity-70">
-                                {telemetryPruneStatus.exceedsSize && telemetryPruneStatus.exceedsAge
-                                    ? 'Retention is exceeded by both size and age.'
-                                    : telemetryPruneStatus.exceedsSize
-                                        ? 'Retention is exceeded by size.'
-                                        : 'Retention is exceeded by age.'}
-                            </div>
-                            {telemetryPruneStatus.exceedsSize ? (
+                    <div className="fixed z-top top-20 right-4 left-4 md:left-auto md:w-[28rem] pointer-events-none space-y-3">
+                        {telemetryPruneStatus && (
+                            <div className="pointer-events-auto rounded-2xl border border-warning/45 bg-md-sys-surface-container-highest shadow-2xl p-4">
+                                <div className="text-body font-bold">Telemetry retention needs cleanup</div>
                                 <div className="mt-1 text-label-sm opacity-70">
-                                    Current: {formatBytes(telemetryPruneStatus.sizeBytes)} of {formatBytes(telemetryPruneStatus.maxBytes)}.
+                                    {telemetryPruneStatus.exceedsSize && telemetryPruneStatus.exceedsAge
+                                        ? 'Retention is exceeded by both size and age.'
+                                        : telemetryPruneStatus.exceedsSize
+                                            ? 'Retention is exceeded by size.'
+                                            : 'Retention is exceeded by age.'}
                                 </div>
-                            ) : (
-                                <div className="mt-1 text-label-sm opacity-70">
-                                    Age policy: keep telemetry newer than {Math.max(1, Math.round(telemetryPruneStatus.maxAgeMs / (24 * 60 * 60 * 1000)))} day(s).
-                                </div>
-                            )}
-                            <div className="mt-1 text-label-sm opacity-70">
-                                Suggested prune: {telemetryPruneStatus.prunePreview?.wouldRemoveEntries || 0} entries
-                                ({formatBytes(telemetryPruneStatus.prunePreview?.wouldFreeBytes || 0)}).
-                            </div>
-                            <div className="mt-3 flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={handleTelemetryPruneNow}
-                                    disabled={telemetryPruneBusy}
-                                    className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled"
-                                >
-                                    {telemetryPruneBusy ? 'Pruning...' : 'Prune now'}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleTelemetryPruneLater}
-                                    disabled={telemetryPruneBusy}
-                                    className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled"
-                                >
-                                    Later
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {telemetryDraftPrompt && (
-                        <div className="pointer-events-auto rounded-2xl border border-md-sys-primary/45 bg-md-sys-surface-container-highest shadow-2xl p-4 relative">
-                            <button
-                                type="button"
-                                onClick={handleTelemetryDraftLater}
-                                className="absolute top-2 right-2 h-7 w-7 rounded-full border border-md-sys-outline/20 text-label-sm font-bold text-md-sys-on-surface/70 hover:bg-md-sys-on-surface/10"
-                                aria-label="Dismiss telemetry prompt"
-                                title="Dismiss"
-                            >
-                                ×
-                            </button>
-                            <div className="text-body font-bold pr-8">
-                                {telemetryDraftPrompt.phase === 'midmatch' ? 'Telemetry match in progress' : 'Telemetry match ready'}
-                            </div>
-                            {telemetryDraftPrompt.phase === 'midmatch' ? (
-                                <div className="mt-1 text-label-sm opacity-70">
-                                    Telemetry detected mission start. Capture Crew Hub/Tactical only when roster/loadout changed.
-                                </div>
-                            ) : (
-                                <>
+                                {telemetryPruneStatus.exceedsSize ? (
                                     <div className="mt-1 text-label-sm opacity-70">
-                                        Duration: {telemetryDraftPrompt.duration}. Choose a result to continue in Recording. OCR stays manual until you choose Process OCR.
+                                        Current: {formatBytes(telemetryPruneStatus.sizeBytes)} of {formatBytes(telemetryPruneStatus.maxBytes)}.
                                     </div>
-                                    <div className="mt-3 grid grid-cols-3 gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => handleTelemetryDraftResult('Win')}
-                                            className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
-                                        >
-                                            Win
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleTelemetryDraftResult('Loss')}
-                                            className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
-                                        >
-                                            Loss
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleTelemetryDraftResult('Draw')}
-                                            className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
-                                        >
-                                            Draw
-                                        </button>
+                                ) : (
+                                    <div className="mt-1 text-label-sm opacity-70">
+                                        Age policy: keep telemetry newer than {Math.max(1, Math.round(telemetryPruneStatus.maxAgeMs / (24 * 60 * 60 * 1000)))} day(s).
                                     </div>
-                                </>
-                            )}
-                            <div className="mt-3 flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={handleTelemetryDraftSmartCapture}
-                                    className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
-                                >
-                                    Start Smart Capture
-                                </button>
+                                )}
+                                <div className="mt-1 text-label-sm opacity-70">
+                                    Suggested prune: {telemetryPruneStatus.prunePreview?.wouldRemoveEntries || 0} entries
+                                    ({formatBytes(telemetryPruneStatus.prunePreview?.wouldFreeBytes || 0)}).
+                                </div>
+                                <div className="mt-3 flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleTelemetryPruneNow}
+                                        disabled={telemetryPruneBusy}
+                                        className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled"
+                                    >
+                                        {telemetryPruneBusy ? 'Pruning...' : 'Prune now'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleTelemetryPruneLater}
+                                        disabled={telemetryPruneBusy}
+                                        className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled"
+                                    >
+                                        Later
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {telemetryDraftPrompt && (
+                            <div className="pointer-events-auto rounded-2xl border border-md-sys-primary/45 bg-md-sys-surface-container-highest shadow-2xl p-4 relative">
                                 <button
                                     type="button"
                                     onClick={handleTelemetryDraftLater}
-                                    className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
+                                    className="absolute top-2 right-2 h-7 w-7 rounded-full border border-md-sys-outline/20 text-label-sm font-bold text-md-sys-on-surface/70 hover:bg-md-sys-on-surface/10"
+                                    aria-label="Dismiss telemetry prompt"
+                                    title="Dismiss"
                                 >
-                                    Later
+                                    ×
                                 </button>
+                                <div className="text-body font-bold pr-8">
+                                    {telemetryDraftPrompt.phase === 'midmatch' ? 'Telemetry match in progress' : 'Telemetry match ready'}
+                                </div>
+                                {telemetryDraftPrompt.phase === 'midmatch' ? (
+                                    <div className="mt-1 text-label-sm opacity-70">
+                                        Telemetry detected mission start. Capture Crew Hub/Tactical only when roster/loadout changed.
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="mt-1 text-label-sm opacity-70">
+                                            Duration: {telemetryDraftPrompt.duration}. Choose a result to continue in Recording. OCR stays manual until you choose Process OCR.
+                                        </div>
+                                        <div className="mt-3 grid grid-cols-3 gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleTelemetryDraftResult('Win')}
+                                                className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
+                                            >
+                                                Win
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleTelemetryDraftResult('Loss')}
+                                                className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
+                                            >
+                                                Loss
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleTelemetryDraftResult('Draw')}
+                                                className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
+                                            >
+                                                Draw
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                                <div className="mt-3 flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleTelemetryDraftSmartCapture}
+                                        className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
+                                    >
+                                        Start Smart Capture
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleTelemetryDraftLater}
+                                        className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
+                                    >
+                                        Later
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
 
-                    {showFuzzyReviewPrompt && fuzzyRosterCandidates.length > 0 && !showReviewQueue && (
-                        <div className="pointer-events-auto rounded-2xl border border-warning/45 bg-md-sys-surface-container-highest shadow-2xl p-4 space-y-2">
-                            <div className="text-body font-bold">Fuzzy Match Review Ready</div>
-                            <div className="text-label-sm opacity-70">
-                                {fuzzyRosterCandidates.length} OCR name{fuzzyRosterCandidates.length === 1 ? '' : 's'} can be merged.
-                                Top candidate: "{fuzzyRosterCandidates[0].value}" {'->'} "{fuzzyRosterCandidates[0].bestMatch}" ({Math.round(Number(fuzzyRosterCandidates[0].bestScore || 0))}%)
+                        {showFuzzyReviewPrompt && fuzzyRosterCandidates.length > 0 && !showReviewQueue && (
+                            <div className="pointer-events-auto rounded-2xl border border-warning/45 bg-md-sys-surface-container-highest shadow-2xl p-4 space-y-2">
+                                <div className="text-body font-bold">Fuzzy Match Review Ready</div>
+                                <div className="text-label-sm opacity-70">
+                                    {fuzzyRosterCandidates.length} OCR name{fuzzyRosterCandidates.length === 1 ? '' : 's'} can be merged.
+                                    Top candidate: "{fuzzyRosterCandidates[0].value}" {'->'} "{fuzzyRosterCandidates[0].bestMatch}" ({Math.round(Number(fuzzyRosterCandidates[0].bestScore || 0))}%)
+                                </div>
+                                <div className="flex items-center gap-2 justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowFuzzyReviewPrompt(false)}
+                                        className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
+                                    >
+                                        Later
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={approveFuzzyCandidates}
+                                        className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
+                                    >
+                                        Approve
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowFuzzyReviewPrompt(false);
+                                            setShowReviewQueue(true);
+                                        }}
+                                        className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
+                                    >
+                                        Review now
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2 justify-end">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowFuzzyReviewPrompt(false)}
-                                    className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
-                                >
-                                    Later
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={approveFuzzyCandidates}
-                                    className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
-                                >
-                                    Approve
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowFuzzyReviewPrompt(false);
-                                        setShowReviewQueue(true);
-                                    }}
-                                    className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
-                                >
-                                    Review now
-                                </button>
-                            </div>
-                        </div>
-                    )}
+                        )}
 
-                    {showIdInfoPrompt && unknownIdCount > 0 && !showIdMapper && (
-                        <div className="pointer-events-auto rounded-2xl border border-info/45 bg-md-sys-surface-container-highest shadow-2xl p-4 space-y-2">
-                            <div className="text-body font-bold">ID Info Requested</div>
-                            <div className="text-label-sm opacity-70">
-                                {unknownIdCount} unknown telemetry ID{unknownIdCount === 1 ? '' : 's'} detected. Map them now so ship/prospector/loadout tracking stays accurate.
+                        {showIdInfoPrompt && unknownIdCount > 0 && !showIdMapper && (
+                            <div className="pointer-events-auto rounded-2xl border border-info/45 bg-md-sys-surface-container-highest shadow-2xl p-4 space-y-2">
+                                <div className="text-body font-bold">ID Info Requested</div>
+                                <div className="text-label-sm opacity-70">
+                                    {unknownIdCount} unknown telemetry ID{unknownIdCount === 1 ? '' : 's'} detected. Map them now so ship/prospector/loadout tracking stays accurate.
+                                </div>
+                                <div className="flex items-center gap-2 justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowIdInfoPrompt(false)}
+                                        className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
+                                    >
+                                        Later
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowIdInfoPrompt(false);
+                                            setShowIdMapper(true);
+                                        }}
+                                        className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
+                                    >
+                                        Open ID Mapper
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2 justify-end">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowIdInfoPrompt(false)}
-                                    className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
-                                >
-                                    Later
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowIdInfoPrompt(false);
-                                        setShowIdMapper(true);
-                                    }}
-                                    className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
-                                >
-                                    Open ID Mapper
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            ), document.body)}
+                        )}
+                    </div>
+                ), document.body)}
 
         </div>
     );

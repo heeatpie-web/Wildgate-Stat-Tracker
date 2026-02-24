@@ -37,10 +37,10 @@ export const Section: React.FC<{
 );
 
 export const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: string }> = ({ icon, label, value }) => (
-    <div className="md3-surface rounded-xl sc-bordered p-3 flex flex-col items-center gap-0.5 sc-editor-stat-card">
+    <div className="md3-surface rounded-xl sc-bordered p-3.5 flex flex-col items-center justify-center gap-1.5 sc-editor-stat-card">
         <span className="text-md-sys-on-surface/60">{icon}</span>
-        <span className="text-label-xs font-semibold text-md-sys-on-surface/60">{label}</span>
-        <span className="text-body font-bold text-md-sys-on-surface">{value}</span>
+        <span className="text-label-sm font-semibold text-md-sys-on-surface/60 uppercase tracking-wider">{label}</span>
+        <span className="text-title-md font-bold text-md-sys-on-surface">{value}</span>
     </div>
 );
 
@@ -58,11 +58,11 @@ export const EditableStatCard: React.FC<{
 
     return (
         <div
-            className="md3-surface rounded-xl sc-bordered p-3 flex flex-col items-center gap-0.5 cursor-pointer hover:ring-1 ring-md-sys-primary/20 transition-all sc-editor-stat-card"
+            className="md3-surface rounded-xl sc-bordered p-3.5 flex flex-col items-center justify-center gap-1.5 cursor-pointer hover:ring-1 ring-md-sys-primary/20 transition-all sc-editor-stat-card"
             onClick={() => { if (!editing) { setEditing(true); setDraft(value === '--' ? '' : value); } }}
         >
             <span className="text-md-sys-on-surface/60">{icon}</span>
-            <span className="text-label-xs font-semibold text-md-sys-on-surface/60">{label}</span>
+            <span className="text-label-sm font-semibold text-md-sys-on-surface/60 uppercase tracking-wider">{label}</span>
             {editing ? (
                 <input
                     type={type || 'text'}
@@ -70,13 +70,13 @@ export const EditableStatCard: React.FC<{
                     onChange={(e) => setDraft(e.target.value)}
                     onBlur={() => { onSave(draft); setEditing(false); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') { onSave(draft); setEditing(false); } if (e.key === 'Escape') setEditing(false); }}
-                    className="text-body font-black md3-surface rounded px-2 w-20 text-center outline-none"
+                    className="text-title-md font-black md3-surface rounded px-2 w-24 text-center outline-none"
                     placeholder={placeholder}
                     min={type === 'number' ? 0 : undefined}
                     autoFocus
                 />
             ) : (
-                <span className="text-body font-semibold text-md-sys-on-surface">{value}</span>
+                <span className="text-title-md font-bold text-md-sys-on-surface">{value}</span>
             )}
         </div>
     );

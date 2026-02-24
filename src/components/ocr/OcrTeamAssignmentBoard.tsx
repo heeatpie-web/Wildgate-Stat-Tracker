@@ -25,6 +25,7 @@ interface OcrTeamAssignmentBoardProps {
     allowColorEdit?: boolean;
     allowTeamAddRemove?: boolean;
     fuzzyMatches?: Record<string, string>;
+    pilotRegistry?: string[];
     onTeamNameChange?: (teamIndex: number, value: string) => void;
     onTeamColorChange?: (teamIndex: number, value: string) => void;
     onTeamShipChange: (teamIndex: number, value: string) => void;
@@ -84,6 +85,7 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
     allowColorEdit = false,
     allowTeamAddRemove = false,
     fuzzyMatches = {},
+    pilotRegistry = [],
     onTeamNameChange,
     onTeamColorChange,
     onTeamShipChange,
@@ -198,9 +200,8 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                         <div
                             key={`${team.key}-${teamIndex}`}
                             data-testid={`ocr-team-card-${teamIndex}`}
-                            className={`ocr-assignment-team-card md3-surface-high ${
-                                dragHoverTeamIndex === teamIndex ? 'ocr-assignment-team-card--hover' : ''
-                            }`}
+                            className={`ocr-assignment-team-card md3-surface-high ${dragHoverTeamIndex === teamIndex ? 'ocr-assignment-team-card--hover' : ''
+                                }`}
                             onDragOver={(event) => allowDrop(event, teamIndex)}
                             onDragLeave={() => setDragHoverTeamIndex(null)}
                             onDrop={(event) => dropPlayer(event, teamIndex, null)}
@@ -284,13 +285,13 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                         const fuzzyMatch = fuzzyMatches[normalizePlayerKey(displayName)] || '';
                                         const showFuzzyBadge = fuzzyMatch
                                             && normalizePlayerKey(fuzzyMatch) !== normalizePlayerKey(displayName);
+                                        const isRosterMatch = pilotRegistry.length > 0 && pilotRegistry.some(p => normalizePlayerKey(p) === normalizePlayerKey(displayName));
                                         return (
                                             <div
                                                 key={`${teamIndex}-${playerIndex}`}
                                                 data-testid={`ocr-board-player-row-${teamIndex}-${playerIndex}`}
-                                                className={`ocr-team-player-row ocr-team-player-row--quick ${
-                                                    isDragged ? 'opacity-60' : ''
-                                                }`}
+                                                className={`ocr-team-player-row ocr-team-player-row--quick ${isDragged ? 'opacity-60' : ''
+                                                    }`}
                                                 onDragOver={(event) => allowDrop(event, teamIndex)}
                                                 onDrop={(event) => dropPlayer(event, teamIndex, playerIndex)}
                                             >
@@ -320,6 +321,14 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                                     className="md3-textfield ocr-assignment-player-input"
                                                     aria-label={`${team.teamName || `team ${teamIndex + 1}`} player ${playerIndex + 1} name`}
                                                 />
+                                                {isRosterMatch && !showFuzzyBadge && (
+                                                    <span
+                                                        className="ocr-assignment-fuzzy-badge !border-success !text-success !bg-success-soft"
+                                                        title="Verified Roster Member"
+                                                    >
+                                                        Verified
+                                                    </span>
+                                                )}
                                                 {showFuzzyBadge && (
                                                     <span
                                                         className="ocr-assignment-fuzzy-badge"
@@ -363,9 +372,9 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                     type="button"
                                     onClick={() => addPlayer(teamIndex)}
                                     className="md3-btn-tonal ocr-assignment-add-btn"
+                                    aria-label="Add player"
                                 >
-                                    <Plus size={12} />
-                                    Add
+                                    <Plus size={14} />
                                 </button>
                             </div>
                         </div>

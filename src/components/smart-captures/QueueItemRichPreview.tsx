@@ -45,10 +45,24 @@ const STATUS_PILL_BY_TONE: Record<'success' | 'warning' | 'danger' | 'info' | 'n
 };
 
 const ROW_TONE_BY_RESULT: Record<Match['result'], string> = {
-  Win: 'bg-success/[0.08] border-success/30',
-  Loss: 'bg-danger/[0.08] border-danger/30',
-  Draw: 'bg-info/[0.08] border-info/30',
-  Ongoing: 'bg-md-sys-on-surface/[0.04] border-md-sys-outline/18',
+  Win: 'bg-success/[0.04] border-success/20',
+  Loss: 'bg-danger/[0.04] border-danger/20',
+  Draw: 'bg-info/[0.04] border-info/20',
+  Ongoing: 'bg-md-sys-on-surface/[0.02] border-md-sys-outline/15',
+};
+
+const SELECTED_ROW_TONE_BY_RESULT: Record<Match['result'], string> = {
+  Win: 'bg-success/[0.12] border-success/40 ring-success/20 text-success',
+  Loss: 'bg-danger/[0.12] border-danger/40 ring-danger/20 text-danger',
+  Draw: 'bg-info/[0.12] border-info/40 ring-info/20 text-info',
+  Ongoing: 'bg-md-sys-primary/10 border-md-sys-primary/30 ring-md-sys-primary/20 text-md-sys-primary',
+};
+
+const SELECTED_BORDER_BY_RESULT: Record<Match['result'], string> = {
+  Win: 'var(--md-sys-color-success)',
+  Loss: 'var(--md-sys-color-danger)',
+  Draw: 'var(--md-sys-color-info)',
+  Ongoing: 'var(--md-sys-color-primary)',
 };
 
 const getDayOrdinal = (day: number): string => {
@@ -130,11 +144,11 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
     <button
       type="button"
       onClick={onClick}
-      className={`group sc-queue-item sc-queue-item--rich ${resultClass} w-full text-left rounded-card border-l-[11px] transition-all relative min-h-[88px] overflow-visible ${isSelected
-        ? 'bg-md-sys-primary/16 text-md-sys-on-surface border-l-md-sys-primary border border-md-sys-primary/38 p-3 ring-1 ring-md-sys-primary/26 shadow-sm font-semibold'
-        : `border-l-md-sys-outline/30 border hover:bg-md-sys-on-surface/8 p-3 ${ROW_TONE_BY_RESULT[match.result]}`
+      className={`group sc-queue-item sc-queue-item--rich ${resultClass} w-full text-left rounded-card border-l-[11px] transition-all relative min-h-[64px] overflow-visible ${isSelected
+        ? `text-md-sys-on-surface border p-3 ring-1 shadow-sm font-semibold ${SELECTED_ROW_TONE_BY_RESULT[match.result]}`
+        : `border border-l-md-sys-outline/30 hover:bg-md-sys-on-surface/8 p-3 ${ROW_TONE_BY_RESULT[match.result]}`
         }`}
-      style={{ borderLeftColor: isSelected ? 'var(--md-sys-color-primary)' : BORDER_BY_TONE[displayTone] }}
+      style={{ borderLeftColor: SELECTED_BORDER_BY_RESULT[match.result] }}
       title={tooltipLabel}
     >
       <div className="flex items-start gap-2.5">
@@ -153,36 +167,24 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
           />
         ) : null}
 
-        <div className="flex-1 min-w-0 space-y-2">
-          <div className="sc-queue-item__title-wrap">
-            <span className="sc-queue-item__title">Match #{displayNumber}</span>
-          </div>
-
-          <div className="flex items-center gap-2 min-w-0">
-            <OutcomePill result={match.result} />
+        <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+          <div className="flex items-center justify-between min-w-0">
             <div className="flex items-center gap-2 min-w-0">
-              <span
-                aria-label={`Status ${statusMeta.label}`}
-                className={`inline-flex items-center px-2.5 py-1 rounded-pill text-label-sm font-semibold ${STATUS_PILL_BY_TONE[statusMeta.tone]}`}
-              >
-                {statusMeta.label}
+              <span className={`sc-queue-item__title text-label-md font-black ${isSelected ? '' : 'opacity-40'}`}>#{displayNumber}</span>
+              <span className="text-label-sm font-bold truncate">
+                {match.ship || 'Unknown'} <span className="opacity-40 font-normal">|</span> {match.hero || 'Unknown'}
               </span>
             </div>
+            <span className={`text-label-xs font-semibold truncate whitespace-nowrap ml-2 ${isSelected ? 'opacity-80' : 'text-md-sys-on-surface/60'}`}>{timestampLabel}</span>
           </div>
-          <div className="flex items-center gap-2 min-w-0 text-label-xs text-md-sys-on-surface/58 font-semibold">
-            <span className="truncate">{timestampLabel}</span>
-            <span aria-hidden="true" className="opacity-45">|</span>
-            <span className="truncate">{match.ship || 'Unknown ship'}</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5 text-label-xs text-md-sys-on-surface/62 font-semibold">
-            <span className="inline-flex items-center px-2 py-0.5 rounded-pill bg-md-sys-on-surface/8">
-              Shots {artifactCount}
-            </span>
-            <span className="inline-flex items-center px-2 py-0.5 rounded-pill bg-md-sys-on-surface/8">
-              Team {teammateCount}
-            </span>
-            <span className="inline-flex items-center px-2 py-0.5 rounded-pill bg-md-sys-on-surface/8">
-              OCR {match.ocrState || 'queued'}
+
+          <div className="flex items-center gap-2">
+            <OutcomePill result={match.result} />
+            <span
+              aria-label={`Status ${statusMeta.label}`}
+              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${STATUS_PILL_BY_TONE[statusMeta.tone]}`}
+            >
+              {statusMeta.label}
             </span>
           </div>
         </div>

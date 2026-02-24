@@ -348,10 +348,6 @@ export const Wizard: React.FC = () => {
     const loadoutSourceBadgeLabel = getTelemetryLoadoutSourceLabel(latestTelemetryLoadoutSource) || 'Telemetry';
     const displayedCharacterWeapons = (pendingLoadout.characterWeapons || []).slice(0, 2);
     const displayedCharacterEquipment = (pendingLoadout.characterEquipment || []).slice(0, 2);
-    const prospectorLoadoutSummary = [
-        displayedCharacterWeapons.length > 0 ? `Weapons: ${displayedCharacterWeapons.join(', ')}` : 'Weapons: --',
-        displayedCharacterEquipment.length > 0 ? `Equipment: ${displayedCharacterEquipment.join(', ')}` : 'Equipment: --',
-    ].join(' | ');
     const telemetryDurationSeconds = typeof pendingMatchData?.telemetryConsistency?.telemetryDurationSeconds === 'number'
         ? pendingMatchData.telemetryConsistency.telemetryDurationSeconds
         : null;
@@ -598,16 +594,16 @@ export const Wizard: React.FC = () => {
                         <button
                             type="button"
                             onClick={() => setActiveTab('result')}
-                            className={`wizard-tab-btn rounded-xl py-2.5 text-label-sm font-bold uppercase tracking-widest ${activeTab === 'result' ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'mg-surface-high text-md-sys-on-surface/90 hover:text-md-sys-on-surface'}`}
+                            className={`wizard-tab-btn rounded-2xl py-3 text-label-sm font-bold uppercase tracking-widest transition-all ${activeTab === 'result' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-md' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/80 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'}`}
                         >
                             Result
                         </button>
                         <button
                             type="button"
                             onClick={() => setActiveTab('ocr')}
-                            className={`wizard-tab-btn rounded-xl py-2.5 text-label-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 ${activeTab === 'ocr' ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'mg-surface-high text-md-sys-on-surface/90 hover:text-md-sys-on-surface'}`}
+                            className={`wizard-tab-btn rounded-2xl py-3 text-label-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${activeTab === 'ocr' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-md' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/80 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'}`}
                         >
-                            <Users size={14} />
+                            <Users size={16} />
                             OCR Review {detectedPlayerCount > 0 ? `(${detectedPlayerCount})` : ''}
                         </button>
                     </div>
@@ -626,20 +622,15 @@ export const Wizard: React.FC = () => {
                                             setShowWizard(result);
                                             setSelectedWinType(null);
                                         }}
-                                        className={`wizard-outcome-btn rounded-xl py-2.5 text-label-sm font-bold uppercase tracking-widest transition-all ${selectedResult === result
+                                        className={`wizard-outcome-btn rounded-2xl py-3.5 text-label-sm font-bold uppercase tracking-widest transition-all ${selectedResult === result
                                             ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg'
-                                            : 'mg-surface-high text-md-sys-on-surface/90 hover:text-md-sys-on-surface'
+                                            : 'bg-md-sys-surface-container-high text-md-sys-on-surface/80 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'
                                             }`}
                                     >
                                         {result}
                                     </button>
                                 ))}
                             </div>
-                            {!hasSelectedResult && (
-                                <div className="mt-2 text-label-sm text-md-sys-on-surface/92">
-                                    Select a result to unlock match-type follow-up.
-                                </div>
-                            )}
                             {selectedResult === 'Loss' && selectedWinType === 'Combat' && (
                                 <div className="mt-2">
                                     <span className="text-label-sm font-bold uppercase text-md-sys-on-surface/80 block mb-1">Placement</span>
@@ -667,10 +658,10 @@ export const Wizard: React.FC = () => {
 
                         {(selectedResult === 'Win' || selectedResult === 'Loss') && (
                             <div className="flex gap-2 w-full">
-                                <button onClick={() => setSelectedWinType('Combat')} className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Combat' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg scale-102' : 'mg-surface-high text-md-sys-on-surface/90 hover:text-md-sys-on-surface'}`}>
+                                <button onClick={() => setSelectedWinType('Combat')} className={`flex-1 ${isOverlayMode ? 'py-3.5 text-label-sm' : 'py-4.5 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Combat' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg scale-102' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/80 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'}`}>
                                     <Sword size={16} /> {selectedResult === 'Loss' ? 'Combat Defeat' : 'Combat Win'}
                                 </button>
-                                <button onClick={() => setSelectedWinType('Artifact')} className={`flex-1 ${isOverlayMode ? 'py-3 text-label-sm' : 'py-4 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong shadow-lg scale-102' : 'mg-surface-high text-md-sys-on-surface/90 hover:text-md-sys-on-surface'}`}>
+                                <button onClick={() => setSelectedWinType('Artifact')} className={`flex-1 ${isOverlayMode ? 'py-3.5 text-label-sm' : 'py-4.5 text-label-sm'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong shadow-lg scale-102' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/80 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'}`}>
                                     <Gem size={16} /> {selectedResult === 'Loss' ? 'Artifact Defeat' : 'Artifact Win'}
                                 </button>
                             </div>
@@ -780,27 +771,23 @@ export const Wizard: React.FC = () => {
                                         <div
                                             key={ship}
                                             data-testid={isAiLegion ? 'wizard-ai-legion-kill-card' : undefined}
-                                            className={`wizard-kill-card flex flex-col items-center rounded-xl p-2 border transition-all group ${
-                                            isAiLegion
+                                            className={`wizard-kill-card flex flex-col items-center rounded-2xl p-3 border transition-all group ${isAiLegion
                                                 ? 'wizard-kill-card--ai-legion ai-legion-chip'
-                                                : 'mg-surface-high border-md-sys-outline/5 hover:border-md-sys-primary/20'
-                                        }`}
+                                                : 'bg-md-sys-surface-container-high border-md-sys-outline/5 hover:border-md-sys-primary/40'
+                                                }`}
                                         >
-                                            <span className={`wizard-kill-label text-label-xs font-bold uppercase mb-2 truncate w-full text-center ${
-                                                isAiLegion ? 'wizard-kill-label--ai-legion ai-legion-chip__label' : 'opacity-40'
-                                            }`}>{shortName}</span>
+                                            <span className={`wizard-kill-label text-label-xs font-bold uppercase mb-2 truncate w-full text-center ${isAiLegion ? 'wizard-kill-label--ai-legion ai-legion-chip__label' : 'opacity-40'
+                                                }`}>{shortName}</span>
                                             <div className="flex items-center w-full justify-between">
-                                                <button onClick={() => setKills({ ...kills, [shortName]: Math.max(0, currentVal - 1) })} className={`wizard-kill-stepper w-6 h-6 flex items-center justify-center rounded-lg transition-all ${
-                                                    isAiLegion
-                                                        ? 'wizard-kill-stepper--ai-legion'
-                                                        : 'hover:bg-md-sys-error/10 text-md-sys-on-surface/60 hover:text-md-sys-error'
-                                                }`}>-</button>
+                                                <button onClick={() => setKills({ ...kills, [shortName]: Math.max(0, currentVal - 1) })} className={`wizard-kill-stepper w-6 h-6 flex items-center justify-center rounded-lg transition-all ${isAiLegion
+                                                    ? 'wizard-kill-stepper--ai-legion'
+                                                    : 'hover:bg-md-sys-error/10 text-md-sys-on-surface/60 hover:text-md-sys-error'
+                                                    }`}>-</button>
                                                 <span className={`wizard-kill-value font-mono font-bold text-body ${isAiLegion ? 'wizard-kill-value--ai-legion ai-legion-chip__value' : ''}`}>{currentVal}</span>
-                                                <button onClick={() => setKills({ ...kills, [shortName]: currentVal + 1 })} className={`wizard-kill-stepper w-6 h-6 flex items-center justify-center rounded-lg transition-all ${
-                                                    isAiLegion
-                                                        ? 'wizard-kill-stepper--ai-legion'
-                                                        : 'hover:bg-success/10 text-md-sys-on-surface/60 hover:text-success'
-                                                }`}>+</button>
+                                                <button onClick={() => setKills({ ...kills, [shortName]: currentVal + 1 })} className={`wizard-kill-stepper w-6 h-6 flex items-center justify-center rounded-lg transition-all ${isAiLegion
+                                                    ? 'wizard-kill-stepper--ai-legion'
+                                                    : 'hover:bg-success/10 text-md-sys-on-surface/60 hover:text-success'
+                                                    }`}>+</button>
                                             </div>
                                         </div>
                                     );
@@ -878,7 +865,15 @@ export const Wizard: React.FC = () => {
                                         </span>
                                     )}
                                 </span>
-                                <span className="text-label-sm text-md-sys-on-surface/80 truncate">{prospectorLoadoutSummary}</span>
+                                <div className="flex gap-1.5 items-center overflow-hidden">
+                                    {displayedCharacterWeapons.length > 0 ? displayedCharacterWeapons.map((w, i) => (
+                                        <span key={`w-${i}`} className="px-1.5 py-0.5 rounded bg-md-sys-surface-container-highest text-md-sys-on-surface text-[10px] font-bold uppercase truncate max-w-[80px]">{w}</span>
+                                    )) : <span className="text-label-xs opacity-40">No Weapons</span>}
+                                    <span className="opacity-20 mx-1">|</span>
+                                    {displayedCharacterEquipment.length > 0 ? displayedCharacterEquipment.map((e, i) => (
+                                        <span key={`e-${i}`} className="px-1.5 py-0.5 rounded bg-md-sys-surface-container-highest text-md-sys-on-surface text-[10px] font-bold uppercase truncate max-w-[80px]">{e}</span>
+                                    )) : <span className="text-label-xs opacity-40">No Equipment</span>}
+                                </div>
                             </button>
                             {(loadoutExpanded || !hasTelemetryLoadout) && (
                                 <div className="mt-3 space-y-3">
@@ -1054,13 +1049,13 @@ export const Wizard: React.FC = () => {
                             </button>
                         </div>
                         <div className="flex-1 min-h-0 flex flex-col overflow-y-auto custom-scrollbar">
-                        <OcrCorrectionModal
-                            isOpen={true}
-                            embedded={true}
-                            onClose={() => setActiveTab('result')}
-                            onAcceptAll={() => setActiveTab('result')}
-                            screenshots={wizardReviewScreenshots}
-                        />
+                            <OcrCorrectionModal
+                                isOpen={true}
+                                embedded={true}
+                                onClose={() => setActiveTab('result')}
+                                onAcceptAll={() => setActiveTab('result')}
+                                screenshots={wizardReviewScreenshots}
+                            />
                         </div>
                     </div>
                 )}

@@ -1032,512 +1032,513 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
 
     return (
         <>
-        <div
-            className={embedded
-                ? 'w-full h-full min-h-0 flex flex-col overflow-hidden'
-                : 'fixed inset-0 md3-dialog-scrim z-top-second flex items-start justify-center p-4 overflow-y-auto animate-fade-in'}
-            onClick={embedded ? undefined : onClose}
-        >
             <div
-                ref={focusTrapRef}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={dialogTitleId}
-                aria-describedby={isHelpBannerDismissed ? undefined : dialogDescriptionId}
                 className={embedded
-                    ? 'ocr-correction-dialog ocr-correction-dialog--embedded w-full h-full min-h-0 flex flex-col rounded-2xl border border-md-sys-outline/10 bg-md-sys-surface-container overflow-hidden'
-                    : 'ocr-correction-dialog md3-dialog rounded-modal w-full max-w-2xl h-[85vh] max-h-85vh my-2 flex flex-col animate-scale-in overflow-hidden'}
-                onClick={e => e.stopPropagation()}
+                    ? 'w-full h-full min-h-0 flex flex-col overflow-hidden'
+                    : 'fixed inset-0 md3-dialog-scrim z-top-second flex items-start justify-center p-4 overflow-y-auto animate-fade-in'}
+                onClick={embedded ? undefined : onClose}
             >
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 min-w-0">
-                        <div className="min-w-0">
-                            <h2 id={dialogTitleId} className="text-body font-bold truncate">OCR Review</h2>
-                            <p className="text-label-xs text-md-sys-on-surface/62 truncate">
-                                Review player names, team grouping, and ship assignment.
-                            </p>
-                        </div>
-                        {!embedded && (
-                            <span className="md3-chip text-label-xs font-mono shrink-0">
-                                {detectedPlayers.length} detected
-                            </span>
-                        )}
-                    </div>
-                    {embedded ? (
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="md3-btn-text inline-flex items-center gap-1.5"
-                            title="Back to result tab"
-                            aria-label="Back to result tab"
-                        >
-                            <ArrowLeft size={14} />
-                            Back to Result
-                        </button>
-                    ) : (
-                        <button onClick={onClose} className="md3-icon-btn" title="Close" aria-label="Close OCR correction dialog">
-                            <X size={18} />
-                        </button>
-                    )}
-                </div>
-
                 <div
-                    ref={scrollBodyRef}
-                    className="ocr-correction-body flex-1 min-h-0 overflow-y-auto custom-scrollbar md3-dialog-content overscroll-contain"
-                    tabIndex={0}
-                >
-                {!isHelpBannerDismissed && (
-                    <div className="md3-banner md3-banner--info ocr-correction-help-banner">
-                        <Info size={16} className="mt-0.5 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                            <p className="text-body font-medium">How this helps</p>
-                            <p id={dialogDescriptionId} className="text-label-sm opacity-60 mt-0.5">
-                                Pick the real player name for each OCR guess, then press <span className="font-semibold">Apply and Learn</span>.
-                            </p>
-                            <p className="text-label-sm opacity-60 mt-0.5">
-                                These links are remembered, so OCR gets better in future matches.
-                            </p>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={dismissHelpBanner}
-                            className="md3-icon-btn ml-2 flex-shrink-0"
-                            aria-label="Dismiss help banner"
-                            title="Dismiss help"
-                        >
-                            <X size={14} />
-                        </button>
-                    </div>
-                )}
-
-                <div className="md3-card p-3 mb-3 border border-md-sys-outline/20 ocr-correction-batch-card">
-                    <div className="flex items-center justify-between gap-2">
-                        <span className="text-label-sm font-bold uppercase text-md-sys-on-surface/70">Batch Operations</span>
-                        <span className="text-label-sm font-mono text-md-sys-on-surface">{ocrBatchAcceptThreshold}% threshold</span>
-                    </div>
-                    <div className="mt-2 flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={() => setOcrBatchAcceptThreshold(Math.max(OCR_BATCH_THRESHOLD_MIN, ocrBatchAcceptThreshold - OCR_BATCH_THRESHOLD_STEP))}
-                            className="md3-icon-btn h-8 w-8 shrink-0"
-                            aria-label="Lower batch confidence threshold"
-                            title="Lower threshold"
-                        >
-                            <Minus size={14} />
-                        </button>
-                        <div className="flex-1 px-1 py-1">
-                            <input
-                                type="range"
-                                min={OCR_BATCH_THRESHOLD_MIN}
-                                max={OCR_BATCH_THRESHOLD_MAX}
-                                step={OCR_BATCH_THRESHOLD_STEP}
-                                value={ocrBatchAcceptThreshold}
-                                onChange={(event) => setOcrBatchAcceptThreshold(Number(event.target.value))}
-                                className="ocr-threshold-slider w-full h-8 cursor-pointer touch-manipulation"
-                                aria-label="Batch confidence threshold"
-                            />
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => setOcrBatchAcceptThreshold(Math.min(OCR_BATCH_THRESHOLD_MAX, ocrBatchAcceptThreshold + OCR_BATCH_THRESHOLD_STEP))}
-                            className="md3-icon-btn h-8 w-8 shrink-0"
-                            aria-label="Raise batch confidence threshold"
-                            title="Raise threshold"
-                        >
-                            <Plus size={14} />
-                        </button>
-                    </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2 ocr-correction-batch-actions">
-                        <button
-                            type="button"
-                            onClick={() => setPendingBatchAction('accept')}
-                            disabled={highEligibleCount === 0}
-                            className="md3-btn-tonal disabled:opacity-disabled"
-                        >
-                            Accept {highEligibleCount} High Confidence
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setPendingBatchAction('ignore')}
-                            disabled={lowEligibleCount === 0}
-                            className="md3-btn-text text-warning disabled:opacity-disabled"
-                        >
-                            Ignore {lowEligibleCount} Low Confidence
-                        </button>
-                    </div>
-                </div>
-
-                {teamDraft.length > 0 && (
-                    <section className="md3-card p-3 mb-3 border border-md-sys-outline/20 ocr-team-assignment-shell">
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                            <span className="text-label-sm font-bold uppercase opacity-60 flex items-center gap-1">
-                                <Users size={14} />
-                                Team Assignment
-                            </span>
-                            <span className="text-label-sm opacity-60">
-                                Drag players between cards, then apply to learn.
-                            </span>
-                        </div>
-                        {pilotRegistry.length > 0 && (
-                            <datalist id={teamAssignmentRosterListId}>
-                                {pilotRegistry.map((pilot) => (
-                                    <option key={`team-assignment-${pilot}`} value={pilot} />
-                                ))}
-                            </datalist>
-                        )}
-                        <OcrTeamAssignmentBoard
-                            teams={teamDraft}
-                            shipOptions={SHIPS}
-                            rosterSuggestionsId={pilotRegistry.length > 0 ? teamAssignmentRosterListId : undefined}
-                            friendlyTeamIndex={displayFriendlyTeamIndex}
-                            compact={embedded}
-                            allowColorEdit={true}
-                            fuzzyMatches={fuzzyMatchByPlayer}
-                            onTeamNameChange={updateTeamName}
-                            onTeamColorChange={updateTeamColor}
-                            onTeamShipChange={updateTeamShip}
-                            onPlayerChange={updateTeamPlayerName}
-                            onPlayerRemove={removeTeamPlayer}
-                            onPlayerAdd={addTeamPlayer}
-                            onPlayerMove={moveTeamPlayer}
-                            dataTestId="ocr-team-assignment-board"
-                        />
-                    </section>
-                )}
-
-                {/* Player List */}
-                <div className="space-y-4">
-                    {reviewScreenshots.length > 0 && (
-                        <div className="sticky top-0 z-20 md3-card p-2 border border-md-sys-outline/15 bg-md-sys-surface/95 backdrop-blur-sm">
-                            <div className="flex items-center justify-between gap-2 mb-1">
-                                <span className="text-label-sm font-bold uppercase opacity-60 flex items-center gap-1">
-                                    <ImageIcon size={14} />
-                                    Screenshot References
-                                </span>
-                                <span className="text-label-sm opacity-60">{reviewScreenshots.length} image(s)</span>
-                            </div>
-                            <div className="flex gap-2 overflow-x-auto pb-1">
-                                {reviewScreenshots.map((imagePath, index) => (
-                                    <button
-                                        key={`${imagePath}-${index}`}
-                                        type="button"
-                                        onClick={() => setLightboxIdx(index)}
-                                        className="rounded-control border border-md-sys-outline/20 p-1 bg-md-sys-surface min-w-[92px] hover:border-md-sys-primary/40 transition-all"
-                                        aria-label={`Open screenshot ${index + 1}`}
-                                    >
-                                        <div className="w-[82px] h-[56px] rounded overflow-hidden bg-md-sys-on-surface/5">
-                                            <LocalImage
-                                                src={imagePath}
-                                                alt={`Reference screenshot ${index + 1}`}
-                                                className="w-full h-full object-cover"
-                                            />
-                                        </div>
-                                        <div className="mt-1 flex items-center justify-center gap-1 text-label-xs opacity-70">
-                                            <Eye size={10} />
-                                            #{index + 1}
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {detectedPlayers.length === 0 ? (
-                        <div className="text-center opacity-60 py-8">
-                            <p className="text-body font-medium">No players detected</p>
-                            <p className="text-label-sm mt-1">
-                                Capture a Crew Hub or Tactical Map screenshot first, then return here to review.
-                            </p>
-                        </div>
-                    ) : (
-                        detectedPlayers.map((player, idx) => {
-                            const isIgnored = ignored.has(player.name);
-                            const hasCorrected = corrections[player.name];
-                            const priorCorrection = ocrCorrections?.[player.name];
-                            const conf = player.confidence || 70;
-                            const filteredRegistry = getFilteredRegistry(player.name);
-                            const isFriendlyDetectedPlayer = friendlyPlayerKeys.has(normalizeNameKey(player.name));
-                            const learningCount = Math.max(1, Number(priorCorrection?.count || 1));
-                            const learningTooltip = getLearningMetadata(ocrAliasModel, player.name)
-                                || `Learned from ${learningCount} correction${learningCount === 1 ? '' : 's'}`;
-                            const inputValue = Object.prototype.hasOwnProperty.call(searchQuery, player.name)
-                                ? (searchQuery[player.name] || '')
-                                : (corrections[player.name] || priorCorrection?.correctedTo || player.name);
-                            const showPortalDropdown = (
-                                activeInputPlayer === player.name
-                                && String(searchQuery[player.name] || '').trim().length > 0
-                                && !!dropdownAnchor
-                                && typeof document !== 'undefined'
-                            );
-
-                            return (
-                                <div
-                                    key={`${player.name}-${idx}`}
-                                    className={`ocr-detected-player-card md3-card p-3 rounded-card border transition-all ${
-                                        isIgnored
-                                            ? 'bg-md-sys-on-surface/5 border-md-sys-outline-variant/30 opacity-50'
-                                            : hasCorrected
-                                                ? 'bg-success-soft border-success-soft'
-                                                : getConfidenceBg(conf)
-                                    }`}
-                                >
-                                    <div className="flex items-center justify-between gap-3">
-                                        {/* Player Info */}
-                                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                                            {/* Team Color Badge */}
-                                            <div
-                                                className="w-3 h-8 rounded-full flex-shrink-0"
-                                                style={{
-                                                    backgroundColor: player.teamColor.toLowerCase() === 'unknown'
-                                                        ? 'var(--md-sys-color-outline-variant)'
-                                                        : player.teamColor.toLowerCase()
-                                                }}
-                                            />
-
-                                            {/* Name & Details */}
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-bold truncate">{player.name}</span>
-                                                    {isFriendlyDetectedPlayer && (
-                                                        <span className="ocr-teammate-chip ocr-teammate-chip--compact" title="Friendly teammate">
-                                                            <Shield size={10} />
-                                                            Teammate
-                                                        </span>
-                                                    )}
-                                                    {priorCorrection && (
-                                                        <span
-                                                            className="text-label-sm bg-info-soft text-info px-1.5 py-0.5 rounded"
-                                                            title={learningTooltip}
-                                                        >
-                                                            Learned ({learningCount}x)
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="mt-1 max-w-220px">
-                                                    <ConfidenceMeter confidence={conf} size="sm" />
-                                                </div>
-                                                {player.shipType && (
-                                                    <div className="text-label-sm opacity-60 mt-0.5">
-                                                        Ship: {player.shipType}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Actions */}
-                                            {isIgnored ? (
-                                            <button
-                                                onClick={() => handleUnignore(player.name)}
-                                                className="md3-btn-text text-label-sm"
-                                            >
-                                                Undo Ignore
-                                            </button>
-                                        ) : (
-                                            <div className="ocr-detected-player-actions flex items-center gap-2">
-                                                {/* Correction Dropdown */}
-                                                <div className={`relative ${activeInputPlayer === player.name ? 'z-30' : ''}`}>
-                                                    <div className="ocr-roster-search-field md3-textfield md3-textfield--outlined flex items-center gap-1 px-2 py-1 bg-md-sys-surface-container-highest">
-                                                        <Search size={12} className="opacity-60" />
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Search roster or type name..."
-                                                            ref={(node) => {
-                                                                inputRefs.current[player.name] = node;
-                                                            }}
-                                                            value={inputValue}
-                                                            onFocus={() => {
-                                                                setActiveInputPlayer(player.name);
-                                                                if (!Object.prototype.hasOwnProperty.call(searchQuery, player.name)) {
-                                                                    setSearchQuery(prev => ({ ...prev, [player.name]: inputValue }));
-                                                                }
-                                                                window.requestAnimationFrame(() => updateDropdownAnchor(player.name));
-                                                            }}
-                                                            onBlur={() => {
-                                                                setActiveInputPlayer((current) => (current === player.name ? null : current));
-                                                                commitTypedCorrection(player.name, searchQuery[player.name] || inputValue);
-                                                            }}
-                                                            onChange={e => {
-                                                                setSearchQuery(prev => ({ ...prev, [player.name]: e.target.value }));
-                                                                window.requestAnimationFrame(() => updateDropdownAnchor(player.name));
-                                                            }}
-                                                            onKeyDown={(event) => {
-                                                                if (event.key === 'Enter') {
-                                                                    event.preventDefault();
-                                                                    commitTypedCorrection(player.name, searchQuery[player.name] || inputValue);
-                                                                }
-                                                                event.stopPropagation();
-                                                            }}
-                                                            className="ocr-roster-search-input bg-transparent text-body w-60 min-w-0 outline-none caret-current"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                {showPortalDropdown && createPortal(
-                                                    <div
-                                                        className="ocr-roster-dropdown md3-card rounded-lg shadow-xl overflow-y-auto custom-scrollbar overscroll-contain border border-md-sys-outline/20 bg-md-sys-surface-container-highest p-0"
-                                                        onWheel={(event) => event.stopPropagation()}
-                                                        style={{
-                                                            position: 'fixed',
-                                                            top: dropdownAnchor.top,
-                                                            left: dropdownAnchor.left,
-                                                            width: dropdownAnchor.width,
-                                                            maxHeight: dropdownAnchor.maxHeight,
-                                                            zIndex: 1200,
-                                                            transform: dropdownAnchor.placeAbove ? 'translateY(-100%)' : undefined,
-                                                        }}
-                                                    >
-                                                        {filteredRegistry.map((p) => (
-                                                            <button
-                                                                key={p}
-                                                                onMouseDown={(event) => event.preventDefault()}
-                                                                onClick={() => handleCorrection(player.name, p)}
-                                                                className="ocr-roster-dropdown-item w-full text-left px-3 py-1.5 text-body text-md-sys-on-surface hover:bg-md-sys-on-surface/10 truncate"
-                                                            >
-                                                                {p}
-                                                            </button>
-                                                        ))}
-                                                        {filteredRegistry.length === 0 && (
-                                                            <div className="ocr-roster-dropdown-empty px-3 py-2 text-label-sm text-md-sys-on-surface/70">
-                                                                No matching pilots found. Use "+ New" to add this name.
-                                                            </div>
-                                                        )}
-                                                    </div>,
-                                                    document.body
-                                                )}
-
-                                                {/* Accept as New */}
-                                                {!pilotRegistry.includes(player.name) && !hasCorrected && (
-                                                    <button
-                                                        onClick={() => handleAcceptNewPlayer(player.name)}
-                                                        className="md3-btn-text text-label-sm text-success whitespace-nowrap"
-                                                    >
-                                                        + New
-                                                    </button>
-                                                )}
-
-                                                {/* Ignore */}
-                                                <button
-                                                    onClick={() => handleIgnore(player.name)}
-                                                    className="md3-btn-text text-label-sm text-danger"
-                                                >
-                                                    Ignore
-                                                </button>
-
-                                                {/* Checkmark if corrected */}
-                                                {hasCorrected && (
-                                                    <Check size={16} className="text-success" />
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Show correction target */}
-                                    {hasCorrected && hasCorrected !== player.name && (
-                                        <div className="mt-2 text-label-sm text-success flex items-center gap-1">
-                                            <span className="opacity-60">Linked to:</span>
-                                            <span className="font-semibold">{hasCorrected}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })
-                    )}
-                </div>
-
-                {/* All-resolved hint */}
-                {detectedPlayers.length > 0 &&
-                 detectedPlayers.every(p => corrections[p.name] || ignored.has(p.name)) && (
-                    <div className="px-3 py-2 text-center text-label-sm text-success font-medium">
-                        All players reviewed. Press "Apply Corrections" to save.
-                    </div>
-                )}
-
-                <div className="px-3 py-2 text-label-sm border-t border-md-sys-outline/15 bg-md-sys-surface-container-low text-md-sys-on-surface/80 flex items-center flex-wrap gap-2">
-                    <span className="inline-flex items-center gap-1">
-                        <kbd className="px-1.5 py-0.5 rounded bg-md-sys-surface3 border border-md-sys-outline/20 font-mono text-label-xs">Ctrl+Enter</kbd>
-                        Apply
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                        <kbd className="px-1.5 py-0.5 rounded bg-md-sys-surface3 border border-md-sys-outline/20 font-mono text-label-xs">Esc</kbd>
-                        Close
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                        <kbd className="px-1.5 py-0.5 rounded bg-md-sys-surface3 border border-md-sys-outline/20 font-mono text-label-xs">Ctrl+A</kbd>
-                        Auto-fill
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                        <kbd className="px-1.5 py-0.5 rounded bg-md-sys-surface3 border border-md-sys-outline/20 font-mono text-label-xs">Ctrl+I</kbd>
-                        Ignore Next
-                    </span>
-                </div>
-                </div>
-
-                {/* Footer */}
-                <div className="md3-dialog-actions w-full justify-between">
-                    <button onClick={onClose} className="md3-btn-text">
-                        {embedded ? 'Back to Result' : 'Close for Now'}
-                    </button>
-
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={handleAcceptAllHigh}
-                            className="md3-btn-tonal"
-                            title="Auto-fill players that already have strong confidence"
-                        >
-                            Auto Fill Confident
-                        </button>
-                        <button
-                            onClick={handleSubmitCorrections}
-                            className="md3-btn-filled flex items-center gap-2"
-                            title="Save all reviewed links so future OCR can reuse them"
-                        >
-                            <Check size={16} />
-                            Apply and Learn
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <BatchActionConfirmDialog
-            isOpen={pendingBatchAction !== null}
-            title={confirmTitle}
-            message={confirmMessage}
-            affectedCount={confirmCount}
-            onConfirm={handleConfirmBatchAction}
-            onCancel={() => setPendingBatchAction(null)}
-            confirmLabel={pendingBatchAction === 'accept' ? 'Accept Players' : 'Ignore Players'}
-        />
-        {lightboxIdx !== null && reviewScreenshots[lightboxIdx] && (
-            <div
-                className="fixed inset-0 z-top bg-scrim-90 flex items-center justify-center p-8"
-                onClick={closeLightbox}
-            >
-                <button
-                    type="button"
-                    onClick={closeLightbox}
-                    className="absolute top-4 right-4 text-on-scrim-muted hover:text-on-scrim z-10"
-                    aria-label="Close screenshot preview"
-                >
-                    <X size={24} />
-                </button>
-                <div
+                    ref={focusTrapRef}
                     role="dialog"
                     aria-modal="true"
-                    aria-label={`Screenshot ${lightboxIdx + 1} of ${reviewScreenshots.length}`}
-                    onClick={(event) => event.stopPropagation()}
-                    className="max-w-full max-h-full"
+                    aria-labelledby={dialogTitleId}
+                    aria-describedby={isHelpBannerDismissed ? undefined : dialogDescriptionId}
+                    className={embedded
+                        ? 'ocr-correction-dialog ocr-correction-dialog--embedded w-full h-full min-h-0 flex flex-col overflow-hidden'
+                        : 'ocr-correction-dialog md3-dialog rounded-modal w-full max-w-2xl h-[85vh] max-h-85vh my-2 flex flex-col animate-scale-in overflow-hidden'}
+                    onClick={e => e.stopPropagation()}
                 >
-                    <LocalImage
-                        src={reviewScreenshots[lightboxIdx]}
-                        alt={`Screenshot ${lightboxIdx + 1}`}
-                        className="max-w-full max-h-85vh object-contain rounded-lg"
-                    />
-                    <div className="text-center mt-2 text-label-sm text-on-scrim-muted font-bold">
-                        Screenshot {lightboxIdx + 1} of {reviewScreenshots.length}
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <div className="min-w-0">
+                                <h2 id={dialogTitleId} className="text-body font-bold truncate">OCR Review</h2>
+                                <p className="text-label-xs text-md-sys-on-surface/62 truncate">
+                                    Review player names, team grouping, and ship assignment.
+                                </p>
+                            </div>
+                            {!embedded && (
+                                <span className="md3-chip text-label-xs font-mono shrink-0">
+                                    {detectedPlayers.length} detected
+                                </span>
+                            )}
+                        </div>
+                        {embedded ? (
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="md3-btn-text inline-flex items-center gap-1.5"
+                                title="Back to result tab"
+                                aria-label="Back to result tab"
+                            >
+                                <ArrowLeft size={14} />
+                                Back to Result
+                            </button>
+                        ) : (
+                            <button onClick={onClose} className="md3-icon-btn" title="Close" aria-label="Close OCR correction dialog">
+                                <X size={18} />
+                            </button>
+                        )}
+                    </div>
+
+                    <div
+                        ref={scrollBodyRef}
+                        className="ocr-correction-body flex-1 min-h-0 overflow-y-auto custom-scrollbar md3-dialog-content overscroll-contain"
+                        tabIndex={0}
+                    >
+                        {!isHelpBannerDismissed && (
+                            <div className="md3-banner md3-banner--info ocr-correction-help-banner">
+                                <Info size={16} className="mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-body font-medium">How this helps</p>
+                                    <p id={dialogDescriptionId} className="text-label-sm opacity-60 mt-0.5">
+                                        Pick the real player name for each OCR guess, then press <span className="font-semibold">Apply and Learn</span>.
+                                    </p>
+                                    <p className="text-label-sm opacity-60 mt-0.5">
+                                        These links are remembered, so OCR gets better in future matches.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={dismissHelpBanner}
+                                    className="md3-icon-btn ml-2 flex-shrink-0"
+                                    aria-label="Dismiss help banner"
+                                    title="Dismiss help"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        )}
+
+                        <div className="md3-card p-3 mb-3 border border-md-sys-outline/20 ocr-correction-batch-card">
+                            <div className="flex items-center justify-between gap-4">
+                                <div className="flex flex-col">
+                                    <span className="text-label-sm font-bold uppercase text-md-sys-on-surface/70">Batch Operations</span>
+                                    <span className="text-label-xs font-mono text-md-sys-on-surface/50">{ocrBatchAcceptThreshold}% threshold</span>
+                                </div>
+                                <div className="flex items-center gap-2 max-w-[200px] flex-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setOcrBatchAcceptThreshold(Math.min(OCR_BATCH_THRESHOLD_MAX, ocrBatchAcceptThreshold - OCR_BATCH_THRESHOLD_STEP))}
+                                        className="md3-icon-btn h-6 w-6 shrink-0"
+                                        aria-label="Lower batch confidence threshold"
+                                        title="Lower threshold"
+                                    >
+                                        <Minus size={12} />
+                                    </button>
+                                    <div className="flex-1 px-1 py-1">
+                                        <input
+                                            type="range"
+                                            min={OCR_BATCH_THRESHOLD_MIN}
+                                            max={OCR_BATCH_THRESHOLD_MAX}
+                                            step={OCR_BATCH_THRESHOLD_STEP}
+                                            value={ocrBatchAcceptThreshold}
+                                            onChange={(event) => setOcrBatchAcceptThreshold(Number(event.target.value))}
+                                            className="ocr-threshold-slider w-full h-8 cursor-pointer touch-manipulation"
+                                            aria-label="Batch confidence threshold"
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setOcrBatchAcceptThreshold(Math.min(OCR_BATCH_THRESHOLD_MAX, ocrBatchAcceptThreshold + OCR_BATCH_THRESHOLD_STEP))}
+                                        className="md3-icon-btn h-6 w-6 shrink-0"
+                                        aria-label="Raise batch confidence threshold"
+                                        title="Raise threshold"
+                                    >
+                                        <Plus size={12} />
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="mt-2 grid grid-cols-2 gap-2 ocr-correction-batch-actions">
+                                <button
+                                    type="button"
+                                    onClick={() => setPendingBatchAction('accept')}
+                                    disabled={highEligibleCount === 0}
+                                    className="md3-btn-tonal disabled:opacity-disabled"
+                                >
+                                    Accept {highEligibleCount} High Confidence
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setPendingBatchAction('ignore')}
+                                    disabled={lowEligibleCount === 0}
+                                    className="md3-btn-text text-warning disabled:opacity-disabled"
+                                >
+                                    Ignore {lowEligibleCount} Low Confidence
+                                </button>
+                            </div>
+                        </div>
+
+                        {teamDraft.length > 0 && (
+                            <section className="md3-card p-3 mb-3 border border-md-sys-outline/20 ocr-team-assignment-shell">
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                    <span className="text-label-sm font-bold uppercase opacity-60 flex items-center gap-1">
+                                        <Users size={14} />
+                                        Team Assignment
+                                    </span>
+                                    <span className="text-label-sm opacity-60">
+                                        Drag players between cards, then apply to learn.
+                                    </span>
+                                </div>
+                                {pilotRegistry.length > 0 && (
+                                    <datalist id={teamAssignmentRosterListId}>
+                                        {pilotRegistry.map((pilot) => (
+                                            <option key={`team-assignment-${pilot}`} value={pilot} />
+                                        ))}
+                                    </datalist>
+                                )}
+                                <OcrTeamAssignmentBoard
+                                    teams={teamDraft}
+                                    shipOptions={SHIPS}
+                                    rosterSuggestionsId={pilotRegistry.length > 0 ? teamAssignmentRosterListId : undefined}
+                                    friendlyTeamIndex={displayFriendlyTeamIndex}
+                                    compact={embedded}
+                                    allowColorEdit={true}
+                                    fuzzyMatches={fuzzyMatchByPlayer}
+                                    onTeamNameChange={updateTeamName}
+                                    onTeamColorChange={updateTeamColor}
+                                    onTeamShipChange={updateTeamShip}
+                                    onPlayerChange={updateTeamPlayerName}
+                                    onPlayerRemove={removeTeamPlayer}
+                                    onPlayerAdd={addTeamPlayer}
+                                    onPlayerMove={moveTeamPlayer}
+                                    dataTestId="ocr-team-assignment-board"
+                                />
+                            </section>
+                        )}
+
+                        {/* Player List */}
+                        <div className="space-y-4">
+                            {reviewScreenshots.length > 0 && (
+                                <div className="sticky top-0 z-20 md3-card p-2 border border-md-sys-outline/15 bg-md-sys-surface/95 backdrop-blur-sm">
+                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                        <span className="text-label-sm font-bold uppercase opacity-60 flex items-center gap-1">
+                                            <ImageIcon size={14} />
+                                            Screenshot References
+                                        </span>
+                                        <span className="text-label-sm opacity-60">{reviewScreenshots.length} image(s)</span>
+                                    </div>
+                                    <div className="flex gap-2 overflow-x-auto pb-1">
+                                        {reviewScreenshots.map((imagePath, index) => (
+                                            <button
+                                                key={`${imagePath}-${index}`}
+                                                type="button"
+                                                onClick={() => setLightboxIdx(index)}
+                                                className="rounded-control border border-md-sys-outline/20 p-1 bg-md-sys-surface min-w-[92px] hover:border-md-sys-primary/40 transition-all"
+                                                aria-label={`Open screenshot ${index + 1}`}
+                                            >
+                                                <div className="w-[82px] h-[56px] rounded overflow-hidden bg-md-sys-on-surface/5">
+                                                    <LocalImage
+                                                        src={imagePath}
+                                                        alt={`Reference screenshot ${index + 1}`}
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                </div>
+                                                <div className="mt-1 flex items-center justify-center gap-1 text-label-xs opacity-70">
+                                                    <Eye size={10} />
+                                                    #{index + 1}
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {detectedPlayers.length === 0 ? (
+                                <div className="text-center opacity-60 py-8">
+                                    <p className="text-body font-medium">No players detected</p>
+                                    <p className="text-label-sm mt-1">
+                                        Capture a Crew Hub or Tactical Map screenshot first, then return here to review.
+                                    </p>
+                                </div>
+                            ) : (
+                                detectedPlayers.map((player, idx) => {
+                                    const isIgnored = ignored.has(player.name);
+                                    const hasCorrected = corrections[player.name];
+                                    const priorCorrection = ocrCorrections?.[player.name];
+                                    const conf = player.confidence || 70;
+                                    const filteredRegistry = getFilteredRegistry(player.name);
+                                    const isFriendlyDetectedPlayer = friendlyPlayerKeys.has(normalizeNameKey(player.name));
+                                    const learningCount = Math.max(1, Number(priorCorrection?.count || 1));
+                                    const learningTooltip = getLearningMetadata(ocrAliasModel, player.name)
+                                        || `Learned from ${learningCount} correction${learningCount === 1 ? '' : 's'}`;
+                                    const inputValue = Object.prototype.hasOwnProperty.call(searchQuery, player.name)
+                                        ? (searchQuery[player.name] || '')
+                                        : (corrections[player.name] || priorCorrection?.correctedTo || player.name);
+                                    const showPortalDropdown = (
+                                        activeInputPlayer === player.name
+                                        && String(searchQuery[player.name] || '').trim().length > 0
+                                        && !!dropdownAnchor
+                                        && typeof document !== 'undefined'
+                                    );
+
+                                    return (
+                                        <div
+                                            key={`${player.name}-${idx}`}
+                                            className={`ocr-detected-player-card md3-card p-3 rounded-card border transition-all ${isIgnored
+                                                ? 'bg-md-sys-on-surface/5 border-md-sys-outline-variant/30 opacity-50'
+                                                : hasCorrected
+                                                    ? 'bg-success-soft border-success-soft'
+                                                    : getConfidenceBg(conf)
+                                                }`}
+                                        >
+                                            <div className="flex items-center justify-between gap-3">
+                                                {/* Player Info */}
+                                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                    {/* Team Color Badge */}
+                                                    <div
+                                                        className="w-3 h-8 rounded-full flex-shrink-0"
+                                                        style={{
+                                                            backgroundColor: player.teamColor.toLowerCase() === 'unknown'
+                                                                ? 'var(--md-sys-color-outline-variant)'
+                                                                : player.teamColor.toLowerCase()
+                                                        }}
+                                                    />
+
+                                                    {/* Name & Details */}
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-bold truncate">{player.name}</span>
+                                                            {isFriendlyDetectedPlayer && (
+                                                                <span className="ocr-teammate-chip ocr-teammate-chip--compact" title="Friendly teammate">
+                                                                    <Shield size={10} />
+                                                                    Teammate
+                                                                </span>
+                                                            )}
+                                                            {priorCorrection && (
+                                                                <span
+                                                                    className="text-label-sm bg-info-soft text-info px-1.5 py-0.5 rounded"
+                                                                    title={learningTooltip}
+                                                                >
+                                                                    Learned ({learningCount}x)
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="mt-1 max-w-220px">
+                                                            <ConfidenceMeter confidence={conf} size="sm" />
+                                                        </div>
+                                                        {player.shipType && (
+                                                            <div className="text-label-sm opacity-60 mt-0.5">
+                                                                Ship: {player.shipType}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Actions */}
+                                                {isIgnored ? (
+                                                    <button
+                                                        onClick={() => handleUnignore(player.name)}
+                                                        className="md3-btn-text text-label-sm"
+                                                    >
+                                                        Undo Ignore
+                                                    </button>
+                                                ) : (
+                                                    <div className="ocr-detected-player-actions flex items-center gap-2">
+                                                        {/* Correction Dropdown */}
+                                                        <div className={`relative ${activeInputPlayer === player.name ? 'z-30' : ''}`}>
+                                                            <div className="ocr-roster-search-field md3-textfield md3-textfield--outlined flex items-center gap-1 px-2 py-1 bg-md-sys-surface-container-highest">
+                                                                <Search size={12} className="opacity-60" />
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Search roster or type name..."
+                                                                    ref={(node) => {
+                                                                        inputRefs.current[player.name] = node;
+                                                                    }}
+                                                                    value={inputValue}
+                                                                    onFocus={() => {
+                                                                        setActiveInputPlayer(player.name);
+                                                                        if (!Object.prototype.hasOwnProperty.call(searchQuery, player.name)) {
+                                                                            setSearchQuery(prev => ({ ...prev, [player.name]: inputValue }));
+                                                                        }
+                                                                        window.requestAnimationFrame(() => updateDropdownAnchor(player.name));
+                                                                    }}
+                                                                    onBlur={() => {
+                                                                        setActiveInputPlayer((current) => (current === player.name ? null : current));
+                                                                        commitTypedCorrection(player.name, searchQuery[player.name] || inputValue);
+                                                                    }}
+                                                                    onChange={e => {
+                                                                        setSearchQuery(prev => ({ ...prev, [player.name]: e.target.value }));
+                                                                        window.requestAnimationFrame(() => updateDropdownAnchor(player.name));
+                                                                    }}
+                                                                    onKeyDown={(event) => {
+                                                                        if (event.key === 'Enter') {
+                                                                            event.preventDefault();
+                                                                            commitTypedCorrection(player.name, searchQuery[player.name] || inputValue);
+                                                                        }
+                                                                        event.stopPropagation();
+                                                                    }}
+                                                                    className="ocr-roster-search-input bg-transparent text-body w-60 min-w-0 outline-none caret-current"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        {showPortalDropdown && createPortal(
+                                                            <div
+                                                                className="ocr-roster-dropdown md3-card rounded-lg shadow-xl overflow-y-auto custom-scrollbar overscroll-contain border border-md-sys-outline/20 bg-md-sys-surface-container-highest p-0"
+                                                                onWheel={(event) => event.stopPropagation()}
+                                                                style={{
+                                                                    position: 'fixed',
+                                                                    top: dropdownAnchor.top,
+                                                                    left: dropdownAnchor.left,
+                                                                    width: dropdownAnchor.width,
+                                                                    maxHeight: dropdownAnchor.maxHeight,
+                                                                    zIndex: 1200,
+                                                                    transform: dropdownAnchor.placeAbove ? 'translateY(-100%)' : undefined,
+                                                                }}
+                                                            >
+                                                                {filteredRegistry.map((p) => (
+                                                                    <button
+                                                                        key={p}
+                                                                        onMouseDown={(event) => event.preventDefault()}
+                                                                        onClick={() => handleCorrection(player.name, p)}
+                                                                        className="ocr-roster-dropdown-item w-full text-left px-3 py-1.5 text-body text-md-sys-on-surface hover:bg-md-sys-on-surface/10 truncate"
+                                                                    >
+                                                                        {p}
+                                                                    </button>
+                                                                ))}
+                                                                {filteredRegistry.length === 0 && (
+                                                                    <div className="ocr-roster-dropdown-empty px-3 py-2 text-label-sm text-md-sys-on-surface/70">
+                                                                        No matching pilots found. Use "+ New" to add this name.
+                                                                    </div>
+                                                                )}
+                                                            </div>,
+                                                            document.body
+                                                        )}
+
+                                                        {/* Accept as New */}
+                                                        {!pilotRegistry.includes(player.name) && !hasCorrected && (
+                                                            <button
+                                                                onClick={() => handleAcceptNewPlayer(player.name)}
+                                                                className="md3-btn-text text-label-sm text-success whitespace-nowrap"
+                                                            >
+                                                                + New
+                                                            </button>
+                                                        )}
+
+                                                        {/* Ignore */}
+                                                        <button
+                                                            onClick={() => handleIgnore(player.name)}
+                                                            className="md3-btn-text text-label-sm text-danger"
+                                                        >
+                                                            Ignore
+                                                        </button>
+
+                                                        {/* Checkmark if corrected */}
+                                                        {hasCorrected && (
+                                                            <Check size={16} className="text-success" />
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Show correction target */}
+                                            {hasCorrected && hasCorrected !== player.name && (
+                                                <div className="mt-2 text-label-sm text-success flex items-center gap-1">
+                                                    <span className="opacity-60">Linked to:</span>
+                                                    <span className="font-semibold">{hasCorrected}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+
+                        {/* All-resolved hint */}
+                        {detectedPlayers.length > 0 &&
+                            detectedPlayers.every(p => corrections[p.name] || ignored.has(p.name)) && (
+                                <div className="px-3 py-2 text-center text-label-sm text-success font-medium">
+                                    All players reviewed. Press "Apply Corrections" to save.
+                                </div>
+                            )}
+
+                        <div className="px-3 py-2 text-label-sm border-t border-md-sys-outline/15 bg-md-sys-surface-container-low text-md-sys-on-surface/80 flex items-center flex-wrap gap-2">
+                            <span className="inline-flex items-center gap-1">
+                                <kbd className="px-1.5 py-0.5 rounded bg-md-sys-surface3 border border-md-sys-outline/20 font-mono text-label-xs">Ctrl+Enter</kbd>
+                                Apply
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                                <kbd className="px-1.5 py-0.5 rounded bg-md-sys-surface3 border border-md-sys-outline/20 font-mono text-label-xs">Esc</kbd>
+                                Close
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                                <kbd className="px-1.5 py-0.5 rounded bg-md-sys-surface3 border border-md-sys-outline/20 font-mono text-label-xs">Ctrl+A</kbd>
+                                Auto-fill
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                                <kbd className="px-1.5 py-0.5 rounded bg-md-sys-surface3 border border-md-sys-outline/20 font-mono text-label-xs">Ctrl+I</kbd>
+                                Ignore Next
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="md3-dialog-actions w-full justify-between">
+                        <button onClick={onClose} className="md3-btn-text">
+                            {embedded ? 'Back to Result' : 'Close for Now'}
+                        </button>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={handleAcceptAllHigh}
+                                className="md3-btn-tonal"
+                                title="Auto-fill players that already have strong confidence"
+                            >
+                                Auto Fill Confident
+                            </button>
+                            <button
+                                onClick={handleSubmitCorrections}
+                                className="md3-btn-filled flex items-center gap-2"
+                                title="Save all reviewed links so future OCR can reuse them"
+                            >
+                                <Check size={16} />
+                                Apply and Learn
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-        )}
+            <BatchActionConfirmDialog
+                isOpen={pendingBatchAction !== null}
+                title={confirmTitle}
+                message={confirmMessage}
+                affectedCount={confirmCount}
+                onConfirm={handleConfirmBatchAction}
+                onCancel={() => setPendingBatchAction(null)}
+                confirmLabel={pendingBatchAction === 'accept' ? 'Accept Players' : 'Ignore Players'}
+            />
+            {lightboxIdx !== null && reviewScreenshots[lightboxIdx] && (
+                <div
+                    className="fixed inset-0 z-top bg-scrim-90 flex items-center justify-center p-8"
+                    onClick={closeLightbox}
+                >
+                    <button
+                        type="button"
+                        onClick={closeLightbox}
+                        className="absolute top-4 right-4 text-on-scrim-muted hover:text-on-scrim z-10"
+                        aria-label="Close screenshot preview"
+                    >
+                        <X size={24} />
+                    </button>
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label={`Screenshot ${lightboxIdx + 1} of ${reviewScreenshots.length}`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="max-w-full max-h-full"
+                    >
+                        <LocalImage
+                            src={reviewScreenshots[lightboxIdx]}
+                            alt={`Screenshot ${lightboxIdx + 1}`}
+                            className="max-w-full max-h-[90vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
+                        />
+                        <div className="text-center mt-2 text-label-sm text-on-scrim-muted font-bold">
+                            Screenshot {lightboxIdx + 1} of {reviewScreenshots.length}
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 };
