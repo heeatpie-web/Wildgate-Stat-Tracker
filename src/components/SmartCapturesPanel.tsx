@@ -3098,11 +3098,6 @@ const SmartMatchDetail: React.FC<{
 
                 <div className="sc-detail-main-grid">
                     <div className="lg:col-span-9 lg:col-start-1 space-y-3 min-w-0 sc-detail-editor-block">
-                        <div className="sc-detail-lane-kicker">
-                            <Edit3 size={12} />
-                            Match Editor
-                        </div>
-
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sc-detail-stats-grid">
                             <EditableStatCard
                                 icon={<Clock size={14} />} label="Time" value={match.time || '--'}
@@ -3118,14 +3113,14 @@ const SmartMatchDetail: React.FC<{
                                 icon={<Target size={14} className="text-success" />} label="Kills" value={totalKills.toString()}
                                 readOnly
                             />
-                            <div className="md3-surface rounded-xl sc-bordered p-3.5 flex flex-col items-center justify-center gap-1.5 sc-editor-stat-card">
-                                <span className="text-md-sys-on-surface/60"><Trophy size={14} className="text-warning" /></span>
-                                <span className="text-label-sm font-semibold text-md-sys-on-surface/60 uppercase tracking-wider">Place</span>
+                            <div className="md3-surface rounded-xl sc-bordered p-4 flex flex-col items-center justify-center gap-1 sc-editor-stat-card min-h-[88px]">
+                                <span className="text-md-sys-on-surface/50"><Trophy size={14} className="text-warning" /></span>
+                                <span className="text-label-xs font-bold text-md-sys-on-surface/50 uppercase tracking-wider">Place</span>
                                 {match.result === 'Win' ? (
-                                    <span className="text-title-md font-bold text-md-sys-on-surface">#1</span>
+                                    <span className="text-title-lg font-black text-md-sys-on-surface">#1</span>
                                 ) : (
                                     <select
-                                        className="text-title-md font-black md3-surface rounded px-2 w-24 text-center outline-none"
+                                        className="text-title-lg font-black md3-surface rounded px-2 w-24 text-center outline-none"
                                         value={
                                             match.result === 'Loss'
                                                 ? (match.placement && match.placement >= 2 && match.placement <= 5 ? String(match.placement) : '2')
@@ -3489,11 +3484,6 @@ const SmartMatchDetail: React.FC<{
                     </div>
 
                     <div className="lg:col-span-3 lg:col-start-10 space-y-3 min-w-0 sc-detail-rail-block" ref={screenshotsSectionRef}>
-                        <div className="sc-detail-lane-kicker sc-detail-lane-kicker--rail">
-                            <ScanEye size={12} />
-                            Screenshots and OCR
-                        </div>
-
                         {artifacts.images.length > 0 && (
                             <div className="rounded-card md3-surface-high p-3 border border-md-sys-outline/10 space-y-3">
                                 <div className="flex flex-col gap-2">

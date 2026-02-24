@@ -145,10 +145,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         };
     }, [filteredMatches, periodComparison, timePatterns]);
 
-    const topInsights = useMemo(
-        () => [...(insights || [])].sort((a, b) => b.priority - a.priority).slice(0, dense ? 2 : 3),
-        [insights, dense]
-    );
+    const topInsights: Insight[] = [];
     const insightsRow = useMemo(
         () => [...(insights || [])].sort((a, b) => b.priority - a.priority).slice(0, dense ? 4 : 6),
         [insights, dense]
@@ -389,7 +386,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                             {insightsRow.map((insight) => (
                                 <div
                                     key={`${insight.title}_${insight.value}_${insight.subtitle}`}
-                                    className={`rounded-control border p-2.5 min-w-0 transition-all hover:scale-101 ${getInsightToneClasses(insight.tone)}`}
+                                    onClick={() => onNavigate('insights')}
+                                    className={`rounded-control border p-2.5 min-w-0 transition-all hover:scale-101 cursor-pointer hover:ring-1 hover:ring-md-sys-primary/20 ${getInsightToneClasses(insight.tone)}`}
                                 >
                                     <div className="text-label-xs font-bold uppercase tracking-widest opacity-70 truncate">{insight.subtitle || insight.title}</div>
                                     <div className="text-body font-black truncate mt-1">{insight.value}</div>

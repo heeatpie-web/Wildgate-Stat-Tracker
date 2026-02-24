@@ -1111,23 +1111,25 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                             </div>
                         )}
 
-                        <div className="md3-card p-3 mb-3 border border-md-sys-outline/20 ocr-correction-batch-card">
-                            <div className="flex items-center justify-between gap-4">
-                                <div className="flex flex-col">
-                                    <span className="text-label-sm font-bold uppercase text-md-sys-on-surface/70">Batch Operations</span>
-                                    <span className="text-label-xs font-mono text-md-sys-on-surface/50">{ocrBatchAcceptThreshold}% threshold</span>
-                                </div>
-                                <div className="flex items-center gap-2 max-w-[200px] flex-1">
+                        <div className="md3-card p-4 mb-3 border border-md-sys-outline/20 ocr-correction-batch-card space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-label-sm font-bold uppercase text-md-sys-on-surface/70">Batch Operations</span>
+                                <span className="text-label-xs text-md-sys-on-surface/45">
+                                    Players above {ocrBatchAcceptThreshold}% = high confidence
+                                </span>
+                            </div>
+                            <div className="space-y-1.5">
+                                <div className="flex items-center gap-3">
                                     <button
                                         type="button"
-                                        onClick={() => setOcrBatchAcceptThreshold(Math.min(OCR_BATCH_THRESHOLD_MAX, ocrBatchAcceptThreshold - OCR_BATCH_THRESHOLD_STEP))}
-                                        className="md3-icon-btn h-6 w-6 shrink-0"
+                                        onClick={() => setOcrBatchAcceptThreshold(Math.max(OCR_BATCH_THRESHOLD_MIN, ocrBatchAcceptThreshold - OCR_BATCH_THRESHOLD_STEP))}
+                                        className="md3-icon-btn h-7 w-7 shrink-0 border border-md-sys-outline/15"
                                         aria-label="Lower batch confidence threshold"
                                         title="Lower threshold"
                                     >
-                                        <Minus size={12} />
+                                        <Minus size={14} />
                                     </button>
-                                    <div className="flex-1 px-1 py-1">
+                                    <div className="flex-1 relative">
                                         <input
                                             type="range"
                                             min={OCR_BATCH_THRESHOLD_MIN}
@@ -1142,30 +1144,37 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                     <button
                                         type="button"
                                         onClick={() => setOcrBatchAcceptThreshold(Math.min(OCR_BATCH_THRESHOLD_MAX, ocrBatchAcceptThreshold + OCR_BATCH_THRESHOLD_STEP))}
-                                        className="md3-icon-btn h-6 w-6 shrink-0"
+                                        className="md3-icon-btn h-7 w-7 shrink-0 border border-md-sys-outline/15"
                                         aria-label="Raise batch confidence threshold"
                                         title="Raise threshold"
                                     >
-                                        <Plus size={12} />
+                                        <Plus size={14} />
                                     </button>
+                                    <span className="text-label-md font-black tabular-nums text-md-sys-primary w-12 text-right">{ocrBatchAcceptThreshold}%</span>
+                                </div>
+                                <div className="flex justify-between text-[10px] font-semibold text-md-sys-on-surface/35 px-10">
+                                    <span>Lenient</span>
+                                    <span>Strict</span>
                                 </div>
                             </div>
-                            <div className="mt-2 grid grid-cols-2 gap-2 ocr-correction-batch-actions">
+                            <div className="grid grid-cols-2 gap-2 ocr-correction-batch-actions">
                                 <button
                                     type="button"
                                     onClick={() => setPendingBatchAction('accept')}
                                     disabled={highEligibleCount === 0}
-                                    className="md3-btn-tonal disabled:opacity-disabled"
+                                    className="md3-btn-tonal disabled:opacity-disabled py-2 flex flex-col items-center gap-0.5"
                                 >
-                                    Accept {highEligibleCount} High Confidence
+                                    <span className="text-label-sm font-bold">Accept {highEligibleCount}</span>
+                                    <span className="text-[10px] opacity-60 font-medium">≥ {ocrBatchAcceptThreshold}% confidence</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setPendingBatchAction('ignore')}
                                     disabled={lowEligibleCount === 0}
-                                    className="md3-btn-text text-warning disabled:opacity-disabled"
+                                    className="md3-btn-text text-warning disabled:opacity-disabled py-2 flex flex-col items-center gap-0.5"
                                 >
-                                    Ignore {lowEligibleCount} Low Confidence
+                                    <span className="text-label-sm font-bold">Ignore {lowEligibleCount}</span>
+                                    <span className="text-[10px] opacity-60 font-medium">&lt; {ocrBatchAcceptThreshold}% confidence</span>
                                 </button>
                             </div>
                         </div>
@@ -1191,6 +1200,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                 <OcrTeamAssignmentBoard
                                     teams={teamDraft}
                                     shipOptions={SHIPS}
+                                    pilotRegistry={pilotRegistry}
                                     rosterSuggestionsId={pilotRegistry.length > 0 ? teamAssignmentRosterListId : undefined}
                                     friendlyTeamIndex={displayFriendlyTeamIndex}
                                     compact={embedded}

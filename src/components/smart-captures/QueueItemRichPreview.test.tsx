@@ -37,14 +37,14 @@ describe('QueueItemRichPreview', () => {
       />,
     );
 
-    expect(screen.getByText('Match #73')).toBeInTheDocument();
-    const previewButton = screen.getByRole('button', { name: /match #73/i });
+    expect(screen.getByText('#73')).toBeInTheDocument();
+    const previewButton = screen.getByRole('button', { name: /73/i });
     expect(previewButton).toHaveAttribute('title', expect.stringContaining('Match 73 - '));
     expect(previewButton).toHaveAttribute('title', expect.stringContaining('14th'));
     expect(screen.getByText(/Feb 14th 10:45am/i)).toBeInTheDocument();
-    expect(screen.getByText('Hunter (4 Player)')).toBeInTheDocument();
+    expect(screen.getByText(/Hunter \(4 Player\)/)).toBeInTheDocument();
     expect(screen.queryByText(/ID 12345/)).toBeNull();
-    expect(screen.getByText('Win')).toBeInTheDocument();
+    expect(screen.getByText(/^Win$/)).toBeInTheDocument();
     expect(screen.getByLabelText('Status Ready')).toBeInTheDocument();
     expect(screen.queryByText('85%')).toBeNull();
     expect(screen.queryByText(/Spec:/i)).toBeNull();

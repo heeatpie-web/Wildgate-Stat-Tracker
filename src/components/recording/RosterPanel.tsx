@@ -147,7 +147,7 @@ export const RosterPanel: React.FC = () => {
             })()}
 
             <div className="grid grid-cols-2 gap-3">
-                <div className="mg-surface rounded-card p-3 border border-md-sys-outline/10 flex flex-col gap-2 min-h-128px">
+                <div className={`mg-surface rounded-card p-3 border border-md-sys-outline/10 flex flex-col gap-2 ${hasTeammates ? 'min-h-128px' : ''}`}>
                     <div className="flex items-center justify-between">
                         <span className={`text-label-sm font-bold ${hasTeammates ? 'text-md-sys-primary' : 'text-md-sys-on-surface/60'}`}>Teammates</span>
                         <div className="flex items-center gap-1">
@@ -165,7 +165,7 @@ export const RosterPanel: React.FC = () => {
                             <span className="text-label-sm px-1.5 py-0.5 rounded-full md3-surface">{selectedTeammates.length}</span>
                         </div>
                     </div>
-                    {hasTeammates ? (
+                    {hasTeammates && (
                         <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto custom-scrollbar pr-1">
                             {selectedTeammates.map((p: string) => (
                                 <button
@@ -177,11 +177,9 @@ export const RosterPanel: React.FC = () => {
                                 </button>
                             ))}
                         </div>
-                    ) : (
-                        <div className="text-label-sm text-md-sys-on-surface/40">No teammates selected.</div>
                     )}
                 </div>
-                <div className="mg-surface rounded-card p-3 border border-md-sys-outline/10 flex flex-col gap-2 min-h-104px">
+                <div className={`mg-surface rounded-card p-3 border border-md-sys-outline/10 flex flex-col gap-2 ${hasOpponents ? 'min-h-104px' : ''}`}>
                     <div className="flex items-center justify-between">
                         <span className={`text-label-sm font-bold ${hasOpponents ? 'text-danger' : 'text-md-sys-on-surface/60'}`}>
                             Hostiles

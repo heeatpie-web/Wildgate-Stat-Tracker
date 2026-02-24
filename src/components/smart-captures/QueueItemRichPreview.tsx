@@ -45,17 +45,17 @@ const STATUS_PILL_BY_TONE: Record<'success' | 'warning' | 'danger' | 'info' | 'n
 };
 
 const ROW_TONE_BY_RESULT: Record<Match['result'], string> = {
-  Win: 'bg-success/[0.04] border-success/20',
-  Loss: 'bg-danger/[0.04] border-danger/20',
-  Draw: 'bg-info/[0.04] border-info/20',
-  Ongoing: 'bg-md-sys-on-surface/[0.02] border-md-sys-outline/15',
+  Win: 'bg-success/[0.02] border-success/12',
+  Loss: 'bg-danger/[0.02] border-danger/12',
+  Draw: 'bg-info/[0.02] border-info/12',
+  Ongoing: 'bg-md-sys-on-surface/[0.02] border-md-sys-outline/10',
 };
 
 const SELECTED_ROW_TONE_BY_RESULT: Record<Match['result'], string> = {
-  Win: 'bg-success/[0.12] border-success/40 ring-success/20 text-success',
-  Loss: 'bg-danger/[0.12] border-danger/40 ring-danger/20 text-danger',
-  Draw: 'bg-info/[0.12] border-info/40 ring-info/20 text-info',
-  Ongoing: 'bg-md-sys-primary/10 border-md-sys-primary/30 ring-md-sys-primary/20 text-md-sys-primary',
+  Win: 'bg-success/[0.07] border-success/25 ring-success/12 text-success',
+  Loss: 'bg-danger/[0.07] border-danger/25 ring-danger/12 text-danger',
+  Draw: 'bg-info/[0.07] border-info/25 ring-info/12 text-info',
+  Ongoing: 'bg-md-sys-primary/7 border-md-sys-primary/20 ring-md-sys-primary/12 text-md-sys-primary',
 };
 
 const SELECTED_BORDER_BY_RESULT: Record<Match['result'], string> = {

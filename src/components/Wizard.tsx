@@ -1028,20 +1028,17 @@ export const Wizard: React.FC = () => {
                         data-testid="wizard-ocr-tab-panel"
                         className={`flex-1 min-h-0 flex flex-col ${isOverlayMode ? 'px-4 py-4 gap-3' : 'px-8 py-6 gap-4'}`}
                     >
-                        <div className="flex items-center justify-between gap-3 rounded-xl border border-md-sys-outline/12 bg-md-sys-surface-container px-3 py-2">
-                            <div className="min-w-0">
-                                <span className="text-label-sm font-bold text-md-sys-on-surface/78">OCR Review</span>
-                                <p className="text-label-xs text-md-sys-on-surface/58 truncate">
-                                    Re-run OCR or correct players before final submit.
-                                </p>
-                            </div>
+                        <div className="flex items-center gap-3 rounded-xl mg-surface border border-md-sys-outline/10 px-4 py-2.5">
+                            <span className="text-label-sm font-bold text-md-sys-on-surface/70 whitespace-nowrap">OCR Review</span>
+                            <span className="text-label-xs text-md-sys-on-surface/45 hidden sm:inline">·</span>
+                            <span className="text-label-xs text-md-sys-on-surface/45 truncate hidden sm:inline">Correct players before final submit</span>
                             <button
                                 type="button"
                                 onClick={() => {
                                     void handleWizardRerunOcr();
                                 }}
                                 disabled={isRerunningOcr}
-                                className="px-2.5 py-1 rounded-lg text-label-sm font-bold md3-btn-tonal inline-flex items-center gap-1.5 shrink-0"
+                                className="ml-auto px-3 py-1.5 rounded-lg text-label-xs font-bold md3-btn-tonal inline-flex items-center gap-1.5 shrink-0"
                                 title="Re-run OCR across bundled screenshot artifacts"
                             >
                                 <RefreshCw size={12} />

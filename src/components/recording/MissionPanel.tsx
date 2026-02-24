@@ -176,7 +176,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                 </div>
             )}
 
-            <div className={`flex-1 flex flex-col ${accordionMode ? 'gap-1' : 'gap-4'} ${accordionMode ? '' : 'overflow-y-auto custom-scrollbar pr-1'}`}>
+            <div className={`flex-1 flex flex-col ${accordionMode ? 'gap-2' : 'gap-4'} ${accordionMode ? '' : 'overflow-y-auto custom-scrollbar pr-1'}`}>
                 {/* Time & Damage Section */}
                 <div className="flex flex-col gap-2">
                     <SectionHeader id="stats" icon={<Clock size={12} />} title="Stats" />
@@ -276,9 +276,9 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                     const totalWeaponKills = WEAPONS.reduce((sum, w) => sum + (weapons?.[w] || 0), 0);
                     return (
                         <div className="flex flex-col gap-2">
-                            <SectionHeader id="weapons" icon={<Crosshair size={12} />} title="Weapons" badge={totalWeaponKills > 0 ? `${totalWeaponKills}` : undefined} />
+                            <SectionHeader id="weapons" icon={<Crosshair size={12} />} title="Ship Weapons" badge={totalWeaponKills > 0 ? `${totalWeaponKills}` : undefined} />
                             {isSectionExpanded('weapons') && (
-                                <div className="grid grid-cols-2 gap-2">
+                                <div className="grid grid-cols-2 gap-2 pl-1 pb-1">
                                     {WEAPONS.map(w => {
                                         const count = weapons?.[w] || 0;
                                         const isActive = count > 0;
@@ -351,7 +351,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                 )}
                             />
                             {isSectionExpanded('charWeapons') && (
-                                <div className="flex flex-col gap-2">
+                                <div className="flex flex-col gap-2 pl-1 pb-1">
                                     <div className="grid grid-cols-2 gap-2">
                                         {CHARACTER_WEAPONS.map(w => {
                                             const count = weapons?.[w] || 0;
@@ -433,7 +433,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                 )}
                             />
                             {isSectionExpanded('equipment') && (
-                                <div className="flex flex-col gap-2">
+                                <div className="flex flex-col gap-2 pl-1 pb-1">
                                     <div className="grid grid-cols-2 gap-2">
                                         {CHARACTER_EQUIPMENT.map(w => {
                                             const count = weapons?.[w] || 0;
