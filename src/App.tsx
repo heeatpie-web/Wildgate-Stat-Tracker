@@ -21,6 +21,7 @@ import { ResetConfirmModal } from './components/ResetConfirmModal';
 import { DevTools } from './components/DevTools';
 import { TelemetryPanel } from './components/TelemetryPanel';
 import { ReviewQueueModal } from './components/ReviewQueueModal';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import Tutorial from './components/Tutorial';
 import { WindowResizer } from './components/WindowResizer';
 type LazyDashboardView = 'analytics' | 'smart-captures' | 'players' | 'dev-ocr';
@@ -2091,7 +2092,9 @@ const App: React.FC = () => {
             <ResetConfirmModal />
             <Wizard />
             {showReviewQueue && (
-                <ReviewQueueModal onClose={() => setShowReviewQueue(false)} />
+                <ErrorBoundary>
+                    <ReviewQueueModal onClose={() => setShowReviewQueue(false)} />
+                </ErrorBoundary>
             )}
 
             {showTutorial && (

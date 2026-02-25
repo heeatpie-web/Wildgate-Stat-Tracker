@@ -143,6 +143,8 @@ const PLAYER_NOISE_WORDS = new Set([
   'EPIC', 'FAST', 'GATE', 'FEW', 'MANY', 'ASTEROIDS', 'LAVA', 'LEGION',
   'PATROLS', 'LOW', 'ALTITUDE', 'LATITUDE', 'FOG', 'ROGUE', 'TURRETS',
   'LEECH', 'SWARMS', 'HAUNTED', 'STORM', 'SANDSTORM', 'GLOAMING', 'EXPANSE',
+  // Tactical map grid row labels (A-H)
+  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
 ]);
 
 /**
@@ -580,6 +582,8 @@ function extractPlayerNameFromLine(words) {
     if (!text) continue;
     if (PLAYER_NOISE_WORDS.has(text.toUpperCase())) continue;
     if (text.length < 2) continue;
+    // Filter tactical map grid coordinate labels (e.g. A1, B3, H8)
+    if (/^[A-H]\d{1,2}$/i.test(text)) continue;
     if (/^[XPCD]$/i.test(text) && parts.length > 0) continue;
     if (/^[|=\-~#%&*]+$/.test(text)) continue;
 

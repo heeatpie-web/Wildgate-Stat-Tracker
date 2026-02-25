@@ -100,6 +100,8 @@ const NOISE_WORDS = new Set([
   'ENEMY', 'CREWS', 'CHANNEL', 'INTO', 'SAME', 'WITH', 'THE', 'HOP',
   'HUNTER', 'BASTION', 'PRIVATEER', 'SCOUT', 'OUTLAW', 'SHIP',
   'ON', 'OFF', 'TO',
+  // Tactical map grid row labels (A-H) — prevent misclassification from tactical view
+  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
 ]);
 
 /**
@@ -622,6 +624,9 @@ function extractPlayerNameFromLine(words) {
 
     // Skip single character noise
     if (text.length === 1 && /[^0-9a-zA-Z\u4e00-\u9fff]/.test(text)) continue;
+
+    // Filter tactical map grid coordinate labels (e.g. A1, B3, H8)
+    if (/^[A-H]\d{1,2}$/i.test(text)) continue;
 
     // Skip platform indicators at end
     if (/^[XPCD]$/i.test(text) && validParts.length > 0) continue;

@@ -156,7 +156,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
           <input
             type="checkbox"
             checked={isMultiSelected}
-            onChange={() => onToggleSelect()}
+            onChange={() => { onToggleSelect(); onClick(); }}
             onClick={(e) => e.stopPropagation()}
             style={{ accentColor: 'var(--md-sys-color-primary)' }}
             className={`w-4 h-4 mt-1 flex-shrink-0 transition-opacity ${isMultiSelected

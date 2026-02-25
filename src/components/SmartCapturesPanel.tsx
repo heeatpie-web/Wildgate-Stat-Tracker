@@ -1823,6 +1823,7 @@ const SmartMatchDetail: React.FC<{
         const [reviewData, setReviewData] = useState<OCRExtractedData | null>(null);
         const [rerunProgress, setRerunProgress] = useState<RerunProgressState>({ ...INITIAL_RERUN_PROGRESS });
         const [showSecondaryActions, setShowSecondaryActions] = useState(false);
+        const [loadoutTab, setLoadoutTab] = useState<'loadout' | 'ship-weapons'>('loadout');
         const secondaryActionsRef = useRef<HTMLDivElement | null>(null);
         const nonCurrentWizardSnapshotRef = useRef<NonCurrentWizardSnapshot | null>(null);
         const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
@@ -2089,6 +2090,9 @@ const SmartMatchDetail: React.FC<{
                 opponentTeams: latestMatch.opponentTeams || undefined,
                 ocrDebug: latestMatch.ocrDebug || undefined,
                 eliminatedByTeam: latestMatch.eliminatedByTeam || undefined,
+                // Restore previously saved result so Wizard pre-selects it
+                result: latestMatch.result,
+                subType: latestMatch.subType || undefined,
             };
             const didCommitPending = commitPendingMatchDataForWizard(
                 pendingMatchData,
@@ -2099,7 +2103,12 @@ const SmartMatchDetail: React.FC<{
                 setToast({ message: 'Unable to open wizard: pending match data was not committed.', type: 'error' });
                 return;
             }
-            setShowWizard('Match Result');
+            // Pre-select the result if this match already has one (re-edit flow)
+            const priorResult = latestMatch.result;
+            const wizardResult = (priorResult === 'Win' || priorResult === 'Loss' || priorResult === 'Draw')
+                ? priorResult
+                : 'Match Result';
+            setShowWizard(wizardResult);
         }, [activeUser, match, setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setShowWizard, setTimeMin, setTimeSec, setToast]);
 
         useEffect(() => {
@@ -2415,7 +2424,10 @@ const SmartMatchDetail: React.FC<{
                 color: String(team.color || 'unknown').trim() || 'unknown',
                 teamName: String(team.teamName || `Enemy Team ${index + 1}`).trim() || `Enemy Team ${index + 1}`,
                 shipType: String(team.shipType || '').trim(),
-                players: dedupeBoardNames(team.players || []),
+                // Also filter the active user out of any opponent team (OCR sometimes misassigns them)
+                players: dedupeBoardNames((team.players || []).filter(
+                    name => normalizeOcrName(name).toLowerCase() !== activeUserName && name !== ''
+                )),
             }));
             return [{
                 key: `friendly:${friendlyTeamName}`,
@@ -3297,6 +3309,25 @@ const SmartMatchDetail: React.FC<{
                         </Section>
 
                         <Section title="Loadout" collapsible collapsed={!!collapsedSections.loadout} onToggle={() => toggleSection('loadout')}>
+                            {/* Tab bar */}
+                            <div className="flex mb-3 rounded-lg overflow-hidden border border-md-sys-outline/15 text-label-xs font-bold uppercase tracking-wider">
+                                <button
+                                    type="button"
+                                    onClick={() => setLoadoutTab('loadout')}
+                                    className={`flex-1 py-1.5 transition-colors ${loadoutTab === 'loadout' ? 'bg-md-sys-primary/14 text-md-sys-on-surface' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/6'}`}
+                                >
+                                    Loadout
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setLoadoutTab('ship-weapons')}
+                                    className={`flex-1 py-1.5 transition-colors ${loadoutTab === 'ship-weapons' ? 'bg-md-sys-primary/14 text-md-sys-on-surface' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/6'}`}
+                                >
+                                    Ship Weapons
+                                </button>
+                            </div>
+
+                            {loadoutTab === 'loadout' && (
                             <div className="space-y-3">
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="flex flex-col gap-1.5">
@@ -3371,64 +3402,66 @@ const SmartMatchDetail: React.FC<{
                                         </div>
                                     </>
                                 )}
-
-                                <div className="h-px w-full bg-md-sys-outline/10" />
-                                <div className="space-y-1.5">
-                                    <div className="w-full flex items-center justify-between">
-                                        <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Ship Weapons</span>
-                                        <span className="text-label-xs font-bold bg-md-sys-surface-container-high px-2 py-0.5 rounded-pill text-md-sys-on-surface/70">
-                                            {detailShipWeaponTotal}/10 slots
-                                        </span>
-                                    </div>
-                                    <div className="space-y-1">
-                                        {Object.entries(detailShipWeaponCounts).length === 0 ? (
-                                            <span className="text-label-xs opacity-55">No ship weapons selected.</span>
-                                        ) : (
-                                            Object.entries(detailShipWeaponCounts).map(([weaponName, qty]) => (
-                                                <div key={weaponName} className="flex items-center justify-between gap-2 rounded-md px-2 py-0.5 md3-surface-high">
-                                                    <span className="text-label-xs font-bold">{weaponName}</span>
-                                                    <div className="inline-flex items-center gap-1">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setDetailShipWeaponQuantity(weaponName, qty - 1)}
-                                                            className="w-5 h-5 rounded-control md3-surface inline-flex items-center justify-center text-label-xs text-md-sys-on-surface/70 hover:text-md-sys-on-surface"
-                                                            aria-label={`Decrease ${weaponName}`}
-                                                        >
-                                                            -
-                                                        </button>
-                                                        <span className="min-w-[1.25rem] text-center text-label-xs font-black">{qty}</span>
-                                                        <button
-                                                            type="button"
-                                                            disabled={detailShipWeaponTotal >= 10}
-                                                            onClick={() => setDetailShipWeaponQuantity(weaponName, qty + 1)}
-                                                            className="w-5 h-5 rounded-control md3-surface inline-flex items-center justify-center text-label-xs text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
-                                                            aria-label={`Increase ${weaponName}`}
-                                                        >
-                                                            +
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                    <div className="flex flex-wrap gap-1">
-                                        {WEAPONS
-                                            .filter((weapon) => !detailShipWeaponCounts[weapon])
-                                            .map((weapon) => (
-                                                <button
-                                                    key={weapon}
-                                                    type="button"
-                                                    disabled={detailShipWeaponTotal >= 10}
-                                                    onClick={() => setDetailShipWeaponQuantity(weapon, 1)}
-                                                    className="px-1.5 py-0.5 rounded-md text-label-xs font-bold md3-surface-high text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
-                                                >
-                                                    + {weapon}
-                                                </button>
-                                            ))}
-                                    </div>
-                                </div>
-
                             </div>
+                            )}
+
+                            {loadoutTab === 'ship-weapons' && (
+                            <div className="space-y-1.5">
+                                <div className="w-full flex items-center justify-between">
+                                    <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Ship Weapons</span>
+                                    <span className="text-label-xs font-bold bg-md-sys-surface-container-high px-2 py-0.5 rounded-pill text-md-sys-on-surface/70">
+                                        {detailShipWeaponTotal}/10 slots
+                                    </span>
+                                </div>
+                                <div className="space-y-1">
+                                    {Object.entries(detailShipWeaponCounts).length === 0 ? (
+                                        <span className="text-label-xs opacity-55">No ship weapons selected.</span>
+                                    ) : (
+                                        Object.entries(detailShipWeaponCounts).map(([weaponName, qty]) => (
+                                            <div key={weaponName} className="flex items-center justify-between gap-2 rounded-md px-2 py-0.5 md3-surface-high">
+                                                <span className="text-label-xs font-bold">{weaponName}</span>
+                                                <div className="inline-flex items-center gap-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDetailShipWeaponQuantity(weaponName, qty - 1)}
+                                                        className="w-5 h-5 rounded-control md3-surface inline-flex items-center justify-center text-label-xs text-md-sys-on-surface/70 hover:text-md-sys-on-surface"
+                                                        aria-label={`Decrease ${weaponName}`}
+                                                    >
+                                                        -
+                                                    </button>
+                                                    <span className="min-w-[1.25rem] text-center text-label-xs font-black">{qty}</span>
+                                                    <button
+                                                        type="button"
+                                                        disabled={detailShipWeaponTotal >= 10}
+                                                        onClick={() => setDetailShipWeaponQuantity(weaponName, qty + 1)}
+                                                        className="w-5 h-5 rounded-control md3-surface inline-flex items-center justify-center text-label-xs text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
+                                                        aria-label={`Increase ${weaponName}`}
+                                                    >
+                                                        +
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                    {WEAPONS
+                                        .filter((weapon) => !detailShipWeaponCounts[weapon])
+                                        .map((weapon) => (
+                                            <button
+                                                key={weapon}
+                                                type="button"
+                                                disabled={detailShipWeaponTotal >= 10}
+                                                onClick={() => setDetailShipWeaponQuantity(weapon, 1)}
+                                                className="px-1.5 py-0.5 rounded-md text-label-xs font-bold md3-surface-high text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
+                                            >
+                                                + {weapon}
+                                            </button>
+                                        ))}
+                                </div>
+                            </div>
+                            )}
+
                         </Section>
 
                         <Section title="Points of Interest">

@@ -81,38 +81,18 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
         </div>
 
         {telemetryOverrideSummary}
-        {(hasShipWeapons || hasProspectorWeapons || hasProspectorEquipment) && (
-          <div className="mg-surface rounded-card p-2 border border-info/15 space-y-1.5">
-            {hasShipWeapons && (
-              <div className="flex items-start gap-2 text-label-sm">
-                <span className="font-bold uppercase tracking-wide text-info">Ship Weapons</span>
-                <span className="text-md-sys-on-surface/80 break-words">
-                  {shipWeapons.join(', ')}
-                </span>
-              </div>
-            )}
-            {hasProspectorWeapons && (
-              <div className="flex items-start gap-2 text-label-sm">
-                <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
-                <span className="text-md-sys-on-surface/80 break-words">
-                  {prospectorWeapons.join(', ')}
-                </span>
-              </div>
-            )}
-            {hasProspectorEquipment && (
-              <div className="flex items-start gap-2 text-label-sm">
-                <span className="font-bold uppercase tracking-wide text-info">Equipment</span>
-                <span className="text-md-sys-on-surface/80 break-words">
-                  {prospectorEquipment.join(', ')}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Ship Pill Buttons */}
         <div className="flex flex-col gap-1.5">
-          <span className="text-label-sm font-semibold text-md-sys-on-surface/60">Ship</span>
+          <div className="flex items-center gap-2">
+            <span className="text-label-sm font-semibold text-md-sys-on-surface/60">Ship</span>
+            {shipSource === 'telemetry' && (
+              <span className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-1.5 py-0.5 text-[10px] font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                Telemetry
+              </span>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-1.5">
             {SHIPS.map(s => (
               <button
@@ -131,7 +111,15 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
 
         {/* Prospector Pill Buttons */}
         <div className="flex flex-col gap-1.5">
-          <span className="text-label-sm font-semibold text-md-sys-on-surface/60">Prospector</span>
+          <div className="flex items-center gap-2">
+            <span className="text-label-sm font-semibold text-md-sys-on-surface/60">Prospector</span>
+            {heroSource === 'telemetry' && (
+              <span className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-1.5 py-0.5 text-[10px] font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                Telemetry
+              </span>
+            )}
+          </div>
           <div className="grid grid-cols-4 gap-1.5">
             {[...CHARACTERS].sort().map(c => (
               <button
@@ -171,36 +159,18 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
       </div>
 
       {telemetryOverrideSummary}
-      {(hasShipWeapons || hasProspectorWeapons || hasProspectorEquipment) && (
-        <div className="mg-surface rounded-card p-2 border border-info/15 space-y-1.5">
-          {hasShipWeapons && (
-            <div className="flex items-start gap-2 text-label-sm">
-              <span className="font-bold uppercase tracking-wide text-info">Ship Weapons</span>
-              <span className="text-md-sys-on-surface/80 break-words">
-                {shipWeapons.join(', ')}
-              </span>
-            </div>
-          )}
-          {hasProspectorWeapons && (
-            <div className="flex items-start gap-2 text-label-sm">
-              <span className="font-bold uppercase tracking-wide text-info">Weapons</span>
-              <span className="text-md-sys-on-surface/80 break-words">
-                {prospectorWeapons.join(', ')}
-              </span>
-            </div>
-          )}
-          {hasProspectorEquipment && (
-            <div className="flex items-start gap-2 text-label-sm">
-              <span className="font-bold uppercase tracking-wide text-info">Equipment</span>
-              <span className="text-md-sys-on-surface/80 break-words">
-                {prospectorEquipment.join(', ')}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Ship Grid */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <span className="md3-label text-md-sys-on-surface/60">Ship</span>
+          {shipSource === 'telemetry' && (
+            <span className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-1.5 py-0.5 text-[10px] font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-success" />
+              Telemetry
+            </span>
+          )}
+        </div>
       <div className="grid grid-cols-2 gap-2">
         {SHIPS.map(s => (
           <button
@@ -215,10 +185,19 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
           </button>
         ))}
       </div>
+      </div>
 
       {/* Prospector Section */}
       <div className="flex flex-col gap-2">
-        <span className="md3-label text-md-sys-on-surface/60">Prospector</span>
+        <div className="flex items-center gap-2">
+          <span className="md3-label text-md-sys-on-surface/60">Prospector</span>
+          {heroSource === 'telemetry' && (
+            <span className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-1.5 py-0.5 text-[10px] font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-success" />
+              Telemetry
+            </span>
+          )}
+        </div>
         <div className="grid grid-cols-3 gap-2">
           {[...CHARACTERS].sort().map(c => (
             <button

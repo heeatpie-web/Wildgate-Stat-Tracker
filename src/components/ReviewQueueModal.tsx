@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { Check, X, Edit2, AlertTriangle, Trash2, Image as ImageIcon } from 'lucide-react';
@@ -141,27 +141,27 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         });
     };
 
-    const unknownItems: UnknownReviewItem[] = Object.entries(detectedUnknowns).map(([id, data]) => ({
+    const unknownItems = useMemo<UnknownReviewItem[]>(() => Object.entries(detectedUnknowns ?? {}).map(([id, data]) => ({
         id,
         value: `Unknown ${data.type} (${id.substring(0, 5)})`,
         context: `New ${data.type} Discovered`,
-        type: 'unknown_id',
+        type: 'unknown_id' as const,
         originalConfidence: 0,
         isUnknown: true
-    }));
+    })), [detectedUnknowns]);
 
-    const learningItems: LearningReviewItem[] = (ocrLearningQueue || []).map((item) => ({
+    const learningItems = useMemo<LearningReviewItem[]>(() => (ocrLearningQueue ?? []).map((item) => ({
         id: item.id,
         value: `${item.rawText} -> ${item.suggestedName}`,
         rawValue: item.rawText,
         suggestedName: item.suggestedName,
         context: `OCR Learning (${item.context})`,
-        type: 'ocr_learning_review',
+        type: 'ocr_learning_review' as const,
         originalConfidence: Math.round(item.score * 100),
         isLearning: true,
         learningEventId: item.eventId,
         explanation: item.explanation || [],
-    }));
+    })), [ocrLearningQueue]);
 
     const prioritizedPending = useMemo(() => (
         [...pendingReviews].sort((a, b) => {
@@ -384,7 +384,8 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             }
         });
 
-        const nextAutoMergeReview = prioritizedPending.find((review) => {
+        // Process ALL eligible auto-merges in one pass to avoid cascading re-renders
+        const eligibleItems = prioritizedPending.filter((review) => {
             if (review.type !== 'roster_candidate') return false;
             if (autoApprovedRosterIdsRef.current.has(review.id)) return false;
             const score = Number(review.bestScore || 0);
@@ -392,17 +393,20 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             return score >= AUTO_MERGE_APPROVAL_THRESHOLD && target.length > 0;
         });
 
-        if (!nextAutoMergeReview) return;
+        if (eligibleItems.length === 0) return;
 
-        autoApprovedRosterIdsRef.current.add(nextAutoMergeReview.id);
-        const target = normalizeName(nextAutoMergeReview.bestMatch || '');
-        const score = Number(nextAutoMergeReview.bestScore || 0);
-        replaceNameInSession(nextAutoMergeReview.value, target);
-        addToRegistry(target);
-        removePendingReview(nextAutoMergeReview.id);
-        notifyReviewQueue(`Auto-approved merge "${nextAutoMergeReview.value}" -> "${target}" (${Math.round(score)}%)`, 'success');
-        announce(`Auto-approved merge from ${nextAutoMergeReview.value} to ${target}.`, 'polite');
-    }, [announce, addToRegistry, prioritizedPending, removePendingReview]);
+        eligibleItems.forEach((review) => {
+            autoApprovedRosterIdsRef.current.add(review.id);
+            const target = normalizeName(review.bestMatch || '');
+            const score = Number(review.bestScore || 0);
+            replaceNameInSession(review.value, target);
+            addToRegistry(target);
+            removePendingReview(review.id);
+            notifyReviewQueue(`Auto-approved merge "${review.value}" -> "${target}" (${Math.round(score)}%)`, 'success');
+            announce(`Auto-approved merge from ${review.value} to ${target}.`, 'polite');
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [prioritizedPending]);
 
     const startEdit = (review: ReviewItem) => {
         setEditingId(review.id);
