@@ -45,17 +45,17 @@ const STATUS_PILL_BY_TONE: Record<'success' | 'warning' | 'danger' | 'info' | 'n
 };
 
 const ROW_TONE_BY_RESULT: Record<Match['result'], string> = {
-  Win: 'bg-success/[0.02] border-success/12',
-  Loss: 'bg-danger/[0.02] border-danger/12',
-  Draw: 'bg-info/[0.02] border-info/12',
-  Ongoing: 'bg-md-sys-on-surface/[0.02] border-md-sys-outline/10',
+  Win: 'border-md-sys-outline/10',
+  Loss: 'border-md-sys-outline/10',
+  Draw: 'border-md-sys-outline/10',
+  Ongoing: 'border-md-sys-outline/10',
 };
 
 const SELECTED_ROW_TONE_BY_RESULT: Record<Match['result'], string> = {
-  Win: 'bg-success/[0.07] border-success/25 ring-success/12 text-success',
-  Loss: 'bg-danger/[0.07] border-danger/25 ring-danger/12 text-danger',
-  Draw: 'bg-info/[0.07] border-info/25 ring-info/12 text-info',
-  Ongoing: 'bg-md-sys-primary/7 border-md-sys-primary/20 ring-md-sys-primary/12 text-md-sys-primary',
+  Win: 'bg-md-sys-on-surface/8 border-success/30 ring-success/12',
+  Loss: 'bg-md-sys-on-surface/8 border-danger/30 ring-danger/12',
+  Draw: 'bg-md-sys-on-surface/8 border-info/30 ring-info/12',
+  Ongoing: 'bg-md-sys-on-surface/8 border-md-sys-primary/20 ring-md-sys-primary/12',
 };
 
 const SELECTED_BORDER_BY_RESULT: Record<Match['result'], string> = {
@@ -144,7 +144,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
     <button
       type="button"
       onClick={onClick}
-      className={`group sc-queue-item sc-queue-item--rich ${resultClass} w-full text-left rounded-card border-l-[11px] transition-all relative min-h-[64px] overflow-visible ${isSelected
+      className={`group sc-queue-item sc-queue-item--rich ${resultClass} w-full text-left rounded-r-card border-l-[11px] transition-all relative min-h-[64px] overflow-visible ${isSelected
         ? `text-md-sys-on-surface border p-3 ring-1 shadow-sm font-semibold ${SELECTED_ROW_TONE_BY_RESULT[match.result]}`
         : `border border-l-md-sys-outline/30 hover:bg-md-sys-on-surface/8 p-3 ${ROW_TONE_BY_RESULT[match.result]}`
         }`}
@@ -170,7 +170,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
         <div className="flex-1 min-w-0 flex flex-col gap-1.5">
           <div className="flex items-center justify-between min-w-0">
             <div className="flex items-center gap-2 min-w-0">
-              <span className={`sc-queue-item__title text-label-md font-black ${isSelected ? '' : 'opacity-40'}`}>#{displayNumber}</span>
+              <span className={`sc-queue-item__title text-label-md font-black ${isSelected ? '' : 'opacity-65'}`}>#{displayNumber}</span>
               <span className="text-label-sm font-bold truncate">
                 {match.ship || 'Unknown'} <span className="opacity-40 font-normal">|</span> {match.hero || 'Unknown'}
               </span>

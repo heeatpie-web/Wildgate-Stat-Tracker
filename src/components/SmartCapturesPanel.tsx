@@ -1169,7 +1169,7 @@ const SmartCapturesPanel: React.FC = () => {
                                     </div>
                                 }
                                 body={
-                                    <div className="flex-1 overflow-y-auto custom-scrollbar overscroll-contain px-2 py-1.5 flex flex-col gap-2 min-h-0">
+                                    <div className="flex-1 overflow-y-auto custom-scrollbar overscroll-contain pl-0 pr-1.5 py-1.5 flex flex-col gap-1 min-h-0 sc-queue-list-body">
                                         {selectedIds.size > 0 && !queueCollapsed && (
                                             <div className="sticky top-0 z-20 mb-2 rounded-card p-2.5 flex items-center justify-between gap-2 sc-queue-selection-bar">
                                                 <span className="text-label-sm font-bold text-md-sys-primary inline-flex items-center gap-1.5">
@@ -2475,6 +2475,19 @@ const SmartMatchDetail: React.FC<{
             commitAssignmentBoardTeams(mutated);
         }, [assignmentBoardTeams, commitAssignmentBoardTeams]);
 
+        const ocrDetectedTeamIndices = useMemo<Set<number>>(() => {
+            const detected = new Set<number>();
+            const defaultPattern = /^enemy\s+team\s+\d+$/i;
+            assignmentBoardTeams.forEach((team, idx) => {
+                if (idx === 0) return; // skip friendly
+                const name = String(team.teamName || '').trim();
+                if (name && !defaultPattern.test(name) && !/^unknown\s+team$/i.test(name)) {
+                    detected.add(idx);
+                }
+            });
+            return detected;
+        }, [assignmentBoardTeams]);
+
         const renderPlayerChips = (players: string[], type: 'teammate' | 'opponent') => {
             const chipClass = type === 'teammate' ? 'sc-player-chip sc-player-chip--teammate' : 'sc-player-chip sc-player-chip--opponent';
             const addBtnClass = type === 'teammate' ? 'sc-player-add-btn sc-player-add-btn--teammate' : 'sc-player-add-btn sc-player-add-btn--opponent';
@@ -2937,24 +2950,28 @@ const SmartMatchDetail: React.FC<{
                     ))}
                 </datalist>
 
-                <div className="sticky top-0 z-40 -mx-3 lg:-mx-4 px-3 lg:px-4 pt-2 pb-2 bg-md-sys-surface-container-highest border-b border-md-sys-outline/14 shadow-sm sc-detail-sticky-header">
+                <div className="sticky top-0 z-40 -mx-3 lg:-mx-4 px-3 lg:px-4 py-3 sc-detail-sticky-header">
                     <SmartCaptureSummaryBar>
                         {!queueOnly && (
-                            <div className="sc-detail-summary-top">
-                                <div className="sc-detail-title-block min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="sc-detail-match-badge">Match {displayNumber}</span>
-                                        <span className={`sc-detail-chip sc-status-chip sc-status-chip--${statusMeta.tone}`} title={statusMeta.description}>
-                                            {statusIcon}
-                                            {statusMeta.label}
+                            <div className="sc-detail-identity-block">
+                                <div className="sc-detail-identity-top">
+                                    <span className="sc-detail-match-title">Match {displayNumber}</span>
+                                    <span className={`sc-detail-chip sc-status-chip sc-status-chip--${statusMeta.tone}`} title={statusMeta.description}>
+                                        {statusIcon}
+                                        {statusMeta.label}
+                                    </span>
+                                    {hasResult && (
+                                        <span className={`sc-detail-chip sc-result-chip--${match.result?.toLowerCase()}`}>
+                                            {match.result === 'Win' ? <Trophy size={10} /> : match.result === 'Loss' ? <Skull size={10} /> : <AlertTriangle size={10} />}
+                                            {match.result}
                                         </span>
-                                    </div>
-                                    <div className="sc-detail-meta-line">
-                                        <Clock size={12} />
-                                        <span className="font-semibold">{summaryDateLabel}</span>
-                                        <span aria-hidden="true" className="opacity-55">|</span>
-                                        <span className="font-mono">{summaryTimeLabel}</span>
-                                    </div>
+                                    )}
+                                </div>
+                                <div className="sc-detail-identity-sub">
+                                    <Clock size={11} />
+                                    <span>{summaryDateLabel}</span>
+                                    <span aria-hidden="true" className="opacity-40">·</span>
+                                    <span className="font-mono">{summaryTimeLabel}</span>
                                 </div>
                             </div>
                         )}
@@ -2971,6 +2988,28 @@ const SmartMatchDetail: React.FC<{
                                         Review Shots
                                     </button>
                                 ) : null}
+                                <div className="flex items-center gap-1.5">
+                                    {onApplyToSession && (
+                                        <button
+                                            onClick={applyReviewDataToSession}
+                                            className={`sc-detail-action-btn sc-detail-action-btn--tonal ${reviewData ? '' : 'opacity-80'}`}
+                                            title={reviewData
+                                                ? 'Apply latest OCR extraction to the current recording session and open wizard'
+                                                : 'Run Re-analyze first, then apply OCR'}
+                                        >
+                                            <Zap size={14} />
+                                            Apply OCR
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => openWizardForMatch()}
+                                        className="sc-detail-action-btn sc-detail-action-btn--filled sc-detail-action-btn--workflow"
+                                        title="Open wizard for review and final save"
+                                    >
+                                        <FlaskConical size={16} />
+                                        Open Wizard
+                                    </button>
+                                </div>
                                 <div className="sc-detail-action-menu" ref={secondaryActionsRef}>
                                     <button
                                         type="button"
@@ -3056,28 +3095,6 @@ const SmartMatchDetail: React.FC<{
                                         </div>
                                     )}
                                 </div>
-                                <div className="ml-auto flex items-center gap-1.5">
-                                    {onApplyToSession && (
-                                        <button
-                                            onClick={applyReviewDataToSession}
-                                            className={`sc-detail-action-btn sc-detail-action-btn--tonal ${reviewData ? '' : 'opacity-80'}`}
-                                            title={reviewData
-                                                ? 'Apply latest OCR extraction to the current recording session and open wizard'
-                                                : 'Run Re-analyze first, then apply OCR'}
-                                        >
-                                            <Zap size={14} />
-                                            Apply OCR
-                                        </button>
-                                    )}
-                                    <button
-                                        onClick={() => openWizardForMatch()}
-                                        className="sc-detail-action-btn sc-detail-action-btn--filled sc-detail-action-btn--workflow"
-                                        title="Open wizard for review and final save"
-                                    >
-                                        <FlaskConical size={16} />
-                                        Open Wizard
-                                    </button>
-                                </div>
                             </SmartCaptureActionBar>
                         </div>
 
@@ -3098,150 +3115,151 @@ const SmartMatchDetail: React.FC<{
                     <div className="lg:col-span-9 lg:col-start-1 space-y-3 min-w-0 sc-detail-editor-block">
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sc-detail-stats-grid">
                             <EditableStatCard
-                                icon={<Clock size={14} />} label="Time" value={match.time || '--'}
+                                icon={<Clock size={15} />} label="Time" value={match.time || '--'}
                                 onSave={(v) => onUpdate({ ...match, time: v })}
                                 placeholder="MM:SS"
+                                accent="primary"
                             />
                             <EditableStatCard
-                                icon={<HeartCrack size={14} className="text-danger" />} label="Damage" value={match.damageTaken?.toString() || '0'}
+                                icon={<HeartCrack size={15} />} label="Damage" value={match.damageTaken?.toString() || '0'}
                                 onSave={(v) => onUpdate({ ...match, damageTaken: parseInt(v) || 0 })}
                                 type="number"
+                                accent="danger"
                             />
                             <EditableStatCard
-                                icon={<Target size={14} className="text-success" />} label="Kills" value={totalKills.toString()}
+                                icon={<Target size={15} />} label="Kills" value={totalKills.toString()}
                                 readOnly
+                                accent="success"
                             />
-                            <div className="md3-surface rounded-xl sc-bordered p-4 flex flex-col items-center justify-center gap-1 sc-editor-stat-card min-h-[88px]">
-                                <span className="text-md-sys-on-surface/50"><Trophy size={14} className="text-warning" /></span>
-                                <span className="text-label-xs font-bold text-md-sys-on-surface/50 uppercase tracking-wider">Place</span>
-                                {match.result === 'Win' ? (
-                                    <span className="text-title-lg font-black text-md-sys-on-surface">#1</span>
-                                ) : (
-                                    <select
-                                        className="text-title-lg font-black md3-surface rounded px-2 w-24 text-center outline-none"
-                                        value={
-                                            match.result === 'Loss'
-                                                ? (match.placement && match.placement >= 2 && match.placement <= 5 ? String(match.placement) : '2')
-                                                : String(match.placement || '')
-                                        }
-                                        onChange={(e) => {
-                                            const next = Number.parseInt(e.target.value, 10);
-                                            if (!Number.isFinite(next)) {
-                                                onUpdate({ ...match, placement: undefined });
-                                                return;
+                            <div className="sc-stat-card sc-stat-card--warning">
+                                <div className="sc-stat-card__icon">
+                                    <Trophy size={15} />
+                                </div>
+                                <div className="sc-stat-card__body">
+                                    <span className="sc-stat-card__label">Place</span>
+                                    {match.result === 'Win' ? (
+                                        <span className="sc-stat-card__value">#1</span>
+                                    ) : (
+                                        <select
+                                            className="sc-stat-card__select"
+                                            value={
+                                                match.result === 'Loss'
+                                                    ? (match.placement && match.placement >= 2 && match.placement <= 5 ? String(match.placement) : '2')
+                                                    : String(match.placement || '')
                                             }
-                                            if (match.result === 'Loss') {
-                                                onUpdate({ ...match, placement: Math.min(5, Math.max(2, next)) });
-                                                return;
-                                            }
-                                            onUpdate({ ...match, placement: next });
-                                        }}
-                                    >
-                                        {match.result === 'Loss' ? (
-                                            [2, 3, 4, 5].map((place) => (
-                                                <option key={place} value={place}>{`#${place}`}</option>
-                                            ))
-                                        ) : (
-                                            <>
-                                                <option value="">--</option>
-                                                {Array.from({ length: 20 }, (_, idx) => idx + 2).map((place) => (
+                                            onChange={(e) => {
+                                                const next = Number.parseInt(e.target.value, 10);
+                                                if (!Number.isFinite(next)) {
+                                                    onUpdate({ ...match, placement: undefined });
+                                                    return;
+                                                }
+                                                if (match.result === 'Loss') {
+                                                    onUpdate({ ...match, placement: Math.min(5, Math.max(2, next)) });
+                                                    return;
+                                                }
+                                                onUpdate({ ...match, placement: next });
+                                            }}
+                                        >
+                                            {match.result === 'Loss' ? (
+                                                [2, 3, 4, 5].map((place) => (
                                                     <option key={place} value={place}>{`#${place}`}</option>
-                                                ))}
-                                            </>
-                                        )}
-                                    </select>
-                                )}
+                                                ))
+                                            ) : (
+                                                <>
+                                                    <option value="">--</option>
+                                                    {Array.from({ length: 20 }, (_, idx) => idx + 2).map((place) => (
+                                                        <option key={place} value={place}>{`#${place}`}</option>
+                                                    ))}
+                                                </>
+                                            )}
+                                        </select>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
                         <Section title="Players" collapsible collapsed={!!collapsedSections.players} onToggle={() => toggleSection('players')}>
-                            <div className="space-y-3">
-                                <div className="md3-card p-3 border border-md-sys-outline/20 ocr-team-assignment-shell">
-                                    <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="text-label-sm uppercase font-bold opacity-60">Team Assignment</span>
-                                        <span className="text-label-xs text-md-sys-on-surface/55">
-                                            Drag names between teams to fix grouping and ship ownership.
-                                        </span>
-                                    </div>
-                                    <OcrTeamAssignmentBoard
-                                        teams={assignmentBoardTeams}
-                                        shipOptions={SHIPS}
-                                        pilotRegistry={pilotRegistry}
-                                        rosterSuggestionsId={pilotRegistry.length > 0 ? rosterSuggestionsId : undefined}
-                                        friendlyTeamIndex={0}
-                                        compact={true}
-                                        allowColorEdit={true}
-                                        allowTeamAddRemove={true}
-                                        fuzzyMatches={assignmentBoardFuzzyMatches}
-                                        dataTestId="sc-detail-players-assignment-board"
-                                        onTeamAdd={() => mutateAssignmentBoardTeams((draft) => {
-                                            draft.push({
-                                                key: `enemy-${draft.length}:Enemy Team ${draft.length}`,
-                                                color: 'unknown',
-                                                teamName: `Enemy Team ${draft.length}`,
-                                                shipType: '',
-                                                players: [],
-                                            });
-                                        })}
-                                        onTeamRemove={(teamIndex) => mutateAssignmentBoardTeams((draft) => {
-                                            if (teamIndex <= 0 || teamIndex >= draft.length) return;
-                                            draft.splice(teamIndex, 1);
-                                        })}
-                                        onTeamNameChange={(teamIndex, value) => mutateAssignmentBoardTeams((draft) => {
-                                            if (teamIndex < 0 || teamIndex >= draft.length) return;
-                                            draft[teamIndex] = { ...draft[teamIndex], teamName: value };
-                                        })}
-                                        onTeamColorChange={(teamIndex, value) => mutateAssignmentBoardTeams((draft) => {
-                                            if (teamIndex <= 0 || teamIndex >= draft.length) return;
-                                            draft[teamIndex] = { ...draft[teamIndex], color: value };
-                                        })}
-                                        onTeamShipChange={(teamIndex, value) => mutateAssignmentBoardTeams((draft) => {
-                                            if (teamIndex < 0 || teamIndex >= draft.length) return;
-                                            draft[teamIndex] = { ...draft[teamIndex], shipType: value };
-                                        })}
-                                        onPlayerChange={(teamIndex, playerIndex, value) => mutateAssignmentBoardTeams((draft) => {
-                                            if (teamIndex < 0 || teamIndex >= draft.length) return;
-                                            const team = draft[teamIndex];
-                                            if (playerIndex < 0 || playerIndex >= team.players.length) return;
-                                            const nextPlayers = [...team.players];
-                                            nextPlayers[playerIndex] = value;
-                                            draft[teamIndex] = { ...team, players: nextPlayers };
-                                        })}
-                                        onPlayerRemove={(teamIndex, playerIndex) => mutateAssignmentBoardTeams((draft) => {
-                                            if (teamIndex < 0 || teamIndex >= draft.length) return;
-                                            const team = draft[teamIndex];
-                                            draft[teamIndex] = {
-                                                ...team,
-                                                players: team.players.filter((_, idx) => idx !== playerIndex),
-                                            };
-                                        })}
-                                        onPlayerAdd={(teamIndex, value) => mutateAssignmentBoardTeams((draft) => {
-                                            if (teamIndex < 0 || teamIndex >= draft.length) return;
-                                            const team = draft[teamIndex];
-                                            draft[teamIndex] = {
-                                                ...team,
-                                                players: dedupeBoardNames([...(team.players || []), value]),
-                                            };
-                                        })}
-                                        onPlayerMove={(fromTeamIndex, fromPlayerIndex, toTeamIndex, toPlayerIndex) => mutateAssignmentBoardTeams((draft) => {
-                                            const moveResult = tryMoveOpponentPlayerBetweenTeams(draft, {
-                                                fromTeamIndex,
-                                                fromPlayerIndex,
-                                                toTeamIndex,
-                                                toPlayerIndex,
-                                                preventDuplicateNames: true,
-                                                normalizeName: (value) => normalizeOcrName(String(value || '')).toLowerCase(),
-                                            });
-                                            if (moveResult.reason === 'duplicate') {
-                                                const movedName = moveResult.movedPlayer || 'Player';
-                                                const targetTeamName = draft[toTeamIndex]?.teamName || `Team ${toTeamIndex + 1}`;
-                                                setToast({ message: `${movedName} already exists in ${targetTeamName}.`, type: 'warning' });
-                                                return draft;
-                                            }
-                                            return moveResult.teams as OcrTeamAssignmentTeam[];
-                                        })}
-                                    />
-                                </div>
+                            <div className="space-y-2">
+                                <OcrTeamAssignmentBoard
+                                    teams={assignmentBoardTeams}
+                                    shipOptions={SHIPS}
+                                    pilotRegistry={pilotRegistry}
+                                    rosterSuggestionsId={pilotRegistry.length > 0 ? rosterSuggestionsId : undefined}
+                                    friendlyTeamIndex={0}
+                                    compact={true}
+                                    allowColorEdit={true}
+                                    allowTeamAddRemove={true}
+                                    fuzzyMatches={assignmentBoardFuzzyMatches}
+                                    dataTestId="sc-detail-players-assignment-board"
+                                    ocrDetectedTeamIndices={ocrDetectedTeamIndices}
+                                    onTeamAdd={() => mutateAssignmentBoardTeams((draft) => {
+                                        draft.push({
+                                            key: `enemy-${draft.length}:Enemy Team ${draft.length}`,
+                                            color: 'unknown',
+                                            teamName: `Enemy Team ${draft.length}`,
+                                            shipType: '',
+                                            players: [],
+                                        });
+                                    })}
+                                    onTeamRemove={(teamIndex) => mutateAssignmentBoardTeams((draft) => {
+                                        if (teamIndex <= 0 || teamIndex >= draft.length) return;
+                                        draft.splice(teamIndex, 1);
+                                    })}
+                                    onTeamNameChange={(teamIndex, value) => mutateAssignmentBoardTeams((draft) => {
+                                        if (teamIndex < 0 || teamIndex >= draft.length) return;
+                                        draft[teamIndex] = { ...draft[teamIndex], teamName: value };
+                                    })}
+                                    onTeamColorChange={(teamIndex, value) => mutateAssignmentBoardTeams((draft) => {
+                                        if (teamIndex <= 0 || teamIndex >= draft.length) return;
+                                        draft[teamIndex] = { ...draft[teamIndex], color: value };
+                                    })}
+                                    onTeamShipChange={(teamIndex, value) => mutateAssignmentBoardTeams((draft) => {
+                                        if (teamIndex < 0 || teamIndex >= draft.length) return;
+                                        draft[teamIndex] = { ...draft[teamIndex], shipType: value };
+                                    })}
+                                    onPlayerChange={(teamIndex, playerIndex, value) => mutateAssignmentBoardTeams((draft) => {
+                                        if (teamIndex < 0 || teamIndex >= draft.length) return;
+                                        const team = draft[teamIndex];
+                                        if (playerIndex < 0 || playerIndex >= team.players.length) return;
+                                        const nextPlayers = [...team.players];
+                                        nextPlayers[playerIndex] = value;
+                                        draft[teamIndex] = { ...team, players: nextPlayers };
+                                    })}
+                                    onPlayerRemove={(teamIndex, playerIndex) => mutateAssignmentBoardTeams((draft) => {
+                                        if (teamIndex < 0 || teamIndex >= draft.length) return;
+                                        const team = draft[teamIndex];
+                                        draft[teamIndex] = {
+                                            ...team,
+                                            players: team.players.filter((_, idx) => idx !== playerIndex),
+                                        };
+                                    })}
+                                    onPlayerAdd={(teamIndex, value) => mutateAssignmentBoardTeams((draft) => {
+                                        if (teamIndex < 0 || teamIndex >= draft.length) return;
+                                        const team = draft[teamIndex];
+                                        draft[teamIndex] = {
+                                            ...team,
+                                            players: dedupeBoardNames([...(team.players || []), value]),
+                                        };
+                                    })}
+                                    onPlayerMove={(fromTeamIndex, fromPlayerIndex, toTeamIndex, toPlayerIndex) => mutateAssignmentBoardTeams((draft) => {
+                                        const moveResult = tryMoveOpponentPlayerBetweenTeams(draft, {
+                                            fromTeamIndex,
+                                            fromPlayerIndex,
+                                            toTeamIndex,
+                                            toPlayerIndex,
+                                            preventDuplicateNames: true,
+                                            normalizeName: (value) => normalizeOcrName(String(value || '')).toLowerCase(),
+                                        });
+                                        if (moveResult.reason === 'duplicate') {
+                                            const movedName = moveResult.movedPlayer || 'Player';
+                                            const targetTeamName = draft[toTeamIndex]?.teamName || `Team ${toTeamIndex + 1}`;
+                                            setToast({ message: `${movedName} already exists in ${targetTeamName}.`, type: 'warning' });
+                                            return draft;
+                                        }
+                                        return moveResult.teams as OcrTeamAssignmentTeam[];
+                                    })}
+                                    onAddToRoster={onAddPilotToRoster}
+                                />
                                 {match.eliminatedByTeam && (
                                     <button
                                         onClick={() => onUpdate({ ...match, eliminatedByTeam: undefined })}

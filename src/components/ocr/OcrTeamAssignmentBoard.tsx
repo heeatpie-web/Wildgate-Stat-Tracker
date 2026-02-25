@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { GripVertical, Plus, Shield, Trash2, X } from 'lucide-react';
+import { GripVertical, Plus, Shield, Trash2, UserPlus, Wand2, X } from 'lucide-react';
 
 export interface OcrTeamAssignmentTeam {
     key: string;
@@ -26,6 +26,7 @@ interface OcrTeamAssignmentBoardProps {
     allowTeamAddRemove?: boolean;
     fuzzyMatches?: Record<string, string>;
     pilotRegistry?: string[];
+    ocrDetectedTeamIndices?: Set<number>;
     onTeamNameChange?: (teamIndex: number, value: string) => void;
     onTeamColorChange?: (teamIndex: number, value: string) => void;
     onTeamShipChange: (teamIndex: number, value: string) => void;
@@ -40,11 +41,13 @@ interface OcrTeamAssignmentBoardProps {
         toTeamIndex: number,
         toPlayerIndex?: number | null
     ) => void;
+    onAddToRoster?: (name: string) => void;
 }
 
-const TEAM_COLOR_OPTIONS = ['red', 'orange', 'yellow', 'green', 'blue', 'cyan', 'purple', 'unknown'] as const;
+const TEAM_COLOR_OPTIONS = ['red', 'orange', 'yellow', 'green', 'blue', 'cyan', 'purple', 'friendly', 'unknown'] as const;
+const TEAM_COLOR_CYCLE = ['red', 'orange', 'yellow', 'green', 'blue', 'cyan', 'purple', 'unknown'] as const;
 const DRAG_DATA_KEY = 'application/x-wildgate-player-drag';
-const TEAM_COLOR_OPTION_LIST = [...TEAM_COLOR_OPTIONS];
+const TEAM_COLOR_OPTION_LIST = [...TEAM_COLOR_CYCLE];
 
 const normalizeColorToken = (value: string): string => {
     const normalized = String(value || '').trim().toLowerCase();
@@ -86,6 +89,7 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
     allowTeamAddRemove = false,
     fuzzyMatches = {},
     pilotRegistry = [],
+    ocrDetectedTeamIndices,
     onTeamNameChange,
     onTeamColorChange,
     onTeamShipChange,
@@ -95,6 +99,7 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
     onPlayerRemove,
     onPlayerAdd,
     onPlayerMove,
+    onAddToRoster,
 }) => {
     const [draggedPlayer, setDraggedPlayer] = useState<DraggedPlayerPayload | null>(null);
     const [dragHoverTeamIndex, setDragHoverTeamIndex] = useState<number | null>(null);
@@ -195,12 +200,13 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                 {teams.map((team, teamIndex) => {
                     const normalizedColor = normalizeColorToken(team.color);
                     const friendlyTeam = teamIndex === friendlyTeamIndex;
-                    const displayColor = friendlyTeam ? 'blue' : normalizedColor;
+                    const displayColor = friendlyTeam ? 'friendly' : normalizedColor;
+                    const isOcrDetected = !friendlyTeam && ocrDetectedTeamIndices?.has(teamIndex);
                     return (
                         <div
                             key={`${team.key}-${teamIndex}`}
                             data-testid={`ocr-team-card-${teamIndex}`}
-                            className={`ocr-assignment-team-card md3-surface-high ${dragHoverTeamIndex === teamIndex ? 'ocr-assignment-team-card--hover' : ''
+                            className={`ocr-assignment-team-card md3-surface-high ocr-assignment-team-card--color-${displayColor} ${dragHoverTeamIndex === teamIndex ? 'ocr-assignment-team-card--hover' : ''
                                 }`}
                             onDragOver={(event) => allowDrop(event, teamIndex)}
                             onDragLeave={() => setDragHoverTeamIndex(null)}
@@ -240,6 +246,11 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                         <span className="ocr-teammate-chip ocr-teammate-chip--compact">
                                             <Shield size={10} />
                                             Friendly
+                                        </span>
+                                    )}
+                                    {isOcrDetected && (
+                                        <span className="ocr-assignment-scan-badge" title="Name auto-detected by OCR scan">
+                                            <Wand2 size={9} />
                                         </span>
                                     )}
                                 </div>
@@ -305,8 +316,7 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                                         draggedPlayerRef.current = null;
                                                         setDragHoverTeamIndex(null);
                                                     }}
-                                                    className="md3-icon-btn h-6 w-6 text-md-sys-on-surface/60 cursor-grab active:cursor-grabbing shrink-0"
-                                                    title="Drag to move player"
+                                                    className="md3-icon-btn h-6 w-6 text-md-sys-on-surface/40 cursor-grab active:cursor-grabbing shrink-0"
                                                     aria-label={`Drag ${displayName || `player ${playerIndex + 1}`} in ${team.teamName || `team ${teamIndex + 1}`}`}
                                                 >
                                                     <GripVertical size={12} />
@@ -337,6 +347,17 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                                         onClick={() => onPlayerChange(teamIndex, playerIndex, fuzzyMatch)}
                                                     >
                                                         ~ {fuzzyMatch}
+                                                    </button>
+                                                )}
+                                                {!isRosterMatch && !showFuzzyBadge && onAddToRoster && displayName.trim().length >= 2 && (
+                                                    <button
+                                                        type="button"
+                                                        className="md3-icon-btn text-success shrink-0"
+                                                        title={`Add "${displayName}" to roster`}
+                                                        aria-label={`Add ${displayName} to roster`}
+                                                        onClick={() => onAddToRoster(displayName.trim())}
+                                                    >
+                                                        <UserPlus size={12} />
                                                     </button>
                                                 )}
                                                 <button

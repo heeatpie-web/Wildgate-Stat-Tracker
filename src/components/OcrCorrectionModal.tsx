@@ -1213,6 +1213,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                     onPlayerRemove={removeTeamPlayer}
                                     onPlayerAdd={addTeamPlayer}
                                     onPlayerMove={moveTeamPlayer}
+                                    onAddToRoster={(name) => addToRegistry(name)}
                                     dataTestId="ocr-team-assignment-board"
                                 />
                             </section>

@@ -36,48 +36,57 @@ export const Section: React.FC<{
     </div>
 );
 
-export const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: string }> = ({ icon, label, value }) => (
-    <div className="md3-surface rounded-xl sc-bordered p-4 flex flex-col items-center justify-center gap-1 sc-editor-stat-card min-h-[88px]">
-        <span className="text-md-sys-on-surface/50">{icon}</span>
-        <span className="text-label-xs font-bold text-md-sys-on-surface/50 uppercase tracking-wider">{label}</span>
-        <span className="text-title-lg font-black text-md-sys-on-surface">{value}</span>
+export const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: string; accent?: 'primary' | 'danger' | 'success' | 'warning' }> = ({ icon, label, value, accent = 'primary' }) => (
+    <div className={`sc-stat-card sc-stat-card--${accent}`}>
+        <div className="sc-stat-card__icon">
+            {icon}
+        </div>
+        <div className="sc-stat-card__body">
+            <span className="sc-stat-card__label">{label}</span>
+            <span className="sc-stat-card__value">{value}</span>
+        </div>
     </div>
 );
 
 export const EditableStatCard: React.FC<{
     icon: React.ReactNode; label: string; value: string;
     onSave?: (v: string) => void; placeholder?: string; type?: string; readOnly?: boolean;
-}> = ({ icon, label, value, onSave, placeholder, type, readOnly }) => {
+    accent?: 'primary' | 'danger' | 'success' | 'warning';
+}> = ({ icon, label, value, onSave, placeholder, type, readOnly, accent = 'primary' }) => {
     const [editing, setEditing] = React.useState(false);
     const [draft, setDraft] = React.useState(value);
     React.useEffect(() => { setDraft(value); }, [value]);
 
     if (readOnly || !onSave) {
-        return <StatCard icon={icon} label={label} value={value} />;
+        return <StatCard icon={icon} label={label} value={value} accent={accent} />;
     }
 
     return (
         <div
-            className="md3-surface rounded-xl sc-bordered p-4 flex flex-col items-center justify-center gap-1 cursor-pointer hover:ring-1 ring-md-sys-primary/20 transition-all sc-editor-stat-card min-h-[88px]"
+            className={`sc-stat-card sc-stat-card--${accent} sc-stat-card--editable`}
             onClick={() => { if (!editing) { setEditing(true); setDraft(value === '--' ? '' : value); } }}
         >
-            <span className="text-md-sys-on-surface/50">{icon}</span>
-            <span className="text-label-xs font-bold text-md-sys-on-surface/50 uppercase tracking-wider">{label}</span>
-            {editing ? (
-                <input
-                    type={type || 'text'}
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onBlur={() => { onSave(draft); setEditing(false); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { onSave(draft); setEditing(false); } if (e.key === 'Escape') setEditing(false); }}
-                    className="text-title-lg font-black md3-surface rounded px-2 w-24 text-center outline-none"
-                    placeholder={placeholder}
-                    min={type === 'number' ? 0 : undefined}
-                    autoFocus
-                />
-            ) : (
-                <span className="text-title-lg font-black text-md-sys-on-surface">{value}</span>
-            )}
+            <div className="sc-stat-card__icon">
+                {icon}
+            </div>
+            <div className="sc-stat-card__body">
+                <span className="sc-stat-card__label">{label}</span>
+                {editing ? (
+                    <input
+                        type={type || 'text'}
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        onBlur={() => { onSave(draft); setEditing(false); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { onSave(draft); setEditing(false); } if (e.key === 'Escape') setEditing(false); }}
+                        className="sc-stat-card__input"
+                        placeholder={placeholder}
+                        min={type === 'number' ? 0 : undefined}
+                        autoFocus
+                    />
+                ) : (
+                    <span className="sc-stat-card__value">{value}</span>
+                )}
+            </div>
         </div>
     );
 };
