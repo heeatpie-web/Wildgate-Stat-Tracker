@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Users, Star, Filter, Search, Edit2, Plus, X, Trash2, Check, Undo2 } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
+import { useAppStore } from '../../store/useAppStore';
 import { getShipColor } from '../../types';
 import { normalizeOcrName, similarityScore } from '../../utils/stringUtils';
 
@@ -22,6 +23,9 @@ export const RosterPanel: React.FC = () => {
         removeFromRegistry: onDeletePilot,
         renamePilot: onRenamePilot,
         mergePilots: onMergePilots,
+        pilotAliases,
+        addPilotAlias: onAddPilotAlias,
+        removePilotAlias: onRemovePilotAlias,
         undoLastMerge,
         mergeHistory,
         setDrillDownTarget,
@@ -44,6 +48,9 @@ export const RosterPanel: React.FC = () => {
     const [mergeTarget, setMergeTarget] = useState("");
     const [mergeSearch, setMergeSearch] = useState("");
     const [mergeKeepName, setMergeKeepName] = useState<string | null>(null);
+    const [newAlias, setNewAlias] = useState("");
+    const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
+    const removeOcrAliasCorrection = useAppStore(s => s.removeOcrAliasCorrection);
     const displayName = (name: string) => {
         const normalized = String(name || '').trim().toLowerCase();
         const me = String(activeUser || '').trim().toLowerCase();
@@ -84,6 +91,7 @@ export const RosterPanel: React.FC = () => {
         setMergeTarget("");
         setMergeSearch("");
         setMergeKeepName(null);
+        setNewAlias("");
     };
 
     const saveEdit = () => {
@@ -451,6 +459,57 @@ export const RosterPanel: React.FC = () => {
                                         className="w-full md3-textfield--outlined text-body outline-none min-h-80px resize-none"
                                         placeholder="Add notes..."
                                     />
+                                </div>
+                                <div>
+                                    <label className="text-label-sm font-semibold text-md-sys-on-surface/60 uppercase block mb-1">OCR Aliases</label>
+                                    <div className="flex flex-wrap gap-1 mb-2">
+                                        {(pilotAliases[editingPilot] || []).map(alias => (
+                                            <span key={alias} className="flex items-center gap-1 px-2 py-0.5 rounded-control bg-md-sys-primary/10 text-md-sys-primary text-label-xs font-semibold">
+                                                {alias}
+                                                <button
+                                                    onClick={() => {
+                                                        onRemovePilotAlias(editingPilot, alias);
+                                                        removeOcrAliasCorrection(alias, editingPilot);
+                                                    }}
+                                                    className="hover:text-danger"
+                                                    aria-label={`Remove alias ${alias}`}
+                                                >
+                                                    <X size={10} />
+                                                </button>
+                                            </span>
+                                        ))}
+                                        {(pilotAliases[editingPilot] || []).length === 0 && (
+                                            <span className="text-label-xs text-md-sys-on-surface/40">No aliases set</span>
+                                        )}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={newAlias}
+                                            onChange={e => setNewAlias(e.target.value)}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter' && newAlias.trim()) {
+                                                    onAddPilotAlias(editingPilot, newAlias.trim());
+                                                    recordOcrAliasCorrection(newAlias.trim(), editingPilot, { source: 'manual_correction', context: 'unknown', confidenceWeight: 1 });
+                                                    setNewAlias("");
+                                                }
+                                            }}
+                                            placeholder="Add OCR alias..."
+                                            className="flex-1 h-8 md3-textfield--outlined text-label-sm outline-none px-2"
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                if (newAlias.trim()) {
+                                                    onAddPilotAlias(editingPilot, newAlias.trim());
+                                                    recordOcrAliasCorrection(newAlias.trim(), editingPilot, { source: 'manual_correction', context: 'unknown', confidenceWeight: 1 });
+                                                    setNewAlias("");
+                                                }
+                                            }}
+                                            className="h-8 px-2 md3-btn-tonal rounded-control text-label-sm font-bold flex items-center gap-1"
+                                        >
+                                            <Plus size={12} /> Add
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="flex gap-2">
                                     <button

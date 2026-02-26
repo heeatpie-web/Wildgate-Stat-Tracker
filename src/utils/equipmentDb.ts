@@ -43,6 +43,7 @@ export const EQUIPMENT_DB: EquipmentItem[] = [
     { id: 'ce4', name: 'Sensor Trap', type: 'CharacterEquipment', compatibleChars: ['All'], defaultAmmo: 2, description: "Trap | Dmg: 30 | Reveal: 4s" },
     { id: 'ce5', name: 'Foam Can', type: 'CharacterEquipment', compatibleChars: ['All'], defaultAmmo: 3, description: "Throw | Extinguishes Fire | Slows" },
     { id: 'ce6', name: 'Repair Drone', type: 'CharacterEquipment', compatibleChars: ['All'], defaultAmmo: 2, description: "Drone | Heals Ship | 30s" },
+    { id: 'ce6b', name: 'Healing Drone', type: 'CharacterEquipment', compatibleChars: ['All'], defaultAmmo: 2 },
     { id: 'ce7', name: 'Attack Drone', type: 'CharacterEquipment', compatibleChars: ['All'], defaultAmmo: 2, description: "Drone | Damages Enemies | 30s" },
     { id: 'ce8', name: 'Impact Can', type: 'CharacterEquipment', compatibleChars: ['All'], defaultAmmo: 3, description: "Throw | Explodes on Impact | Dmg: 60" },
     { id: 'ce9', name: 'Flash Shield', type: 'CharacterEquipment', compatibleChars: ['All'], defaultAmmo: 1, description: "Active | Invulnerable 0.7s" },

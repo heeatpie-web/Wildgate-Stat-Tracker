@@ -34,6 +34,9 @@ interface GameDataContextType {
     pilotNotes: Record<string, string>;
     setPilotNotes: (notes: Record<string, string>) => void;
     updatePilotNote: (pilot: string, note: string) => void;
+    pilotAliases: Record<string, string[]>;
+    addPilotAlias: (pilotName: string, alias: string) => void;
+    removePilotAlias: (pilotName: string, alias: string) => void;
     playerIdMap: Record<string, string>;
     setPlayerIdMap: (map: Record<string, string>) => void;
     updatePlayerIdMapping: (id: string, name: string) => void;
@@ -160,6 +163,7 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         addToRegistry: s.addToRegistry, removeFromRegistry: s.removeFromRegistry,
         favorites: s.favorites, setFavorites: s.setFavorites, toggleFavorite: s.toggleFavorite,
         pilotNotes: s.pilotNotes, setPilotNotes: s.setPilotNotes, updatePilotNote: s.updatePilotNote,
+        pilotAliases: s.pilotAliases, addPilotAlias: s.addPilotAlias, removePilotAlias: s.removePilotAlias,
         playerIdMap: s.playerIdMap, setPlayerIdMap: s.setPlayerIdMap,
         updatePlayerIdMapping: s.updatePlayerIdMapping,
         mergePilots: s.mergePilots, undoLastMerge: s.undoLastMerge, mergeHistory: s.mergeHistory,
