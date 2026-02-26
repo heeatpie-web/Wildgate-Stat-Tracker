@@ -39,6 +39,7 @@ export interface StorageData {
   pilotRegistry: string[];
   favorites: string[];
   pilotNotes: Record<string, string>;
+  pilotAliases?: Record<string, string[]>;
   playerIdMap?: StringMap;
   ocrCorrections?: Record<string, OcrCorrection>;
   teamIdentityCorrections?: Record<string, TeamIdentityCorrection>;

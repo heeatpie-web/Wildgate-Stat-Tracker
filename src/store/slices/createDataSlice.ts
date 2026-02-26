@@ -234,6 +234,10 @@ export interface DataSlice {
   setPilotNotes: (notes: Record<string, string>) => void;
   updatePilotNote: (name: string, note: string) => void;
 
+  pilotAliases: Record<string, string[]>;
+  addPilotAlias: (pilotName: string, alias: string) => void;
+  removePilotAlias: (pilotName: string, alias: string) => void;
+
   setPlayerIdMap: (map: Record<string, string>) => void;
   updatePlayerIdMapping: (id: string, name: string) => void;
   mergePilots: (sourceName: string, targetName: string) => void;
@@ -258,6 +262,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
   pilotRegistry: [],
   favorites: [],
   pilotNotes: {},
+  pilotAliases: {},
   playerIdMap: {},
   lastActivity: Date.now(),
   pendingKilledBy: "",
@@ -445,11 +450,18 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
       opponents: (m.opponents || []).map(o => o === oldName ? newName : o)
     }));
 
+    const newAliases = { ...state.pilotAliases };
+    if (newAliases[oldName]) {
+      newAliases[newName] = newAliases[oldName];
+      delete newAliases[oldName];
+    }
+
     return {
       pilotRegistry: newRegistry,
       players: newPlayers,
       favorites: newFavorites,
       pilotNotes: newNotes,
+      pilotAliases: newAliases,
       matches: newMatches,
       lastActivity: Date.now()
     };
@@ -491,13 +503,20 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     const newRegistry = state.pilotRegistry.filter(p => !isSource(p));
     if (!newRegistry.includes(targetName)) newRegistry.push(targetName);
 
-    // 3. Update Favorites & Notes
+    // 3. Update Favorites, Notes & Aliases
     const newFavorites = state.favorites.filter(f => !isSource(f));
     const newNotes = { ...state.pilotNotes };
     if (newNotes[sourceName]) {
       newNotes[targetName] = (newNotes[targetName] ? newNotes[targetName] + "\n" : "") + newNotes[sourceName];
       delete newNotes[sourceName];
     }
+    const newAliases = { ...state.pilotAliases };
+    const srcAliases = newAliases[sourceName] || [];
+    if (srcAliases.length > 0) {
+      const tgtAliases = newAliases[targetName] || [];
+      newAliases[targetName] = Array.from(new Set([...tgtAliases, ...srcAliases]));
+    }
+    delete newAliases[sourceName];
 
     // 4. Update ID Map (case-insensitive)
     const newIdMap = { ...state.playerIdMap };
@@ -537,14 +556,14 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
         delete newProfiles[sourceName];
         return {
           matches: newMatches, pilotRegistry: newRegistry, favorites: newFavorites,
-          pilotNotes: newNotes, playerIdMap: newIdMap, playerProfiles: newProfiles, mergeHistory, lastActivity: Date.now()
+          pilotNotes: newNotes, pilotAliases: newAliases, playerIdMap: newIdMap, playerProfiles: newProfiles, mergeHistory, lastActivity: Date.now()
         };
       } else if (srcProfile) {
         const newProfiles = { ...profiles, [targetName]: { ...srcProfile, id: targetName, name: targetName } };
         delete newProfiles[sourceName];
         return {
           matches: newMatches, pilotRegistry: newRegistry, favorites: newFavorites,
-          pilotNotes: newNotes, playerIdMap: newIdMap, playerProfiles: newProfiles, mergeHistory, lastActivity: Date.now()
+          pilotNotes: newNotes, pilotAliases: newAliases, playerIdMap: newIdMap, playerProfiles: newProfiles, mergeHistory, lastActivity: Date.now()
         };
       }
     }
@@ -555,7 +574,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
 
     return {
       matches: newMatches, pilotRegistry: newRegistry, favorites: newFavorites,
-      pilotNotes: newNotes, playerIdMap: newIdMap, pendingReviews: newPending, mergeHistory, lastActivity: Date.now()
+      pilotNotes: newNotes, pilotAliases: newAliases, playerIdMap: newIdMap, pendingReviews: newPending, mergeHistory, lastActivity: Date.now()
     };
   }),
 
@@ -586,6 +605,22 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
 
   setPilotNotes: (pilotNotes) => set({ pilotNotes }),
   updatePilotNote: (name, note) => set((state) => ({ pilotNotes: { ...state.pilotNotes, [name]: note } })),
+  addPilotAlias: (pilotName, alias) => set((state) => {
+    const trimmed = alias.trim();
+    if (!trimmed) return {};
+    const existing = state.pilotAliases[pilotName] || [];
+    if (existing.includes(trimmed)) return {};
+    return { pilotAliases: { ...state.pilotAliases, [pilotName]: [...existing, trimmed] } };
+  }),
+  removePilotAlias: (pilotName, alias) => set((state) => {
+    const existing = state.pilotAliases[pilotName] || [];
+    const next = existing.filter(a => a !== alias);
+    if (next.length === 0) {
+      const { [pilotName]: _, ...rest } = state.pilotAliases;
+      return { pilotAliases: rest };
+    }
+    return { pilotAliases: { ...state.pilotAliases, [pilotName]: next } };
+  }),
 
   setPlayerIdMap: (playerIdMap) => set({ playerIdMap }),
   updatePlayerIdMapping: (id, name) => set((state) => ({ playerIdMap: { ...state.playerIdMap, [id]: name } })),
