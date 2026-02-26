@@ -2126,15 +2126,15 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           const stripX1  = Math.round(origW * stripXFrac1);
           const stripX2  = Math.round(origW * stripXFrac2);
           const stripW   = stripX2 - stripX1;
-          const stripY   = 160;
-          const stripH   = Math.max(0, origH - stripY - 20);  // y=160 to near-bottom
+          const stripY   = 80;
+          const stripH   = Math.max(0, origH - stripY - 20);  // y=80 to near-bottom
           const STRIP_SCALE = 3;
 
           const stripBuf = await sharp(imageBuffer)
             .extract({ left: stripX1, top: stripY, width: stripW, height: stripH })
             .resize(stripW * STRIP_SCALE, stripH * STRIP_SCALE, { kernel: sharp.kernel.nearest })
-            .modulate({ brightness: 1.2 })
-            .linear(1.4, -(0.4 * 128))
+            .modulate({ brightness: 1.0 })
+            .linear(1.3, -(0.3 * 128))
             .sharpen({ sigma: 2, m1: 1, m2: 0.5 })
             .png().toBuffer();
           const stripResult = await runOCREngOnly(stripBuf, 11);
@@ -2297,15 +2297,15 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           const lStripX1  = Math.round(origW * lStripXFrac1);
           const lStripX2  = Math.round(origW * lStripXFrac2);
           const lStripW   = lStripX2 - lStripX1;
-          const lStripY   = 160;
+          const lStripY   = 80;
           const lStripH   = Math.max(0, origH - lStripY - 20);
           const L_STRIP_SCALE = 3;
 
           const lStripBuf = await sharp(imageBuffer)
             .extract({ left: lStripX1, top: lStripY, width: lStripW, height: lStripH })
             .resize(lStripW * L_STRIP_SCALE, lStripH * L_STRIP_SCALE, { kernel: sharp.kernel.nearest })
-            .modulate({ brightness: 1.2 })
-            .linear(1.4, -(0.4 * 128))
+            .modulate({ brightness: 1.0 })
+            .linear(1.3, -(0.3 * 128))
             .sharpen({ sigma: 2, m1: 1, m2: 0.5 })
             .png().toBuffer();
           const lStripResult = await runOCREngOnly(lStripBuf, 11);

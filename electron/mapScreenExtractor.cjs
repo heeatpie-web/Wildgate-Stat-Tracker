@@ -303,6 +303,7 @@ async function extractYourShip(imageBuffer, words, lines, text, imageWidth, imag
   // Group into lines
   const groupedLines = groupWordsIntoLines(regionWords, imageHeight);
 
+
   const teamNameParts = [];
   let shipType = '';
 
