@@ -1443,22 +1443,39 @@ ipcMain.handle('rerun-ocr-multi', async (event, { imagePaths, activeUser, ocrMod
       }
     }
     const successCount = perFile.filter(f => f.success).length;
+    const _mDlogPath = require('path').join(require('os').tmpdir(), 'wildgate-ocr.log');
+    const _mDlog = msg => { try { fs.appendFileSync(_mDlogPath, new Date().toISOString() + ' [multi] ' + msg + '\n'); } catch(_e) {} };
     if (successCount === 0) {
+      _mDlog('FAIL: all ' + perFile.length + ' images failed OCR');
       return errorResult(IpcErrorCode.INTERNAL_ERROR, 'All images failed OCR processing');
     }
+    _mDlog('perFile: ' + perFile.map(f => f.imagePath.split(/[\\/]/).pop() + '=' + (f.success ? (f.data?.screenshotType || 'noType') : 'FAIL')).join(', '));
     // Phase 2: merge successful results sequentially so ocrMerger combines
     // tactical-map data (ship types, hazards) with crew-hub data (player names).
     let accumulatedData = null;
     for (const entry of perFile) {
       if (!entry.success || !entry.data) continue;
-      if (!accumulatedData) { accumulatedData = entry.data; continue; }
-      if (isSameMatch(accumulatedData, entry.data)) {
+      if (!accumulatedData) {
+        _mDlog('seed: type=' + (entry.data.screenshotType || '?') + ' oppTeams=' + (entry.data.opponentTeams?.length || 0) + ' file=' + entry.imagePath.split(/[\\/]/).pop());
+        accumulatedData = entry.data;
+        continue;
+      }
+      const _sameMatch = isSameMatch(accumulatedData, entry.data);
+      _mDlog('isSameMatch(acc.type=' + (accumulatedData.screenshotType || '?') + ' vs ' + (entry.data.screenshotType || '?') + ')=' + _sameMatch + ' file=' + entry.imagePath.split(/[\\/]/).pop());
+      if (_sameMatch) {
         accumulatedData = mergeCaptures(accumulatedData, entry.data);
+        const _oppC = accumulatedData.opponentTeams?.length || 0;
+        const _plC = (accumulatedData.opponentTeams || []).reduce((s, t) => s + (t.players?.length || 0), 0);
+        _mDlog('merged: type=' + (accumulatedData.screenshotType || '?') + ' oppTeams=' + _oppC + ' totalPlayers=' + _plC);
       } else {
         // Different match — just overwrite (shouldn't happen for a single match's artifacts)
+        _mDlog('MISMATCH overwrite with type=' + (entry.data.screenshotType || '?') + ' file=' + entry.imagePath.split(/[\\/]/).pop());
         accumulatedData = entry.data;
       }
     }
+    const _finOppC = accumulatedData?.opponentTeams?.length || 0;
+    const _finPlC = (accumulatedData?.opponentTeams || []).reduce((s, t) => s + (t.players?.length || 0), 0);
+    _mDlog('FINAL: type=' + (accumulatedData?.screenshotType || '?') + ' oppTeams=' + _finOppC + ' totalPlayers=' + _finPlC);
     return { success: true, data: accumulatedData, perFile };
   } catch (e) {
     console.error('[rerun-ocr-multi] Error:', e.message);

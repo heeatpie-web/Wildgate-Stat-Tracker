@@ -833,6 +833,11 @@ function isSameMatch(data1, data2) {
   // overlap (e.g. one team name was read differently in each screenshot).
   if (yourTeamShared >= 1 && enemyTeamShared >= 1) return true;
 
+  // Fallback for cross-type (tac-map vs crew-hub) when the crew-hub OCR didn't capture
+  // the player's own team name banner: matching 2+ enemy team names is strong enough
+  // evidence that both captures are from the same match.
+  if (enemyTeamShared >= 2) return true;
+
   // Fallback: plain ratio check (>50% of ALL parts in common)
   return totalShared / Math.max(parts1.length, parts2.size) > 0.5;
 }

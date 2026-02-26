@@ -2090,9 +2090,12 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       const nameBandXMin = (ocrRegions.crewHub?.enemyName?.xMin || 0.62) * processed.width;
       const nameBandXMax = (ocrRegions.crewHub?.enemyName?.xMax || 0.93) * processed.width;
       const engOnlyWords = engOnlyFullResult?.allWords || [];
+      // runOCR() and mergeOCRResults() return { words } not { allWords };
+      // only runOCREngOnly() returns allWords. Fall back to .words to avoid crash.
+      const baseAllWords = ocrResult.allWords || ocrResult.words || [];
       let allWordsWithEngOnly = engOnlyWords.length > 0
         ? [
-            ...ocrResult.allWords.filter(lw => {
+            ...baseAllWords.filter(lw => {
               const lxm = (lw.bbox.x0 + lw.bbox.x1) / 2;
               return lxm < nameBandXMin || lxm > nameBandXMax;
             }),
@@ -2104,7 +2107,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
               return exm >= nameBandXMin && exm <= nameBandXMax && ew.confidence > 0;
             }),
           ]
-        : ocrResult.allWords;
+        : baseAllWords;
 
       // SUPPLEMENTARY: Narrow-strip PSM 11 pass for enemy names that are missed by
       // the full-image eng-only pass (PSM 4).

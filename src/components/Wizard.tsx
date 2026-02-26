@@ -21,7 +21,7 @@ import { OcrCorrectionModal } from './OcrCorrectionModal';
 import { useAppStore } from '../store/useAppStore';
 import { getElectronAPI } from '../utils/electronAPI';
 import type { OCRProcessRuntimeOptions } from '../utils/electronBridge';
-import { rerunMatchArtifacts } from '../utils/ocr/rerunMatchArtifacts';
+import { rerunOCRMulti } from '../utils/artifactService';
 import {
     getEliminatorDisplayLabel,
     getPrimaryEliminatedByTeamValue,
@@ -481,7 +481,7 @@ export const Wizard: React.FC = () => {
             externalFallbackThreshold,
             externalOnDetectorDisagreement,
             forceMaxAnalysis,
-            forceUncached: forceMaxAnalysis,
+            forceUncached: true,
         };
 
         setIsRerunningOcr(true);
@@ -494,14 +494,21 @@ export const Wizard: React.FC = () => {
         });
 
         try {
-            const rerun = await rerunMatchArtifacts({
+            // Use server-side multi-image merge (rerunOCRMulti) so that
+            // ocrMerger.mergeCaptures properly cross-enriches crew-hub
+            // player data with tactical-map team/ship data.
+            const rerun = await rerunOCRMulti(
                 imagePaths,
-                activeUser: activeUser || '',
+                activeUser || '',
                 ocrMode,
                 ocrRegions,
                 runtimeOptions,
-            });
-            if (!rerun.mergedData || rerun.successfulCount === 0) {
+            );
+            const perFileResults = rerun.perFile || [];
+            const successfulCount = perFileResults.filter(f => f.success).length;
+            const failedCount = perFileResults.length - successfulCount;
+            const mergedData = rerun.data;
+            if (!mergedData || successfulCount === 0) {
                 pushNotification({
                     message: 'OCR rerun failed for all artifacts.',
                     type: 'error',
@@ -517,16 +524,18 @@ export const Wizard: React.FC = () => {
                     .map((entry) => String(entry || '').trim())
                     .filter(Boolean)
             ));
-            const nextTeammates = dedupeNames((rerun.mergedData.teammates || []).map((entry) => entry.name));
-            const nextOpponentTeams = (rerun.mergedData.opponentTeams || []).map((team, index) => ({
+            const safePlayerName = (entry: unknown): string =>
+                typeof entry === 'string' ? entry : (entry as { name?: string })?.name || '';
+            const nextTeammates = dedupeNames((mergedData.teammates || []).map(safePlayerName));
+            const nextOpponentTeams = (mergedData.opponentTeams || []).map((team: any, index: number) => ({
                 teamName: String(team.teamName || `Enemy Team ${index + 1}`).trim() || `Enemy Team ${index + 1}`,
                 shipType: String(team.shipType || '').trim(),
                 color: String(team.color || 'unknown').trim() || 'unknown',
-                players: dedupeNames((team.players || []).map((entry) => entry.name)),
-            })).filter((team) => team.players.length > 0 || team.shipType || team.teamName);
-            const nextOpponents = dedupeNames(nextOpponentTeams.flatMap((team) => team.players));
-            const nextModifiers = dedupeNames((rerun.mergedData.reachModifiers || []).map((entry) => String(entry.name || '').trim()));
-            const rerunShip = String(rerun.mergedData.playerShip?.shipType || '').trim();
+                players: dedupeNames((team.players || []).map(safePlayerName)),
+            })).filter((team: { players: string[]; shipType: string; teamName: string }) => team.players.length > 0 || team.shipType || team.teamName);
+            const nextOpponents = dedupeNames(nextOpponentTeams.flatMap((team: { players: string[] }) => team.players));
+            const nextModifiers = dedupeNames((mergedData.reachModifiers || []).map((entry: any) => String(entry?.name || entry || '').trim()));
+            const rerunShip = String(mergedData.playerShip?.shipType || '').trim();
 
             useAppStore.getState().setPendingMatchData({
                 ...pendingMatchData,
@@ -538,23 +547,24 @@ export const Wizard: React.FC = () => {
                 ocrState: 'reviewing',
                 ocrDebug: {
                     ...(pendingMatchData.ocrDebug || {}),
-                    rawText: rerun.mergedData.rawText,
-                    confidence: rerun.mergedData.overallConfidence,
-                    source: rerun.mergedData.ocrSource || pendingMatchData.ocrDebug?.source,
-                    fallbackReason: rerun.mergedData.ocrFallbackReason,
-                    cloudError: rerun.mergedData.ocrCloudError,
-                    geminiError: rerun.mergedData.ocrGeminiError,
-                    mergeStats: rerun.mergedData.mergeStats,
+                    rawText: mergedData.rawText,
+                    confidence: mergedData.overallConfidence,
+                    source: mergedData.ocrSource || pendingMatchData.ocrDebug?.source,
+                    fallbackReason: mergedData.ocrFallbackReason,
+                    cloudError: mergedData.ocrCloudError,
+                    geminiError: mergedData.ocrGeminiError,
+                    mergeStats: mergedData.mergeStats,
                     timestamp: Date.now(),
                 },
             });
 
-            const rerunSummary = rerun.failedCount > 0
-                ? `OCR rerun complete: ${rerun.successfulCount}/${rerun.total} succeeded.`
-                : `OCR rerun complete: ${rerun.successfulCount}/${rerun.total} succeeded.`;
+            const total = perFileResults.length;
+            const rerunSummary = failedCount > 0
+                ? `OCR rerun complete: ${successfulCount}/${total} succeeded.`
+                : `OCR rerun complete: ${successfulCount}/${total} succeeded.`;
             pushNotification({
                 message: rerunSummary,
-                type: rerun.failedCount > 0 ? 'warning' : 'success',
+                type: failedCount > 0 ? 'warning' : 'success',
                 source: 'wizard',
                 durationMs: 10_000,
                 deepLink: { type: 'openWizard', result: selectedResult || undefined },

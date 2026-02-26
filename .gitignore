@@ -62,6 +62,20 @@ dataset/
 .codex-temp/
 .codemachine/
 .windsurf/
+AGENTS.md
+GUIDE.md
+PLAN.md
+TODO.md
+UI_MASTERPLAN_V3.md
+auto_coder.py
+
+# Root-level stale copies / dev-only scripts
+/ocrHandler.cjs
+/crewHubExtractor.cjs
+/decode_script.cjs
+/machine
+/start.bat
+/start.sh
 
 # Test coverage
 coverage/
