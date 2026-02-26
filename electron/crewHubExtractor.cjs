@@ -119,6 +119,7 @@ const NOISE_WORDS = new Set([
   'SWITCH', 'DISABLE', 'ENABLE', 'YOUR', 'TEAM', 'CHANGE', 'MAP', 'SEED',
   'ENEMY', 'CREWS', 'CHANNEL', 'INTO', 'SAME', 'WITH', 'THE', 'HOP',
   'ON', 'OFF', 'TO', 'DEAFEN', 'UNMUTE', 'SAY', 'TEXT', 'PINGS',
+  'OF', 'IN', 'AT', 'IS', 'BY', 'OR', 'AN',
   // Crew-hub section headers / UI labels — never player or team names
   'KNOWN', 'HAZARDS', 'HAZARD', 'WILDGATE', 'HEALTH', 'FASTER', 'SHIELDS',
   'DOWN', 'ARTIFACT', 'ASTEROIDS', 'ALTITUDE', 'FOG', 'PATROLS', 'LEGION',
@@ -1225,6 +1226,11 @@ function scoreAsPlayerName(text) {
   // Penalize short all-caps (likely UI element) — extended to ≤7 chars to catch
   // 6-char noise fragments like "LUEVAY", "ANGUAR" etc. that aren't real names.
   if (text === text.toUpperCase() && text.length < 7 && !/[0-9]/.test(text)) score -= 20;
+
+  // Multi-word gamertags (e.g. "sticks and stones", "Lanky Bastard"):
+  // if every space-separated part is ≥3 chars the spaces are intentional, not OCR noise.
+  const spaceParts = text.split(/\s+/);
+  if (spaceParts.length >= 2 && spaceParts.every(p => p.length >= 3)) score += 15;
 
   return Math.max(0, Math.min(100, score));
 }
