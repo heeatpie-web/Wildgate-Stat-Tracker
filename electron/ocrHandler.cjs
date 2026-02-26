@@ -2126,8 +2126,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           const stripX1  = Math.round(origW * stripXFrac1);
           const stripX2  = Math.round(origW * stripXFrac2);
           const stripW   = stripX2 - stripX1;
-          const stripY   = 120;
-          const stripH   = Math.max(0, Math.round(origH * 0.83) - stripY);  // y=120 to ~83% height
+          const stripY   = 241;
+          const stripH   = Math.max(0, Math.round(origH * 0.83) - stripY);  // y=241 to ~83% height
           const STRIP_SCALE = 3;
 
           const stripBuf = await sharp(imageBuffer)
@@ -2218,9 +2218,9 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           const rX1    = Math.round(origW2 * 0.64);
           const rW     = Math.round(origW2 * 0.79) - rX1;
           const RSC    = 3;
-          const SLICE_H = 55;
+          const SLICE_H = 65;
           const STEP    = 48;
-          const rowSliceYStart = 120;
+          const rowSliceYStart = 241;
           const rowSliceYEnd   = Math.round(origH2 * 0.83);
           let rowWordCount = 0;
           for (let sy = rowSliceYStart; sy < rowSliceYEnd; sy += STEP) {
