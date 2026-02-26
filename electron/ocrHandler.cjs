@@ -2335,13 +2335,13 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         try {
           const origW = Math.round(processed.width / processed.scale);
           const origH = Math.round(processed.height / processed.scale);
-          const lStripXFrac1 = 0.11;  // player name cards start ~14% from left (extended to 11% to catch full name)
-          const lStripXFrac2 = 0.28;  // right edge of name column; UI controls (PARTY/TEAM VOICE) start at ~28%+
+          const lStripXFrac1 = 0.184; // measured: player name cards start at ~18.4%
+          const lStripXFrac2 = 0.29;  // measured: right edge of name column at ~29%
           const lStripX1  = Math.round(origW * lStripXFrac1);
           const lStripX2  = Math.round(origW * lStripXFrac2);
           const lStripW   = lStripX2 - lStripX1;
-          const lStripY   = 260; // skip team-name banner (ends ~y=248 = 23% of 1080p); player cards start ~y=350+
-          const lStripH   = Math.max(0, origH - lStripY - 20);
+          const lStripY   = Math.round(origH * 0.38); // measured: player cards start at ~38% height
+          const lStripH   = Math.max(0, Math.round(origH * 0.725) - lStripY); // measured: bottom at ~72.5%
           const L_STRIP_SCALE = 3;
 
           const lStripBuf = await sharp(imageBuffer)
