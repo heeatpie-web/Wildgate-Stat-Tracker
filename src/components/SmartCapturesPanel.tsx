@@ -915,11 +915,30 @@ const SmartCapturesPanel: React.FC = () => {
                     (combined.reachModifiers || []).map((modifier) => String(modifier?.name || '')).filter(Boolean)
                 );
 
+                // Manually-entered names take priority: start from existing list, add OCR
+                // findings only when not already present (same as single-match rerun path).
+                const existingTeammates = match.teammates || [];
+                const existingTeammateKeys = new Set(existingTeammates.map(n => normalizeOcrName(n).toLowerCase()));
+                const mergedTeammates = [...existingTeammates];
+                for (const name of cappedTeammates) {
+                    const key = normalizeOcrName(name).toLowerCase();
+                    if (key && !existingTeammateKeys.has(key)) { mergedTeammates.push(name); existingTeammateKeys.add(key); }
+                }
+                const finalTeammates = capTeammateNames(mergedTeammates, shipForTeammateCap);
+
+                const existingOpponents = match.opponents || [];
+                const existingOpponentKeys = new Set(existingOpponents.map(n => normalizeOcrName(n).toLowerCase()));
+                const mergedOpponents = [...existingOpponents];
+                for (const name of nextOpponents) {
+                    const key = normalizeOcrName(name).toLowerCase();
+                    if (key && !existingOpponentKeys.has(key)) { mergedOpponents.push(name); existingOpponentKeys.add(key); }
+                }
+
                 const updated: Match = {
                     ...match,
                     ship: combined.playerShip?.shipType ? combined.playerShip.shipType : match.ship,
-                    teammates: cappedTeammates.length > 0 ? cappedTeammates : match.teammates,
-                    opponents: nextOpponents.length > 0 ? nextOpponents : match.opponents,
+                    teammates: finalTeammates.length > 0 ? finalTeammates : existingTeammates,
+                    opponents: mergedOpponents.length > 0 ? mergedOpponents : existingOpponents,
                     opponentTeams: nextOppTeams.length > 0 ? nextOppTeams : match.opponentTeams,
                     reachModifiers: mergedModifierNames.length > 0 ? mergedModifierNames : (match.reachModifiers || []),
                     artifactSource: mergedArtifactSource || match.artifactSource,
@@ -2151,7 +2170,10 @@ const SmartMatchDetail: React.FC<{
                 matchOverride: appliedMatch,
                 reusePendingDraft: false,
             });
-        }, [onApplyToSession, openWizardForMatch, reviewData, setToast]);
+            window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
+                detail: { matchId: Number(appliedMatch?.id || match.id || 0) || null },
+            }));
+        }, [onApplyToSession, openWizardForMatch, reviewData, setToast, match.id]);
 
         useEffect(() => {
             setShowSecondaryActions(false);
@@ -2467,7 +2489,7 @@ const SmartMatchDetail: React.FC<{
                 shipType: String(team.shipType || '').trim(),
                 color: String(team.color || 'unknown').trim() || 'unknown',
                 players: dedupeBoardNames(team.players || []),
-            })).filter((team) => team.players.length > 0 || team.shipType || team.teamName);
+            })).filter((team) => team.players.length > 0 || team.shipType);
             onUpdate({
                 ...match,
                 ship: String(friendlyTeam.shipType || ''),
@@ -2698,9 +2720,17 @@ const SmartMatchDetail: React.FC<{
                 setReviewData(rerun.mergedData);
                 onUpdate({ ...match, ocrState: 'reviewing' });
                 setToast({
-                    message: `Analysis complete: ${rerun.successfulCount}/${rerun.total} screenshot${rerun.total === 1 ? '' : 's'} processed. Click Apply OCR to sync.`,
+                    message: `Analysis complete: ${rerun.successfulCount}/${rerun.total} screenshot${rerun.total === 1 ? '' : 's'} processed. Opening OCR review...`,
                     type: rerun.failedCount > 0 ? 'warning' : 'success',
                 });
+                // Auto-open the OCR wizard tab for immediate review
+                if (onApplyToSession) {
+                    const appliedMatch = onApplyToSession(rerun.mergedData);
+                    openWizardForMatch({ matchOverride: appliedMatch, reusePendingDraft: false });
+                    window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
+                        detail: { matchId: Number(appliedMatch?.id || match.id || 0) || null },
+                    }));
+                }
             } catch (error) {
                 const reason = errorMessage(error);
                 setRerunProgress({
@@ -3876,11 +3906,16 @@ const SmartMatchDetail: React.FC<{
                     </div>
                 </div>
                 {lightboxSrc && (
-                    <div className="fixed inset-0 z-modal bg-scrim-90 flex items-center justify-center p-8" onClick={() => setLightboxSrc(null)}>
-                        <button onClick={() => setLightboxSrc(null)} className="absolute top-4 right-4 text-md-sys-on-surface/60 hover:text-md-sys-on-surface">
+                    <div className="fixed inset-0 z-modal bg-scrim-90 p-8" onClick={() => setLightboxSrc(null)}>
+                        <button onClick={() => setLightboxSrc(null)} className="absolute top-4 right-4 text-md-sys-on-surface/60 hover:text-md-sys-on-surface z-10">
                             <X size={24} />
                         </button>
-                        <LocalImage src={lightboxSrc} alt="Screenshot" className="max-w-full max-h-full object-contain rounded-lg" />
+                        <LocalImage
+                            src={lightboxSrc}
+                            alt="Screenshot"
+                            className="w-full h-full object-contain rounded-lg"
+                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                        />
                     </div>
                 )}
             </div>

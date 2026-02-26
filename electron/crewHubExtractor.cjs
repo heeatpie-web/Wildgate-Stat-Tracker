@@ -1,52 +1,69 @@
 /**
- * Crew Hub Extractor
+ * Crew Hub Extractor — v3 (Row-Based Card Scanner)
  *
- * Extracts player and team data from Crew Hub screenshots:
- * - Left Panel: Your team (team name + players)
- * - Right Panel: Enemy crews (up to 4 teams with colored badges)
+ * Extracts player and team data from Crew Hub screenshots.
  *
- * Features:
- * - Dynamic user anchor (activeUser from store)
- * - Color-based team detection
- * - Chinese character support
- * - Position fallback when user not found
+ * ACTUAL Crew Hub layout (1920×1080):
+ * ┌──────────────────────────────────────────────────────────────────────────┐
+ * │ LEFT PANEL (0–48%)           │ RIGHT PANEL (55–100%)                    │
+ * │                              │                                          │
+ * │ "CREW HUB" header            │ "Enemy Crews" header                     │
+ * │ "ShipName's Crew" (cyan)     │                                          │
+ * │                              │ ┌─ Player Card (~78px tall) ───────────┐ │
+ * │ [Your username — large]      │ │ [Portrait] PlayerName      [P]       │ │
+ * │ [voice/party controls]       │ │            ████ TeamName ████        │ │
+ * │                              │ │            (colored bar, ~22px)       │ │
+ * │ [Teammate1] [PARTY VOICE]    │ └─────────────────────────────────────┘ │
+ * │ [Teammate2] [PARTY VOICE]    │ ┌─ Player Card ──────────────────────┐ │
+ * │ [Teammate3] [PARTY VOICE]    │ │ [Portrait] PlayerName      [P]      │ │
+ * │                              │ │            ████ TeamName ████        │ │
+ * └──────────────────────────────┴─└─────────────────────────────────────┘─┘
+ *
+ * Key insight: Each enemy player has their OWN colored bar below their name.
+ * The bar's color = team color (red/orange/yellow/yellowGreen).
+ * Players grouped by matching bar color = same team.
+ * There is NO separate "team header row" — just player card after player card.
+ *
+ * The right panel scrolls vertically; up to 9 cards visible at once.
+ * Multiple screenshots may be needed to capture all enemy players.
  */
 
-const { detectBadgeColorNearText, detectColorInRegion } = require('./colorUtils.cjs');
+const { detectTeamColorBarBelow, detectColorInRegion } = require('./colorUtils.cjs');
+const _fs = require('fs');
+const _os = require('os');
+const DLOG_PATH = require('path').join(_os.tmpdir(), 'wildgate-ocr.log');
+const dlog = msg => { try { _fs.appendFileSync(DLOG_PATH, new Date().toISOString() + ' ' + msg + '\n'); } catch(_e) {} };
 
 /**
- * Screen layout constants (percentage-based for scaling)
+ * Screen layout constants (percentage-based, calibrated from real 1920×1080 screenshots)
  */
 const LAYOUT = {
   // Left panel: Your team
   LEFT_PANEL: {
     xMin: 0,
-    xMax: 0.36, // tighten to avoid enemy-column bleed into teammate parsing
-    yMin: 0.10,
-    yMax: 0.80,
+    xMax: 0.48,  // names can extend to ~46%, allow margin
+    yMin: 0.05,
+    yMax: 0.85,
   },
-  // Right panel: Enemy crews
-  RIGHT_PANEL: {
-    xMin: 0.45, // start earlier to capture enemy headers/players near center seam
+  // Right panel: Enemy crews — single scrollable list of player cards
+  ENEMY_PANEL: {
+    xMin: 0.55,  // portraits start at ~55%
     xMax: 1.0,
-    yMin: 0.10,
-    yMax: 0.90,
+    yMin: 0.08,
+    yMax: 0.95,
   },
   // Team name header region (contains "'s Crew")
   TEAM_HEADER: {
     xMin: 0,
-    xMax: 0.45,
-    yMin: 0.05,
-    yMax: 0.20,
+    xMax: 0.50,
+    yMin: 0.02,
+    yMax: 0.18,
   },
-  ENEMY_ROW_1_TEAM: { xMin: 0.52, xMax: 0.74, yMin: 0.16, yMax: 0.23 },
-  ENEMY_ROW_1_PLAYERS: { xMin: 0.74, xMax: 0.98, yMin: 0.16, yMax: 0.23 },
-  ENEMY_ROW_2_TEAM: { xMin: 0.52, xMax: 0.74, yMin: 0.27, yMax: 0.34 },
-  ENEMY_ROW_2_PLAYERS: { xMin: 0.74, xMax: 0.98, yMin: 0.27, yMax: 0.34 },
-  ENEMY_ROW_3_TEAM: { xMin: 0.52, xMax: 0.74, yMin: 0.38, yMax: 0.45 },
-  ENEMY_ROW_3_PLAYERS: { xMin: 0.74, xMax: 0.98, yMin: 0.38, yMax: 0.45 },
-  ENEMY_ROW_4_TEAM: { xMin: 0.52, xMax: 0.74, yMin: 0.49, yMax: 0.56 },
-  ENEMY_ROW_4_PLAYERS: { xMin: 0.74, xMax: 0.98, yMin: 0.49, yMax: 0.56 },
+  // Enemy player name text typically starts at x≈68% and extends to ~88%
+  ENEMY_NAME: {
+    xMin: 0.63,
+    xMax: 0.92,
+  },
 };
 
 function clamp01(value, fallback) {
@@ -78,16 +95,19 @@ function resolveCrewHubLayout(layoutOverrides) {
   const source = (layoutOverrides && typeof layoutOverrides === 'object') ? layoutOverrides : {};
   return {
     LEFT_PANEL: sanitizeBounds(source.leftPanel, LAYOUT.LEFT_PANEL),
-    RIGHT_PANEL: sanitizeBounds(source.rightPanel, LAYOUT.RIGHT_PANEL),
+    ENEMY_PANEL: sanitizeBounds(source.enemyPanel || source.rightPanel, LAYOUT.ENEMY_PANEL),
     TEAM_HEADER: sanitizeBounds(source.teamHeader, LAYOUT.TEAM_HEADER),
-    ENEMY_ROW_1_TEAM: sanitizeBounds(source.enemyRow1TeamName, LAYOUT.ENEMY_ROW_1_TEAM),
-    ENEMY_ROW_1_PLAYERS: sanitizeBounds(source.enemyRow1Players, LAYOUT.ENEMY_ROW_1_PLAYERS),
-    ENEMY_ROW_2_TEAM: sanitizeBounds(source.enemyRow2TeamName, LAYOUT.ENEMY_ROW_2_TEAM),
-    ENEMY_ROW_2_PLAYERS: sanitizeBounds(source.enemyRow2Players, LAYOUT.ENEMY_ROW_2_PLAYERS),
-    ENEMY_ROW_3_TEAM: sanitizeBounds(source.enemyRow3TeamName, LAYOUT.ENEMY_ROW_3_TEAM),
-    ENEMY_ROW_3_PLAYERS: sanitizeBounds(source.enemyRow3Players, LAYOUT.ENEMY_ROW_3_PLAYERS),
-    ENEMY_ROW_4_TEAM: sanitizeBounds(source.enemyRow4TeamName, LAYOUT.ENEMY_ROW_4_TEAM),
-    ENEMY_ROW_4_PLAYERS: sanitizeBounds(source.enemyRow4Players, LAYOUT.ENEMY_ROW_4_PLAYERS),
+    ENEMY_NAME: sanitizeBounds(source.enemyName || {
+      xMin: LAYOUT.ENEMY_NAME.xMin,
+      xMax: LAYOUT.ENEMY_NAME.xMax,
+      yMin: LAYOUT.ENEMY_PANEL.yMin,
+      yMax: LAYOUT.ENEMY_PANEL.yMax,
+    }, {
+      xMin: LAYOUT.ENEMY_NAME.xMin,
+      xMax: LAYOUT.ENEMY_NAME.xMax,
+      yMin: LAYOUT.ENEMY_PANEL.yMin,
+      yMax: LAYOUT.ENEMY_PANEL.yMax,
+    }),
   };
 }
 
@@ -98,22 +118,65 @@ const NOISE_WORDS = new Set([
   'PARTY', 'VOICE', 'CREW', 'HUB', 'PUSH', 'TALK', 'MUTE', 'OPTIONS', 'BACK',
   'SWITCH', 'DISABLE', 'ENABLE', 'YOUR', 'TEAM', 'CHANGE', 'MAP', 'SEED',
   'ENEMY', 'CREWS', 'CHANNEL', 'INTO', 'SAME', 'WITH', 'THE', 'HOP',
-  'HUNTER', 'BASTION', 'PRIVATEER', 'SCOUT', 'OUTLAW', 'SHIP',
-  'ON', 'OFF', 'TO',
-  // Tactical map grid row labels (A-H) — prevent misclassification from tactical view
+  'ON', 'OFF', 'TO', 'DEAFEN', 'UNMUTE', 'SAY', 'TEXT', 'PINGS',
+  // Crew-hub section headers / UI labels — never player or team names
+  'KNOWN', 'HAZARDS', 'HAZARD', 'WILDGATE', 'HEALTH', 'FASTER', 'SHIELDS',
+  'DOWN', 'ARTIFACT', 'ASTEROIDS', 'ALTITUDE', 'FOG', 'PATROLS', 'LEGION',
+  'ROGUE', 'TURRETS', 'HEALING', 'CRYON', 'RIFT', 'SHIPS', 'WORLDS',
+  'CURSOR', 'LABELS', 'TOGGLE', 'CLOSE', 'PING', 'EPIC', 'DEAD', 'LOOT',
+  // Tactical map grid row labels (A-H) — prevent misclassification
   'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
 ]);
 
 /**
- * Main entry point: Extract all data from Crew Hub screenshot
- * @param {Buffer} imageBuffer - OCR text buffer (typically preprocessed/scaled)
- * @param {string} activeUser - Current user's display name (for anchor)
+ * Ship type names — not relevant in Crew Hub (only on tactical map),
+ * but filter them for safety.
+ */
+const SHIP_TYPES = new Set(['HUNTER', 'BASTION', 'PRIVATEER', 'SCOUT', 'OUTLAW']);
+
+/**
+ * Known hazard patterns → display names (mirrors mapScreenExtractor KNOWN_HAZARDS).
+ * Used to extract hazard info from the crew hub "KNOWN HAZARDS" section as a
+ * fallback when the tactical map extraction fails or finds no hazards.
+ */
+const CREW_HUB_HAZARDS = {
+  'HEALING ARTIFACT': 'Artifact: Healing',
+  'ARTIFACT HEALING': 'Artifact: Healing',
+  'ICE ARTIFACT': 'Artifact: Ice',
+  'WEAPON ARTIFACT': 'Artifact: Weapon',
+  'ANCIENT VAULT': 'Ancient Vault',
+  'CRYON REACH': 'Cryon Reach',
+  'CRYON RIFT': 'Cryon Rift',
+  'DEAD SENSORS': 'Dead Sensors',
+  'DEAD WORLDS': 'Dead Worlds',
+  'EASY LOOT': 'Easy Loot',
+  'EPIC LOOT': 'Epic Loot',
+  'FAST GATE': 'Fast Gate',
+  'FEW ASTEROIDS': 'Few Asteroids',
+  'FEW SHIPS': 'Few Ships',
+  'GLOAMING EXPANSE': 'Gloaming Expanse',
+  'HAUNTED STORM': 'Haunted Storm',
+  'ICE STORM': 'Ice Storm',
+  'LAVA EPICS': 'Lava Epics',
+  'LEECH SWARMS': 'Leech Swarms',
+  'LEGION PATROLS': 'Legion Patrols',
+  'LOW ALTITUDE FOG': 'Low Altitude Fog',
+  'MANY ASTEROIDS': 'Many Asteroids',
+  'ROGUE TURRETS': 'Rogue Turrets',
+  'SANDSTORM': 'Sandstorm',
+};
+
+/**
+ * Main entry point: Extract all data from Crew Hub screenshot.
+ *
+ * @param {Buffer} imageBuffer - Preprocessed image buffer (for OCR word positions)
+ * @param {string} activeUser - Current user's display name (anchor for left panel)
  * @param {Object} ocrResult - Tesseract OCR result { words, lines, text }
- * @param {number} imageWidth - Image width
- * @param {number} imageHeight - Image height
- * @param {number} scale - Image scale factor from preprocessing (default 1)
- * @param {Buffer} [colorImageBuffer] - Color-fidelity buffer for team-color detection
- * @param {Object} [layoutOverrides] - Optional percentage-based layout overrides
+ * @param {number} imageWidth - Image width (of preprocessed image)
+ * @param {number} imageHeight - Image height (of preprocessed image)
+ * @param {number} [scale=1] - Preprocessing scale factor
+ * @param {Buffer} [colorImageBuffer] - ORIGINAL color image for team-color sampling
+ * @param {Object} [layoutOverrides] - Optional layout overrides
  * @returns {Promise<Object>} Extracted data
  */
 async function extractCrewHub(
@@ -137,6 +200,7 @@ async function extractCrewHub(
       players: [],
     },
     enemyTeams: [],
+    hazards: [],
     isPartialCapture: false,
     confidence: 0,
   };
@@ -147,7 +211,7 @@ async function extractCrewHub(
     return result;
   }
 
-  const words = ocrResult.words || [];
+  const words = ocrResult.allWords || ocrResult.words || [];
   const lines = ocrResult.lines || [];
   const text = ocrResult.text || '';
 
@@ -157,8 +221,11 @@ async function extractCrewHub(
   }
 
   try {
+    // Initialise the debug log for this extraction run
+    try { _fs.appendFileSync(DLOG_PATH, '=== extractCrewHub ' + new Date().toISOString() + ' ===\n'); } catch(_e) {}
+
     // Step 1: Extract your team from left panel
-    const yourTeamData = await extractLeftPanel(
+    result.yourTeam = await extractLeftPanel(
       imageBuffer,
       activeUser,
       words,
@@ -168,10 +235,9 @@ async function extractCrewHub(
       imageHeight,
       layout
     );
-    result.yourTeam = yourTeamData;
 
-    // Step 2: Extract enemy teams from right panel (pass scale for color detection)
-    const enemyTeamsData = await extractRightPanel(
+    // Step 2: Extract enemy teams from right panel using row-based card scanner
+    result.enemyTeams = await extractEnemyPanel(
       colorBuffer,
       words,
       lines,
@@ -181,18 +247,28 @@ async function extractCrewHub(
       scale,
       layout
     );
-    result.enemyTeams = enemyTeamsData;
 
-    // Step 3: Calculate confidence
+    // Step 3: Extract hazards from the "KNOWN HAZARDS" section of the crew hub.
+    // This is a fallback source — used by ocrMerger when the tactical map
+    // extraction returns no hazards (e.g. map screenshot was missing or unclear).
+    {
+      const upperText = text.toUpperCase();
+      const foundHazards = new Set();
+      for (const [pattern, displayName] of Object.entries(CREW_HUB_HAZARDS)) {
+        if (upperText.includes(pattern)) foundHazards.add(displayName);
+      }
+      if (foundHazards.size > 0) {
+        result.hazards = Array.from(foundHazards).sort();
+        dlog('[CrewHub] Hazards from crew hub: ' + result.hazards.join(', '));
+      }
+    }
+
+    // Step 4: Calculate confidence
     const playerCount = result.yourTeam.players.length +
       result.enemyTeams.reduce((sum, t) => sum + t.players.length, 0);
     result.confidence = Math.min(95, 50 + playerCount * 5);
 
-    // Check if this might be a partial capture (scrolling needed).
-    // Heuristic: flag partial if player counts are inconsistent across teams (some teams have
-    // many more players than others — suggesting some rows are cut off), OR if every team
-    // shows ≤1 player when there are ≥2 teams (universally sparse, likely not fully OCR'd).
-    // Legitimate small teams (e.g., [2,2,2,2] or [3,3]) are NOT flagged as partial.
+    // Check partial capture heuristic
     if (result.enemyTeams.length > 0) {
       const counts = result.enemyTeams.map(t => t.players.length);
       const maxCount = Math.max(...counts);
@@ -209,6 +285,7 @@ async function extractCrewHub(
       teammates: result.yourTeam.players.length,
       enemyTeams: result.enemyTeams.length,
       totalEnemies: result.enemyTeams.reduce((sum, t) => sum + t.players.length, 0),
+      colors: result.enemyTeams.map(t => `${t.color}(${t.players.length})`).join(', '),
     });
 
   } catch (error) {
@@ -222,7 +299,7 @@ async function extractCrewHub(
  * Extract your team data from left panel
  */
 async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, imageWidth, imageHeight, layout = LAYOUT) {
-  console.log('[CrewHub] Extracting left panel (your team)');
+  dlog('[CrewHub] Extracting left panel (your team)');
 
   const teamData = {
     name: '',
@@ -237,11 +314,14 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
     yMax: imageHeight * layout.LEFT_PANEL.yMax,
   };
 
-  // Step 1: Find team name (look for "'s Crew" pattern)
-  const teamNameMatch = text.match(/([A-Z][A-Z\s]{2,30})['']s\s*Crew/i);
+  // Step 1: Find YOUR team name via the "'s Crew" banner (left panel only).
+  // Allow !, digits, hyphens etc. in team names (e.g. "SPEED RUN!'s Crew")
+  const teamNameMatch = text.match(/([A-Za-z][A-Za-z0-9 !_\-]{2,30}?)[\u2019\u2018'']s\s*Crew/i);
   if (teamNameMatch) {
-    teamData.name = formatTeamName(teamNameMatch[1]);
-    console.log('[CrewHub] Found team name:', teamData.name);
+    teamData.name = formatTeamName(teamNameMatch[1].trim());
+    dlog('[CrewHub] Found team name: ' + teamData.name);
+  } else {
+    dlog('[CrewHub] No team name found (no \'s Crew pattern in text)');
   }
 
   // Step 2: Filter words in left panel
@@ -253,28 +333,12 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
            centerY >= leftBounds.yMin && centerY <= leftBounds.yMax;
   });
 
-  console.log('[CrewHub] Left panel words:', leftPanelWords.length);
+  dlog('[CrewHub] Left panel words: ' + leftPanelWords.length + ' (bounds xMin=' + Math.round(leftBounds.xMin) + ' xMax=' + Math.round(leftBounds.xMax) + ' yMin=' + Math.round(leftBounds.yMin) + ' yMax=' + Math.round(leftBounds.yMax) + ')');
+  dlog('[CrewHub] Left panel all words: ' + leftPanelWords.map(w => '"' + w.text + '"(c' + Math.round(w.confidence) + ')@x' + Math.round((w.bbox.x0+w.bbox.x1)/2) + '@y' + Math.round((w.bbox.y0+w.bbox.y1)/2)).join(' '));
 
-  // Step 3: Group words into lines by Y position (with X-proximity clustering)
+  // Step 3: Group words into lines by Y position
   const groupedLines = groupWordsIntoLines(leftPanelWords, imageHeight, imageWidth);
-
-  // Step 3.5: Try to detect ship/team name (often all-caps, multi-word)
-  const teamNameCandidates = groupedLines
-    .map(line => line.words.map(w => w.text).join(' ').trim())
-    .filter(lineText => {
-      if (!lineText) return false;
-      if (/CREW|HUB|TEAM|VOICE|LOBBY|MATCH|PARTY|CHANNEL|PUSH|TALK/i.test(lineText)) return false;
-      if (lineText.split(/\s+/).length < 2) return false;
-      return isTeamName(lineText);
-    })
-    .map(lineText => formatTeamName(lineText))
-    .filter(name => name && name.length >= 4);
-
-  if (!teamData.name && teamNameCandidates.length > 0) {
-    const best = teamNameCandidates.sort((a, b) => b.length - a.length)[0];
-    teamData.name = best;
-    console.log('[CrewHub] Detected ship/team name in left panel:', teamData.name);
-  }
+  dlog('[CrewHub] Left panel lines: ' + groupedLines.length + ' ys=' + groupedLines.map(l=>Math.round(l.y)).join(','));
 
   // Step 4: Try to find activeUser first (anchor)
   let foundActiveUser = false;
@@ -290,38 +354,95 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
       if (fuzzyMatch) {
         foundActiveUser = true;
         activeUserYPos = line.y;
-        console.log('[CrewHub] Found activeUser anchor at Y:', activeUserYPos);
+        dlog('[CrewHub] Found activeUser anchor at Y: ' + activeUserYPos);
         break;
       }
     }
   }
 
+  // Teammate column max X — widened to ~48% to catch long names
+  const teammateColumnMaxX = imageWidth * 0.48;
+
   const parsePlayersFromLines = (lineSet) => {
     const out = [];
-    const teammateColumnMaxX = imageWidth * 0.34;
+    // Narrow x-band for the name column: portraits are ~0-8%, names ~8-32%.
+    // Words beyond ~50% are typically voice/party control icons OCR'd as noise.
+    // Must be ≥0.45 so crewmate names at x≈756-839 (on 1920-wide images) pass.
+    const nameColXMax = imageWidth * 0.50;
     for (const line of lineSet) {
-      // Guardrail: teammate names should stay in the left player column.
-      // This avoids ingesting enemy names when OCR line grouping crosses panel seams.
-      if (getLineCenterX(line.words) > teammateColumnMaxX) continue;
-      const playerName = extractPlayerNameFromLine(line.words);
-      if (!playerName) continue;
-      if (!isValidPlayerName(playerName)) continue;
-      if (teamData.name && playerName.toUpperCase().includes(teamData.name.toUpperCase())) continue;
-      if (/PARTY|CREW|HUB|VOICE|CHANNEL/i.test(playerName)) continue;
+      if (Math.abs(line.y - 1355) < 10) {
+        dlog('[LPdbg1355] words=' + line.words.map(w => '"'+w.text+'"(c'+Math.round(w.confidence)+')bbox=['+[w.bbox&&w.bbox.x0,w.bbox&&w.bbox.x1,w.bbox&&w.bbox.y0,w.bbox&&w.bbox.y1].join(',')+']').join(' '));
+      }
+      const centerX = getLineCenterX(line.words);
+      if (centerX > teammateColumnMaxX) { dlog('[LPdbg] y=' + Math.round(line.y) + ' SKIP centX=' + Math.round(centerX) + '>' + Math.round(teammateColumnMaxX)); continue; }
+      // Filter line words to the name column only — this strips adjacent UI
+      // control text (party/voice icons) that appear at the same Y as the name.
+      // Apply x-column filter then a confidence floor — low-conf left-panel
+      // words (e.g. "Bay" c29, "Sng" c8) are almost always noise fragments from
+      // adjacent UI chrome rather than genuine teammate names.
+      const nameColWords = line.words
+        .filter(w => !w.bbox || (w.bbox.x0 + w.bbox.x1) / 2 < nameColXMax)
+        .filter(w => (w.confidence || 0) >= 30);
+      if (nameColWords.length === 0) { dlog('[LPdbg] y=' + Math.round(line.y) + ' → nameColWords empty after x<' + Math.round(nameColXMax) + ' / conf<30 filter'); continue; }
+      // If any word in this line is a high-confidence UI control keyword (conf≥60),
+      // the whole line is a voice/party button row — skip it entirely.
+      // This prevents OCR corruptions of "PARTY" (e.g. "parry") being extracted
+      // as a player name when PARTY/VOICE/TEAM/PUSH appear on the same line.
+      const UI_CONTROL_RE = /^(PARTY|VOICE|TEAM|PUSH|TALK|CHANNEL|MUTE|DEAFEN|TEXT|PINGS|HOP|SWITCH)$/i;
+      if (nameColWords.some(w => (w.confidence || 0) >= 60 && UI_CONTROL_RE.test(w.text.trim()))) {
+        dlog('[LPdbg] y=' + Math.round(line.y) + ' → SKIP UI button row (high-conf control word)');
+        continue;
+      }
+      const playerName = extractPlayerNameFromLine(nameColWords);
+      if (Math.abs(line.y - 1355) < 10) dlog('[LPdbg1355b] extractResult="' + playerName + '" nameColWords=' + nameColWords.length);
+      if (!playerName) { dlog('[LPdbg] y=' + Math.round(line.y) + ' → no name from: ' + nameColWords.map(w=>'"'+w.text+'"(c'+Math.round(w.confidence)+')').join(' ')); continue; }
+      if (!isValidPlayerName(playerName)) { dlog('[LPdbg] y=' + Math.round(line.y) + ' → invalid: "' + playerName + '"'); continue; }
+      // Filter team name banner fragments.
+      // Normalise to letters+spaces only so OCR noise ("PEED RUN!s" ← "SPEED RUN!'s")
+      // is caught regardless of leading/trailing punctuation or clipped first letter.
+      if (teamData.name) {
+        const normStr = s => s.toUpperCase().replace(/[^A-Z ]+/g, ' ').trim().replace(/\s+/g, ' ');
+        const tnNorm = normStr(teamData.name);            // "SPEED RUN"
+        let   pnNorm = normStr(playerName);               // "PEED RUN S"
+        // Drop a trailing single-letter fragment (the clipped "'s" → "S")
+        const pnParts = pnNorm.split(' ');
+        if (pnParts.length > 1 && pnParts[pnParts.length - 1].length === 1)
+          pnNorm = pnParts.slice(0, -1).join(' ');        // "PEED RUN"
+        if (pnNorm.length >= 3 && (pnNorm.includes(tnNorm) || tnNorm.includes(pnNorm))) continue;
+      }
+      if (/PARTY|CREW|HUB|VOICE|CHANNEL|PUSH|TALK|MUTE|DISABLE|DEAFEN|UNMUTE|TEXT|PINGS/i.test(playerName)) continue;
       if (/'S$/i.test(playerName)) continue;
+      // Filter ship type words and fragments (e.g. "RIVATEER" ⊂ "PRIVATEER")
+      // NOTE: keep digits in pnUp — stripping them turns "Riv2" → "RIV" which
+      // falsely matches as a substring of "PRIVATEER" and drops the player name.
+      {
+        const shipTypes = ['HUNTER', 'BASTION', 'PRIVATEER', 'SCOUT', 'OUTLAW', 'SOLO OUTLAW', 'BATTLE CRUISER', 'DREADNAUGHT'];
+        const pnUp = playerName.toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim();
+        if (shipTypes.some(st => st === pnUp || st.includes(pnUp) || pnUp.includes(st))) continue;
+      }
+      // Left-panel specific noise filters (gamertags rarely look like these):
+      // (a) 3+ space-separated fragments are almost always UI label garble
+      if (playerName.split(/\s+/).length >= 3) continue;
+      // (b) All-lowercase name shorter than 7 letters = OCR noise fragment (e.g. "pay en")
+      if (/^[a-z\s]+$/.test(playerName) && playerName.replace(/\s+/g, '').length < 7) continue;
+      // (c) All-uppercase name 5 or fewer letters = button/label fragment (e.g. "ATTLE", "N JI")
+      if (/^[A-Z\s]+$/.test(playerName) && playerName.replace(/\s+/g, '').length <= 5) continue;
       pushUniquePlayerName(out, playerName);
+      dlog('[LPdbg] y=' + Math.round(line.y) + ' → ADD "' + playerName + '"');
     }
     return out;
   };
 
   // First pass: anchor-window around active user to reduce UI noise.
+  // Use 40% of image height so the 4th player card (~30-35% below the active
+  // user anchor) is always included even with small positional variance.
   let parsedPlayers = [];
   if (foundActiveUser && activeUserYPos !== null) {
-    const anchorLines = groupedLines.filter(line => Math.abs(line.y - activeUserYPos) <= imageHeight * 0.24);
+    const anchorLines = groupedLines.filter(line => Math.abs(line.y - activeUserYPos) <= imageHeight * 0.40);
     parsedPlayers = parsePlayersFromLines(anchorLines);
   }
 
-  // Fallback pass: expand to full left panel if anchor-window under-captures.
+  // Fallback: full left panel if anchor-window under-captures
   if (parsedPlayers.length < 3) {
     const expanded = parsePlayersFromLines(groupedLines);
     if (expanded.length > parsedPlayers.length) {
@@ -329,219 +450,504 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
     }
   }
 
-  teamData.players.push(...parsedPlayers);
-  for (const name of parsedPlayers) {
-    console.log('[CrewHub] Found teammate:', name);
+  teamData.players = [...new Set(parsedPlayers)];
+  if (teamData.players.length === 0) {
+    dlog('[CrewHub] Left panel: no teammates found after all filters');
+  } else {
+    for (const name of teamData.players) {
+      dlog('[CrewHub] Found teammate: ' + name);
+    }
   }
-
-  // Deduplicate
-  teamData.players = [...new Set(teamData.players)];
+  dlog('[CrewHub] Left panel done — name="' + teamData.name + '" players=' + teamData.players.length);
 
   return teamData;
 }
 
 /**
- * Extract enemy teams from right panel
+ * Extract enemy teams from the right-side enemy panel using row-based card scanning.
+ *
+ * Architecture: Row-Based Card Scanner (v3)
+ *
+ * The Crew Hub right panel shows enemy player "cards" stacked vertically:
+ *   Each card ~78px tall contains:
+ *   - Portrait (42×42 left side)
+ *   - Player name (white text, x ≈ 63-92%)
+ *   - ~22px colored bar 11px below the name (color = team identity)
+ *
+ * Algorithm:
+ *   1. Filter all OCR words to the ENEMY_NAME x-band (63-92%)
+ *   2. Group into lines by Y proximity
+ *   3. For each line, extract player name and sample color bar below
+ *   4. Group players by detected color → form teams
+ *   5. Self-improvement: inherit color from neighbors at ~78px card spacing
+ *
+ * @param {Buffer} colorImageBuffer - Original unprocessed color image buffer
+ * @param {Array} words - All OCR words from Tesseract
+ * @param {Array} lines - OCR lines (unused, kept for API compat)
+ * @param {string} text - Full OCR text (unused)
+ * @param {number} imageWidth - Image width in pixels
+ * @param {number} imageHeight - Image height in pixels
  * @param {number} scale - Image scale factor from preprocessing (default 1)
+ * @param {Object} layout - Layout constants
  */
-async function extractRightPanel(colorImageBuffer, words, lines, text, imageWidth, imageHeight, scale = 1, layout = LAYOUT) {
-  console.log('[CrewHub] Extracting right panel (enemy teams)');
-
-  const enemyTeams = [];
-
-  // Define right panel bounds
-  const rightBounds = {
-    xMin: imageWidth * layout.RIGHT_PANEL.xMin,
-    xMax: imageWidth * layout.RIGHT_PANEL.xMax,
-    yMin: imageHeight * layout.RIGHT_PANEL.yMin,
-    yMax: imageHeight * layout.RIGHT_PANEL.yMax,
-  };
-
-  // Filter words in right panel
-  const rightPanelWords = words.filter(w => {
-    if (!w.bbox) return false;
-    const centerX = (w.bbox.x0 + w.bbox.x1) / 2;
-    const centerY = (w.bbox.y0 + w.bbox.y1) / 2;
-    return centerX >= rightBounds.xMin && centerX <= rightBounds.xMax &&
-           centerY >= rightBounds.yMin && centerY <= rightBounds.yMax;
-  });
-
-  console.log('[CrewHub] Right panel words:', rightPanelWords.length);
-
-  // Group into lines (with X-proximity clustering)
-  const groupedLines = groupWordsIntoLines(rightPanelWords, imageHeight, imageWidth);
+async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidth, imageHeight, scale = 1, layout = LAYOUT) {
+  dlog('=== extractEnemyPanel ' + new Date().toISOString() + ' ===');
+  dlog('[CrewHub] Extracting enemy panel — row-based card scanner v3');
 
   const SPECTATOR_PATTERNS = [
     /FIEND\s*(OR|0R)\s*FOE/i,
     /SPECTATOR/i,
     /OBSERVER/i,
   ];
+  const isSpectatorLine = (s) => SPECTATOR_PATTERNS.some(p => p.test(s));
 
-  const isSpectatorTeamName = (name) => {
-    return SPECTATOR_PATTERNS.some(p => p.test(name));
-  };
+  // ── Bounds ──────────────────────────────────────────────────────────────────
+  const panelXMin = imageWidth  * layout.ENEMY_PANEL.xMin;   // ~0.55
+  const panelXMax = imageWidth  * layout.ENEMY_PANEL.xMax;   // ~1.0
+  const panelYMin = imageHeight * layout.ENEMY_PANEL.yMin;   // ~0.08
+  const panelYMax = imageHeight * layout.ENEMY_PANEL.yMax;   // ~0.95
 
-  const teams = [];
-  const MAX_PLAYER_TO_TEAM_Y_GAP = Math.max(70, Math.round(imageHeight * 0.12));
-  let currentTeamIdx = -1;
-  let spectatorBandActive = false;
+  // Enemy name X-band: narrower filter to isolate player name text
+  const nameXMin = imageWidth * layout.ENEMY_NAME.xMin;      // ~0.63
+  const nameXMax = imageWidth * layout.ENEMY_NAME.xMax;      // ~0.92
 
-  console.log('[CrewHub] Processing', groupedLines.length, 'lines in right panel');
-
-  for (const line of groupedLines) {
-    const lineText = line.words.map(w => w.text).join(' ').trim();
-    const lineY = line.y;
-    const firstWord = line.words[0];
-    if (!lineText) continue;
-
-    let detectedColor = 'unknown';
-    if (firstWord && firstWord.bbox && colorImageBuffer) {
-      try {
-        const colorResult = await detectBadgeColorNearText(colorImageBuffer, firstWord.bbox, scale);
-        if (colorResult.color !== 'unknown' && colorResult.confidence > 40) {
-          detectedColor = colorResult.color;
-        }
-      } catch (e) {
-        // Continue without color detection for this line
-      }
-    }
-
-    const formattedTeamName = formatTeamName(lineText);
-    const lineLooksLikeTeamHeader = isTeamName(lineText);
-    const lineIsSpectator = detectedColor === 'spectator' || isSpectatorTeamName(lineText);
-
-    if (lineLooksLikeTeamHeader) {
-      if (lineIsSpectator) {
-        spectatorBandActive = true;
-        currentTeamIdx = -1;
-        console.log('[CrewHub] Spectator header skipped:', lineText.substring(0, 40));
-        continue;
-      }
-
-      spectatorBandActive = false;
-      const nearExistingIdx = teams.findIndex(t =>
-        Math.abs((t.anchorY || 0) - lineY) < 24 &&
-        ((t.name && formattedTeamName && namesAreNearDuplicate(t.name, formattedTeamName)) ||
-         (detectedColor !== 'unknown' && t.color === detectedColor))
-      );
-
-      if (nearExistingIdx >= 0) {
-        const existing = teams[nearExistingIdx];
-        if (formattedTeamName.length > (existing.name || '').length) {
-          existing.name = formattedTeamName;
-        }
-        if ((existing.color === 'unknown' || !existing.color) && detectedColor !== 'unknown') {
-          existing.color = detectedColor;
-        }
-        existing.anchorY = lineY;
-        existing.lastY = lineY;
-        currentTeamIdx = nearExistingIdx;
-      } else {
-        teams.push({
-          name: formattedTeamName || '',
-          color: detectedColor,
-          players: [],
-          confidence: detectedColor !== 'unknown' ? 75 : 68,
-          anchorY: lineY,
-          lastY: lineY,
-        });
-        currentTeamIdx = teams.length - 1;
-      }
-      continue;
-    }
-
-    if (lineIsSpectator || spectatorBandActive) {
-      continue;
-    }
-
-    const playerName = extractPlayerNameFromLine(line.words);
-    if (!playerName) continue;
-    if (!isValidOpponentName(playerName)) continue;
-    if (isTeamName(playerName)) continue;
-    if (/PARTY|CREW|HUB|VOICE|CHANNEL/i.test(playerName)) continue;
-
-    let targetTeamIdx = -1;
-
-    if (currentTeamIdx >= 0) {
-      const current = teams[currentTeamIdx];
-      if (current && lineY >= current.anchorY && (lineY - current.lastY) <= MAX_PLAYER_TO_TEAM_Y_GAP) {
-        targetTeamIdx = currentTeamIdx;
-      }
-    }
-
-    if (targetTeamIdx < 0 && detectedColor !== 'unknown') {
-      targetTeamIdx = findNearestTeamIndexByColor(teams, detectedColor, lineY, MAX_PLAYER_TO_TEAM_Y_GAP);
-    }
-
-    if (targetTeamIdx < 0) {
-      targetTeamIdx = findNearestTeamIndexByY(teams, lineY, MAX_PLAYER_TO_TEAM_Y_GAP);
-    }
-
-    if (targetTeamIdx < 0) {
-      teams.push({
-        name: '',
-        color: detectedColor,
-        players: [],
-        confidence: detectedColor !== 'unknown' ? 65 : 58,
-        anchorY: lineY,
-        lastY: lineY,
-      });
-      targetTeamIdx = teams.length - 1;
-      currentTeamIdx = targetTeamIdx;
-    }
-
-    const targetTeam = teams[targetTeamIdx];
-    targetTeam.lastY = lineY;
-    if ((targetTeam.color === 'unknown' || !targetTeam.color) && detectedColor !== 'unknown') {
-      targetTeam.color = detectedColor;
-    }
-    pushUniquePlayerName(targetTeam.players, playerName);
+  // ── Step 1: Filter words into enemy name X-band ─────────────────────────────
+  const enemyWords = [];
+  for (const w of words) {
+    if (!w.bbox || !w.text) continue;
+    const cx = (w.bbox.x0 + w.bbox.x1) / 2;
+    const cy = (w.bbox.y0 + w.bbox.y1) / 2;
+    if (cx < nameXMin || cx > nameXMax) continue;
+    if (cy < panelYMin || cy > panelYMax) continue;
+    // Long tokens (≥8 chars) allowed at conf≥15 — catches OCR misreads like
+    // "GoblinaTTyV"(c16) for "GoblinaTTV". Short tokens keep the tighter c≥20
+    // floor to avoid single-glyph noise.
+    const confFloor = (w.text.trim().length >= 8) ? 15 : 20;
+    if ((w.confidence || 0) < confFloor) continue;
+    enemyWords.push(w);
   }
 
-  // Final cleanup and naming
-  let unnamedCounter = 1;
-  for (const team of teams) {
-    if (!team.players || team.players.length === 0) continue;
+  dlog('[CrewHub] Enemy panel words in name band: ' + enemyWords.length + ' (imageSize=' + imageWidth + 'x' + imageHeight + ' scale=' + scale + ')');
+  dlog('[CrewHub] All words (' + enemyWords.length + '): ' + enemyWords.map(w => '"' + w.text + '"(c' + Math.round(w.confidence) + ')@y' + Math.round((w.bbox.y0+w.bbox.y1)/2)).join(' '));
 
-    const dedupedPlayers = [];
-    for (const p of team.players) pushUniquePlayerName(dedupedPlayers, p);
-    team.players = dedupedPlayers.filter(p => !isTeamName(p));
-    if (team.players.length === 0) continue;
+  if (enemyWords.length === 0) {
+    dlog('[CrewHub] No words found in enemy name band — returning empty');
+    return [];
+  }
 
-    if (!team.name) {
-      team.name = `Team ${unnamedCounter++}`;
+  // ── Step 2: Group words into lines ──────────────────────────────────────────
+  const groupedLines = groupWordsIntoLines(enemyWords, imageHeight, imageWidth);
+  dlog('[CrewHub] Enemy lines found: ' + groupedLines.length + ' | ys=' + groupedLines.map(l => Math.round(l.y)).join(','));
+
+  // ── Step 3: For each line, extract name + sample color bar below ────────────
+  // Card height is ~78px at 1080p original resolution; OCR bbox Y coords are in
+  // scaled image space, so multiply by scale for correct threshold comparisons.
+  const CARD_HEIGHT = Math.round(78 * (scale || 1));
+  // BAR_HEIGHT: the team-name bar is ~22px tall at original res = 22*scale in OCR coords
+  // BAR_OFFSET: bar sits ~11px below name text bottom at original res = 11*scale in OCR coords
+  const BAR_OFFSET = Math.round(11 * (scale || 1));
+  const BAR_HEIGHT = Math.round(28 * (scale || 1)); // slightly generous
+
+  // Tracks Y zones (in scaled OCR coords) occupied by detected color bars.
+  // Any OCR line whose center falls in one of these zones is bar text, not a player name.
+  const barZones = []; // { min, max }
+
+  const cards = []; // { y, name, color, confidence, bbox }
+  const capturedTeamNames = new Map(); // color → cleanest team name seen
+
+  // Helper: extract the raw team name text from a line's word list
+  // (used when the line is identified as a team-name bar, not a player name)
+  function extractRawTeamNameFromLine(lineWords) {
+    // Drop near-zero-confidence words — Tesseract sometimes returns garbage
+    // all-caps strings (e.g. "ISM"/"NGUARD" at conf=4) that happen to pass
+    // the caps filter but are not real text.  The actual team name bar text
+    // (e.g. "VANGUARD" at conf=88) will appear in a later, cleaner read.
+    const confWords = lineWords.filter(w => (w.confidence || 0) >= 15);
+    if (confWords.length === 0) return null;
+    // Priority 1: longest hyphenated all-caps compound (e.g. "ATTACK-O-LANTERN")
+    const sorted = [...confWords].sort((a, b) => b.text.trim().length - a.text.trim().length);
+    for (const w of sorted) {
+      const t = w.text.trim();
+      if (/^[A-Z0-9]{2,}(-[A-Z0-9]+)+$/.test(t)) return t;
+    }
+    // Priority 2: join all-caps words of length ≥3 (filters leading noise like "Y", "|", "NY")
+    const capsWords = confWords.map(w => w.text.trim()).filter(t => /^[A-Z]{3,}$/.test(t));
+    if (capsWords.length >= 2) return capsWords.join(' ');
+    if (capsWords.length === 1 && capsWords[0].length >= 5) return capsWords[0];
+    return null;
+  }
+
+  for (const line of groupedLines) {
+    // ── Skip lines that fall inside a known bar zone (ship name text) ──────────
+    const inBarZone = barZones.some(z => line.y >= z.min && line.y <= z.max);
+    if (inBarZone) { dlog('[CrewHub] SKIP bar-zone line: "' + line.words.map(w => w.text).join(' ') + '" y=' + Math.round(line.y)); continue; }
+    const lineText = line.words.map(w => w.text).join(' ').trim();
+    if (!lineText || lineText.length < 2) { dlog('[CrewHub] SKIP too-short line: "' + lineText + '" y=' + Math.round(line.y)); continue; }
+    if (isSpectatorLine(lineText)) { dlog('[CrewHub] SKIP spectator line: "' + lineText + '"'); continue; }
+
+    // Check if all words are noise
+    const wordsUpper = lineText.toUpperCase().split(/\s+/);
+    const allNoise = wordsUpper.every(w => NOISE_WORDS.has(w) || w.length <= 1);
+    if (allNoise) { dlog('[CrewHub] SKIP all-noise line: "' + lineText + '"'); continue; }
+
+    // Extract player name
+    let playerName = extractPlayerNameFromLine(line.words);
+    if (!playerName) { dlog('[CrewHub] SKIP no-name extracted from: "' + lineText + '"'); continue; }
+
+    // Build a synthetic bbox spanning the whole line — needed for both the
+    // team-name-bar detection path and the regular color sampling path below.
+    const firstWord = line.words[0];
+    if (!firstWord?.bbox) continue;
+    const lineBbox = {
+      x0: Math.min(...line.words.map(w => w.bbox.x0)),
+      y0: Math.min(...line.words.map(w => w.bbox.y0)),
+      x1: Math.max(...line.words.map(w => w.bbox.x1)),
+      y1: Math.max(...line.words.map(w => w.bbox.y1)),
+    };
+
+    // ── Detect team-name bars BEFORE player-name validation ──────────────────
+    // isValidOpponentName will also reject these, but by checking here first
+    // we can capture the actual team name text and its color.
+    const isBarLine = isTeamName(playerName)
+      || /^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(playerName)  // ATTACK-O-LANTERN
+      || /^T{0,1}TACK(-O)?-LANTERN/i.test(playerName); // garbled variants
+    if (isBarLine) {
+      if (colorImageBuffer) {
+        const rawName = extractRawTeamNameFromLine(line.words);
+        if (rawName) {
+          try {
+            const cr = await detectTeamColorBarBelow(colorImageBuffer, lineBbox, scale);
+            if (cr.color !== 'unknown' && cr.color !== 'spectator') {
+              // Prefer the LONGEST captured name for each color (most complete read)
+              const existing = capturedTeamNames.get(cr.color);
+              // Don't register the same team name under two different colors
+              // (can happen when a bar appears near a color-bleed from an adjacent bar).
+              const alreadyByName = [...capturedTeamNames.values()]
+                .some(n => n.toUpperCase() === rawName.toUpperCase());
+              if (!alreadyByName && (!existing || rawName.length > existing.length)) {
+                capturedTeamNames.set(cr.color, rawName);
+                dlog('[CrewHub] Captured team name "' + rawName + '" color=' + cr.color);
+              }
+            }
+          } catch (_) {}
+        }
+      }
+      dlog('[CrewHub] Team name bar (skipping as player): "' + playerName + '"');
+      continue;
     }
 
-    if (isSpectatorTeamName(team.name)) continue;
+    if (!isValidOpponentName(playerName)) { dlog('[CrewHub] SKIP invalid-name: "' + playerName + '"'); continue; }
+    if (/PARTY|CREW|HUB|VOICE|CHANNEL|PUSH|TALK|MUTE|DISABLE|DEAFEN|UNMUTE|SAY|TEXT|PINGS/i.test(playerName)) { dlog('[CrewHub] SKIP ui-word: "' + playerName + '"'); continue; }
+    // 3+ word names are almost always OCR noise fragments joined together.
+    // Exception: if the first word alone is a strong valid name (e.g. "wootywoot"
+    // or "Ledurricane" with noise fragments appended by the row-slice scan),
+    // salvage it rather than discarding the whole line.
+    if (playerName.trim().split(/\s+/).length >= 3) {
+      const fp = playerName.trim().split(/\s+/)[0];
+      if (fp && isValidOpponentName(fp) && scoreAsPlayerName(fp) >= 15) {
+        playerName = fp;
+      } else {
+        dlog('[CrewHub] SKIP multi-word noise: "' + playerName + '"');
+        continue;
+      }
+    }
+
+    // Get the bounding box of the first word (for color sampling reference)
+    // (lineBbox already computed above)
+
+    // Sample the colored bar BELOW the name text
+    let detectedColor = 'unknown';
+    let colorConfidence = 0;
+
+    if (colorImageBuffer) {
+      try {
+        const cr = await detectTeamColorBarBelow(colorImageBuffer, lineBbox, scale);
+        if (cr.color !== 'unknown' && cr.color !== 'spectator' && cr.confidence > 30) {
+          detectedColor = cr.color;
+          colorConfidence = cr.confidence;
+        } else if (cr.color === 'spectator') {
+          console.log('[CrewHub] Skipping spectator card:', playerName);
+          continue;
+        }
+      } catch (e) {
+        console.warn('[CrewHub] Color detection failed for', playerName, ':', e.message);
+      }
+    }
+
+    cards.push({
+      y: line.y,
+      name: playerName,
+      color: detectedColor,
+      confidence: colorConfidence,
+      bbox: lineBbox,
+    });
+
+    // Register the bar zone so subsequent lines from the same card get skipped.
+    // Safety guard: if the "player name" itself looks like a ship name (e.g. an
+    // all-caps hyphenated word that slipped past isValidOpponentName), skip the
+    // bar zone registration — a misplaced bar zone can block the NEXT real player
+    // name from being processed (e.g., "LEASE" bar zone at y≈775 blocked
+    // "Scipion" at y≈841 in the eng+chi_sim fallback path).
+    const looksLikeShipNameBar = /^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(playerName)
+      || (/^[A-Z]{6,}$/.test(playerName) && /(?:LANTERN|PLEASE|WITCH|ATTACK|SPAGHURDER)/.test(playerName));
+    if (!looksLikeShipNameBar) {
+      barZones.push({ min: lineBbox.y1 + BAR_OFFSET - 5, max: lineBbox.y1 + BAR_OFFSET + BAR_HEIGHT + 5 });
+    } else {
+      dlog('[CrewHub] SKIP bar-zone for ship-name-like card: "' + playerName + '"');
+    }
+
+    dlog('[CrewHub] Card: ' + playerName + ' | color: ' + detectedColor + ' | conf: ' + colorConfidence + ' | y: ' + Math.round(line.y));
+  }
+
+  // ── Step 3b: Deduplicate cards that are within the same card-height zone ────
+  // The team name bar text (e.g. "WITCH PLEASE") appears ~30-60px below the
+  // player name in the same card. Use 0.4× card height (~62px) so we catch the
+  // bar (24-50px away) without merging consecutive player cards (~78px+).
+  const deduped = [];
+  for (const card of cards) {
+    const nearby = deduped.find(k => Math.abs(k.y - card.y) < CARD_HEIGHT * 0.4);
+    if (nearby) {
+      // Prefer the name with the higher player-name score, not simply the longer one.
+      // Known-color card only displaces an unknown-color card when the name quality
+      // is comparable (within 15 pts); a weak OCR read like "thong"(c37,score=20)
+      // must NOT replace a strong read like "fartingPuppy"(c89,score=40).
+      const newScore    = scoreAsPlayerName(card.name);
+      const nearbyScore = scoreAsPlayerName(nearby.name);
+      const keepNew = (card.color !== 'unknown' && nearby.color === 'unknown'
+                        && newScore >= nearbyScore - 15)
+        || (card.color === nearby.color && newScore > nearbyScore);
+      if (keepNew) {
+        deduped.splice(deduped.indexOf(nearby), 1, card);
+        dlog('[CrewHub] Dedup: replaced "' + nearby.name + '" with "' + card.name + '" (same zone y=' + Math.round(card.y) + ')');
+      } else {
+        dlog('[CrewHub] Dedup: dropped "' + card.name + '" near "' + nearby.name + '" (dist=' + Math.round(Math.abs(nearby.y - card.y)) + 'px)');
+      }
+      continue;
+    }
+    deduped.push(card);
+  }
+  const uniqueCards = deduped;
+  dlog('[CrewHub] Cards after dedup: ' + uniqueCards.length + ' — ' + uniqueCards.map(c => c.name + '(' + c.color + ')').join(', '));
+
+  // ── Step 3b-post: Remove cards whose name is a garbled form of a captured team name ─
+  // e.g. "Fancy Goose" == "FANCY GOOSE", "ANGUAR" ⊂ "VANGUARD", "VANCUARP" ≈ "VANGUARD"
+  if (capturedTeamNames.size > 0) {
+    const normS = s => (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    for (let i = uniqueCards.length - 1; i >= 0; i--) {
+      const card = uniqueCards[i];
+      const pn   = normS(card.name);
+      if (!pn || pn.length < 3) continue;
+      let isFragment = false;
+      for (const [, tn] of capturedTeamNames) {
+        const t = normS(tn);
+        if (!t || t.length < 4) continue;
+        if (pn === t || pn.includes(t) || t.includes(pn)) { isFragment = true; break; }
+        if (pn.length >= 5 && t.length >= 5) {
+          const maxLen = Math.max(pn.length, t.length);
+          if (levenshteinDistance(pn, t) / maxLen <= 0.25) { isFragment = true; break; }
+        }
+      }
+      if (isFragment) {
+        dlog('[CrewHub] Post-dedup: removed team-name fragment "' + card.name + '"');
+        uniqueCards.splice(i, 1);
+      }
+    }
+  }
+
+  // ── Step 3c: Capture team names from bar-zone lines ──────────────────────────
+  // Team name bars appear near their player cards in Y. Find the nearest known-
+  // color card above the bar within a search window. First captured name wins —
+  // never override a name already captured for a color.
+  for (const tLine of groupedLines) {
+    const rawTeamName = extractRawTeamNameFromLine(tLine.words);
+    if (!rawTeamName) continue;
+    if (!isTeamName(rawTeamName) && !/^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(rawTeamName)) continue;
+    // Find the nearest known-color card above OR below this line
+    let bestCard = null, bestDist = Infinity;
+    for (const card of uniqueCards) {
+      if (card.color === 'unknown') continue;
+      const dist = Math.abs(tLine.y - card.y);
+      if (dist < CARD_HEIGHT * 4 && dist < bestDist) { bestDist = dist; bestCard = card; }
+    }
+    // Block exact duplicates AND near-duplicates (≤15% edit distance) so that
+    // OCR misreads like "EANCY GOOSE" don't create a second entry for a name
+    // already captured as "FANCY GOOSE" for a different color.
+    const normFuz = s => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const rawNorm = normFuz(rawTeamName);
+    const alreadyByName3c = [...capturedTeamNames.values()]
+      .some(n => {
+        if (n.toUpperCase() === rawTeamName.toUpperCase()) return true;
+        const nN = normFuz(n);
+        if (nN.length >= 6 && rawNorm.length >= 6) {
+          const maxLen = Math.max(nN.length, rawNorm.length);
+          return levenshteinDistance(nN, rawNorm) / maxLen <= 0.15;
+        }
+        return false;
+      });
+    if (bestCard && !capturedTeamNames.has(bestCard.color) && !alreadyByName3c) {
+      capturedTeamNames.set(bestCard.color, rawTeamName);
+      dlog('[CrewHub] Step3c captured "' + rawTeamName + '" for color=' + bestCard.color + ' (nearest card: ' + bestCard.name + ', dist=' + Math.round(bestDist) + 'px)');
+    }
+  }
+
+  // ── Step 3c-post: Re-run team-name-fragment filter now that Step 3c has
+  //    populated capturedTeamNames from bar-zone lines (e.g. VANGUARD whose
+  //    bar fell inside a player card's bar-zone and was missed in the first pass).
+  if (capturedTeamNames.size > 0) {
+    const normS3c = s => (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    for (let i = uniqueCards.length - 1; i >= 0; i--) {
+      const card = uniqueCards[i];
+      const pn   = normS3c(card.name);
+      if (!pn || pn.length < 3) continue;
+      let isFragment = false;
+      for (const [, tn] of capturedTeamNames) {
+        const t = normS3c(tn);
+        if (!t || t.length < 4) continue;
+        if (pn === t || pn.includes(t) || t.includes(pn)) { isFragment = true; break; }
+        if (pn.length >= 5 && t.length >= 5) {
+          const maxLen = Math.max(pn.length, t.length);
+          if (levenshteinDistance(pn, t) / maxLen <= 0.25) { isFragment = true; break; }
+        }
+      }
+      if (isFragment) {
+        dlog('[CrewHub] Step3c-post: removed team-name fragment "' + card.name + '"');
+        uniqueCards.splice(i, 1);
+      }
+    }
+  }
+  const colorGroups = new Map(); // color → { cards[], minY, maxY }
+
+  for (const card of uniqueCards) {
+    if (card.color !== 'unknown') {
+      if (!colorGroups.has(card.color)) {
+        colorGroups.set(card.color, { color: card.color, cards: [], minY: Infinity, maxY: -Infinity, confidence: 0 });
+      }
+      const g = colorGroups.get(card.color);
+      g.cards.push(card);
+      g.minY = Math.min(g.minY, card.y);
+      g.maxY = Math.max(g.maxY, card.y);
+      g.confidence = Math.max(g.confidence, card.confidence);
+    }
+  }
+
+  const unknownCards = uniqueCards.filter(c => c.color === 'unknown');
+
+  // ── Step 5: Assign unknown-color cards to nearest known group ───────────────
+  const knownGroups = [...colorGroups.values()];
+
+  if (knownGroups.length > 0) {
+    for (const card of unknownCards) {
+      let bestGroup = null;
+      let bestDist = Infinity;
+      for (const g of knownGroups) {
+        // Distance to the group's Y range (0 if inside range)
+        const dist = card.y < g.minY ? g.minY - card.y
+                   : card.y > g.maxY ? card.y - g.maxY
+                   : 0;
+        if (dist < bestDist) { bestDist = dist; bestGroup = g; }
+      }
+      if (bestGroup && bestDist < CARD_HEIGHT * 3) {
+        bestGroup.cards.push(card);
+        bestGroup.minY = Math.min(bestGroup.minY, card.y);
+        bestGroup.maxY = Math.max(bestGroup.maxY, card.y);
+        console.log('[CrewHub] Assigned unknown-color', card.name, '→', bestGroup.color, '(dist', Math.round(bestDist), 'px)');
+      } else {
+        // No nearby known group — create isolated unknown group
+        knownGroups.push({ color: 'unknown', cards: [card], minY: card.y, maxY: card.y, confidence: 0 });
+      }
+    }
+  } else {
+    // ── Step 5b: Fallback — pure Y-gap clustering when ALL colors unknown ──────
+    console.log('[CrewHub] No color info — falling back to Y-gap clustering');
+    const TEAM_GAP_THRESHOLD = CARD_HEIGHT * 1.8;
+    let currentCluster = null;
+    for (const card of uniqueCards) {
+      if (!currentCluster) {
+        currentCluster = { color: 'unknown', cards: [card], minY: card.y, maxY: card.y, confidence: 0 };
+      } else {
+        const gap = card.y - currentCluster.maxY;
+        if (gap > TEAM_GAP_THRESHOLD) {
+          knownGroups.push(currentCluster);
+          currentCluster = { color: 'unknown', cards: [card], minY: card.y, maxY: card.y, confidence: 0 };
+        } else {
+          currentCluster.cards.push(card);
+          currentCluster.maxY = card.y;
+        }
+      }
+    }
+    if (currentCluster && currentCluster.cards.length > 0) knownGroups.push(currentCluster);
+  }
+
+  dlog('[CrewHub] Groups after assignment: ' + knownGroups.length + ' — ' + knownGroups.map(g => g.color + '(' + g.cards.length + ')').join(', '));
+
+  // ── Step 5c: Second-pass team name capture with fully-resolved colors ────────
+  // Step 3c runs before unknown cards get color-assigned in Step 5. Re-run the
+  // same nearest-card matching on the fully-resolved card set to fill any gaps.
+  {
+    const allCards = [];
+    for (const g of knownGroups) {
+      if (g.color === 'unknown') continue;
+      for (const c of g.cards) allCards.push({ color: g.color, y: c.y });
+    }
+    for (const tLine of groupedLines) {
+      const rawTeamName = extractRawTeamNameFromLine(tLine.words);
+      if (!rawTeamName) continue;
+      if (!isTeamName(rawTeamName) && !/^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(rawTeamName)) continue;
+      let bestCard = null, bestDist = Infinity;
+      for (const c of allCards) {
+        const dist = Math.abs(tLine.y - c.y);
+        if (dist < CARD_HEIGHT * 4 && dist < bestDist) { bestDist = dist; bestCard = c; }
+      }
+      const alreadyByName5c = [...capturedTeamNames.values()]
+        .some(n => n.toUpperCase() === rawTeamName.toUpperCase());
+      if (bestCard && !capturedTeamNames.has(bestCard.color) && !alreadyByName5c) {
+        capturedTeamNames.set(bestCard.color, rawTeamName);
+        dlog('[CrewHub] Step5c captured "' + rawTeamName + '" for color=' + bestCard.color + ' (dist=' + Math.round(bestDist) + 'px)');
+      }
+    }
+  }
+
+  // ── Build output ─────────────────────────────────────────────────────────────
+  let teamCounter = 1;
+  const enemyTeams = [];
+
+  for (const cluster of knownGroups) {
+    const players = [];
+    for (const card of cluster.cards) {
+      pushUniquePlayerName(players, card.name);
+    }
+
+    const filteredPlayers = players.filter(p => !isTeamName(p));
+    if (filteredPlayers.length === 0) continue;
+
+    const teamName = capturedTeamNames.get(cluster.color)
+      || (cluster.color !== 'unknown' ? cluster.color : `Team ${teamCounter++}`);
+    if (isSpectatorLine(teamName)) continue;
 
     enemyTeams.push({
-      name: team.name,
-      color: team.color || 'unknown',
-      players: team.players,
-      confidence: team.confidence || 60,
+      name: teamName,
+      color: cluster.color || 'unknown',
+      shipType: '',
+      players: filteredPlayers,
+      confidence: cluster.confidence || 50,
     });
   }
 
-  // Sort by player count (most players first) and limit to 4 teams
+  // Sort by player count (most players first), cap at 4 teams
   enemyTeams.sort((a, b) => b.players.length - a.players.length);
   if (enemyTeams.length > 4) {
-    console.warn('[CrewHub] More than 4 enemy teams detected, preserving overflow players in top 4 buckets');
+    console.warn('[CrewHub] More than 4 enemy teams detected, merging overflow into top 4');
     const kept = enemyTeams.slice(0, 4);
     const overflow = enemyTeams.slice(4);
-
     for (const spill of overflow) {
       let target = kept.find(t => t.color !== 'unknown' && spill.color !== 'unknown' && t.color === spill.color);
-      if (!target) {
-        target = kept.reduce((best, t) => (t.players.length < best.players.length ? t : best), kept[0]);
-      }
-      for (const p of spill.players || []) {
-        pushUniquePlayerName(target.players, p);
-      }
+      if (!target) target = kept.reduce((best, t) => (t.players.length < best.players.length ? t : best), kept[0]);
+      for (const p of spill.players || []) pushUniquePlayerName(target.players, p);
     }
-
     return kept;
   }
 
+  console.log('[CrewHub] Enemy teams found:', enemyTeams.length, enemyTeams.map(t => `${t.color}(${t.players.length})`).join(', '));
   return enemyTeams;
 }
 
@@ -566,18 +972,22 @@ function groupWordsIntoLines(words, imageHeight, imageWidth = null) {
     for (const line of lines) {
       // Check Y proximity (same vertical level)
       if (Math.abs(line.y - wordY) < lineThreshold) {
-        // Also check X proximity to prevent merging distant text
-        const lastWordInLine = line.words[line.words.length - 1];
-        const lineEndX = lastWordInLine ? lastWordInLine.bbox.x1 : 0;
-        const lineStartX = line.words[0]?.bbox.x0 || 0;
+        // Use full x-span of the line (min x0 to max x1) to decide membership.
+        // Checking only the last-added word's x1 fails when a later word was
+        // appended further right (e.g. "fg)" at x=2780 after "Hoff" at x=2450)
+        // causing a legitimate word like "07" (x0=2460) to look like it's
+        // 320px to the LEFT of the line end and be wrongly excluded.
+        const lineXmin = Math.min(...line.words.map(w => w.bbox.x0));
+        const lineXmax = Math.max(...line.words.map(w => w.bbox.x1));
+        const xDistFromRight = wordX - lineXmax;   // positive = right of span
+        const xDistFromLeft  = lineXmin - (word.bbox.x1 || wordX); // positive = left of span
 
-        // Word should be within reasonable X distance of existing line content
-        const xDistFromEnd = wordX - lineEndX;
-        const xDistFromStart = lineStartX - (word.bbox.x1 || wordX);
+        // Accept if the word is inside the span, or within xProximityThreshold of either end
+        const withinSpan   = xDistFromRight <= 0  && xDistFromLeft <= 0;
+        const closeToRight = xDistFromRight >= 0  && xDistFromRight < xProximityThreshold;
+        const closeToLeft  = xDistFromLeft  >= 0  && xDistFromLeft  < xProximityThreshold;
 
-        // Accept if word is close to either end of the line
-        if (xDistFromEnd < xProximityThreshold && xDistFromEnd > -50 ||
-            xDistFromStart < xProximityThreshold && xDistFromStart > -50) {
+        if (withinSpan || closeToRight || closeToLeft) {
           line.words.push(word);
           foundLine = true;
           break;
@@ -608,6 +1018,18 @@ function groupWordsIntoLines(words, imageHeight, imageWidth = null) {
 function extractPlayerNameFromLine(words) {
   if (!words || words.length === 0) return null;
 
+  // Pre-pass: detect rank/prestige prefix tokens like "[6°]", "[7*]" before the
+  // general noise filters discard them (bracket-containing tokens are skipped by
+  // default). OCR reads "[6*]" as "[6°]" (degree symbol), so we normalise ° → *.
+  let rankPrefix = null;
+  for (const word of words) {
+    const t = word.text?.trim();
+    if (!t) continue;
+    const rm = t.match(/^\[(\d{1,2})[°*+~]\]$/);
+    if (rm) { rankPrefix = '[' + rm[1] + '*]'; break; }
+  }
+  const prependRank = (name) => rankPrefix ? rankPrefix + ' ' + name : name;
+
   const validParts = [];
   let bestSingleWord = null;
   let bestSingleWordScore = 0;
@@ -616,8 +1038,12 @@ function extractPlayerNameFromLine(words) {
     const text = word.text?.trim();
     if (!text) continue;
 
-    // Skip noise words
-    if (NOISE_WORDS.has(text.toUpperCase())) continue;
+    // Skip near-zero-confidence reads — Tesseract assigns near-0 to
+    // hallucinated tokens it has no confidence in at all.
+    if ((word.confidence || 0) < 1) continue;
+
+    // Skip noise words — strip trailing punctuation first so "crew!" == "CREW", etc.
+    if (NOISE_WORDS.has(text.toUpperCase().replace(/[!?.,;:]+$/, ''))) continue;
 
     // Skip very short fragments (likely OCR noise) unless they're numbers (part of name)
     if (text.length < 2 && !/[0-9]/.test(text)) continue;
@@ -630,6 +1056,9 @@ function extractPlayerNameFromLine(words) {
 
     // Skip platform indicators at end
     if (/^[XPCD]$/i.test(text) && validParts.length > 0) continue;
+
+    // Skip tokens that are OCR noise with brackets/parens (e.g. "fg)", "[P]", "(x")
+    if (/[()\[\]{}]/.test(text) && !/[A-Z0-9_]{3,}/i.test(text)) continue;
 
     // Skip common OCR noise patterns
     if (/^[|=\-~#%&*]+$/.test(text)) continue;
@@ -645,33 +1074,105 @@ function extractPlayerNameFromLine(words) {
     validParts.push(text);
   }
 
-  // Strategy 1: If we have a single high-confidence word, use it
-  if (bestSingleWord && bestSingleWordScore >= 50 && validParts.length <= 3) {
-    const cleaned = cleanupPlayerName(bestSingleWord);
-    if (cleaned.length >= 3) return cleaned;
+  // Strategy 1: single dominant word — threshold 40 (was 50) so mixed-case names
+  // like "fartingPuppy" (score=40) pass without requiring numbers/underscore.
+  // The "other parts are non-name" threshold is 41 so that short ≤4-char
+  // names like "Salo"/"Sune"/"Riv" (score≤40 = +10 len + +20 mixed + +10 cap)
+  // don't prevent a longer dominant name like "Saln_Reclaimer" (score=65)
+  // from being used alone.  Genuine 2-word names like "Lanky Bastard" both
+  // score ≥50 so neither word passes the < 41 test and Strategy 1 is skipped.
+  if (bestSingleWord && bestSingleWordScore >= 40 && validParts.length <= 3) {
+    const otherParts = validParts.filter(p => p !== bestSingleWord);
+    const allOthersAreNonName = otherParts.every(
+      p => scoreAsPlayerName(p) < 41 || /^\d{1,5}$/.test(p)
+    );
+    if (allOthersAreNonName) {
+      const cleaned = cleanupPlayerName(bestSingleWord);
+      if (cleaned.length >= 3) return prependRank(cleaned);
+    }
+  }
+
+  // Strategy 1b: Best word is decent but all other "words" score 0
+  // (e.g., "Hoff"+"OF" → "Hoff"; "Scipion"+"kD)"+"10" → "Scipion")
+  // No length restriction on noise: any score=0 fragment is treated as noise.
+  // Exception: a 1-2 digit token that immediately follows the best word in the
+  // line (x-gap ≤ 15px in OCR coords) is treated as a numeric name suffix
+  // e.g. "Hoff 07" where "07" sits directly beside "Hoff".
+  // Threshold 15 (was 25) so all-lowercase names ≥5 chars like "lirolake" (score=20) pass.
+  if (bestSingleWord && bestSingleWordScore >= 15 && validParts.length >= 2) {
+    const otherParts = validParts.filter(p => p !== bestSingleWord);
+    const allOthersAreNoise = otherParts.every(p => scoreAsPlayerName(p) === 0);
+    if (allOthersAreNoise) {
+      const bestWordObj = words.find(w => w.text?.trim() === bestSingleWord);
+      const adjacentNums = words.filter(w => {
+        const t = w.text?.trim();
+        if (!t || !/^\d{1,2}$/.test(t)) return false;
+        if (!bestWordObj?.bbox || !w.bbox) return false;
+        const gap = w.bbox.x0 - bestWordObj.bbox.x1;
+        return gap >= -5 && gap <= 15; // immediately follows the name word
+      }).map(w => w.text.trim());
+      const nameParts = adjacentNums.length > 0
+        ? [bestSingleWord, ...adjacentNums]
+        : [bestSingleWord];
+      const cleaned = cleanupPlayerName(nameParts.join(' '));
+      if (cleaned.length >= 3) return prependRank(cleaned);
+    }
   }
 
   // Strategy 2: Join consecutive parts that look like they belong together
   if (validParts.length === 0) return null;
 
-  // Filter out likely noise parts
-  const filteredParts = validParts.filter(p => {
-    // Keep if it has alphanumeric content
+  // Filter out likely noise parts.
+  // Require at least one letter — pure numbers ("12", "120", kill-count indicators)
+  // adjacent to a name must not be joined into the username string.
+  // Also filter level-badge reads: "10", "1D", "10D", "12D", "ID", "1" etc.
+  let filteredParts = validParts.filter(p => {
+    if (!/[a-zA-Z\u4e00-\u9fff\u0400-\u04FF]/.test(p)) return false; // pure number/symbol → skip
+    if (/^\d{0,3}[ID]$/i.test(p)) return false; // level-badge indicators: "10D", "1D", "ID"
+    if (/^\d{1,2}[a-zA-Z]{1,2}$/.test(p)) return false; // short digit+letter fragments: "4s", "10x"
+    if (/^(.)\1+$/i.test(p)) return false; // all-same-letter OCR garbage: "EEE", "lll", "III"
     if (/[a-zA-Z0-9\u4e00-\u9fff]{2,}/.test(p)) return true;
-    // Keep numbers that might be part of username
-    if (/^\d+$/.test(p) && p.length <= 4) return true;
     return false;
   });
 
   if (filteredParts.length === 0) return null;
 
-  // Join parts
-  let name = filteredParts.join('');
+  // Deduplicate near-identical consecutive tokens — handles double OCR reads where
+  // the same name is read twice with slight variation e.g. "RapidWarrior RapldWarrior"
+  // or "H4VOK_XP H4YOK_XP".  Keep the higher-scoring token from each near-identical pair.
+  if (filteredParts.length >= 2) {
+    const ddParts = [filteredParts[0]];
+    for (let i = 1; i < filteredParts.length; i++) {
+      const cur  = filteredParts[i];
+      const prev = ddParts[ddParts.length - 1];
+      // Near-identical: same length ±1 AND ≤2 positional char differences (covers 1-char OCR substitution)
+      const lenDiff = Math.abs(cur.length - prev.length);
+      if (cur.length >= 4 && prev.length >= 4 && lenDiff <= 1) {
+        const minLen = Math.min(cur.length, prev.length);
+        let diffs = lenDiff;
+        for (let k = 0; k < minLen; k++) {
+          if (cur[k].toLowerCase() !== prev[k].toLowerCase()) diffs++;
+        }
+        if (diffs <= 2) {
+          // Keep the higher-scored one
+          if (scoreAsPlayerName(cur) > scoreAsPlayerName(prev)) {
+            ddParts[ddParts.length - 1] = cur;
+          }
+          continue; // skip adding cur — discard the near-duplicate
+        }
+      }
+      ddParts.push(cur);
+    }
+    filteredParts = ddParts;
+  }
+
+  // Join parts with space — preserves multi-word names like "Sticks and Stones"
+  let name = filteredParts.join(' ');
 
   // Clean up OCR artifacts
   name = cleanupPlayerName(name);
 
-  return name.length >= 3 ? name : null;
+  return name.length >= 3 ? prependRank(name) : null;
 }
 
 function getLineCenterX(words) {
@@ -719,8 +1220,9 @@ function scoreAsPlayerName(text) {
   const noiseRatio = (text.match(/[^a-zA-Z0-9_\u4e00-\u9fff\u0400-\u04FF]/g) || []).length / text.length;
   if (noiseRatio > 0.3) score -= 30;
 
-  // Penalize short all-caps (likely UI element)
-  if (text === text.toUpperCase() && text.length < 6 && !/[0-9]/.test(text)) score -= 20;
+  // Penalize short all-caps (likely UI element) — extended to ≤7 chars to catch
+  // 6-char noise fragments like "LUEVAY", "ANGUAR" etc. that aren't real names.
+  if (text === text.toUpperCase() && text.length < 7 && !/[0-9]/.test(text)) score -= 20;
 
   return Math.max(0, Math.min(100, score));
 }
@@ -735,6 +1237,9 @@ function cleanupPlayerName(name) {
   let cleaned = name
     // Common OCR substitutions
     .replace(/@/g, 'Q')      // @ -> Q
+    .replace(/&/g, '4')       // & -> 4 (OCR misreads digit 4 as ampersand)
+    .replace(/[éèêëÉÈÊË]/g, '4') // accented E variants misread for digit 4 (e.g. G4zZy → GézZy)
+    .replace(/[àáâãäåÀÁÂÃÄÅ]/g, '4') // accented A variants misread for digit 4
     .replace(/»/g, 'a')      // >> -> a
     .replace(/«/g, '')       // <<
     .replace(/[{}()\[\]<>]/g, '')
@@ -748,8 +1253,10 @@ function cleanupPlayerName(name) {
     .replace(/\\/g, '')      // Backslashes
     .replace(/[|]/g, '')     // Pipes
     .replace(/[~#%&*^]/g, '') // Common OCR noise symbols
-    // Remove trailing platform indicators
-    .replace(/\s*[XPCD]$/i, '')
+    // Remove trailing platform indicators (must be space-separated, e.g. "PlayerName P")
+    // Using \s+ (not \s*) so trailing letters that are part of the name
+    // (e.g. "H4VOK_XP" ending in P) are not incorrectly stripped.
+    .replace(/\s+[XPCD]$/i, '')
     // Remove common OCR prefixes/suffixes
     .replace(/^[A-Z]{1,3}(?=[A-Z][a-z])/g, '') // Remove short caps prefix before CamelCase (e.g., "GNAlixThus" -> "AlixThus")
     .replace(/[=]+$/g, '')   // Remove trailing = (e.g., "oSalad=" -> "oSalad")
@@ -762,6 +1269,16 @@ function cleanupPlayerName(name) {
   // Additional cleanup: remove single isolated characters at start/end
   cleaned = cleaned.replace(/^[a-zA-Z](?=[A-Z])/, ''); // Single lowercase before uppercase
   cleaned = cleaned.replace(/[a-zA-Z]$(?<=[a-z][A-Z])/, ''); // Single uppercase after lowercase at end
+
+  // OCR commonly misreads digit "1" as "l" or "i" inside mixed-case names.
+  // Heuristic: if a mixed-case word (10+ chars, starts uppercase) ends in 2+
+  // chars from the {i, l} confusion set, convert those trailing chars to "1"s.
+  // Example: "PerfectSinil" → "PerfectSin11"  ("11" mis-read as "il")
+  // The 10-char minimum prevents false positives on short English words ("Basil" etc.)
+  cleaned = cleaned.replace(
+    /^([A-Z][a-zA-Z0-9]{8,}[a-zA-Z0-9])[il]{2,}$/,
+    (m, p1) => p1 + '1'.repeat(m.length - p1.length)
+  );
 
   return cleaned;
 }
@@ -808,15 +1325,41 @@ function isValidPlayerName(name) {
 }
 
 function isValidOpponentName(name) {
-  if (!name || name.length < 3 || name.length > 28) return false;
+  if (!name || name.length < 4 || name.length > 28) return false;
+  if (/^[0-9]/.test(name)) return false; // names never start with a digit
 
   if (!/[a-zA-Z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/.test(name)) return false;
   if (NOISE_WORDS.has(name.toUpperCase())) return false;
   if (/PARTY|CREW|HUB|VOICE|CHANNEL|SPECTATOR|OBSERVER/i.test(name)) return false;
   if (/^[|=\-~#%&*]+$/.test(name)) return false;
 
+  // Reject ship name patterns:
+  // 1. All-caps hyphenated compound words (e.g. "ATTACK-O-LANTERN", "TTACK-O-LANTERN")
+  if (/^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(name)) return false;
+
+  // 2. Merged all-caps ship names (e.g. "WITCHPLEASE", "NACKOLANTERN")
+  if (/^[A-Z]{8,}$/.test(name) && /(?:LANTERN|PLEASE|WITCH|SPAGHURDER|MEANR|ATTACK)/.test(name)) return false;
+
+  // 3. Multi-word all-caps team name bars (e.g. "WITCH PLEASE", "Y WITCH PLEASE")
+  //    These are the colored bar labels rendered inside opponent cards, not player names.
+  if (isTeamName(name)) return false;
+
+  // 4. Very low-scoring tokens are almost certainly OCR noise (e.g. "amy" from
+  //    the "Enemy Crews" header) — reject anything scoring below 15.
+  if (scoreAsPlayerName(name) < 15) return false;
+
   return true;
 }
+
+// UI section headers that appear in the crew-hub right panel but are NOT team
+// name bars. All-caps multi-word phrases that isTeamName would otherwise accept.
+const NON_TEAM_PHRASES = new Set([
+  'KNOWN HAZARDS', 'ENEMY CREWS', 'CREW SIZE', 'KNOWN HAZARDS &',
+  'FASTER SHIELDS', 'FASTER SHIELDS DOWN', 'LOW ALTITUDE FOG',
+  'FEW ASTEROIDS', 'LEGION PATROLS', 'ROGUE TURRETS', 'FEW SHIPS',
+  'DEAD WORLDS', 'EPIC LOOT', 'CRYON RIFT', 'ARTIFACT HEALING',
+  'ARTIFACT WEAPON', 'PING AT CURSOR', 'TOGGLE LABELS', 'TOGGLE CURSOR',
+]);
 
 /**
  * Check if text looks like a team name (not a player name)
@@ -827,12 +1370,19 @@ function isTeamName(text) {
   const cleaned = text.replace(/\s+/g, ' ').trim();
   if (cleaned.length < 4 || cleaned.length > 40) return false;
 
+  // Block known UI section headers that are all-caps multi-word but not teams
+  if (NON_TEAM_PHRASES.has(cleaned.toUpperCase())) return false;
+
   const words = cleaned.split(/\s+/);
-  if (words.length < 2) return false;
 
   const letters = cleaned.match(/[A-Za-z]/g) || [];
   const upperLetters = cleaned.match(/[A-Z]/g) || [];
   const upperRatio = letters.length > 0 ? upperLetters.length / letters.length : 0;
+
+  // Single all-caps word (e.g. VANGUARD, BOREALIS) counts as a team name
+  if (words.length < 2) {
+    return upperRatio === 1 && letters.length >= 5;
+  }
 
   const hasNumbers = /[0-9]/.test(cleaned);
   const hasUnderscore = /_/.test(cleaned);
@@ -855,8 +1405,15 @@ function namesAreNearDuplicate(a, b) {
   const bKey = normalizeNameKey(b);
   if (!aKey || !bKey) return false;
   if (aKey === bKey) return true;
-  if (aKey.includes(bKey) || bKey.includes(aKey)) return true;
-  return levenshteinDistance(aKey, bKey) <= 1;
+  // Substring containment only when the shorter string is long enough to be
+  // unambiguous — prevents "riv" ⊆ "riv2" false-positive.
+  const shorter = aKey.length <= bKey.length ? aKey : bKey;
+  const longer  = aKey.length <= bKey.length ? bKey : aKey;
+  if (shorter.length >= 5 && longer.includes(shorter)) return true;
+  // Levenshtein ≤1 only for longer names so short names like "Rive" vs "Riv2"
+  // (both 4 chars, edit-distance 1) are NOT conflated.
+  if (aKey.length >= 8 && bKey.length >= 8) return levenshteinDistance(aKey, bKey) <= 1;
+  return false;
 }
 
 function pushUniquePlayerName(players, candidate) {
@@ -902,8 +1459,9 @@ function findNearestTeamIndexByY(teams, lineY, maxGap) {
  */
 function formatTeamName(name) {
   if (!name) return '';
+  // Preserve punctuation valid in team names (!, ?, -, _, ., ')
   return name
-    .replace(/[^a-zA-Z0-9_.\-'\s]/g, '')
+    .replace(/[^a-zA-Z0-9_.\-'!? ]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -960,7 +1518,7 @@ function levenshteinDistance(s1, s2) {
 module.exports = {
   extractCrewHub,
   extractLeftPanel,
-  extractRightPanel,
+  extractEnemyPanel,
   groupWordsIntoLines,
   extractPlayerNameFromLine,
   cleanupPlayerName,

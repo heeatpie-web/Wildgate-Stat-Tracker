@@ -21,37 +21,49 @@ const LAYOUT = {
     yMin: 0,
     yMax: 0.25,
   },
-  // ENEMY SHIPS region (top-right)
+  // ENEMY SHIPS region (top-right).
+  // Text starts at x≈85%; x=60-83% contains badge/icon noise — exclude it.
   ENEMY_SHIPS: {
-    xMin: 0.60,
+    xMin: 0.83,
     xMax: 1.0,
     yMin: 0.00,
     yMax: 0.10,
   },
   ENEMY_SHIPS2: {
-    xMin: 0.60,
+    xMin: 0.83,
     xMax: 1.0,
     yMin: 0.10,
     yMax: 0.20,
   },
   ENEMY_SHIPS3: {
-    xMin: 0.60,
+    xMin: 0.83,
     xMax: 1.0,
     yMin: 0.20,
     yMax: 0.30,
   },
   ENEMY_SHIPS4: {
-    xMin: 0.60,
+    xMin: 0.83,
     xMax: 1.0,
     yMin: 0.30,
     yMax: 0.40,
   },
-  // HAZARDS region (right side, middle)
+  // HAZARDS region (right panel only — modifier list runs y≈28-63%;
+  // At 1080p the list starts at ~31% of screen height; at 4K ~38%.
+  // Widening to 0.28 captures all items at both resolutions.
+  // ARTIFACT SPECIAL LOOT and WILDGATE RESOURCES below 0.63 are map POI labels)
   HAZARDS: {
     xMin: 0.60,
     xMax: 1.0,
-    yMin: 0.30,
-    yMax: 0.70,
+    yMin: 0.28,
+    yMax: 0.63,
+  },
+  // MAP CENTER dead-zone: the actual game map graphic — no useful text here.
+  // x=28-60%, y=6-72%  (left UI strip and right panel are outside this box)
+  MAP_CENTER: {
+    xMin: 0.28,
+    xMax: 0.60,
+    yMin: 0.06,
+    yMax: 0.72,
   },
   // Player list (bottom-left)
   PLAYERS: {
@@ -96,6 +108,7 @@ function resolveMapLayout(layoutOverrides) {
     ENEMY_SHIPS3: sanitizeBounds(source.enemyShips3, LAYOUT.ENEMY_SHIPS3),
     ENEMY_SHIPS4: sanitizeBounds(source.enemyShips4, LAYOUT.ENEMY_SHIPS4),
     HAZARDS: sanitizeBounds(source.hazards, LAYOUT.HAZARDS),
+    MAP_CENTER: sanitizeBounds(source.mapCenter, LAYOUT.MAP_CENTER),
     PLAYERS: sanitizeBounds(source.players, LAYOUT.PLAYERS),
   };
 }
@@ -109,14 +122,19 @@ const SHIP_TYPES = ['HUNTER', 'BASTION', 'PRIVATEER', 'SCOUT', 'SOLO OUTLAW', 'O
  * Known hazards/modifiers
  */
 const KNOWN_HAZARDS = {
+  // Artifact modifiers
   'HEALING ARTIFACT': 'Artifact: Healing',
   'ARTIFACT HEALING': 'Artifact: Healing',
   'ICE ARTIFACT': 'Artifact: Ice',
+  'CE ARTIFACT': 'Artifact: Ice',    // OCR misreads I as | → "| CE" or "CE"
   'WEAPON ARTIFACT': 'Artifact: Weapon',
+  // Named modifiers
   'ANCIENT VAULT': 'Ancient Vault',
   'CRYON REACH': 'Cryon Reach',
+  'CRYON RIFT': 'Cryon Rift',
   'DEAD SENSORS': 'Dead Sensors',
-  'DEADWORLDS': 'Deadworlds',
+  'DEAD WORLDS': 'Dead Worlds',
+  'DEADWORLDS': 'Dead Worlds',
   'EASY LOOT': 'Easy Loot',
   'EPIC LOOT': 'Epic Loot',
   'FAST GATE': 'Fast Gate',
@@ -128,11 +146,15 @@ const KNOWN_HAZARDS = {
   'LAVA EPICS': 'Lava Epics',
   'LEECH SWARMS': 'Leech Swarms',
   'LEGION PATROLS': 'Legion Patrols',
+  'PATROLS': 'Legion Patrols',       // OCR sometimes only reads second word
   'LOW ALTITUDE FOG': 'Low Altitude Fog',
   'LOW LATITUDE FOG': 'Low Altitude Fog',
   'MANY ASTEROIDS': 'Many Asteroids',
   'ROGUE TURRETS': 'Rogue Turrets',
   'SANDSTORM': 'Sandstorm',
+  'SAND STORM': 'Sandstorm',         // OCR sometimes splits as two words
+  // NOTE: 'ARTIFACT SPECIAL LOOT', 'WILDGATE RESOURCES', 'LUCKY DOCKS' are
+  // map POI icon labels (below the modifier list), NOT modifiers — do not add them here.
 };
 
 const PLAYER_NOISE_WORDS = new Set([
@@ -175,7 +197,26 @@ async function extractMapScreen(imageBuffer, ocrResult, imageWidth, imageHeight,
     return result;
   }
 
-  const words = ocrResult.words || [];
+  // Pre-filter: drop words that fall inside the map-centre dead-zone.
+  // The actual game-map graphic occupies the middle of the screen and produces
+  // nothing but noise (POI grid labels, legend icons, etc.).
+  const mapCenterBounds = {
+    xMin: imageWidth  * layout.MAP_CENTER.xMin,
+    xMax: imageWidth  * layout.MAP_CENTER.xMax,
+    yMin: imageHeight * layout.MAP_CENTER.yMin,
+    yMax: imageHeight * layout.MAP_CENTER.yMax,
+  };
+  const isInMapCenter = (w) => {
+    if (!w.bbox) return false;
+    const cx = (w.bbox.x0 + w.bbox.x1) / 2;
+    const cy = (w.bbox.y0 + w.bbox.y1) / 2;
+    return cx >= mapCenterBounds.xMin && cx <= mapCenterBounds.xMax &&
+           cy >= mapCenterBounds.yMin && cy <= mapCenterBounds.yMax;
+  };
+
+  const rawWords = ocrResult.words || [];
+  const words = rawWords.filter(w => !isInMapCenter(w));
+  console.log(`[MapScreen] Words after map-centre exclusion: ${words.length}/${rawWords.length}`);
   const lines = ocrResult.lines || [];
   const text = ocrResult.text || '';
 
@@ -244,26 +285,45 @@ async function extractYourShip(imageBuffer, words, lines, text, imageWidth, imag
     yMax: imageHeight * layout.YOUR_SHIP.yMax,
   };
 
-  // Filter words in YOUR SHIP region
+  // Filter words in YOUR SHIP region.
+  // Drop very-low-confidence words (icon artefacts) and the far-left icon column (x<5%).
   const regionWords = words.filter(w => {
     if (!w.bbox) return false;
     const centerX = (w.bbox.x0 + w.bbox.x1) / 2;
     const centerY = (w.bbox.y0 + w.bbox.y1) / 2;
-    return centerX >= bounds.xMin && centerX <= bounds.xMax &&
-           centerY >= bounds.yMin && centerY <= bounds.yMax;
+    const inBounds = centerX >= bounds.xMin && centerX <= bounds.xMax &&
+                     centerY >= bounds.yMin && centerY <= bounds.yMax;
+    if (!inBounds) return false;
+    // Skip leftmost icon strip (x < 5%) and garbage-confidence words
+    if (centerX < imageWidth * 0.05) return false;
+    if ((w.confidence || 0) < 30) return false;
+    return true;
   });
 
   // Group into lines
   const groupedLines = groupWordsIntoLines(regionWords, imageHeight);
 
-  let teamName = '';
+  const teamNameParts = [];
   let shipType = '';
+
+  // UI words to strip from line text before team-name extraction.
+  // These appear in the YOUR SHIP panel but are never part of a team name.
+  const MAP_SHIP_UI_LABELS = new Set([
+    'SHIP', 'YOUR', 'SHIPS', 'ENEMY', 'HEALTH', 'CREWSIZE', 'CREW',
+    'FAST', 'GUN', 'KNOWN', 'HAZARDS', 'FEATURES', 'PARTY', 'VOICE',
+    'SIZE', 'HEALTH',
+  ]);
 
   // Look for ship type and team name
   for (const line of groupedLines) {
-    const lineText = line.words.map(w => w.text).join(' ').toUpperCase().trim();
-
-    // Skip "YOUR SHIP" header
+    // Filter out known UI label words from the line before processing.
+    // This handles lines where e.g. "SHIP" and "DODGE THE BULLET" land on the
+    // same grouped line due to close Y proximity at scaled coords.
+    const lineWords = line.words
+      .map(w => w.text.toUpperCase().trim())
+      .filter(t => !MAP_SHIP_UI_LABELS.has(t));
+    const lineText = lineWords.join(' ').trim();
+    if (!lineText) continue;
     if (lineText.includes('YOUR') && lineText.includes('SHIP')) continue;
 
     // Check for ship type
@@ -271,18 +331,24 @@ async function extractYourShip(imageBuffer, words, lines, text, imageWidth, imag
     if (foundShip) {
       shipType = foundShip.charAt(0) + foundShip.slice(1).toLowerCase();
 
-      // Team name might be in same line before ship type
-      const beforeShip = lineText.substring(0, lineText.indexOf(foundShip)).trim();
-      if (beforeShip.length >= 3 && !teamName) {
-        teamName = formatTeamName(beforeShip);
+      // Team name may appear before AND/OR after the ship type on the same line
+      // (e.g. Tesseract groups "DODGE OUTLAW THE BULLET" all on one line)
+      const shipIdx = lineText.indexOf(foundShip);
+      const beforeShip = lineText.substring(0, shipIdx).trim();
+      const afterShip  = lineText.substring(shipIdx + foundShip.length).trim();
+      if (beforeShip.length >= 2) teamNameParts.push(formatTeamName(beforeShip));
+      if (afterShip.length >= 2 && looksLikeTeamName(afterShip)) {
+        teamNameParts.push(formatTeamName(afterShip));
       }
-    } else if (!shipType && lineText.length >= 3 && lineText.length <= 30) {
-      // This might be the team name (appears before ship type)
+    } else if (!shipType && lineText.length >= 2 && lineText.length <= 40) {
+      // Accumulate team name parts — team names can span multiple words/lines
       if (looksLikeTeamName(lineText)) {
-        teamName = formatTeamName(lineText);
+        teamNameParts.push(formatTeamName(lineText));
       }
     }
   }
+
+  const teamName = teamNameParts.join(' ').trim();
 
   if (shipType) {
     return {
@@ -350,8 +416,9 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
     const lineText = line.words.map(w => w.text).join(' ').trim();
     const upperText = lineText.toUpperCase();
 
-    // Skip "ENEMY SHIPS" header
-    if (upperText.includes('ENEMY') && upperText.includes('SHIP')) continue;
+    // Skip "ENEMY SHIPS" header (and standalone "SHIPS" which can appear alone
+    // in the region and leak into pendingTeamName via looksLikeTeamName).
+    if ((upperText.includes('ENEMY') && upperText.includes('SHIP')) || /^SHIPS?$/.test(upperText)) continue;
 
     // Detect color for this line
     const firstWord = line.words[0];
@@ -366,17 +433,53 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
       }
     }
 
-    // Check if this line is a ship type
-    const foundShip = SHIP_TYPES.find(type => upperText.includes(type));
+    // Check if this line is a ship type (exact match first, fuzzy fallback for OCR noise)
+    let foundShip = SHIP_TYPES.find(type => upperText.includes(type));
+    if (!foundShip) {
+      // Fuzzy: OCR sometimes replaces leading char with noise e.g. "(UNTER" for "HUNTER".
+      // Strip one leading non-alpha character from each word and check if the result
+      // is a suffix of exactly one ship type (covering all but the first char).
+      const lineWords = upperText.split(/\s+/);
+      for (const type of SHIP_TYPES) {
+        if (lineWords.some(w => {
+          const stripped = w.replace(/^[^A-Z]/, '');
+          return stripped.length >= 4 && type.endsWith(stripped) && stripped.length >= type.length - 1;
+        })) {
+          foundShip = type;
+          break;
+        }
+      }
+    }
 
     if (foundShip) {
       // This line has a ship type - extract team name
       let teamName = pendingTeamName;
 
-      // Check if team name is in same line before ship type
-      const beforeShip = upperText.substring(0, upperText.indexOf(foundShip)).trim();
-      if (beforeShip.length >= 3) {
+      // Locate where the ship type token starts in the line (exact or fuzzy match)
+      let rawShipIdx = upperText.includes(foundShip) ? upperText.indexOf(foundShip) : -1;
+      if (rawShipIdx === -1) {
+        // Fuzzy match: find the word that was matched (one leading noise char)
+        let consumed = 0;
+        for (const w of upperText.split(/(\s+)/)) {
+          const stripped = w.replace(/^[^A-Z]/, '');
+          if (stripped.length >= 4 && foundShip.endsWith(stripped) && stripped.length >= foundShip.length - 1) {
+            rawShipIdx = consumed;
+            break;
+          }
+          consumed += w.length;
+        }
+        if (rawShipIdx === -1) rawShipIdx = 0;
+      }
+      const beforeShip = upperText.substring(0, rawShipIdx).trim();
+      if (beforeShip.length >= 2) {
         teamName = formatTeamName(beforeShip);
+      }
+      // Also capture text AFTER the ship type — OCR sometimes reads the card as
+      // e.g. "DUBIOUS HUNTER REFLECTION" where the second word of the team name
+      // appears after the ship type token.
+      const afterShip = upperText.substring(rawShipIdx + foundShip.length).trim();
+      if (afterShip.length >= 3 && looksLikeTeamName(afterShip)) {
+        teamName = teamName ? teamName + ' ' + formatTeamName(afterShip) : formatTeamName(afterShip);
       }
 
       enemyShips.push({
@@ -389,10 +492,14 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
       // Reset pending values
       pendingTeamName = '';
       pendingColor = 'unknown';
-    } else if (lineText.length >= 3 && lineText.length <= 30) {
+    } else if (lineText.length >= 2 && lineText.length <= 30) {
       // This might be a team name (for next ship type line)
-      if (looksLikeTeamName(lineText)) {
-        pendingTeamName = formatTeamName(lineText);
+      // Also accept short all-caps words like "NO" / "GO" as valid team name prefix words
+      if (looksLikeTeamName(lineText) || /^[A-Z]{2,3}$/.test(lineText)) {
+        const formatted = formatTeamName(lineText);
+        // Accumulate consecutive team-name lines so multi-word names spread across
+        // two OCR lines (e.g. "DUBIOUS" then "REFLECTION") are joined correctly.
+        pendingTeamName = pendingTeamName ? pendingTeamName + ' ' + formatted : formatted;
       }
     }
   }
@@ -464,13 +571,38 @@ function extractHazards(text, words = [], imageWidth = 0, imageHeight = 0, layou
   }
 
   if (Array.isArray(words) && words.length > 0 && imageWidth > 0 && imageHeight > 0) {
-    const bounds = {
-      xMin: imageWidth * layout.HAZARDS.xMin,
-      xMax: imageWidth * layout.HAZARDS.xMax,
-      yMin: imageHeight * layout.HAZARDS.yMin,
-      yMax: imageHeight * layout.HAZARDS.yMax,
-    };
-    const regionWords = filterWordsInBounds(words, bounds);
+    // Anchor hazard search to the "KNOWN HAZARDS" or "HAZARDS" header word.
+    // The list position shifts up/down with the number of enemy ship rows,
+    // so we cannot use a fixed yMin percentage.
+    const rightXMin = imageWidth * layout.HAZARDS.xMin;
+    const rightXWords = words.filter(w => {
+      if (!w.bbox) return false;
+      return (w.bbox.x0 + w.bbox.x1) / 2 >= rightXMin;
+    });
+
+    // Find the header Y — look for a word that is "HAZARDS" or "KNOWN"
+    let headerY = null;
+    for (const w of rightXWords) {
+      const t = (w.text || '').toUpperCase().replace(/[^A-Z]/g, '');
+      if (t === 'HAZARDS' || t === 'KNOWN') {
+        headerY = (w.bbox.y0 + w.bbox.y1) / 2;
+        break;
+      }
+    }
+
+    // If header found, scan below it; otherwise fall back to lower 60% of image
+    const scanYMin = headerY != null
+      ? headerY                        // start right at the header row itself
+      : imageHeight * 0.25;            // generous fallback — catches even at top
+    const scanYMax = headerY != null
+      ? headerY + imageHeight * 0.40   // ~40% of screen height below header
+      : imageHeight * 0.75;
+
+    const regionWords = rightXWords.filter(w => {
+      const cy = (w.bbox.y0 + w.bbox.y1) / 2;
+      return cy >= scanYMin && cy <= scanYMax;
+    });
+
     if (regionWords.length > 0) {
       const regionText = groupWordsIntoLines(regionWords, imageHeight)
         .map(line => line.words.map(w => w.text).join(' ').trim())
@@ -706,9 +838,9 @@ function dedupePlayerNames(players) {
  */
 function formatTeamName(name) {
   if (!name) return '';
-
+  // Preserve punctuation valid in team names (!, ?, -, _, ., ')
   return name
-    .replace(/[^a-zA-Z0-9_.\-'\s]/g, '')
+    .replace(/[^a-zA-Z0-9_.'\-!? ]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -721,9 +853,6 @@ function looksLikeTeamName(text) {
   const cleaned = text.replace(/\s+/g, ' ').trim();
   if (cleaned.length < 4 || cleaned.length > 40) return false;
 
-  const words = cleaned.split(/\s+/);
-  if (words.length < 2) return false;
-
   const letters = cleaned.match(/[A-Za-z]/g) || [];
   const upperLetters = cleaned.match(/[A-Z]/g) || [];
   const upperRatio = letters.length > 0 ? upperLetters.length / letters.length : 0;
@@ -731,9 +860,15 @@ function looksLikeTeamName(text) {
   const hasUnderscore = /_/.test(cleaned);
   const hasMixedCase = /[a-z]/.test(cleaned) && /[A-Z]/.test(cleaned);
 
+  // Game-specific noise: ship stat description lines start with a digit
+  if (/^\d/.test(cleaned)) return false;
+
   if (hasUnderscore) return false;
   if (hasMixedCase && upperRatio < 0.9) return false;
 
+  // Accept single-word all-caps names of 4+ letters (e.g. BOREALIS, VANGUARD)
+  // as well as multi-word names
+  if (letters.length < 4) return false;
   return upperRatio >= 0.6;
 }
 

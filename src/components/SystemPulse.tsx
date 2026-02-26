@@ -104,7 +104,7 @@ const SystemPulse: React.FC = () => {
             active: enableAutoLogRecording,
             color: enableAutoLogRecording ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
             dotVar: safetyState.colorVar,
-            pulse: false,
+            pulse: enableAutoLogRecording,
             tooltip: safety
                 ? `Data: ${safetyState.label}\nLast Save: ${fmtTs(safety.dbMtime)}\nWAL Pending: ${safety.walExists ? 'Yes' : 'No'}\nWAL Time: ${fmtTs(safety.walMtime)}\nPrevious Snapshot: ${fmtTs(safety.prevMtime)}\nLast Backup: ${fmtTs(safety.lastBackupMtime)}${safety.error ? `\nError: ${safety.error}` : ''}`
                 : 'Data: unavailable',
@@ -148,7 +148,7 @@ const SystemPulse: React.FC = () => {
             active: pendingReviewCount > 0,
             color: pendingReviewCount > 0 ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
             dotVar: pendingReviewCount > 0 ? '--indicator-vision' : '--indicator-idle',
-            pulse: false,
+            pulse: pendingReviewCount > 0,
             tooltip: pendingReviewCount > 0 ? `${pendingReviewCount} pending OCR reviews` : 'Vision: no pending reviews',
         },
         {

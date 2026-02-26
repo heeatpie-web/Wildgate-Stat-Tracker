@@ -50,16 +50,9 @@ export interface OcrRegionBounds {
 export interface OcrRegionSettings {
     crewHub: {
         leftPanel: OcrRegionBounds;
-        rightPanel: OcrRegionBounds;
+        enemyPanel: OcrRegionBounds;
         teamHeader: OcrRegionBounds;
-        enemyRow1TeamName: OcrRegionBounds;
-        enemyRow1Players: OcrRegionBounds;
-        enemyRow2TeamName: OcrRegionBounds;
-        enemyRow2Players: OcrRegionBounds;
-        enemyRow3TeamName: OcrRegionBounds;
-        enemyRow3Players: OcrRegionBounds;
-        enemyRow4TeamName: OcrRegionBounds;
-        enemyRow4Players: OcrRegionBounds;
+        enemyName: OcrRegionBounds;
     };
     mapScreen: {
         yourShip: OcrRegionBounds;

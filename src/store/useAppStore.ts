@@ -57,16 +57,9 @@ const mergeOcrRegions = (value: unknown) => {
   return {
     crewHub: {
       leftPanel: mergeNumberRecord(defaults.crewHub.leftPanel, value.crewHub && isRecord(value.crewHub) ? value.crewHub.leftPanel : undefined),
-      rightPanel: mergeNumberRecord(defaults.crewHub.rightPanel, value.crewHub && isRecord(value.crewHub) ? value.crewHub.rightPanel : undefined),
+      enemyPanel: mergeNumberRecord(defaults.crewHub.enemyPanel, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyPanel : undefined),
       teamHeader: mergeNumberRecord(defaults.crewHub.teamHeader, value.crewHub && isRecord(value.crewHub) ? value.crewHub.teamHeader : undefined),
-      enemyRow1TeamName: mergeNumberRecord(defaults.crewHub.enemyRow1TeamName, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyRow1TeamName : undefined),
-      enemyRow1Players: mergeNumberRecord(defaults.crewHub.enemyRow1Players, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyRow1Players : undefined),
-      enemyRow2TeamName: mergeNumberRecord(defaults.crewHub.enemyRow2TeamName, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyRow2TeamName : undefined),
-      enemyRow2Players: mergeNumberRecord(defaults.crewHub.enemyRow2Players, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyRow2Players : undefined),
-      enemyRow3TeamName: mergeNumberRecord(defaults.crewHub.enemyRow3TeamName, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyRow3TeamName : undefined),
-      enemyRow3Players: mergeNumberRecord(defaults.crewHub.enemyRow3Players, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyRow3Players : undefined),
-      enemyRow4TeamName: mergeNumberRecord(defaults.crewHub.enemyRow4TeamName, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyRow4TeamName : undefined),
-      enemyRow4Players: mergeNumberRecord(defaults.crewHub.enemyRow4Players, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyRow4Players : undefined),
+      enemyName: mergeNumberRecord(defaults.crewHub.enemyName, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyName : undefined),
     },
     mapScreen: {
       yourShip: mergeNumberRecord(defaults.mapScreen.yourShip, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.yourShip : undefined),

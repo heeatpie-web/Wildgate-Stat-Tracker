@@ -560,14 +560,14 @@ const MatchDetail: React.FC<{
 
             {/* Lightbox */}
             {lightboxSrc && (
-                <div className="fixed inset-0 z-modal bg-scrim-90 flex items-center justify-center p-8" onClick={() => setLightboxSrc(null)}>
+                <div className="fixed inset-0 z-modal bg-scrim-90 p-8" onClick={() => setLightboxSrc(null)}>
                     <div
                         ref={lightboxFocusTrapRef}
                         role="dialog"
                         aria-modal="true"
                         aria-labelledby={lightboxTitleId}
                         aria-describedby={lightboxDescriptionId}
-                        className="relative max-w-full max-h-full"
+                        className="w-full h-full"
                         onClick={(event) => event.stopPropagation()}
                     >
                         <h2 id={lightboxTitleId} className="a11y-sr-only">Screenshot preview</h2>
@@ -576,11 +576,11 @@ const MatchDetail: React.FC<{
                             type="button"
                             onClick={() => setLightboxSrc(null)}
                             aria-label="Close screenshot preview"
-                            className="absolute top-4 right-4 text-md-sys-on-surface/60 hover:text-md-sys-on-surface"
+                            className="absolute top-4 right-4 text-md-sys-on-surface/60 hover:text-md-sys-on-surface z-10"
                         >
                             <X size={24} />
                         </button>
-                        <LocalImage src={lightboxSrc} alt="Match screenshot preview" className="max-w-full max-h-full object-contain rounded-lg" />
+                        <LocalImage src={lightboxSrc} alt="Match screenshot preview" className="w-full h-full object-contain rounded-lg" />
                     </div>
                 </div>
             )}

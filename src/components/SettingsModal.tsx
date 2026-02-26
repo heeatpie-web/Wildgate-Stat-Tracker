@@ -540,16 +540,9 @@ const SettingsModalContent: React.FC = () => {
     type MapRegionKey = keyof OcrRegionSettings['mapScreen'];
     const regionLabels: Record<CrewRegionKey | MapRegionKey, string> = {
         leftPanel: 'Left Panel',
-        rightPanel: 'Right Panel',
+        enemyPanel: 'Enemy Panel',
         teamHeader: 'Team Header',
-        enemyRow1TeamName: 'Enemy Row 1 Team',
-        enemyRow1Players: 'Enemy Row 1 Players',
-        enemyRow2TeamName: 'Enemy Row 2 Team',
-        enemyRow2Players: 'Enemy Row 2 Players',
-        enemyRow3TeamName: 'Enemy Row 3 Team',
-        enemyRow3Players: 'Enemy Row 3 Players',
-        enemyRow4TeamName: 'Enemy Row 4 Team',
-        enemyRow4Players: 'Enemy Row 4 Players',
+        enemyName: 'Enemy Name Band',
         yourShip: 'Your Ship',
         enemyShips: 'Enemy Ships #1',
         enemyShips2: 'Enemy Ships #2',
@@ -606,16 +599,9 @@ const SettingsModalContent: React.FC = () => {
     };
     const crewHubRegionKeys: CrewRegionKey[] = [
         'leftPanel',
-        'rightPanel',
+        'enemyPanel',
         'teamHeader',
-        'enemyRow1TeamName',
-        'enemyRow1Players',
-        'enemyRow2TeamName',
-        'enemyRow2Players',
-        'enemyRow3TeamName',
-        'enemyRow3Players',
-        'enemyRow4TeamName',
-        'enemyRow4Players',
+        'enemyName',
     ];
     const mapRegionKeys: MapRegionKey[] = [
         'yourShip',

@@ -9,6 +9,12 @@
  * - Cyan (player only): #00FDCD (0, 253, 205)
  */
 
+const _fs2 = require('fs');
+const _os2 = require('os');
+const _path2 = require('path');
+const DLOG_PATH2 = _path2.join(_os2.tmpdir(), 'wildgate-ocr.log');
+const dlog2 = msg => { try { _fs2.appendFileSync(DLOG_PATH2, new Date().toISOString() + ' ' + msg + '\n'); } catch(_e) {} };
+
 // Team color definitions with HSL values for tolerance-based matching
 const TEAM_COLORS = {
   red: {
@@ -39,8 +45,9 @@ const TEAM_COLORS = {
 };
 
 // Tolerance values for HSL matching
+// SAT_TOLERANCE is set wide because team name text on the bar dilutes average saturation
 const HUE_TOLERANCE = 30;
-const SAT_TOLERANCE = 50;
+const SAT_TOLERANCE = 65;
 const LIGHT_TOLERANCE = 50;
 
 /**
@@ -115,7 +122,7 @@ function classifyTeamColorHSL(r, g, b) {
   }
 
   // Filter out grayscale/low saturation (UI background, not team colors)
-  if (hsl.s < 30) {
+  if (hsl.s < 15) {
     return { color: 'unknown', confidence: 0 };
   }
 
@@ -260,40 +267,121 @@ async function detectColorInRegion(imageBuffer, region, sharpModule = null) {
 }
 
 /**
- * Detect team badge color by sampling the text region itself
- * FIXED: Badge color appears AT the name text (colored text), not to the left
- * @param {Buffer} imageBuffer - Image buffer
- * @param {Object} bbox - Text bounding box { x0, y0, x1, y1 }
- * @param {number} [scale=1] - Image scale factor
+ * Detect team badge color by sampling the colored bar BELOW the player name.
+ *
+ * Crew Hub layout (per 78px player card on 1080p):
+ *   - Player name (white text) at top of card
+ *   - ~11px gap
+ *   - 20-22px tall colored bar containing team name text
+ *
+ * The colored bar IS the team color indicator. Player name text is white,
+ * so sampling the text itself always returns 'unknown'.
+ *
+ * @param {Buffer} imageBuffer - Image buffer (should be original color, NOT preprocessed)
+ * @param {Object} bbox - Player name text bounding box { x0, y0, x1, y1 }
+ * @param {number} [scale=1] - Image scale factor (if OCR ran on scaled image)
  * @param {Object} [sharp] - Sharp module instance
  * @returns {Promise<{ color: string, confidence: number }>}
  */
 async function detectBadgeColorNearText(imageBuffer, bbox, scale = 1, sharpModule = null) {
+  // Delegate to the purpose-built color bar detector
+  return detectTeamColorBarBelow(imageBuffer, bbox, scale, sharpModule);
+}
+
+/**
+ * Detect team color by sampling the colored bar BELOW a player name.
+ *
+ * On 1920×1080 at scale=1:
+ *   - Color bar starts ~11px below the bottom of the name text (bbox.y1)
+ *   - Color bar is ~20-22px tall
+ *   - Color bar width varies with team name length (~80-200px)
+ *   - Color bar starts at roughly the same x as the player name
+ *
+ * We sample the CENTER of the colored bar to avoid edge anti-aliasing.
+ * If the first sample returns 'unknown', we try multiple Y offsets.
+ *
+ * @param {Buffer} imageBuffer - Original color image buffer
+ * @param {Object} bbox - Player name text bounding box { x0, y0, x1, y1 }
+ * @param {number} [scale=1] - Image scale factor
+ * @param {Object} [sharpModule] - Sharp module instance
+ * @returns {Promise<{ color: string, confidence: number }>}
+ */
+async function detectTeamColorBarBelow(imageBuffer, bbox, scale = 1, sharpModule = null) {
   if (!bbox) {
     return { color: 'unknown', confidence: 0 };
   }
 
-  // FIXED: Sample the text region itself (badge color is the text color)
   // Scale bbox coordinates back to original image coordinates
-  const scaledBbox = {
-    x0: bbox.x0 / scale,
-    y0: bbox.y0 / scale,
-    x1: bbox.x1 / scale,
-    y1: bbox.y1 / scale,
+  const s = scale || 1;
+  const origBbox = {
+    x0: bbox.x0 / s,
+    y0: bbox.y0 / s,
+    x1: bbox.x1 / s,
+    y1: bbox.y1 / s,
   };
 
-  // Sample the left portion of the text (first 30% width, full height)
-  const textWidth = scaledBbox.x1 - scaledBbox.x0;
-  const textHeight = scaledBbox.y1 - scaledBbox.y0;
+  const textHeight = origBbox.y1 - origBbox.y0;
+  const textWidth = origBbox.x1 - origBbox.x0;
 
-  const region = {
-    x: Math.max(0, scaledBbox.x0),
-    y: scaledBbox.y0,
-    width: Math.max(20, textWidth * 0.3), // Sample left 30% of text, minimum 20px
-    height: Math.max(10, textHeight),
-  };
+  // Color bar sampling parameters (tuned for 1080p)
+  // Gap between name bottom and color bar top: ~11px
+  // Color bar height: ~20-22px
+  const gapBelow = Math.max(6, textHeight * 0.6);          // ~11px for 18px text
+  const barHeight = Math.max(12, textHeight * 1.1);         // ~20px
+  const sampleY = origBbox.y1 + gapBelow + (barHeight * 0.3);
+  const sampleHeight = Math.max(8, barHeight * 0.5);
+  const sampleWidth = Math.max(40, textWidth * 0.5);
 
-  return detectColorInRegion(imageBuffer, region, sharpModule);
+  // The colored bar spans the full card width. The team name TEXT sits on the bar
+  // roughly aligned with the player name X position, which contaminates the average color.
+  // Sample AT and to the RIGHT of the player name first — that's where the bar has solid
+  // fill with no text overlay. Fall back leftward only as a last resort.
+  const xPositions = [
+    Math.max(0, Math.floor(origBbox.x0)),         // at name start — bar is typically here
+    Math.max(0, Math.floor(origBbox.x0 + 60)),    // slightly right — clean solid fill
+    Math.max(0, Math.floor(origBbox.x0 + 120)),   // further right
+    Math.max(0, Math.floor(origBbox.x0 - 80)),    // left fallback
+    Math.max(0, Math.floor(origBbox.x0 - 160)),   // far left fallback
+  ];
+  const yOffsets = [0, 6, -6, 12, -12, 18];
+
+  // Collect ALL samples and return the highest-confidence result.
+  // Early-exit on first match would cause a dim edge pixel (e.g. pinkish s=36%)
+  // to beat a clean sample further right (e.g. pure orange s=100%) because the
+  // HSL saturation tolerance is wide enough to let marginal reads through.
+  let bestResult = { color: 'unknown', confidence: 0, rgb: null, xBase: 0, yOff: 0 };
+
+  for (const xBase of xPositions) {
+    for (const yOff of yOffsets) {
+      const region = {
+        x: xBase,
+        y: Math.max(0, Math.floor(sampleY + yOff)),
+        width: Math.floor(sampleWidth),
+        height: Math.floor(sampleHeight),
+      };
+      try {
+        const result = await detectColorInRegion(imageBuffer, region, sharpModule);
+        if (
+          result.color !== 'unknown' &&
+          result.color !== 'spectator' &&
+          result.confidence > bestResult.confidence
+        ) {
+          bestResult = { ...result, xBase, yOff };
+        }
+      } catch (_) {
+        // out of bounds — skip
+      }
+    }
+  }
+
+  if (bestResult.confidence > 30) {
+    dlog2(`[ColorUtils] Bar color=${bestResult.color} conf=${bestResult.confidence} x=${bestResult.xBase} yOff=${bestResult.yOff} rgb=(${bestResult.rgb?.r},${bestResult.rgb?.g},${bestResult.rgb?.b})`);
+    return { color: bestResult.color, confidence: bestResult.confidence, rgb: bestResult.rgb };
+  }
+
+  // All attempts failed
+  dlog2(`[ColorUtils] Bar color=unknown after all attempts. y1=${Math.round(origBbox.y1)} sampleY=${Math.round(sampleY)}`);
+  return { color: 'unknown', confidence: 0 };
 }
 
 /**
@@ -399,6 +487,7 @@ module.exports = {
   classifyTeamColorRGB,
   detectColorInRegion,
   detectBadgeColorNearText,
+  detectTeamColorBarBelow,
   findTeamColorRegions,
   getTeamColorInfo,
 };

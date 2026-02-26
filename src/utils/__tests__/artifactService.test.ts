@@ -167,17 +167,10 @@ describe('artifactService', () => {
       mockInvoke.mockResolvedValue({ teammates: [], opponents: [] });
       const ocrRegions = {
         crewHub: {
-          leftPanel: { xMin: 0, xMax: 0.36, yMin: 0.1, yMax: 0.8 },
-          rightPanel: { xMin: 0.45, xMax: 1, yMin: 0.1, yMax: 0.9 },
+          leftPanel: { xMin: 0.0, xMax: 0.48, yMin: 0.05, yMax: 0.85 },
+          enemyPanel: { xMin: 0.55, xMax: 1.0, yMin: 0.08, yMax: 0.95 },
           teamHeader: { xMin: 0, xMax: 0.45, yMin: 0.05, yMax: 0.2 },
-          enemyRow1TeamName: { xMin: 0.52, xMax: 0.74, yMin: 0.16, yMax: 0.23 },
-          enemyRow1Players: { xMin: 0.74, xMax: 0.98, yMin: 0.16, yMax: 0.23 },
-          enemyRow2TeamName: { xMin: 0.52, xMax: 0.74, yMin: 0.27, yMax: 0.34 },
-          enemyRow2Players: { xMin: 0.74, xMax: 0.98, yMin: 0.27, yMax: 0.34 },
-          enemyRow3TeamName: { xMin: 0.52, xMax: 0.74, yMin: 0.38, yMax: 0.45 },
-          enemyRow3Players: { xMin: 0.74, xMax: 0.98, yMin: 0.38, yMax: 0.45 },
-          enemyRow4TeamName: { xMin: 0.52, xMax: 0.74, yMin: 0.49, yMax: 0.56 },
-          enemyRow4Players: { xMin: 0.74, xMax: 0.98, yMin: 0.49, yMax: 0.56 },
+          enemyName: { xMin: 0.63, xMax: 0.92, yMin: 0.08, yMax: 0.95 },
         },
         mapScreen: {
           yourShip: { xMin: 0, xMax: 0.3, yMin: 0, yMax: 0.25 },

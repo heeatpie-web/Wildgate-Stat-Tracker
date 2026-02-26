@@ -67,16 +67,9 @@ interface ImageSize {
 
 const CREW_REGION_KEYS: CrewRegionKey[] = [
     'leftPanel',
-    'rightPanel',
+    'enemyPanel',
     'teamHeader',
-    'enemyRow1TeamName',
-    'enemyRow1Players',
-    'enemyRow2TeamName',
-    'enemyRow2Players',
-    'enemyRow3TeamName',
-    'enemyRow3Players',
-    'enemyRow4TeamName',
-    'enemyRow4Players',
+    'enemyName',
 ];
 const MAP_REGION_KEYS: MapRegionKey[] = [
     'yourShip',
@@ -90,16 +83,9 @@ const MAP_REGION_KEYS: MapRegionKey[] = [
 
 const REGION_LABELS: Record<RegionKey, string> = {
     leftPanel: 'Crew Left Panel',
-    rightPanel: 'Crew Right Panel',
+    enemyPanel: 'Enemy Panel',
     teamHeader: 'Crew Team Header',
-    enemyRow1TeamName: 'Enemy Row 1 Team',
-    enemyRow1Players: 'Enemy Row 1 Players',
-    enemyRow2TeamName: 'Enemy Row 2 Team',
-    enemyRow2Players: 'Enemy Row 2 Players',
-    enemyRow3TeamName: 'Enemy Row 3 Team',
-    enemyRow3Players: 'Enemy Row 3 Players',
-    enemyRow4TeamName: 'Enemy Row 4 Team',
-    enemyRow4Players: 'Enemy Row 4 Players',
+    enemyName: 'Enemy Name Band',
     yourShip: 'Map Your Ship',
     enemyShips: 'Map Enemy Ships #1',
     enemyShips2: 'Map Enemy Ships #2',
@@ -111,16 +97,9 @@ const REGION_LABELS: Record<RegionKey, string> = {
 
 const REGION_COLORS: Record<RegionKey, string> = {
     leftPanel: '#34D399',
-    rightPanel: '#F59E0B',
+    enemyPanel: '#F59E0B',
     teamHeader: '#38BDF8',
-    enemyRow1TeamName: '#F59E0B',
-    enemyRow1Players: '#F97316',
-    enemyRow2TeamName: '#FB923C',
-    enemyRow2Players: '#FDBA74',
-    enemyRow3TeamName: '#EF4444',
-    enemyRow3Players: '#DC2626',
-    enemyRow4TeamName: '#8B5CF6',
-    enemyRow4Players: '#6366F1',
+    enemyName: '#FB923C',
     yourShip: '#34D399',
     enemyShips: '#F59E0B',
     enemyShips2: '#FB923C',
@@ -143,16 +122,9 @@ const cloneRegions = (regions: OcrRegionSettings): OcrRegionSettings => {
     return ({
         crewHub: {
             leftPanel: { ...(crewHub.leftPanel || defaults.crewHub.leftPanel) },
-            rightPanel: { ...(crewHub.rightPanel || defaults.crewHub.rightPanel) },
+            enemyPanel: { ...(crewHub.enemyPanel || defaults.crewHub.enemyPanel) },
             teamHeader: { ...(crewHub.teamHeader || defaults.crewHub.teamHeader) },
-            enemyRow1TeamName: { ...(crewHub.enemyRow1TeamName || defaults.crewHub.enemyRow1TeamName) },
-            enemyRow1Players: { ...(crewHub.enemyRow1Players || defaults.crewHub.enemyRow1Players) },
-            enemyRow2TeamName: { ...(crewHub.enemyRow2TeamName || defaults.crewHub.enemyRow2TeamName) },
-            enemyRow2Players: { ...(crewHub.enemyRow2Players || defaults.crewHub.enemyRow2Players) },
-            enemyRow3TeamName: { ...(crewHub.enemyRow3TeamName || defaults.crewHub.enemyRow3TeamName) },
-            enemyRow3Players: { ...(crewHub.enemyRow3Players || defaults.crewHub.enemyRow3Players) },
-            enemyRow4TeamName: { ...(crewHub.enemyRow4TeamName || defaults.crewHub.enemyRow4TeamName) },
-            enemyRow4Players: { ...(crewHub.enemyRow4Players || defaults.crewHub.enemyRow4Players) },
+            enemyName: { ...(crewHub.enemyName || defaults.crewHub.enemyName) },
         },
         mapScreen: {
             yourShip: { ...(mapScreen.yourShip || defaults.mapScreen.yourShip) },
