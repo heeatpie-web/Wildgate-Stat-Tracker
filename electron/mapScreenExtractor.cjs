@@ -329,7 +329,7 @@ async function extractYourShip(imageBuffer, words, lines, text, imageWidth, imag
     // Check for ship type
     const foundShip = SHIP_TYPES.find(type => lineText.includes(type));
     if (foundShip) {
-      shipType = foundShip.charAt(0) + foundShip.slice(1).toLowerCase();
+      shipType = foundShip.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
 
       // Team name may appear before AND/OR after the ship type on the same line
       // (e.g. Tesseract groups "DODGE OUTLAW THE BULLET" all on one line)
@@ -364,7 +364,7 @@ async function extractYourShip(imageBuffer, words, lines, text, imageWidth, imag
     if (yourShipSection.toUpperCase().includes(shipName)) {
       return {
         teamName: 'Your Team',
-        shipType: shipName.charAt(0) + shipName.slice(1).toLowerCase(),
+        shipType: shipName.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' '),
         confidence: 60,
       };
     }
@@ -484,7 +484,7 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
 
       enemyShips.push({
         teamName: teamName || `Enemy Team ${enemyShips.length + 1}`,
-        shipType: foundShip.charAt(0) + foundShip.slice(1).toLowerCase(),
+        shipType: foundShip.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' '),
         color: pendingColor,
         confidence: teamName ? 80 : 60,
       });
@@ -544,7 +544,7 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
 
         enemyShips.push({
           teamName: teamName || `Enemy Team ${enemyShips.length + 1}`,
-          shipType: foundShip.charAt(0) + foundShip.slice(1).toLowerCase(),
+          shipType: foundShip.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' '),
           color: 'unknown',
           confidence: teamName ? 65 : 50,
         });

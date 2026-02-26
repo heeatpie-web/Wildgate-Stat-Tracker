@@ -421,8 +421,9 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
         if (shipTypes.some(st => st === pnUp || st.includes(pnUp) || pnUp.includes(st))) continue;
       }
       // Left-panel specific noise filters (gamertags rarely look like these):
-      // (a) 3+ space-separated fragments are almost always UI label garble
-      if (playerName.split(/\s+/).length >= 3) continue;
+      // (a) 4+ space-separated fragments are almost always UI label garble
+      // (3-word names like "sticks and stones" are valid)
+      if (playerName.split(/\s+/).length >= 4) continue;
       // (b) All-lowercase name shorter than 7 letters = OCR noise fragment (e.g. "pay en")
       if (/^[a-z\s]+$/.test(playerName) && playerName.replace(/\s+/g, '').length < 7) continue;
       // (c) All-uppercase name 5 or fewer letters = button/label fragment (e.g. "ATTLE", "N JI")
@@ -638,11 +639,12 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
 
     if (!isValidOpponentName(playerName)) { dlog('[CrewHub] SKIP invalid-name: "' + playerName + '"'); continue; }
     if (/PARTY|CREW|HUB|VOICE|CHANNEL|PUSH|TALK|MUTE|DISABLE|DEAFEN|UNMUTE|SAY|TEXT|PINGS/i.test(playerName)) { dlog('[CrewHub] SKIP ui-word: "' + playerName + '"'); continue; }
-    // 3+ word names are almost always OCR noise fragments joined together.
+    // 4+ word names are almost always OCR noise fragments joined together.
+    // 3-word names like "sticks and stones" are valid gamertags.
     // Exception: if the first word alone is a strong valid name (e.g. "wootywoot"
     // or "Ledurricane" with noise fragments appended by the row-slice scan),
     // salvage it rather than discarding the whole line.
-    if (playerName.trim().split(/\s+/).length >= 3) {
+    if (playerName.trim().split(/\s+/).length >= 4) {
       const fp = playerName.trim().split(/\s+/)[0];
       if (fp && isValidOpponentName(fp) && scoreAsPlayerName(fp) >= 15) {
         playerName = fp;
