@@ -521,10 +521,12 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     const cy = (w.bbox.y0 + w.bbox.y1) / 2;
     if (cx < nameXMin || cx > nameXMax) continue;
     if (cy < panelYMin || cy > panelYMax) continue;
-    // Long tokens (≥8 chars) allowed at conf≥15 — catches OCR misreads like
-    // "GoblinaTTyV"(c16) for "GoblinaTTV". Short tokens keep the tighter c≥20
-    // floor to avoid single-glyph noise.
-    const confFloor = (w.text.trim().length >= 8) ? 15 : 20;
+    // Confidence floors by token length to balance recall vs noise:
+    //   ≥5 chars → 10  (e.g. "sticks", "stones", "GoblinaTTyV")
+    //   3-4 chars → 15 (e.g. "and", "Riv", "Hoff")
+    //   1-2 chars → 20 (icon/glyph noise)
+    const tlen = w.text.trim().length;
+    const confFloor = tlen >= 5 ? 10 : tlen >= 3 ? 15 : 20;
     if ((w.confidence || 0) < confFloor) continue;
     enemyWords.push(w);
   }
