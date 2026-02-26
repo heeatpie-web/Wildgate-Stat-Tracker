@@ -117,7 +117,7 @@ function resolveCrewHubLayout(layoutOverrides) {
 const NOISE_WORDS = new Set([
   'PARTY', 'VOICE', 'CREW', 'HUB', 'PUSH', 'TALK', 'MUTE', 'OPTIONS', 'BACK',
   'SWITCH', 'DISABLE', 'ENABLE', 'YOUR', 'TEAM', 'CHANGE', 'MAP', 'SEED',
-  'ENEMY', 'CREWS', 'CHANNEL', 'INTO', 'SAME', 'WITH', 'THE', 'HOP',
+  'ENEMY', 'NEMY', 'CREWS', 'CHANNEL', 'INTO', 'SAME', 'WITH', 'THE', 'HOP',
   'ON', 'OFF', 'TO', 'DEAFEN', 'UNMUTE', 'SAY', 'TEXT', 'PINGS',
   'OF', 'IN', 'AT', 'IS', 'BY', 'OR', 'AN',
   // Crew-hub section headers / UI labels — never player or team names

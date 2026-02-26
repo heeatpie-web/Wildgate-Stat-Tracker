@@ -217,22 +217,32 @@ function crossMergeCrewHubAndMap(crewHub, tactMap) {
  * ship types pulled from the map screen by color or fuzzy name match.
  */
 function crossMergeInternalCrewAndMap(crew, map) {
-  // Index map ships by color and normalized name for lookup
-  const mapByColor = new Map();
-  const mapByName  = new Map();
+  // Index map ships by color (as array — map may have >1 ship per color due to
+  // OCR colour-detection errors) and by normalized name.
+  const mapByColorArr = new Map(); // color → Ship[]
+  const mapByName     = new Map(); // normalizedName → Ship
   for (const ship of (map.enemyShips || [])) {
-    if (ship.color) mapByColor.set(ship.color, ship);
+    if (ship.color) {
+      if (!mapByColorArr.has(ship.color)) mapByColorArr.set(ship.color, []);
+      mapByColorArr.get(ship.color).push(ship);
+    }
     if (ship.teamName) mapByName.set(normalizeTeamName(ship.teamName), ship);
   }
+
+  // Track map ships claimed by name-match so colour-match won't double-use them.
+  const claimedNames = new Set();
 
   const enrichedTeams = (crew.enemyTeams || []).map(team => {
     if (team.shipType) return team;
 
-    // 1. Exact color match
-    let mapShip = team.color ? mapByColor.get(team.color) : null;
+    const isColorLabel = !team.name || team.name.toLowerCase() === (team.color || '').toLowerCase();
 
-    // 2. Fuzzy name match
-    if (!mapShip && team.name) {
+    let mapShip = null;
+
+    // 1. Name match first (when the crew team has a real name, not just the colour label).
+    //    This handles cases where the map assigned the wrong colour to a ship — we still
+    //    identify it correctly by name.
+    if (!isColorLabel && team.name) {
       const normName = normalizeTeamName(team.name);
       mapShip = mapByName.get(normName);
       if (!mapShip) {
@@ -246,6 +256,19 @@ function crossMergeInternalCrewAndMap(crew, map) {
           }
         }
       }
+      if (mapShip) claimedNames.add(normalizeTeamName(mapShip.teamName || ''));
+    }
+
+    // 2. Colour match (fallback).  Skip ships already claimed by the name-match above,
+    //    and when multiple ships share the same colour pick the first unclaimed one.
+    if (!mapShip && team.color) {
+      const candidates = (mapByColorArr.get(team.color) || []).filter(
+        s => !claimedNames.has(normalizeTeamName(s.teamName || ''))
+      );
+      if (candidates.length > 0) {
+        mapShip = candidates[0];
+        claimedNames.add(normalizeTeamName(mapShip.teamName || ''));
+      }
     }
 
     return mapShip ? {
@@ -255,7 +278,7 @@ function crossMergeInternalCrewAndMap(crew, map) {
       //  (a) it's just the color label (OCR fallback), or
       //  (b) it matches a map ship at a DIFFERENT color (crew OCR misassigned a UI label)
       name: (() => {
-        if (!team.name || team.name.toLowerCase() === (team.color || '').toLowerCase()) {
+        if (isColorLabel) {
           return mapShip.teamName || team.name;
         }
         const normCrewName = normalizeTeamName(team.name);
