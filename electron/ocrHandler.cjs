@@ -2310,7 +2310,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
               .linear(1.4, -(0.4 * 128))
               .sharpen({ sigma: 1.5, m1: 1, m2: 0.5 })
               .png().toBuffer();
-            const bannerOcr = await runOCREngOnly(bannerBuf, 8); // PSM8 = single word per line
+            const bannerOcr = await runOCREngOnly(bannerBuf, 7); // PSM7 = single text line (preserves spaces)
             const bannerText = (bannerOcr?.allWords || [])
               .filter(w => w.confidence >= 30)
               .map(w => w.text.trim())
