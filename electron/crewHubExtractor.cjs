@@ -391,7 +391,14 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
       // adjacent UI chrome rather than genuine teammate names.
       const nameColWords = line.words
         .filter(w => !w.bbox || (w.bbox.x0 + w.bbox.x1) / 2 < nameColXMax)
-        .filter(w => (w.confidence || 0) >= 30);
+        .filter(w => {
+          const conf = w.confidence || 0;
+          if (conf >= 30) return true;
+          // Exception: strong gamertag structure (mixed-case + adequate length) overrides
+          // near-zero confidence — e.g. "JrMJr"(c0) scores 50 and should be kept.
+          const t = (w.text || '').trim();
+          return t.length >= 4 && scoreAsPlayerName(t) >= 40;
+        });
       if (nameColWords.length === 0) { dlog('[LPdbg] y=' + Math.round(line.y) + ' → nameColWords empty after x<' + Math.round(nameColXMax) + ' / conf<30 filter'); continue; }
       // If any word in this line is a high-confidence UI control keyword (conf≥60),
       // the whole line is a voice/party button row — skip it entirely.
@@ -656,7 +663,17 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       continue;
     }
 
-    if (!isValidOpponentName(playerName)) { dlog('[CrewHub] SKIP invalid-name: "' + playerName + '"'); continue; }
+    if (!isValidOpponentName(playerName)) {
+      // Try stripping a leading digit-noise fragment to recover the real player name
+      // e.g. "4s lirolake" → strip "4s" → test "lirolake" alone
+      const _nameParts = playerName.trim().split(/\s+/);
+      if (_nameParts.length >= 2 && /^\d/.test(_nameParts[0])) {
+        const _stripped = _nameParts.slice(1).join(' ');
+        if (isValidOpponentName(_stripped)) {
+          playerName = _stripped;
+        } else { dlog('[CrewHub] SKIP invalid-name: "' + playerName + '"'); continue; }
+      } else { dlog('[CrewHub] SKIP invalid-name: "' + playerName + '"'); continue; }
+    }
     if (/PARTY|CREW|HUB|VOICE|CHANNEL|PUSH|TALK|MUTE|DISABLE|DEAFEN|UNMUTE|SAY|TEXT|PINGS/i.test(playerName)) { dlog('[CrewHub] SKIP ui-word: "' + playerName + '"'); continue; }
     // 4+ word names are almost always OCR noise fragments joined together.
     // 3-word names like "sticks and stones" are valid gamertags.
@@ -676,13 +693,30 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     // Get the bounding box of the first word (for color sampling reference)
     // (lineBbox already computed above)
 
+    // Use a tight bbox around the name word(s) only for color bar detection.
+    // The full lineBbox can extend below into neighbouring bar zones when noise
+    // words land on a lower row (e.g. "-"@y884 pushes the window past the
+    // BOREALIS red bar into FANCY GOOSE orange region, mis-assigning the card).
+    const _pnCore = playerName.replace(/^\[\d+[*°+~]\]\s*/, '').toLowerCase();
+    const _nameMatchWords = line.words.filter(w => {
+      if (!w.bbox || !w.text) return false;
+      const t = w.text.trim().toLowerCase();
+      return t && (t === _pnCore || (_pnCore.includes(t) && t.length >= 3));
+    });
+    const colorDetectBbox = _nameMatchWords.length > 0 ? {
+      x0: Math.min(..._nameMatchWords.map(w => w.bbox.x0)),
+      y0: Math.min(..._nameMatchWords.map(w => w.bbox.y0)),
+      x1: Math.max(..._nameMatchWords.map(w => w.bbox.x1)),
+      y1: Math.max(..._nameMatchWords.map(w => w.bbox.y1)),
+    } : lineBbox;
+
     // Sample the colored bar BELOW the name text
     let detectedColor = 'unknown';
     let colorConfidence = 0;
 
     if (colorImageBuffer) {
       try {
-        const cr = await detectTeamColorBarBelow(colorImageBuffer, lineBbox, scale);
+        const cr = await detectTeamColorBarBelow(colorImageBuffer, colorDetectBbox, scale);
         if (cr.color !== 'unknown' && cr.color !== 'spectator' && cr.confidence > 30) {
           detectedColor = cr.color;
           colorConfidence = cr.confidence;
@@ -1061,7 +1095,12 @@ function extractPlayerNameFromLine(words) {
 
     // Skip near-zero-confidence reads — Tesseract assigns near-0 to
     // hallucinated tokens it has no confidence in at all.
-    if ((word.confidence || 0) < 1) continue;
+    // Exception: strong gamertag structure (mixed-case + adequate length) can override
+    // a displayed-c0 read — e.g. "JrMJr"(c0) is clearly a gamertag pattern (score≥40)
+    // while noise like "parryvoce"(c0, all-lowercase) scores below 40 and stays blocked.
+    if ((word.confidence || 0) < 1) {
+      if (scoreAsPlayerName(text) < 40) continue;
+    }
 
     // Skip noise words — strip trailing punctuation first so "crew!" == "CREW", etc.
     if (NOISE_WORDS.has(text.toUpperCase().replace(/[!?.,;:]+$/, ''))) continue;
@@ -1353,6 +1392,19 @@ function isValidPlayerName(name) {
 function isValidOpponentName(name) {
   if (!name || name.length < 4 || name.length > 28) return false;
   if (/^[0-9]/.test(name)) return false; // names never start with a digit
+
+  // Reject names where any space-separated component is a single ASCII letter —
+  // these are OCR glyph artefacts joined to a real token (e.g. "E Hg", "E ar").
+  // Single-letter names like [S] are always single tokens (brackets = 3 chars) so unaffected.
+  if (name.includes(' ') && name.trim().split(/\s+/).some(p => /^[A-Za-z]$/.test(p))) return false;
+
+  // Reject pure title-case multi-word names — these are garbled team-name bar text,
+  // not player names (e.g. "Fancy Goose", "Attack O"). Real multi-word player names
+  // always have numbers, underscores, or at least one non-title-case word.
+  if (name.includes(' ') && !/[0-9_]/.test(name)) {
+    const _pp = name.trim().split(/\s+/);
+    if (_pp.length >= 2 && _pp.every(p => /^[A-Z][a-z]+$/.test(p))) return false;
+  }
 
   if (!/[a-zA-Z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/.test(name)) return false;
   if (NOISE_WORDS.has(name.toUpperCase())) return false;
