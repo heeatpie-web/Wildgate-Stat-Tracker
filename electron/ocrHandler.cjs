@@ -2121,13 +2121,13 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         try {
           const origW = Math.round(processed.width / processed.scale);
           const origH = Math.round(processed.height / processed.scale);
-          const stripXFrac1 = 0.68;
-          const stripXFrac2 = 0.82;
+          const stripXFrac1 = 0.64;
+          const stripXFrac2 = 0.79;
           const stripX1  = Math.round(origW * stripXFrac1);
           const stripX2  = Math.round(origW * stripXFrac2);
           const stripW   = stripX2 - stripX1;
-          const stripY   = 80;
-          const stripH   = Math.max(0, origH - stripY - 20);  // y=80 to near-bottom
+          const stripY   = 120;
+          const stripH   = Math.max(0, Math.round(origH * 0.83) - stripY);  // y=120 to ~83% height
           const STRIP_SCALE = 3;
 
           const stripBuf = await sharp(imageBuffer)
@@ -2215,14 +2215,16 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         try {
           const origW2 = Math.round(processed.width / processed.scale);
           const origH2 = Math.round(processed.height / processed.scale);
-          const rX1    = Math.round(origW2 * 0.68);
-          const rW     = Math.round(origW2 * 0.82) - rX1;
+          const rX1    = Math.round(origW2 * 0.64);
+          const rW     = Math.round(origW2 * 0.79) - rX1;
           const RSC    = 3;
           const SLICE_H = 55;
           const STEP    = 48;
+          const rowSliceYStart = 120;
+          const rowSliceYEnd   = Math.round(origH2 * 0.83);
           let rowWordCount = 0;
-          for (let sy = 300; sy < origH2 - 20; sy += STEP) {
-            const h = Math.min(SLICE_H, origH2 - 20 - sy);
+          for (let sy = rowSliceYStart; sy < rowSliceYEnd; sy += STEP) {
+            const h = Math.min(SLICE_H, rowSliceYEnd - sy);
             if (h < 20) continue;
             const sliceBuf = await sharp(imageBuffer)
               .extract({ left: rX1, top: sy, width: rW, height: h })
