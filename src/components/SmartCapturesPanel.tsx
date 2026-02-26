@@ -1141,49 +1141,7 @@ const SmartCapturesPanel: React.FC = () => {
                                                         {showResolved ? 'Showing resolved' : 'Show resolved'}
                                                     </button>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="sc-seg sc-bordered sc-seg--compact">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                const nextEnabled = !externalFallbackEnabled;
-                                                                setExternalFallbackEnabled(nextEnabled);
-                                                                if (nextEnabled && externalFallbackThreshold > 0.66) {
-                                                                    setExternalFallbackThreshold(0.66);
-                                                                }
-                                                            }}
-                                                            className={`sc-seg-btn sc-seg-btn--compact ${externalFallbackEnabled
-                                                                ? 'text-info'
-                                                                : 'text-md-sys-on-surface/60'
-                                                                }`}
-                                                            data-active={externalFallbackEnabled}
-                                                            title="Lower-barrier external feedback assist for OCR reruns"
-                                                        >
-                                                            Ext. Assist {Math.round(externalFallbackThreshold * 100)}%
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                const next = !forceMaxAnalysis;
-                                                                setForceMaxAnalysis(next);
-                                                                if (next) {
-                                                                    setExternalFallbackEnabled(true);
-                                                                    if (externalFallbackThreshold > 0.66) {
-                                                                        setExternalFallbackThreshold(0.66);
-                                                                    }
-                                                                }
-                                                            }}
-                                                            className={`sc-seg-btn sc-seg-btn--compact ${forceMaxAnalysis
-                                                                ? 'text-warning'
-                                                                : 'text-md-sys-on-surface/60'
-                                                                }`}
-                                                            data-active={forceMaxAnalysis}
-                                                            title="Force max analysis using all available avenues"
-                                                        >
-                                                            Avenues {forceMaxAnalysis ? 'On' : 'Off'}
-                                                        </button>
-                                                    </div>
-                                                </div>
+
                                             </>
                                         )}
                                     </div>

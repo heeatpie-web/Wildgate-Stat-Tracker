@@ -1242,18 +1242,7 @@ const SettingsModalContent: React.FC = () => {
                                     <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${externalOnDetectorDisagreement ? 'translate-x-5' : ''}`} />
                                 </button>
                             </div>
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <div className="text-label-sm font-semibold">Force Max Analysis</div>
-                                    <div className="text-label-sm opacity-60">Use all available analysis paths (local + cloud + Gemini) and bypass cache</div>
-                                </div>
-                                <button
-                                    onClick={() => setForceMaxAnalysis(!forceMaxAnalysis)}
-                                    className={`w-11 h-6 rounded-full transition-colors ${forceMaxAnalysis ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
-                                >
-                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${forceMaxAnalysis ? 'translate-x-5' : ''}`} />
-                                </button>
-                            </div>
+
                             <div className="flex items-center justify-between">
                                 <div>
                                     <div className="text-label-sm font-semibold">OCR Learning</div>
