@@ -399,17 +399,25 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
       if (!playerName) { dlog('[LPdbg] y=' + Math.round(line.y) + ' → no name from: ' + nameColWords.map(w=>'"'+w.text+'"(c'+Math.round(w.confidence)+')').join(' ')); continue; }
       if (!isValidPlayerName(playerName)) { dlog('[LPdbg] y=' + Math.round(line.y) + ' → invalid: "' + playerName + '"'); continue; }
       // Filter team name banner fragments.
-      // Normalise to letters+spaces only so OCR noise ("PEED RUN!s" ← "SPEED RUN!'s")
-      // is caught regardless of leading/trailing punctuation or clipped first letter.
+      // e.g. "PEED ED RUN!s" ← "SPEED RUN!'s" — handles:
+      //   (a) compact substring/Levenshtein on letters+digits (catches "PEEDRUN")
+      //   (b) word-level: any 4-char+ word in playerName appears inside teamName
+      //       (catches "PEED" being a substring of "SPEED RUN")
       if (teamData.name) {
-        const normStr = s => s.toUpperCase().replace(/[^A-Z ]+/g, ' ').trim().replace(/\s+/g, ' ');
-        const tnNorm = normStr(teamData.name);            // "SPEED RUN"
-        let   pnNorm = normStr(playerName);               // "PEED RUN S"
-        // Drop a trailing single-letter fragment (the clipped "'s" → "S")
-        const pnParts = pnNorm.split(' ');
-        if (pnParts.length > 1 && pnParts[pnParts.length - 1].length === 1)
-          pnNorm = pnParts.slice(0, -1).join(' ');        // "PEED RUN"
-        if (pnNorm.length >= 3 && (pnNorm.includes(tnNorm) || tnNorm.includes(pnNorm))) continue;
+        const normS  = s => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const normSp = s => s.toUpperCase().replace(/[^A-Z ]+/g, ' ').trim().replace(/\s+/g, ' ');
+        const tnN    = normS(teamData.name);   // "SPEEDRUN"
+        const pnN    = normS(playerName);      // "PEEDEDRUNS"
+        const tnNSp  = normSp(teamData.name);  // "SPEED RUN"
+        if (pnN.length >= 3 && tnN.length >= 3) {
+          const isSubstr  = pnN.includes(tnN) || tnN.includes(pnN);
+          const maxLen    = Math.max(pnN.length, tnN.length);
+          const isFuzzy   = maxLen >= 5 && levenshteinDistance(pnN, tnN) / maxLen <= 0.40;
+          // Word-level: any 4+ char word of playerName is a substring of the team name
+          const pnWords4  = normSp(playerName).split(' ').filter(w => w.length >= 4);
+          const isWordSub = pnWords4.some(pw => tnNSp.includes(pw));
+          if (isSubstr || isFuzzy || isWordSub) continue;
+        }
       }
       if (/PARTY|CREW|HUB|VOICE|CHANNEL|PUSH|TALK|MUTE|DISABLE|DEAFEN|UNMUTE|TEXT|PINGS/i.test(playerName)) continue;
       if (/'S$/i.test(playerName)) continue;

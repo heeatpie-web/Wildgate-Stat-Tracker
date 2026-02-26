@@ -2294,12 +2294,12 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         try {
           const origW = Math.round(processed.width / processed.scale);
           const origH = Math.round(processed.height / processed.scale);
-          const lStripXFrac1 = 0.14;  // player name cards start ~14% from left
+          const lStripXFrac1 = 0.11;  // player name cards start ~14% from left (extended to 11% to catch full name)
           const lStripXFrac2 = 0.28;  // right edge of name column; UI controls (PARTY/TEAM VOICE) start at ~28%+
           const lStripX1  = Math.round(origW * lStripXFrac1);
           const lStripX2  = Math.round(origW * lStripXFrac2);
           const lStripW   = lStripX2 - lStripX1;
-          const lStripY   = 80;
+          const lStripY   = 250; // skip team-name banner (~y=80-240) and ship-name row; player cards start ~y=250+
           const lStripH   = Math.max(0, origH - lStripY - 20);
           const L_STRIP_SCALE = 3;
 
