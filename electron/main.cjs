@@ -1388,6 +1388,68 @@ ipcMain.handle('rerun-ocr-on-artifact', async (event, { imagePath, activeUser, o
   }
 });
 
+// Multi-image rerun: processes a match's screenshots sequentially so that
+// each result is fed as existingData into the next processCapture call.
+// This allows ocrMerger.mergeCaptures to do a proper server-side merge
+// (combining tactical-map ship/hazard data with crew-hub player data).
+ipcMain.handle('rerun-ocr-multi', async (event, { imagePaths, activeUser, ocrMode, ocrRegions, runtimeOptions }) => {
+  try {
+    if (!Array.isArray(imagePaths) || imagePaths.length === 0) {
+      return errorResult(IpcErrorCode.INVALID_INPUT, 'imagePaths must be a non-empty array');
+    }
+    const safeRuntimeOptions = (runtimeOptions && typeof runtimeOptions === 'object' && !Array.isArray(runtimeOptions))
+      ? runtimeOptions
+      : {};
+    let accumulatedData = null;
+    const perFile = [];
+    for (const imagePath of imagePaths) {
+      const pathCheck = resolveAllowedRendererPath(imagePath);
+      if (!pathCheck.success) {
+        recordSecurityBlock('rerun-ocr-multi', pathCheck.code || IpcErrorCode.PATH_NOT_ALLOWED, pathCheck.message || 'Path not allowed');
+        perFile.push({ imagePath, success: false, error: pathCheck.message || 'Path not allowed' });
+        continue;
+      }
+      const fullPath = pathCheck.data.resolved;
+      const extCheck = validateAllowedExtension(fullPath, ALLOWED_FILE_EXTENSIONS, 'image');
+      if (!extCheck.success) {
+        recordSecurityBlock('rerun-ocr-multi', extCheck.code, extCheck.message);
+        perFile.push({ imagePath: fullPath, success: false, error: extCheck.message });
+        continue;
+      }
+      if (!fs.existsSync(fullPath)) {
+        perFile.push({ imagePath: fullPath, success: false, error: 'File not found' });
+        continue;
+      }
+      try {
+        const imageBuffer = await fsPromises.readFile(fullPath);
+        const base64 = imageBuffer.toString('base64');
+        const result = await processCapture(base64, activeUser, accumulatedData, ocrMode || 'both', {
+          sourceImagePath: fullPath,
+          ocrRegions: ocrRegions || null,
+          ...safeRuntimeOptions,
+        });
+        if (result && result.success && result.data) {
+          accumulatedData = result.data;
+          perFile.push({ imagePath: fullPath, success: true, data: result.data });
+        } else {
+          perFile.push({ imagePath: fullPath, success: false, error: (result && result.error) || 'OCR returned no data' });
+        }
+      } catch (e) {
+        console.error('[rerun-ocr-multi] Error processing', fullPath, ':', e.message);
+        perFile.push({ imagePath: fullPath, success: false, error: e.message || 'Processing failed' });
+      }
+    }
+    const successCount = perFile.filter(f => f.success).length;
+    if (successCount === 0) {
+      return errorResult(IpcErrorCode.INTERNAL_ERROR, 'All images failed OCR processing');
+    }
+    return { success: true, data: accumulatedData, perFile };
+  } catch (e) {
+    console.error('[rerun-ocr-multi] Error:', e.message);
+    return errorResult(IpcErrorCode.INTERNAL_ERROR, e.message || 'Unknown error');
+  }
+});
+
 // Log Persistence Handler
 ipcMain.handle('persist-logs', async (event, logContent) => {
   try {

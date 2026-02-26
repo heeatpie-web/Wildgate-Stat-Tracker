@@ -16,7 +16,7 @@ const INVOKE_CHANNELS = [
   'gcloud-ocr-scan', 'sync-training-sample',
   'save-screenshot',
   'pick-roi-image',
-  'bundle-artifacts', 'get-match-artifacts', 'rerun-ocr-on-artifact',
+  'bundle-artifacts', 'get-match-artifacts', 'rerun-ocr-on-artifact', 'rerun-ocr-multi',
   'list-match-artifacts',
   'artifact-repair-preview', 'artifact-repair-apply',
   'remove-match-artifact', 'add-match-artifact',

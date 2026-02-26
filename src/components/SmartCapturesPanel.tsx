@@ -13,6 +13,7 @@ import { useUIState } from '../providers/UIStateProvider';
 import {
     getMatchArtifactsStructured,
     rerunOCROnArtifact,
+    rerunOCRMulti,
     removeMatchArtifact,
     addMatchArtifact,
     previewArtifactRepair,
@@ -2671,35 +2672,40 @@ const SmartMatchDetail: React.FC<{
             });
 
             try {
-                const rerun = await rerunMatchArtifacts({
+                // Use the multi-image server-side rerun: processes screenshots sequentially
+                // so ocrMerger can properly combine tactical-map + crew-hub data.
+                const multiResult = await rerunOCRMulti(
                     imagePaths,
                     activeUser,
                     ocrMode,
                     ocrRegions,
-                    runtimeOptions: rerunRuntimeOptions,
-                    normalizeModifierName,
-                });
-                const results: RerunResultWithMeta[] = rerun.perFile.map((entry) => ({
+                    rerunRuntimeOptions,
+                );
+                const perFileRaw = multiResult.perFile || [];
+                const successfulCount = perFileRaw.filter(f => f.success).length;
+                const failedCount = perFileRaw.length - successfulCount;
+                const mergedData = multiResult.data ?? null;
+                const results: RerunResultWithMeta[] = perFileRaw.map((entry) => ({
                     success: entry.success,
                     error: entry.error,
                     data: entry.data,
                     imagePath: entry.imagePath,
-                    filename: entry.filename,
+                    filename: entry.imagePath.split(/[\\/]/).pop() || entry.imagePath,
                 }));
                 setRerunResults(results);
 
-                const latestSummary = rerun.perFile[rerun.perFile.length - 1];
+                const latestSummary = results[results.length - 1];
                 const latestFileStatus = latestSummary
                     ? (latestSummary.success ? 'Succeeded' : `Failed: ${latestSummary.error || 'OCR failed'}`)
                     : '';
 
-                if (!rerun.mergedData || rerun.successfulCount === 0) {
+                if (!mergedData || successfulCount === 0) {
                     setRerunProgress({
                         phase: 'error',
-                        current: rerun.total,
-                        total: rerun.total,
-                        status: `Done - 0/${rerun.total} succeeded`,
-                        cloudStatus: rerun.cloudStatusMessage,
+                        current: imagePaths.length,
+                        total: imagePaths.length,
+                        status: `Done - 0/${imagePaths.length} succeeded`,
+                        cloudStatus: '',
                         latestFile: latestSummary?.filename || '',
                         latestFileStatus: latestFileStatus || 'No successful OCR output',
                     });
@@ -2710,22 +2716,22 @@ const SmartMatchDetail: React.FC<{
 
                 setRerunProgress({
                     phase: 'ready',
-                    current: rerun.total,
-                    total: rerun.total,
-                    status: `Done - ${rerun.successfulCount}/${rerun.total} succeeded`,
-                    cloudStatus: rerun.cloudStatusMessage,
+                    current: imagePaths.length,
+                    total: imagePaths.length,
+                    status: `Done - ${successfulCount}/${imagePaths.length} succeeded`,
+                    cloudStatus: '',
                     latestFile: latestSummary?.filename || '',
                     latestFileStatus: latestFileStatus || 'Completed',
                 });
-                setReviewData(rerun.mergedData);
+                setReviewData(mergedData);
                 onUpdate({ ...match, ocrState: 'reviewing' });
                 setToast({
-                    message: `Analysis complete: ${rerun.successfulCount}/${rerun.total} screenshot${rerun.total === 1 ? '' : 's'} processed. Opening OCR review...`,
-                    type: rerun.failedCount > 0 ? 'warning' : 'success',
+                    message: `Analysis complete: ${successfulCount}/${imagePaths.length} screenshot${imagePaths.length === 1 ? '' : 's'} processed. Opening OCR review...`,
+                    type: failedCount > 0 ? 'warning' : 'success',
                 });
                 // Auto-open the OCR wizard tab for immediate review
                 if (onApplyToSession) {
-                    const appliedMatch = onApplyToSession(rerun.mergedData);
+                    const appliedMatch = onApplyToSession(mergedData);
                     openWizardForMatch({ matchOverride: appliedMatch, reusePendingDraft: false });
                     window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
                         detail: { matchId: Number(appliedMatch?.id || match.id || 0) || null },

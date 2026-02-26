@@ -265,6 +265,47 @@ export const rerunOCROnArtifact = async (
     };
 };
 
+/**
+ * Re-run OCR on multiple screenshots for a single match, processing them
+ * sequentially so ocrMerger can do a proper server-side merge (map + crew hub).
+ * Returns the merged OCRExtractedData plus per-file status.
+ */
+export const rerunOCRMulti = async (
+    imagePaths: string[],
+    activeUser: string,
+    ocrMode: string,
+    ocrRegions?: OcrRegionSettings | null,
+    runtimeOptions?: OCRProcessRuntimeOptions | null
+): Promise<{ success: boolean; data?: OCRExtractedData; perFile: Array<{ imagePath: string; success: boolean; error?: string; data?: OCRExtractedData }>; error?: string }> => {
+    const api = getElectronAPI();
+    if (!api) return { success: false, perFile: [], error: 'Electron API not available' };
+    const payload: Record<string, unknown> = { imagePaths, activeUser, ocrMode };
+    if (ocrRegions) payload.ocrRegions = ocrRegions;
+    if (runtimeOptions && typeof runtimeOptions === 'object') payload.runtimeOptions = runtimeOptions;
+    const raw = await api.invoke('rerun-ocr-multi', payload);
+    if (!isRecord(raw)) return { success: false, perFile: [], error: 'Invalid response' };
+    if (raw.success === true) {
+        const perFile = Array.isArray(raw.perFile)
+            ? (raw.perFile as Array<Record<string, unknown>>).map(f => ({
+                imagePath: typeof f.imagePath === 'string' ? f.imagePath : '',
+                success: f.success === true,
+                error: typeof f.error === 'string' ? f.error : undefined,
+                data: isLikelyOcrExtractedData(f.data) ? f.data : undefined,
+            }))
+            : [];
+        return {
+            success: true,
+            data: isLikelyOcrExtractedData(raw.data) ? raw.data : undefined,
+            perFile,
+        };
+    }
+    return {
+        success: false,
+        perFile: [],
+        error: typeof raw.error === 'string' ? raw.error : (typeof raw.message === 'string' ? raw.message : 'OCR multi-rerun failed'),
+    };
+};
+
 export const removeMatchArtifact = async (matchId: number, artifactId: string): Promise<{ success: boolean; error?: string; code?: IpcErrorCode }> => {
     const api = getElectronAPI();
     if (!api) return { success: false, error: 'Electron API not available' };

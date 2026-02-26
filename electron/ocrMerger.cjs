@@ -814,17 +814,27 @@ function isSameMatch(data1, data2) {
 
   if (!fp1 || !fp2) return false;
 
-  // Check for significant overlap
   const parts1 = fp1.split('|');
   const parts2 = new Set(fp2.split('|'));
 
-  let matches = 0;
+  // Categorise each shared part
+  let yourTeamShared = 0;
+  let enemyTeamShared = 0;
+  let totalShared = 0;
   for (const part of parts1) {
-    if (parts2.has(part)) matches++;
+    if (!parts2.has(part)) continue;
+    totalShared++;
+    if (part.startsWith('Y:') || part.startsWith('S:')) yourTeamShared++;
+    if (part.startsWith('E:') || part.startsWith('P:') || part.startsWith('TM:')) enemyTeamShared++;
   }
 
-  // Consider same match if >50% overlap
-  return matches / Math.max(parts1.length, parts2.size) > 0.5;
+  // Strong cross-type signal: your-team name + at least one enemy indicator shared.
+  // This handles tactical-map vs crew-hub pairings where only some enemy team names
+  // overlap (e.g. one team name was read differently in each screenshot).
+  if (yourTeamShared >= 1 && enemyTeamShared >= 1) return true;
+
+  // Fallback: plain ratio check (>50% of ALL parts in common)
+  return totalShared / Math.max(parts1.length, parts2.size) > 0.5;
 }
 
 module.exports = {

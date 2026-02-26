@@ -141,8 +141,13 @@ const findBestOpponentTeamMatchIndex = (
     if (rosterOverlap > 0) score += 40 * rosterOverlap;
 
     // Require enough evidence for fallback matches when names are weak/missing.
+    // Allow color-only match when one side has no players — this happens when merging
+    // tactical-map OCR (which reads ship/color but has no player lists) with crew-hub OCR.
+    // In Wildgate each team has a unique color per match, so color alone disambiguates.
+    const oneHasNoPlayers = (newTeam.players?.length ?? 0) === 0 || (existing.players?.length ?? 0) === 0;
     const fallbackAcceptable = hasStrongNameMatch
       || (colorMatch && rosterOverlap > 0)
+      || (colorMatch && oneHasNoPlayers)
       || rosterOverlap >= 0.5;
 
     if (!fallbackAcceptable) continue;
