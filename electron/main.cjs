@@ -35,6 +35,11 @@ const isDev = !app.isPackaged;
 if (isDev && app.getName() !== 'Wildgate Stat Tracker') {
   app.setName('Wildgate Stat Tracker');
 }
+// Dev-only: override userData path for testing fresh-install flows (e.g. npm run electron:dev:newuser).
+const userDataDirOverride = String(process.env.WILDGATE_USER_DATA_DIR || '').trim();
+if (isDev && userDataDirOverride) {
+  app.setPath('userData', path.resolve(userDataDirOverride));
+}
 
 // Keep Chromium cache/service-worker storage in a writable local path on Windows.
 const SESSION_DATA_ROOT = (() => {
