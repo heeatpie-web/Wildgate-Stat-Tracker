@@ -137,7 +137,7 @@ function createDefaultOcrRegions() {
     crewHub: {
       leftPanel: { xMin: 0.0, xMax: 0.36, yMin: 0.10, yMax: 0.80 },
       rightPanel: { xMin: 0.45, xMax: 1.0, yMin: 0.10, yMax: 0.90 },
-      teamHeader: { xMin: 0.0, xMax: 0.45, yMin: 0.05, yMax: 0.20 },
+      teamHeader: { xMin: 0.10, xMax: 0.45, yMin: 0.17, yMax: 0.23 },
       enemyRow1TeamName: { xMin: 0.52, xMax: 0.74, yMin: 0.16, yMax: 0.23 },
       enemyRow1Players: { xMin: 0.74, xMax: 0.98, yMin: 0.16, yMax: 0.23 },
       enemyRow2TeamName: { xMin: 0.52, xMax: 0.74, yMin: 0.27, yMax: 0.34 },
@@ -2294,10 +2294,11 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         try {
           const origW = Math.round(processed.width / processed.scale);
           const origH = Math.round(processed.height / processed.scale);
-          const bannerX1 = Math.round(origW * 0.03);
-          const bannerX2 = Math.round(origW * 0.45);
-          const bannerY1 = Math.round(origH * 0.37);  // banner sits at ~38-44% down (y≈400-480 on 1080p)
-          const bannerY2 = Math.round(origH * 0.46);
+          const th = ocrRegions.crewHub?.teamHeader || { xMin: 0.10, xMax: 0.45, yMin: 0.17, yMax: 0.23 };
+          const bannerX1 = Math.round(origW * th.xMin);
+          const bannerX2 = Math.round(origW * th.xMax);
+          const bannerY1 = Math.round(origH * th.yMin);
+          const bannerY2 = Math.round(origH * th.yMax);
           const bannerW  = bannerX2 - bannerX1;
           const bannerH  = bannerY2 - bannerY1;
           if (bannerW > 0 && bannerH > 0) {
@@ -2339,7 +2340,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           const lStripX1  = Math.round(origW * lStripXFrac1);
           const lStripX2  = Math.round(origW * lStripXFrac2);
           const lStripW   = lStripX2 - lStripX1;
-          const lStripY   = 500; // skip team-name banner (~y=400-480) and ship-name row; player cards start ~y=530+
+          const lStripY   = 260; // skip team-name banner (ends ~y=248 = 23% of 1080p); player cards start ~y=350+
           const lStripH   = Math.max(0, origH - lStripY - 20);
           const L_STRIP_SCALE = 3;
 
