@@ -13,7 +13,6 @@ const INVOKE_CHANNELS = [
   'capture-screen', 'save-ocr-debug',
   'ocr-scan', 'ml-scan',
   'capture-game-window', 'ocr-process-capture',
-  'gcloud-ocr-scan', 'sync-training-sample',
   'save-screenshot',
   'pick-roi-image',
   'bundle-artifacts', 'get-match-artifacts', 'rerun-ocr-on-artifact', 'rerun-ocr-multi',
@@ -30,9 +29,6 @@ const INVOKE_CHANNELS = [
   'ocr-corpus-import-images', 'ocr-corpus-run-pipeline', 'ocr-corpus-sync-to-repo',
   'ocr-corpus-import-images-from-paths',
   'ocr-corpus-list-images', 'ocr-corpus-read-image', 'ocr-corpus-add-corrected-sample',
-  'get-gcloud-status',
-  'test-gcloud-upload',
-  'gcloud-backfill-screenshots',
 ];
 
 const SEND_CHANNELS = [

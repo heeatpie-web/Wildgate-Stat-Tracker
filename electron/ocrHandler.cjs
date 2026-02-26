@@ -27,9 +27,6 @@ const {
 } = require('./crewHubExtractor.cjs');
 const { extractMapScreen, extractPlayerList, KNOWN_HAZARDS } = require('./mapScreenExtractor.cjs');
 const { mergeCaptures, isSameMatch } = require('./ocrMerger.cjs');
-const gcloudService = require('./gcloudService.cjs');
-const gcloudSyncService = require('./gcloudSyncService.cjs');
-const geminiService = require('./geminiService.cjs');
 const { generateUserWordsFile } = require('./tesseractDictionary.cjs');
 
 // Dynamic imports (loaded when needed)
@@ -267,31 +264,13 @@ function setCachedResult(cacheKey, result, missDurationMs = null) {
   console.log(`[OCR Cache] STORE ${cacheKey.split('|')[0].slice(0, 8)}... (${ocrResultCache.size}/${OCR_CACHE_MAX})`);
 }
 
-// Save debug image + optional cloud upload
+// Save debug image
 async function saveDebugImage(buffer, prefix = 'capture') {
   ensureDebugDir();
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filename = `${prefix}_${timestamp}.png`;
   const filepath = path.join(DEBUG_DIR, filename);
   await fsPromises.writeFile(filepath, buffer);
-
-  // Auto-upload to GCS (fire-and-forget)
-  if (gcloudSyncService.isInitialized) {
-    gcloudSyncService.uploadFile(filepath, `screenshots/${filename}`)
-      .then(result => {
-        if (result.success) {
-          console.log(`[GCloud-Upload] Uploaded ${filename} (${(buffer.length / 1024).toFixed(1)}KB)`);
-        } else {
-          console.warn(`[GCloud-Upload] Failed ${filename}: ${result.error}`);
-        }
-      })
-      .catch(err => {
-        console.warn(`[GCloud-Upload] Error uploading ${filename}:`, err.message);
-      });
-  } else {
-    console.log(`[GCloud-Upload] Skipped ${filename} - GCloud sync not initialized`);
-  }
-
   return filepath;
 }
 
@@ -1141,324 +1120,6 @@ function bboxIoU(a, b) {
   return inter / (areaA + areaB - inter);
 }
 
-/**
- * Convert Google Cloud Vision annotations to the same word/line shape as Tesseract.
- * Cloud Vision annotations[0] is the full text; annotations[1..n] are individual words.
- * Each annotation has boundingPoly.vertices [{x,y}, ...] — we convert to {x0,y0,x1,y1}.
- */
-function cloudAnnotationsToWords(annotations) {
-  if (!annotations || annotations.length === 0) return [];
-  return annotations
-    .filter(a => a && a.text)
-    .filter(a => {
-      // Backward compatibility: some providers include a full-text blob in index 0.
-      // Keep only likely word-level tokens for spatial matching.
-      const t = (a.text || '').trim();
-      if (!t) return false;
-      if (t.length > 80) return false;
-      if (t.includes('\n') && t.length > 30) return false;
-      return true;
-    })
-    .map(a => {
-    const verts = a.bounds || [];
-    const xs = verts.map(v => v.x || 0);
-    const ys = verts.map(v => v.y || 0);
-    return {
-      text: a.text || '',
-      confidence: typeof a.confidence === 'number' ? a.confidence : 85,
-      bbox: {
-        x0: Math.min(...xs),
-        y0: Math.min(...ys),
-        x1: Math.max(...xs),
-        y1: Math.max(...ys),
-      },
-      source: 'cloud',
-    };
-    });
-}
-
-function normalizeConfidence01(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 0;
-  if (numeric > 1) return Math.max(0, Math.min(1, numeric / 100));
-  return Math.max(0, Math.min(1, numeric));
-}
-
-function tokenizeOcrText(text) {
-  return String(text || '')
-    .toLowerCase()
-    .split(/[^a-z0-9]+/i)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 2);
-}
-
-function computeTokenOverlapRatio(leftTokens = [], rightTokens = []) {
-  if (!Array.isArray(leftTokens) || !Array.isArray(rightTokens)) return 0;
-  if (leftTokens.length === 0 || rightTokens.length === 0) return 0;
-  const left = new Set(leftTokens);
-  const right = new Set(rightTokens);
-  let overlap = 0;
-  left.forEach((token) => {
-    if (right.has(token)) overlap += 1;
-  });
-  return overlap / Math.max(1, Math.min(left.size, right.size));
-}
-
-function evaluateCrossEngineDisagreement(localResult, cloudResult) {
-  const localWordCount = Array.isArray(localResult?.words) ? localResult.words.length : 0;
-  const cloudWordCount = Array.isArray(cloudResult?.annotations) ? cloudResult.annotations.length : 0;
-  const wordCountDrift = (localWordCount > 0 && cloudWordCount > 0)
-    ? Math.abs(localWordCount - cloudWordCount) / Math.max(localWordCount, cloudWordCount)
-    : 0;
-  const tokenOverlap = computeTokenOverlapRatio(
-    tokenizeOcrText(localResult?.text || ''),
-    tokenizeOcrText(cloudResult?.fullText || '')
-  );
-  const lowOverlap = tokenOverlap > 0 ? tokenOverlap < 0.35 : false;
-  const strongCountDrift = wordCountDrift >= 0.45;
-  return {
-    disagrees: lowOverlap || strongCountDrift,
-    tokenOverlap,
-    wordCountDrift,
-    localWordCount,
-    cloudWordCount,
-  };
-}
-
-/**
- * Merge OCR results from local Tesseract and Google Cloud Vision.
- * Returns a unified result in the same shape as runOCR() output,
- * plus merge metadata for debugging.
- *
- * Merge strategy:
- * - Match words by bounding-box IoU (>0.3) OR Levenshtein similarity (>0.7)
- * - CJK words: prefer cloud result, boost confidence by 15%
- * - Agreement: boost confidence to max(local, cloud) + 10 (capped at 99)
- * - Disagreement: keep best candidate, flag mergeConflict
- * - Unmatched words: include from whichever engine found them
- */
-function mergeOCRResults(localResult, cloudResult) {
-  const mergeStart = Date.now();
-  const mergeLog = [];
-  const stats = { total: 0, agreed: 0, cloudPreferred: 0, cloudPreferredCJK: 0, localOnly: 0, cloudOnly: 0, conflicts: 0 };
-
-  const localWords = (localResult?.words || []).map(w => ({ ...w, source: 'local' }));
-  const cloudWords = cloudAnnotationsToWords(cloudResult?.annotations || []);
-
-  const usedCloudIndices = new Set();
-  const mergedWords = [];
-
-  // Phase 1: Match local words to cloud words
-  for (const lw of localWords) {
-    let bestMatch = null;
-    let bestScore = 0;
-    let bestIdx = -1;
-
-    for (let ci = 0; ci < cloudWords.length; ci++) {
-      if (usedCloudIndices.has(ci)) continue;
-      const cw = cloudWords[ci];
-
-      // Try bbox IoU first
-      const iou = bboxIoU(lw.bbox, cw.bbox);
-      // Then text similarity
-      const sim = levenshteinSimilarity(
-        (lw.text || '').toLowerCase(),
-        (cw.text || '').toLowerCase()
-      );
-
-      const score = Math.max(iou, sim);
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = cw;
-        bestIdx = ci;
-      }
-    }
-
-    if (bestMatch && bestScore > 0.3) {
-      usedCloudIndices.add(bestIdx);
-      const hasCJK = CJK_REGEX.test(bestMatch.text) || CJK_REGEX.test(lw.text);
-      const textsMatch = levenshteinSimilarity(
-        (lw.text || '').toLowerCase(),
-        (bestMatch.text || '').toLowerCase()
-      ) > 0.85;
-
-      let mergedWord;
-      let decision;
-
-      if (textsMatch) {
-        // Agreement — boost confidence
-        const boostedConf = Math.min(99, Math.max(lw.confidence, bestMatch.confidence) + 10);
-        mergedWord = {
-          text: hasCJK ? bestMatch.text : lw.text, // Prefer cloud text for CJK
-          confidence: hasCJK ? Math.min(99, boostedConf + 5) : boostedConf,
-          bbox: lw.bbox,
-          source: 'merged',
-          cloudContributed: true,
-        };
-        decision = `AGREE conf=${boostedConf}${hasCJK ? ' +CJK' : ''}`;
-        stats.agreed++;
-      } else if (hasCJK) {
-        // CJK disagreement — prefer cloud
-        mergedWord = {
-          text: bestMatch.text,
-          confidence: Math.min(99, bestMatch.confidence + 15),
-          bbox: bestMatch.bbox,
-          source: 'cloud',
-          cloudContributed: true,
-          mergeConflict: true,
-        };
-        decision = `CJK-CLOUD conf=${mergedWord.confidence} (local="${lw.text}" cloud="${bestMatch.text}")`;
-        stats.cloudPreferred++;
-        stats.cloudPreferredCJK++;
-        stats.conflicts++;
-      } else if (bestMatch.confidence > lw.confidence) {
-        // Cloud has higher confidence
-        mergedWord = {
-          text: bestMatch.text,
-          confidence: bestMatch.confidence,
-          bbox: bestMatch.bbox,
-          source: 'cloud',
-          cloudContributed: true,
-          mergeConflict: true,
-        };
-        decision = `CLOUD-WINS conf=${bestMatch.confidence} vs local=${lw.confidence}`;
-        stats.cloudPreferred++;
-        stats.conflicts++;
-      } else {
-        // Local wins
-        mergedWord = {
-          text: lw.text,
-          confidence: lw.confidence,
-          bbox: lw.bbox,
-          source: 'local',
-          cloudContributed: false,
-          mergeConflict: true,
-        };
-        decision = `LOCAL-WINS conf=${lw.confidence} vs cloud=${bestMatch.confidence}`;
-        stats.conflicts++;
-      }
-
-      mergedWords.push(mergedWord);
-      mergeLog.push({ word: mergedWord.text, localText: lw.text, cloudText: bestMatch.text, decision });
-    } else {
-      // No cloud match — keep local word
-      mergedWords.push({
-        ...lw,
-        source: 'local',
-        cloudContributed: false,
-      });
-      mergeLog.push({ word: lw.text, decision: 'LOCAL-ONLY' });
-      stats.localOnly++;
-    }
-  }
-
-  // Phase 2: Add unmatched cloud words
-  for (let ci = 0; ci < cloudWords.length; ci++) {
-    if (usedCloudIndices.has(ci)) continue;
-    const cw = cloudWords[ci];
-    const hasCJK = CJK_REGEX.test(cw.text);
-    mergedWords.push({
-      ...cw,
-      confidence: hasCJK ? Math.min(99, cw.confidence + 15) : cw.confidence,
-      source: 'cloud',
-      cloudContributed: true,
-    });
-    mergeLog.push({ word: cw.text, decision: `CLOUD-ONLY${hasCJK ? ' +CJK' : ''}` });
-    stats.cloudOnly++;
-  }
-
-  stats.total = mergedWords.length;
-
-  // Rebuild lines from merged words (simple: group by Y proximity)
-  const sortedWords = [...mergedWords].sort((a, b) => a.bbox.y0 - b.bbox.y0 || a.bbox.x0 - b.bbox.x0);
-  const lines = [];
-  let currentLine = { words: [], y0: -Infinity };
-  const LINE_THRESHOLD = 15; // pixels
-
-  for (const w of sortedWords) {
-    if (Math.abs(w.bbox.y0 - currentLine.y0) > LINE_THRESHOLD) {
-      if (currentLine.words.length > 0) lines.push(currentLine);
-      currentLine = { words: [w], y0: w.bbox.y0 };
-    } else {
-      currentLine.words.push(w);
-    }
-  }
-  if (currentLine.words.length > 0) lines.push(currentLine);
-
-  const mergedLines = lines.map(l => ({
-    text: l.words.map(w => w.text).join(' '),
-    confidence: l.words.reduce((sum, w) => sum + w.confidence, 0) / l.words.length,
-    bbox: {
-      x0: Math.min(...l.words.map(w => w.bbox.x0)),
-      y0: Math.min(...l.words.map(w => w.bbox.y0)),
-      x1: Math.max(...l.words.map(w => w.bbox.x1)),
-      y1: Math.max(...l.words.map(w => w.bbox.y1)),
-    },
-  }));
-
-  const fullText = mergedLines.map(l => l.text).join('\n');
-  const avgConfidence = mergedWords.length > 0
-    ? mergedWords.reduce((sum, w) => sum + w.confidence, 0) / mergedWords.length
-    : 0;
-
-  const mergeDuration = Date.now() - mergeStart;
-
-  return {
-    text: fullText,
-    confidence: avgConfidence,
-    words: mergedWords,
-    lines: mergedLines,
-    cloudContributed: usedCloudIndices.size > 0 || stats.cloudOnly > 0,
-    ocrSource: 'merged',
-    mergeStats: stats,
-    mergeLog,
-    mergeDuration,
-  };
-}
-
-/**
- * Run Cloud Vision OCR with timeout.
- * @param {string} imagePath - Path to the image file on disk.
- * @param {number} timeoutMs - Timeout in milliseconds (default 3000).
- * @returns {Promise<Object|null>} Cloud OCR result or null on failure/timeout.
- */
-async function runCloudOCR(imagePath, timeoutMs = 3000) {
-  if (!gcloudService.isInitialized) {
-    console.log('[OCR-Cloud] GCloud Vision not initialized, skipping');
-    return null;
-  }
-
-  const executeOnce = async () => {
-    return await Promise.race([
-      gcloudService.performOCR(imagePath),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Cloud OCR timeout')), timeoutMs)),
-    ]);
-  };
-
-  // Errors that won't be resolved by retrying (auth, quota, billing, not found).
-  const isNonRetriable = (msg = '') => {
-    const lower = msg.toLowerCase();
-    return lower.includes('auth') || lower.includes('permission') || lower.includes('credential')
-      || lower.includes('quota') || lower.includes('billing') || lower.includes('not found')
-      || lower.includes('invalid') || lower.includes('api key');
-  };
-
-  try {
-    return await executeOnce();
-  } catch (err) {
-    const msg = err?.message || '';
-    if (isNonRetriable(msg)) {
-      console.warn(`[OCR-Cloud] Non-retriable error, skipping retry: ${msg}`);
-      return null;
-    }
-    console.warn(`[OCR-Cloud] First attempt failed (${msg}), retrying once...`);
-    try {
-      return await executeOnce();
-    } catch (retryErr) {
-      console.warn(`[OCR-Cloud] Retry failed (${retryErr?.message})`);
-      return null;
-    }
-  }
 }
 
 /**
@@ -1728,7 +1389,7 @@ function getNameConfidenceFloor(fieldConfidence) {
  * @param {string} ocrMode - OCR engine mode: 'local', 'cloud', 'both', or 'hybrid-plus'
  * @returns {Object} Processed OCR result
  */
-async function processCapture(imageBase64, activeUser = null, existingData = null, ocrMode = 'both', options = {}) {
+async function processCapture(imageBase64, activeUser = null, existingData = null, ocrMode = 'local', options = {}) {
   await acquireOcrSlot(`processCapture:${ocrMode}`);
   const captureStart = Date.now();
   let tempOcrPath = null;
@@ -1737,10 +1398,6 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       sourceImagePath = null,
       skipDebugSave = false,
       forceUncached = false,
-      forceMaxAnalysis: rawForceMaxAnalysis = false,
-      externalFallbackEnabled: rawExternalFallbackEnabled = true,
-      externalFallbackThreshold: rawExternalFallbackThreshold = 0.74,
-      externalOnDetectorDisagreement: rawExternalOnDetectorDisagreement = true,
       ocrRegions: rawOcrRegions = null,
       screenTypeHint: rawScreenTypeHint = null,
       includeBboxes: rawIncludeBboxes = false,
@@ -1760,10 +1417,6 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     const fontProfile = rawFontProfile === 'ealing-black-italic' ? 'ealing-black-italic' : 'default';
     const nameRerouteThreshold = Math.max(50, Math.min(95, Number(rawNameRerouteThreshold) || 78));
     const maxReroutePasses = Math.max(0, Math.min(2, Math.round(Number(rawMaxReroutePasses) || 1)));
-    const forceMaxAnalysis = rawForceMaxAnalysis === true;
-    const externalFallbackEnabled = forceMaxAnalysis ? true : rawExternalFallbackEnabled !== false;
-    const externalFallbackThreshold = clamp01(rawExternalFallbackThreshold, 0.74);
-    const externalOnDetectorDisagreement = forceMaxAnalysis ? true : rawExternalOnDetectorDisagreement !== false;
     const ocrRegions = sanitizeOcrRegions(rawOcrRegions);
     const inferredScreenType =
       (typeof rawScreenTypeHint === 'string' ? rawScreenTypeHint : '')
@@ -1781,23 +1434,13 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       : hintedScreenType === SCREEN_TYPES.MAP_SCREEN ? 11
       : null;
     const ocrRegionFingerprint = getOcrRegionsCacheFingerprint(ocrRegions);
-    const runtimeFingerprint = [
-      forceMaxAnalysis ? 1 : 0,
-      externalFallbackEnabled ? 1 : 0,
-      Math.round(externalFallbackThreshold * 100),
-      externalOnDetectorDisagreement ? 1 : 0,
-    ].join(':');
-    const routingFingerprint = `${routingProfile}:${fontProfile}:${nameRerouteThreshold}:${maxReroutePasses}:${runtimeFingerprint}`;
+    const routingFingerprint = `${routingProfile}:${fontProfile}:${nameRerouteThreshold}:${maxReroutePasses}`;
     console.log('[OCR] Starting processCapture');
     console.log('[OCR] activeUser:', activeUser);
     console.log('[OCR] hasExistingData:', !!existingData);
     console.log('[OCR] ocrMode:', ocrMode);
     console.log('[OCR] routingProfile:', routingProfile);
     console.log('[OCR] fontProfile:', fontProfile);
-    console.log('[OCR] forceMaxAnalysis:', forceMaxAnalysis);
-    console.log('[OCR] externalFallbackEnabled:', externalFallbackEnabled);
-    console.log('[OCR] externalFallbackThreshold:', Math.round(externalFallbackThreshold * 100));
-    console.log('[OCR] externalOnDetectorDisagreement:', externalOnDetectorDisagreement);
     console.log('[OCR] regionFingerprint:', ocrRegionFingerprint);
     if (sourceImagePath) console.log('[OCR] Re-analysis from:', sourceImagePath);
     if (skipDebugSave) console.log('[OCR] Skipping debug save (screenshot already saved by caller)');
@@ -1814,7 +1457,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     // Check OCR cache only for non-cloud, non-reanalysis, non-forced runs.
     const imageHash = getImageHash(imageBuffer);
     const cacheKey = buildCacheKey(imageHash, activeUser, ocrMode, ocrRegionFingerprint, routingFingerprint);
-    const shouldBypassCache = !!sourceImagePath || forceUncached || forceMaxAnalysis || ocrMode === 'cloud' || !!existingData || includeBboxes || shouldArchiveOcrSample;
+    const shouldBypassCache = !!sourceImagePath || forceUncached || !!existingData || includeBboxes || shouldArchiveOcrSample;
     let cacheLookupStartedAt = null;
     if (!shouldBypassCache) {
       cacheLookupStartedAt = Date.now();
@@ -1832,33 +1475,10 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
 
     // Save raw capture debug image (also triggers cloud upload)
     // When sourceImagePath is provided (re-analysis), skip saving a duplicate
-    // and use the original file path for cloud OCR instead.
-    // When skipDebugSave is true (normal smart capture where saveScreenshot already ran),
-    // save a temporary file for cloud OCR but don't keep it in ocr-debug/ to avoid duplication.
-    const useHybridMerge = ocrMode === 'both' || ocrMode === 'hybrid-plus' || forceMaxAnalysis;
-    const useGeminiRefine = ocrMode === 'hybrid-plus' || forceMaxAnalysis;
-    const shouldProbeExternalInLocal = ocrMode === 'local' && externalFallbackEnabled;
-    const needsFilePath = useHybridMerge || ocrMode === 'cloud' || useGeminiRefine || shouldProbeExternalInLocal;
     let rawDebugPath = null;
     if (sourceImagePath) {
       rawDebugPath = sourceImagePath;
-      console.log('[OCR] Reusing source image for cloud OCR (skipping duplicate upload)');
-    } else if (skipDebugSave && needsFilePath) {
-      // Write a temp file for cloud OCR only — don't save to ocr-debug/ folder
-      try {
-        const tmpDir = os.tmpdir();
-        const tmpPath = path.join(tmpDir, `wg_ocr_${Date.now()}.png`);
-        await fsPromises.writeFile(tmpPath, imageBuffer);
-        tempOcrPath = tmpPath;
-        rawDebugPath = tmpPath;
-        console.log('[OCR] Saved temp image for cloud OCR (skipping ocr-debug save)');
-      } catch (e) {
-        console.warn('[OCR] Failed to save temp image:', e.message);
-      }
-    } else if (skipDebugSave && !needsFilePath) {
-      // Local-only runs do not need any on-disk image path.
-      console.log('[OCR] skipDebugSave active in local-only mode (no temp/debug image written)');
-    } else {
+    } else if (!skipDebugSave) {
       try {
         rawDebugPath = await saveDebugImage(imageBuffer, 'raw_capture');
       } catch (e) {
@@ -1871,21 +1491,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     // Skipped by default to reduce disk usage
 
     // ─── Run OCR based on ocrMode ───
-    let ocrResult = null;
-    let cloudContributed = false;
-    let ocrSource = 'local';
-    let mergeStats = null;
-    let mergeLog = null;
-    let localOCRForFallback = null;
-    let cloudFailureReason = '';
-    let geminiFailureReason = '';
-    let geminiContributed = false;
-    let providerUsed = null;
-    let consensusScore = 0;
-    let detectorDisagreement = false;
-    let externalFallbackApplied = false;
-    let externalFallbackReason = '';
-    const analysisPathsUsed = new Set();
+    const analysisPathsUsed = new Set(['local']);
     let routingDebug = {
       attempted: false,
       applied: false,
@@ -1896,169 +1502,10 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       fontProfile,
     };
 
-    if (useHybridMerge) {
-      // Run both in parallel
-      console.log('[OCR] Running LOCAL + CLOUD in parallel...');
-      const localStart = Date.now();
-      const [localResult, cloudResult] = await Promise.allSettled([
-        runOCR(processed.buffer, ocrPsm),
-        rawDebugPath ? runCloudOCR(rawDebugPath, Math.min(30000, Math.max(1000, parseInt(process.env.WILDGATE_OCR_CLOUD_TIMEOUT_MS || '7000', 10) || 7000))) : Promise.resolve(null),
-      ]);
-      const localDuration = Date.now() - localStart;
-
-      const localOCR = localResult.status === 'fulfilled' ? localResult.value : null;
-      const cloudOCR = cloudResult.status === 'fulfilled' ? cloudResult.value : null;
-      if (localOCR) {
-        localOCRForFallback = localOCR;
-        analysisPathsUsed.add('local');
-      }
-      if (cloudOCR) {
-        analysisPathsUsed.add('cloud');
-      }
-
-      if (localResult.status === 'rejected') {
-        console.error('[OCR] Local Tesseract failed:', localResult.reason?.message);
-      }
-      if (cloudResult.status === 'rejected') {
-        cloudFailureReason = cloudResult.reason?.message || 'Cloud Vision request failed';
-        console.warn('[OCR-Cloud] Cloud Vision failed:', cloudFailureReason);
-      }
-
-      console.log(`[OCR-Merge] Local: ${localOCR ? localOCR.words?.length + ' words' : 'FAILED'} | Cloud: ${cloudOCR ? (cloudOCR.annotations?.length || 0) + ' annotations' : 'FAILED/UNAVAILABLE'}`);
-
-      if (localOCR && cloudOCR) {
-        // Merge results
-        ocrResult = mergeOCRResults(localOCR, cloudOCR);
-        cloudContributed = ocrResult.cloudContributed;
-        ocrSource = 'merged';
-        mergeStats = ocrResult.mergeStats;
-        mergeLog = ocrResult.mergeLog;
-
-        // Phase 4: Comprehensive logging
-        console.log(`[OCR-Merge] ${mergeStats.total} words total | ${mergeStats.agreed} agreed | ${mergeStats.cloudPreferred} cloud-preferred (${mergeStats.cloudPreferredCJK} CJK) | ${mergeStats.localOnly} local-only | ${mergeStats.cloudOnly} cloud-only | ${mergeStats.conflicts} conflicts`);
-        console.log(`[OCR-Merge] Timing: Local=${localDuration}ms | Merge=${ocrResult.mergeDuration}ms | Total=${Date.now() - captureStart}ms`);
-
-        // Save merge debug JSON (only in 'both' mode where merging actually occurs)
-        try {
-          const mergeDebugFilename = `merge_debug_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-          const mergeDebugPath = path.join(DEBUG_DIR, mergeDebugFilename);
-          await fsPromises.writeFile(mergeDebugPath, JSON.stringify({
-            timestamp: new Date().toISOString(),
-            ocrMode,
-            timing: { localMs: localDuration, mergeMs: ocrResult.mergeDuration, totalMs: Date.now() - captureStart },
-            stats: mergeStats,
-            log: mergeLog,
-            localWordCount: localOCR.words?.length || 0,
-            cloudAnnotationCount: cloudOCR.annotations?.length || 0,
-          }, null, 2));
-          console.log(`[OCR-Merge] Debug saved: ${mergeDebugFilename}`);
-        } catch (e) {
-          console.warn('[OCR-Merge] Failed to save merge debug:', e.message);
-        }
-      } else if (localOCR) {
-        console.log('[OCR-Merge] Cloud unavailable, using local-only result');
-        if (cloudFailureReason) {
-          console.warn(`[OCR-Merge] Local fallback reason: ${cloudFailureReason}`);
-        }
-        ocrResult = localOCR;
-        ocrSource = 'local';
-      } else if (cloudOCR) {
-        console.log('[OCR-Merge] Local failed, using cloud-only result');
-        // Convert cloud result to standard format
-        const cloudWords = cloudAnnotationsToWords(cloudOCR.annotations || []);
-        ocrResult = {
-          text: cloudOCR.fullText || '',
-          confidence: 80,
-          words: cloudWords,
-          lines: [{ text: cloudOCR.fullText || '', confidence: 80, bbox: { x0: 0, y0: 0, x1: processed.width, y1: processed.height } }],
-        };
-        cloudContributed = true;
-        ocrSource = 'cloud';
-      } else {
-        throw new Error('Both local and cloud OCR failed');
-      }
-    } else if (ocrMode === 'cloud') {
-      // Cloud only
-      console.log('[OCR] Running CLOUD-ONLY mode...');
-      if (!rawDebugPath) {
-        rawDebugPath = await saveDebugImage(imageBuffer, 'raw_capture');
-      }
-      let cloudOCR = null;
-      try {
-        cloudOCR = await runCloudOCR(rawDebugPath, 10000); // longer timeout for cloud-only mode
-      } catch (cloudError) {
-        cloudFailureReason = cloudError?.message || 'Cloud OCR request failed';
-      }
-
-      if (cloudOCR) {
-        const cloudWords = cloudAnnotationsToWords(cloudOCR.annotations || []);
-        ocrResult = {
-          text: cloudOCR.fullText || '',
-          confidence: 80,
-          words: cloudWords,
-          lines: [{ text: cloudOCR.fullText || '', confidence: 80, bbox: { x0: 0, y0: 0, x1: processed.width, y1: processed.height } }],
-        };
-        cloudContributed = true;
-        ocrSource = 'cloud';
-        analysisPathsUsed.add('cloud');
-        console.log(`[OCR] Cloud-only done, text length: ${ocrResult.text?.length || 0}`);
-      } else {
-        cloudFailureReason = cloudFailureReason || 'Cloud OCR unavailable';
-        console.warn(`[OCR] Cloud-only unavailable, falling back to local OCR: ${cloudFailureReason}`);
-        ocrResult = await runOCR(processed.buffer, ocrPsm);
-        localOCRForFallback = ocrResult;
-        ocrSource = 'local';
-        analysisPathsUsed.add('local');
-      }
-    } else {
-      // Local only (default / fallback)
-      console.log('[OCR] Running LOCAL-ONLY mode...');
-      ocrResult = await runOCR(processed.buffer, ocrPsm);
-      localOCRForFallback = ocrResult;
-      ocrSource = 'local';
-      analysisPathsUsed.add('local');
-      const localConsensus = normalizeConfidence01(ocrResult?.confidence || 0);
-      consensusScore = localConsensus;
-      const shouldProbeCloudForDisagreement = externalOnDetectorDisagreement && localConsensus <= Math.min(0.92, externalFallbackThreshold + 0.2);
-      const shouldProbeExternal = shouldProbeExternalInLocal
-        && !!rawDebugPath
-        && (localConsensus < externalFallbackThreshold || shouldProbeCloudForDisagreement);
-      if (shouldProbeExternal) {
-        const cloudProbe = await runCloudOCR(rawDebugPath, Math.min(30000, Math.max(1000, parseInt(process.env.WILDGATE_OCR_CLOUD_TIMEOUT_MS || '7000', 10) || 7000)));
-        if (cloudProbe) {
-          analysisPathsUsed.add('cloud');
-          const disagreement = evaluateCrossEngineDisagreement(ocrResult, cloudProbe);
-          detectorDisagreement = disagreement.disagrees;
-          const shouldApplyFallback = (localConsensus < externalFallbackThreshold)
-            || (externalOnDetectorDisagreement && disagreement.disagrees);
-          if (shouldApplyFallback) {
-            const mergedProbe = mergeOCRResults(ocrResult, cloudProbe);
-            ocrResult = mergedProbe;
-            cloudContributed = mergedProbe.cloudContributed;
-            ocrSource = 'merged';
-            mergeStats = mergedProbe.mergeStats;
-            mergeLog = mergedProbe.mergeLog;
-            externalFallbackApplied = true;
-            const triggerParts = [];
-            if (localConsensus < externalFallbackThreshold) {
-              triggerParts.push(`consensus ${Math.round(localConsensus * 100)}% below ${Math.round(externalFallbackThreshold * 100)}%`);
-            }
-            if (externalOnDetectorDisagreement && disagreement.disagrees) {
-              triggerParts.push(`detector disagreement (overlap ${Math.round(disagreement.tokenOverlap * 100)}%, drift ${Math.round(disagreement.wordCountDrift * 100)}%)`);
-            }
-            externalFallbackReason = `External fallback activated: ${triggerParts.join('; ') || 'policy trigger'}.`;
-            console.log(`[OCR-External] ${externalFallbackReason}`);
-          } else {
-            console.log('[OCR-External] Probe completed; local OCR retained');
-          }
-        } else {
-          cloudFailureReason = cloudFailureReason || 'Cloud OCR unavailable during external fallback probe';
-          console.warn(`[OCR-External] ${cloudFailureReason}`);
-        }
-      }
-      console.log(`[OCR] Local-only done, text length: ${ocrResult.text?.length || 0}`);
-    }
-
+    // Run local OCR
+    console.log('[OCR] Running LOCAL-ONLY mode...');
+    const ocrResult = await runOCR(processed.buffer, ocrPsm);
+    console.log(`[OCR] Local OCR done, text length: ${ocrResult.text?.length || 0}`);
     console.log('[OCR] OCR complete, text length:', ocrResult.text?.length || 0);
 
     // Detect screen type
@@ -2399,19 +1846,6 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       // Convert to legacy format
       extractedData = convertMapScreenToLegacy(mapScreenData, ocrResult.text);
 
-      // Bug 1 mitigation: when merged OCR is used, preserve high-confidence local modifier detections.
-      // This avoids cloud noise degrading modifier recall while keeping merged name/roster benefits.
-      if (ocrSource === 'merged' && localOCRForFallback?.text) {
-        const localModifiers = extractModifiers(localOCRForFallback.text);
-        const currentModifiers = extractedData.reachModifiers || [];
-        const currentUniqueCount = new Set(currentModifiers.map(m => String(m?.name || '').trim().toLowerCase()).filter(Boolean)).size;
-        const mergedModifiers = mergeModifierLists(currentModifiers, localModifiers);
-        const mergedUniqueCount = new Set(mergedModifiers.map(m => String(m?.name || '').trim().toLowerCase()).filter(Boolean)).size;
-        if (mergedUniqueCount > currentUniqueCount) {
-          console.log(`[OCR-Merge] Modifier fallback restored ${mergedUniqueCount - currentUniqueCount} modifier(s) from local OCR`);
-        }
-        extractedData.reachModifiers = mergedModifiers;
-      }
 
       // Bug 3 mitigation: map-screen player names are small and overlaid on game visuals.
       // Full-image OCR often extracts garbled names (0% recall). Crop the player-list region
@@ -2479,53 +1913,6 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           captureTimestamp: Date.now(),
         };
       }
-    }
-
-    const baselineFieldConfidence = computeFieldConfidence(extractedData);
-    consensusScore = normalizeConfidence01(getNameConfidenceFloor(baselineFieldConfidence));
-    const mergeConflictRatio = (mergeStats && mergeStats.total > 0)
-      ? (Number(mergeStats.conflicts || 0) / Number(mergeStats.total || 1))
-      : 0;
-    detectorDisagreement = screenDetection.type === SCREEN_TYPES.UNKNOWN || mergeConflictRatio >= 0.2;
-    const shouldTriggerExternalGemini = externalFallbackEnabled && (
-      consensusScore < externalFallbackThreshold
-      || (externalOnDetectorDisagreement && detectorDisagreement)
-    );
-
-    // Optional Gemini refinement (runs after normal extraction/merge, preserves multi-screenshot workflow)
-    const shouldRunGemini = !!rawDebugPath && (useGeminiRefine || shouldTriggerExternalGemini);
-    if (shouldRunGemini && geminiService.isInitialized) {
-      try {
-        const thresholdPct = Math.round(externalFallbackThreshold * 100);
-        const consensusPct = Math.round(consensusScore * 100);
-        const triggerLabel = forceMaxAnalysis
-          ? 'force-max-analysis'
-          : useGeminiRefine
-            ? 'hybrid-plus'
-            : `external-fallback(consensus=${consensusPct}%, threshold=${thresholdPct}%, disagreement=${detectorDisagreement ? 'yes' : 'no'})`;
-        console.log(`[OCR-AI] Running Gemini structured refinement (${triggerLabel})...`);
-        analysisPathsUsed.add('gemini');
-        const geminiData = await geminiService.extractStructured(rawDebugPath, activeUser, extractedData.rawText || '');
-        const refined = mergeGeminiRefinement(extractedData, geminiData);
-        extractedData = refined.data;
-        extractedData.aiContributed = refined.contributed;
-        extractedData.aiSource = refined.contributed ? 'gemini' : undefined;
-        if (refined.contributed) {
-          geminiContributed = true;
-          providerUsed = 'gemini';
-          console.log('[OCR-AI] Gemini contributed structured refinements');
-          if (!forceMaxAnalysis && shouldTriggerExternalGemini) {
-            externalFallbackApplied = true;
-            externalFallbackReason = `External fallback activated: consensus ${consensusPct}% vs threshold ${thresholdPct}%${detectorDisagreement ? '; detector disagreement observed' : ''}.`;
-          }
-        }
-      } catch (e) {
-        geminiFailureReason = e?.message || 'Gemini refinement failed';
-        console.warn('[OCR-AI] Gemini refinement failed:', geminiFailureReason);
-      }
-    } else if (shouldRunGemini && !geminiService.isInitialized) {
-      geminiFailureReason = 'Gemini service unavailable';
-      console.warn('[OCR-AI] Gemini service unavailable; skipping refinement');
     }
 
     // Merge with existing data if provided
@@ -2701,9 +2088,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     const artifactMatch = (extractedData.rawText || '').match(/\b(Healing|Weapon|Ice)\b/i);
     if (artifactMatch) extractedData.artifactType = artifactMatch[1].charAt(0).toUpperCase() + artifactMatch[1].slice(1).toLowerCase();
 
-    // Attach cloud/merge metadata to extracted data
-    extractedData.cloudContributed = cloudContributed;
-    extractedData.ocrSource = ocrSource;
+    extractedData.ocrSource = 'local';
     const fieldConfidence = computeFieldConfidence(extractedData);
     extractedData.fieldConfidence = fieldConfidence;
     const nameConfidenceFloor = getNameConfidenceFloor(fieldConfidence);
@@ -2711,13 +2096,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     const confidenceConsensus = floorConsensus > 0
       ? floorConsensus
       : normalizeConfidence01(extractedData.overallConfidence || 0);
-    const conflictConsensus = (mergeStats && mergeStats.total > 0)
-      ? Math.max(0, Math.min(1, 1 - (Number(mergeStats.conflicts || 0) / Number(mergeStats.total || 1))))
-      : confidenceConsensus;
-    consensusScore = Math.min(1, Math.max(0, Math.min(confidenceConsensus, conflictConsensus)));
-    extractedData.consensusScore = Number(consensusScore.toFixed(4));
-    extractedData.analysisPathsUsed = Array.from(analysisPathsUsed);
-    extractedData.providerUsed = providerUsed || (geminiContributed ? 'gemini' : (cloudContributed ? 'vertex' : null));
+    extractedData.consensusScore = Number(confidenceConsensus.toFixed(4));
     if (!routingDebug.attempted && routingDebug.postNameConfidence <= 0) {
       routingDebug.postNameConfidence = getNameConfidenceFloor(fieldConfidence);
     }
@@ -2730,27 +2109,11 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       latencyMs: Number.isFinite(routingDebug.latencyMs) ? routingDebug.latencyMs : 0,
       fontProfile: routingDebug.fontProfile === 'ealing-black-italic' ? 'ealing-black-italic' : 'default',
     };
-    if (cloudFailureReason) {
-      extractedData.ocrCloudError = cloudFailureReason;
-      if (!externalFallbackReason) {
-        externalFallbackReason = 'Cloud OCR unavailable, local OCR used';
-      }
-    }
-    if (externalFallbackApplied && !externalFallbackReason) {
-      externalFallbackReason = 'External fallback activated';
-    }
-    if (externalFallbackReason) {
-      extractedData.ocrFallbackReason = externalFallbackReason;
-    }
-    if (geminiFailureReason) {
-      extractedData.ocrGeminiError = geminiFailureReason;
-    }
-    if (mergeStats) extractedData.mergeStats = mergeStats;
     if (includeBboxes) {
       extractedData.ocrBoundingBoxes = buildOcrBoundingBoxDebugPayload(
-        ocrSource,
+        'local',
         ocrResult,
-        localOCRForFallback,
+        null,
         processed,
         screenDetection.type,
         ocrRegions
@@ -2764,7 +2127,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           trigger: 'ocr-process-capture',
           activeUser: activeUser || null,
           ocrMode,
-          ocrSource,
+          ocrSource: 'local',
           screenshotType: extractedData.screenshotType || 'unknown',
           overallConfidence: Number(extractedData.overallConfidence || 0),
           regionFingerprint: ocrRegionFingerprint,

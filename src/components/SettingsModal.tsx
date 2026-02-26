@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Palette, FileJson, Save, Download, RefreshCw, X, Cloud, Monitor, Merge, Check, Sparkles, Search, Upload } from 'lucide-react';
+import { Palette, FileJson, Save, Download, RefreshCw, X, Check, Search, Upload } from 'lucide-react';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
@@ -8,9 +8,7 @@ import { exportToCSV, exportToJSON } from '../utils/export';
 import { StorageService } from '../utils/storage';
 import { getElectronAPI } from '../utils/electronAPI';
 import { useAppStore } from '../store/useAppStore';
-import { getGCloudStatus, type GCloudStatus } from '../utils/electronBridge';
 import {
-    type OcrMode,
     type CaptureMode,
     type ResultOcrFlowMode,
     type TelemetryPerformanceProfile,
@@ -27,7 +25,7 @@ import { Button, Input } from './ui';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import OcrRegionEditorModal from './OcrRegionEditorModal';
-import { runtimeConfig } from '../config/runtimeConfig';
+
 
 type SettingsTabId = 'identity' | 'interface' | 'ocr-capture' | 'data';
 type DashboardStatView = 'analytics' | 'history' | 'smart-captures' | 'players' | 'dev-ocr';
@@ -73,22 +71,12 @@ interface ThresholdRecommendationPayload {
     summary?: string;
     reasons?: string[];
     recommendedThresholds?: {
-        cloud: { player: number; mod: number; ship: number };
         merged: { player: number; mod: number; ship: number };
         local: { player: number; mod: number; ship: number };
         lowConfidenceBump: number;
     };
 }
 
-const CLOUD_READINESS_REASON_COPY: Record<string, string> = {
-    beta_cohort_disabled: 'Cloud beta is disabled for this machine/user.',
-    credentials_missing: 'Google Cloud credential file is missing.',
-    vision_unavailable: 'Vision OCR service is not initialized.',
-    gemini_unavailable: 'Gemini refinement service is not initialized.',
-    storage_unavailable: 'Cloud storage sync service is not initialized.',
-    storage_error: 'Cloud storage reported a recent upload error.',
-    initialization_error: 'Cloud initialization failed.',
-};
 
 const SettingsModalContent: React.FC = () => {
     const {
@@ -119,8 +107,6 @@ const SettingsModalContent: React.FC = () => {
 
     const { matches, players, pilotRegistry } = useGameData();
 
-    const ocrMode = useAppStore(s => s.ocrMode);
-    const setOcrMode = useAppStore(s => s.setOcrMode);
     const captureMode = useAppStore(s => s.captureMode);
     const setCaptureMode = useAppStore(s => s.setCaptureMode);
     const resultOcrFlowMode = useAppStore(s => s.resultOcrFlowMode);
@@ -137,14 +123,6 @@ const SettingsModalContent: React.FC = () => {
     const setOcrEnhancedNameRecoveryEnabled = useAppStore(s => s.setOcrEnhancedNameRecoveryEnabled);
     const ocrNameRerouteThreshold = useAppStore(s => s.ocrNameRerouteThreshold);
     const setOcrNameRerouteThreshold = useAppStore(s => s.setOcrNameRerouteThreshold);
-    const externalFallbackEnabled = useAppStore(s => s.externalFallbackEnabled);
-    const setExternalFallbackEnabled = useAppStore(s => s.setExternalFallbackEnabled);
-    const externalFallbackThreshold = useAppStore(s => s.externalFallbackThreshold);
-    const setExternalFallbackThreshold = useAppStore(s => s.setExternalFallbackThreshold);
-    const externalOnDetectorDisagreement = useAppStore(s => s.externalOnDetectorDisagreement);
-    const setExternalOnDetectorDisagreement = useAppStore(s => s.setExternalOnDetectorDisagreement);
-    const forceMaxAnalysis = useAppStore(s => s.forceMaxAnalysis);
-    const setForceMaxAnalysis = useAppStore(s => s.setForceMaxAnalysis);
     const ocrLearningEnabled = useAppStore(s => s.ocrLearningEnabled);
     const setOcrLearningEnabled = useAppStore(s => s.setOcrLearningEnabled);
     const ocrAutoApplyMinScore = useAppStore(s => s.ocrAutoApplyMinScore);
@@ -190,7 +168,6 @@ const SettingsModalContent: React.FC = () => {
     const ocrLearningQueue = useAppStore(s => s.ocrLearningQueue);
     const rollbackOcrLearningEvent = useAppStore(s => s.rollbackOcrLearningEvent);
     const clearResolvedOcrLearningEvents = useAppStore(s => s.clearResolvedOcrLearningEvents);
-    const [gcloudStatus, setGcloudStatus] = useState<GCloudStatus | null>(null);
     const [aliasFrom, setAliasFrom] = useState('');
     const [aliasTo, setAliasTo] = useState('');
     const [showRoiEditor, setShowRoiEditor] = useState(false);
@@ -198,13 +175,12 @@ const SettingsModalContent: React.FC = () => {
     const [pendingSuspiciousAliasPair, setPendingSuspiciousAliasPair] = useState<string | null>(null);
     const [thresholdRecBusy, setThresholdRecBusy] = useState(false);
     const [thresholdRecommendation, setThresholdRecommendation] = useState<ThresholdRecommendationPayload | null>(null);
-    const getSensitivityLevel = () => detectSensitivityLevel(ocrBestGuessThresholds);
+    const getSensitivityLevel = () => detectSensitivityLevel(ocrBestGuessThresholds as any);
     const applySensitivityPreset = (level: 'strict' | 'balanced' | 'lenient') => {
         setOcrBestGuessThresholds(getPreset(level));
     };
     const resetBestGuessThresholds = () => {
         setOcrBestGuessThresholds({
-            cloud: { ...DEFAULT_OCR_BEST_GUESS_THRESHOLDS.cloud },
             merged: { ...DEFAULT_OCR_BEST_GUESS_THRESHOLDS.merged },
             local: { ...DEFAULT_OCR_BEST_GUESS_THRESHOLDS.local },
             lowConfidenceBump: DEFAULT_OCR_BEST_GUESS_THRESHOLDS.lowConfidenceBump,
@@ -234,7 +210,6 @@ const SettingsModalContent: React.FC = () => {
             timestamp: Date.now(),
             source: 'manual-apply-recommendation',
             thresholds: {
-                cloud: { ...ocrBestGuessThresholds.cloud },
                 merged: { ...ocrBestGuessThresholds.merged },
                 local: { ...ocrBestGuessThresholds.local },
                 lowConfidenceBump: ocrBestGuessThresholds.lowConfidenceBump,
@@ -253,25 +228,7 @@ const SettingsModalContent: React.FC = () => {
             setShowRoiEditor(false);
             setShowAdvancedRoiInputs(false);
             setSettingsSearch('');
-            setGcloudStatus(null);
-            return;
         }
-
-        let active = true;
-        const refreshCloudStatus = async () => {
-            const status = await getGCloudStatus();
-            if (!active) return;
-            setGcloudStatus(status);
-        };
-        void refreshCloudStatus();
-        const pollId = window.setInterval(() => {
-            void refreshCloudStatus();
-        }, runtimeConfig.cloud.statusPollIntervalMs);
-
-        return () => {
-            active = false;
-            window.clearInterval(pollId);
-        };
     }, [showSettings]);
 
     const [saved, setSaved] = useState(false);
@@ -283,9 +240,6 @@ const SettingsModalContent: React.FC = () => {
     useKeyboardShortcuts([
         { key: 'Escape', handler: () => setShowSettings(false) },
     ], showSettings);
-    const cloudReadiness = gcloudStatus?.readiness;
-    const cloudReady = !!gcloudStatus?.visionReady && !!cloudReadiness?.betaEnabled;
-    const cloudDegradedReasons = cloudReadiness?.reasons || [];
     useEffect(() => {
         if (isOverlayMode && activeTab === 'data') {
             setActiveTab('interface');
@@ -354,16 +308,11 @@ const SettingsModalContent: React.FC = () => {
                 telemetryPerformanceProfile: state.telemetryPerformanceProfile,
                 alwaysOnTop: (state as any).isAlwaysOnTop,
                 overlayStyle: state.overlayStyle,
-                ocrMode: state.ocrMode,
                 captureMode: state.captureMode,
                 resultOcrFlowMode: state.resultOcrFlowMode,
                 lockOcrTeams: state.lockOcrTeams,
                 ocrEnhancedNameRecoveryEnabled: (state as any).ocrEnhancedNameRecoveryEnabled,
                 ocrNameRerouteThreshold: (state as any).ocrNameRerouteThreshold,
-                externalFallbackEnabled: (state as any).externalFallbackEnabled,
-                externalFallbackThreshold: (state as any).externalFallbackThreshold,
-                externalOnDetectorDisagreement: (state as any).externalOnDetectorDisagreement,
-                forceMaxAnalysis: (state as any).forceMaxAnalysis,
                 ocrLearningEnabled: (state as any).ocrLearningEnabled,
                 ocrAutoApplyMinScore: (state as any).ocrAutoApplyMinScore,
                 ocrAutoApplyMinCount: (state as any).ocrAutoApplyMinCount,
@@ -1114,66 +1063,8 @@ const SettingsModalContent: React.FC = () => {
                             <h3 className="text-label-sm font-bold uppercase tracking-wide opacity-60 flex items-center gap-2">
                                 OCR Engine
                             </h3>
-                            {gcloudStatus && (
-                                <div className="flex items-center gap-3">
-                                    <div className="flex items-center gap-1.5">
-                                        <div className={`w-2 h-2 rounded-full ${gcloudStatus.visionReady ? 'bg-success' : 'bg-neutral'}`} />
-                                        <span className="text-label-sm opacity-60 font-bold uppercase">Vision</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <div className={`w-2 h-2 rounded-full ${gcloudStatus.geminiReady ? 'bg-success' : 'bg-neutral'}`} />
-                                        <span className="text-label-sm opacity-60 font-bold uppercase">Gemini</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <div className={`w-2 h-2 rounded-full ${gcloudStatus.storageReady ? 'bg-success' : 'bg-neutral'}`} />
-                                        <span className="text-label-sm opacity-60 font-bold uppercase">Storage</span>
-                                    </div>
-                                </div>
-                            )}
+                            <span className="text-label-sm opacity-60 font-bold uppercase">Local OCR</span>
                         </div>
-                        {gcloudStatus && cloudReadiness?.degraded && runtimeConfig.cloud.showBetaDiagnostics && (
-                            <div className="mb-3 rounded-control border border-warning-soft-strong bg-warning-soft px-3 py-2 space-y-1">
-                                <div className="text-label-sm font-bold uppercase tracking-wide text-warning">
-                                    Cloud Degraded Mode
-                                </div>
-                                <div className="text-label-sm text-warning/90">
-                                    {cloudReadiness.summary}
-                                </div>
-                                <div className="text-label-sm text-warning/90">
-                                    {cloudDegradedReasons.map((reason) => CLOUD_READINESS_REASON_COPY[reason] || reason).join(' ')}
-                                </div>
-                                <div className="text-label-xs text-warning/80 font-mono">
-                                    creds:{cloudReadiness.diagnostics.keyPresent ? 'ok' : 'missing'} | bucket:{cloudReadiness.diagnostics.bucketName || 'unset'} | checked:{new Date(cloudReadiness.diagnostics.lastCheckedAt).toLocaleTimeString()}
-                                </div>
-                            </div>
-                        )}
-                        <div className="grid grid-cols-4 gap-2">
-                            {[
-                                { id: 'local' as OcrMode, label: 'Local', desc: 'Tesseract only', icon: Monitor },
-                                { id: 'cloud' as OcrMode, label: 'Cloud', desc: 'Vision API only', icon: Cloud },
-                                { id: 'both' as OcrMode, label: 'Both', desc: 'Merged results', icon: Merge },
-                                { id: 'hybrid-plus' as OcrMode, label: 'Hybrid+', desc: 'Both + Gemini', icon: Sparkles },
-                            ].map(opt => (
-                                <button
-                                    key={opt.id}
-                                    onClick={() => setOcrMode(opt.id)}
-                                    disabled={opt.id !== 'local' && !!gcloudStatus && !cloudReady}
-                                    className={`p-3 rounded-control text-center transition-all ${ocrMode === opt.id
-                                        ? 'md3-btn-filled ring-2 ring-md-sys-primary/50'
-                                        : 'md3-btn-outlined'
-                                        } disabled:opacity-disabled disabled:cursor-not-allowed`}
-                                >
-                                    <opt.icon size={18} className="mx-auto mb-1" />
-                                    <div className="text-label-sm font-bold">{opt.label}</div>
-                                    <div className="text-label-sm opacity-60">{opt.desc}</div>
-                                </button>
-                            ))}
-                        </div>
-                        {(ocrMode === 'both' || ocrMode === 'hybrid-plus') && (
-                            <div className="mt-3 text-label-sm opacity-60 text-center">
-                                CJK is weighted toward Cloud Vision. Hybrid+ adds Gemini structured refinement.
-                            </div>
-                        )}
                         <div className="mt-3 p-3 md3-surface rounded-card border border-md-sys-outline/10 space-y-3">
                             <div className="flex items-center justify-between">
                                 <div>
@@ -1201,59 +1092,6 @@ const SettingsModalContent: React.FC = () => {
                                 />
                                 <span className="font-mono text-label-sm w-10 text-right">{ocrNameRerouteThreshold}%</span>
                             </label>
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <div className="text-label-sm font-semibold">External Feedback Assist</div>
-                                    <div className="text-label-sm opacity-60">Allow cloud/Gemini fallback when local confidence is weak</div>
-                                </div>
-                                <button
-                                    onClick={() => setExternalFallbackEnabled(!externalFallbackEnabled)}
-                                    disabled={forceMaxAnalysis}
-                                    className={`w-11 h-6 rounded-full transition-colors ${externalFallbackEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative disabled:opacity-disabled`}
-                                    title={forceMaxAnalysis ? 'Always enabled while Force Max Analysis is on' : 'Toggle external fallback assist'}
-                                >
-                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${externalFallbackEnabled ? 'translate-x-5' : ''}`} />
-                                </button>
-                            </div>
-                            <label className="text-label-sm opacity-60 flex items-center gap-2">
-                                External activation threshold
-                                <input
-                                    type="range"
-                                    min={0.55}
-                                    max={0.90}
-                                    step={0.01}
-                                    value={externalFallbackThreshold}
-                                    onChange={(e) => setExternalFallbackThreshold(Number(e.target.value))}
-                                    disabled={!externalFallbackEnabled || forceMaxAnalysis}
-                                    className="flex-1"
-                                />
-                                <span className="font-mono text-label-sm w-10 text-right">{Math.round(externalFallbackThreshold * 100)}%</span>
-                            </label>
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <div className="text-label-sm font-semibold opacity-60">Detector disagreement trigger</div>
-                                    <div className="text-label-sm opacity-40">Escalate to external analysis when OCR engines materially disagree</div>
-                                </div>
-                                <button
-                                    onClick={() => setExternalOnDetectorDisagreement(!externalOnDetectorDisagreement)}
-                                    disabled={!externalFallbackEnabled || forceMaxAnalysis}
-                                    className={`w-11 h-6 rounded-full transition-colors ${externalOnDetectorDisagreement ? 'bg-md-sys-primary' : 'md3-surface-high'} relative disabled:opacity-disabled`}
-                                >
-                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${externalOnDetectorDisagreement ? 'translate-x-5' : ''}`} />
-                                </button>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <div className="text-label-sm font-semibold">Force Max Analysis</div>
-                                    <div className="text-label-sm opacity-60">Use all available analysis paths (local + cloud + Gemini) and bypass cache</div>
-                                </div>
-                                <button
-                                    onClick={() => setForceMaxAnalysis(!forceMaxAnalysis)}
-                                    className={`w-11 h-6 rounded-full transition-colors ${forceMaxAnalysis ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
-                                >
-                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${forceMaxAnalysis ? 'translate-x-5' : ''}`} />
-                                </button>
-                            </div>
                             <div className="flex items-center justify-between">
                                 <div>
                                     <div className="text-label-sm font-semibold">OCR Learning</div>
@@ -1440,8 +1278,7 @@ const SettingsModalContent: React.FC = () => {
                                     <div className="text-label-sm opacity-60">
                                         Suggested at {thresholdRecommendation.generatedAt || 'unknown time'} • confidence {Math.round((thresholdRecommendation.confidenceScore || 0) * 100)}%
                                     </div>
-                                    <div className="grid grid-cols-3 gap-2 text-label-sm font-mono opacity-70">
-                                        <div>Cloud p/m/s: {thresholdRecommendation.recommendedThresholds.cloud.player}/{thresholdRecommendation.recommendedThresholds.cloud.mod}/{thresholdRecommendation.recommendedThresholds.cloud.ship}</div>
+                                    <div className="grid grid-cols-2 gap-2 text-label-sm font-mono opacity-70">
                                         <div>Merged p/m/s: {thresholdRecommendation.recommendedThresholds.merged.player}/{thresholdRecommendation.recommendedThresholds.merged.mod}/{thresholdRecommendation.recommendedThresholds.merged.ship}</div>
                                         <div>Local p/m/s: {thresholdRecommendation.recommendedThresholds.local.player}/{thresholdRecommendation.recommendedThresholds.local.mod}/{thresholdRecommendation.recommendedThresholds.local.ship}</div>
                                     </div>
@@ -1569,24 +1406,6 @@ const SettingsModalContent: React.FC = () => {
                                 </div>
                             </div>
                         </div>
-                        {gcloudStatus?.storageStats && gcloudStatus.storageReady && (
-                            <div className="mt-3 flex items-center justify-center gap-3 text-label-sm opacity-60 font-mono">
-                                <span>Uploads: {gcloudStatus.storageStats.uploadCount}</span>
-                                <span className="opacity-40">|</span>
-                                <span>
-                                    Last: {gcloudStatus.storageStats.lastUploadTime
-                                        ? `${Math.round((Date.now() - gcloudStatus.storageStats.lastUploadTime) / 60000)}m ago`
-                                        : 'never'}
-                                </span>
-                                <span className="opacity-40">|</span>
-                                <span
-                                    className={gcloudStatus.storageStats.uploadErrors > 0 ? 'text-danger' : ''}
-                                    title={gcloudStatus.storageStats.lastError || undefined}
-                                >
-                                    Errors: {gcloudStatus.storageStats.uploadErrors}
-                                </span>
-                            </div>
-                        )}
                         </section>
                     )}
 

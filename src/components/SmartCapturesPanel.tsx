@@ -238,13 +238,6 @@ const SmartCapturesPanel: React.FC = () => {
     } = useUIState();
     const ocrMode = useAppStore(s => s.ocrMode);
     const ocrRegions = useAppStore(s => s.ocrRegions);
-    const externalFallbackEnabled = useAppStore(s => s.externalFallbackEnabled);
-    const externalFallbackThreshold = useAppStore(s => s.externalFallbackThreshold);
-    const externalOnDetectorDisagreement = useAppStore(s => s.externalOnDetectorDisagreement);
-    const setExternalFallbackEnabled = useAppStore(s => s.setExternalFallbackEnabled);
-    const setExternalFallbackThreshold = useAppStore(s => s.setExternalFallbackThreshold);
-    const forceMaxAnalysis = useAppStore(s => s.forceMaxAnalysis);
-    const setForceMaxAnalysis = useAppStore(s => s.setForceMaxAnalysis);
     const setOcrRegions = useAppStore(s => s.setOcrRegions);
     const activeSection = useAppStore(s => s.activeSection) as any;
     const setActiveSection = useAppStore(s => s.setActiveSection);
@@ -260,18 +253,7 @@ const SmartCapturesPanel: React.FC = () => {
     const pendingReviews = useAppStore(s => s.pendingReviews);
     const queueCollapsed = useAppStore(s => s.queueCollapsed);
     const toggleQueueCollapsed = useAppStore(s => s.toggleQueueCollapsed);
-    const rerunRuntimeOptions = useMemo<OCRProcessRuntimeOptions>(() => ({
-        externalFallbackEnabled,
-        externalFallbackThreshold,
-        externalOnDetectorDisagreement,
-        forceMaxAnalysis,
-        forceUncached: forceMaxAnalysis,
-    }), [
-        externalFallbackEnabled,
-        externalFallbackThreshold,
-        externalOnDetectorDisagreement,
-        forceMaxAnalysis,
-    ]);
+    const rerunRuntimeOptions = useMemo<OCRProcessRuntimeOptions>(() => ({}), []);
     const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
     const [bulkBusy, setBulkBusy] = useState(false);
     const todayQueueDayKey = useMemo(() => toLocalDateKey(Date.now()), []);
@@ -1141,49 +1123,6 @@ const SmartCapturesPanel: React.FC = () => {
                                                         {showResolved ? 'Showing resolved' : 'Show resolved'}
                                                     </button>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="sc-seg sc-bordered sc-seg--compact">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                const nextEnabled = !externalFallbackEnabled;
-                                                                setExternalFallbackEnabled(nextEnabled);
-                                                                if (nextEnabled && externalFallbackThreshold > 0.66) {
-                                                                    setExternalFallbackThreshold(0.66);
-                                                                }
-                                                            }}
-                                                            className={`sc-seg-btn sc-seg-btn--compact ${externalFallbackEnabled
-                                                                ? 'text-info'
-                                                                : 'text-md-sys-on-surface/60'
-                                                                }`}
-                                                            data-active={externalFallbackEnabled}
-                                                            title="Lower-barrier external feedback assist for OCR reruns"
-                                                        >
-                                                            Ext. Assist {Math.round(externalFallbackThreshold * 100)}%
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                const next = !forceMaxAnalysis;
-                                                                setForceMaxAnalysis(next);
-                                                                if (next) {
-                                                                    setExternalFallbackEnabled(true);
-                                                                    if (externalFallbackThreshold > 0.66) {
-                                                                        setExternalFallbackThreshold(0.66);
-                                                                    }
-                                                                }
-                                                            }}
-                                                            className={`sc-seg-btn sc-seg-btn--compact ${forceMaxAnalysis
-                                                                ? 'text-warning'
-                                                                : 'text-md-sys-on-surface/60'
-                                                                }`}
-                                                            data-active={forceMaxAnalysis}
-                                                            title="Force max analysis using all available avenues"
-                                                        >
-                                                            Avenues {forceMaxAnalysis ? 'On' : 'Off'}
-                                                        </button>
-                                                    </div>
-                                                </div>
                                             </>
                                         )}
                                     </div>
@@ -1276,8 +1215,6 @@ const SmartCapturesPanel: React.FC = () => {
                                         ocrMode={ocrMode}
                                         ocrRegions={ocrRegions}
                                         rerunRuntimeOptions={rerunRuntimeOptions}
-                                        forceMaxAnalysis={forceMaxAnalysis}
-                                        onForceMaxAnalysisChange={setForceMaxAnalysis}
                                         pilotRegistry={pilotRegistry}
                                         queueOnly={queueOnly}
                                         onNext={goNextQueue}
@@ -1788,8 +1725,6 @@ const SmartMatchDetail: React.FC<{
     ocrMode: string;
     ocrRegions: OcrRegionSettings;
     rerunRuntimeOptions: OCRProcessRuntimeOptions;
-    forceMaxAnalysis: boolean;
-    onForceMaxAnalysisChange: (enabled: boolean) => void;
     pilotRegistry: string[];
     queueOnly?: boolean;
     onNext?: () => void;
@@ -1807,8 +1742,6 @@ const SmartMatchDetail: React.FC<{
     ocrMode,
     ocrRegions,
     rerunRuntimeOptions,
-    forceMaxAnalysis,
-    onForceMaxAnalysisChange,
     pilotRegistry,
     queueOnly = false,
     onNext,
@@ -3604,16 +3537,6 @@ const SmartMatchDetail: React.FC<{
                                             <RefreshCw size={12} className={rerunning ? 'animate-spin' : ''} />
                                             {rerunning ? 'Analyzing...' : `Re-analyze ${countImages(artifacts.images.length > 0 ? artifacts.images : (match.artifacts || []))}`}
                                         </button>
-                                        <label className="inline-flex items-center gap-1.5 text-label-xs font-semibold text-md-sys-on-surface/70 w-full mt-1">
-                                            <input
-                                                type="checkbox"
-                                                checked={forceMaxAnalysis}
-                                                onChange={(event) => onForceMaxAnalysisChange(event.target.checked)}
-                                                disabled={rerunning}
-                                                className="h-3.5 w-3.5 accent-md-sys-primary"
-                                            />
-                                            Force max analysis
-                                        </label>
                                     </div>
                                 </div>
                                 {showRerunStatus && (

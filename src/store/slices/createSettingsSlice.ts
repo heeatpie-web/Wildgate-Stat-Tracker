@@ -13,8 +13,8 @@ import type { CalibrationSample } from '../../utils/ocrCalibration';
 /** Visual style variant for the in-game overlay. */
 export type OverlayStyle = 'compact' | 'transparent';
 
-/** OCR engine mode: local Tesseract, Google Cloud Vision, merged, or merged+Gemini refinement. */
-export type OcrMode = 'local' | 'cloud' | 'both' | 'hybrid-plus';
+/** OCR engine mode (local Tesseract only). */
+export type OcrMode = 'local';
 
 /** Capture behavior: auto runs OCR immediately, deferred saves screenshot first. */
 export type CaptureMode = 'auto' | 'deferred';
@@ -31,7 +31,6 @@ export const OCR_NAME_REROUTE_THRESHOLD_MAX = 95;
 export const OCR_NAME_REROUTE_THRESHOLD_DEFAULT = 78;
 
 export interface OcrBestGuessThresholds {
-  cloud: { player: number; mod: number; ship: number };
   merged: { player: number; mod: number; ship: number };
   local: { player: number; mod: number; ship: number };
   lowConfidenceBump: number;
@@ -146,10 +145,6 @@ export interface SettingsSlice {
   lockOcrTeams: boolean;
   ocrEnhancedNameRecoveryEnabled: boolean;
   ocrNameRerouteThreshold: number;
-  externalFallbackEnabled: boolean;
-  externalFallbackThreshold: number;
-  externalOnDetectorDisagreement: boolean;
-  forceMaxAnalysis: boolean;
   ocrLearningEnabled: boolean;
   ocrAutoApplyMinScore: number;
   ocrAutoApplyMinCount: number;
@@ -196,10 +191,6 @@ export interface SettingsSlice {
   setLockOcrTeams: (enabled: boolean) => void;
   setOcrEnhancedNameRecoveryEnabled: (enabled: boolean) => void;
   setOcrNameRerouteThreshold: (threshold: number) => void;
-  setExternalFallbackEnabled: (enabled: boolean) => void;
-  setExternalFallbackThreshold: (threshold: number) => void;
-  setExternalOnDetectorDisagreement: (enabled: boolean) => void;
-  setForceMaxAnalysis: (enabled: boolean) => void;
   setOcrLearningEnabled: (enabled: boolean) => void;
   setOcrAutoApplyMinScore: (score: number) => void;
   setOcrAutoApplyMinCount: (count: number) => void;
@@ -256,16 +247,12 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   startupSmartPreloadEnabled: true,
   overlayStyle: 'compact',
   visualMode: 'dense',
-  ocrMode: 'both',
+  ocrMode: 'local',
   captureMode: 'auto',
   resultOcrFlowMode: 'prompt',
   lockOcrTeams: false,
   ocrEnhancedNameRecoveryEnabled: true,
   ocrNameRerouteThreshold: OCR_NAME_REROUTE_THRESHOLD_DEFAULT,
-  externalFallbackEnabled: true,
-  externalFallbackThreshold: 0.66,
-  externalOnDetectorDisagreement: true,
-  forceMaxAnalysis: false,
   ocrLearningEnabled: true,
   ocrAutoApplyMinScore: 0.83,
   ocrAutoApplyMinCount: 3,
@@ -279,7 +266,6 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   ocrThresholdRecommendationMode: 'assisted',
   ocrThresholdHistory: [],
   ocrBestGuessThresholds: {
-    cloud: { player: 80, mod: 82, ship: 62 },
     merged: { player: 78, mod: 80, ship: 60 },
     local: { player: 84, mod: 87, ship: 68 },
     lowConfidenceBump: 4,
@@ -328,12 +314,6 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   setOcrNameRerouteThreshold: (threshold) => set({
     ocrNameRerouteThreshold: normalizeOcrNameRerouteThreshold(threshold)
   }),
-  setExternalFallbackEnabled: (enabled) => set({ externalFallbackEnabled: enabled }),
-  setExternalFallbackThreshold: (threshold) => set({
-    externalFallbackThreshold: Math.max(0, Math.min(1, Number.isFinite(Number(threshold)) ? Number(threshold) : 0.66))
-  }),
-  setExternalOnDetectorDisagreement: (enabled) => set({ externalOnDetectorDisagreement: enabled }),
-  setForceMaxAnalysis: (enabled) => set({ forceMaxAnalysis: enabled }),
   setOcrLearningEnabled: (enabled) => set({ ocrLearningEnabled: enabled }),
   setOcrAutoApplyMinScore: (score) => set({ ocrAutoApplyMinScore: Math.max(0.5, Math.min(0.99, Number(score) || 0.83)) }),
   setOcrAutoApplyMinCount: (count) => set({ ocrAutoApplyMinCount: Math.max(1, Math.min(10, Math.round(Number(count) || 3))) }),
@@ -389,7 +369,6 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
     ocrBestGuessThresholds: {
       ...state.ocrBestGuessThresholds,
       ...update,
-      cloud: { ...state.ocrBestGuessThresholds.cloud, ...(update.cloud || {}) },
       merged: { ...state.ocrBestGuessThresholds.merged, ...(update.merged || {}) },
       local: { ...state.ocrBestGuessThresholds.local, ...(update.local || {}) },
     }
@@ -418,12 +397,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
     const recommended = recommendCalibrationThreshold(buckets);
     if (recommended === null) return {};
 
-    const mode = state.ocrMode || 'local';
-    const modeKey = (mode === 'both' || mode === 'hybrid-plus')
-      ? 'merged'
-      : mode === 'cloud'
-        ? 'cloud'
-        : 'local';
+    const modeKey = 'local';
 
     const nextThresholds: OcrBestGuessThresholds = {
       ...state.ocrBestGuessThresholds,
@@ -440,7 +414,6 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
           timestamp: Date.now(),
           source: `auto-calibration-${modeKey}:${recommended}`,
           thresholds: {
-            cloud: { ...state.ocrBestGuessThresholds.cloud },
             merged: { ...state.ocrBestGuessThresholds.merged },
             local: { ...state.ocrBestGuessThresholds.local },
             lowConfidenceBump: state.ocrBestGuessThresholds.lowConfidenceBump,

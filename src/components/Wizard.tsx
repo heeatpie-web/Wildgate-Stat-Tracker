@@ -86,10 +86,6 @@ export const Wizard: React.FC = () => {
     const { processFinalSubmission, submitting } = useMatchSubmission();
     const ocrMode = useAppStore((state) => state.ocrMode);
     const ocrRegions = useAppStore((state) => state.ocrRegions);
-    const externalFallbackEnabled = useAppStore((state) => state.externalFallbackEnabled);
-    const externalFallbackThreshold = useAppStore((state) => state.externalFallbackThreshold);
-    const externalOnDetectorDisagreement = useAppStore((state) => state.externalOnDetectorDisagreement);
-    const forceMaxAnalysis = useAppStore((state) => state.forceMaxAnalysis);
     const [selectedWinType, setSelectedWinType] = useState<'Combat' | 'Artifact' | null>(null);
     const [requestedOcrReviewMatchId, setRequestedOcrReviewMatchId] = useState<number | null | undefined>(undefined);
     const [activeTab, setActiveTab] = useState<WizardTab>('result');
@@ -477,10 +473,6 @@ export const Wizard: React.FC = () => {
         }
 
         const runtimeOptions: OCRProcessRuntimeOptions = {
-            externalFallbackEnabled,
-            externalFallbackThreshold,
-            externalOnDetectorDisagreement,
-            forceMaxAnalysis,
             forceUncached: true,
         };
 

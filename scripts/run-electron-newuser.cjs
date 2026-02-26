@@ -6,6 +6,7 @@
  */
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
 function resolveElectronBinary() {
   try {
@@ -17,7 +18,27 @@ function resolveElectronBinary() {
 }
 
 delete process.env.ELECTRON_RUN_AS_NODE;
-process.env.WILDGATE_USER_DATA_DIR = path.resolve(__dirname, '..', 'tmp-newuser');
+const tmpDir = path.resolve(__dirname, '..', 'tmp-newuser');
+process.env.WILDGATE_USER_DATA_DIR = tmpDir;
+
+// Wipe the tmp dir on every run so the new-user flow always starts clean.
+if (fs.existsSync(tmpDir)) {
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+  console.log('[run-electron-newuser] Wiped tmp-newuser for clean run.');
+}
+fs.mkdirSync(tmpDir, { recursive: true });
+
+// Write a valid empty db so the IPC db-read succeeds and the app never
+// falls back to localStorage (which would load the real user's data).
+const emptyDb = {
+  matches: [], players: [], pilotRegistry: [], favorites: [],
+  pilotNotes: {}, settings: {}, layouts: {}, lastActivity: 0,
+};
+fs.writeFileSync(
+  path.join(tmpDir, 'wildgate_db.json'),
+  JSON.stringify(emptyDb),
+);
+console.log('[run-electron-newuser] Seeded empty db — localStorage fallback bypassed.');
 
 const electronBinary = resolveElectronBinary();
 const child = spawn(electronBinary, ['.'], {

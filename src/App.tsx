@@ -15,6 +15,7 @@ import { WindowFrame } from './components/WindowFrame';
 import { OverlayView } from './components/OverlayView';
 import { Wizard } from './components/Wizard';
 import { RenameModal } from './components/RenameModal';
+import { SetupWizard } from './components/SetupWizard';
 import { DrillDownOverlay } from './components/DrillDownOverlay';
 import { SettingsModal } from './components/SettingsModal';
 import { ResetConfirmModal } from './components/ResetConfirmModal';
@@ -276,6 +277,7 @@ const App: React.FC = () => {
         showIdMapper, setShowIdMapper,
         sidebarCollapsed, setSidebarCollapsed,
         renameModal, setRenameModal, setRenameValue,
+        showSetupWizard, setShowSetupWizard,
     } = useUIState();
 
     const changelogDialogTitleId = React.useId();
@@ -548,7 +550,7 @@ const App: React.FC = () => {
     useEffect(() => {
         if (onboardingPromptedRef.current) return;
         if (isStoreLoading) return;
-        if (renameModal) return;
+        if (showSetupWizard) return;
 
         const hasActiveUser = Boolean((activeUser || '').trim());
         const hasProfiles = Array.isArray(players) && players.some((name) => String(name || '').trim().length > 0);
@@ -558,9 +560,8 @@ const App: React.FC = () => {
         }
 
         onboardingPromptedRef.current = true;
-        setRenameValue('');
-        setRenameModal({ type: 'new', blocking: true });
-    }, [activeUser, isStoreLoading, players, renameModal, setRenameModal, setRenameValue]);
+        setShowSetupWizard(true);
+    }, [activeUser, isStoreLoading, players, showSetupWizard, setShowSetupWizard]);
 
     useEffect(() => {
         if (tutorialAutoPromptedRef.current) return;
@@ -571,6 +572,7 @@ const App: React.FC = () => {
             return;
         }
         if (renameModal) return;
+        if (showSetupWizard) return;
         if (!String(activeUser || '').trim()) return;
         try {
             const key = 'wg_tutorial_autostart_seen_v1';
@@ -584,7 +586,7 @@ const App: React.FC = () => {
         }
         tutorialAutoPromptedRef.current = true;
         setShowTutorial(true);
-    }, [activeUser, isStoreLoading, renameModal, setShowTutorial, showTutorial, tutorialCompleted]);
+    }, [activeUser, isStoreLoading, renameModal, showSetupWizard, setShowTutorial, showTutorial, tutorialCompleted]);
 
     useEffect(() => {
         if (isStoreLoading) return;
@@ -2087,6 +2089,7 @@ const App: React.FC = () => {
             )}
 
             <RenameModal />
+            <SetupWizard />
             <DrillDownOverlay />
             <SettingsModal />
             <ResetConfirmModal />

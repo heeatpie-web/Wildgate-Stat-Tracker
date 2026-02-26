@@ -58,12 +58,11 @@ export const processWithTesseractOCR = async (
 
         const base64Data = imageDataUrl.replace(/^data:image\/\w+;base64,/, '');
 
-        const effectiveOcrMode = options.ocrMode === 'hybrid-plus' ? 'both' : (options.ocrMode || 'both');
         const ocrResponse = await ocrProcessCapture(
             base64Data,
             activeUser,
             null,
-            effectiveOcrMode,
+            'local',
             options.ocrRegions || null
         );
 

@@ -138,10 +138,10 @@ function getValidatedMatchDir(app, artifactHelpers, matchId, options = {}) {
 /**
  * Register artifact-related IPC handlers.
  * @param {import('electron').IpcMain} ipcMain
- * @param {{ app: import('electron').App, getWin: () => import('electron').BrowserWindow | null, artifactHelpers: typeof import('../helpers/artifactHelpers.cjs'), gcloudSyncService: import('../gcloudSyncService.cjs') }} ctx
+ * @param {{ app: import('electron').App, getWin: () => import('electron').BrowserWindow | null, artifactHelpers: typeof import('../helpers/artifactHelpers.cjs') }} ctx
  */
 function registerArtifactHandlers(ipcMain, ctx) {
-  const { app, getWin, artifactHelpers, gcloudSyncService } = ctx;
+  const { app, getWin, artifactHelpers } = ctx;
 
   ipcMain.handle('bundle-artifacts', async (event, { matchId, startTime, endTime }) => {
     try {
@@ -155,13 +155,7 @@ function registerArtifactHandlers(ipcMain, ctx) {
       const state = {
         bundledNames,
         bundledSizes,
-        onCopy: (srcPath, destPath, file) => {
-          if (gcloudSyncService.isInitialized) {
-            return gcloudSyncService.uploadFile(destPath, `match_artifacts/${folderName}/${file}`)
-              .then(r => { if (!r.success) console.warn(`[GCloud] Artifact upload failed: ${r.error}`); })
-              .catch(err => console.warn(`[GCloud] Artifact upload error: ${err.message}`));
-          }
-        },
+        onCopy: () => {},
       };
 
       const fromScreenshots = await artifactHelpers.scanDirForImagesInWindow(paths.screenshotsDir, matchDir, startTime, endTime, state);

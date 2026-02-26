@@ -37,21 +37,21 @@ describe('SquadronPanel', () => {
     gameData.telemetryDetectedHero = 'Adrian';
   });
 
-  it('shows telemetry-selected weapon and equipment details in standard mode without a header telemetry badge', () => {
+  it('shows ship and prospector sections in standard mode without a telemetry active badge', () => {
     render(<SquadronPanel />);
 
-    expect(screen.getByText('Ship Weapons')).toBeInTheDocument();
-    expect(screen.getByText('Equipment')).toBeInTheDocument();
+    expect(screen.getByText('Ship and Loadout')).toBeInTheDocument();
+    expect(screen.getByText('Ship')).toBeInTheDocument();
+    expect(screen.getByText('Prospector')).toBeInTheDocument();
     expect(screen.queryByText(/telemetry active/i)).not.toBeInTheDocument();
-    expect(screen.getByText('Double Whammy')).toBeInTheDocument();
-    expect(screen.getByText('Repair Drone')).toBeInTheDocument();
   });
 
-  it('shows telemetry-selected weapon and equipment details in compact mode without a header telemetry badge', () => {
+  it('shows ship and prospector sections in compact mode without a telemetry active badge', () => {
     render(<SquadronPanel density="compact" />);
 
-    expect(screen.getByText('Ship Weapons')).toBeInTheDocument();
-    expect(screen.getByText('Equipment')).toBeInTheDocument();
+    expect(screen.getByText('Ship and Loadout')).toBeInTheDocument();
+    expect(screen.getByText('Ship')).toBeInTheDocument();
+    expect(screen.getByText('Prospector')).toBeInTheDocument();
     expect(screen.queryByText(/telemetry active/i)).not.toBeInTheDocument();
   });
 
