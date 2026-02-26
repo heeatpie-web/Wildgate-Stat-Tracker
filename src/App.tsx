@@ -81,7 +81,6 @@ import {
     combinedNameSimilarityScore,
     getAdaptiveNameSimilarityThreshold,
     normalizeOcrName,
-    similarityScore,
 } from './utils/stringUtils';
 import { StorageService } from './utils/storage';
 import { playSoundCue } from './utils/soundCues';
@@ -1172,6 +1171,8 @@ const App: React.FC = () => {
         if (!api) return;
         const unsubAvailable = api.on('update_available', () => setUpdateStatus('available'));
         const unsubDownloaded = api.on('update_downloaded', () => setUpdateStatus('downloaded'));
+        const unsubNotAvailable = api.on('update_not_available', () => setUpdateStatus('not-available'));
+        const unsubError = api.on('update_error', () => setUpdateStatus('not-available'));
 
         const unsubHotkey = api.on('hotkey-toggle-overlay', (forceState?: boolean) => {
             if (typeof forceState === 'boolean') {
@@ -1184,6 +1185,8 @@ const App: React.FC = () => {
         return () => {
             unsubAvailable();
             unsubDownloaded();
+            unsubNotAvailable();
+            unsubError();
             unsubHotkey();
         };
     }, [setUpdateStatus, setIsOverlayMode]);
@@ -1475,7 +1478,7 @@ const App: React.FC = () => {
         if (pendingValues.has(normalized.toLowerCase())) return;
         const scored = pilotRegistry.map((pilot) => ({
             name: pilot,
-            score: similarityScore(normalized, normalizeOcrName(pilot)),
+            score: combinedNameSimilarityScore(normalized, normalizeOcrName(pilot)),
         })).sort((a, b) => b.score - a.score);
         const suggestions = scored.filter((entry) => entry.score > 0).slice(0, 3);
         addPendingReview({

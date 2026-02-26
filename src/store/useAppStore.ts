@@ -446,7 +446,8 @@ export const useAppStore = create<AppState>()(
         teamIdentityCorrections: state.teamIdentityCorrections,
         ocrAliasModel: state.ocrAliasModel,
         ocrLearningEvents: state.ocrLearningEvents,
-        ocrLearningQueue: state.ocrLearningQueue
+        ocrLearningQueue: state.ocrLearningQueue,
+        pendingReviews: state.pendingReviews
         // sessionTeams removed from persistence to prevent color sticking
       } as any),
       onRehydrateStorage: () => (state) => {

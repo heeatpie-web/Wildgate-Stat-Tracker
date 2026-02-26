@@ -44,7 +44,7 @@ const RECEIVE_CHANNELS = [
   'log-status', 'log-data',
   'window-maximized-changed',
   'window-restored',
-  'update_available', 'update_downloaded',
+  'update_available', 'update_downloaded', 'update_not_available', 'update_error',
   'hotkey-toggle-overlay',
   'telemetry-prune-needed',
 ];
