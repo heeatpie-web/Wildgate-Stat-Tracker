@@ -9,6 +9,7 @@ const http = require('http');
 const https = require('https');
 const fsPromises = require('fs').promises;
 const { registerOCRHandlers, processCapture, runOCR } = require('./ocrHandler.cjs');
+const { mergeCaptures, isSameMatch } = require('./ocrMerger.cjs');
 const gcloudService = require('./gcloudService.cjs');
 const gcloudSyncService = require('./gcloudSyncService.cjs');
 const geminiService = require('./geminiService.cjs');
@@ -1400,8 +1401,11 @@ ipcMain.handle('rerun-ocr-multi', async (event, { imagePaths, activeUser, ocrMod
     const safeRuntimeOptions = (runtimeOptions && typeof runtimeOptions === 'object' && !Array.isArray(runtimeOptions))
       ? runtimeOptions
       : {};
-    let accumulatedData = null;
     const perFile = [];
+    // Phase 1: process every image independently (no existingData chaining).
+    // Passing the previous result as existingData would let its screenshotType
+    // leak into the next image's PSM hint, causing the crew hub to be OCR'd with
+    // mapScreen's PSM=11 and then misclassified, crashing the extractor.
     for (const imagePath of imagePaths) {
       const pathCheck = resolveAllowedRendererPath(imagePath);
       if (!pathCheck.success) {
@@ -1423,13 +1427,12 @@ ipcMain.handle('rerun-ocr-multi', async (event, { imagePaths, activeUser, ocrMod
       try {
         const imageBuffer = await fsPromises.readFile(fullPath);
         const base64 = imageBuffer.toString('base64');
-        const result = await processCapture(base64, activeUser, accumulatedData, ocrMode || 'both', {
+        const result = await processCapture(base64, activeUser, null, ocrMode || 'both', {
           sourceImagePath: fullPath,
           ocrRegions: ocrRegions || null,
           ...safeRuntimeOptions,
         });
         if (result && result.success && result.data) {
-          accumulatedData = result.data;
           perFile.push({ imagePath: fullPath, success: true, data: result.data });
         } else {
           perFile.push({ imagePath: fullPath, success: false, error: (result && result.error) || 'OCR returned no data' });
@@ -1442,6 +1445,19 @@ ipcMain.handle('rerun-ocr-multi', async (event, { imagePaths, activeUser, ocrMod
     const successCount = perFile.filter(f => f.success).length;
     if (successCount === 0) {
       return errorResult(IpcErrorCode.INTERNAL_ERROR, 'All images failed OCR processing');
+    }
+    // Phase 2: merge successful results sequentially so ocrMerger combines
+    // tactical-map data (ship types, hazards) with crew-hub data (player names).
+    let accumulatedData = null;
+    for (const entry of perFile) {
+      if (!entry.success || !entry.data) continue;
+      if (!accumulatedData) { accumulatedData = entry.data; continue; }
+      if (isSameMatch(accumulatedData, entry.data)) {
+        accumulatedData = mergeCaptures(accumulatedData, entry.data);
+      } else {
+        // Different match — just overwrite (shouldn't happen for a single match's artifacts)
+        accumulatedData = entry.data;
+      }
     }
     return { success: true, data: accumulatedData, perFile };
   } catch (e) {
