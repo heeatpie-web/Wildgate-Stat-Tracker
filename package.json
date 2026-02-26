@@ -18,7 +18,7 @@
     "ci:quality": "npm run lint && npm run test && npm run typecheck && npm run build",
     "preview": "vite preview",
     "electron:dev": "concurrently \"vite\" \"node scripts/run-electron.cjs .\"",
-    "electron:dev:newuser": "concurrently \"vite\" \"node scripts/run-electron.cjs . --user-data-dir=./tmp-newuser\"",
+    "electron:dev:newuser": "concurrently \"vite\" \"node scripts/run-electron-newuser.cjs\"",
     "dev:hot": "concurrently \"vite\" \"node scripts/electron-hot-dev.cjs\"",
     "electron:build": "vite build && electron-builder",
     "snap:views": "node scripts/visual-snapshots.mjs",
