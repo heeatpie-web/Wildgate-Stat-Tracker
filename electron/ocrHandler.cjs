@@ -2286,6 +2286,46 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         }
       }
 
+      // DEDICATED: Left-panel team-name banner box (separate from the player-name strip).
+      // Reads just the top of the left panel where "SPEED RUN!"-style banners appear.
+      // Stored as leftPanelTeamName and used by extractCrewHub as a fallback team name.
+      let leftPanelTeamName = null;
+      if (imageBuffer) {
+        try {
+          const origW = Math.round(processed.width / processed.scale);
+          const origH = Math.round(processed.height / processed.scale);
+          const bannerX1 = Math.round(origW * 0.03);
+          const bannerX2 = Math.round(origW * 0.45);
+          const bannerY1 = Math.round(origH * 0.37);  // banner sits at ~38-44% down (y≈400-480 on 1080p)
+          const bannerY2 = Math.round(origH * 0.46);
+          const bannerW  = bannerX2 - bannerX1;
+          const bannerH  = bannerY2 - bannerY1;
+          if (bannerW > 0 && bannerH > 0) {
+            const BANNER_SCALE = 4;
+            const bannerBuf = await sharp(imageBuffer)
+              .extract({ left: bannerX1, top: bannerY1, width: bannerW, height: bannerH })
+              .resize(bannerW * BANNER_SCALE, bannerH * BANNER_SCALE, { kernel: sharp.kernel.nearest })
+              .modulate({ brightness: 1.05 })
+              .linear(1.4, -(0.4 * 128))
+              .sharpen({ sigma: 1.5, m1: 1, m2: 0.5 })
+              .png().toBuffer();
+            const bannerOcr = await runOCREngOnly(bannerBuf, 8); // PSM8 = single word per line
+            const bannerText = (bannerOcr?.allWords || [])
+              .filter(w => w.confidence >= 30)
+              .map(w => w.text.trim())
+              .filter(Boolean)
+              .join(' ');
+            if (bannerText.length >= 3) {
+              // Strip trailing "'s Crew" if OCR caught it
+              leftPanelTeamName = bannerText.replace(/[\u2019\u2018\u0027\u0060]?s\s*Crew\s*$/i, '').trim();
+              console.log(`[OCR-CrewHub] Left-panel banner box: "${leftPanelTeamName}"`);
+            }
+          }
+        } catch (e) {
+          console.warn('[OCR-CrewHub] Left-panel banner box failed:', e.message);
+        }
+      }
+
       // SUPPLEMENTARY: Left-panel PSM11 strip for your-team player names.
       // The PSM4 full-image pass often misses names that sit at lower-contrast
       // positions in the left panel (e.g. 3rd/4th teammate cards). The left
@@ -2299,7 +2339,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           const lStripX1  = Math.round(origW * lStripXFrac1);
           const lStripX2  = Math.round(origW * lStripXFrac2);
           const lStripW   = lStripX2 - lStripX1;
-          const lStripY   = 250; // skip team-name banner (~y=80-240) and ship-name row; player cards start ~y=250+
+          const lStripY   = 500; // skip team-name banner (~y=400-480) and ship-name row; player cards start ~y=530+
           const lStripH   = Math.max(0, origH - lStripY - 20);
           const L_STRIP_SCALE = 3;
 
@@ -2355,7 +2395,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         }
       }
 
-      const mergedOcrResult = { ...ocrResult, allWords: allWordsWithEngOnly };
+      const mergedOcrResult = { ...ocrResult, allWords: allWordsWithEngOnly, leftPanelTeamName };
 
       extractedData = await extractCrewHub(
         processed.buffer,

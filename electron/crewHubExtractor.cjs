@@ -42,7 +42,7 @@ const LAYOUT = {
   LEFT_PANEL: {
     xMin: 0,
     xMax: 0.48,  // names can extend to ~46%, allow margin
-    yMin: 0.05,
+    yMin: 0.22,  // skip team-name banner (~top 22% = y<238 on 1080p); player cards start below this
     yMax: 0.85,
   },
   // Right panel: Enemy crews — single scrollable list of player cards
@@ -234,7 +234,8 @@ async function extractCrewHub(
       text,
       imageWidth,
       imageHeight,
-      layout
+      layout,
+      ocrResult && ocrResult.leftPanelTeamName
     );
 
     // Step 2: Extract enemy teams from right panel using row-based card scanner
@@ -299,7 +300,7 @@ async function extractCrewHub(
 /**
  * Extract your team data from left panel
  */
-async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, imageWidth, imageHeight, layout = LAYOUT) {
+async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, imageWidth, imageHeight, layout = LAYOUT, leftPanelTeamName = null) {
   dlog('[CrewHub] Extracting left panel (your team)');
 
   const teamData = {
@@ -317,12 +318,19 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
 
   // Step 1: Find YOUR team name via the "'s Crew" banner (left panel only).
   // Allow !, digits, hyphens etc. in team names (e.g. "SPEED RUN!'s Crew")
-  const teamNameMatch = text.match(/([A-Za-z][A-Za-z0-9 !_\-]{2,30}?)[\u2019\u2018'']s\s*Crew/i);
-  if (teamNameMatch) {
-    teamData.name = formatTeamName(teamNameMatch[1].trim());
-    dlog('[CrewHub] Found team name: ' + teamData.name);
+  // Primary: dedicated banner-box OCR read passed in via leftPanelTeamName param
+  // Fallback: regex on the full PSM4 text
+  if (leftPanelTeamName) {
+    teamData.name = formatTeamName(leftPanelTeamName);
+    dlog('[CrewHub] Found team name from banner box: ' + teamData.name);
   } else {
-    dlog('[CrewHub] No team name found (no \'s Crew pattern in text)');
+    const teamNameMatch = text.match(/([A-Za-z][A-Za-z0-9 !_\-]{2,30}?)[\u2019\u2018'']s\s*Crew/i);
+    if (teamNameMatch) {
+      teamData.name = formatTeamName(teamNameMatch[1].trim());
+      dlog('[CrewHub] Found team name from regex: ' + teamData.name);
+    } else {
+      dlog('[CrewHub] No team name found (no \'s Crew pattern in text)');
+    }
   }
 
   // Step 2: Filter words in left panel
