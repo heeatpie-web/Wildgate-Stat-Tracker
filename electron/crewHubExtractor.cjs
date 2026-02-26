@@ -1316,7 +1316,7 @@ function cleanupPlayerName(name) {
  * - Length 3-25 characters
  */
 function isValidPlayerName(name) {
-  if (!name || name.length < 3 || name.length > 25) return false;
+  if (!name || name.length < 4 || name.length > 25) return false;
 
   // Must have at least some letters (Latin, Extended Latin, Cyrillic, or CJK)
   // \u00C0-\u024F: Extended Latin (accented characters)

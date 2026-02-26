@@ -2340,7 +2340,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           const lStripX1  = Math.round(origW * lStripXFrac1);
           const lStripX2  = Math.round(origW * lStripXFrac2);
           const lStripW   = lStripX2 - lStripX1;
-          const lStripY   = Math.round(origH * 0.38); // measured: player cards start at ~38% height
+          const lStripY   = Math.round(origH * 0.31); // measured: player cards start at ~31% height
           const lStripH   = Math.max(0, Math.round(origH * 0.725) - lStripY); // measured: bottom at ~72.5%
           const L_STRIP_SCALE = 3;
 
