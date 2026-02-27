@@ -46,6 +46,12 @@ export interface ShipWeaponEntry {
 export interface Loadout {
   hero: string | null;
   ship: string | null;
+  /** Optional normalized perk IDs/names for this loadout. */
+  perks?: string[];
+  /** Optional ship-specific perks (kept separate for consumers that need split slots). */
+  shipPerks?: string[];
+  /** Optional prospector/hero-specific perks. */
+  characterPerks?: string[];
   /** Explicit ship weapon quantities. Falls back to `weapons[]` when absent. */
   shipWeapons?: ShipWeaponEntry[];
   weapons: string[];
@@ -53,6 +59,64 @@ export interface Loadout {
   characterWeapons?: string[];
   characterEquipment?: string[];
 }
+
+/** Shared mapping categories used by UI/OCR contracts. */
+export type MappingCategory = 'players' | 'ships' | 'weapons' | 'equipment' | 'perks';
+
+/** Shared entity types for unknown-ID detection and mapping workflows. */
+export type MappingEntityType = 'Hero' | 'Ship' | 'Weapon' | 'Equipment' | 'Perk' | 'Unknown';
+
+export interface DetectedUnknownMapping {
+  type: MappingEntityType;
+  lastSeen: number;
+}
+
+type MappingRecord = Record<string, string>;
+
+/**
+ * Shared UID mapping contract.
+ * `perks` is optional for backward compatibility with older persisted saves.
+ */
+export interface UidMappingsContract {
+  players: MappingRecord;
+  ships: MappingRecord;
+  weapons: MappingRecord;
+  equipment: MappingRecord;
+  perks?: MappingRecord;
+}
+
+/** Stable default shape for mapping consumers that want all mapping buckets present. */
+export const createEmptyUidMappingsContract = (): Required<UidMappingsContract> => ({
+  players: {},
+  ships: {},
+  weapons: {},
+  equipment: {},
+  perks: {},
+});
+
+const toStrictMappingRecord = (value: unknown): MappingRecord => {
+  if (typeof value !== 'object' || value === null) return {};
+  const normalized: MappingRecord = {};
+  Object.entries(value as Record<string, unknown>).forEach(([key, raw]) => {
+    if (typeof raw !== 'string') return;
+    normalized[key] = raw;
+  });
+  return normalized;
+};
+
+/**
+ * Normalizes persisted mapping payloads while preserving backward compatibility.
+ * Saves created before perk mappings existed safely default to an empty `perks` map.
+ */
+export const normalizeUidMappingsContract = (
+  input?: Partial<UidMappingsContract> | null
+): Required<UidMappingsContract> => ({
+  players: toStrictMappingRecord(input?.players),
+  ships: toStrictMappingRecord(input?.ships),
+  weapons: toStrictMappingRecord(input?.weapons),
+  equipment: toStrictMappingRecord(input?.equipment),
+  perks: toStrictMappingRecord(input?.perks),
+});
 
 export type TelemetryConsistencyStatus = 'pass' | 'warn' | 'unknown';
 
@@ -108,6 +172,8 @@ export interface Match {
   hero: string;
   ship: string;
   loadout?: Loadout; // New field
+  /** Optional flattened perk list for compatibility with legacy/non-loadout consumers. */
+  perks?: string[];
   weapons?: Record<string, number>; // Legacy/Usage stats
   reachModifiers: string[];
   kills: KillMap;
