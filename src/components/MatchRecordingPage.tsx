@@ -30,7 +30,7 @@ const SOURCE_BADGE: Record<string, { label: string; color: string }> = {
 
 export const MatchRecordingPage: React.FC = () => {
     const { matches, updateMatch } = useGameData();
-    const { activeMode, setActiveView } = useUIState();
+    const { activeMode, setActiveView, devMode } = useUIState();
 
     const [selectedMatchId, setSelectedMatchId] = useState<number | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -123,7 +123,12 @@ export const MatchRecordingPage: React.FC = () => {
             {/* Right Panel — Match Detail */}
             <div className="flex-1 overflow-y-auto custom-scrollbar">
                 {selectedMatch ? (
-                    <MatchDetail match={selectedMatch} onUpdate={updateMatch} onViewCaptures={() => setActiveView('smart-captures')} />
+                    <MatchDetail
+                        match={selectedMatch}
+                        onUpdate={updateMatch}
+                        onViewCaptures={() => setActiveView('smart-captures')}
+                        devMode={devMode}
+                    />
                 ) : (
                     <div className="h-full flex items-center justify-center">
                         <div className="text-center opacity-40">
@@ -184,7 +189,8 @@ const MatchDetail: React.FC<{
     match: Match;
     onUpdate: (m: Match) => void;
     onViewCaptures?: () => void;
-}> = ({ match, onUpdate, onViewCaptures }) => {
+    devMode: boolean;
+}> = ({ match, onUpdate, onViewCaptures, devMode }) => {
     const [artifacts, setArtifacts] = useState<string[]>([]);
     const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
     const [editingField, setEditingField] = useState<string | null>(null);
@@ -507,7 +513,7 @@ const MatchDetail: React.FC<{
             )}
 
             {/* OCR Debug Info */}
-            {(match.ocrDebug || (match.artifacts && match.artifacts.length > 0)) && (
+            {devMode && (match.ocrDebug || (match.artifacts && match.artifacts.length > 0)) && (
                 <Section title="OCR Metadata" icon={<ShieldCheck size={14} />}>
                     <div className="space-y-2 text-label-sm">
                         {match.artifacts && match.artifacts.length > 0 && (

@@ -230,6 +230,7 @@ const SmartCapturesPanel: React.FC = () => {
     } = useGameData();
     const {
         activeUser,
+        devMode,
         setToast,
         setShowSettings,
         smartCapturesFocusMatchId,
@@ -1467,6 +1468,7 @@ const SmartCapturesPanel: React.FC = () => {
                                         onQueueRosterCandidate={queueRosterCandidate}
                                         onAddPilotToRoster={addToRegistry}
                                         onDeleteMatch={handleDeleteSingleMatch}
+                                        devMode={devMode}
                                     />
                                 ) : (
                                     <div className="h-full flex items-center justify-center p-4">
@@ -1734,6 +1736,7 @@ const SmartMatchDetail: React.FC<{
     onQueueRosterCandidate?: (name: string) => void;
     onAddPilotToRoster?: (name: string) => void;
     onDeleteMatch?: (match: Match) => void;
+    devMode?: boolean;
 }> = ({
     match,
     displayNumber,
@@ -1750,7 +1753,8 @@ const SmartMatchDetail: React.FC<{
     onApplyToSession,
     onQueueRosterCandidate,
     onAddPilotToRoster,
-    onDeleteMatch
+    onDeleteMatch,
+    devMode = false,
 }) => {
         const [artifacts, setArtifacts] = useState<{ images: string[], imageFiles: ArtifactFile[], telemetry: TelemetryArchiveEvent[][] }>({ images: [], imageFiles: [], telemetry: [] });
         const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -3679,7 +3683,7 @@ const SmartMatchDetail: React.FC<{
                             </div>
                         </Section>
 
-                        {match.ocrDebug && (
+                        {devMode && match.ocrDebug && (
                             <Section title="OCR Metadata" collapsible collapsed={!!collapsedSections.ocrMeta} onToggle={() => toggleSection('ocrMeta')}>
                                 <div className="space-y-2 text-label-sm">
                                     <div className="flex flex-wrap gap-3">

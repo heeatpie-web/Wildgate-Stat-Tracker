@@ -3564,6 +3564,11 @@ body.perf-lite .md3-card {
   box-shadow: none !important;
 }
 
+/* Keep header system pulse feedback alive in performance mode. */
+body.perf-lite .system-pulse-dot.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+}
+
 body.perf-lite .shadow,
 body.perf-lite .shadow-sm,
 body.perf-lite .shadow-md,

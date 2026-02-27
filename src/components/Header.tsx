@@ -139,8 +139,10 @@ export const Header: React.FC<HeaderProps> = ({
                     )}
                 </div>
 
-                <div data-tour="system-pulse" style={{ WebkitAppRegion: 'no-drag' } as any}>
-                    <SystemPulse />
+                <div className="flex-1 min-w-0 flex justify-center px-2" data-tour="system-pulse" style={{ WebkitAppRegion: 'no-drag' } as any}>
+                    <div className="max-w-full overflow-x-auto no-scrollbar">
+                        <SystemPulse />
+                    </div>
                 </div>
 
                 <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as any}>
