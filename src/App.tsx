@@ -151,9 +151,13 @@ const RESTORE_SESSION_STORAGE_KEY = 'wg_restore_session_v1';
 const RESTORE_SESSION_DISMISSED_SIGNATURE_KEY = 'wg_restore_session_dismissed_signature_v1';
 const RESTORE_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const SETTINGS_FOCUS_SECTION_STORAGE_KEY = 'wg_settings_focus_section_v1';
-const STARTUP_HEALTH_CHECK_SEEN_KEY = 'wg_startup_health_check_seen_v1';
-const STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY = 'wg_startup_health_check_skipped_launch_v1';
+const STARTUP_HEALTH_CHECK_SEEN_KEY_PREFIX = 'wg_startup_health_check_seen_v2';
+const STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY_PREFIX = 'wg_startup_health_check_skipped_launch_v2';
 const UNKNOWN_PLAYER_LABELS = new Set(['unknown', 'unknown player', 'n/a', 'na', '?']);
+const getOnboardingUserScope = (user: string | null | undefined): string => {
+    const normalized = String(user || '').trim().toLowerCase();
+    return normalized || '__global__';
+};
 
 interface WindowWithIdleCallbacks {
     requestIdleCallback?: (callback: IdleRequestCallback, opts?: { timeout: number }) => number;
@@ -601,11 +605,14 @@ const App: React.FC = () => {
         if (!String(activeUser || '').trim()) return;
 
         try {
-            if (window.localStorage.getItem(STARTUP_HEALTH_CHECK_SEEN_KEY) === '1') {
+            const userScope = getOnboardingUserScope(activeUser);
+            const seenKey = `${STARTUP_HEALTH_CHECK_SEEN_KEY_PREFIX}:${userScope}`;
+            const skippedKey = `${STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY_PREFIX}:${userScope}`;
+            if (window.localStorage.getItem(seenKey) === '1') {
                 startupHealthPromptedRef.current = true;
                 return;
             }
-            if (window.sessionStorage.getItem(STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY) === '1') {
+            if (window.sessionStorage.getItem(skippedKey) === '1') {
                 startupHealthPromptedRef.current = true;
                 return;
             }
@@ -629,16 +636,6 @@ const App: React.FC = () => {
         if (renameModal) return;
         if (showSetupWizard) return;
         if (!String(activeUser || '').trim()) return;
-        try {
-            const key = 'wg_tutorial_autostart_seen_v1';
-            if (window.localStorage.getItem(key) === '1') {
-                tutorialAutoPromptedRef.current = true;
-                return;
-            }
-            window.localStorage.setItem(key, '1');
-        } catch {
-            // Ignore localStorage failures and continue with ref guard.
-        }
         tutorialAutoPromptedRef.current = true;
         setShowTutorial(true);
     }, [activeUser, isStoreLoading, renameModal, setShowTutorial, showSetupWizard, showStartupHealthCheck, showTutorial, tutorialCompleted]);
@@ -2209,7 +2206,9 @@ const App: React.FC = () => {
                     onSetColorTheme={setColorTheme}
                     onComplete={() => {
                         try {
-                            window.localStorage.setItem(STARTUP_HEALTH_CHECK_SEEN_KEY, '1');
+                            const userScope = getOnboardingUserScope(activeUser);
+                            const seenKey = `${STARTUP_HEALTH_CHECK_SEEN_KEY_PREFIX}:${userScope}`;
+                            window.localStorage.setItem(seenKey, '1');
                         } catch {
                             // no-op
                         }
@@ -2217,7 +2216,9 @@ const App: React.FC = () => {
                     }}
                     onSkip={() => {
                         try {
-                            window.sessionStorage.setItem(STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY, '1');
+                            const userScope = getOnboardingUserScope(activeUser);
+                            const skippedKey = `${STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY_PREFIX}:${userScope}`;
+                            window.sessionStorage.setItem(skippedKey, '1');
                         } catch {
                             // no-op
                         }
