@@ -220,6 +220,7 @@ const App: React.FC = () => {
     const [showFuzzyReviewPrompt, setShowFuzzyReviewPrompt] = useState(false);
     const [showIdInfoPrompt, setShowIdInfoPrompt] = useState(false);
     const [showStartupHealthCheck, setShowStartupHealthCheck] = useState(false);
+    const [startupFlowReady, setStartupFlowReady] = useState(false);
     const [isCompactNav, setIsCompactNav] = useState(() => window.innerWidth < 1024);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const navToggleRef = React.useRef<HTMLButtonElement | null>(null);
@@ -565,19 +566,31 @@ const App: React.FC = () => {
     }, [activeUser, isStoreLoading, setToast]);
 
     useEffect(() => {
-        if (onboardingPromptedRef.current) return;
-        if (isStoreLoading) return;
-        if (showSetupWizard) return;
+        if (isStoreLoading) {
+            setStartupFlowReady(false);
+            return;
+        }
+        if (onboardingPromptedRef.current) {
+            setStartupFlowReady(true);
+            return;
+        }
+        if (showSetupWizard) {
+            onboardingPromptedRef.current = true;
+            setStartupFlowReady(true);
+            return;
+        }
 
         const hasActiveUser = Boolean((activeUser || '').trim());
         const hasProfiles = Array.isArray(players) && players.some((name) => String(name || '').trim().length > 0);
         if (hasActiveUser || hasProfiles) {
             onboardingPromptedRef.current = true;
+            setStartupFlowReady(true);
             return;
         }
 
         onboardingPromptedRef.current = true;
         setShowSetupWizard(true);
+        setStartupFlowReady(true);
     }, [activeUser, isStoreLoading, players, showSetupWizard, setShowSetupWizard]);
 
     useEffect(() => {
@@ -2056,6 +2069,14 @@ const App: React.FC = () => {
     );
 
     const navigationOpen = isCompactNav ? mobileNavOpen : !sidebarCollapsed;
+
+    if (!isStoreLoading && !startupFlowReady) {
+        return (
+            <div className="h-screen w-screen flex items-center justify-center bg-md-sys-background text-md-sys-on-surface/70">
+                <div className="text-label-sm font-bold uppercase tracking-widest">Preparing Startup...</div>
+            </div>
+        );
+    }
 
     return (
         <div ref={appRef} className={`app-container h-screen w-screen flex flex-col text-md-sys-onSurface ${!isOverlayMode ? 'bg-md-sys-background' : ''} font-sans transition-colors duration-300`} style={{ opacity: hiddenForScan ? 0 : 1 }}>

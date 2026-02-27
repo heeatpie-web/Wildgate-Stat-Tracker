@@ -1,5 +1,5 @@
 import React, { useId, useState } from 'react';
-import { Activity, ChevronLeft, ChevronRight, Palette, SlidersHorizontal, Moon, User, Volume2 } from 'lucide-react';
+import { Activity, ChevronLeft, ChevronRight, Gauge, Palette, SlidersHorizontal, Moon, User, Volume2 } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
@@ -24,7 +24,7 @@ const APPEARANCE_MODES = [
     { id: 'system'   as const, label: 'System' },
 ];
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 6;
 
 export const SetupWizard: React.FC = () => {
     const {
@@ -45,11 +45,14 @@ export const SetupWizard: React.FC = () => {
         setCustomHue,
         soundEnabled,
         setSoundEnabled,
+        performanceMode,
+        setPerformanceMode,
+        setDisableAnimations,
     } = useUserPreferences();
     const telemetryPerformanceProfile = useAppStore(s => s.telemetryPerformanceProfile);
     const setTelemetryPerformanceProfile = useAppStore(s => s.setTelemetryPerformanceProfile);
 
-    const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+    const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
     const [callsign, setCallsign] = useState('');
     const [callsignError, setCallsignError] = useState('');
 
@@ -75,22 +78,22 @@ export const SetupWizard: React.FC = () => {
         setShowSetupWizard(false);
     };
 
+    const goNextStep = () => setStep((s) => Math.min(TOTAL_STEPS, s + 1) as 1 | 2 | 3 | 4 | 5 | 6);
+    const goPrevStep = () => setStep((s) => Math.max(1, s - 1) as 1 | 2 | 3 | 4 | 5 | 6);
+
     useKeyboardShortcuts([
         {
             key: 'Enter',
             handler: () => {
                 if (step === 1) handleStep1Confirm();
-                else if (step === 2) setStep(3);
-                else if (step === 3) setStep(4);
+                else if (step < TOTAL_STEPS) goNextStep();
                 else handleFinish();
             },
         },
         {
             key: 'Escape',
             handler: () => {
-                if (step === 2) setStep(1);
-                else if (step === 3) setStep(2);
-                else if (step === 4) setStep(3);
+                if (step > 1) goPrevStep();
                 // Step 1 is blocking — no escape
             },
         },
@@ -114,7 +117,7 @@ export const SetupWizard: React.FC = () => {
                         {step > 1 && (
                             <button
                                 type="button"
-                                onClick={() => setStep((s) => (s - 1) as 1 | 2 | 3 | 4)}
+                                onClick={goPrevStep}
                                 className="md3-icon-btn -ml-1"
                                 aria-label="Go back"
                             >
@@ -128,7 +131,7 @@ export const SetupWizard: React.FC = () => {
 
                     {/* Step dots */}
                     <div className="flex items-center gap-1.5" aria-hidden="true">
-                        {[1, 2, 3, 4].map((s) => (
+                        {[1, 2, 3, 4, 5, 6].map((s) => (
                             <div
                                 key={s}
                                 className={`h-1.5 rounded-full transition-all duration-300 ${
@@ -179,87 +182,8 @@ export const SetupWizard: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Step 2: Telemetry + Audio */}
+                    {/* Step 2: Appearance mode */}
                     {step === 2 && (
-                        <div className="animate-fade-in">
-                            <div className="flex items-center gap-2 mb-1">
-                                <Activity size={18} className="text-md-sys-primary" />
-                                <h2 className="text-title font-bold uppercase">Telemetry + Audio</h2>
-                            </div>
-                            <p className="text-label-sm opacity-60 uppercase tracking-widest mb-5">
-                                Configure data capture behavior
-                            </p>
-
-                            <div className="rounded-control bg-warning-soft border border-warning-soft-strong px-3 py-2 text-label-sm text-warning mb-4">
-                                OCR works best at 1920 x 1080. Other resolutions can reduce accuracy.
-                            </div>
-
-                            <div className="space-y-3">
-                                <div className="md3-surface-high/60 border border-md-sys-outline/10 rounded-card p-3 flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Activity size={14} className={enableAutoLogRecording ? 'text-success' : 'opacity-50'} />
-                                        <div>
-                                            <div className="text-label-sm font-bold">Telemetry Monitoring</div>
-                                            <div className="text-label-sm opacity-60">{enableAutoLogRecording ? 'Enabled' : 'Disabled'}</div>
-                                        </div>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setEnableAutoLogRecording(!enableAutoLogRecording)}
-                                        className={`w-11 h-6 rounded-full transition-colors ${enableAutoLogRecording ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
-                                    >
-                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${enableAutoLogRecording ? 'translate-x-5' : ''}`} />
-                                    </button>
-                                </div>
-
-                                <div className="md3-surface-high/60 border border-md-sys-outline/10 rounded-card p-3">
-                                    <div className="text-label-sm font-bold uppercase tracking-wide opacity-70 mb-2 flex items-center gap-2">
-                                        <SlidersHorizontal size={13} /> Telemetry Update Rate
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {([
-                                            { id: 'low-power' as const, label: 'Low Power' },
-                                            { id: 'balanced' as const, label: 'Balanced' },
-                                            { id: 'high-accuracy' as const, label: 'High Accuracy' },
-                                        ] as const).map((opt) => (
-                                            <button
-                                                key={opt.id}
-                                                type="button"
-                                                onClick={() => setTelemetryPerformanceProfile(opt.id)}
-                                                className={`p-2 rounded-control text-label-sm font-bold transition-all ${
-                                                    telemetryPerformanceProfile === opt.id
-                                                        ? 'md3-btn-filled ring-2 ring-md-sys-primary/40'
-                                                        : 'md3-btn-outlined'
-                                                }`}
-                                            >
-                                                {opt.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="md3-surface-high/60 border border-md-sys-outline/10 rounded-card p-3 flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Volume2 size={14} className={soundEnabled ? 'text-success' : 'opacity-50'} />
-                                        <div>
-                                            <div className="text-label-sm font-bold">Sound Effects</div>
-                                            <div className="text-label-sm opacity-60">{soundEnabled ? 'On' : 'Off'}</div>
-                                        </div>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSoundEnabled(!soundEnabled)}
-                                        className={`w-11 h-6 rounded-full transition-colors ${soundEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
-                                    >
-                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${soundEnabled ? 'translate-x-5' : ''}`} />
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Step 3: Appearance mode */}
-                    {step === 3 && (
                         <div className="animate-fade-in">
                             <div className="flex items-center gap-2 mb-1">
                                 <Moon size={18} className="text-md-sys-primary" />
@@ -292,8 +216,8 @@ export const SetupWizard: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Step 4: Color theme */}
-                    {step === 4 && (
+                    {/* Step 3: Color theme */}
+                    {step === 3 && (
                         <div className="animate-fade-in">
                             <div className="flex items-center gap-2 mb-1">
                                 <Palette size={18} className="text-md-sys-primary" />
@@ -357,14 +281,144 @@ export const SetupWizard: React.FC = () => {
                             </p>
                         </div>
                     )}
+
+                    {/* Step 4: Telemetry */}
+                    {step === 4 && (
+                        <div className="animate-fade-in">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Activity size={18} className="text-md-sys-primary" />
+                                <h2 className="text-title font-bold uppercase">Telemetry</h2>
+                            </div>
+                            <p className="text-label-sm opacity-60 uppercase tracking-widest mb-5">
+                                Configure data capture behavior
+                            </p>
+                            <div className="mb-4 rounded-control md3-surface-high/60 border border-md-sys-outline/10 px-3 py-2 text-label-sm opacity-75">
+                                Telemetry is the app's live data feed from Wildgate logs. It powers automatic match/session updates so you don't have to enter everything manually.
+                            </div>
+
+                            <div className="rounded-control bg-warning-soft border border-warning-soft-strong px-3 py-2 text-label-sm text-warning mb-4">
+                                OCR works best at 1920 x 1080. Other resolutions can reduce accuracy.
+                            </div>
+
+                            <div className="space-y-3">
+                                <div className="md3-surface-high/60 border border-md-sys-outline/10 rounded-card p-3 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Activity size={14} className={enableAutoLogRecording ? 'text-success' : 'opacity-50'} />
+                                        <div>
+                                            <div className="text-label-sm font-bold">Telemetry Monitoring</div>
+                                            <div className="text-label-sm opacity-60">{enableAutoLogRecording ? 'Enabled' : 'Disabled'}</div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setEnableAutoLogRecording(!enableAutoLogRecording)}
+                                        className={`w-11 h-6 rounded-full transition-colors ${enableAutoLogRecording ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
+                                    >
+                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${enableAutoLogRecording ? 'translate-x-5' : ''}`} />
+                                    </button>
+                                </div>
+
+                                <div className="md3-surface-high/60 border border-md-sys-outline/10 rounded-card p-3">
+                                    <div className="text-label-sm font-bold uppercase tracking-wide opacity-70 mb-2 flex items-center gap-2">
+                                        <SlidersHorizontal size={13} /> Telemetry Update Rate
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {([
+                                            { id: 'low-power' as const, label: 'Low Power' },
+                                            { id: 'balanced' as const, label: 'Balanced' },
+                                            { id: 'high-accuracy' as const, label: 'High Accuracy' },
+                                        ] as const).map((opt) => (
+                                            <button
+                                                key={opt.id}
+                                                type="button"
+                                                onClick={() => setTelemetryPerformanceProfile(opt.id)}
+                                                className={`p-2 rounded-control text-label-sm font-bold transition-all ${
+                                                    telemetryPerformanceProfile === opt.id
+                                                        ? 'md3-btn-filled ring-2 ring-md-sys-primary/40'
+                                                        : 'md3-btn-outlined'
+                                                }`}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Step 5: Audio */}
+                    {step === 5 && (
+                        <div className="animate-fade-in">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Volume2 size={18} className="text-md-sys-primary" />
+                                <h2 className="text-title font-bold uppercase">Audio</h2>
+                            </div>
+                            <p className="text-label-sm opacity-60 uppercase tracking-widest mb-5">
+                                Enable or disable sound cues
+                            </p>
+
+                            <div className="md3-surface-high/60 border border-md-sys-outline/10 rounded-card p-4 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Volume2 size={14} className={soundEnabled ? 'text-success' : 'opacity-50'} />
+                                    <div>
+                                        <div className="text-label-sm font-bold">Sound Effects</div>
+                                        <div className="text-label-sm opacity-60">{soundEnabled ? 'On' : 'Off'}</div>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setSoundEnabled(!soundEnabled)}
+                                    className={`w-11 h-6 rounded-full transition-colors ${soundEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
+                                >
+                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${soundEnabled ? 'translate-x-5' : ''}`} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Step 6: Performance mode */}
+                    {step === 6 && (
+                        <div className="animate-fade-in">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Gauge size={18} className="text-md-sys-primary" />
+                                <h2 className="text-title font-bold uppercase">Performance Mode</h2>
+                            </div>
+                            <p className="text-label-sm opacity-60 uppercase tracking-widest mb-5">
+                                Optimize responsiveness vs visuals
+                            </p>
+                            <div className="mb-4 rounded-control md3-surface-high/60 border border-md-sys-outline/10 px-3 py-2 text-label-sm opacity-75">
+                                Performance Mode is for the app itself. It reduces visual effects/animations to keep UI smoother on lower-end hardware or while multitasking.
+                            </div>
+
+                            <div className="md3-surface-high/60 border border-md-sys-outline/10 rounded-card p-4 flex items-center justify-between">
+                                <div>
+                                    <div className="text-label-sm font-bold">Performance Mode</div>
+                                    <div className="text-label-sm opacity-60">{performanceMode ? 'Enabled (fewer visual effects)' : 'Disabled (full visual effects)'}</div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const next = !performanceMode;
+                                        setPerformanceMode(next);
+                                        setDisableAnimations(next);
+                                    }}
+                                    className={`w-11 h-6 rounded-full transition-colors ${performanceMode ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
+                                >
+                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${performanceMode ? 'translate-x-5' : ''}`} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                 </div>
 
                 {/* Footer action */}
                 <div className="px-6 pb-6">
-                    {step < 4 ? (
+                    {step < TOTAL_STEPS ? (
                         <button
                             type="button"
-                            onClick={step === 1 ? handleStep1Confirm : () => setStep((s) => (s + 1) as 1 | 2 | 3 | 4)}
+                            onClick={step === 1 ? handleStep1Confirm : goNextStep}
                             className="w-full md3-btn-filled py-4 rounded-card font-bold uppercase tracking-widest shadow-lg flex items-center justify-center gap-2"
                         >
                             Continue
