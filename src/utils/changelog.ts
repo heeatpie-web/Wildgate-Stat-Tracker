@@ -1,4 +1,13 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v2.19.1": [
+    "Release: Initial beta release is now live for external testing.",
+    "Beta: Added first-run health check with startup guidance for OCR, telemetry, backups, and capture readiness.",
+    "Feature: Added telemetry basics onboarding section with an enable/disable toggle directly in startup.",
+    "Feature: Added crash-safe and settings-level Copy Logs actions so testers can quickly share diagnostics.",
+    "Improvement: Tutorial language refreshed to be more casual and easier for new users to follow.",
+    "Improvement: Added explicit OCR 1920x1080 guidance in startup and settings to reduce first-run OCR confusion.",
+    "Improvement: Added Beta labeling and clearer settings copy for telemetry monitoring and sound preferences."
+  ],
   "v2.18.0": [
     "Polish: Refined Smart Captures Queue layout, simplifying match summary and reducing visual intensity.",
     "Polish: Enhanced Players OCR Team Assignment Board with improved alignment and deterministic colors.",

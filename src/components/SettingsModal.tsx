@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Palette, FileJson, Save, Download, RefreshCw, X, Check, Search, Upload } from 'lucide-react';
+import { Palette, FileJson, Save, Download, RefreshCw, X, Check, Search, Upload, Copy } from 'lucide-react';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
@@ -147,6 +147,18 @@ const SettingsModalContent: React.FC = () => {
     const pushOcrThresholdHistory = useAppStore(s => s.pushOcrThresholdHistory);
     const popOcrThresholdHistory = useAppStore(s => s.popOcrThresholdHistory);
     const ocrBestGuessThresholds = useAppStore(s => s.ocrBestGuessThresholds);
+    const normalizedOcrBestGuessThresholds = {
+        ...DEFAULT_OCR_BEST_GUESS_THRESHOLDS,
+        ...(ocrBestGuessThresholds || {}),
+        merged: {
+            ...DEFAULT_OCR_BEST_GUESS_THRESHOLDS.merged,
+            ...((ocrBestGuessThresholds as any)?.merged || {}),
+        },
+        local: {
+            ...DEFAULT_OCR_BEST_GUESS_THRESHOLDS.local,
+            ...((ocrBestGuessThresholds as any)?.local || {}),
+        },
+    };
     const setOcrBestGuessThresholds = useAppStore(s => s.setOcrBestGuessThresholds);
     const dashboardPreloadStats = useAppStore(s => s.dashboardPreloadStats);
     const resetDashboardPreloadStats = useAppStore(s => s.resetDashboardPreloadStats);
@@ -175,7 +187,7 @@ const SettingsModalContent: React.FC = () => {
     const [pendingSuspiciousAliasPair, setPendingSuspiciousAliasPair] = useState<string | null>(null);
     const [thresholdRecBusy, setThresholdRecBusy] = useState(false);
     const [thresholdRecommendation, setThresholdRecommendation] = useState<ThresholdRecommendationPayload | null>(null);
-    const getSensitivityLevel = () => detectSensitivityLevel(ocrBestGuessThresholds as any);
+    const getSensitivityLevel = () => detectSensitivityLevel(normalizedOcrBestGuessThresholds as any);
     const applySensitivityPreset = (level: 'strict' | 'balanced' | 'lenient') => {
         setOcrBestGuessThresholds(getPreset(level));
     };
@@ -210,9 +222,9 @@ const SettingsModalContent: React.FC = () => {
             timestamp: Date.now(),
             source: 'manual-apply-recommendation',
             thresholds: {
-                merged: { ...ocrBestGuessThresholds.merged },
-                local: { ...ocrBestGuessThresholds.local },
-                lowConfidenceBump: ocrBestGuessThresholds.lowConfidenceBump,
+                merged: { ...normalizedOcrBestGuessThresholds.merged },
+                local: { ...normalizedOcrBestGuessThresholds.local },
+                lowConfidenceBump: normalizedOcrBestGuessThresholds.lowConfidenceBump,
             }
         });
         setOcrBestGuessThresholds(thresholdRecommendation.recommendedThresholds);
@@ -396,6 +408,42 @@ const SettingsModalContent: React.FC = () => {
         getElectronAPI()?.send('restart_app');
     };
 
+    const handleCopyLogs = async () => {
+        const api = getElectronAPI();
+        if (!api) {
+            setToast({ message: 'Copy Logs is available only in the desktop app.', type: 'warning' });
+            return;
+        }
+        try {
+            const result = await api.invoke('read-logs');
+            if (!result?.success) {
+                setToast({ message: `Could not read logs: ${result?.error || 'Unknown error'}`, type: 'error' });
+                return;
+            }
+            const content = String(result.content || '').trim();
+            const payload = content.length > 0
+                ? content
+                : `No logs recorded yet.\nLog file: ${result.path || 'unknown'}`;
+            try {
+                await navigator.clipboard.writeText(payload);
+            } catch {
+                const textarea = document.createElement('textarea');
+                textarea.value = payload;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+            }
+            setToast({ message: 'Logs copied to clipboard.', type: 'success' });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            setToast({ message: `Copy Logs failed: ${message}`, type: 'error' });
+        }
+    };
+
     const settingsTabs: Array<{ id: SettingsTabId; label: string }> = isOverlayMode
         ? [
             { id: 'interface', label: 'Interface' },
@@ -411,6 +459,7 @@ const SettingsModalContent: React.FC = () => {
     const settingsSearchEntries: Array<{ id: string; tab: SettingsTabId; label: string; keywords: string[] }> = [
         { id: 'theme-accent', tab: 'interface', label: 'Theme Accent', keywords: ['theme', 'accent', 'color', 'appearance', 'hue'] },
         { id: 'appearance-mode', tab: 'interface', label: 'Appearance Mode', keywords: ['dark', 'light', 'twilight', 'system'] },
+        { id: 'sound-effects', tab: 'interface', label: 'Sound Effects', keywords: ['sound', 'audio', 'toggle', 'cue'] },
         { id: 'telemetry-performance', tab: 'interface', label: 'Telemetry Performance', keywords: ['telemetry', 'performance', 'polling', 'load'] },
         { id: 'header-smart-capture', tab: 'interface', label: 'Header Smart Capture', keywords: ['header', 'capture', 'quick capture'] },
         { id: 'alias-authority', tab: 'identity', label: 'Alias & Authority', keywords: ['alias', 'authority', 'name', 'canonical'] },
@@ -418,6 +467,7 @@ const SettingsModalContent: React.FC = () => {
         { id: 'capture-flow', tab: 'ocr-capture', label: 'Capture Mode', keywords: ['capture', 'deferred', 'auto', 'workflow'] },
         { id: 'ocr-roi', tab: 'ocr-capture', label: 'OCR Scan Regions (ROI)', keywords: ['roi', 'region', 'hazard', 'players', 'map'] },
         { id: 'backup-db', tab: 'data', label: 'Backup Database', keywords: ['backup', 'db', 'export'] },
+        { id: 'copy-logs', tab: 'data', label: 'Copy Logs', keywords: ['logs', 'errors', 'diagnostics', 'support'] },
         { id: 'updates', tab: 'data', label: 'App Updates', keywords: ['update', 'version', 'download', 'restart'] },
     ];
     const normalizedSettingsSearch = settingsSearch.trim().toLowerCase();
@@ -903,8 +953,10 @@ const SettingsModalContent: React.FC = () => {
                                 ))}
                                 <div className="flex justify-between items-center">
                                     <div>
-                                        <span className="text-label-sm font-medium opacity-60 block">Auto Log Rec.</span>
-                                        <span className="text-label-sm opacity-40 uppercase font-bold">Experimental</span>
+                                        <span className="text-label-sm font-medium opacity-60 block">Telemetry Monitoring</span>
+                                        <span className="text-label-sm opacity-40 uppercase font-bold">
+                                            {enableAutoLogRecording ? 'Enabled' : 'Disabled'}
+                                        </span>
                                     </div>
                                     <button
                                         onClick={() => setEnableAutoLogRecording(!enableAutoLogRecording)}
@@ -912,6 +964,9 @@ const SettingsModalContent: React.FC = () => {
                                     >
                                         <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${enableAutoLogRecording ? 'translate-x-5' : ''}`} />
                                     </button>
+                                </div>
+                                <div className="text-label-sm text-md-sys-on-surface/55 -mt-2">
+                                    Reads Wildgate telemetry logs in the background to auto-fill match/session data.
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <div>
@@ -1059,6 +1114,9 @@ const SettingsModalContent: React.FC = () => {
                     {/* OCR Engine Section */}
                     {activeTab === 'ocr-capture' && (
                         <section className="md3-surface-high/50 backdrop-blur-sm p-5 rounded-card border border-md-sys-outline/10">
+                        <div className="mb-4 rounded-control border border-warning/40 bg-warning-soft/35 px-3 py-2 text-label-sm text-warning">
+                            OCR is tuned for 1920 x 1080. Using other resolutions can lower accuracy unless you adjust OCR scan regions (ROI).
+                        </div>
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-label-sm font-bold uppercase tracking-wide opacity-60 flex items-center gap-2">
                                 OCR Engine
@@ -1398,11 +1456,11 @@ const SettingsModalContent: React.FC = () => {
                                     <span className="text-label-sm opacity-60">Fuzzy-match boost for noisy OCR</span>
                                     <input
                                         type="range" min={0} max={20}
-                                        value={ocrBestGuessThresholds.lowConfidenceBump}
+                                        value={normalizedOcrBestGuessThresholds.lowConfidenceBump}
                                         onChange={(e) => setOcrBestGuessThresholds({ lowConfidenceBump: Math.max(0, Math.min(20, Number(e.target.value) || 0)) })}
                                         className="w-28"
                                     />
-                                    <span className="text-label-sm font-mono w-6 text-right opacity-60">{ocrBestGuessThresholds.lowConfidenceBump}</span>
+                                    <span className="text-label-sm font-mono w-6 text-right opacity-60">{normalizedOcrBestGuessThresholds.lowConfidenceBump}</span>
                                 </div>
                             </div>
                         </div>
@@ -1583,6 +1641,10 @@ const SettingsModalContent: React.FC = () => {
                                     <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${enableAutoBackup ? 'translate-x-5' : ''}`} />
                                 </button>
                             </div>
+                            <div className="md3-surface-high/50 backdrop-blur-sm p-3 rounded-card mb-4 border border-warning/30 text-warning">
+                                <div className="text-label-sm font-bold uppercase tracking-wide">Beta Build</div>
+                                <div className="text-label-sm opacity-90 mt-1">This app is in beta. If something breaks, use Copy Logs and share them with the team.</div>
+                            </div>
                             <div className="grid grid-cols-2 gap-3 mb-4">
                                 <button
                                     onClick={handleBackupDB}
@@ -1613,15 +1675,22 @@ const SettingsModalContent: React.FC = () => {
                                     <span className="text-label-sm font-bold">Export JSON</span>
                                 </button>
                                 <button
+                                    onClick={handleCopyLogs}
+                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high/50 backdrop-blur-sm rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
+                                >
+                                    <Copy size={20} />
+                                    <span className="text-label-sm font-bold">Copy Logs</span>
+                                </button>
+                                <button
                                     onClick={() => setShowResetConfirm(true)}
-                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high/50 backdrop-blur-sm hover:bg-md-sys-error/10 text-md-sys-error rounded-card transition-colors col-span-2 border border-md-sys-outline/10"
+                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high/50 backdrop-blur-sm hover:bg-md-sys-error/10 text-md-sys-error rounded-card transition-colors border border-md-sys-outline/10"
                                 >
                                     <RefreshCw size={20} />
                                     <span className="text-label-sm font-bold">Reset Data</span>
                                 </button>
                                 <button
                                     onClick={() => setShowIdMapper(true)}
-                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high/50 backdrop-blur-sm hover:bg-md-sys-primary/10 text-md-sys-primary rounded-card transition-colors col-span-2 border border-md-sys-outline/10"
+                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high/50 backdrop-blur-sm hover:bg-md-sys-primary/10 text-md-sys-primary rounded-card transition-colors border border-md-sys-outline/10"
                                 >
                                     <FileJson size={20} />
                                     <span className="text-label-sm font-bold">Manage ID Mappings</span>

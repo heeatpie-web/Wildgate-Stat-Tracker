@@ -348,7 +348,7 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
 const maybeAutoBackup = async (data: StorageData) => {
   const ipc = getElectronAPI();
   if (!ipc) return;
-  const autoBackupEnabled = data.settings?.autoBackup ?? false;
+  const autoBackupEnabled = data.settings?.autoBackup ?? true;
   if (!autoBackupEnabled) return;
 
   const matchCount = data.matches?.length || 0;

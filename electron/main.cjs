@@ -1428,6 +1428,19 @@ ipcMain.handle('persist-logs', async (event, logContent) => {
     return { success: false, error: e.message };
   }
 });
+
+// Read persisted app logs for user-facing diagnostics copy/export actions.
+ipcMain.handle('read-logs', async () => {
+  try {
+    const content = await fsPromises.readFile(LOG_FILE_PATH, 'utf-8');
+    return { success: true, path: LOG_FILE_PATH, content };
+  } catch (e) {
+    if (e && (e.code === 'ENOENT' || e.code === 'ENOTDIR')) {
+      return { success: true, path: LOG_FILE_PATH, content: '' };
+    }
+    return { success: false, error: e?.message || 'Failed to read logs', path: LOG_FILE_PATH };
+  }
+});
 // Legacy Windows OCR - replaced by Tesseract.js in ocrHandler.cjs
 // const { recognizeBatchFromPath } = require('node-windows-ocr');
 // ipcMain.handle('ocr-scan', async (event, imagePath) => {

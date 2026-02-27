@@ -1,67 +1,78 @@
-﻿<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Wildgate Stat Tracker (Beta)
 
-# Wildgate Stat Tracker
+Wildgate Stat Tracker is a desktop app for logging matches, reviewing OCR captures, and tracking performance over time.
 
-A specialized stat tracking and analytics application for **Artifact Brawl** and **Fleet Battle**, built as a high-performance desktop application.
+## Beta Notice
 
-## ðŸš€ Overview
+This is a beta build.
 
-Wildgate Stat Tracker provides real-time tracking, match history, and deep analytics for competitive players. It features a customizable dashboard layout, automated log recording, and Discord Rich Presence integration.
+- Some OCR flows may need manual correction.
+- If something breaks, open `Settings -> Data -> Copy Logs` and send the logs with your report.
 
-## ðŸ› ï¸ Technology Stack
+## What The App Does
 
-- **Core Framework:** [React 18](https://reactjs.org/) + [TypeScript](https://www.typescriptlang.org/)
-- **Desktop Wrapper:** [Electron](https://www.electronjs.org/)
-- **Build Tool:** [Vite](https://vitejs.dev/)
-- **State Management:** [Zustand](https://github.com/pmndrs/zustand) (with persistent storage)
-- **UI & Visualization:** 
-  - [Lucide React](https://lucide.dev/) for iconography
-  - [Recharts](https://recharts.org/) for analytics
-  - [React Grid Layout](https://github.com/react-grid-layout/react-grid-layout) for the dashboard
-- **Styling:** Custom CSS with theme support (Twilight, Ocean, etc.)
+- Tracks match history and outcomes.
+- Captures screenshots and extracts teammates/opponents/ships/modifiers using OCR.
+- Provides analytics dashboards and export tools.
+- Supports local backups and restore.
 
-## ðŸ“¦ Project Structure
+## Quick Start (Users)
 
-- `/components`: UI building blocks (Dashboard, Analytics, etc.)
-- `/electron`: Main process and window management logic.
-- `/hooks`: Custom React hooks for Discord RPC, sound effects, and shortcuts.
-- `/store`: Zustand state slices (Data, UI, Settings, Forms).
-- `/utils`: Utility functions for analytics, storage, and translations.
+1. Install and launch the app.
+2. Complete first-run setup.
+3. Keep game telemetry enabled and point the app to your Wildgate folder if prompted.
+4. Run a match, then review OCR results before saving.
 
-## Quick Developer/AI Docs
+## Development
 
-- `docs/AI_CONTEXT.md` - minimal context map and read order
-- `src/README.md` - renderer code map
-- `src/components/README.md` - UI feature map
-- `src/hooks/README.md` - hook responsibilities
-- `src/store/README.md` - Zustand slice map
-- `src/utils/README.md` - utility and IPC wrapper map
-- `electron/README.md` - main process and IPC map
+### Prerequisites
 
-## âš™ï¸ Development Setup
+- Node.js 18+
+- npm
 
-1. **Install Dependencies:**
-   ```bash
-   npm install
-   ```
+### Commands
 
-2. **Run Web Dev Server:**
-   ```bash
-   npm run dev
-   ```
+- `npm install` - install dependencies
+- `npm run dev` - renderer dev server only
+- `npm run electron:dev` - run Electron + renderer
+- `npm run build` - build renderer
+- `npm run electron:build` - package desktop app
+- `npm run test` - run tests
 
-3. **Run Desktop App (Electron):**
-   ```bash
-   npm run electron:dev
-   ```
+## Project Layout
 
-4. **Build for Production:**
-   ```bash
-   npm run electron:build
-   ```
+- `src/` - React renderer code (UI, state, hooks, utilities)
+- `electron/` - Electron main/preload and desktop integrations
+- `dist/` - renderer build output
 
-## ðŸ“ Roadmap & Tasks
+## IPC (Plain English)
 
-See [TODO.md](TODO.md) for current progress and upcoming features.
+IPC means **Inter-Process Communication**.
+
+In this app there are two sides:
+
+- **Renderer**: the React UI (what users click)
+- **Main process**: Electron backend (file system, OS integration, window control)
+
+The renderer cannot safely access everything directly, so it asks main to do privileged tasks through IPC channels.
+
+Examples in this app:
+
+- save/read logs
+- read/write database backups
+- capture screenshots
+- monitor telemetry files
+
+Safety model used here:
+
+- `electron/preload.cjs` exposes a limited API to the renderer.
+- Only allowlisted channels can be called.
+- Main process validates file paths and operations before executing.
+
+## Additional Docs
+
+- `src/README.md` - renderer map
+- `src/components/README.md` - component map
+- `src/store/README.md` - state slice map
+- `src/utils/README.md` - utility map
+- `electron/README.md` - main/preload IPC map

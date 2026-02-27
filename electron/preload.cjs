@@ -9,7 +9,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 const INVOKE_CHANNELS = [
   'db-read', 'db-write', 'db-backup', 'db-status',
   'read-uid-seed',
-  'persist-logs',
+  'persist-logs', 'read-logs',
   'capture-screen', 'save-ocr-debug',
   'ocr-scan', 'ml-scan',
   'capture-game-window', 'ocr-process-capture',

@@ -243,7 +243,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   customBgUrl: '',
   enableAutoLogRecording: true,
   telemetryPerformanceProfile: 'balanced',
-  enableAutoBackup: false,
+  enableAutoBackup: true,
   startupSmartPreloadEnabled: true,
   overlayStyle: 'compact',
   visualMode: 'dense',

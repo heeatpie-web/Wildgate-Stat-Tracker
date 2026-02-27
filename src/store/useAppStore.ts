@@ -191,7 +191,7 @@ const customStorage: PersistStorage<AppState> = {
           customBgUrl: settings.bgUrl || '',
           enableAutoLogRecording: settings.autoLog ?? true,
           telemetryPerformanceProfile: settings.telemetryPerformanceProfile || 'balanced',
-          enableAutoBackup: settings.autoBackup ?? false,
+          enableAutoBackup: settings.autoBackup ?? true,
           startupSmartPreloadEnabled: settings.startupSmartPreloadEnabled ?? true,
           isAlwaysOnTop: settings.alwaysOnTop ?? false,
           overlayStyle: settings.overlayStyle || 'compact',

@@ -4,8 +4,9 @@
  * logs them via Logger.captureException, and shows a recovery UI.
  */
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Copy } from 'lucide-react';
 import Logger from '../utils/logger';
+import { getElectronAPI } from '../utils/electronAPI';
 
 interface Props {
   children?: ReactNode;
@@ -14,16 +15,25 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  copyStatus: string | null;
+  copyStatusTone: 'success' | 'error' | 'info';
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
-    error: null
+    error: null,
+    copyStatus: null,
+    copyStatusTone: 'info',
   };
 
   public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+    return {
+      hasError: true,
+      error,
+      copyStatus: null,
+      copyStatusTone: 'info',
+    };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -47,6 +57,55 @@ export class ErrorBoundary extends Component<Props, State> {
       window.location.reload();
   }
 
+  private handleCopyLogs = async () => {
+      const api = getElectronAPI();
+      if (!api) {
+        this.setState({
+          copyStatus: 'Copy Logs is only available in the desktop app.',
+          copyStatusTone: 'error',
+        });
+        return;
+      }
+      try {
+        const result = await api.invoke('read-logs');
+        if (!result?.success) {
+          this.setState({
+            copyStatus: `Could not read logs: ${result?.error || 'Unknown error'}`,
+            copyStatusTone: 'error',
+          });
+          return;
+        }
+        const content = String(result.content || '').trim();
+        const payload = content.length > 0
+          ? content
+          : `No logs recorded yet.\nLog file: ${result.path || 'unknown'}`;
+
+        try {
+          await navigator.clipboard.writeText(payload);
+        } catch {
+          const textarea = document.createElement('textarea');
+          textarea.value = payload;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.focus();
+          textarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textarea);
+        }
+
+        this.setState({
+          copyStatus: 'Logs copied. Share them with your beta report.',
+          copyStatusTone: 'success',
+        });
+      } catch (error) {
+        this.setState({
+          copyStatus: `Copy Logs failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          copyStatusTone: 'error',
+        });
+      }
+  };
+
   public render() {
     if (this.state.hasError) {
       return (
@@ -66,7 +125,19 @@ export class ErrorBoundary extends Component<Props, State> {
                 </code>
             </div>
 
+            {this.state.copyStatus && (
+              <p className={`text-label-sm mb-4 ${this.state.copyStatusTone === 'success' ? 'text-success' : this.state.copyStatusTone === 'error' ? 'text-md-sys-error' : 'opacity-70'}`}>
+                {this.state.copyStatus}
+              </p>
+            )}
+
             <div className="grid gap-3">
+                <button
+                    onClick={this.handleCopyLogs}
+                    className="w-full py-3 md3-btn-outlined rounded-xl font-bold uppercase tracking-widest flex items-center justify-center gap-2"
+                >
+                    <Copy size={16}/> Copy Logs
+                </button>
                 <button 
                     onClick={this.handleReload}
                     className="w-full py-4 md3-btn-filled rounded-xl font-bold uppercase tracking-widest flex items-center justify-center gap-2 bg-md-sys-error text-md-sys-on-error hover:brightness-110"

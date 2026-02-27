@@ -21,64 +21,69 @@ interface TutorialStep {
 
 const steps: TutorialStep[] = [
     {
-        title: 'Profile Selector',
-        description: 'Open the profile hub to switch profiles and manage pilot settings.',
+        title: 'Getting Around',
+        description: 'Use the left sidebar to hop between Recording, Analytics, Smart Captures, Players, and History.',
+        selector: 'nav-recording',
+    },
+    {
+        title: 'Your Profile',
+        description: 'Tap this profile area to switch pilots and open account options whenever you need to.',
         selector: 'profile-selector',
     },
     {
-        title: 'System Status',
-        description: 'This pulse shows key background health: telemetry online/offline, OCR activity, mission live/idle, and update state.',
+        title: 'Live Status',
+        description: 'This status pulse gives you a quick read on telemetry, OCR, mission state, and update progress.',
         selector: 'system-pulse',
     },
     {
         title: 'Data Safety',
-        description: 'This indicates your local save safety. Hover it for last save/backup details and recovery state.',
+        description: 'This badge tracks save and backup health. Hover it to see the latest save/backup info.',
         selector: 'data-safety',
     },
     {
-        title: 'Match Recording',
-        description: 'This is the main recording surface: live session controls, mission intel, and rapid match logging.',
+        title: 'Recording',
+        description: 'This is your main workspace for session controls, mission intel, and quick match logging.',
         selector: 'view-recording',
         view: 'recording',
     },
     {
         title: 'Smart Capture',
-        description: 'High-priority action. Captures the game window and extracts teammates/opponents/ship/modifiers via OCR for faster entry.',
+        description: 'Use this to grab the game screen and auto-fill teammates, opponents, ship, and modifiers with OCR.',
         selector: 'smart-capture',
         view: 'recording',
     },
     {
         title: 'Quick Actions',
-        description: 'Use this panel to log wins/losses quickly and keep your mission/session timer in one place.',
+        description: 'This panel is for fast win/loss logging and keeping your session timer in one place.',
         selector: 'action-panel',
         view: 'recording',
     },
     {
         title: 'Analytics',
-        description: 'Your performance cockpit. Use quick chips to jump into Momentum, Insights, Social, Pro, and more.',
+        description: 'Your performance hub. Use the chips to jump into Momentum, Insights, Social, Pro, and more.',
         selector: 'view-analytics',
         view: 'analytics',
     },
     {
         title: 'History',
-        description: 'Browse, edit, and export previous matches from the history table.',
+        description: 'Find past matches here. You can edit entries and export when needed.',
         selector: 'view-history',
         view: 'history',
     },
     {
         title: 'Smart Captures',
-        description: 'Review captured screenshots, rerun OCR, and apply extracted data back into matches or your current session.',
+        description: 'Review captured screenshots, rerun OCR, and apply results back to a match or your live session.',
         selector: 'view-smart-captures',
         view: 'smart-captures',
     },
     {
         title: 'Overlay Mode',
-        description: 'Switch to overlay when you want a compact HUD during play.',
+        description: 'Need less screen clutter? Switch to overlay mode for a compact in-game HUD.',
         selector: 'overlay-button',
     },
     {
         title: 'Settings',
-        description: 'Open the profile hub, then choose Settings to configure OCR, backups, UI preferences, and advanced options.',
+        description: 'Open Settings from your profile area for OCR, backups, and UI preferences. You can always revisit this later.',
         selector: 'profile-selector',
     },
 ];
@@ -86,7 +91,14 @@ const steps: TutorialStep[] = [
 const highlightPadding = 8;
 
 const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
-    const { activeView, setActiveView, showSettings, setShowSettings } = useUIState();
+    const {
+        activeView,
+        setActiveView,
+        showSettings,
+        setShowSettings,
+        sidebarCollapsed,
+        setSidebarCollapsed,
+    } = useUIState();
     const [stepIndex, setStepIndex] = useState(0);
     const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
     const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties | null>(null);
@@ -96,7 +108,9 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
     const focusTrapRef = useFocusTrap<HTMLDivElement>(true);
     const initialViewRef = useRef(activeView);
     const initialSettingsRef = useRef(showSettings);
+    const initialSidebarCollapsedRef = useRef(sidebarCollapsed);
     const openedSettingsRef = useRef(false);
+    const openedSidebarForTutorialRef = useRef(false);
 
     const step = steps[stepIndex];
 
@@ -171,6 +185,15 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
     ], true);
 
     useEffect(() => {
+        if (sidebarCollapsed) {
+            setSidebarCollapsed(false);
+            openedSidebarForTutorialRef.current = true;
+        }
+        // Run once at tutorial start.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
         if (step.view) {
             setActiveView(step.view);
         }
@@ -236,8 +259,11 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
             if (initialSettingsRef.current !== showSettings) {
                 setShowSettings(initialSettingsRef.current);
             }
+            if (openedSidebarForTutorialRef.current) {
+                setSidebarCollapsed(initialSidebarCollapsedRef.current);
+            }
         };
-    }, [setActiveView, setShowSettings, showSettings]);
+    }, [setActiveView, setShowSettings, setSidebarCollapsed, showSettings]);
 
     const tooltipInlineStyle: React.CSSProperties =
         tooltipStyle || { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
@@ -270,7 +296,7 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
                 <div className="flex items-start justify-between gap-3">
                     <div>
                         <div className="text-label-sm uppercase tracking-wide-20 text-md-sys-primary font-bold">
-                            Step {stepIndex + 1} of {steps.length}
+                            Quick Tour {stepIndex + 1} of {steps.length}
                         </div>
                         <h2 id={dialogTitleId} className="text-lg font-black mt-1">{step.title}</h2>
                     </div>
@@ -292,18 +318,27 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
                         onClick={stepIndex === 0 ? onSkip : handlePrev}
                         className="md3-btn-text"
                     >
-                        {stepIndex === 0 ? 'Skip' : 'Back'}
+                        {stepIndex === 0 ? 'Skip for now' : 'Back'}
                     </button>
+                    {stepIndex < steps.length - 1 && (
+                        <button
+                            type="button"
+                            onClick={onComplete}
+                            className="md3-btn-text"
+                        >
+                            End tour
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={handleNext}
                         className="md3-btn-filled flex-1 font-black uppercase tracking-widest flex items-center justify-center gap-2"
                     >
                         {stepIndex === steps.length - 1 ? (
-                            <>Finish</>
+                            <>All set</>
                         ) : (
                             <>
-                                Next <ChevronRight size={16} />
+                                Keep going <ChevronRight size={16} />
                             </>
                         )}
                     </button>

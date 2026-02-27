@@ -6,6 +6,7 @@ import Tutorial from './Tutorial';
 
 const setActiveView = vi.fn();
 const setShowSettings = vi.fn();
+const setSidebarCollapsed = vi.fn();
 
 vi.mock('../providers/UIStateProvider', () => ({
   useUIState: () => ({
@@ -13,6 +14,8 @@ vi.mock('../providers/UIStateProvider', () => ({
     setActiveView,
     showSettings: false,
     setShowSettings,
+    sidebarCollapsed: false,
+    setSidebarCollapsed,
   }),
 }));
 
@@ -33,7 +36,7 @@ describe('Tutorial', () => {
 
   it('renders with dialog semantics', () => {
     render(<Tutorial onComplete={vi.fn()} onSkip={vi.fn()} />);
-    const dialog = screen.getByRole('dialog', { name: /profile selector/i });
+    const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveAttribute('aria-modal', 'true');
   });
 

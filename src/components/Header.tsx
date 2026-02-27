@@ -127,6 +127,9 @@ export const Header: React.FC<HeaderProps> = ({
                             <span className="ml-2 text-[10px] text-md-sys-on-surface/50 font-mono font-medium lowercase tracking-normal">
                                 {APP_VERSION}
                             </span>
+                            <span className="ml-2 inline-flex items-center rounded-control bg-warning-soft text-warning px-1.5 py-0.5 text-[10px] font-bold tracking-wide uppercase">
+                                Beta
+                            </span>
                         </div>
                     </button>
                     {devMode && (

@@ -24,6 +24,7 @@ import { TelemetryPanel } from './components/TelemetryPanel';
 import { ReviewQueueModal } from './components/ReviewQueueModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import Tutorial from './components/Tutorial';
+import FirstRunHealthCheck from './components/FirstRunHealthCheck';
 import { WindowResizer } from './components/WindowResizer';
 type LazyDashboardView = 'analytics' | 'smart-captures' | 'players' | 'dev-ocr';
 type LazyDashboardModule = { default: React.ComponentType<object> };
@@ -150,6 +151,8 @@ const RESTORE_SESSION_STORAGE_KEY = 'wg_restore_session_v1';
 const RESTORE_SESSION_DISMISSED_SIGNATURE_KEY = 'wg_restore_session_dismissed_signature_v1';
 const RESTORE_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const SETTINGS_FOCUS_SECTION_STORAGE_KEY = 'wg_settings_focus_section_v1';
+const STARTUP_HEALTH_CHECK_SEEN_KEY = 'wg_startup_health_check_seen_v1';
+const STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY = 'wg_startup_health_check_skipped_launch_v1';
 const UNKNOWN_PLAYER_LABELS = new Set(['unknown', 'unknown player', 'n/a', 'na', '?']);
 
 interface WindowWithIdleCallbacks {
@@ -216,6 +219,7 @@ const App: React.FC = () => {
     const [restoreSessionPrompt, setRestoreSessionPrompt] = useState<RestoreSessionSnapshot | null>(null);
     const [showFuzzyReviewPrompt, setShowFuzzyReviewPrompt] = useState(false);
     const [showIdInfoPrompt, setShowIdInfoPrompt] = useState(false);
+    const [showStartupHealthCheck, setShowStartupHealthCheck] = useState(false);
     const [isCompactNav, setIsCompactNav] = useState(() => window.innerWidth < 1024);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const navToggleRef = React.useRef<HTMLButtonElement | null>(null);
@@ -231,6 +235,7 @@ const App: React.FC = () => {
     const tipByViewSentAtRef = React.useRef<Record<string, number>>({});
     const restorePromptCheckedRef = React.useRef(false);
     const onboardingPromptedRef = React.useRef(false);
+    const startupHealthPromptedRef = React.useRef(false);
     const fuzzyPromptCountRef = React.useRef(0);
     const idPromptCountRef = React.useRef(0);
     const setTutorialCompleted = useAppStore(s => s.setTutorialCompleted);
@@ -273,6 +278,8 @@ const App: React.FC = () => {
         showReviewQueue, setShowReviewQueue,
         requestSmartCapture,
         setShowSettings,
+        enableAutoLogRecording,
+        setEnableAutoLogRecording,
         showIdMapper, setShowIdMapper,
         sidebarCollapsed, setSidebarCollapsed,
         renameModal, setRenameModal, setRenameValue,
@@ -563,8 +570,33 @@ const App: React.FC = () => {
     }, [activeUser, isStoreLoading, players, showSetupWizard, setShowSetupWizard]);
 
     useEffect(() => {
+        if (startupHealthPromptedRef.current) return;
+        if (isStoreLoading) return;
+        if (showSetupWizard) return;
+        if (renameModal) return;
+        if (!String(activeUser || '').trim()) return;
+
+        try {
+            if (window.localStorage.getItem(STARTUP_HEALTH_CHECK_SEEN_KEY) === '1') {
+                startupHealthPromptedRef.current = true;
+                return;
+            }
+            if (window.sessionStorage.getItem(STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY) === '1') {
+                startupHealthPromptedRef.current = true;
+                return;
+            }
+        } catch {
+            // Ignore storage access failures and continue with in-memory guard.
+        }
+
+        startupHealthPromptedRef.current = true;
+        setShowStartupHealthCheck(true);
+    }, [activeUser, isStoreLoading, renameModal, showSetupWizard]);
+
+    useEffect(() => {
         if (tutorialAutoPromptedRef.current) return;
         if (isStoreLoading) return;
+        if (showStartupHealthCheck) return;
         if (showTutorial) return;
         if (tutorialCompleted) {
             tutorialAutoPromptedRef.current = true;
@@ -585,7 +617,7 @@ const App: React.FC = () => {
         }
         tutorialAutoPromptedRef.current = true;
         setShowTutorial(true);
-    }, [activeUser, isStoreLoading, renameModal, showSetupWizard, setShowTutorial, showTutorial, tutorialCompleted]);
+    }, [activeUser, isStoreLoading, renameModal, setShowTutorial, showSetupWizard, showStartupHealthCheck, showTutorial, tutorialCompleted]);
 
     useEffect(() => {
         if (isStoreLoading) return;
@@ -2110,6 +2142,42 @@ const App: React.FC = () => {
                         setShowTutorial(false);
                     }}
                     onSkip={() => setShowTutorial(false)}
+                />
+            )}
+            {showStartupHealthCheck && (
+                <FirstRunHealthCheck
+                    isOpen={showStartupHealthCheck}
+                    activeUser={activeUser}
+                    telemetryStatus={logStatus}
+                    telemetryEnabled={enableAutoLogRecording}
+                    onToggleTelemetryEnabled={setEnableAutoLogRecording}
+                    onOpenSettingsFocus={({ tab, search }) => {
+                        try {
+                            window.localStorage.setItem(STARTUP_HEALTH_CHECK_SEEN_KEY, '1');
+                        } catch {
+                            // no-op
+                        }
+                        setShowStartupHealthCheck(false);
+                        window.dispatchEvent(new CustomEvent('settings:focus-section', {
+                            detail: { tab, search }
+                        }));
+                    }}
+                    onComplete={() => {
+                        try {
+                            window.localStorage.setItem(STARTUP_HEALTH_CHECK_SEEN_KEY, '1');
+                        } catch {
+                            // no-op
+                        }
+                        setShowStartupHealthCheck(false);
+                    }}
+                    onSkip={() => {
+                        try {
+                            window.sessionStorage.setItem(STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY, '1');
+                        } catch {
+                            // no-op
+                        }
+                        setShowStartupHealthCheck(false);
+                    }}
                 />
             )}
 
