@@ -6,6 +6,13 @@ import { useUIState } from '../../providers/UIStateProvider';
 import { captureScreen, processMatchScreenshot, ScanOptions } from '../../utils/scanService';
 import { EQUIPMENT_DB } from '../../utils/equipmentDb';
 import Logger from '../../utils/logger';
+import {
+    getPerkCatalog,
+    getProspectorEquipmentCatalog,
+    getProspectorWeaponCatalog,
+    isPerkAllowedForProspector,
+    MAX_PERKS_PER_MATCH,
+} from '../patch/patchEntityCatalog';
 
 interface MissionPanelProps {
     variant?: 'default' | 'transparent';
@@ -15,7 +22,7 @@ interface MissionPanelProps {
 }
 
 // Accordion section types
-type SectionId = 'stats' | 'poi' | 'weapons' | 'charWeapons' | 'equipment' | 'modifiers';
+type SectionId = 'stats' | 'poi' | 'weapons' | 'charWeapons' | 'equipment' | 'perks' | 'modifiers';
 
 export const MissionPanel: React.FC<MissionPanelProps> = ({
     variant = 'default',
@@ -29,7 +36,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
         selectedReachModifiers, modifiersSource, toggleReachModifier, setSelectedReachModifiers,
         currentNote, setCurrentNote,
         activeWeapons: weapons, setActiveWeapons: setWeapons,
-        currentLoadout
+        currentLoadout, setCurrentLoadout, activeHero
     } = useGameData();
 
     const { showArtifactSelect, setShowArtifactSelect } = useUIState();
@@ -61,9 +68,45 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
     const telemetryProspectorEquipment = Array.isArray(currentLoadout?.characterEquipment)
         ? currentLoadout.characterEquipment.filter(Boolean)
         : [];
+    const telemetryProspectorPerks = Array.isArray(currentLoadout?.characterPerks)
+        ? currentLoadout.characterPerks.filter(Boolean).slice(0, MAX_PERKS_PER_MATCH)
+        : (Array.isArray(currentLoadout?.perks) ? currentLoadout.perks.filter(Boolean).slice(0, MAX_PERKS_PER_MATCH) : []);
     const telemetryProspectorWeaponsLabel = telemetryProspectorWeapons.join(', ');
     const telemetryProspectorEquipmentLabel = telemetryProspectorEquipment.join(', ');
-    const hasTelemetryLoadout = telemetryProspectorWeapons.length > 0 || telemetryProspectorEquipment.length > 0;
+    const telemetryProspectorPerksLabel = telemetryProspectorPerks.join(', ');
+    const hasTelemetryLoadout = telemetryProspectorWeapons.length > 0 || telemetryProspectorEquipment.length > 0 || telemetryProspectorPerks.length > 0;
+    const prospectorWeaponCatalog = React.useMemo(() => getProspectorWeaponCatalog(CHARACTER_WEAPONS || []), []);
+    const prospectorEquipmentCatalog = React.useMemo(() => getProspectorEquipmentCatalog(CHARACTER_EQUIPMENT || []), []);
+    const perkCatalog = React.useMemo(() => getPerkCatalog(), []);
+    const selectedProspector = String(currentLoadout?.hero || activeHero || '').trim();
+    const selectedCharacterPerks = Array.from(new Set(
+        (Array.isArray(currentLoadout?.characterPerks)
+            ? currentLoadout.characterPerks
+            : (Array.isArray(currentLoadout?.perks) ? currentLoadout.perks : [])
+        )
+            .map((entry) => String(entry || '').trim())
+            .filter(Boolean)
+    )).slice(0, MAX_PERKS_PER_MATCH);
+    const selectedCharacterPerksLabel = selectedCharacterPerks.length > 0
+        ? selectedCharacterPerks.join(', ')
+        : 'None';
+    const setManualPerkSelection = (nextPerks: string[]) => {
+        const existing = currentLoadout || {
+            hero: activeHero || null,
+            ship: null,
+            weapons: [],
+            equipment: [],
+            characterWeapons: [],
+            characterEquipment: [],
+            characterPerks: [],
+        };
+        setCurrentLoadout({
+            ...existing,
+            hero: existing.hero || activeHero || null,
+            characterPerks: nextPerks,
+            perks: nextPerks,
+        });
+    };
     const sanitizeMinuteInput = (value: string) => value.replace(/[^0-9]/g, '').slice(0, 2);
     const sanitizeSecondInput = (value: string) => {
         const digits = value.replace(/[^0-9]/g, '').slice(0, 2);
@@ -316,11 +359,11 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                 })()}
 
                 {/* Character Loadout */}
-                {CHARACTER_WEAPONS && CHARACTER_WEAPONS.length > 0 && (() => {
+                {prospectorWeaponCatalog.length > 0 && (() => {
                     // Calculate total weapons selected
-                    const totalWeapons = CHARACTER_WEAPONS.reduce((sum, w) => sum + (weapons?.[w] || 0), 0);
+                    const totalWeapons = prospectorWeaponCatalog.reduce((sum, w) => sum + (weapons?.[w] || 0), 0);
                     const MAX_WEAPONS = 2;
-                    const selectedCharacterWeapons = CHARACTER_WEAPONS.filter((w) => (weapons?.[w] || 0) > 0);
+                    const selectedCharacterWeapons = prospectorWeaponCatalog.filter((w) => (weapons?.[w] || 0) > 0);
                     const selectedCharacterWeaponsLabel = selectedCharacterWeapons.length > 0
                         ? selectedCharacterWeapons.join(', ')
                         : 'None';
@@ -353,7 +396,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                             {isSectionExpanded('charWeapons') && (
                                 <div className="flex flex-col gap-2 pl-1 pb-1">
                                     <div className="grid grid-cols-2 gap-2">
-                                        {CHARACTER_WEAPONS.map(w => {
+                                        {prospectorWeaponCatalog.map(w => {
                                             const count = weapons?.[w] || 0;
                                             const isActive = count > 0;
                                             const canAdd = totalWeapons < MAX_WEAPONS && count === 0; // Can only have 1 of each
@@ -398,11 +441,11 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                 })()}
 
                 {/* Character Equipment */}
-                {CHARACTER_EQUIPMENT && CHARACTER_EQUIPMENT.length > 0 && (() => {
+                {prospectorEquipmentCatalog.length > 0 && (() => {
                     // Calculate total equipment selected
-                    const totalEquipment = CHARACTER_EQUIPMENT.reduce((sum, w) => sum + (weapons?.[w] || 0), 0);
+                    const totalEquipment = prospectorEquipmentCatalog.reduce((sum, w) => sum + (weapons?.[w] || 0), 0);
                     const MAX_EQUIPMENT = 2;
-                    const selectedCharacterEquipment = CHARACTER_EQUIPMENT.filter((w) => (weapons?.[w] || 0) > 0);
+                    const selectedCharacterEquipment = prospectorEquipmentCatalog.filter((w) => (weapons?.[w] || 0) > 0);
                     const selectedCharacterEquipmentLabel = selectedCharacterEquipment.length > 0
                         ? selectedCharacterEquipment.join(', ')
                         : 'None';
@@ -435,7 +478,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                             {isSectionExpanded('equipment') && (
                                 <div className="flex flex-col gap-2 pl-1 pb-1">
                                     <div className="grid grid-cols-2 gap-2">
-                                        {CHARACTER_EQUIPMENT.map(w => {
+                                        {prospectorEquipmentCatalog.map(w => {
                                             const count = weapons?.[w] || 0;
                                             const isActive = count > 0;
                                             const canAdd = totalEquipment < MAX_EQUIPMENT && count === 0; // Can only have 1 of each
@@ -479,6 +522,81 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                         </div>
                     );
                 })()}
+
+                {/* Character Perks */}
+                {perkCatalog.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                        <SectionHeader
+                            id="perks"
+                            icon={<Zap size={12} />}
+                            title="Perks"
+                            badge={`${selectedCharacterPerks.length}/${MAX_PERKS_PER_MATCH}`}
+                            indicator={(
+                                <>
+                                    <span className="text-label-xs font-semibold text-md-sys-on-surface/60 truncate max-w-180px">
+                                        {selectedCharacterPerksLabel}
+                                    </span>
+                                    {telemetryProspectorPerks.length > 0 && (
+                                        <span
+                                            data-testid="telemetry-prospector-perks"
+                                            className="inline-flex items-center gap-1.5 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold whitespace-nowrap"
+                                            title={`Telemetry source for prospector perks: ${telemetryProspectorPerksLabel || 'detected loadout'}`}
+                                        >
+                                            <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                                            Source: Telemetry
+                                        </span>
+                                    )}
+                                </>
+                            )}
+                        />
+                        {isSectionExpanded('perks') && (
+                            <div className="flex flex-col gap-2 pl-1 pb-1">
+                                <div className="grid grid-cols-2 gap-2">
+                                    {perkCatalog.map((perk) => {
+                                        const selected = selectedCharacterPerks.some((entry) => entry.toLowerCase() === perk.toLowerCase());
+                                        const allowedForProspector = isPerkAllowedForProspector(perk, selectedProspector);
+                                        const disabled = (!selected && selectedCharacterPerks.length >= MAX_PERKS_PER_MATCH) || !allowedForProspector;
+                                        return (
+                                            <button
+                                                key={perk}
+                                                type="button"
+                                                onClick={() => {
+                                                    if (disabled) return;
+                                                    const next = selected
+                                                        ? selectedCharacterPerks.filter((entry) => entry.toLowerCase() !== perk.toLowerCase())
+                                                        : [...selectedCharacterPerks, perk];
+                                                    setManualPerkSelection(next.slice(0, MAX_PERKS_PER_MATCH));
+                                                }}
+                                                className={`relative ${accordionMode ? 'h-8' : 'h-10'} rounded-control transition-all select-none overflow-hidden
+                                                    ${selected
+                                                        ? 'bg-warning-soft ring-1 ring-warning'
+                                                        : disabled
+                                                            ? (isTransparent ? 'bg-scrim-40 opacity-40' : 'mg-surface opacity-40')
+                                                            : (isTransparent ? 'mg-surface border border-md-sys-outline/10 hover:bg-md-sys-on-surface/[0.08]' : 'mg-surface')
+                                                    }
+                                                    ${selected || !disabled ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                                                title={!allowedForProspector ? `Only available for ${perk.split(' ')[0]}` : perk}
+                                                aria-pressed={selected}
+                                                aria-label={`Toggle perk ${perk}`}
+                                            >
+                                                <div className="absolute inset-0 flex items-center justify-between px-3 pointer-events-none">
+                                                    <span className={`text-label-sm font-semibold uppercase truncate ${selected ? 'text-warning' : 'text-md-sys-on-surface/60'}`}>
+                                                        {perk}
+                                                    </span>
+                                                    {selected ? (
+                                                        <Check size={14} className="text-warning" />
+                                                    ) : (!allowedForProspector ? (
+                                                        <span className="text-label-xs uppercase font-bold text-md-sys-on-surface/40">Locked</span>
+                                                    ) : null)}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Reach Modifiers */}
                 {showModifiers && (

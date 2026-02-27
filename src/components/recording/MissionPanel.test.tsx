@@ -3,9 +3,11 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { CHARACTER_EQUIPMENT, CHARACTER_WEAPONS } from '../../types';
+import { getPerkCatalog } from '../patch/patchEntityCatalog';
 
 const selectedCharacterWeapon = CHARACTER_WEAPONS[0] || 'Unknown Weapon';
 const selectedCharacterEquipment = CHARACTER_EQUIPMENT[0] || 'Unknown Equipment';
+const selectedCharacterPerk = getPerkCatalog()[0] || 'Boarder';
 
 const gameData = {
   timeMin: '00',
@@ -32,13 +34,16 @@ const gameData = {
     [selectedCharacterEquipment]: 1,
   } as Record<string, number>,
   setActiveWeapons: vi.fn(),
+  activeHero: 'Adrian',
+  setCurrentLoadout: vi.fn(),
   currentLoadout: {
-    hero: null,
+    hero: 'Adrian',
     ship: null,
     weapons: [],
     equipment: [],
     characterWeapons: [selectedCharacterWeapon],
     characterEquipment: [selectedCharacterEquipment],
+    characterPerks: [selectedCharacterPerk],
   },
 };
 
@@ -63,6 +68,15 @@ vi.mock('../../utils/scanService', () => ({
 describe('MissionPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    gameData.currentLoadout = {
+      hero: 'Adrian',
+      ship: null,
+      weapons: [],
+      equipment: [],
+      characterWeapons: [selectedCharacterWeapon],
+      characterEquipment: [selectedCharacterEquipment],
+      characterPerks: [selectedCharacterPerk],
+    };
   });
 
   it('shows selected character loadout on section headers', async () => {
@@ -80,6 +94,11 @@ describe('MissionPanel', () => {
     const equipmentHeader = equipmentButtons.find(btn => btn.textContent?.includes(selectedCharacterEquipment));
     expect(equipmentHeader).toBeInTheDocument();
     expect(within(equipmentHeader!).getByText(selectedCharacterEquipment)).toBeInTheDocument();
+
+    const perkButtons = screen.getAllByRole('button', { name: /perks/i });
+    const perkHeader = perkButtons.find(btn => btn.textContent?.includes(selectedCharacterPerk));
+    expect(perkHeader).toBeInTheDocument();
+    expect(within(perkHeader!).getByText(selectedCharacterPerk)).toBeInTheDocument();
   });
 
   it('uses MM:SS text inputs and sanitizes timer values', async () => {
@@ -116,5 +135,44 @@ describe('MissionPanel', () => {
     const equipmentHeader = equipmentTelemetryBadge.closest('button');
     expect(equipmentHeader).toBeInTheDocument();
     expect(within(equipmentHeader!).getByTestId('telemetry-prospector-equipment')).toHaveTextContent('Source: Telemetry');
+
+    const perksTelemetryBadge = screen.getByTestId('telemetry-prospector-perks');
+    const perksHeader = perksTelemetryBadge.closest('button');
+    expect(perksHeader).toBeInTheDocument();
+    expect(within(perksHeader!).getByTestId('telemetry-prospector-perks')).toHaveTextContent('Source: Telemetry');
+  });
+
+  it('includes patch-era prospector loadout options for manual entry', async () => {
+    const { MissionPanel } = await import('./MissionPanel');
+    render(<MissionPanel />);
+
+    expect(screen.getByText('Foam Gun')).toBeInTheDocument();
+    expect(screen.getByText('Rocket Launcher')).toBeInTheDocument();
+    expect(screen.getByText('Hand Cannon')).toBeInTheDocument();
+    expect(screen.getByText('Repulsor')).toBeInTheDocument();
+    expect(screen.getByText('Plasma Grenade')).toBeInTheDocument();
+    expect(screen.getAllByText('Boarder').length).toBeGreaterThan(0);
+    expect(screen.getByText('Adrian Jetpack')).toBeInTheDocument();
+  });
+
+  it('persists mission intel perk toggles into current loadout', async () => {
+    gameData.currentLoadout = {
+      hero: 'Adrian',
+      ship: null,
+      weapons: [],
+      equipment: [],
+      characterWeapons: [],
+      characterEquipment: [],
+      characterPerks: [],
+    };
+    const { MissionPanel } = await import('./MissionPanel');
+    render(<MissionPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: /toggle perk boarder/i }));
+    expect(gameData.setCurrentLoadout).toHaveBeenCalledWith(expect.objectContaining({
+      hero: 'Adrian',
+      characterPerks: ['Boarder'],
+      perks: ['Boarder'],
+    }));
   });
 });
