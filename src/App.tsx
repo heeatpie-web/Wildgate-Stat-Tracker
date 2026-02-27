@@ -249,6 +249,8 @@ const App: React.FC = () => {
     const recordDashboardPreloadVisit = useAppStore(s => s.recordDashboardPreloadVisit);
     const ocrAutoApplyMinScore = useAppStore(s => s.ocrAutoApplyMinScore);
     const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
+    const telemetryPerformanceProfile = useAppStore(s => s.telemetryPerformanceProfile);
+    const setTelemetryPerformanceProfile = useAppStore(s => s.setTelemetryPerformanceProfile);
     const welcomeBackToastShownRef = React.useRef(false);
     const tutorialAutoPromptedRef = React.useRef(false);
     const [preloadedViews, setPreloadedViews] = useState<Record<LazyDashboardView, boolean>>({
@@ -314,7 +316,16 @@ const App: React.FC = () => {
         setSessionShipTypes
     } = useGameData();
 
-    const { overlayStyle, soundEnabled, performanceMode } = useUserPreferences();
+    const {
+        overlayStyle,
+        soundEnabled,
+        setSoundEnabled,
+        performanceMode,
+        appearanceMode,
+        setAppearanceMode,
+        colorTheme,
+        setColorTheme,
+    } = useUserPreferences();
 
     const { logFeed, logStatus } = useLogMonitor();
 
@@ -1925,11 +1936,27 @@ const App: React.FC = () => {
     }, [handleApplyOCRData]);
 
     useEffect(() => {
+        if (isStoreLoading) return;
+        if (showSetupWizard || showStartupHealthCheck || showTutorial || renameModal) return;
+        if (!activeUser) return;
         const lastSeen = localStorage.getItem('wg_last_seen_version');
-        if (lastSeen !== APP_VERSION && !showTutorial) {
+        // First launch: do not interrupt onboarding with changelog.
+        if (lastSeen === null) {
+            localStorage.setItem('wg_last_seen_version', APP_VERSION);
+            return;
+        }
+        if (lastSeen !== APP_VERSION) {
             setShowChangelog(true);
         }
-    }, [showTutorial, setShowChangelog]);
+    }, [
+        activeUser,
+        isStoreLoading,
+        renameModal,
+        setShowChangelog,
+        showSetupWizard,
+        showStartupHealthCheck,
+        showTutorial,
+    ]);
 
     const closeChangelog = useCallback(() => {
         localStorage.setItem('wg_last_seen_version', APP_VERSION);
@@ -2151,17 +2178,14 @@ const App: React.FC = () => {
                     telemetryStatus={logStatus}
                     telemetryEnabled={enableAutoLogRecording}
                     onToggleTelemetryEnabled={setEnableAutoLogRecording}
-                    onOpenSettingsFocus={({ tab, search }) => {
-                        try {
-                            window.localStorage.setItem(STARTUP_HEALTH_CHECK_SEEN_KEY, '1');
-                        } catch {
-                            // no-op
-                        }
-                        setShowStartupHealthCheck(false);
-                        window.dispatchEvent(new CustomEvent('settings:focus-section', {
-                            detail: { tab, search }
-                        }));
-                    }}
+                    telemetryPerformanceProfile={telemetryPerformanceProfile}
+                    onSetTelemetryPerformanceProfile={setTelemetryPerformanceProfile}
+                    soundEnabled={soundEnabled}
+                    onToggleSoundEnabled={setSoundEnabled}
+                    appearanceMode={appearanceMode}
+                    onSetAppearanceMode={setAppearanceMode}
+                    colorTheme={colorTheme}
+                    onSetColorTheme={setColorTheme}
                     onComplete={() => {
                         try {
                             window.localStorage.setItem(STARTUP_HEALTH_CHECK_SEEN_KEY, '1');
