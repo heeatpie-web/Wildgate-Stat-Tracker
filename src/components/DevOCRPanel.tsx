@@ -356,7 +356,7 @@ const DevOCRPanel: React.FC = () => {
     const runOCR = async (includeBboxes = false) => {
         if (!imageSrc) return;
         setLoading(true);
-        const modeLabel = ocrMode === 'both' ? 'Local+Cloud' : ocrMode === 'cloud' ? 'Cloud Vision' : 'Tesseract (Local)';
+        const modeLabel = 'Tesseract (Local)';
         const debugLabel = includeBboxes ? ' + Bounding Boxes' : '';
         setStatus(`Running OCR (${modeLabel}${debugLabel})${activeUser ? ` with anchor: ${activeUser}` : ''}...`);
         setOcrResult(null);
@@ -1417,7 +1417,7 @@ const DevOCRPanel: React.FC = () => {
                                     disabled={loading || !imageSrc}
                                     className="p-4 bg-md-sys-primary text-md-sys-on-primary font-bold rounded-lg hover:brightness-110 disabled:opacity-disabled shadow-lg shadow-md-sys-primary/20 text-lg"
                                 >
-                                    {loading ? 'Processing...' : `Run OCR (${ocrMode === 'both' ? 'Local+Cloud' : ocrMode === 'cloud' ? 'Cloud' : 'Local'})`}
+                                    {loading ? 'Processing...' : 'Run OCR (Local)'}
                                 </button>
                                 <button
                                     onClick={runOCRWithBoundingBoxes}

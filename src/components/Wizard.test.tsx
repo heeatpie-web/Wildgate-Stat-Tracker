@@ -48,7 +48,7 @@ const uiState = {
 
 const processFinalSubmission = vi.fn();
 const setPendingMatchDataFromStore = vi.fn();
-const rerunMatchArtifacts = vi.fn();
+const rerunOCRMulti = vi.fn();
 
 vi.mock('../providers/GameDataProvider', () => ({
     useGameData: () => gameData,
@@ -65,18 +65,14 @@ vi.mock('../hooks/useMatchSubmission', () => ({
     }),
 }));
 
-vi.mock('../utils/ocr/rerunMatchArtifacts', () => ({
-    rerunMatchArtifacts,
+vi.mock('../utils/artifactService', () => ({
+    rerunOCRMulti,
 }));
 
 vi.mock('../store/useAppStore', () => {
     const state = {
-        ocrMode: 'both',
+        ocrMode: 'local',
         ocrRegions: undefined,
-        externalFallbackEnabled: true,
-        externalFallbackThreshold: 0.66,
-        externalOnDetectorDisagreement: true,
-        forceMaxAnalysis: false,
         setPendingMatchData: setPendingMatchDataFromStore,
     };
     const hook = ((selector?: (value: typeof state) => unknown) => (
@@ -105,14 +101,9 @@ describe('Wizard', () => {
         gameData.sessionTeams = {};
         uiState.showWizard = null;
         vi.clearAllMocks();
-        rerunMatchArtifacts.mockResolvedValue({
-            total: 0,
-            successfulCount: 0,
-            failedCount: 0,
+        rerunOCRMulti.mockResolvedValue({
+            success: false,
             perFile: [],
-            mergedData: null,
-            cloudUsed: false,
-            cloudStatusMessage: '',
         });
         uiState.setShowWizard.mockImplementation((next: 'Win' | 'Loss' | 'Draw' | 'Match Result' | null) => {
             uiState.showWizard = next;
@@ -475,17 +466,9 @@ describe('Wizard', () => {
             kills: { 'AI Legion': 0 },
         };
         uiState.showWizard = 'Match Result';
-        rerunMatchArtifacts.mockResolvedValue({
-            total: 1,
-            successfulCount: 1,
-            failedCount: 0,
-            perFile: [{
-                imagePath: 'C:\\captures\\wizard-1.png',
-                filename: 'wizard-1.png',
-                success: true,
-                data: undefined,
-            }],
-            mergedData: {
+        rerunOCRMulti.mockResolvedValue({
+            success: true,
+            data: {
                 screenshotType: 'crew_hub',
                 playerShip: { shipType: 'Bastion', confidence: 88, rawText: 'Bastion' },
                 reachModifiers: [{ name: 'Ice Storm', confidence: 84, rawText: 'ICE STORM' }],
@@ -503,8 +486,11 @@ describe('Wizard', () => {
                 rawText: 'sample',
                 ocrSource: 'merged',
             },
-            cloudUsed: true,
-            cloudStatusMessage: 'Cloud OCR contributed',
+            perFile: [{
+                imagePath: 'C:\\captures\\wizard-1.png',
+                success: true,
+                data: undefined,
+            }],
         });
 
         render(<Wizard />);
@@ -512,9 +498,13 @@ describe('Wizard', () => {
         fireEvent.click(screen.getByRole('button', { name: /re-run ocr/i }));
 
         await waitFor(() => {
-            expect(rerunMatchArtifacts).toHaveBeenCalledWith(expect.objectContaining({
-                imagePaths: ['C:\\captures\\wizard-1.png'],
-            }));
+            expect(rerunOCRMulti).toHaveBeenCalledWith(
+                ['C:\\captures\\wizard-1.png'],
+                'Alec',
+                'local',
+                undefined,
+                expect.objectContaining({ forceUncached: true }),
+            );
         });
         expect(setPendingMatchDataFromStore).toHaveBeenCalledWith(expect.objectContaining({
             ship: 'Bastion',

@@ -196,23 +196,12 @@ const customStorage: PersistStorage<AppState> = {
           isAlwaysOnTop: settings.alwaysOnTop ?? false,
           overlayStyle: settings.overlayStyle || 'compact',
           visualMode: settings.visualMode || 'dense',
-          ocrMode: settings.ocrMode || 'both',
+          ocrMode: 'local',
           captureMode: settings.captureMode || 'auto',
           resultOcrFlowMode: settings.resultOcrFlowMode === 'background' ? 'background' : 'prompt',
           lockOcrTeams: settings.lockOcrTeams || false,
           ocrEnhancedNameRecoveryEnabled: settings.ocrEnhancedNameRecoveryEnabled ?? true,
           ocrNameRerouteThreshold: normalizeOcrNameRerouteThreshold(settings.ocrNameRerouteThreshold),
-          externalFallbackEnabled: settings.externalFallbackEnabled ?? true,
-          externalFallbackThreshold: (() => {
-            const rawThreshold = Number(settings.externalFallbackThreshold);
-            const normalized = Number.isFinite(rawThreshold)
-              ? Math.max(0, Math.min(1, rawThreshold))
-              : 0.66;
-            // Migrate the previous default (0.72) to the new lower barrier.
-            return Math.abs(normalized - 0.72) < 0.000001 ? 0.66 : normalized;
-          })(),
-          externalOnDetectorDisagreement: settings.externalOnDetectorDisagreement ?? true,
-          forceMaxAnalysis: settings.forceMaxAnalysis ?? false,
           ocrLearningEnabled: settings.ocrLearningEnabled ?? true,
           ocrAutoApplyMinScore: Number.isFinite(settings.ocrAutoApplyMinScore) ? Number(settings.ocrAutoApplyMinScore) : 0.83,
           ocrAutoApplyMinCount: Number.isFinite(settings.ocrAutoApplyMinCount) ? Math.max(1, Math.round(Number(settings.ocrAutoApplyMinCount))) : 3,
@@ -232,7 +221,6 @@ const customStorage: PersistStorage<AppState> = {
           ocrThresholdRecommendationMode: settings.ocrThresholdRecommendationMode || 'assisted',
           ocrThresholdHistory: Array.isArray(settings.ocrThresholdHistory) ? settings.ocrThresholdHistory : [],
           ocrBestGuessThresholds: settings.ocrBestGuessThresholds || {
-            cloud: { player: 80, mod: 82, ship: 62 },
             merged: { player: 78, mod: 80, ship: 60 },
             local: { player: 84, mod: 87, ship: 68 },
             lowConfidenceBump: 4,
@@ -333,10 +321,6 @@ const customStorage: PersistStorage<AppState> = {
                 lockOcrTeams: state.lockOcrTeams,
                 ocrEnhancedNameRecoveryEnabled: state.ocrEnhancedNameRecoveryEnabled,
                 ocrNameRerouteThreshold: state.ocrNameRerouteThreshold,
-                externalFallbackEnabled: state.externalFallbackEnabled,
-                externalFallbackThreshold: state.externalFallbackThreshold,
-                externalOnDetectorDisagreement: state.externalOnDetectorDisagreement,
-                forceMaxAnalysis: state.forceMaxAnalysis,
                 ocrLearningEnabled: state.ocrLearningEnabled,
                 ocrAutoApplyMinScore: state.ocrAutoApplyMinScore,
                 ocrAutoApplyMinCount: state.ocrAutoApplyMinCount,
@@ -431,10 +415,6 @@ export const useAppStore = create<AppState>()(
         lockOcrTeams: state.lockOcrTeams,
         ocrEnhancedNameRecoveryEnabled: state.ocrEnhancedNameRecoveryEnabled,
         ocrNameRerouteThreshold: state.ocrNameRerouteThreshold,
-        externalFallbackEnabled: state.externalFallbackEnabled,
-        externalFallbackThreshold: state.externalFallbackThreshold,
-        externalOnDetectorDisagreement: state.externalOnDetectorDisagreement,
-        forceMaxAnalysis: state.forceMaxAnalysis,
         ocrLearningEnabled: state.ocrLearningEnabled,
         ocrAutoApplyMinScore: state.ocrAutoApplyMinScore,
         ocrAutoApplyMinCount: state.ocrAutoApplyMinCount,
@@ -466,7 +446,8 @@ export const useAppStore = create<AppState>()(
         teamIdentityCorrections: state.teamIdentityCorrections,
         ocrAliasModel: state.ocrAliasModel,
         ocrLearningEvents: state.ocrLearningEvents,
-        ocrLearningQueue: state.ocrLearningQueue
+        ocrLearningQueue: state.ocrLearningQueue,
+        pendingReviews: state.pendingReviews
         // sessionTeams removed from persistence to prevent color sticking
       } as any),
       onRehydrateStorage: () => (state) => {

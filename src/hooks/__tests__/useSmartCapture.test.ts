@@ -5,15 +5,11 @@ import { captureGameWindow, saveScreenshot, isElectron } from '../../utils/elect
 import { rerunOCROnArtifact } from '../../utils/artifactService';
 
 const mockStoreState: Record<string, unknown> = {
-  ocrMode: 'both',
+  ocrMode: 'local',
   captureMode: 'auto',
   performanceMode: false,
   ocrEnhancedNameRecoveryEnabled: true,
   ocrNameRerouteThreshold: 78,
-  externalFallbackEnabled: true,
-  externalFallbackThreshold: 0.66,
-  externalOnDetectorDisagreement: true,
-  forceMaxAnalysis: false,
   lockOcrTeams: false,
   pilotRegistry: [],
   ocrCorrections: {},
@@ -92,15 +88,11 @@ vi.mock('../../utils/scanService', () => ({
 describe('useSmartCapture', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockStoreState.ocrMode = 'both';
+    mockStoreState.ocrMode = 'local';
     mockStoreState.captureMode = 'auto';
     mockStoreState.performanceMode = false;
     mockStoreState.ocrEnhancedNameRecoveryEnabled = true;
     mockStoreState.ocrNameRerouteThreshold = 78;
-    mockStoreState.externalFallbackEnabled = true;
-    mockStoreState.externalFallbackThreshold = 0.66;
-    mockStoreState.externalOnDetectorDisagreement = true;
-    mockStoreState.forceMaxAnalysis = false;
     mockStoreState.lockOcrTeams = false;
     mockStoreState.pilotRegistry = [];
     mockStoreState.ocrCorrections = {};
@@ -233,18 +225,13 @@ describe('useSmartCapture', () => {
     expect(vi.mocked(rerunOCROnArtifact)).toHaveBeenCalledWith(
       'C:\\captures\\cap-1.png',
       'Pilot',
-      'both',
+      'local',
       undefined,
       expect.objectContaining({
         routingProfile: 'names-only',
         fontProfile: 'ealing-black-italic',
         nameRerouteThreshold: 78,
         maxReroutePasses: 1,
-        externalFallbackEnabled: true,
-        externalFallbackThreshold: 0.66,
-        externalOnDetectorDisagreement: true,
-        forceMaxAnalysis: false,
-        forceUncached: false,
       })
     );
     expect(result.current[0].savedCaptures[0]?.ocrProcessed).toBe(true);
@@ -292,7 +279,7 @@ describe('useSmartCapture', () => {
     expect(vi.mocked(rerunOCROnArtifact)).toHaveBeenCalledWith(
       'C:\\captures\\cap-threshold.png',
       'Pilot',
-      'both',
+      'local',
       undefined,
       expect.objectContaining({
         nameRerouteThreshold: 86,
@@ -357,68 +344,9 @@ describe('useSmartCapture', () => {
     expect(result.current[0].processingStatus?.message).toContain('Completed OCR');
   });
 
-  it('enables forced uncached reruns when forceMaxAnalysis is enabled', async () => {
-    vi.mocked(isElectron).mockReturnValue(true);
-    mockStoreState.forceMaxAnalysis = true;
-    mockStoreState.ocrEnhancedNameRecoveryEnabled = false;
-    mockStoreState.externalFallbackThreshold = 0.66;
-    mockStoreState.externalOnDetectorDisagreement = false;
-
-    vi.mocked(captureGameWindow).mockResolvedValue({
-      success: true,
-      imageBase64: 'ZmFrZQ==',
-    });
-    vi.mocked(saveScreenshot).mockResolvedValue({
-      success: true,
-      filePath: 'C:\\captures\\cap-force.png',
-      filename: 'cap-force.png',
-    });
-    vi.mocked(rerunOCROnArtifact).mockResolvedValue({
-      success: true,
-      data: {
-        screenshotType: 'crew_hub',
-        playerShip: { shipType: 'Hunter (4 Player)', confidence: 90, rawText: 'Hunter' },
-        playerTeamName: '',
-        reachModifiers: [],
-        enemyShips: [],
-        teammates: [{ name: 'Wingman', confidence: 88, isTeammate: true, rawText: 'Wingman' }],
-        opponentTeams: [],
-        overallConfidence: 88,
-        captureTimestamp: Date.now(),
-      },
-    });
-
-    const { result } = renderHook(() => useSmartCapture());
-    const [, actions] = result.current;
-
-    await act(async () => {
-      await actions.captureOnly('match-force');
-    });
-    await act(async () => {
-      await actions.processStoredImage('C:\\captures\\cap-force.png', 'Pilot');
-    });
-
-    expect(vi.mocked(rerunOCROnArtifact)).toHaveBeenCalledWith(
-      'C:\\captures\\cap-force.png',
-      'Pilot',
-      'both',
-      undefined,
-      expect.objectContaining({
-        routingProfile: 'default',
-        fontProfile: 'default',
-        maxReroutePasses: 0,
-        externalFallbackEnabled: true,
-        externalFallbackThreshold: 0.66,
-        externalOnDetectorDisagreement: false,
-        forceMaxAnalysis: true,
-        forceUncached: true,
-      })
-    );
-  });
-
   it('processAllStored runs one OCR job at a time in performance mode', async () => {
     mockStoreState.performanceMode = true;
-    mockStoreState.ocrMode = 'cloud';
+    mockStoreState.ocrMode = 'local';
 
     vi.mocked(isElectron).mockReturnValue(true);
     vi.mocked(captureGameWindow).mockResolvedValue({

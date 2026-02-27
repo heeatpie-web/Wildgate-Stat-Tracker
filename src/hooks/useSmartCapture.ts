@@ -96,10 +96,6 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const lockOcrTeams = useAppStore(s => s.lockOcrTeams);
   const ocrEnhancedNameRecoveryEnabled = useAppStore(s => s.ocrEnhancedNameRecoveryEnabled);
   const ocrNameRerouteThreshold = useAppStore(s => s.ocrNameRerouteThreshold);
-  const externalFallbackEnabled = useAppStore(s => s.externalFallbackEnabled);
-  const externalFallbackThreshold = useAppStore(s => s.externalFallbackThreshold);
-  const externalOnDetectorDisagreement = useAppStore(s => s.externalOnDetectorDisagreement);
-  const forceMaxAnalysis = useAppStore(s => s.forceMaxAnalysis);
   const pilotRegistry = useAppStore(s => s.pilotRegistry);
   const ocrCorrections = useAppStore(s => s.ocrCorrections);
   const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
@@ -178,18 +174,9 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     fontProfile: ocrEnhancedNameRecoveryEnabled ? 'ealing-black-italic' : 'default',
     nameRerouteThreshold: ocrNameRerouteThreshold,
     maxReroutePasses: ocrEnhancedNameRecoveryEnabled ? 1 : 0,
-    externalFallbackEnabled,
-    externalFallbackThreshold,
-    externalOnDetectorDisagreement,
-    forceMaxAnalysis,
-    forceUncached: forceMaxAnalysis,
   }), [
     ocrEnhancedNameRecoveryEnabled,
     ocrNameRerouteThreshold,
-    externalFallbackEnabled,
-    externalFallbackThreshold,
-    externalOnDetectorDisagreement,
-    forceMaxAnalysis,
   ]);
 
   const createEmptyScopeEvidence = useCallback((): ScopeNameEvidence => ({
@@ -908,12 +895,11 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       });
     }
 
-    const effectiveOcrMode = ocrMode === 'hybrid-plus' ? 'both' : ocrMode;
     const ocrResult = await ocrProcessCapture(
       captureResult.imageBase64,
       activeUser,
       null,
-      effectiveOcrMode,
+      'local',
       ocrRegions,
       ocrRuntimeOptions
     );
@@ -1048,9 +1034,8 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     setProcessingStatus({ phase: 'prepare', message: `Preparing OCR queue (${unprocessed.length} files)...` });
 
     try {
-      const normalizedMode = ocrMode === 'hybrid-plus' ? 'both' : ocrMode;
-      const concurrency = performanceMode ? 1 : (normalizedMode === 'cloud' ? 2 : 1);
-      const interJobDelayMs = performanceMode ? 250 : (normalizedMode === 'cloud' ? 60 : 120);
+      const concurrency = 1;
+      const interJobDelayMs = performanceMode ? 250 : 120;
       const yieldEvery = performanceMode ? 2 : 4;
       const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
       const results: Array<{ filePath: string; result: RerunOcrResult }> = [];

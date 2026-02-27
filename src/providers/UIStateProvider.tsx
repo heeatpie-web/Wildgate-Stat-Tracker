@@ -76,6 +76,8 @@ interface UIStateContextType {
     setShowResetConfirm: (show: boolean) => void;
     showWelcomeBack: boolean;
     setShowWelcomeBack: (show: boolean) => void;
+    showSetupWizard: boolean;
+    setShowSetupWizard: (show: boolean) => void;
     isLayoutReady: boolean;
     setIsLayoutReady: (ready: boolean) => void;
     updateStatus: string;
@@ -168,6 +170,7 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [renameValue, setRenameValue] = React.useState<string>("");
     const [hiddenForScan, setHiddenForScan] = React.useState(false);
     const [showReviewQueue, setShowReviewQueue] = React.useState(false);
+    const [showSetupWizard, setShowSetupWizard] = React.useState(false);
     const [smartCaptureRequest, setSmartCaptureRequest] = React.useState<SmartCaptureRequest | null>(null);
 
     const requestSmartCapture = React.useCallback((request: {
@@ -199,9 +202,10 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
         renameModal, setRenameModal,
         renameValue, setRenameValue,
         showReviewQueue, setShowReviewQueue,
+        showSetupWizard, setShowSetupWizard,
         smartCaptureRequest, requestSmartCapture, clearSmartCaptureRequest,
         hiddenForScan, setHiddenForScan,
-    }), [store, renameModal, renameValue, hiddenForScan, showReviewQueue, smartCaptureRequest, requestSmartCapture, clearSmartCaptureRequest]);
+    }), [store, renameModal, renameValue, hiddenForScan, showReviewQueue, showSetupWizard, smartCaptureRequest, requestSmartCapture, clearSmartCaptureRequest]);
 
     return (
         <UIStateContext.Provider value={value}>

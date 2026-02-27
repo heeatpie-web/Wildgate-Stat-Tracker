@@ -95,13 +95,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const discardMatch = useAppStore(s => s.discardMatch);
     const resultOcrFlowMode = useAppStore(s => s.resultOcrFlowMode);
     const selectedSmartCapturesMatchId = useAppStore(s => s.selectedMatchId);
-    const ocrModeLabel = ocrMode === 'hybrid-plus'
-        ? 'Hybrid+'
-        : ocrMode === 'both'
-            ? 'Hybrid'
-            : ocrMode === 'cloud'
-                ? 'Cloud'
-                : 'Local';
+    const ocrModeLabel = 'Local';
 
     const [smartCaptureState, smartCaptureActions] = useSmartCapture();
     const {

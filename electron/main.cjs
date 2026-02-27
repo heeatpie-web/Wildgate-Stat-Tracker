@@ -10,9 +10,6 @@ const https = require('https');
 const fsPromises = require('fs').promises;
 const { registerOCRHandlers, processCapture, runOCR } = require('./ocrHandler.cjs');
 const { mergeCaptures, isSameMatch } = require('./ocrMerger.cjs');
-const gcloudService = require('./gcloudService.cjs');
-const gcloudSyncService = require('./gcloudSyncService.cjs');
-const geminiService = require('./geminiService.cjs');
 const artifactHelpers = require('./helpers/artifactHelpers.cjs');
 const { runArtifactCanonicalMigration } = require('./helpers/artifactCanonicalMigration.cjs');
 const telemetryArchiveHelpers = require('./helpers/telemetryArchiveHelpers.cjs');
@@ -66,91 +63,6 @@ const OCR_CORPUS_DIR = path.join(USER_DATA_ROOT, 'ocr-corpus');
 const OCR_CORPUS_REPORTS_DIR = path.join(OCR_CORPUS_DIR, 'reports');
 const REPO_OCR_CORPUS_DIR = path.resolve(app.getAppPath(), 'dataset', 'ocr-corpus');
 const AUTO_SYNC_CORPUS_TO_REPO = process.env.WILDGATE_AUTO_SYNC_CORPUS_TO_REPO !== '0';
-const GCLOUD_DEFAULT_KEY_PATH = path.join(app.getPath('documents'), 'GCloudInfo', 'service-account.json');
-const getConfiguredGCloudKeyPath = () => (
-  process.env.WILDGATE_GCLOUD_KEY
-  || process.env.GOOGLE_APPLICATION_CREDENTIALS
-  || GCLOUD_DEFAULT_KEY_PATH
-);
-const getConfiguredGCloudBucket = () => (
-  process.env.WILDGATE_GCLOUD_BUCKET || 'wildgate-training-heeatpie'
-);
-const normalizeCloudCohortToken = (value) => String(value || '').trim().toLowerCase();
-const CLOUD_BETA_COHORT = new Set(
-  (process.env.WILDGATE_CLOUD_BETA_COHORT || '')
-    .split(',')
-    .map(normalizeCloudCohortToken)
-    .filter(Boolean)
-);
-const CLOUD_BETA_FORCE = String(process.env.WILDGATE_CLOUD_BETA_FORCE || '').trim();
-const cloudReadinessState = {
-  lastInitError: null,
-  lastCheckedAt: 0,
-};
-const CLOUD_READINESS_REASON_LABELS = Object.freeze({
-  beta_cohort_disabled: 'Cloud beta is disabled for this user/machine.',
-  credentials_missing: 'Google Cloud credential file is missing.',
-  vision_unavailable: 'Vision OCR service is not initialized.',
-  gemini_unavailable: 'Gemini refinement service is not initialized.',
-  storage_unavailable: 'Cloud storage sync service is not initialized.',
-  storage_error: 'Cloud storage reported a recent upload error.',
-  initialization_error: 'Cloud service initialization failed.',
-});
-const setCloudInitError = (error) => {
-  if (!error) {
-    cloudReadinessState.lastInitError = null;
-    cloudReadinessState.lastCheckedAt = Date.now();
-    return;
-  }
-  cloudReadinessState.lastInitError = String(error?.message || error);
-  cloudReadinessState.lastCheckedAt = Date.now();
-};
-const isCloudBetaEnabled = () => {
-  if (CLOUD_BETA_FORCE === '1') return true;
-  if (CLOUD_BETA_FORCE === '0') return false;
-  if (CLOUD_BETA_COHORT.size === 0) return true;
-  const tokens = [
-    process.env.USERNAME,
-    process.env.COMPUTERNAME,
-    process.env.USERDOMAIN,
-  ]
-    .map(normalizeCloudCohortToken)
-    .filter(Boolean);
-  return tokens.some((token) => CLOUD_BETA_COHORT.has(token));
-};
-const buildCloudReadinessStatus = (storageStats) => {
-  const betaEnabled = isCloudBetaEnabled();
-  const keyPath = getConfiguredGCloudKeyPath();
-  const keyPresent = fs.existsSync(keyPath);
-  const bucketName = getConfiguredGCloudBucket();
-  const reasons = [];
-  if (!betaEnabled) reasons.push('beta_cohort_disabled');
-  if (!keyPresent) reasons.push('credentials_missing');
-  if (betaEnabled && keyPresent && !gcloudService.isInitialized) reasons.push('vision_unavailable');
-  if (betaEnabled && keyPresent && !geminiService.isInitialized) reasons.push('gemini_unavailable');
-  if (betaEnabled && keyPresent && !gcloudSyncService.isInitialized) reasons.push('storage_unavailable');
-  if (storageStats?.lastError) reasons.push('storage_error');
-  if (cloudReadinessState.lastInitError) reasons.push('initialization_error');
-
-  const dedupedReasons = Array.from(new Set(reasons));
-  const summary = dedupedReasons.length > 0
-    ? dedupedReasons.map((reason) => CLOUD_READINESS_REASON_LABELS[reason] || reason).join(' ')
-    : 'Cloud services are ready.';
-
-  return {
-    betaEnabled,
-    degraded: dedupedReasons.length > 0,
-    reasons: dedupedReasons,
-    summary,
-    diagnostics: {
-      keyPath,
-      keyPresent,
-      bucketName,
-      lastInitError: cloudReadinessState.lastInitError,
-      lastCheckedAt: Date.now(),
-    },
-  };
-};
 const ALLOWED_FILE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.webp', '.gif']);
 const ROI_PICKER_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.bmp', '.webp', '.gif']);
 const ROI_MIME_BY_EXT = Object.freeze({
@@ -1355,7 +1267,7 @@ const getDbCandidates = () => {
 const LOG_FILE_PATH = path.join(app.getPath('userData'), 'app_logs.txt');
 
 // Artifact handlers (Phase 2: electron/handlers/*)
-registerArtifactHandlers(ipcMain, { app, getWin: () => win, artifactHelpers, gcloudSyncService });
+registerArtifactHandlers(ipcMain, { app, getWin: () => win, artifactHelpers });
 
 ipcMain.handle('rerun-ocr-on-artifact', async (event, { imagePath, activeUser, ocrMode, ocrRegions, runtimeOptions }) => {
   try {
@@ -2516,21 +2428,6 @@ function createWindow() {
   ipcMain.on('check-for-updates', () => { if (!isDev) autoUpdater.checkForUpdates(); else if (win) win.webContents.send('update_not_available'); });
 }
 
-// GCloud OCR IPC Handler
-ipcMain.handle('gcloud-ocr-scan', async (event, imagePath) => {
-  return await gcloudService.performOCR(imagePath);
-});
-
-// GCloud Training Sync IPC Handler
-ipcMain.handle('sync-training-sample', async (event, sampleId) => {
-  const trainingDir = path.join(app.getPath('userData'), 'training_data');
-  return await gcloudSyncService.syncSample(trainingDir, sampleId);
-});
-
-// GCloud one-time backfill: upload all local screenshots, deduped against bucket contents
-ipcMain.handle('gcloud-backfill-screenshots', async () => {
-  return await gcloudSyncService.backfillScreenshots(app.getPath('userData'));
-});
 
 app.whenReady().then(async () => {
   devMark('app whenReady');
@@ -2579,38 +2476,6 @@ app.whenReady().then(async () => {
   }, 0);
   if (isDev) setSplashProgress(win, 35, 'Preparing OCR...', 'Registering OCR handlers');
   registerOCRHandlers(win);  // Register new OCR IPC handlers (pass win for hide-during-capture)
-  if (isDev) setSplashProgress(win, 50, 'OCR ready', 'Checking cloud integrations');
-
-  // Initialize GCloud services (only if key file exists on this machine)
-  const GCLOUD_KEY = getConfiguredGCloudKeyPath();
-  const GCLOUD_BUCKET = getConfiguredGCloudBucket();
-  const cloudBetaEnabled = isCloudBetaEnabled();
-  if (cloudBetaEnabled && fs.existsSync(GCLOUD_KEY)) {
-    if (isDev) setSplashProgress(win, 60, 'Initializing cloud OCR...', 'Connecting to Google Cloud');
-    // Keep cloud init in the background so dev splash can appear immediately.
-    void (async () => {
-      try {
-        gcloudService.initialize(GCLOUD_KEY);
-        await gcloudSyncService.initialize(GCLOUD_KEY, GCLOUD_BUCKET);
-        geminiService.initialize(GCLOUD_KEY);
-        setCloudInitError(null);
-        if (isDev) setSplashProgress(win, 92, 'Cloud services ready', 'Renderer loading');
-      } catch (e) {
-        console.warn('[GCloud] Background init failed:', e?.message || e);
-        setCloudInitError(e);
-        if (isDev) setSplashProgress(win, 72, 'Cloud OCR disabled', 'Background init failed');
-      }
-    })();
-  } else {
-    if (!cloudBetaEnabled) {
-      console.warn('[GCloud] Cloud beta cohort disabled for this machine/user, cloud services skipped');
-      if (isDev) setSplashProgress(win, 72, 'Cloud OCR disabled', 'Beta cohort disabled');
-    } else {
-      console.warn('[GCloud] Key file not found, GCloud services disabled');
-      if (isDev) setSplashProgress(win, 72, 'Cloud OCR disabled', 'No credentials found');
-    }
-    setCloudInitError(null);
-  }
   if (!isDev) autoUpdater.checkForUpdates();
   if (isDev) setSplashProgress(win, 84, 'Initializing presence...', 'Connecting Discord RPC');
   rpc.login({ clientId }).catch((err) => {
@@ -3324,23 +3189,6 @@ ipcMain.handle('open-path', async (event, targetPath) => {
   }
 });
 
-// GCloud status check (renderer queries this to show availability in settings)
-ipcMain.handle('get-gcloud-status', async () => {
-  const storageStats = gcloudSyncService.getStats();
-  const readiness = buildCloudReadinessStatus(storageStats);
-  return {
-    visionReady: gcloudService.isInitialized || false,
-    geminiReady: geminiService.isInitialized || false,
-    storageReady: gcloudSyncService.isInitialized || false,
-    storageStats,
-    readiness,
-  };
-});
-
-// GCloud test upload (verify credentials and bucket access from UI)
-ipcMain.handle('test-gcloud-upload', async () => {
-  return await gcloudSyncService.testUpload();
-});
 
 app.on('will-quit', () => globalShortcut.unregisterAll());
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

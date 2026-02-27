@@ -145,14 +145,6 @@ export interface OCRProcessOptions {
   debug?: boolean;
   /** Language hint for OCR */
   language?: string;
-  /** Force the OCR pipeline to run the maximum analysis path. */
-  forceMaxAnalysis?: boolean;
-  /** Enable external-model fallback passes when confidence is low. */
-  externalFallbackEnabled?: boolean;
-  /** Consensus floor (0-1) for triggering external fallback paths. */
-  externalFallbackThreshold?: number;
-  /** Trigger external fallback when detector classification disagrees. */
-  externalOnDetectorDisagreement?: boolean;
 }
 
 /**

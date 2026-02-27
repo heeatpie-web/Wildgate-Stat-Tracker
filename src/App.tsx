@@ -15,6 +15,7 @@ import { WindowFrame } from './components/WindowFrame';
 import { OverlayView } from './components/OverlayView';
 import { Wizard } from './components/Wizard';
 import { RenameModal } from './components/RenameModal';
+import { SetupWizard } from './components/SetupWizard';
 import { DrillDownOverlay } from './components/DrillDownOverlay';
 import { SettingsModal } from './components/SettingsModal';
 import { ResetConfirmModal } from './components/ResetConfirmModal';
@@ -80,7 +81,6 @@ import {
     combinedNameSimilarityScore,
     getAdaptiveNameSimilarityThreshold,
     normalizeOcrName,
-    similarityScore,
 } from './utils/stringUtils';
 import { StorageService } from './utils/storage';
 import { playSoundCue } from './utils/soundCues';
@@ -276,6 +276,7 @@ const App: React.FC = () => {
         showIdMapper, setShowIdMapper,
         sidebarCollapsed, setSidebarCollapsed,
         renameModal, setRenameModal, setRenameValue,
+        showSetupWizard, setShowSetupWizard,
     } = useUIState();
 
     const changelogDialogTitleId = React.useId();
@@ -548,7 +549,7 @@ const App: React.FC = () => {
     useEffect(() => {
         if (onboardingPromptedRef.current) return;
         if (isStoreLoading) return;
-        if (renameModal) return;
+        if (showSetupWizard) return;
 
         const hasActiveUser = Boolean((activeUser || '').trim());
         const hasProfiles = Array.isArray(players) && players.some((name) => String(name || '').trim().length > 0);
@@ -558,9 +559,8 @@ const App: React.FC = () => {
         }
 
         onboardingPromptedRef.current = true;
-        setRenameValue('');
-        setRenameModal({ type: 'new', blocking: true });
-    }, [activeUser, isStoreLoading, players, renameModal, setRenameModal, setRenameValue]);
+        setShowSetupWizard(true);
+    }, [activeUser, isStoreLoading, players, showSetupWizard, setShowSetupWizard]);
 
     useEffect(() => {
         if (tutorialAutoPromptedRef.current) return;
@@ -571,6 +571,7 @@ const App: React.FC = () => {
             return;
         }
         if (renameModal) return;
+        if (showSetupWizard) return;
         if (!String(activeUser || '').trim()) return;
         try {
             const key = 'wg_tutorial_autostart_seen_v1';
@@ -584,7 +585,7 @@ const App: React.FC = () => {
         }
         tutorialAutoPromptedRef.current = true;
         setShowTutorial(true);
-    }, [activeUser, isStoreLoading, renameModal, setShowTutorial, showTutorial, tutorialCompleted]);
+    }, [activeUser, isStoreLoading, renameModal, showSetupWizard, setShowTutorial, showTutorial, tutorialCompleted]);
 
     useEffect(() => {
         if (isStoreLoading) return;
@@ -1170,6 +1171,8 @@ const App: React.FC = () => {
         if (!api) return;
         const unsubAvailable = api.on('update_available', () => setUpdateStatus('available'));
         const unsubDownloaded = api.on('update_downloaded', () => setUpdateStatus('downloaded'));
+        const unsubNotAvailable = api.on('update_not_available', () => setUpdateStatus('not-available'));
+        const unsubError = api.on('update_error', () => setUpdateStatus('not-available'));
 
         const unsubHotkey = api.on('hotkey-toggle-overlay', (forceState?: boolean) => {
             if (typeof forceState === 'boolean') {
@@ -1182,6 +1185,8 @@ const App: React.FC = () => {
         return () => {
             unsubAvailable();
             unsubDownloaded();
+            unsubNotAvailable();
+            unsubError();
             unsubHotkey();
         };
     }, [setUpdateStatus, setIsOverlayMode]);
@@ -1473,7 +1478,7 @@ const App: React.FC = () => {
         if (pendingValues.has(normalized.toLowerCase())) return;
         const scored = pilotRegistry.map((pilot) => ({
             name: pilot,
-            score: similarityScore(normalized, normalizeOcrName(pilot)),
+            score: combinedNameSimilarityScore(normalized, normalizeOcrName(pilot)),
         })).sort((a, b) => b.score - a.score);
         const suggestions = scored.filter((entry) => entry.score > 0).slice(0, 3);
         addPendingReview({
@@ -2087,6 +2092,7 @@ const App: React.FC = () => {
             )}
 
             <RenameModal />
+            <SetupWizard />
             <DrillDownOverlay />
             <SettingsModal />
             <ResetConfirmModal />

@@ -38,7 +38,6 @@ export const runtimeConfig = {
     cacheMaxEntries:      readEnvNumber('VITE_OCR_CACHE_MAX',           50,   10,  500),
     workerPoolSize:       readEnvNumber('VITE_OCR_WORKER_POOL_SIZE',     3,    1,    8),
     regionOcrScale:       readEnvNumber('VITE_OCR_REGION_SCALE',         3,    1,    6),
-    cloudTimeoutMs:       readEnvNumber('VITE_OCR_CLOUD_TIMEOUT_MS',  7000, 1000, 30000),
     lowWordConfidence:    readEnvNumber('VITE_OCR_WORD_CONF_MIN',        25,    0,   80),
     learningQueueMax:     readEnvNumber('VITE_OCR_LEARNING_QUEUE_MAX',  200,   50, 1000),
     learningEventMax:     readEnvNumber('VITE_OCR_LEARNING_EVENT_MAX',  500,  100, 5000),
@@ -66,9 +65,5 @@ export const runtimeConfig = {
   },
   ui: {
     toastDurationMs: readEnvNumber('VITE_TOAST_DURATION_MS', 3_200, 1_000, 60_000),
-  },
-  cloud: {
-    statusPollIntervalMs: readEnvNumber('VITE_CLOUD_STATUS_POLL_MS', 20_000, 5_000, 120_000),
-    showBetaDiagnostics: readEnvBoolean('VITE_CLOUD_SHOW_BETA_DIAGNOSTICS', true),
   },
 } as const;

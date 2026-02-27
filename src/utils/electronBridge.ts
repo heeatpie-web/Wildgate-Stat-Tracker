@@ -22,10 +22,6 @@ const toErrorMessage = (error: unknown, fallback: string): string => {
 export interface OCRProcessRuntimeOptions {
   includeBboxes?: boolean;
   forceUncached?: boolean;
-  forceMaxAnalysis?: boolean;
-  externalFallbackEnabled?: boolean;
-  externalFallbackThreshold?: number;
-  externalOnDetectorDisagreement?: boolean;
   sourceImagePath?: string | null;
   archiveOcrSample?: boolean;
   archiveMetadata?: Record<string, unknown>;
@@ -63,13 +59,12 @@ export async function captureGameWindow(): Promise<CaptureResult> {
  * @param imageBase64 - Base64 encoded image
  * @param activeUser - Current user's display name (for anchor-based detection)
  * @param existingData - Previous capture data to merge with (for scrolled captures)
- * @param ocrMode - OCR engine mode: 'local', 'cloud', 'both', or 'hybrid-plus'
  */
 export async function ocrProcessCapture(
   imageBase64: string,
   activeUser?: string | null,
   existingData?: OCRExtractedData | null,
-  ocrMode: 'local' | 'cloud' | 'both' | 'hybrid-plus' = 'both',
+  ocrMode: 'local' = 'local',
   ocrRegions?: OcrRegionSettings | null,
   runtimeOptions: OCRProcessRuntimeOptions = {}
 ): Promise<OCRProcessResult> {
@@ -120,61 +115,6 @@ export async function saveScreenshot(
 }
 
 /**
- * Check GCloud service availability.
- * @returns Status of Vision API and Storage services, or null outside Electron.
- */
-export interface GCloudStorageStats {
-  isInitialized: boolean;
-  bucketName: string;
-  uploadCount: number;
-  uploadErrors: number;
-  lastUploadTime: number | null;
-  lastError: string | null;
-}
-
-export type CloudReadinessReason =
-  | 'beta_cohort_disabled'
-  | 'credentials_missing'
-  | 'vision_unavailable'
-  | 'gemini_unavailable'
-  | 'storage_unavailable'
-  | 'storage_error'
-  | 'initialization_error';
-
-export interface CloudReadinessStatus {
-  betaEnabled: boolean;
-  degraded: boolean;
-  reasons: CloudReadinessReason[];
-  summary: string;
-  diagnostics: {
-    keyPath: string;
-    keyPresent: boolean;
-    bucketName: string;
-    lastInitError: string | null;
-    lastCheckedAt: number;
-  };
-}
-
-export interface GCloudStatus {
-  visionReady: boolean;
-  geminiReady?: boolean;
-  storageReady: boolean;
-  storageStats: GCloudStorageStats;
-  readiness: CloudReadinessStatus;
-}
-
-export async function getGCloudStatus(): Promise<GCloudStatus | null> {
-  const ipc = getIpcRenderer();
-  if (!ipc) return null;
-
-  try {
-    return await ipc.invoke('get-gcloud-status');
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Save debug image (existing functionality)
  */
 export async function saveOcrDebug(dataUrl: string, filename: string): Promise<string | null> {
@@ -189,51 +129,6 @@ export async function saveOcrDebug(dataUrl: string, filename: string): Promise<s
 }
 
 /**
- * Perform OCR via Google Cloud Vision API (main process).
- * @param imagePath - Absolute path to the image file on disk.
- * @returns Detected text and annotation data, or null if unavailable.
- */
-export async function gcloudOcrScan(imagePath: string): Promise<{ fullText: string; annotations: unknown[] } | null> {
-  const ipc = getIpcRenderer();
-  if (!ipc) return null;
-
-  try {
-    const result = await ipc.invoke('gcloud-ocr-scan', imagePath);
-    if (
-      isRecord(result) &&
-      typeof result.fullText === 'string' &&
-      Array.isArray(result.annotations)
-    ) {
-      return {
-        fullText: result.fullText,
-        annotations: result.annotations,
-      };
-    }
-    return null;
-  } catch (error: unknown) {
-    Logger.error('ElectronBridge', 'GCloud OCR request failed', error);
-    return null;
-  }
-}
-
-/**
- * Sync a training sample (screenshot + label JSON) to Google Cloud Storage.
- * @param sampleId - Unique identifier for the training sample.
- * @returns Upload result with list of uploaded files and any errors.
- */
-export async function syncTrainingSample(sampleId: string): Promise<{ success: boolean; uploaded: string[]; errors: string[] } | null> {
-  const ipc = getIpcRenderer();
-  if (!ipc) return null;
-
-  try {
-    return await ipc.invoke('sync-training-sample', sampleId);
-  } catch (error: unknown) {
-    Logger.error('ElectronBridge', 'Training sample sync failed', error);
-    return null;
-  }
-}
-
-/**
  * Electron bridge object for compatibility
  */
 export const electronBridge = {
@@ -242,9 +137,6 @@ export const electronBridge = {
   ocrProcessCapture,
   saveScreenshot,
   saveOcrDebug,
-  gcloudOcrScan,
-  syncTrainingSample,
-  getGCloudStatus,
 };
 
 export default electronBridge;

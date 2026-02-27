@@ -611,11 +611,9 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
 
   const applyBestGuess = () => {
     const source = editedData.ocrSource || 'local';
-    const base = source === 'cloud'
-      ? ocrBestGuessThresholds.cloud
-      : source === 'merged'
-        ? ocrBestGuessThresholds.merged
-        : ocrBestGuessThresholds.local;
+    const base = source === 'merged'
+      ? ocrBestGuessThresholds.merged
+      : ocrBestGuessThresholds.local;
     const lowConfidenceBump = (editedData.overallConfidence || 0) < 70
       ? ocrBestGuessThresholds.lowConfidenceBump
       : 0;

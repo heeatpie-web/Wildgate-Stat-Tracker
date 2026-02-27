@@ -48,8 +48,6 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@google-cloud/storage": "^7.19.0",
-    "@google-cloud/vision": "^5.3.4",
     "canvas-confetti": "^1.9.2",
     "discord-rpc": "^4.0.1",
     "electron-updater": "^6.7.3",
