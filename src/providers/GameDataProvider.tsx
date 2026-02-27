@@ -7,7 +7,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useShallow } from 'zustand/react/shallow';
-import { Match, DrillDownTarget, KillMap, Loadout, GameMode } from '../types';
+import { Match, DrillDownTarget, KillMap, Loadout, GameMode, type DetectedUnknownMapping } from '../types';
 import { PlayerProfile } from '../store/slices/createMappingSlice';
 import type { PendingReview, TimelineEvent } from '../store/slices/createDataSlice';
 import { getElectronAPI } from '../utils/electronAPI';
@@ -132,7 +132,7 @@ interface GameDataContextType {
     addPendingReview: (review: PendingReview) => void;
     removePendingReview: (id: string) => void;
     clearPendingReviews: () => void;
-    detectedUnknowns: Record<string, { type: 'Hero' | 'Ship' | 'Weapon' | 'Equipment' | 'Unknown'; lastSeen: number }>;
+    detectedUnknowns: Record<string, DetectedUnknownMapping>;
     addMapping: (id: string, name: string) => void;
     setOverlayPhase: (phase: 'Setup' | 'Live' | 'Result') => void;
     playerProfiles: Record<string, PlayerProfile>;

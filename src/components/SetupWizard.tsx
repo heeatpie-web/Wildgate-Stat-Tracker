@@ -26,6 +26,12 @@ const APPEARANCE_MODES = [
 ];
 
 const TOTAL_STEPS = 7;
+const STARTUP_HEALTH_CHECK_SEEN_KEY_PREFIX = 'wg_startup_health_check_seen_v2';
+const STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY_PREFIX = 'wg_startup_health_check_skipped_launch_v2';
+const getOnboardingUserScope = (user: string | null | undefined): string => {
+    const normalized = String(user || '').trim().toLowerCase();
+    return normalized || '__global__';
+};
 
 type HealthStatus = 'idle' | 'running' | 'pass' | 'warn' | 'fail';
 
@@ -103,6 +109,15 @@ export const SetupWizard: React.FC = () => {
         const normalized = callsign.trim();
         addPlayer(normalized);
         setActiveUser(normalized);
+        try {
+            const userScope = getOnboardingUserScope(normalized);
+            const seenKey = `${STARTUP_HEALTH_CHECK_SEEN_KEY_PREFIX}:${userScope}`;
+            const skippedKey = `${STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY_PREFIX}:${userScope}`;
+            window.localStorage.setItem(seenKey, '1');
+            window.sessionStorage.removeItem(skippedKey);
+        } catch {
+            // no-op: storage can be unavailable in embedded contexts.
+        }
         setToast({ message: `Welcome, ${normalized}! Your mission begins now.`, type: 'success' });
         setShowSetupWizard(false);
     };

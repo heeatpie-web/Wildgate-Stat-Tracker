@@ -12,7 +12,7 @@ const setSessionShipTypes = vi.fn();
 const storeState: any = {
     detectedUnknowns: {},
     knownMappings: {},
-    uidMappings: { players: {}, ships: {}, weapons: {}, equipment: {} },
+    uidMappings: { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} },
     playerProfiles: {},
     addMapping: vi.fn(),
     setUidMapping,
@@ -53,7 +53,7 @@ describe('IdMapper ship mapping behavior', () => {
             'ABCD-0000-0000-0000': { type: 'Ship', lastSeen: Date.now() },
         };
         storeState.knownMappings = {};
-        storeState.uidMappings = { players: {}, ships: {}, weapons: {}, equipment: {} };
+        storeState.uidMappings = { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} };
         storeState.playerProfiles = {};
         storeState.activeShip = 'Unknown (ABCD)';
         storeState.shipSource = 'manual';

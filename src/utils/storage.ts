@@ -1,8 +1,9 @@
 import { getElectronAPI } from './electronAPI';
-import type { Match } from '../types';
+import type { Match, UidMappingsContract } from '../types';
 import type { TimelineEvent } from '../store/slices/createDataSlice';
 import type { OcrCorrection, PlayerProfile, TeamIdentityCorrection } from '../store/slices/createMappingSlice';
 import type { OcrAliasModel, OcrLearningEvent, OcrLearningQueueItem } from './ocrAliasEngine';
+import { normalizeSharedUidMappings } from '../services/mappingContract';
 import Logger from './logger';
 import { runtimeConfig } from '../config/runtimeConfig';
 
@@ -22,12 +23,7 @@ interface StorageMeta {
   artifactCanonicalMigrationV1At?: number;
 }
 
-interface UidMappings {
-  players: StringMap;
-  ships: StringMap;
-  weapons: StringMap;
-  equipment: StringMap;
-}
+type UidMappings = ReturnType<typeof normalizeSharedUidMappings>;
 
 interface UidSeedState {
   seedVersionApplied: number | null;
@@ -52,7 +48,7 @@ export interface StorageData {
   mappings?: StringMap;
   playerProfiles?: Record<string, PlayerProfile>;
   timelineEvents?: TimelineEvent[];
-  uidMappings?: UidMappings;
+  uidMappings?: UidMappingsContract;
   uidSeedState?: UidSeedState;
   storageMeta?: StorageMeta;
 }
@@ -165,27 +161,16 @@ const toNumberOr = (value: unknown, fallback: number) => {
   return Number.isFinite(num) ? num : fallback;
 };
 
-const emptyUidMappings = (): UidMappings => ({
-  players: {},
-  ships: {},
-  weapons: {},
-  equipment: {},
-});
-
-const normalizeUidMappings = (input?: Partial<UidMappings>): UidMappings => ({
-  players: { ...(input?.players || {}) },
-  ships: { ...(input?.ships || {}) },
-  weapons: { ...(input?.weapons || {}) },
-  equipment: { ...(input?.equipment || {}) },
-});
+const emptyUidMappings = (): UidMappings => normalizeSharedUidMappings();
 
 const toUidMappings = (value: unknown): UidMappings => {
   if (!isRecord(value)) return emptyUidMappings();
-  return normalizeUidMappings({
+  return normalizeSharedUidMappings({
     players: toStringMap(value.players),
     ships: toStringMap(value.ships),
     weapons: toStringMap(value.weapons),
     equipment: toStringMap(value.equipment),
+    perks: toStringMap(value.perks),
   });
 };
 
@@ -296,7 +281,7 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
     storageMeta: StorageMeta;
   } = {
     ...data,
-    uidMappings: normalizeUidMappings(data.uidMappings || emptyUidMappings()),
+    uidMappings: normalizeSharedUidMappings(data.uidMappings || emptyUidMappings()),
     uidSeedState: data.uidSeedState || { seedVersionApplied: null },
     storageMeta: data.storageMeta || {},
   };
@@ -325,17 +310,19 @@ const applyUidSeed = async (data: StorageData): Promise<StorageData> => {
     const applied = merged.uidSeedState?.seedVersionApplied ?? null;
     if (applied !== null && seedVersion <= applied) return merged;
 
-    const seedMappings = normalizeUidMappings({
+    const seedMappings = normalizeSharedUidMappings({
       players: toStringMap(seed.players),
       ships: toStringMap(seed.ships),
       weapons: toStringMap(seed.weapons),
       equipment: toStringMap(seed.equipment),
+      perks: toStringMap(seed.perks),
     });
     merged.uidMappings = {
       players: { ...seedMappings.players, ...merged.uidMappings.players },
       ships: { ...seedMappings.ships, ...merged.uidMappings.ships },
       weapons: { ...seedMappings.weapons, ...merged.uidMappings.weapons },
       equipment: { ...seedMappings.equipment, ...merged.uidMappings.equipment },
+      perks: { ...seedMappings.perks, ...merged.uidMappings.perks },
     };
     merged.uidSeedState = { seedVersionApplied: seedVersion };
     return merged;

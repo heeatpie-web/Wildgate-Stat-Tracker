@@ -29,6 +29,7 @@ import {
 import { normalizeOcrBatchThreshold } from '../utils/ocrBatchActions';
 import { sanitizeCalibrationSamples } from '../utils/ocrCalibration';
 import { normalizeShipName, type Match } from '../types';
+import { normalizeSharedUidMappings } from '../services/mappingContract';
 
 export type AppState = DataSlice & SettingsSlice & UISlice & SmartCapturesUIState & FormSlice & MappingSlice;
 
@@ -167,7 +168,7 @@ const customStorage: PersistStorage<AppState> = {
           playerIdMap: data.playerIdMap || {},
           lastActivity: data.lastActivity || Date.now(),
           knownMappings: data.mappings || {},
-          uidMappings: data.uidMappings || { players: {}, ships: {}, weapons: {}, equipment: {} },
+          uidMappings: normalizeSharedUidMappings(data.uidMappings),
           uidSeedVersionApplied: data.uidSeedState?.seedVersionApplied ?? null,
           playerProfiles: data.playerProfiles || {},
           ocrCorrections: legacyOcrCorrections,
