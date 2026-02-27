@@ -711,12 +711,19 @@ async function preprocessImage(imageBuffer) {
     const image = sharp(imageBuffer);
     const metadata = await image.metadata();
 
-    // Scale up 2x for better OCR if small
-    const scale = metadata.width < 2000 ? 2 : 1;
+    const sourceWidth = Number(metadata.width) || 1920;
+    const sourceHeight = Number(metadata.height) || 1080;
+    // Three-way scaling policy:
+    // <2000px => 2x upsample, 2000-2400px => keep, >2400px => downscale to 1920px width.
+    const scale = sourceWidth < 2000
+      ? 2
+      : (sourceWidth > 2400 ? (1920 / sourceWidth) : 1);
+    const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
+    const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
 
     const processed = await image
-      .resize(metadata.width * scale, metadata.height * scale, {
-        kernel: sharp.kernel.nearest,
+      .resize(targetWidth, targetHeight, {
+        kernel: sharp.kernel.lanczos3,
       })
       .modulate({
         brightness: 1.1,
@@ -734,10 +741,10 @@ async function preprocessImage(imageBuffer) {
     return {
       buffer: processed,
       scale,
-      width: metadata.width * scale,
-      height: metadata.height * scale,
-      originalWidth: metadata.width,
-      originalHeight: metadata.height,
+      width: targetWidth,
+      height: targetHeight,
+      originalWidth: sourceWidth,
+      originalHeight: sourceHeight,
     };
   } catch (error) {
     console.error('[OCR] Preprocessing failed:', error);
@@ -1711,7 +1718,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
 
           const stripBuf = await sharp(imageBuffer)
             .extract({ left: stripX1, top: stripY, width: stripW, height: stripH })
-            .resize(stripW * STRIP_SCALE, stripH * STRIP_SCALE, { kernel: sharp.kernel.nearest })
+            .resize(stripW * STRIP_SCALE, stripH * STRIP_SCALE, { kernel: sharp.kernel.lanczos3 })
+            .grayscale()
             .modulate({ brightness: 1.0 })
             .linear(1.3, -(0.3 * 128))
             .sharpen({ sigma: 2, m1: 1, m2: 0.5 })
@@ -1810,7 +1818,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
             if (h < 20) continue;
             const sliceBuf = await sharp(imageBuffer)
               .extract({ left: rX1, top: sy, width: rW, height: h })
-              .resize(rW * RSC, h * RSC, { kernel: sharp.kernel.nearest })
+              .resize(rW * RSC, h * RSC, { kernel: sharp.kernel.lanczos3 })
+              .grayscale()
               .modulate({ brightness: 1.15 })
               .linear(1.3, -(0.3 * 128))
               .sharpen({ sigma: 1.5, m1: 1, m2: 0.5 })
@@ -1887,7 +1896,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
             const BANNER_SCALE = 4;
             const bannerBuf = await sharp(imageBuffer)
               .extract({ left: bannerX1, top: bannerY1, width: bannerW, height: bannerH })
-              .resize(bannerW * BANNER_SCALE, bannerH * BANNER_SCALE, { kernel: sharp.kernel.nearest })
+              .resize(bannerW * BANNER_SCALE, bannerH * BANNER_SCALE, { kernel: sharp.kernel.lanczos3 })
+              .grayscale()
               .modulate({ brightness: 1.05 })
               .linear(1.4, -(0.4 * 128))
               .sharpen({ sigma: 1.5, m1: 1, m2: 0.5 })
@@ -1917,8 +1927,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         try {
           const origW = Math.round(processed.width / processed.scale);
           const origH = Math.round(processed.height / processed.scale);
-          const lStripXFrac1 = 0.184; // measured: player name cards start at ~18.4%
-          const lStripXFrac2 = 0.29;  // measured: right edge of name column at ~29%
+          const lStripXFrac1 = 0.08; // expanded left-panel name scan window start
+          const lStripXFrac2 = 0.46; // expanded left-panel name scan window end
           const lStripX1  = Math.round(origW * lStripXFrac1);
           const lStripX2  = Math.round(origW * lStripXFrac2);
           const lStripW   = lStripX2 - lStripX1;
@@ -1928,7 +1938,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
 
           const lStripBuf = await sharp(imageBuffer)
             .extract({ left: lStripX1, top: lStripY, width: lStripW, height: lStripH })
-            .resize(lStripW * L_STRIP_SCALE, lStripH * L_STRIP_SCALE, { kernel: sharp.kernel.nearest })
+            .resize(lStripW * L_STRIP_SCALE, lStripH * L_STRIP_SCALE, { kernel: sharp.kernel.lanczos3 })
+            .grayscale()
             .modulate({ brightness: 1.0 })
             .linear(1.3, -(0.3 * 128))
             .sharpen({ sigma: 2, m1: 1, m2: 0.5 })
