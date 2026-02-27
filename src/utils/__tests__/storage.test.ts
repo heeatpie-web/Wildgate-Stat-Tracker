@@ -14,7 +14,7 @@ const createStorageData = (overrides: Partial<StorageData> = {}): StorageData =>
   settings: {},
   layouts: {},
   lastActivity: Date.now(),
-  uidMappings: { players: {}, ships: {}, weapons: {}, equipment: {} },
+  uidMappings: { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} },
   uidSeedState: { seedVersionApplied: null },
   storageMeta: {},
   ...overrides,

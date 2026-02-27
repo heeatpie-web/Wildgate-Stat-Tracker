@@ -3,11 +3,14 @@ import { Save, Trash2, Download, Upload, Users, UserMinus, UserCheck, Eye, Chevr
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
 import { PlayerRole } from '../store/slices/createMappingSlice';
+import type { MappingEntityType } from '../types';
 import { SHIPS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT } from '../types';
+import { normalizeDetectedUnknownMappings } from '../services/mappingContract';
 import Logger from '../utils/logger';
+import { getPerkCatalog, getProspectorEquipmentCatalog, getProspectorWeaponCatalog, getShipCatalog } from './patch/patchEntityCatalog';
 
-type MappingDomain = 'players' | 'ships' | 'weapons' | 'equipment';
-type MappingTag = 'prospector' | 'ship' | 'weapon' | 'equipment' | 'player';
+type MappingDomain = 'players' | 'ships' | 'weapons' | 'equipment' | 'perks';
+type MappingTag = 'prospector' | 'ship' | 'weapon' | 'equipment' | 'perk' | 'player';
 
 const normalizeLabel = (value: unknown) => String(value || '').trim().toLowerCase();
 const normalizeEntityLabel = (value: unknown) => normalizeLabel(value)
@@ -16,7 +19,7 @@ const normalizeEntityLabel = (value: unknown) => normalizeLabel(value)
     .replace(/\s+/g, ' ')
     .trim();
 
-const SHIP_SET = new Set((SHIPS || []).flatMap((name) => {
+const SHIP_SET = new Set(getShipCatalog(SHIPS || []).flatMap((name) => {
     const normalized = normalizeEntityLabel(name);
     const withoutSoloPrefix = normalized.replace(/^solo\s+/, '').trim();
     const firstToken = withoutSoloPrefix.split(/\s+/)[0] || '';
@@ -25,12 +28,14 @@ const SHIP_SET = new Set((SHIPS || []).flatMap((name) => {
 const PROSPECTOR_SET = new Set((CHARACTERS || []).map((name) => normalizeEntityLabel(name)));
 const WEAPON_SET = new Set([
     ...(WEAPONS || []),
-    ...(CHARACTER_WEAPONS || []),
+    ...getProspectorWeaponCatalog(CHARACTER_WEAPONS || []),
 ].map((name) => normalizeEntityLabel(name)));
-const EQUIPMENT_SET = new Set((CHARACTER_EQUIPMENT || []).map((name) => normalizeEntityLabel(name)));
+const EQUIPMENT_SET = new Set(getProspectorEquipmentCatalog(CHARACTER_EQUIPMENT || []).map((name) => normalizeEntityLabel(name)));
+const PERK_SET = new Set(getPerkCatalog().map((name) => normalizeEntityLabel(name)));
 const SHIP_KEYWORDS = ['drone', 'privateer', 'interceptor', 'gunship', 'fighter', 'frigate', 'raider', 'brawler', 'carrier'];
 const WEAPON_KEYWORDS = ['cannon', 'rifle', 'pistol', 'launcher', 'beam', 'turret', 'blaster', 'weapon'];
 const EQUIPMENT_KEYWORDS = ['shield', 'module', 'booster', 'utility', 'gear', 'ability', 'equipment'];
+const PERK_KEYWORDS = ['perk', 'jetpack', 'teleport', 'wings', 'inventor', 'defender', 'resourcing', 'engineering', 'salvager', 'boarder', 'factory', 'smash', 'explorer', 'bomber'];
 const SHIP_TYPE_HINTS = ['attackdrone', 'drone', 'privateer', 'interceptor', 'gunship', 'fighter', 'frigate', 'raider', 'brawler', 'carrier'];
 
 const hasAliasMatch = (value: string, aliases: Set<string>): boolean => {
@@ -51,6 +56,7 @@ const inferTagFromKeywords = (value: string): MappingTag | null => {
     if (SHIP_KEYWORDS.some((keyword) => normalizedValue.includes(keyword))) return 'ship';
     if (WEAPON_KEYWORDS.some((keyword) => normalizedValue.includes(keyword))) return 'weapon';
     if (EQUIPMENT_KEYWORDS.some((keyword) => normalizedValue.includes(keyword))) return 'equipment';
+    if (PERK_KEYWORDS.some((keyword) => normalizedValue.includes(keyword))) return 'perk';
     return null;
 };
 
@@ -67,11 +73,13 @@ const inferDomainFromName = (name: string): MappingDomain | null => {
     if (hasAliasMatch(name, SHIP_SET)) return 'ships';
     if (hasAliasMatch(name, WEAPON_SET)) return 'weapons';
     if (hasAliasMatch(name, EQUIPMENT_SET)) return 'equipment';
+    if (hasAliasMatch(name, PERK_SET)) return 'perks';
     if (hasAliasMatch(name, PROSPECTOR_SET)) return 'players';
     const inferredTag = inferTagFromKeywords(name);
     if (inferredTag === 'ship') return 'ships';
     if (inferredTag === 'weapon') return 'weapons';
     if (inferredTag === 'equipment') return 'equipment';
+    if (inferredTag === 'perk') return 'perks';
     return null;
 };
 
@@ -81,6 +89,7 @@ const inferTagFromName = (name: string): MappingTag | null => {
     if (hasAliasMatch(name, PROSPECTOR_SET)) return 'prospector';
     if (hasAliasMatch(name, WEAPON_SET)) return 'weapon';
     if (hasAliasMatch(name, EQUIPMENT_SET)) return 'equipment';
+    if (hasAliasMatch(name, PERK_SET)) return 'perk';
     const inferredTag = inferTagFromKeywords(name);
     if (inferredTag) return inferredTag;
     return null;
@@ -158,11 +167,18 @@ export const IdMapper: React.FC = () => {
         Object.keys(detectedUnknowns || {}).length > 0 ? 'unknowns' : 'known'
     ));
     const previousUnknownCountRef = useRef(Object.keys(detectedUnknowns || {}).length);
+    const normalizedUnknowns = useMemo(
+        () => normalizeDetectedUnknownMappings(detectedUnknowns),
+        [detectedUnknowns]
+    );
 
-    const resolveUnknownDomain = (id: string, rawType?: string, candidateName?: string): MappingDomain => {
+    const resolveUnknownDomain = (id: string, rawType?: MappingEntityType, candidateName?: string): MappingDomain => {
         const normalizedType = String(rawType || '').trim().toLowerCase();
         if (normalizedType.includes('ship')) {
             return 'ships';
+        }
+        if (normalizedType.includes('perk') || normalizedType.includes('trait')) {
+            return 'perks';
         }
         if (normalizedType.includes('weapon') || normalizedType.includes('tertiary')) {
             return 'weapons';
@@ -173,6 +189,7 @@ export const IdMapper: React.FC = () => {
 
         const normalizedId = String(id || '').trim().toLowerCase();
         if (normalizedId.startsWith('ship')) return 'ships';
+        if (normalizedId.startsWith('perk') || normalizedId.startsWith('pk')) return 'perks';
         if (normalizedId.startsWith('wpn') || normalizedId.startsWith('weapon') || normalizedId.startsWith('cw')) return 'weapons';
         if (normalizedId.startsWith('equip') || normalizedId.startsWith('gear') || normalizedId.startsWith('ce')) return 'equipment';
 
@@ -255,11 +272,12 @@ export const IdMapper: React.FC = () => {
         }
     };
 
-    const getTagFromUnknownType = (rawType?: string): MappingTag | null => {
+    const getTagFromUnknownType = (rawType?: MappingEntityType): MappingTag | null => {
         const normalizedType = normalizeLabel(rawType);
         if (normalizedType.includes('hero')) return 'prospector';
         if (normalizedType.includes('ship')) return 'ship';
         if (looksLikeShipEntity(normalizedType)) return 'ship';
+        if (normalizedType.includes('perk') || normalizedType.includes('trait')) return 'perk';
         if (normalizedType.includes('weapon')) return 'weapon';
         if (normalizedType.includes('equipment') || normalizedType.includes('gear') || normalizedType.includes('utility')) return 'equipment';
         return null;
@@ -269,8 +287,9 @@ export const IdMapper: React.FC = () => {
         if (entry.domain === 'ships') return 'ship';
         if (entry.domain === 'weapons') return 'weapon';
         if (entry.domain === 'equipment') return 'equipment';
+        if (entry.domain === 'perks') return 'perk';
 
-        const unknownTypeTag = getTagFromUnknownType(detectedUnknowns?.[entry.id]?.type);
+        const unknownTypeTag = getTagFromUnknownType(normalizedUnknowns?.[entry.id]?.type);
         if (unknownTypeTag) return unknownTypeTag;
 
         const normalizedId = normalizeLabel(entry.id);
@@ -302,6 +321,10 @@ export const IdMapper: React.FC = () => {
             label: 'EQUIPMENT',
             className: 'bg-success-soft text-success',
         },
+        perk: {
+            label: 'PERK',
+            className: 'bg-warning-soft text-warning',
+        },
         player: {
             label: 'PLAYER',
             className: 'md3-surface-high text-md-sys-on-surface/50',
@@ -309,12 +332,13 @@ export const IdMapper: React.FC = () => {
     };
 
     const inferRelationshipTag = (id: string, name: string): MappingTag => {
-        const unknownTypeTag = getTagFromUnknownType(detectedUnknowns?.[id]?.type);
+        const unknownTypeTag = getTagFromUnknownType(normalizedUnknowns?.[id]?.type);
         if (unknownTypeTag) return unknownTypeTag;
 
         if ((uidMappings?.ships || {})[id]) return 'ship';
         if ((uidMappings?.weapons || {})[id]) return 'weapon';
         if ((uidMappings?.equipment || {})[id]) return 'equipment';
+        if ((uidMappings?.perks || {})[id]) return 'perk';
         if ((uidMappings?.players || {})[id]) {
             const inferredFromName = inferTagFromName(name);
             return inferredFromName || 'player';
@@ -323,6 +347,7 @@ export const IdMapper: React.FC = () => {
         const normalizedId = normalizeLabel(id);
         if (normalizedId.startsWith('ship')) return 'ship';
         if (looksLikeShipEntity(normalizedId)) return 'ship';
+        if (normalizedId.startsWith('perk') || normalizedId.startsWith('pk')) return 'perk';
         if (normalizedId.startsWith('wpn') || normalizedId.startsWith('weapon') || normalizedId.startsWith('cw')) return 'weapon';
         if (normalizedId.startsWith('equip') || normalizedId.startsWith('gear') || normalizedId.startsWith('ce')) return 'equipment';
         if (normalizedId.startsWith('hero') || normalizedId.startsWith('char') || normalizedId.startsWith('prospector')) return 'prospector';
@@ -348,6 +373,7 @@ export const IdMapper: React.FC = () => {
         pushDomain('ships', uidMappings?.ships || {});
         pushDomain('weapons', uidMappings?.weapons || {});
         pushDomain('equipment', uidMappings?.equipment || {});
+        pushDomain('perks', uidMappings?.perks || {});
 
         // Preserve legacy knownMappings player entries not represented in uidMappings.players.
         Object.entries(knownMappings || {}).forEach(([id, name]) => {
@@ -360,16 +386,16 @@ export const IdMapper: React.FC = () => {
     const relationshipEntries = useMemo(
         () => Object.entries(playerProfiles)
             .filter(([id, profile]: [string, any]) => inferRelationshipTag(id, profile.name || '') === 'player'),
-        [playerProfiles, uidMappings, detectedUnknowns]
+        [playerProfiles, uidMappings, normalizedUnknowns]
     );
 
     useEffect(() => {
-        const unknownCount = Object.keys(detectedUnknowns || {}).length;
+        const unknownCount = Object.keys(normalizedUnknowns || {}).length;
         if (unknownCount > 0 && previousUnknownCountRef.current === 0) {
             setActiveTab('unknowns');
         }
         previousUnknownCountRef.current = unknownCount;
-    }, [detectedUnknowns]);
+    }, [normalizedUnknowns]);
 
     const notifyIdMapper = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
         pushNotification({
@@ -384,7 +410,7 @@ export const IdMapper: React.FC = () => {
         const name = nameInputs[id];
         if (name && name.trim()) {
             const trimmed = name.trim();
-            const domain = resolveUnknownDomain(id, detectedUnknowns[id]?.type, trimmed);
+            const domain = resolveUnknownDomain(id, normalizedUnknowns[id]?.type, trimmed);
             applyMappingByDomain(domain, id, trimmed);
             const newInputs = { ...nameInputs };
             delete newInputs[id];
@@ -394,7 +420,7 @@ export const IdMapper: React.FC = () => {
         }
     };
 
-    const handleKnownSave = (entry: { key: string; id: string; name: string; domain: 'players' | 'ships' | 'weapons' | 'equipment' }) => {
+    const handleKnownSave = (entry: { key: string; id: string; name: string; domain: MappingDomain }) => {
         const nextName = (nameInputs[entry.key] || '').trim();
         if (!nextName) return;
         applyMappingByDomain(entry.domain, entry.id, nextName);
@@ -511,7 +537,7 @@ export const IdMapper: React.FC = () => {
             {/* Tabs */}
             <div className="flex gap-1 md3-surface-high p-1 rounded-lg">
                 {[
-                    { id: 'unknowns', label: 'Unknowns', count: Object.keys(detectedUnknowns).length },
+                    { id: 'unknowns', label: 'Unknowns', count: Object.keys(normalizedUnknowns).length },
                     { id: 'known', label: 'Known', count: knownEntries.length },
                     { id: 'relationships', label: 'Relationships', count: Object.keys(playerProfiles).length }
                 ].map(tab => (
@@ -537,7 +563,7 @@ export const IdMapper: React.FC = () => {
                 {/* Unknowns Tab */}
                 {activeTab === 'unknowns' && (
                     <div className="md3-card rounded-lg p-2 max-h-60 overflow-y-auto space-y-2">
-                        {Object.keys(detectedUnknowns).length === 0 ? (
+                        {Object.keys(normalizedUnknowns).length === 0 ? (
                             <div className="text-center p-6 text-label-sm opacity-50 space-y-2">
                                 <div>No unknown IDs detected yet.</div>
                                 <div className="flex items-center justify-center gap-2">
@@ -558,7 +584,7 @@ export const IdMapper: React.FC = () => {
                                 </div>
                             </div>
                         ) : (
-                            Object.entries(detectedUnknowns)
+                            Object.entries(normalizedUnknowns)
                                 .filter(([id, meta]) =>
                                     !searchTerm ||
                                     id.toLowerCase().includes(searchTerm.toLowerCase()) ||

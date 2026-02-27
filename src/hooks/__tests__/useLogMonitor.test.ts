@@ -49,7 +49,7 @@ const appStoreState = {
   telemetryPerformanceProfile: 'balanced',
   matches: [] as Array<Record<string, unknown>>,
   knownMappings: {},
-  uidMappings: { players: {}, ships: {}, weapons: {}, equipment: {} },
+  uidMappings: { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} },
   resetSelectionSourcesForNewMatch: vi.fn(),
   registerUnknownId: vi.fn(),
   setPlayerName: vi.fn(),

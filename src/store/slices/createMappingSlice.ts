@@ -10,6 +10,8 @@
 import { StateCreator } from 'zustand';
 import Logger from '../../utils/logger';
 import { normalizeOcrName } from '../../utils/stringUtils';
+import type { DetectedUnknownMapping, MappingEntityType } from '../../types';
+import { normalizeDetectedUnknownMappings, normalizeSharedUidMappings } from '../../services/mappingContract';
 import {
     OcrAliasContext,
     OcrAliasModel,
@@ -89,12 +91,7 @@ export interface TeamIdentityResolution {
     matched: boolean;
 }
 
-export interface UidMappings {
-    players: Record<string, string>;
-    ships: Record<string, string>;
-    weapons: Record<string, string>;
-    equipment: Record<string, string>;
-}
+export type UidMappings = ReturnType<typeof normalizeSharedUidMappings>;
 
 export interface MappingSlice {
     // Player profiles with relationship tracking
@@ -102,7 +99,7 @@ export interface MappingSlice {
 
     // Legacy mappings (for backwards compatibility)
     knownMappings: Record<string, string>;      // ID -> Name
-    detectedUnknowns: Record<string, { type: 'Hero' | 'Ship' | 'Weapon' | 'Equipment' | 'Unknown'; lastSeen: number }>;
+    detectedUnknowns: Record<string, DetectedUnknownMapping>;
     uidMappings: UidMappings;
     uidSeedVersionApplied: number | null;
 
@@ -162,7 +159,7 @@ export interface MappingSlice {
     // Legacy actions
     addMapping: (id: string, name: string) => void;
     removeMapping: (id: string) => void;
-    registerUnknownId: (id: string, type: 'Hero' | 'Ship' | 'Weapon' | 'Equipment' | 'Unknown') => void;
+    registerUnknownId: (id: string, type: MappingEntityType) => void;
     importMappings: (mappings: Record<string, string>) => void;
     clearUnknowns: () => void;
     setUidMapping: (domain: keyof UidMappings, id: string, name: string) => void;
@@ -276,8 +273,8 @@ const emptyTeamIdentityContexts = (): Record<OcrAliasContext, number> => ({
 export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
     playerProfiles: {},
     knownMappings: {},
-    detectedUnknowns: {},
-    uidMappings: { players: {}, ships: {}, weapons: {}, equipment: {} },
+    detectedUnknowns: normalizeDetectedUnknownMappings(),
+    uidMappings: normalizeSharedUidMappings(),
     uidSeedVersionApplied: null,
     ocrCorrections: {},
     ocrAliasModel: createEmptyOcrAliasModel(),
@@ -805,7 +802,11 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
 
     registerUnknownId: (id, type) => set((state) => {
         if (state.knownMappings[id]) return {};
-        if (state.uidMappings.players[id] || state.uidMappings.ships[id] || state.uidMappings.weapons[id] || state.uidMappings.equipment[id]) return {};
+        if (state.uidMappings.players[id]
+            || state.uidMappings.ships[id]
+            || state.uidMappings.weapons[id]
+            || state.uidMappings.equipment[id]
+            || state.uidMappings.perks[id]) return {};
 
         // Initialize profile if needed
         const existingProfile = state.playerProfiles[id] || createEmptyProfile(id);
@@ -895,12 +896,13 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
     }),
 
     importUidMappings: (mappings) => set((state) => {
-        const merged: UidMappings = {
+        const merged: UidMappings = normalizeSharedUidMappings({
             players: { ...state.uidMappings.players, ...(mappings.players || {}) },
             ships: { ...state.uidMappings.ships, ...(mappings.ships || {}) },
             weapons: { ...state.uidMappings.weapons, ...(mappings.weapons || {}) },
             equipment: { ...state.uidMappings.equipment, ...(mappings.equipment || {}) },
-        };
+            perks: { ...state.uidMappings.perks, ...(mappings.perks || {}) },
+        });
         return {
             uidMappings: merged,
             knownMappings: { ...state.knownMappings, ...(mappings.players || {}) }
