@@ -102,14 +102,24 @@ function mergeLegacyCrewHub(existing, newData) {
       const et = mergedTeams[idx];
       mergedTeams[idx] = {
         ...et,
-        teamName: (nt.teamName?.length || 0) > (et.teamName?.length || 0) ? nt.teamName : et.teamName,
+        teamName: pickPreferredTeamName(
+          et.teamName,
+          nt.teamName,
+          {
+            color: et.color || nt.color,
+            preferCandidate: et.teamNameSource !== 'team_bar' && nt.teamNameSource === 'team_bar',
+          }
+        ),
+        teamNameSource: (nt.teamNameSource === 'team_bar' || !et.teamNameSource)
+          ? (nt.teamNameSource || et.teamNameSource)
+          : et.teamNameSource,
         shipType: et.shipType || nt.shipType,
         color: et.color === 'unknown' ? nt.color : et.color,
         players: capPlayerEntries(mergePlayers(et.players || [], nt.players || [])),
         confidence: Math.round(((et.confidence || 0) + (nt.confidence || 0)) / 2),
       };
     } else if (mergedTeams.length < 4) {
-      mergedTeams.push({ ...nt, players: capPlayerEntries(nt.players || []) });
+      mergedTeams.push({ ...nt, teamNameSource: nt.teamNameSource || 'fallback', players: capPlayerEntries(nt.players || []) });
     }
   }
 
@@ -185,7 +195,22 @@ function crossMergeCrewHubAndMap(crewHub, tactMap) {
       }
     }
 
-    if (shipType) return { ...team, shipType };
+    if (shipType) {
+      const mapShip = (tactMap.opponentTeams || []).find(s => normalizeTeamName(s.teamName) === normalizeTeamName(team.teamName) || (team.color && s.color === team.color));
+      const resolvedTeamName = pickPreferredTeamName(
+        team.teamName,
+        mapShip?.teamName || '',
+        {
+          color: team.color || mapShip?.color || '',
+          preferCandidate: Boolean(team.teamNameSource !== 'team_bar' && mapShip?.teamName),
+        }
+      );
+      return {
+        ...team,
+        teamName: resolvedTeamName,
+        shipType,
+      };
+    }
     return team;
   });
 
@@ -205,7 +230,13 @@ function crossMergeCrewHubAndMap(crewHub, tactMap) {
     ...crewHub,
     screenshotType: 'crew_hub',
     playerShip: crewHub.playerShip || tactMap.playerShip,
-    opponentTeams: enrichedTeams,
+    teammates: mergePlayers(crewHub.teammates || [], tactMap.teammates || []).slice(0, MAX_TEAM_PLAYERS),
+    opponentTeams: enrichedTeams.map(team => {
+      if (!isPlaceholderTeamName(team.teamName, team.color)) return team;
+      const byColor = (tactMap.opponentTeams || []).find(s => s.color && team.color && s.color === team.color && !isPlaceholderTeamName(s.teamName, s.color));
+      if (!byColor?.teamName) return team;
+      return { ...team, teamName: byColor.teamName };
+    }),
     reachModifiers: mergeHazards(crewHub.reachModifiers || [], tactMap.reachModifiers || []),
     captureTimestamp: crewHub.captureTimestamp || tactMap.captureTimestamp,
   };
@@ -274,21 +305,13 @@ function crossMergeInternalCrewAndMap(crew, map) {
     return mapShip ? {
       ...team,
       shipType: mapShip.shipType,
-      // Use crew name unless:
-      //  (a) it's just the color label (OCR fallback), or
-      //  (b) it matches a map ship at a DIFFERENT color (crew OCR misassigned a UI label)
       name: (() => {
         if (isColorLabel) {
-          return mapShip.teamName || team.name;
+          return pickPreferredTeamName(team.name, mapShip.teamName, { color: team.color, preferCandidate: true });
         }
         const normCrewName = normalizeTeamName(team.name);
-        // Check if crew name exactly matches a map team of a DIFFERENT color
-        // (means OCR picked up a neighbouring team's banner label — clear misread).
         const crewNameIsWrongColor = (() => {
-          // Exact: crew name exactly matches a map team at DIFFERENT color
-          if (mapByName.has(normCrewName) && mapByName.get(normCrewName).color !== team.color)
-            return true;
-          // Fuzzy: within 15% Levenshtein of a different-color map team
+          if (mapByName.has(normCrewName) && mapByName.get(normCrewName).color !== team.color) return true;
           if (team.color) {
             for (const [mn, s] of mapByName.entries()) {
               if ((s.color || '') === team.color) continue;
@@ -299,14 +322,8 @@ function crossMergeInternalCrewAndMap(crew, map) {
           }
           return false;
         })();
-        // Prefer map name when it's a superset of the crew name (crew OCR dropped leading words)
-        if (!crewNameIsWrongColor && mapShip.teamName) {
-          const normMapName = normalizeTeamName(mapShip.teamName);
-          if (normMapName.includes(normCrewName) && normMapName.length > normCrewName.length) {
-            return mapShip.teamName;
-          }
-        }
-        return crewNameIsWrongColor ? (mapShip.teamName || team.name) : team.name;
+        const preferMapName = crewNameIsWrongColor || Boolean(team.nameSource !== 'team_bar');
+        return pickPreferredTeamName(team.name, mapShip.teamName, { color: team.color, preferCandidate: preferMapName });
       })(),
     } : team;
   });
@@ -341,7 +358,14 @@ function crossMergeInternalCrewAndMap(crew, map) {
   // Drop artifact enemy teams: unknown-color entries with no map-identified
   // shipType are UI noise (e.g. "Ping at Cursor" / "Toggle Labels" map overlay
   // text that Tesseract read as player cards).
-  const finalEnrichedTeams = enrichedTeams.filter(t => t.color !== 'unknown' || t.shipType);
+  const finalEnrichedTeams = enrichedTeams
+    .map(team => {
+      if (!isPlaceholderTeamName(team.name, team.color)) return team;
+      const mapBySameColor = (map.enemyShips || []).find(s => s.color && team.color && s.color === team.color && !isPlaceholderTeamName(s.teamName, s.color));
+      if (!mapBySameColor?.teamName) return team;
+      return { ...team, name: mapBySameColor.teamName };
+    })
+    .filter(t => t.color !== 'unknown' || t.shipType);
 
   // Cross-enemy dedup: if a player appears in more than one enemy team
   // (e.g. from Y-gap colour inheritance giving a card to the wrong team),
@@ -392,10 +416,7 @@ function crossMergeInternalCrewAndMap(crew, map) {
       ...crew.yourTeam,
       name: yourTeamName,
       shipType: map.yourShip?.shipType || crew.yourTeam?.shipType,
-      // Only supplement from map player list when crew extraction found nobody
-      players: yourPlayersFiltered.length > 0
-        ? yourPlayersFiltered
-        : (crew.yourTeam?.players?.length > 0 ? crew.yourTeam.players : (map.players || [])),
+      players: mergePlayers(yourPlayersFiltered, map.players || []),
     },
     enemyTeams: finalEnrichedTeams,
     hazards: (map.hazards && map.hazards.length > 0) ? map.hazards : (crew.hazards || []),
@@ -503,8 +524,16 @@ function mergeEnemyTeams(existingTeams = [], newTeams = []) {
       const existingTeam = mergedTeams[matchIndex];
 
       // Update team name if new one is longer/more complete
-      if ((newTeam.name?.length || 0) > (existingTeam.name?.length || 0)) {
-        existingTeam.name = newTeam.name;
+      existingTeam.name = pickPreferredTeamName(
+        existingTeam.name,
+        newTeam.name,
+        {
+          color: existingTeam.color || newTeam.color,
+          preferCandidate: existingTeam.nameSource !== 'team_bar' && newTeam.nameSource === 'team_bar',
+        }
+      );
+      if (newTeam.nameSource === 'team_bar' || !existingTeam.nameSource) {
+        existingTeam.nameSource = newTeam.nameSource || existingTeam.nameSource;
       }
 
       // Update color if we didn't have one
@@ -552,6 +581,7 @@ function mergeEnemyTeams(existingTeams = [], newTeams = []) {
         mergedTeams.push({
           ...newTeam,
           name: cleanedName,
+          nameSource: newTeam.nameSource || 'fallback',
           players: capPlayerEntries(newTeam.players || []),
         });
       } else {
@@ -621,6 +651,30 @@ function findMatchingTeam(teams, target) {
 function normalizeTeamName(name) {
   if (!name) return '';
   return name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function isPlaceholderTeamName(name, color = '') {
+  const n = String(name || '').trim().toLowerCase();
+  const c = String(color || '').trim().toLowerCase();
+  if (!n) return true;
+  if (/^enemy team \d+$/i.test(n) || /^team \d+$/i.test(n) || n === 'unknown team') return true;
+  const colorWords = new Set(['red', 'orange', 'yellow', 'yellowgreen', 'green', 'blue', 'purple', 'unknown']);
+  if (colorWords.has(n)) return true;
+  if (c && n === c) return true;
+  return false;
+}
+
+function pickPreferredTeamName(currentName, candidateName, context = {}) {
+  const curr = String(currentName || '').trim();
+  const cand = String(candidateName || '').trim();
+  if (!cand) return curr;
+  if (!curr) return cand;
+  const currPlaceholder = isPlaceholderTeamName(curr, context.color || '');
+  const candPlaceholder = isPlaceholderTeamName(cand, context.color || '');
+  if (currPlaceholder && !candPlaceholder) return cand;
+  if (!currPlaceholder && candPlaceholder) return curr;
+  if (context.preferCandidate) return cand;
+  return cand.length > curr.length ? cand : curr;
 }
 
 /**

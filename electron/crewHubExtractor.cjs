@@ -61,7 +61,7 @@ const LAYOUT = {
   },
   // Enemy player name text typically starts at x≈68% and extends to ~88%
   ENEMY_NAME: {
-    xMin: 0.63,
+    xMin: 0.60,
     xMax: 0.92,
   },
 };
@@ -549,7 +549,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     //   3-4 chars → 15 (e.g. "and", "Riv", "Hoff")
     //   1-2 chars → 20 (icon/glyph noise)
     const tlen = w.text.trim().length;
-    const confFloor = tlen >= 5 ? 10 : tlen >= 3 ? 15 : 20;
+    const confFloor = tlen >= 5 ? 8 : tlen >= 3 ? 12 : 18;
     if ((w.confidence || 0) < confFloor) continue;
     enemyWords.push(w);
   }
@@ -638,7 +638,9 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     const isBarLine = isTeamName(playerName)
       || /^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(playerName)  // ATTACK-O-LANTERN
       || /^T{0,1}TACK(-O)?-LANTERN/i.test(playerName); // garbled variants
-    if (isBarLine) {
+    const linePlayerScore = scoreAsPlayerName(playerName);
+    // Bar-first classification unless a strong player-looking token clearly wins.
+    if (isBarLine && linePlayerScore < 60) {
       if (colorImageBuffer) {
         const rawName = extractRawTeamNameFromLine(line.words);
         if (rawName) {
@@ -965,6 +967,12 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
   // ── Build output ─────────────────────────────────────────────────────────────
   let teamCounter = 1;
   const enemyTeams = [];
+  const isColorWordOnlyName = (name, color) => {
+    if (!name || !color) return false;
+    const n = String(name).trim().toLowerCase();
+    const c = String(color).trim().toLowerCase();
+    return n === c || ['red', 'orange', 'yellow', 'yellowgreen', 'green', 'blue', 'purple', 'unknown'].includes(n);
+  };
 
   for (const cluster of knownGroups) {
     const players = [];
@@ -975,17 +983,61 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     const filteredPlayers = players.filter(p => !isTeamName(p));
     if (filteredPlayers.length === 0) continue;
 
-    const teamName = capturedTeamNames.get(cluster.color)
+    const capturedName = capturedTeamNames.get(cluster.color);
+    let teamName = capturedName
       || (cluster.color !== 'unknown' ? cluster.color : `Team ${teamCounter++}`);
+    const hasAnyCapturedBarName = capturedTeamNames.size > 0;
+    if (hasAnyCapturedBarName && isColorWordOnlyName(teamName, cluster.color)) {
+      teamName = '';
+    }
     if (isSpectatorLine(teamName)) continue;
 
     enemyTeams.push({
-      name: teamName,
+      name: teamName || `Team ${teamCounter++}`,
+      nameSource: capturedName ? 'team_bar' : 'fallback',
       color: cluster.color || 'unknown',
       shipType: '',
       players: filteredPlayers,
       confidence: cluster.confidence || 50,
     });
+  }
+
+  // Under-capture guard: if we found color clusters but too few players, salvage
+  // unmatched valid names and assign them to nearest known-color team by Y.
+  const knownColorTeams = enemyTeams.filter(t => t.color && t.color !== 'unknown');
+  const totalPlayers = enemyTeams.reduce((sum, t) => sum + (t.players?.length || 0), 0);
+  if (knownColorTeams.length > 0 && totalPlayers < Math.max(4, knownColorTeams.length * 2)) {
+    const existingNames = new Set(enemyTeams.flatMap(t => (t.players || []).map(p => normalizeNameKey(p))));
+    const salvageCandidates = groupedLines
+      .map(line => {
+        const name = extractPlayerNameFromLine(line.words);
+        if (!name || !isValidOpponentName(name)) return null;
+        const key = normalizeNameKey(name);
+        if (!key || existingNames.has(key)) return null;
+        return { name, y: line.y };
+      })
+      .filter(Boolean);
+    for (const candidate of salvageCandidates) {
+      let best = null;
+      let bestDist = Number.POSITIVE_INFINITY;
+      for (const team of knownColorTeams) {
+        const yValues = (team.players || [])
+          .map(p => uniqueCards.find(c => normalizeNameKey(c.name) === normalizeNameKey(p))?.y)
+          .filter(v => Number.isFinite(v));
+        const anchorY = yValues.length > 0 ? yValues.reduce((a, b) => a + b, 0) / yValues.length : null;
+        if (!Number.isFinite(anchorY)) continue;
+        const dist = Math.abs(candidate.y - anchorY);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = team;
+        }
+      }
+      if (best && bestDist < CARD_HEIGHT * 2.6) {
+        pushUniquePlayerName(best.players, candidate.name);
+        existingNames.add(normalizeNameKey(candidate.name));
+        dlog('[CrewHub] Under-capture salvage: assigned "' + candidate.name + '" -> ' + best.color);
+      }
+    }
   }
 
   // Sort by player count (most players first), cap at 4 teams

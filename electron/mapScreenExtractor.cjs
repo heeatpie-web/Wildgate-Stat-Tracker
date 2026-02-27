@@ -101,7 +101,7 @@ function sanitizeBounds(input, fallback) {
 
 function resolveMapLayout(layoutOverrides) {
   const source = (layoutOverrides && typeof layoutOverrides === 'object') ? layoutOverrides : {};
-  return {
+  const resolved = {
     YOUR_SHIP: sanitizeBounds(source.yourShip, LAYOUT.YOUR_SHIP),
     ENEMY_SHIPS: sanitizeBounds(source.enemyShips, LAYOUT.ENEMY_SHIPS),
     ENEMY_SHIPS2: sanitizeBounds(source.enemyShips2, LAYOUT.ENEMY_SHIPS2),
@@ -111,6 +111,26 @@ function resolveMapLayout(layoutOverrides) {
     MAP_CENTER: sanitizeBounds(source.mapCenter, LAYOUT.MAP_CENTER),
     PLAYERS: sanitizeBounds(source.players, LAYOUT.PLAYERS),
   };
+  const anchors = (source.__anchors && typeof source.__anchors === 'object') ? source.__anchors : null;
+  if (anchors?.enemyShipsHeaderY != null) {
+    const headerY = Math.max(0, Math.min(1, Number(anchors.enemyShipsHeaderY)));
+    const slotH = 0.105;
+    const slotGap = 0.006;
+    const firstY = Math.max(0, headerY + 0.02);
+    const slots = ['ENEMY_SHIPS', 'ENEMY_SHIPS2', 'ENEMY_SHIPS3', 'ENEMY_SHIPS4'];
+    slots.forEach((slot, idx) => {
+      const yMin = Math.max(0, firstY + idx * (slotH + slotGap));
+      const yMax = Math.min(0.98, yMin + slotH);
+      resolved[slot].yMin = yMin;
+      resolved[slot].yMax = yMax;
+    });
+  }
+  if (anchors?.hazardsHeaderY != null) {
+    const headerY = Math.max(0, Math.min(1, Number(anchors.hazardsHeaderY)));
+    resolved.HAZARDS.yMin = Math.max(0, headerY - 0.01);
+    resolved.HAZARDS.yMax = Math.min(1, headerY + 0.42);
+  }
+  return resolved;
 }
 
 /**
@@ -188,6 +208,9 @@ async function extractMapScreen(imageBuffer, ocrResult, imageWidth, imageHeight,
     enemyShips: [],
     hazards: [],
     players: [],
+    routingMeta: {
+      anchorsUsed: (layoutOverrides && layoutOverrides.__anchors) || null,
+    },
     confidence: 0,
   };
 
@@ -394,114 +417,155 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
     yMax: imageHeight * region.yMax,
   }));
 
-  // Filter words in ENEMY SHIPS region
-  const regionWords = words.filter(w => {
-    if (!w.bbox) return false;
-    const centerX = (w.bbox.x0 + w.bbox.x1) / 2;
-    const centerY = (w.bbox.y0 + w.bbox.y1) / 2;
-    return boundsList.some((bounds) => (
-      centerX >= bounds.xMin && centerX <= bounds.xMax &&
-      centerY >= bounds.yMin && centerY <= bounds.yMax
-    ));
-  });
-
-  // Group into lines and sort by Y
-  const groupedLines = groupWordsIntoLines(regionWords, imageHeight);
-
-  // Process lines looking for team name + ship type pattern
-  let pendingTeamName = '';
-  let pendingColor = 'unknown';
-
-  for (let i = 0; i < groupedLines.length; i++) {
-    const line = groupedLines[i];
-    const lineText = line.words.map(w => w.text).join(' ').trim();
-    const upperText = lineText.toUpperCase();
-
-    // Skip "ENEMY SHIPS" header (and standalone "SHIPS" which can appear alone
-    // in the region and leak into pendingTeamName via looksLikeTeamName).
-    if ((upperText.includes('ENEMY') && upperText.includes('SHIP')) || /^SHIPS?$/.test(upperText)) continue;
-
-    // Detect color for this line
-    const firstWord = line.words[0];
-    if (firstWord && firstWord.bbox && imageBuffer) {
-      try {
-        const colorResult = await detectBadgeColorNearText(imageBuffer, firstWord.bbox, 1);
-        if (colorResult.color !== 'unknown' && colorResult.confidence > 40) {
-          pendingColor = colorResult.color;
-        }
-      } catch (e) {
-        // Continue without color
-      }
-    }
-
-    // Check if this line is a ship type (exact match first, fuzzy fallback for OCR noise)
+  const toTitle = (raw) => String(raw || '')
+    .split(' ')
+    .filter(Boolean)
+    .map(w => w.charAt(0) + w.slice(1).toLowerCase())
+    .join(' ');
+  const findShipType = (upperText) => {
     let foundShip = SHIP_TYPES.find(type => upperText.includes(type));
-    if (!foundShip) {
-      // Fuzzy: OCR sometimes replaces leading char with noise e.g. "(UNTER" for "HUNTER".
-      // Strip one leading non-alpha character from each word and check if the result
-      // is a suffix of exactly one ship type (covering all but the first char).
-      const lineWords = upperText.split(/\s+/);
-      for (const type of SHIP_TYPES) {
-        if (lineWords.some(w => {
-          const stripped = w.replace(/^[^A-Z]/, '');
-          return stripped.length >= 4 && type.endsWith(stripped) && stripped.length >= type.length - 1;
-        })) {
-          foundShip = type;
-          break;
-        }
+    if (foundShip) return foundShip;
+    const lineWords = upperText.split(/\s+/);
+    for (const type of SHIP_TYPES) {
+      if (lineWords.some(w => {
+        const stripped = w.replace(/^[^A-Z]/, '');
+        return stripped.length >= 4 && type.endsWith(stripped) && stripped.length >= type.length - 1;
+      })) {
+        foundShip = type;
+        break;
+      }
+    }
+    return foundShip;
+  };
+
+  const shipWordCandidates = [];
+  const isNoiseTeamLabel = (input) => {
+    const t = String(input || '').toUpperCase().trim();
+    if (!t) return true;
+    if (/KNOWN|HAZARD|FEATURE|ARTIFACT|RESOURCES|WILDGATE|SPECIAL/.test(t)) return true;
+    if (/^ENEMY TEAM \d+$/i.test(t)) return true;
+    return false;
+  };
+
+  for (const w of words || []) {
+    if (!w?.bbox || !w?.text) continue;
+    const cx = (w.bbox.x0 + w.bbox.x1) / 2;
+    const cy = (w.bbox.y0 + w.bbox.y1) / 2;
+    const inEnemyBand = cx >= boundsList[0].xMin && cx <= boundsList[0].xMax && cy >= boundsList[0].yMin && cy <= boundsList[Math.max(1, boundsList.length - 1)].yMax;
+    if (!inEnemyBand) continue;
+    const upper = String(w.text).toUpperCase().trim();
+    const tokenShip = findShipType(upper);
+    if (!tokenShip) continue;
+    shipWordCandidates.push({
+      shipType: toTitle(tokenShip),
+      y: cy,
+      confidence: Number(w.confidence || 0),
+    });
+  }
+
+  for (let slotIdx = 0; slotIdx < boundsList.length; slotIdx++) {
+    const slotBounds = boundsList[slotIdx];
+    const slotWords = words.filter(w => {
+      if (!w?.bbox) return false;
+      const cx = (w.bbox.x0 + w.bbox.x1) / 2;
+      const cy = (w.bbox.y0 + w.bbox.y1) / 2;
+      return cx >= slotBounds.xMin && cx <= slotBounds.xMax && cy >= slotBounds.yMin && cy <= slotBounds.yMax;
+    });
+    if (slotWords.length === 0) continue;
+
+    const groupedLines = groupWordsIntoLines(slotWords, imageHeight);
+    let slotColor = 'unknown';
+    let bestColorConf = -1;
+    if (imageBuffer) {
+      for (const line of groupedLines) {
+        const firstWord = line.words[0];
+        if (!firstWord?.bbox) continue;
+        try {
+          const colorResult = await detectBadgeColorNearText(imageBuffer, firstWord.bbox, 1);
+          if (colorResult.color !== 'unknown' && colorResult.confidence > bestColorConf) {
+            slotColor = colorResult.color;
+            bestColorConf = colorResult.confidence;
+          }
+        } catch (_) {}
       }
     }
 
-    if (foundShip) {
-      // This line has a ship type - extract team name
-      let teamName = pendingTeamName;
-
-      // Locate where the ship type token starts in the line (exact or fuzzy match)
-      let rawShipIdx = upperText.includes(foundShip) ? upperText.indexOf(foundShip) : -1;
-      if (rawShipIdx === -1) {
-        // Fuzzy match: find the word that was matched (one leading noise char)
-        let consumed = 0;
-        for (const w of upperText.split(/(\s+)/)) {
-          const stripped = w.replace(/^[^A-Z]/, '');
-          if (stripped.length >= 4 && foundShip.endsWith(stripped) && stripped.length >= foundShip.length - 1) {
-            rawShipIdx = consumed;
-            break;
-          }
-          consumed += w.length;
+    let foundShip = '';
+    let teamName = '';
+    let confidence = 55;
+    for (const line of groupedLines) {
+      const lineText = line.words.map(w => String(w.text || '').trim()).join(' ').trim();
+      const upperText = lineText.toUpperCase();
+      if (!upperText || /^ENEMY(\s+SHIPS?)?$/.test(upperText) || /^SHIPS?$/.test(upperText)) continue;
+      const ship = findShipType(upperText);
+      if (!ship) {
+        if (!teamName && lineText.length >= 2 && lineText.length <= 34 && looksLikeTeamName(upperText)) {
+          teamName = formatTeamName(upperText);
+          confidence = Math.max(confidence, 66);
         }
-        if (rawShipIdx === -1) rawShipIdx = 0;
+        continue;
       }
+      foundShip = ship;
+      let lineTeam = '';
+      let rawShipIdx = upperText.includes(foundShip) ? upperText.indexOf(foundShip) : -1;
+      if (rawShipIdx < 0) rawShipIdx = 0;
       const beforeShip = upperText.substring(0, rawShipIdx).trim();
-      if (beforeShip.length >= 2) {
-        teamName = formatTeamName(beforeShip);
-      }
-      // Also capture text AFTER the ship type — OCR sometimes reads the card as
-      // e.g. "DUBIOUS HUNTER REFLECTION" where the second word of the team name
-      // appears after the ship type token.
       const afterShip = upperText.substring(rawShipIdx + foundShip.length).trim();
+      if (beforeShip.length >= 2) lineTeam = formatTeamName(beforeShip);
       if (afterShip.length >= 3 && looksLikeTeamName(afterShip)) {
-        teamName = teamName ? teamName + ' ' + formatTeamName(afterShip) : formatTeamName(afterShip);
+        lineTeam = lineTeam ? `${lineTeam} ${formatTeamName(afterShip)}` : formatTeamName(afterShip);
       }
+      if (lineTeam && (!teamName || lineTeam.length > teamName.length)) {
+        teamName = lineTeam;
+      }
+      confidence = Math.max(confidence, teamName ? 82 : 70);
+      break;
+    }
 
+    if (!foundShip) {
+      const joinedUpper = groupedLines
+        .map(line => line.words.map(w => String(w.text || '').trim()).join(' ').trim())
+        .filter(Boolean)
+        .join(' ')
+        .toUpperCase();
+      foundShip = findShipType(joinedUpper) || '';
+      if (foundShip && !teamName && looksLikeTeamName(joinedUpper.replace(foundShip, ' ').trim())) {
+        teamName = formatTeamName(joinedUpper.replace(foundShip, ' ').trim());
+      }
+      if (foundShip) confidence = Math.max(confidence, teamName ? 74 : 62);
+    }
+
+    const likelyEnemySlot = slotIdx <= 1 || Boolean(foundShip);
+    if (likelyEnemySlot && (foundShip || teamName) && !isNoiseTeamLabel(teamName)) {
       enemyShips.push({
         teamName: teamName || `Enemy Team ${enemyShips.length + 1}`,
-        shipType: foundShip.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' '),
-        color: pendingColor,
-        confidence: teamName ? 80 : 60,
+        shipType: foundShip ? toTitle(foundShip) : 'Unknown',
+        color: slotColor,
+        confidence,
+        _slotIndex: slotIdx,
+        _slotCenterY: (slotBounds.yMin + slotBounds.yMax) / 2,
       });
+    }
+  }
 
-      // Reset pending values
-      pendingTeamName = '';
-      pendingColor = 'unknown';
-    } else if (lineText.length >= 2 && lineText.length <= 30) {
-      // This might be a team name (for next ship type line)
-      // Also accept short all-caps words like "NO" / "GO" as valid team name prefix words
-      if (looksLikeTeamName(lineText) || /^[A-Z]{2,3}$/.test(lineText)) {
-        const formatted = formatTeamName(lineText);
-        // Accumulate consecutive team-name lines so multi-word names spread across
-        // two OCR lines (e.g. "DUBIOUS" then "REFLECTION") are joined correctly.
-        pendingTeamName = pendingTeamName ? pendingTeamName + ' ' + formatted : formatted;
+  const usedCandidateIdx = new Set();
+  for (const ship of enemyShips) {
+    if (ship.shipType && ship.shipType !== 'Unknown') continue;
+    let bestIdx = -1;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < shipWordCandidates.length; i++) {
+      if (usedCandidateIdx.has(i)) continue;
+      const candidate = shipWordCandidates[i];
+      const dist = Math.abs((ship._slotCenterY || 0) - candidate.y);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
       }
+    }
+    if (bestIdx >= 0 && bestDist < imageHeight * 0.08) {
+      ship.shipType = shipWordCandidates[bestIdx].shipType;
+      ship.confidence = Math.max(ship.confidence || 0, 70);
+      usedCandidateIdx.add(bestIdx);
     }
   }
 
@@ -555,7 +619,7 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
     }
   }
 
-  return enemyShips;
+  return enemyShips.map(({ _slotIndex, _slotCenterY, ...rest }) => rest);
 }
 
 /**

@@ -25,7 +25,7 @@ const {
   cleanupPlayerName: cleanupCrewHubPlayerName,
   isValidPlayerName: isValidCrewHubPlayerName,
 } = require('./crewHubExtractor.cjs');
-const { extractMapScreen, extractPlayerList, KNOWN_HAZARDS } = require('./mapScreenExtractor.cjs');
+const { extractMapScreen, extractPlayerList, KNOWN_HAZARDS, SHIP_TYPES: MAP_SHIP_TYPES, looksLikeTeamName: looksLikeMapTeamName } = require('./mapScreenExtractor.cjs');
 const { mergeCaptures, isSameMatch } = require('./ocrMerger.cjs');
 const gcloudService = require('./gcloudService.cjs');
 const gcloudSyncService = require('./gcloudSyncService.cjs');
@@ -137,7 +137,9 @@ function createDefaultOcrRegions() {
     crewHub: {
       leftPanel: { xMin: 0.0, xMax: 0.36, yMin: 0.10, yMax: 0.80 },
       rightPanel: { xMin: 0.45, xMax: 1.0, yMin: 0.10, yMax: 0.90 },
+      enemyPanel: { xMin: 0.55, xMax: 1.0, yMin: 0.08, yMax: 0.95 },
       teamHeader: { xMin: 0.10, xMax: 0.45, yMin: 0.17, yMax: 0.23 },
+      enemyName: { xMin: 0.63, xMax: 0.92, yMin: 0.08, yMax: 0.95 },
       enemyRow1TeamName: { xMin: 0.52, xMax: 0.74, yMin: 0.16, yMax: 0.23 },
       enemyRow1Players: { xMin: 0.74, xMax: 0.98, yMin: 0.16, yMax: 0.23 },
       enemyRow2TeamName: { xMin: 0.52, xMax: 0.74, yMin: 0.27, yMax: 0.34 },
@@ -194,8 +196,10 @@ function sanitizeOcrRegions(input) {
   return {
     crewHub: {
       leftPanel: sanitizeRegionBounds(crewHub.leftPanel, defaults.crewHub.leftPanel),
-      rightPanel: sanitizeRegionBounds(crewHub.rightPanel, defaults.crewHub.rightPanel),
+      rightPanel: sanitizeRegionBounds(crewHub.rightPanel || crewHub.enemyPanel, defaults.crewHub.rightPanel),
+      enemyPanel: sanitizeRegionBounds(crewHub.enemyPanel || crewHub.rightPanel, defaults.crewHub.enemyPanel),
       teamHeader: sanitizeRegionBounds(crewHub.teamHeader, defaults.crewHub.teamHeader),
+      enemyName: sanitizeRegionBounds(crewHub.enemyName, defaults.crewHub.enemyName),
       enemyRow1TeamName: sanitizeRegionBounds(crewHub.enemyRow1TeamName, defaults.crewHub.enemyRow1TeamName),
       enemyRow1Players: sanitizeRegionBounds(crewHub.enemyRow1Players, defaults.crewHub.enemyRow1Players),
       enemyRow2TeamName: sanitizeRegionBounds(crewHub.enemyRow2TeamName, defaults.crewHub.enemyRow2TeamName),
@@ -215,6 +219,125 @@ function sanitizeOcrRegions(input) {
       players: sanitizeRegionBounds(mapScreen.players, defaults.mapScreen.players),
     },
   };
+}
+
+function cloneRegions(regions) {
+  return JSON.parse(JSON.stringify(regions || createDefaultOcrRegions()));
+}
+
+function clampNormalizedWindow(center, size, min = 0, max = 1) {
+  const half = Math.max(0.005, size / 2);
+  let start = Math.max(min, center - half);
+  let end = Math.min(max, center + half);
+  if (end <= start) {
+    end = Math.min(max, start + 0.01);
+  }
+  return { start, end };
+}
+
+function findHeaderAnchorY(words, regexes = [], xMin = 0, xMax = 1, yMin = 0, yMax = 1) {
+  if (!Array.isArray(words) || words.length === 0 || !Array.isArray(regexes) || regexes.length === 0) {
+    return null;
+  }
+  const candidates = words.filter(w => {
+    if (!w?.bbox || !w?.text) return false;
+    const cx = (w.bbox.x0 + w.bbox.x1) / 2;
+    const cy = (w.bbox.y0 + w.bbox.y1) / 2;
+    if (cx < xMin || cx > xMax || cy < yMin || cy > yMax) return false;
+    const t = String(w.text || '').toUpperCase().replace(/[^A-Z]/g, '');
+    return regexes.some(rx => rx.test(t));
+  });
+  if (candidates.length === 0) return null;
+  return candidates.reduce((best, w) => {
+    const conf = Number(w.confidence || 0);
+    if (!best || conf > best.conf) {
+      return { conf, y: (w.bbox.y0 + w.bbox.y1) / 2 };
+    }
+    return best;
+  }, null)?.y || null;
+}
+
+function deriveRuntimeAnchors(screenType, ocrResult, processed, ocrRegions) {
+  const words = ocrResult?.allWords || ocrResult?.words || [];
+  if (!Array.isArray(words) || words.length === 0 || !processed?.width || !processed?.height) {
+    return null;
+  }
+  const width = processed.width;
+  const height = processed.height;
+  const anchors = { screenType, crewHub: {}, mapScreen: {} };
+
+  if (screenType === SCREEN_TYPES.MAP_SCREEN) {
+    const rightXMin = width * (ocrRegions?.mapScreen?.enemyShips?.xMin || 0.79);
+    const rightXMax = width * 1.0;
+    const enemyHeaderY = findHeaderAnchorY(
+      words,
+      [/^ENEMY$/, /^SHIPS?$/],
+      rightXMin,
+      rightXMax,
+      0,
+      height * 0.25
+    );
+    const hazardsHeaderY = findHeaderAnchorY(
+      words,
+      [/^KNOWN$/, /^HAZARDS?$/],
+      rightXMin,
+      width,
+      height * 0.18,
+      height * 0.75
+    );
+    if (enemyHeaderY != null) anchors.mapScreen.enemyShipsHeaderY = enemyHeaderY / height;
+    if (hazardsHeaderY != null) anchors.mapScreen.hazardsHeaderY = hazardsHeaderY / height;
+  } else if (screenType === SCREEN_TYPES.CREW_HUB) {
+    const rightPanel = ocrRegions?.crewHub?.enemyPanel || ocrRegions?.crewHub?.rightPanel || { xMin: 0.55, xMax: 1.0, yMin: 0.08, yMax: 0.95 };
+    const enemyCrewsY = findHeaderAnchorY(
+      words,
+      [/^ENEMY$/, /^CREWS?$/],
+      width * rightPanel.xMin,
+      width * rightPanel.xMax,
+      height * 0.05,
+      height * 0.35
+    );
+    if (enemyCrewsY != null) anchors.crewHub.enemyPanelTopY = enemyCrewsY / height;
+  }
+
+  if (Object.keys(anchors.mapScreen).length === 0 && Object.keys(anchors.crewHub).length === 0) {
+    return null;
+  }
+  return anchors;
+}
+
+function applyRuntimeAnchors(ocrRegions, anchors) {
+  if (!anchors) return cloneRegions(ocrRegions);
+  const next = cloneRegions(ocrRegions);
+
+  if (anchors.mapScreen?.enemyShipsHeaderY != null) {
+    const headerY = anchors.mapScreen.enemyShipsHeaderY;
+    const slotHeight = 0.105;
+    const slotGap = 0.006;
+    const firstStart = Math.max(0, headerY + 0.02);
+    const keys = ['enemyShips', 'enemyShips2', 'enemyShips3', 'enemyShips4'];
+    keys.forEach((key, idx) => {
+      const start = firstStart + idx * (slotHeight + slotGap);
+      const { start: yMin, end: yMax } = clampNormalizedWindow(start + (slotHeight / 2), slotHeight, 0, 0.98);
+      next.mapScreen[key].yMin = yMin;
+      next.mapScreen[key].yMax = yMax;
+    });
+  }
+
+  if (anchors.mapScreen?.hazardsHeaderY != null) {
+    const headerY = anchors.mapScreen.hazardsHeaderY;
+    next.mapScreen.hazards.yMin = Math.max(0, headerY - 0.01);
+    next.mapScreen.hazards.yMax = Math.min(1, headerY + 0.42);
+  }
+
+  if (anchors.crewHub?.enemyPanelTopY != null) {
+    const top = Math.max(0.05, anchors.crewHub.enemyPanelTopY + 0.02);
+    next.crewHub.enemyPanel.yMin = top;
+    next.crewHub.rightPanel.yMin = top;
+    next.crewHub.enemyName.yMin = top;
+  }
+
+  return next;
 }
 
 function getOcrRegionsCacheFingerprint(ocrRegions) {
@@ -2071,6 +2194,9 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
 
     // Extract based on screen type
     let extractedData = null;
+    const runtimeAnchors = deriveRuntimeAnchors(screenDetection.type, ocrResult, processed, ocrRegions);
+    const activeRegions = applyRuntimeAnchors(ocrRegions, runtimeAnchors);
+    const targetedRetries = [];
 
     if (screenDetection.type === SCREEN_TYPES.CREW_HUB) {
       console.log('[OCR] Processing as CREW HUB');
@@ -2087,8 +2213,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         console.warn('[OCR-CrewHub] Eng-only full-image pass failed:', e.message);
       }
 
-      const nameBandXMin = (ocrRegions.crewHub?.enemyName?.xMin || 0.62) * processed.width;
-      const nameBandXMax = (ocrRegions.crewHub?.enemyName?.xMax || 0.93) * processed.width;
+      const nameBandXMin = (activeRegions.crewHub?.enemyName?.xMin || 0.62) * processed.width;
+      const nameBandXMax = (activeRegions.crewHub?.enemyName?.xMax || 0.93) * processed.width;
       const engOnlyWords = engOnlyFullResult?.allWords || [];
       // runOCR() and mergeOCRResults() return { words } not { allWords };
       // only runOCREngOnly() returns allWords. Fall back to .words to avoid crash.
@@ -2220,7 +2346,10 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           const RSC    = 3;
           const SLICE_H = 65;
           const STEP    = 65;
-          const rowSliceYStart = 241;
+          const rowSliceYStart = Math.max(
+            160,
+            Math.round(origH2 * (activeRegions.crewHub?.enemyName?.yMin || 0.08)) + 20
+          );
           const rowSliceYEnd   = Math.round(origH2 * 0.83);
           let rowWordCount = 0;
           for (let sy = rowSliceYStart; sy < rowSliceYEnd; sy += STEP) {
@@ -2294,7 +2423,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         try {
           const origW = Math.round(processed.width / processed.scale);
           const origH = Math.round(processed.height / processed.scale);
-          const th = ocrRegions.crewHub?.teamHeader || { xMin: 0.10, xMax: 0.45, yMin: 0.17, yMax: 0.23 };
+          const th = activeRegions.crewHub?.teamHeader || { xMin: 0.10, xMax: 0.45, yMin: 0.17, yMax: 0.23 };
           const bannerX1 = Math.round(origW * th.xMin);
           const bannerX2 = Math.round(origW * th.xMax);
           const bannerY1 = Math.round(origH * th.yMin);
@@ -2406,7 +2535,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         processed.height,
         processed.scale, // OCR words are on preprocessed/scaled image coordinates
         imageBuffer, // keep color detection on original-color pixels
-        ocrRegions.crewHub
+        activeRegions.crewHub
       );
 
       // Convert to legacy format for backwards compatibility
@@ -2415,7 +2544,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     } else if (screenDetection.type === SCREEN_TYPES.MAP_SCREEN) {
       console.log('[OCR] Processing as MAP SCREEN');
 
-      const PLAYER_REGION = ocrRegions.mapScreen.players;
+      const PLAYER_REGION = activeRegions.mapScreen.players;
       if (imageBuffer) {
         console.log('[OCR-Region] Running region-specific OCR for map teammate list');
       }
@@ -2425,7 +2554,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           ocrResult,
           processed.width,
           processed.height,
-          ocrRegions.mapScreen
+          activeRegions.mapScreen
         ),
         imageBuffer
           ? cropRegionAndOCR(
@@ -2438,6 +2567,84 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           )
           : Promise.resolve(null),
       ]);
+
+      const missingYourShip = !mapScreenData?.yourShip?.shipType;
+      const missingEnemySlots = (mapScreenData?.enemyShips || [])
+        .map((ship, idx) => ({ ship, idx }))
+        .filter(({ ship }) => !ship?.shipType || String(ship.shipType).toLowerCase() === 'unknown');
+      if (imageBuffer && (missingYourShip || missingEnemySlots.length > 0)) {
+        const retryRegions = missingYourShip
+          ? ['yourShip']
+          : [];
+        for (const m of missingEnemySlots) {
+          const key = ['enemyShips', 'enemyShips2', 'enemyShips3', 'enemyShips4'][m.idx];
+          if (key) retryRegions.push(key);
+        }
+
+        for (const key of retryRegions) {
+          const region = activeRegions.mapScreen[key];
+          if (!region) continue;
+          const retryEntry = { slot: key, accepted: false, reason: 'no_improvement' };
+          const retryResult = await cropRegionAndOCR(
+            imageBuffer,
+            region,
+            processed.originalWidth,
+            processed.originalHeight,
+            6,
+            fontProfile
+          );
+          const retryWords = retryResult?.words || [];
+          const retryText = groupCrewHubWordsIntoLines(retryWords, processed.originalHeight)
+            .map(line => line.words.map(w => String(w.text || '').trim()).join(' ').trim())
+            .filter(Boolean)
+            .join(' ')
+            .toUpperCase();
+          const shipTypeRaw = MAP_SHIP_TYPES.find(type => retryText.includes(type))
+            || MAP_SHIP_TYPES.find(type => retryText.split(/\s+/).some(tok => {
+              const stripped = tok.replace(/^[^A-Z]/, '');
+              return stripped.length >= 4 && type.endsWith(stripped) && stripped.length >= type.length - 1;
+            }));
+          const shipType = shipTypeRaw
+            ? shipTypeRaw.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ')
+            : '';
+          const teamText = retryText
+            .replace(new RegExp(`\\b(${MAP_SHIP_TYPES.join('|')})\\b`, 'g'), ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          const teamName = teamText && looksLikeMapTeamName(teamText)
+            ? teamText.split(' ').map(s => s.charAt(0) + s.slice(1).toLowerCase()).join(' ')
+            : '';
+
+          if (key === 'yourShip') {
+            if (shipType && !mapScreenData?.yourShip?.shipType) {
+              mapScreenData.yourShip = {
+                ...(mapScreenData.yourShip || { teamName: teamName || 'Your Team' }),
+                teamName: mapScreenData?.yourShip?.teamName || teamName || 'Your Team',
+                shipType,
+                confidence: Math.max(74, Number(mapScreenData?.yourShip?.confidence || 0)),
+              };
+              retryEntry.accepted = true;
+              retryEntry.reason = 'ship_type_recovered';
+            }
+          } else {
+            const idx = ['enemyShips', 'enemyShips2', 'enemyShips3', 'enemyShips4'].indexOf(key);
+            if (idx >= 0 && mapScreenData.enemyShips?.[idx]) {
+              const existingShip = mapScreenData.enemyShips[idx];
+              if (shipType && (!existingShip.shipType || String(existingShip.shipType).toLowerCase() === 'unknown')) {
+                mapScreenData.enemyShips[idx] = {
+                  ...existingShip,
+                  shipType,
+                  teamName: existingShip.teamName || teamName || existingShip.teamName,
+                  confidence: Math.max(72, Number(existingShip.confidence || 0)),
+                };
+                retryEntry.accepted = true;
+                retryEntry.reason = 'ship_type_recovered';
+              }
+            }
+          }
+          targetedRetries.push(retryEntry);
+        }
+      }
 
       // Convert to legacy format
       extractedData = convertMapScreenToLegacy(mapScreenData, ocrResult.text);
@@ -2465,7 +2672,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           regionResult.words,
           processed.originalWidth,
           processed.originalHeight,
-          ocrRegions.mapScreen
+          activeRegions.mapScreen
         );
         const existingCount = (extractedData.teammates || []).length;
         if (regionPlayers.length > 0) {
@@ -2495,7 +2702,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         processed.height,
         processed.scale, // OCR words are on preprocessed/scaled image coordinates
         imageBuffer, // keep color detection on original-color pixels
-        ocrRegions.crewHub
+        activeRegions.crewHub
       );
 
       const mapScreenData = await extractMapScreen(
@@ -2503,7 +2710,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         ocrResult,
         processed.width,
         processed.height,
-        ocrRegions.mapScreen
+        activeRegions.mapScreen
       );
 
       // Use whichever has more data
@@ -2597,7 +2804,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       if (extractedData.screenshotType === 'tactical_map') {
         const rerouteResult = await cropRegionAndOCR(
           imageBuffer,
-          ocrRegions.mapScreen.players,
+          activeRegions.mapScreen.players,
           processed.originalWidth,
           processed.originalHeight,
           11,
@@ -2608,7 +2815,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
             rerouteResult.words,
             processed.originalWidth,
             processed.originalHeight,
-            ocrRegions.mapScreen
+            activeRegions.mapScreen
           )
           : [];
         if (Array.isArray(routedPlayers) && routedPlayers.length > 0) {
@@ -2629,7 +2836,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       } else if (extractedData.screenshotType === 'crew_hub') {
         const teammateRegionResult = await cropRegionAndOCR(
           imageBuffer,
-          ocrRegions.crewHub.leftPanel,
+          activeRegions.crewHub.leftPanel,
           processed.originalWidth,
           processed.originalHeight,
           7,
@@ -2644,10 +2851,10 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           : [];
 
         const enemyRegions = [
-          ocrRegions.crewHub.enemyRow1Players,
-          ocrRegions.crewHub.enemyRow2Players,
-          ocrRegions.crewHub.enemyRow3Players,
-          ocrRegions.crewHub.enemyRow4Players,
+          activeRegions.crewHub.enemyRow1Players,
+          activeRegions.crewHub.enemyRow2Players,
+          activeRegions.crewHub.enemyRow3Players,
+          activeRegions.crewHub.enemyRow4Players,
         ];
         const routedOpponentByIndex = [];
         for (let idx = 0; idx < enemyRegions.length; idx += 1) {
@@ -2772,6 +2979,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       postNameConfidence: Number.isFinite(routingDebug.postNameConfidence) ? routingDebug.postNameConfidence : 0,
       latencyMs: Number.isFinite(routingDebug.latencyMs) ? routingDebug.latencyMs : 0,
       fontProfile: routingDebug.fontProfile === 'ealing-black-italic' ? 'ealing-black-italic' : 'default',
+      anchorsUsed: runtimeAnchors || null,
+      targetedRetries,
     };
     if (cloudFailureReason) {
       extractedData.ocrCloudError = cloudFailureReason;
@@ -2871,6 +3080,7 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
 
   const opponentTeams = (crewHubData.enemyTeams || []).slice(0, 4).map(team => ({
     teamName: team.name || 'Unknown Team',
+    teamNameSource: team.nameSource || 'fallback',
     shipType: team.shipType || '',
     color: team.color || 'unknown',
     players: capPlayers((team.players || []).map(p => ({
@@ -2960,6 +3170,7 @@ function convertMapScreenToLegacy(mapScreenData, rawText) {
     opponentTeams,
     reachModifiers: [...extractModifiers(rawText), ...hazardMods],
     hazards: mapScreenData.hazards || [],
+    mapRoutingMeta: mapScreenData.routingMeta || null,
     overallConfidence,
     captureTimestamp: Date.now(),
     rawText: rawText || '',
