@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { Activity, ChevronLeft, ChevronRight, Gauge, Palette, SlidersHorizontal, Moon, User, Volume2 } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
@@ -6,6 +6,7 @@ import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useAppStore } from '../store/useAppStore';
+import { getElectronAPI } from '../utils/electronAPI';
 
 const THEMES = [
     { id: 'ocean',      color: 'var(--theme-ocean)',      label: 'Ocean' },
@@ -24,7 +25,9 @@ const APPEARANCE_MODES = [
     { id: 'system'   as const, label: 'System' },
 ];
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
+
+type HealthStatus = 'idle' | 'running' | 'pass' | 'warn' | 'fail';
 
 export const SetupWizard: React.FC = () => {
     const {
@@ -52,13 +55,21 @@ export const SetupWizard: React.FC = () => {
     const telemetryPerformanceProfile = useAppStore(s => s.telemetryPerformanceProfile);
     const setTelemetryPerformanceProfile = useAppStore(s => s.setTelemetryPerformanceProfile);
 
-    const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
+    const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6 | 7>(1);
     const [callsign, setCallsign] = useState('');
     const [callsignError, setCallsignError] = useState('');
     const [systemPrefersDark, setSystemPrefersDark] = useState(() => {
         if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
         return window.matchMedia('(prefers-color-scheme: dark)').matches;
     });
+    const [storageStatus, setStorageStatus] = useState<HealthStatus>('idle');
+    const [storageDetail, setStorageDetail] = useState('Not checked yet.');
+    const [backupStatus, setBackupStatus] = useState<HealthStatus>('idle');
+    const [backupDetail, setBackupDetail] = useState('Not checked yet.');
+    const [captureStatus, setCaptureStatus] = useState<HealthStatus>('idle');
+    const [captureDetail, setCaptureDetail] = useState('Run test capture to verify screenshot access.');
+    const [runningChecks, setRunningChecks] = useState(false);
+    const [creatingBackup, setCreatingBackup] = useState(false);
 
     const focusTrapRef = useFocusTrap<HTMLDivElement>(showSetupWizard);
     const dialogTitleId = useId();
@@ -96,8 +107,106 @@ export const SetupWizard: React.FC = () => {
         setShowSetupWizard(false);
     };
 
-    const goNextStep = () => setStep((s) => Math.min(TOTAL_STEPS, s + 1) as 1 | 2 | 3 | 4 | 5 | 6);
-    const goPrevStep = () => setStep((s) => Math.max(1, s - 1) as 1 | 2 | 3 | 4 | 5 | 6);
+    const goNextStep = () => setStep((s) => Math.min(TOTAL_STEPS, s + 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7);
+    const goPrevStep = () => setStep((s) => Math.max(1, s - 1) as 1 | 2 | 3 | 4 | 5 | 6 | 7);
+
+    const toTimeLabel = (value: number | null | undefined) => {
+        if (!Number.isFinite(Number(value)) || Number(value) <= 0) return 'Never';
+        try {
+            return new Date(Number(value)).toLocaleString();
+        } catch {
+            return 'Unknown';
+        }
+    };
+
+    const statusToneClass = (status: HealthStatus) => {
+        if (status === 'pass') return 'text-success';
+        if (status === 'warn') return 'text-warning';
+        if (status === 'fail') return 'text-md-sys-error';
+        return 'opacity-70';
+    };
+
+    const runChecks = useCallback(async () => {
+        const api = getElectronAPI();
+        if (!api) return;
+        setRunningChecks(true);
+        setStorageStatus('running');
+        setBackupStatus('running');
+        try {
+            const status = await api.invoke('db-status') as any;
+            if (status?.ok) {
+                if (status.walExists) {
+                    setStorageStatus('warn');
+                    setStorageDetail('Storage writable, but recovery WAL exists. App will replay it automatically.');
+                } else {
+                    setStorageStatus('pass');
+                    setStorageDetail(`Storage healthy. Last DB write: ${toTimeLabel(status.dbMtime)}`);
+                }
+                if (Number(status.lastBackupMtime || 0) > 0) {
+                    setBackupStatus('pass');
+                    setBackupDetail(`Latest backup: ${toTimeLabel(status.lastBackupMtime || 0)}`);
+                } else {
+                    setBackupStatus('warn');
+                    setBackupDetail('No backup file found yet. Create one now to verify backup permissions.');
+                }
+            } else {
+                setStorageStatus('fail');
+                setStorageDetail(`Storage check failed: ${status?.error || 'Unknown error'}`);
+                setBackupStatus('warn');
+                setBackupDetail('Backup status unknown until storage check succeeds.');
+            }
+        } catch (error) {
+            setStorageStatus('fail');
+            setStorageDetail(`Storage check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            setBackupStatus('warn');
+            setBackupDetail('Backup status unknown until storage check succeeds.');
+        } finally {
+            setRunningChecks(false);
+        }
+    }, []);
+
+    const runCaptureTest = useCallback(async () => {
+        const api = getElectronAPI();
+        if (!api) return;
+        setCaptureStatus('running');
+        setCaptureDetail('Capturing game window...');
+        try {
+            const dataUrl = await api.invoke('capture-screen');
+            if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
+                setCaptureStatus('pass');
+                setCaptureDetail('Capture test passed. Screenshot access is working.');
+            } else {
+                setCaptureStatus('fail');
+                setCaptureDetail('Capture test failed. Keep game window visible and try again.');
+            }
+        } catch (error) {
+            setCaptureStatus('fail');
+            setCaptureDetail(`Capture test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }, []);
+
+    const createBackupNow = useCallback(async () => {
+        const api = getElectronAPI();
+        if (!api) return;
+        setCreatingBackup(true);
+        setBackupStatus('running');
+        setBackupDetail('Creating manual backup...');
+        try {
+            const result = await api.invoke('db-backup') as any;
+            if (result?.success) {
+                setBackupStatus('pass');
+                setBackupDetail(`Backup created: ${result.path || 'Documents/Wildgate Stat Tracker/Backups'}`);
+            } else {
+                setBackupStatus('fail');
+                setBackupDetail(`Backup failed: ${result?.error || 'Unknown error'}`);
+            }
+        } catch (error) {
+            setBackupStatus('fail');
+            setBackupDetail(`Backup failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setCreatingBackup(false);
+        }
+    }, []);
 
     useKeyboardShortcuts([
         {
@@ -150,7 +259,7 @@ export const SetupWizard: React.FC = () => {
 
                     {/* Step dots */}
                     <div className="flex items-center gap-1.5" aria-hidden="true">
-                        {[1, 2, 3, 4, 5, 6].map((s) => (
+                        {[1, 2, 3, 4, 5, 6, 7].map((s) => (
                             <div
                                 key={s}
                                 className={`h-1.5 rounded-full transition-all duration-300 ${
@@ -425,6 +534,62 @@ export const SetupWizard: React.FC = () => {
                                     className={`w-11 h-6 rounded-full transition-colors ${performanceMode ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
                                 >
                                     <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${performanceMode ? 'translate-x-5' : ''}`} />
+                                </button>
+                            </div>
+
+                        </div>
+                    )}
+
+                    {/* Step 7: Health checks */}
+                    {step === 7 && (
+                        <div className="animate-fade-in">
+                            <div className="flex items-center gap-2 mb-1">
+                                <Activity size={18} className="text-md-sys-primary" />
+                                <h2 className="text-title font-bold uppercase">System Health Check</h2>
+                            </div>
+                            <p className="text-label-sm opacity-60 uppercase tracking-widest mb-5">
+                                Verify storage, backups, and capture before launch
+                            </p>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="md3-surface-high/60 border border-md-sys-outline/10 rounded-card p-3">
+                                    <div className="text-label-sm font-bold uppercase">Data Storage</div>
+                                    <p className={`text-label-sm mt-1 ${statusToneClass(storageStatus)}`}>{storageDetail}</p>
+                                </div>
+                                <div className="md3-surface-high/60 border border-md-sys-outline/10 rounded-card p-3">
+                                    <div className="text-label-sm font-bold uppercase">Backups</div>
+                                    <p className={`text-label-sm mt-1 ${statusToneClass(backupStatus)}`}>{backupDetail}</p>
+                                </div>
+                                <div className="md3-surface-high/60 border border-md-sys-outline/10 rounded-card p-3 md:col-span-2">
+                                    <div className="text-label-sm font-bold uppercase">Screen Capture</div>
+                                    <p className={`text-label-sm mt-1 ${statusToneClass(captureStatus)}`}>{captureDetail}</p>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2 mt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => void runChecks()}
+                                    disabled={runningChecks}
+                                    className="md3-btn-outlined px-3 py-2 text-label-sm font-bold uppercase disabled:opacity-disabled"
+                                >
+                                    {runningChecks ? 'Running Checks...' : 'Run Storage Checks'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void createBackupNow()}
+                                    disabled={creatingBackup}
+                                    className="md3-btn-tonal px-3 py-2 text-label-sm font-bold uppercase disabled:opacity-disabled"
+                                >
+                                    {creatingBackup ? 'Creating Backup...' : 'Create Backup Now'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void runCaptureTest()}
+                                    disabled={captureStatus === 'running'}
+                                    className="md3-btn-tonal px-3 py-2 text-label-sm font-bold uppercase disabled:opacity-disabled"
+                                >
+                                    {captureStatus === 'running' ? 'Testing Capture...' : 'Test Capture'}
                                 </button>
                             </div>
                         </div>

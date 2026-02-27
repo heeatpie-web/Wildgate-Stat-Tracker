@@ -241,6 +241,7 @@ const App: React.FC = () => {
     const restorePromptCheckedRef = React.useRef(false);
     const onboardingPromptedRef = React.useRef(false);
     const startupHealthPromptedRef = React.useRef(false);
+    const setupWizardShownThisLaunchRef = React.useRef(false);
     const fuzzyPromptCountRef = React.useRef(0);
     const idPromptCountRef = React.useRef(0);
     const setTutorialCompleted = useAppStore(s => s.setTutorialCompleted);
@@ -598,6 +599,12 @@ const App: React.FC = () => {
     }, [activeUser, isStoreLoading, players, showSetupWizard, setShowSetupWizard]);
 
     useEffect(() => {
+        if (showSetupWizard) {
+            setupWizardShownThisLaunchRef.current = true;
+        }
+    }, [showSetupWizard]);
+
+    useEffect(() => {
         if (startupHealthPromptedRef.current) return;
         if (isStoreLoading) return;
         if (showSetupWizard) return;
@@ -605,6 +612,11 @@ const App: React.FC = () => {
         if (!String(activeUser || '').trim()) return;
 
         try {
+            if (setupWizardShownThisLaunchRef.current) {
+                // Health checks are now part of setup wizard flow for new users.
+                startupHealthPromptedRef.current = true;
+                return;
+            }
             const userScope = getOnboardingUserScope(activeUser);
             const seenKey = `${STARTUP_HEALTH_CHECK_SEEN_KEY_PREFIX}:${userScope}`;
             const skippedKey = `${STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY_PREFIX}:${userScope}`;
