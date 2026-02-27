@@ -88,7 +88,7 @@ const detectStreamFromBranch = (branchName) => {
 };
 
 const streamArg = (argMap.get('stream') || process.env.STREAM || 'auto').trim().toLowerCase();
-const baseRef = (argMap.get('base') || process.env.STREAM_BASE || 'origin/main').trim();
+const baseRef = (argMap.get('base') || process.env.STREAM_BASE || 'main').trim();
 const headRef = (argMap.get('head') || process.env.STREAM_HEAD || 'HEAD').trim();
 const hasExplicitRange = argMap.has('base') || argMap.has('head') || Boolean(process.env.STREAM_BASE) || Boolean(process.env.STREAM_HEAD);
 
