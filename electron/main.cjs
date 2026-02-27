@@ -1358,8 +1358,21 @@ ipcMain.handle('rerun-ocr-multi', async (event, { imagePaths, activeUser, ocrMod
     const _mDlogPath = require('path').join(require('os').tmpdir(), 'wildgate-ocr.log');
     const _mDlog = msg => { try { fs.appendFileSync(_mDlogPath, new Date().toISOString() + ' [multi] ' + msg + '\n'); } catch(_e) {} };
     if (successCount === 0) {
-      _mDlog('FAIL: all ' + perFile.length + ' images failed OCR');
-      return errorResult(IpcErrorCode.INTERNAL_ERROR, 'All images failed OCR processing');
+      const failSummary = perFile
+        .map((f) => {
+          const name = String(f.imagePath || '').split(/[\\/]/).pop() || 'unknown';
+          const reason = String(f.error || 'OCR returned no data');
+          return `${name}: ${reason}`;
+        })
+        .join(' | ');
+      _mDlog('FAIL: all ' + perFile.length + ' images failed OCR' + (failSummary ? ' :: ' + failSummary : ''));
+      return {
+        success: false,
+        code: IpcErrorCode.INTERNAL_ERROR,
+        message: 'All images failed OCR processing',
+        error: 'All images failed OCR processing',
+        perFile,
+      };
     }
     _mDlog('perFile: ' + perFile.map(f => f.imagePath.split(/[\\/]/).pop() + '=' + (f.success ? (f.data?.screenshotType || 'noType') : 'FAIL')).join(', '));
     // Phase 2: merge successful results sequentially so ocrMerger combines

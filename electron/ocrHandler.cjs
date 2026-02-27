@@ -1241,7 +1241,6 @@ function bboxIoU(a, b) {
   const areaA = (a.x1 - a.x0) * (a.y1 - a.y0);
   const areaB = (b.x1 - b.x0) * (b.y1 - b.y0);
   return inter / (areaA + areaB - inter);
-}
 
 }
 
@@ -1502,6 +1501,13 @@ function getNameConfidenceFloor(fieldConfidence) {
     .filter((value) => Number.isFinite(value) && value > 0);
   if (values.length === 0) return 0;
   return Math.min(...values);
+}
+
+function normalizeConfidence01(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  if (numeric <= 1) return numeric;
+  return Math.max(0, Math.min(1, numeric / 100));
 }
 
 /**
@@ -2408,6 +2414,13 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
   } catch (error) {
     console.error('[OCR] Processing failed:', error);
     console.error('[OCR] Stack:', error.stack);
+    try {
+      const failLogPath = path.join(os.tmpdir(), 'wildgate-ocr.log');
+      fs.appendFileSync(
+        failLogPath,
+        `${new Date().toISOString()} [OCR] Processing failed: ${error?.message || 'Unknown error'}\n${error?.stack || ''}\n`
+      );
+    } catch (_logErr) { /* ignore log-write failures */ }
     return {
       success: false,
       error: error.message || 'Unknown OCR error',

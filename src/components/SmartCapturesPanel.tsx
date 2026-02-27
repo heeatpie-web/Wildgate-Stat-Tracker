@@ -2628,6 +2628,7 @@ const SmartMatchDetail: React.FC<{
                 setRerunResults(results);
 
                 const latestSummary = results[results.length - 1];
+                const firstFailureReason = results.find((entry) => !entry.success)?.error || multiResult.error || '';
                 const latestFileStatus = latestSummary
                     ? (latestSummary.success ? 'Succeeded' : `Failed: ${latestSummary.error || 'OCR failed'}`)
                     : '';
@@ -2640,10 +2641,15 @@ const SmartMatchDetail: React.FC<{
                         status: `Done - 0/${imagePaths.length} succeeded`,
                         cloudStatus: '',
                         latestFile: latestSummary?.filename || '',
-                        latestFileStatus: latestFileStatus || 'No successful OCR output',
+                        latestFileStatus: latestFileStatus || firstFailureReason || 'No successful OCR output',
                     });
                     onUpdate({ ...match, ocrState: 'error' });
-                    setToast({ message: 'OCR re-analysis failed for all screenshots.', type: 'error' });
+                    setToast({
+                        message: firstFailureReason
+                            ? `OCR re-analysis failed for all screenshots: ${firstFailureReason}`
+                            : 'OCR re-analysis failed for all screenshots.',
+                        type: 'error',
+                    });
                     return;
                 }
 

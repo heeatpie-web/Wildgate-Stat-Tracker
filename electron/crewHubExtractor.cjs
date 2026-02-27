@@ -120,6 +120,7 @@ const NOISE_WORDS = new Set([
   'ENEMY', 'NEMY', 'CREWS', 'CHANNEL', 'INTO', 'SAME', 'WITH', 'THE', 'HOP',
   'ON', 'OFF', 'TO', 'DEAFEN', 'UNMUTE', 'SAY', 'TEXT', 'PINGS',
   'OF', 'IN', 'AT', 'IS', 'BY', 'OR', 'AN',
+  'CHANGE VOICE', 'THEIR PLAYERS',
   // Crew-hub section headers / UI labels — never player or team names
   'KNOWN', 'HAZARDS', 'HAZARD', 'WILDGATE', 'HEALTH', 'FASTER', 'SHIELDS',
   'DOWN', 'ARTIFACT', 'ASTEROIDS', 'ALTITUDE', 'FOG', 'PATROLS', 'LEGION',
@@ -1455,7 +1456,8 @@ function isValidOpponentName(name) {
   // always have numbers, underscores, or at least one non-title-case word.
   if (name.includes(' ') && !/[0-9_]/.test(name)) {
     const _pp = name.trim().split(/\s+/);
-    if (_pp.length >= 2 && _pp.every(p => /^[A-Z][a-z]+$/.test(p))) return false;
+    // Only block if all words are title-case and all are <6 chars (e.g. 'Fancy Goose'), but allow real names like 'Nathan Fielder'
+    if (_pp.length >= 2 && _pp.every(p => /^[A-Z][a-z]+$/.test(p)) && _pp.every(p => p.length < 6)) return false;
   }
 
   if (!/[a-zA-Z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/.test(name)) return false;
@@ -1512,6 +1514,10 @@ function isTeamName(text) {
   // Single all-caps word (e.g. VANGUARD, BOREALIS) counts as a team name
   if (words.length < 2) {
     return upperRatio === 1 && letters.length >= 5;
+  }
+  // Only accept multi-word team names if ALL CAPS (no lowercase at all)
+  if (words.length >= 2 && (!/[a-z]/.test(cleaned)) && upperRatio >= 0.9) {
+    return true;
   }
 
   const hasNumbers = /[0-9]/.test(cleaned);

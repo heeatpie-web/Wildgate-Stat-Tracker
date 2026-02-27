@@ -284,24 +284,28 @@ export const rerunOCRMulti = async (
     if (runtimeOptions && typeof runtimeOptions === 'object') payload.runtimeOptions = runtimeOptions;
     const raw = await api.invoke('rerun-ocr-multi', payload);
     if (!isRecord(raw)) return { success: false, perFile: [], error: 'Invalid response' };
-    if (raw.success === true) {
-        const perFile = Array.isArray(raw.perFile)
-            ? (raw.perFile as Array<Record<string, unknown>>).map(f => ({
+    const parsePerFile = (): Array<{ imagePath: string; success: boolean; error?: string; data?: OCRExtractedData }> => (
+        Array.isArray(raw.perFile)
+            ? (raw.perFile as Array<Record<string, unknown>>).map((f) => ({
                 imagePath: typeof f.imagePath === 'string' ? f.imagePath : '',
                 success: f.success === true,
                 error: typeof f.error === 'string' ? f.error : undefined,
                 data: isLikelyOcrExtractedData(f.data) ? f.data : undefined,
             }))
-            : [];
+            : []
+    );
+    if (raw.success === true) {
+        const perFile = parsePerFile();
         return {
             success: true,
             data: isLikelyOcrExtractedData(raw.data) ? raw.data : undefined,
             perFile,
         };
     }
+    const perFile = parsePerFile();
     return {
         success: false,
-        perFile: [],
+        perFile,
         error: typeof raw.error === 'string' ? raw.error : (typeof raw.message === 'string' ? raw.message : 'OCR multi-rerun failed'),
     };
 };
