@@ -38,12 +38,21 @@ This is a beta build.
 - `npm run build` - build renderer
 - `npm run electron:build` - package desktop app
 - `npm run test` - run tests
+- `npm run setup:parallel-streams` - create UI/OCR/contract worktrees
+- `npm run check:stream-ownership` - validate changed files match stream rules
 
 ## Project Layout
 
 - `src/` - React renderer code (UI, state, hooks, utilities)
 - `electron/` - Electron main/preload and desktop integrations
 - `dist/` - renderer build output
+
+## Parallel Streams (UI + OCR)
+
+- Ownership rules: `WORK_OWNERSHIP.md`
+- Agent prompt templates: `docs/AGENT_STREAM_PROMPTS.md`
+- Shared OCR contract for UI consumption: `src/services/ocrAdapter.ts`
+- CI guardrail: `.github/workflows/stream-ownership.yml`
 
 ## IPC (Plain English)
 

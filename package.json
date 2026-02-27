@@ -44,6 +44,11 @@
     "artifacts:migrate:canonical": "node scripts/migrate_artifact_folders_to_canonical.cjs",
     "artifacts:migrate:canonical:force": "node scripts/migrate_artifact_folders_to_canonical.cjs --force",
     "dev:qa": "npm run snap:views && npm run ci:quality",
+    "setup:parallel-streams": "powershell -ExecutionPolicy Bypass -File scripts/setup-parallel-streams.ps1 -IncludeContract",
+    "check:stream-ownership": "node scripts/check-stream-ownership.cjs --stream auto",
+    "check:stream-ownership:ui": "node scripts/check-stream-ownership.cjs --stream ui",
+    "check:stream-ownership:ocr": "node scripts/check-stream-ownership.cjs --stream ocr",
+    "check:stream-ownership:contract": "node scripts/check-stream-ownership.cjs --stream contract",
     "test": "vitest run",
     "test:watch": "vitest"
   },
