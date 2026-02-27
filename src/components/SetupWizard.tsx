@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 import { Activity, ChevronLeft, ChevronRight, Gauge, Palette, SlidersHorizontal, Moon, User, Volume2 } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
@@ -55,10 +55,28 @@ export const SetupWizard: React.FC = () => {
     const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
     const [callsign, setCallsign] = useState('');
     const [callsignError, setCallsignError] = useState('');
+    const [systemPrefersDark, setSystemPrefersDark] = useState(() => {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+        return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    });
 
     const focusTrapRef = useFocusTrap<HTMLDivElement>(showSetupWizard);
     const dialogTitleId = useId();
     const callsignErrorId = useId();
+    const resolvedAppearanceMode = useMemo<'light' | 'dark' | 'twilight'>(() => {
+        if (appearanceMode === 'system') {
+            return systemPrefersDark ? 'dark' : 'light';
+        }
+        return appearanceMode;
+    }, [appearanceMode, systemPrefersDark]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+        const media = window.matchMedia('(prefers-color-scheme: dark)');
+        const onChange = () => setSystemPrefersDark(media.matches);
+        media.addEventListener('change', onChange);
+        return () => media.removeEventListener('change', onChange);
+    }, []);
 
     const handleStep1Confirm = () => {
         const normalized = callsign.trim();
@@ -108,7 +126,8 @@ export const SetupWizard: React.FC = () => {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={dialogTitleId}
-                className="wizard-shell relative w-full max-w-2xl rounded-modal border shadow-2xl animate-scale-in flex flex-col overflow-hidden"
+                className={`wizard-shell relative w-full max-w-2xl rounded-modal border shadow-2xl animate-scale-in flex flex-col overflow-hidden ${resolvedAppearanceMode !== 'light' ? 'md3-surface-high' : ''}`}
+                data-mode={resolvedAppearanceMode}
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header with step indicator */}

@@ -96,6 +96,7 @@ export const FirstRunHealthCheck: React.FC<FirstRunHealthCheckProps> = ({
   onSkip,
 }) => {
   const [stepIndex, setStepIndex] = useState(0);
+  const [telemetryRevealStage, setTelemetryRevealStage] = useState(0);
   const [storageStatus, setStorageStatus] = useState<HealthStatus>('idle');
   const [storageDetail, setStorageDetail] = useState('Not checked yet.');
   const [backupStatus, setBackupStatus] = useState<HealthStatus>('idle');
@@ -221,8 +222,18 @@ export const FirstRunHealthCheck: React.FC<FirstRunHealthCheckProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     setStepIndex(0);
+    setTelemetryRevealStage(0);
     setCapturePreview(null);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (stepIndex !== 0) {
+      setTelemetryRevealStage(0);
+      return;
+    }
+    setTelemetryRevealStage((prev) => (prev < 1 ? 1 : prev));
+  }, [isOpen, stepIndex]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -285,7 +296,10 @@ export const FirstRunHealthCheck: React.FC<FirstRunHealthCheckProps> = ({
                 </div>
                 <button
                   type="button"
-                  onClick={() => onToggleTelemetryEnabled(!telemetryEnabled)}
+                  onClick={() => {
+                    onToggleTelemetryEnabled(!telemetryEnabled);
+                    setTelemetryRevealStage((prev) => (prev < 2 ? 2 : prev));
+                  }}
                   className={`w-11 h-6 rounded-full transition-colors ${telemetryEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
                   aria-label="Toggle telemetry monitoring"
                   aria-pressed={telemetryEnabled}
@@ -293,33 +307,58 @@ export const FirstRunHealthCheck: React.FC<FirstRunHealthCheckProps> = ({
                   <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${telemetryEnabled ? 'translate-x-5' : ''}`} />
                 </button>
               </div>
+              {telemetryRevealStage < 2 && (
+                <button
+                  type="button"
+                  onClick={() => setTelemetryRevealStage(2)}
+                  className="md3-btn-text mt-3 px-0 text-label-sm font-bold uppercase"
+                >
+                  Next: Choose update rate
+                </button>
+              )}
             </div>
-            <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high/50">
-              <div className="text-label-sm font-semibold mb-2">Telemetry Update Rate</div>
-              <div className="grid grid-cols-3 gap-2">
-                {([
-                  { id: 'low-power' as const, label: 'Low Power' },
-                  { id: 'balanced' as const, label: 'Balanced' },
-                  { id: 'high-accuracy' as const, label: 'High Accuracy' },
-                ] as const).map((opt) => (
+            {telemetryRevealStage >= 2 && (
+              <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high/50">
+                <div className="text-label-sm font-semibold mb-2">Telemetry Update Rate</div>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { id: 'low-power' as const, label: 'Low Power' },
+                    { id: 'balanced' as const, label: 'Balanced' },
+                    { id: 'high-accuracy' as const, label: 'High Accuracy' },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => {
+                        onSetTelemetryPerformanceProfile(opt.id);
+                        setTelemetryRevealStage((prev) => (prev < 3 ? 3 : prev));
+                      }}
+                      className={`p-2 rounded-control text-label-sm font-bold transition-all ${telemetryPerformanceProfile === opt.id ? 'md3-btn-filled ring-2 ring-md-sys-primary/40' : 'md3-btn-outlined'}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                {telemetryRevealStage < 3 && (
                   <button
-                    key={opt.id}
                     type="button"
-                    onClick={() => onSetTelemetryPerformanceProfile(opt.id)}
-                    className={`p-2 rounded-control text-label-sm font-bold transition-all ${telemetryPerformanceProfile === opt.id ? 'md3-btn-filled ring-2 ring-md-sys-primary/40' : 'md3-btn-outlined'}`}
+                    onClick={() => setTelemetryRevealStage(3)}
+                    className="md3-btn-text mt-3 px-0 text-label-sm font-bold uppercase"
                   >
-                    {opt.label}
+                    Next: Show live status
                   </button>
-                ))}
+                )}
               </div>
-            </div>
-            <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high/50 md:col-span-2">
-              <div className="flex items-center gap-2 font-bold text-label-sm uppercase">
-                <StatusIcon status={telemetryResult.status} />
-                Live Telemetry Status
+            )}
+            {telemetryRevealStage >= 3 && (
+              <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high/50 md:col-span-2">
+                <div className="flex items-center gap-2 font-bold text-label-sm uppercase">
+                  <StatusIcon status={telemetryResult.status} />
+                  Live Telemetry Status
+                </div>
+                <p className={`text-label-sm mt-2 ${statusToneClass(telemetryResult.status)}`}>{telemetryResult.detail}</p>
               </div>
-              <p className={`text-label-sm mt-2 ${statusToneClass(telemetryResult.status)}`}>{telemetryResult.detail}</p>
-            </div>
+            )}
           </div>
         )}
 

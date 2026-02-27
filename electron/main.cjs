@@ -2312,10 +2312,23 @@ function createWindow() {
 
   devMark('window created');
 
-  win.once('ready-to-show', () => {
+  let windowShown = false;
+  const showWindowOnce = () => {
+    if (!win || win.isDestroyed() || windowShown) return;
+    windowShown = true;
     win.show();
+  };
+
+  win.once('ready-to-show', () => {
+    showWindowOnce();
     // if (isDev) win.webContents.openDevTools({ mode: 'detach' });
   });
+
+  // Packaged builds can occasionally stall before ready-to-show; avoid a dead zone.
+  if (!isDev) {
+    win.webContents.once('did-finish-load', showWindowOnce);
+    setTimeout(showWindowOnce, 1500);
+  }
 
   win.on('show', () => win.webContents.send('window-visibility-change', true));
   win.on('hide', () => win.webContents.send('window-visibility-change', false));
@@ -2462,23 +2475,27 @@ app.whenReady().then(async () => {
   } catch (e) {
     console.warn('[DB] WAL preflight replay failed:', e?.message || e);
   }
-  try {
-    const migration = runArtifactCanonicalMigration({
-      dbPath: DB_PATH,
-      userData: app.getPath('userData'),
-    });
-    if (migration?.changed) {
-      console.log(
-        `[Artifacts] Canonical migration applied (assigned=${migration.assignedCanonicalNumbers}, renamedDirs=${migration.renamedDirs}, mergedDirs=${migration.mergedDirs}, duplicatesDeleted=${migration.duplicateFilesDeleted}, orphanReattached=${migration.orphanReattachedFiles}, orphanQuarantined=${migration.orphanQuarantinedFiles}, elapsedMs=${migration.elapsedMs})`
-      );
-    } else if (migration?.reason && migration.reason !== 'already-migrated') {
-      console.log(`[Artifacts] Canonical migration skipped (${migration.reason})`);
-    }
-  } catch (e) {
-    console.warn('[Artifacts] Canonical migration failed:', e?.message || e);
-  }
   createWindow();
   createTray();
+
+  // Keep expensive artifact migration off the critical paint path.
+  setTimeout(() => {
+    try {
+      const migration = runArtifactCanonicalMigration({
+        dbPath: DB_PATH,
+        userData: app.getPath('userData'),
+      });
+      if (migration?.changed) {
+        console.log(
+          `[Artifacts] Canonical migration applied (assigned=${migration.assignedCanonicalNumbers}, renamedDirs=${migration.renamedDirs}, mergedDirs=${migration.mergedDirs}, duplicatesDeleted=${migration.duplicateFilesDeleted}, orphanReattached=${migration.orphanReattachedFiles}, orphanQuarantined=${migration.orphanQuarantinedFiles}, elapsedMs=${migration.elapsedMs})`
+        );
+      } else if (migration?.reason && migration.reason !== 'already-migrated') {
+        console.log(`[Artifacts] Canonical migration skipped (${migration.reason})`);
+      }
+    } catch (e) {
+      console.warn('[Artifacts] Canonical migration failed:', e?.message || e);
+    }
+  }, 0);
 
   // Do not block renderer startup on telemetry history migration.
   void ensureTelemetryHistoryMigrated().catch((e) => {
