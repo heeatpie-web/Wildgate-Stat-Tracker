@@ -306,6 +306,7 @@ export type AnalyticsView =
   | 'session'
   | 'momentum'
   | 'period'
+  | 'entities'
   | 'timePatterns'
   | 'streaks'
   | 'killEfficiency'
