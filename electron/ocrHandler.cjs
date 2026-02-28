@@ -39,6 +39,10 @@ const DEBUG_DIR = path.join(app.getPath('userData'), 'ocr-debug');
 const OCR_CORPUS_ARCHIVE_DIR = path.join(app.getPath('userData'), 'ocr-corpus-archive');
 const OCR_TESSERACT_DIR = path.join(app.getPath('userData'), 'ocr-tesseract');
 const OCR_USER_WORDS_FILE = path.join(OCR_TESSERACT_DIR, 'wildgate_userwords.txt');
+const OCR_USER_WORDS_FILE_FALLBACKS = [
+  path.join(app.getPath('appData'), 'Wildgate Stat Tracker', 'ocr-tesseract', 'wildgate_userwords.txt'),
+  path.join(app.getPath('appData'), 'wildgate-stat-tracker', 'ocr-tesseract', 'wildgate_userwords.txt'),
+];
 
 // Ensure debug directory exists
 function ensureDebugDir() {
@@ -437,12 +441,20 @@ let activeUserWordsFile = null;
 let latestDictionaryStats = null;
 
 async function resolveExistingDictionaryFile() {
-  try {
-    await fsPromises.access(OCR_USER_WORDS_FILE, fs.constants.F_OK);
-    return OCR_USER_WORDS_FILE;
-  } catch {
-    return null;
+  const candidates = [OCR_USER_WORDS_FILE, ...OCR_USER_WORDS_FILE_FALLBACKS];
+  const seen = new Set();
+  for (const filePath of candidates) {
+    const normalized = String(filePath || '').trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    try {
+      await fsPromises.access(normalized, fs.constants.F_OK);
+      return normalized;
+    } catch {
+      // try next candidate
+    }
   }
+  return null;
 }
 
 function buildTesseractWorkerParameters(userWordsFile = null, psm = null) {
