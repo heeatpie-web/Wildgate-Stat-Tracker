@@ -409,3 +409,51 @@ export interface MomentumData {
   peakMomentum: number;
   trend: 'rising' | 'falling' | 'stable';
 }
+
+export type EntityDimensionKey = 'ship' | 'prospectorWeapon' | 'equipment' | 'perk' | 'era';
+
+export interface EntityAnalyticsFilters {
+  ship: string[];
+  prospectorWeapon: string[];
+  equipment: string[];
+  perk: string[];
+  era: Array<'baseline' | 'expansion'>;
+}
+
+export interface EntityMetricRow {
+  key: string;
+  label: string;
+  sampleCount: number;
+  usageRate: number;
+  winRate: number;
+  placementDistribution: Record<string, number>;
+  lowSample: boolean;
+}
+
+export interface EntityComparison {
+  label: string;
+  baselineSample: number;
+  selectedSample: number;
+  baselineWinRate: number;
+  selectedWinRate: number;
+  absoluteDelta: number | null;
+  relativeDelta: number | null;
+  gated: boolean;
+  gateReason?: string;
+}
+
+export interface EntityAnalyticsData {
+  filters: EntityAnalyticsFilters;
+  filteredCount: number;
+  thresholds: {
+    showMetricsAt: number;
+    showDeltasAt: number;
+    lowSampleBelow: number;
+  };
+  dimensions: Record<EntityDimensionKey, EntityMetricRow[]>;
+  comparisons: {
+    periodVsPrevious: EntityComparison;
+    selectedPerkSetVsAll: EntityComparison;
+    selectedLoadoutVsGlobal: EntityComparison;
+  };
+}
