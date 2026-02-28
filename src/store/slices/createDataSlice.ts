@@ -9,6 +9,7 @@
 import { StateCreator } from 'zustand';
 import { Match, Loadout } from '../../types';
 import { normalizeOcrName } from '../../utils/stringUtils';
+import { sanitizeLoadout } from '../../utils/loadout';
 import {
   extractArtifactSourceFromReachModifiers,
   stripArtifactSourceModifiers,
@@ -30,33 +31,9 @@ export const getPriority = (source: DataSource = 'manual'): number => {
   }
 };
 
-const sanitizeLoadoutSlots = (loadout: Loadout | null): Loadout | null => {
-  if (!loadout) return null;
-  const sanitizeSlotList = (entries: string[] | undefined, maxSlots: number) => (
-    (entries || [])
-      .map((entry) => String(entry || '').trim())
-      .filter(Boolean)
-      .filter((entry) => !/tertiary\s+(weapon|equipment)/i.test(entry))
-      .slice(0, Math.max(1, maxSlots))
-  );
-  const sanitizeShipWeaponEntries = (entries: Loadout['shipWeapons'] | undefined) => (
-    (entries || [])
-      .map((entry) => ({
-        name: String(entry?.name || '').trim(),
-        quantity: Math.max(0, Math.min(10, Math.floor(Number(entry?.quantity || 0)))),
-      }))
-      .filter((entry) => entry.name && entry.quantity > 0)
-      .slice(0, 10)
-  );
-  return {
-    ...loadout,
-    shipWeapons: sanitizeShipWeaponEntries(loadout.shipWeapons),
-    weapons: sanitizeSlotList(loadout.weapons, 10),
-    equipment: sanitizeSlotList(loadout.equipment, 2),
-    characterWeapons: sanitizeSlotList(loadout.characterWeapons, 2),
-    characterEquipment: sanitizeSlotList(loadout.characterEquipment, 2),
-  };
-};
+const sanitizeLoadoutSlots = (loadout: Loadout | null): Loadout | null => (
+  sanitizeLoadout(loadout, { shipWeaponSlots: 10, prospectorSlots: 2, perkSlots: 2 })
+);
 
 const sanitizeMatchArtifactFields = (match: Match): Match => {
   const currentModifiers = Array.isArray(match.reachModifiers)

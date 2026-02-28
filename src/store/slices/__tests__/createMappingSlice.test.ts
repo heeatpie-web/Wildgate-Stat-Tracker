@@ -431,9 +431,11 @@ describe('createMappingSlice', () => {
       store.getState().importUidMappings({
         players: { 'p1': 'Alice' },
         weapons: { 'w1': 'Laser' },
+        perks: { 'perk1': 'Boarder' },
       });
       expect(store.getState().uidMappings.players['p1']).toBe('Alice');
       expect(store.getState().uidMappings.weapons['w1']).toBe('Laser');
+      expect(store.getState().uidMappings.perks['perk1']).toBe('Boarder');
       expect(store.getState().knownMappings['p1']).toBe('Alice');
     });
   });

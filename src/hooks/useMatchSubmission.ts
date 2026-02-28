@@ -9,6 +9,7 @@ import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured 
 import { StorageService } from '../utils/storage';
 import Logger from '../utils/logger';
 import { capTeammateNames } from '../utils/teamLimits';
+import { sanitizeLoadout } from '../utils/loadout';
 import { evaluateTelemetryConsistencyChecks, formatDurationOffset } from '../utils/telemetryConsistency';
 import {
     extractArtifactSourceFromReachModifiers,
@@ -25,33 +26,13 @@ const parseDurationSecs = (value: string | undefined): number => {
     return Math.max(0, (parts[0] * 60) + parts[1]);
 };
 
-const sanitizeLoadoutSlots = (loadout: Match['loadout'] | null) => {
-    if (!loadout) return undefined;
-    const sanitizeSlotList = (entries: string[] | undefined, maxSlots: number) => (
-        (entries || [])
-            .map((entry) => String(entry || '').trim())
-            .filter(Boolean)
-            .filter((entry) => !/tertiary\s+(weapon|equipment)/i.test(entry))
-            .slice(0, Math.max(1, maxSlots))
-    );
-    const sanitizeShipWeaponEntries = (entries: Array<{ name: string; quantity: number }> | undefined) => (
-        (entries || [])
-            .map((entry) => ({
-                name: String(entry?.name || '').trim(),
-                quantity: Math.max(0, Math.min(MAX_SHIP_WEAPON_SLOTS, Math.floor(Number(entry?.quantity || 0)))),
-            }))
-            .filter((entry) => entry.name && entry.quantity > 0)
-            .slice(0, MAX_SHIP_WEAPON_SLOTS)
-    );
-    return {
-        ...loadout,
-        shipWeapons: sanitizeShipWeaponEntries(loadout.shipWeapons),
-        weapons: sanitizeSlotList(loadout.weapons, MAX_SHIP_WEAPON_SLOTS),
-        equipment: sanitizeSlotList(loadout.equipment, MAX_PROSPECTOR_SLOTS),
-        characterWeapons: sanitizeSlotList(loadout.characterWeapons, MAX_PROSPECTOR_SLOTS),
-        characterEquipment: sanitizeSlotList(loadout.characterEquipment, MAX_PROSPECTOR_SLOTS),
-    };
-};
+const sanitizeLoadoutSlots = (loadout: Match['loadout'] | null) => (
+    sanitizeLoadout(loadout || null, {
+        shipWeaponSlots: MAX_SHIP_WEAPON_SLOTS,
+        prospectorSlots: MAX_PROSPECTOR_SLOTS,
+        perkSlots: MAX_PROSPECTOR_SLOTS,
+    }) || undefined
+);
 
 const toArtifactKey = (value: string) => value.replace(/[\\/]+/g, '\\').toLowerCase();
 

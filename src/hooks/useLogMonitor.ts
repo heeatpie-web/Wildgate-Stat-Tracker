@@ -14,6 +14,7 @@ import {
     getExpectedTeammateCountFromMode,
     inferModeFromMatchPool,
 } from '../utils/telemetryConsistency';
+import { sanitizeLoadout } from '../utils/loadout';
 
 const ipcRenderer = getElectronAPI();
 const MAX_TELEMETRY_MATCH_DURATION_SECONDS = 60 * 60;
@@ -211,6 +212,9 @@ export const useLogMonitor = (activeUser?: string) => {
             equipment: (loadout.equipment || []).filter(Boolean),
             characterWeapons: (loadout.characterWeapons || []).filter(Boolean),
             characterEquipment: (loadout.characterEquipment || []).filter(Boolean),
+            characterPerks: (loadout.characterPerks || []).filter(Boolean),
+            perks: (loadout.perks || []).filter(Boolean),
+            shipPerks: (loadout.shipPerks || []).filter(Boolean),
         });
     };
 
@@ -241,14 +245,18 @@ export const useLogMonitor = (activeUser?: string) => {
         opponents: [],
         hero: (loadout?.hero && !String(loadout.hero).startsWith('Unknown')) ? String(loadout.hero) : (activeHeroRef.current || 'Unknown'),
         ship: (loadout?.ship && !String(loadout.ship).startsWith('Unknown')) ? String(loadout.ship) : (activeShipRef.current || 'Unknown'),
-        loadout: {
+        loadout: sanitizeLoadout(loadout, { shipWeaponSlots: 10, prospectorSlots: 2, perkSlots: 2 }) || {
             hero: loadout?.hero || null,
             ship: loadout?.ship || null,
             weapons: (loadout?.weapons || []).filter(Boolean),
             equipment: (loadout?.equipment || []).filter(Boolean),
             characterWeapons: (loadout?.characterWeapons || []).filter(Boolean),
             characterEquipment: (loadout?.characterEquipment || []).filter(Boolean),
+            characterPerks: (loadout?.characterPerks || loadout?.perks || []).filter(Boolean).slice(0, 2),
+            perks: (loadout?.perks || loadout?.characterPerks || []).filter(Boolean).slice(0, 2),
+            shipPerks: (loadout?.shipPerks || []).filter(Boolean).slice(0, 2),
         },
+        perks: (loadout?.perks || loadout?.characterPerks || []).filter(Boolean).slice(0, 2),
         weapons: {},
         reachModifiers: [],
         kills: { 'AI Legion': 0 },
@@ -322,12 +330,13 @@ export const useLogMonitor = (activeUser?: string) => {
         telemetryDraftLoadoutSignatureRef.current = signature;
         const match = useAppStore.getState().matches.find((m: Match) => m.id === draftId);
         if (!match) return;
+        const normalizedLoadout = sanitizeLoadout(loadout, { shipWeaponSlots: 10, prospectorSlots: 2, perkSlots: 2 });
         updateMatch({
             ...match,
             timestamp: match.timestamp || gameTime,
             hero: loadout.hero && !String(loadout.hero).startsWith('Unknown') ? String(loadout.hero) : match.hero,
             ship: loadout.ship && !String(loadout.ship).startsWith('Unknown') ? String(loadout.ship) : match.ship,
-            loadout: {
+            loadout: normalizedLoadout || {
                 hero: loadout.hero || match.loadout?.hero || null,
                 ship: loadout.ship || match.loadout?.ship || null,
                 weapons: (loadout.weapons || []).filter(Boolean),
@@ -335,6 +344,7 @@ export const useLogMonitor = (activeUser?: string) => {
                 characterWeapons: (loadout.characterWeapons || []).filter(Boolean),
                 characterEquipment: (loadout.characterEquipment || []).filter(Boolean),
             },
+            perks: normalizedLoadout?.perks || match.perks,
         });
     };
 
@@ -1158,6 +1168,9 @@ export const useLogMonitor = (activeUser?: string) => {
                             characterEquipment: shouldApplyCharacterEquipment
                                 ? resolvedProspectorEquipment
                                 : (currentLoadoutRef.current?.characterEquipment || []),
+                            characterPerks: (currentLoadoutRef.current?.characterPerks || currentLoadoutRef.current?.perks || []).slice(0, 2),
+                            perks: (currentLoadoutRef.current?.perks || currentLoadoutRef.current?.characterPerks || []).slice(0, 2),
+                            shipPerks: (currentLoadoutRef.current?.shipPerks || []).slice(0, 2),
                         };
                         const previousLoadoutNames = new Set([
                             ...(currentLoadoutRef.current?.weapons || []),

@@ -174,6 +174,18 @@ describe('createDataSlice', () => {
   // ── Sourced Setters (Priority System) ──
 
   describe('sourced setters', () => {
+    it('normalizes legacy loadout perks when setting current loadout', () => {
+      store.getState().setCurrentLoadout({
+        hero: 'Adrian',
+        ship: 'Hunter',
+        weapons: [],
+        equipment: [],
+        perks: ['Boarder', 'Defender', 'Engineering'],
+      });
+      expect(store.getState().currentLoadout?.perks).toEqual(['Boarder', 'Defender']);
+      expect(store.getState().currentLoadout?.characterPerks).toEqual(['Boarder', 'Defender']);
+    });
+
     it('accepts the first value regardless of source', () => {
       store.getState().setTimeMin('05', 'ocr');
       expect(store.getState().timeMin).toBe('05');

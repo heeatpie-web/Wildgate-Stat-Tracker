@@ -92,6 +92,7 @@ import { backfillOpponentTeamShipTypes } from './utils/ocr/opponentTeamShipTypes
 import { capTeammatePlayers, getMaxTeammatesForShip } from './utils/teamLimits';
 import Logger from './utils/logger';
 import { runtimeConfig } from './config/runtimeConfig';
+import { sanitizeLoadout } from './utils/loadout';
 
 interface TelemetryRetentionStatus {
     exceedsLimits: boolean;
@@ -142,12 +143,13 @@ interface RestoreSessionPayload {
 }
 
 interface RestoreSessionSnapshot {
-    version: 1;
+    version: 1 | 2;
     savedAt: number;
     payload: RestoreSessionPayload;
 }
 
-const RESTORE_SESSION_STORAGE_KEY = 'wg_restore_session_v1';
+const RESTORE_SESSION_STORAGE_KEY = 'wg_restore_session_v2';
+const RESTORE_SESSION_STORAGE_KEY_LEGACY = 'wg_restore_session_v1';
 const RESTORE_SESSION_DISMISSED_SIGNATURE_KEY = 'wg_restore_session_dismissed_signature_v1';
 const RESTORE_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const SETTINGS_FOCUS_SECTION_STORAGE_KEY = 'wg_settings_focus_section_v1';
@@ -698,6 +700,7 @@ const App: React.FC = () => {
     const clearRestoreSessionSnapshot = useCallback(() => {
         try {
             window.localStorage.removeItem(RESTORE_SESSION_STORAGE_KEY);
+            window.localStorage.removeItem(RESTORE_SESSION_STORAGE_KEY_LEGACY);
         } catch {
             // no-op: localStorage can be unavailable in rare embedded contexts
         }
@@ -725,16 +728,10 @@ const App: React.FC = () => {
             }, {})
             : {};
         const selectedReachModifiers = Array.isArray(state.selectedReachModifiers) ? state.selectedReachModifiers.filter(Boolean) : [];
-        const currentLoadout = isRecord(state.currentLoadout)
-            ? {
-                hero: typeof state.currentLoadout.hero === 'string' ? state.currentLoadout.hero : null,
-                ship: typeof state.currentLoadout.ship === 'string' ? state.currentLoadout.ship : null,
-                weapons: Array.isArray(state.currentLoadout.weapons) ? state.currentLoadout.weapons.filter(Boolean).slice(0, 10) : [],
-                equipment: Array.isArray(state.currentLoadout.equipment) ? state.currentLoadout.equipment.filter(Boolean).slice(0, 2) : [],
-                characterWeapons: Array.isArray(state.currentLoadout.characterWeapons) ? state.currentLoadout.characterWeapons.filter(Boolean).slice(0, 2) : [],
-                characterEquipment: Array.isArray(state.currentLoadout.characterEquipment) ? state.currentLoadout.characterEquipment.filter(Boolean).slice(0, 2) : [],
-            }
-            : null;
+        const currentLoadout = sanitizeLoadout(
+            isRecord(state.currentLoadout) ? state.currentLoadout as Match['loadout'] : null,
+            { shipWeaponSlots: 10, prospectorSlots: 2, perkSlots: 2 }
+        );
         const kills = isRecord(state.kills)
             ? Object.entries(state.kills).reduce<Record<string, number>>((acc, [key, value]) => {
                 const parsed = Number(value);
@@ -766,7 +763,7 @@ const App: React.FC = () => {
             return;
         }
         const snapshot: RestoreSessionSnapshot = {
-            version: 1,
+            version: 2,
             savedAt: Date.now(),
             payload: {
                 activeView: state.activeView,
@@ -844,13 +841,15 @@ const App: React.FC = () => {
         let parsed: unknown = null;
         try {
             const raw = window.localStorage.getItem(RESTORE_SESSION_STORAGE_KEY);
-            if (!raw) return;
-            parsed = JSON.parse(raw);
+            const legacyRaw = window.localStorage.getItem(RESTORE_SESSION_STORAGE_KEY_LEGACY);
+            const source = raw || legacyRaw;
+            if (!source) return;
+            parsed = JSON.parse(source);
         } catch {
             clearRestoreSessionSnapshot();
             return;
         }
-        if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.payload)) {
+        if (!isRecord(parsed) || (parsed.version !== 1 && parsed.version !== 2) || !isRecord(parsed.payload)) {
             clearRestoreSessionSnapshot();
             return;
         }
@@ -865,7 +864,7 @@ const App: React.FC = () => {
         }
         const payloadRecord = parsed.payload as Record<string, unknown>;
         const snapshot: RestoreSessionSnapshot = {
-            version: 1,
+            version: 2,
             savedAt,
             payload: {
                 activeView: isLazyDashboardView(String(payloadRecord.activeView || ''))
@@ -898,14 +897,20 @@ const App: React.FC = () => {
                     : {},
                 activeShip: String(payloadRecord.activeShip || '').trim() || null,
                 activeHero: String(payloadRecord.activeHero || '').trim() || null,
-                currentLoadout: isRecord(payloadRecord.currentLoadout) ? {
-                    hero: String(payloadRecord.currentLoadout.hero || '').trim() || null,
-                    ship: String(payloadRecord.currentLoadout.ship || '').trim() || null,
-                    weapons: Array.isArray(payloadRecord.currentLoadout.weapons) ? payloadRecord.currentLoadout.weapons.map(v => String(v || '').trim()).filter(Boolean).slice(0, 10) : [],
-                    equipment: Array.isArray(payloadRecord.currentLoadout.equipment) ? payloadRecord.currentLoadout.equipment.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
-                    characterWeapons: Array.isArray(payloadRecord.currentLoadout.characterWeapons) ? payloadRecord.currentLoadout.characterWeapons.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
-                    characterEquipment: Array.isArray(payloadRecord.currentLoadout.characterEquipment) ? payloadRecord.currentLoadout.characterEquipment.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
-                } : null,
+                currentLoadout: sanitizeLoadout(
+                    isRecord(payloadRecord.currentLoadout) ? {
+                        hero: String(payloadRecord.currentLoadout.hero || '').trim() || null,
+                        ship: String(payloadRecord.currentLoadout.ship || '').trim() || null,
+                        weapons: Array.isArray(payloadRecord.currentLoadout.weapons) ? payloadRecord.currentLoadout.weapons.map(v => String(v || '').trim()).filter(Boolean).slice(0, 10) : [],
+                        equipment: Array.isArray(payloadRecord.currentLoadout.equipment) ? payloadRecord.currentLoadout.equipment.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
+                        characterWeapons: Array.isArray(payloadRecord.currentLoadout.characterWeapons) ? payloadRecord.currentLoadout.characterWeapons.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
+                        characterEquipment: Array.isArray(payloadRecord.currentLoadout.characterEquipment) ? payloadRecord.currentLoadout.characterEquipment.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
+                        characterPerks: Array.isArray(payloadRecord.currentLoadout.characterPerks) ? payloadRecord.currentLoadout.characterPerks.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
+                        perks: Array.isArray(payloadRecord.currentLoadout.perks) ? payloadRecord.currentLoadout.perks.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
+                        shipPerks: Array.isArray(payloadRecord.currentLoadout.shipPerks) ? payloadRecord.currentLoadout.shipPerks.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
+                    } : null,
+                    { shipWeaponSlots: 10, prospectorSlots: 2, perkSlots: 2 }
+                ),
                 selectedReachModifiers: Array.isArray(payloadRecord.selectedReachModifiers) ? payloadRecord.selectedReachModifiers.map(v => String(v || '').trim()).filter(Boolean) : [],
                 timeMin: String(payloadRecord.timeMin || ''),
                 timeSec: String(payloadRecord.timeSec || ''),
@@ -1407,6 +1412,7 @@ const App: React.FC = () => {
             return;
         }
 
+        const normalizedDraftLoadout = sanitizeLoadout(draft.loadout || null, { shipWeaponSlots: 10, prospectorSlots: 2, perkSlots: 2 });
         const pendingData: Partial<Match> = {
             id: draft.id,
             timestamp: draft.timestamp,
@@ -1416,14 +1422,8 @@ const App: React.FC = () => {
             opponents: [...(draft.opponents || [])],
             hero: draft.hero,
             ship: draft.ship,
-            loadout: draft.loadout ? {
-                hero: draft.loadout.hero,
-                ship: draft.loadout.ship,
-                weapons: (draft.loadout.weapons || []).filter(Boolean),
-                equipment: (draft.loadout.equipment || []).filter(Boolean),
-                characterWeapons: (draft.loadout.characterWeapons || []).filter(Boolean),
-                characterEquipment: (draft.loadout.characterEquipment || []).filter(Boolean),
-            } : undefined,
+            loadout: normalizedDraftLoadout || undefined,
+            perks: normalizedDraftLoadout?.perks || draft.perks,
             reachModifiers: [...(draft.reachModifiers || [])],
             kills: { ...(draft.kills || {}) },
             time: draft.time || telemetryDraftPrompt.duration || '00:00',

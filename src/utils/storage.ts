@@ -6,6 +6,7 @@ import type { OcrAliasModel, OcrLearningEvent, OcrLearningQueueItem } from './oc
 import { normalizeSharedUidMappings } from '../services/mappingContract';
 import Logger from './logger';
 import { runtimeConfig } from '../config/runtimeConfig';
+import { sanitizeLoadout } from './loadout';
 
 type StringMap = Record<string, string>;
 
@@ -21,6 +22,7 @@ interface StorageMeta {
   legacyV13MigratedAt?: number;
   nextCanonicalMatchNumber?: number;
   artifactCanonicalMigrationV1At?: number;
+  loadoutPerkNormalizationV1At?: number;
 }
 
 type UidMappings = ReturnType<typeof normalizeSharedUidMappings>;
@@ -190,11 +192,13 @@ const toStorageMeta = (value: unknown): StorageMeta => {
   const legacyV13MigratedAt = toNumberOr(value.legacyV13MigratedAt, 0);
   const nextCanonicalMatchNumber = toNumberOr(value.nextCanonicalMatchNumber, 0);
   const artifactCanonicalMigrationV1At = toNumberOr(value.artifactCanonicalMigrationV1At, 0);
+  const loadoutPerkNormalizationV1At = toNumberOr(value.loadoutPerkNormalizationV1At, 0);
   return {
     ...(mappingsToUidMigratedAt > 0 ? { mappingsToUidMigratedAt } : {}),
     ...(legacyV13MigratedAt > 0 ? { legacyV13MigratedAt } : {}),
     ...(nextCanonicalMatchNumber > 0 ? { nextCanonicalMatchNumber } : {}),
     ...(artifactCanonicalMigrationV1At > 0 ? { artifactCanonicalMigrationV1At } : {}),
+    ...(loadoutPerkNormalizationV1At > 0 ? { loadoutPerkNormalizationV1At } : {}),
   };
 };
 
@@ -234,10 +238,38 @@ const coerceStorageData = (value: unknown): StorageData | null => {
   const rawMatches = Array.isArray(value.matches)
     ? value.matches.filter((item): item is Match => isRecord(item))
     : defaults.matches;
+  let loadoutPerkMigrationTouched = false;
   const matches = rawMatches.map((m) => {
     const cleaned = stripTelemetryNotes(m.notes);
-    return cleaned !== (m.notes || '') ? { ...m, notes: cleaned } : m;
+    const normalizedLoadout = sanitizeLoadout(m.loadout || null, {
+      shipWeaponSlots: 10,
+      prospectorSlots: 2,
+      perkSlots: 2,
+    });
+    const normalizedPerks = normalizedLoadout?.perks || (Array.isArray(m.perks) ? m.perks : []);
+    const next = {
+      ...m,
+      ...(cleaned !== (m.notes || '') ? { notes: cleaned } : {}),
+      ...(normalizedLoadout ? { loadout: normalizedLoadout } : {}),
+      ...(normalizedPerks.length > 0 ? { perks: normalizedPerks } : {}),
+    };
+    if (
+      JSON.stringify(normalizedLoadout || null) !== JSON.stringify(m.loadout || null)
+      || JSON.stringify(normalizedPerks) !== JSON.stringify(Array.isArray(m.perks) ? m.perks : [])
+    ) {
+      loadoutPerkMigrationTouched = true;
+    }
+    return next;
   });
+  const existingMeta = toStorageMeta(value.storageMeta);
+  const nextStorageMeta = {
+    ...existingMeta,
+    ...(
+      loadoutPerkMigrationTouched && !existingMeta.loadoutPerkNormalizationV1At
+        ? { loadoutPerkNormalizationV1At: Date.now() }
+        : {}
+    ),
+  };
   return {
     ...defaults,
     matches,
@@ -263,7 +295,7 @@ const coerceStorageData = (value: unknown): StorageData | null => {
     timelineEvents: toTimelineEvents(value.timelineEvents),
     uidMappings: toUidMappings(value.uidMappings),
     uidSeedState: toUidSeedState(value.uidSeedState),
-    storageMeta: toStorageMeta(value.storageMeta),
+    storageMeta: nextStorageMeta,
   };
 };
 
