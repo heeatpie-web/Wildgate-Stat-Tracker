@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { AnalyticsView, AnalyticsTimeRange, DrillDownTarget } from '../../types';
+import { AnalyticsView, AnalyticsTimeRange, DrillDownTarget, EntityAnalyticsFilters } from '../../types';
 import { Activity, ArrowLeft, Download, LayoutGrid, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
@@ -10,7 +10,6 @@ import { InlineNarrativeToggle } from './DenseEditorialToggle';
 import { exportAnalyticsAsImage } from './analyticsExport';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { ControlPanelView } from './ControlPanelView';
-import { ProView } from './ProView';
 import { EnvironmentView } from './EnvironmentView';
 import { SynergyView } from './SynergyView';
 import { InsightsView } from './InsightsView';
@@ -24,6 +23,7 @@ import { PlacementDistView } from './PlacementDistView';
 import { MomentumView } from './MomentumView';
 import { VisualEssayView } from './VisualEssayView';
 import { AnalyticsNavigation, AnalyticsCategory } from './AnalyticsNavigation';
+import { EntityAnalyticsView } from './EntityAnalyticsView';
 
 const VIEW_LABELS: Record<AnalyticsView, string> = {
     overview: 'Overview',
@@ -56,6 +56,7 @@ const CATEGORY_SUBVIEWS: Record<AnalyticsCategory, AnalyticsView[]> = {
     performance: ['momentum', 'streaks', 'killEfficiency', 'placement', 'session', 'period', 'timePatterns'],
     team: ['social', 'insights', 'synergy'],
     environment: ['environment'],
+    entities: ['pro'],
 };
 
 type ProCategory = 'all' | 'core' | 'timeline' | 'team' | 'environment' | 'detailed';
@@ -81,9 +82,16 @@ export const AnalyticsShell: React.FC = () => {
     const [exporting, setExporting] = useState(false);
     const [isProMode, setIsProMode] = useState(false);
     const [proCategory, setProCategory] = useState<ProCategory>('core');
+    const [entityFilters, setEntityFilters] = useState<EntityAnalyticsFilters>({
+        ship: [],
+        prospectorWeapon: [],
+        equipment: [],
+        perk: [],
+        era: [],
+    });
     const contentRef = useRef<HTMLDivElement>(null);
 
-    const data = useAnalyticsData(timeRange, lastN, currentView);
+    const data = useAnalyticsData(timeRange, lastN, currentView, entityFilters);
 
     const onDrillDown = (name: string, type: DrillDownTarget['type']) => {
         setDrillDownTarget({ name, type });
@@ -180,7 +188,7 @@ export const AnalyticsShell: React.FC = () => {
             case 'placement': return <PlacementDistView data={data.placementData} visualMode={visualMode} />;
             case 'insights': return <InsightsView insights={data.insights} relationshipInsights={data.relationshipInsights} filteredMatches={data.filteredMatches} onDrillDown={onDrillDown} visualMode={visualMode} />;
             case 'social': return <SocialView socialData={data.socialData} filteredMatches={data.filteredMatches} currentUser={currentUser} playerProfiles={data.playerProfiles} onDrillDown={onDrillDown} visualMode={visualMode} />;
-            case 'pro': return <ProView matches={data.filteredMatches} visualMode={visualMode} />;
+            case 'pro': return <EntityAnalyticsView data={data.entityAnalytics} />;
             case 'environment': return <EnvironmentView matches={data.filteredMatches} visualMode={visualMode} />;
             case 'synergy': return <SynergyView synergyMatrix={data.synergyMatrix} visualMode={visualMode} />;
             case 'essay': return <VisualEssayView matches={data.filteredMatches} winRate={data.winRate} currentStreak={data.currentStreak} momentum={data.momentum} sessionSummary={data.sessionSummary} periodComparison={data.periodComparison} timePatterns={data.timePatterns} killEfficiency={data.killEfficiency} socialData={data.socialData} synergyMatrix={data.synergyMatrix} visualMode={visualMode} />;
@@ -277,7 +285,7 @@ export const AnalyticsShell: React.FC = () => {
             view: 'pro' as AnalyticsView,
             label: 'Detailed Analysis',
             category: 'detailed' as ProCategory,
-            content: <ProView matches={data.filteredMatches} visualMode={visualMode} />,
+            content: <EntityAnalyticsView data={data.entityAnalytics} />,
         },
     ]), [
         data.momentum,
@@ -293,6 +301,7 @@ export const AnalyticsShell: React.FC = () => {
         data.insights,
         data.relationshipInsights,
         data.filteredMatches,
+        data.entityAnalytics,
         visualMode,
         currentUser,
         onDrillDown,
@@ -389,6 +398,45 @@ export const AnalyticsShell: React.FC = () => {
                                 {opt.label}
                             </button>
                         ))}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <input
+                            type="text"
+                            placeholder="Ship filter (comma-separated)"
+                            value={entityFilters.ship.join(', ')}
+                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, ship: e.target.value.split(',').map((v) => v.trim()).filter(Boolean) }))}
+                            className="px-2 py-1 rounded-control bg-md-sys-surfaceContainerHigh text-label-sm"
+                        />
+                        <input
+                            type="text"
+                            placeholder="Weapon filter (comma-separated)"
+                            value={entityFilters.prospectorWeapon.join(', ')}
+                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, prospectorWeapon: e.target.value.split(',').map((v) => v.trim()).filter(Boolean) }))}
+                            className="px-2 py-1 rounded-control bg-md-sys-surfaceContainerHigh text-label-sm"
+                        />
+                        <input
+                            type="text"
+                            placeholder="Equipment filter (comma-separated)"
+                            value={entityFilters.equipment.join(', ')}
+                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, equipment: e.target.value.split(',').map((v) => v.trim()).filter(Boolean) }))}
+                            className="px-2 py-1 rounded-control bg-md-sys-surfaceContainerHigh text-label-sm"
+                        />
+                        <input
+                            type="text"
+                            placeholder="Perk set filter (contains all)"
+                            value={entityFilters.perk.join(', ')}
+                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, perk: e.target.value.split(',').map((v) => v.trim()).filter(Boolean) }))}
+                            className="px-2 py-1 rounded-control bg-md-sys-surfaceContainerHigh text-label-sm"
+                        />
+                        <select
+                            value={entityFilters.era[0] || ''}
+                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, era: e.target.value ? [e.target.value as 'baseline' | 'expansion'] : [] }))}
+                            className="px-2 py-1 rounded-control bg-md-sys-surfaceContainerHigh text-label-sm"
+                        >
+                            <option value="">All Eras</option>
+                            <option value="baseline">Baseline</option>
+                            <option value="expansion">Expansion</option>
+                        </select>
                     </div>
                 </div>
             </div>
