@@ -240,17 +240,28 @@ async function detectColorInRegion(imageBuffer, region, sharpModule = null) {
       return { color: 'unknown', confidence: 0, rgb: { r: 0, g: 0, b: 0 } };
     }
 
-    // Calculate average color
-    let r = 0, g = 0, b = 0;
+    // Pick the most saturated pixel in-region to avoid text/background averaging
+    // washing out the team color bars.
+    let bestR = 0, bestG = 0, bestB = 0;
+    let bestSat = -1;
+    let bestLight = -1;
     for (let i = 0; i < data.length; i += info.channels) {
-      r += data[i];
-      g += data[i + 1];
-      b += data[i + 2];
+      const pr = data[i];
+      const pg = data[i + 1];
+      const pb = data[i + 2];
+      const hsl = rgbToHsl(pr, pg, pb);
+      if (hsl.s > bestSat || (hsl.s === bestSat && hsl.l > bestLight)) {
+        bestSat = hsl.s;
+        bestLight = hsl.l;
+        bestR = pr;
+        bestG = pg;
+        bestB = pb;
+      }
     }
 
-    r = Math.round(r / pixelCount);
-    g = Math.round(g / pixelCount);
-    b = Math.round(b / pixelCount);
+    const r = bestR;
+    const g = bestG;
+    const b = bestB;
 
     // Classify using HSL (more robust)
     const result = classifyTeamColorHSL(r, g, b);

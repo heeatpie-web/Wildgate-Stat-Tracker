@@ -55,7 +55,7 @@ function ensureCorpusArchiveDir() {
 
 // ─── OCR Result Cache (LRU, max 50 entries) ───
 const OCR_CACHE_MAX = Math.min(500, Math.max(10, parseInt(process.env.WILDGATE_OCR_CACHE_MAX || '50', 10) || 50));
-const LOW_WORD_CONFIDENCE_THRESHOLD = Math.min(80, Math.max(0, parseInt(process.env.WILDGATE_OCR_WORD_CONF_MIN || '25', 10) || 25));
+const LOW_WORD_CONFIDENCE_THRESHOLD = Math.min(80, Math.max(0, parseInt(process.env.WILDGATE_OCR_WORD_CONF_MIN || '15', 10) || 15));
 const CPU_COUNT = Math.max(1, Number.isFinite(os.cpus()?.length) ? os.cpus().length : 1);
 const OCR_MAX_CONCURRENT = Math.min(4, Math.max(1, parseInt(process.env.WILDGATE_OCR_MAX_CONCURRENT || '1', 10) || 1));
 const OCR_PREPROCESS_DOWNSCALE_WIDTH = Math.min(4096, Math.max(1200, parseInt(process.env.WILDGATE_OCR_PREPROCESS_MAX_WIDTH || '1920', 10) || 1920));
