@@ -36,16 +36,17 @@ function safeArray(v) {
 }
 
 function canonicalizeName(s) {
-  return String(s || '')
+  const compact = String(s || '')
     .trim()
     .toLowerCase()
     .replace(/[_\-\s]+/g, '')
     .replace(/[^a-z0-9]/g, '');
+  return digitFold(compact);
 }
 
 // --- OCR-aware digit folding (matches src/utils/ocr/playerNameMatching.ts) ---
 const OCR_DIGIT_FOLD_MAP = {
-  '0': 'o', '1': 'i', '3': 'e', '4': 'a',
+  '0': 'o', '1': 'l', '3': 'e', '4': 'a',
   '5': 's', '6': 'g', '7': 't', '8': 'b', '9': 'g'
 };
 
@@ -75,39 +76,102 @@ function levenshteinDistance(a, b) {
 }
 
 function canonicalizeModifier(s) {
-  let m = String(s || '').trim().toLowerCase();
-  // Remove punctuation but keep spaces for word splitting
-  m = m.replace(/[^a-z0-9\s]/g, '');
-  m = m.replace(/\s+/g, ' ').trim();
-  // Sort words so "Healing Artifact" and "Artifact Healing" match
-  const words = m.split(' ').sort();
-  // Join without spaces so "Sand Storm" matches "Sandstorm"
-  return words.join('');
+  const normalized = String(s || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[:\-]+/g, ' ')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized) return '';
+
+  const tokens = normalized.split(' ').filter(Boolean);
+  if (tokens.includes('artifact')) {
+    const rest = tokens.filter((token) => token !== 'artifact');
+    return rest.length ? `artifact ${rest.join(' ')}` : 'artifact';
+  }
+
+  return tokens.join(' ');
 }
 
 function canonicalizeColor(s) {
   return String(s || '')
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, ' ');
+    .replace(/[^a-z]/g, '');
 }
 
-function setStats(truthList, predList, normalize) {
-  const truthSet = new Set(safeArray(truthList).map(normalize).filter(Boolean));
-  const predSet = new Set(safeArray(predList).map(normalize).filter(Boolean));
+function trailingDigits(s) {
+  return String(s || '').match(/[0-9]+$/)?.[0] || '';
+}
+
+function fuzzyNameDistance(a, b) {
+  const aDigits = trailingDigits(a);
+  const bDigits = trailingDigits(b);
+  if (aDigits && bDigits && aDigits !== bDigits) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return levenshteinDistance(a, b);
+}
+
+function toUniqueNormalizedList(values, normalize) {
+  return [...new Set(safeArray(values).map(normalize).filter(Boolean))];
+}
+
+function setStats(truthList, predList, normalize, options = {}) {
+  const truthValues = toUniqueNormalizedList(truthList, normalize);
+  const predValues = toUniqueNormalizedList(predList, normalize);
+  const {
+    maxDistance = null,
+    distanceFn = (a, b) => (a === b ? 0 : Number.POSITIVE_INFINITY),
+  } = options;
 
   let tp = 0;
-  for (const item of predSet) {
-    if (truthSet.has(item)) tp += 1;
+
+  if (Number.isFinite(maxDistance)) {
+    const pairs = [];
+    for (let predIdx = 0; predIdx < predValues.length; predIdx += 1) {
+      for (let truthIdx = 0; truthIdx < truthValues.length; truthIdx += 1) {
+        const distance = distanceFn(predValues[predIdx], truthValues[truthIdx]);
+        if (Number.isFinite(distance) && distance <= maxDistance) {
+          pairs.push({
+            predIdx,
+            truthIdx,
+            distance,
+            lenDelta: Math.abs(predValues[predIdx].length - truthValues[truthIdx].length),
+          });
+        }
+      }
+    }
+
+    pairs.sort((a, b) =>
+      a.distance - b.distance
+      || a.lenDelta - b.lenDelta
+      || a.predIdx - b.predIdx
+      || a.truthIdx - b.truthIdx);
+
+    const usedPred = new Set();
+    const usedTruth = new Set();
+    for (const pair of pairs) {
+      if (usedPred.has(pair.predIdx) || usedTruth.has(pair.truthIdx)) continue;
+      usedPred.add(pair.predIdx);
+      usedTruth.add(pair.truthIdx);
+      tp += 1;
+    }
+  } else {
+    const truthSet = new Set(truthValues);
+    for (const item of predValues) {
+      if (truthSet.has(item)) tp += 1;
+    }
   }
 
-  const fp = Math.max(0, predSet.size - tp);
-  const fn = Math.max(0, truthSet.size - tp);
-  const precision = predSet.size ? tp / predSet.size : 1;
-  const recall = truthSet.size ? tp / truthSet.size : 1;
+  const fp = Math.max(0, predValues.length - tp);
+  const fn = Math.max(0, truthValues.length - tp);
+  const precision = predValues.length ? tp / predValues.length : 1;
+  const recall = truthValues.length ? tp / truthValues.length : 1;
   const f1 = precision + recall ? (2 * precision * recall) / (precision + recall) : 0;
 
-  return { tp, fp, fn, precision, recall, f1, truthCount: truthSet.size, predCount: predSet.size };
+  return { tp, fp, fn, precision, recall, f1, truthCount: truthValues.length, predCount: predValues.length };
 }
 
 function flattenOpponentPlayers(teams) {
@@ -298,11 +362,18 @@ function main() {
 
   for (const t of truthSamples) {
     const p = predById.get(t.sampleId) || {};
-    const teammateStats = setStats(t.teammates, p.teammates, canonicalizeName);
+    const teammateStats = setStats(t.teammates, p.teammates, canonicalizeName, {
+      maxDistance: 2,
+      distanceFn: fuzzyNameDistance,
+    });
     const opponentStats = setStats(
       flattenOpponentPlayers(t.opponentTeams),
       flattenOpponentPlayers(p.opponentTeams),
-      canonicalizeName
+      canonicalizeName,
+      {
+        maxDistance: 2,
+        distanceFn: fuzzyNameDistance,
+      }
     );
     const modifierStats = setStats(t.modifiers, p.modifiers, canonicalizeModifier);
     const grouping = teamGroupingAccuracy(t.opponentTeams, p.opponentTeams);

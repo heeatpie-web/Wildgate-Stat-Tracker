@@ -1731,26 +1731,27 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         try {
           const origW = Math.round(processed.width / processed.scale);
           const origH = Math.round(processed.height / processed.scale);
-          const stripXFrac1 = 0.64;
-          const stripXFrac2 = 0.79;
+          const stripXFrac1 = 0.55;
+          const stripXFrac2 = 0.88;
           const stripX1  = Math.round(origW * stripXFrac1);
           const stripX2  = Math.round(origW * stripXFrac2);
           const stripW   = stripX2 - stripX1;
-          const stripY   = 160;
-          const stripH   = Math.max(0, Math.round(origH * 0.83) - stripY);  // y=160 to ~83% height (captures team bars + player names)
-          const STRIP_SCALE = 3;
+          const stripY   = 120;
+          const stripH   = Math.max(0, Math.round(origH * 0.92) - stripY);
+          const STRIP_SCALE = 4;
 
           const stripBuf = await sharp(imageBuffer)
             .extract({ left: stripX1, top: stripY, width: stripW, height: stripH })
             .resize(stripW * STRIP_SCALE, stripH * STRIP_SCALE, { kernel: sharp.kernel.lanczos3 })
             .grayscale()
             .modulate({ brightness: 1.0 })
-            .linear(1.3, -(0.3 * 128))
+            .linear(1.4, -(0.3 * 128))
             .sharpen({ sigma: 2, m1: 1, m2: 0.5 })
             .png().toBuffer();
           const stripResult = await runOCREngOnly(stripBuf, 11);
+          const stripResultPsm6 = await runOCREngOnly(stripBuf, 6);
           let stripWordCount = 0;
-          for (const sw of (stripResult?.allWords || [])) {
+          for (const sw of [...(stripResult?.allWords || []), ...(stripResultPsm6?.allWords || [])]) {
             // Map: strip-crop 4× coords → 1× full-image → 2× processed coords
             const mapped2x = {
               x0: Math.round((sw.bbox.x0 / STRIP_SCALE + stripX1) * processed.scale),
@@ -1808,12 +1809,13 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
             // Only add NEW words if confidence is sufficient.
             // Long words (≥7 chars) get a lower floor (15) — they're unlikely to be
             // random noise, and this recovers names like GoblinaTTyV(c16).
-            const confFloor = sw.text.trim().length >= 7 ? 15 : 20;
+            const textLen = sw.text.trim().length;
+            const confFloor = textLen >= 7 ? 10 : textLen >= 4 ? 12 : 15;
             if (sw.confidence < confFloor) continue;
             allWordsWithEngOnly.push({ ...sw, bbox: mapped2x });
             stripWordCount++;
           }
-          console.log(`[OCR-CrewHub] Strip PSM11 pass: appended ${stripWordCount} words`);
+          console.log(`[OCR-CrewHub] Strip PSM11/PSM6 pass: appended ${stripWordCount} words`);
         } catch (e) {
           console.warn('[OCR-CrewHub] Strip PSM11 pass failed:', e.message);
         }
@@ -1826,16 +1828,16 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         try {
           const origW2 = Math.round(processed.width / processed.scale);
           const origH2 = Math.round(processed.height / processed.scale);
-          const rX1    = Math.round(origW2 * 0.64);
-          const rW     = Math.round(origW2 * 0.79) - rX1;
-          const RSC    = 3;
-          const SLICE_H = 65;
-          const STEP    = 65;
+          const rX1    = Math.round(origW2 * 0.55);
+          const rW     = Math.round(origW2 * 0.88) - rX1;
+          const RSC    = 4;
+          const SLICE_H = 40;
+          const STEP    = 40;
           const rowSliceYStart = Math.max(
-            160,
-            Math.round(origH2 * (activeRegions.crewHub?.enemyName?.yMin || 0.08)) + 20
+            120,
+            Math.round(origH2 * (activeRegions.crewHub?.enemyName?.yMin || 0.08)) + 10
           );
-          const rowSliceYEnd   = Math.round(origH2 * 0.83);
+          const rowSliceYEnd   = Math.round(origH2 * 0.92);
           let rowWordCount = 0;
           for (let sy = rowSliceYStart; sy < rowSliceYEnd; sy += STEP) {
             const h = Math.min(SLICE_H, rowSliceYEnd - sy);
@@ -1845,7 +1847,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
               .resize(rW * RSC, h * RSC, { kernel: sharp.kernel.lanczos3 })
               .grayscale()
               .modulate({ brightness: 1.15 })
-              .linear(1.3, -(0.3 * 128))
+              .linear(1.4, -(0.3 * 128))
               .sharpen({ sigma: 1.5, m1: 1, m2: 0.5 })
               .png().toBuffer();
             const sliceResult = await runOCREngOnly(sliceBuf, 11);
@@ -1890,7 +1892,9 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
                   allWordsWithEngOnly[existingIdx] = { ...sw, bbox: mapped2x };
                 continue;
               }
-              if (sw.confidence < 20) continue;
+              const swLen = sw.text.trim().length;
+              const rowConfFloor = swLen >= 7 ? 10 : swLen >= 4 ? 12 : 15;
+              if (sw.confidence < rowConfFloor) continue;
               allWordsWithEngOnly.push({ ...sw, bbox: mapped2x });
               rowWordCount++;
             }
@@ -2166,44 +2170,18 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       }
 
     } else {
-      console.log('[OCR] Unknown screen type, attempting both extractors');
-
-      // Try both and use whichever gets better results
-      const crewHubData = await extractCrewHub(
-        processed.buffer,
-        activeUser,
-        ocrResult,
-        processed.width,
-        processed.height,
-        processed.scale, // OCR words are on preprocessed/scaled image coordinates
-        imageBuffer, // keep color detection on original-color pixels
-        activeRegions.crewHub
-      );
-
-      const mapScreenData = await extractMapScreen(
-        processed.buffer,
-        ocrResult,
-        processed.width,
-        processed.height,
-        activeRegions.mapScreen
-      );
-
-      // Use whichever has more data
-      if (crewHubData.yourTeam?.players?.length > 0 ||
-          crewHubData.enemyTeams?.length > 0) {
-        extractedData = convertCrewHubToLegacy(crewHubData, ocrResult.text);
-      } else if (mapScreenData.yourShip || mapScreenData.enemyShips?.length > 0) {
-        extractedData = convertMapScreenToLegacy(mapScreenData, ocrResult.text);
-      } else {
-        // Default to unknown
-        extractedData = {
-          screenshotType: 'unknown',
-          rawText: ocrResult.text,
-          reachModifiers: extractModifiers(ocrResult.text),
-          confidence: 0,
-          captureTimestamp: Date.now(),
-        };
-      }
+      console.log('[OCR] Unknown screen type, returning minimal extraction');
+      extractedData = {
+        screenshotType: 'unknown',
+        rawText: ocrResult.text || '',
+        playerTeamName: undefined,
+        teammates: [],
+        opponentTeams: [],
+        reachModifiers: [],
+        overallConfidence: 0,
+        isPartialCapture: true,
+        captureTimestamp: Date.now(),
+      };
     }
 
     // Merge with existing data if provided

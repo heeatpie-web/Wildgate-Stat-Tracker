@@ -130,6 +130,19 @@ const NOISE_WORDS = new Set([
   'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
 ]);
 
+const UI_NOISE_PHRASES = [
+  'CREW HUB',
+  'PARTY',
+  'TEAM VOICE',
+  'PUSH TO TALK',
+  'MUTE VOICE',
+  'CHANGE VOICE',
+  'BACK',
+  'SWITCH',
+  'VOICE CHANNEL',
+  'YOUR VOICE',
+];
+
 /**
  * Ship type names — not relevant in Crew Hub (only on tactical map),
  * but filter them for safety.
@@ -612,6 +625,11 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     const lineText = line.words.map(w => w.text).join(' ').trim();
     if (!lineText || lineText.length < 2) { dlog('[CrewHub] SKIP too-short line: "' + lineText + '" y=' + Math.round(line.y)); continue; }
     if (isSpectatorLine(lineText)) { dlog('[CrewHub] SKIP spectator line: "' + lineText + '"'); continue; }
+    const upperLineText = lineText.toUpperCase();
+    if (UI_NOISE_PHRASES.some(phrase => upperLineText.includes(phrase))) {
+      dlog('[CrewHub] SKIP ui-phrase line: "' + lineText + '"');
+      continue;
+    }
 
     // Check if all words are noise
     const wordsUpper = lineText.toUpperCase().split(/\s+/);
@@ -904,7 +922,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
                    : 0;
         if (dist < bestDist) { bestDist = dist; bestGroup = g; }
       }
-      if (bestGroup && bestDist < CARD_HEIGHT * 3) {
+      if (bestGroup && bestDist < CARD_HEIGHT * 5) {
         bestGroup.cards.push(card);
         bestGroup.minY = Math.min(bestGroup.minY, card.y);
         bestGroup.maxY = Math.max(bestGroup.maxY, card.y);
@@ -1551,9 +1569,8 @@ function namesAreNearDuplicate(a, b) {
   const shorter = aKey.length <= bKey.length ? aKey : bKey;
   const longer  = aKey.length <= bKey.length ? bKey : aKey;
   if (shorter.length >= 5 && longer.includes(shorter)) return true;
-  // Levenshtein ≤1 only for longer names so short names like "Rive" vs "Riv2"
-  // (both 4 chars, edit-distance 1) are NOT conflated.
-  if (aKey.length >= 8 && bKey.length >= 8) return levenshteinDistance(aKey, bKey) <= 1;
+  // Apply OCR-tolerant near-deduplication for most player-name lengths.
+  if (aKey.length >= 5 && bKey.length >= 5) return levenshteinDistance(aKey, bKey) <= 1;
   return false;
 }
 

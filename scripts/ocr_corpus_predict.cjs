@@ -49,20 +49,25 @@ function safeArray(v) {
 }
 
 function normalizePrediction(data, sampleId) {
+  const screenshotType = String(data?.screenshotType || '').trim() || undefined;
   const teammates = safeArray(data?.teammates).map(t => String(t?.name || '').trim()).filter(Boolean);
   const opponentTeams = safeArray(data?.opponentTeams).map(team => ({
     teamName: String(team?.teamName || '').trim() || 'Unknown Team',
-    teamColor: String(team?.color || '').trim() || undefined,
+    teamColor: String(team?.teamColor || team?.color || '').trim() || undefined,
     players: safeArray(team?.players).map(p => String(p?.name || '').trim()).filter(Boolean)
   }));
+  const normalizedOpponentTeams = screenshotType === 'tactical_map'
+    ? opponentTeams.map(team => ({ ...team, players: [] }))
+    : opponentTeams;
   const modifiers = safeArray(data?.reachModifiers)
     .map(m => (typeof m === 'string' ? m : String(m?.name || '').trim()))
     .filter(Boolean);
 
   return {
     sampleId,
+    screenshotType,
     teammates,
-    opponentTeams,
+    opponentTeams: normalizedOpponentTeams,
     modifiers
   };
 }
