@@ -43,11 +43,46 @@ function canonicalizeName(s) {
     .replace(/[^a-z0-9]/g, '');
 }
 
+// --- OCR-aware digit folding (matches src/utils/ocr/playerNameMatching.ts) ---
+const OCR_DIGIT_FOLD_MAP = {
+  '0': 'o', '1': 'i', '3': 'e', '4': 'a',
+  '5': 's', '6': 'g', '7': 't', '8': 'b', '9': 'g'
+};
+
+function digitFold(s) {
+  return s.replace(/[013456789]/g, ch => OCR_DIGIT_FOLD_MAP[ch] || ch);
+}
+
+// --- Levenshtein distance ---
+function levenshteinDistance(a, b) {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const matrix = Array.from({ length: b.length + 1 }, () => Array(a.length + 1).fill(0));
+  for (let i = 0; i <= b.length; i++) matrix[i][0] = i;
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      const cost = b[i - 1] === a[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
 function canonicalizeModifier(s) {
-  return String(s || '')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, ' ');
+  let m = String(s || '').trim().toLowerCase();
+  // Remove punctuation but keep spaces for word splitting
+  m = m.replace(/[^a-z0-9\s]/g, '');
+  m = m.replace(/\s+/g, ' ').trim();
+  // Sort words so "Healing Artifact" and "Artifact Healing" match
+  const words = m.split(' ').sort();
+  // Join without spaces so "Sand Storm" matches "Sandstorm"
+  return words.join('');
 }
 
 function canonicalizeColor(s) {
