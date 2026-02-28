@@ -79,7 +79,6 @@ const inferDomainFromName = (name: string): MappingDomain | null => {
     if (inferredTag === 'ship') return 'ships';
     if (inferredTag === 'weapon') return 'weapons';
     if (inferredTag === 'equipment') return 'equipment';
-    if (inferredTag === 'perk') return 'perks';
     return null;
 };
 
@@ -91,6 +90,7 @@ const inferTagFromName = (name: string): MappingTag | null => {
     if (hasAliasMatch(name, EQUIPMENT_SET)) return 'equipment';
     if (hasAliasMatch(name, PERK_SET)) return 'perk';
     const inferredTag = inferTagFromKeywords(name);
+    if (inferredTag === 'perk') return null;
     if (inferredTag) return inferredTag;
     return null;
 };

@@ -110,7 +110,11 @@ export const getMatchShip = (match: Match): string => {
 
 export const getMatchPerks = (match: Match): string[] => {
     const loadout = getLoadout(match);
-    return dedupeByCaseInsensitive(getStringArray(loadout.characterPerks).slice(0, MAX_PERKS_PER_MATCH));
+    return dedupeByCaseInsensitive([
+        ...getStringArray(loadout.characterPerks),
+        ...getStringArray(loadout.perks),
+        ...getStringArray(match?.perks),
+    ]).slice(0, MAX_PERKS_PER_MATCH);
 };
 
 export const getMatchProspectorWeapons = (match: Match): string[] => {

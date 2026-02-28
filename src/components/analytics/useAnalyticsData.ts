@@ -9,6 +9,11 @@ import {
     MomentumData,
     StreakData,
     PlacementData,
+    EntityAnalyticsData,
+    EntityAnalyticsFilters,
+    EntityComparison,
+    EntityDimensionKey,
+    EntityMetricRow,
 } from '../../types';
 import {
     calculateInsights,
@@ -25,6 +30,11 @@ import {
 } from '../../utils/analytics';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
+import { getMatchEquipment, getMatchEra, getMatchPerks, getMatchProspectorWeapons, getMatchShip } from '../patch/patchEntityCatalog';
+
+const METRIC_MIN_SAMPLE = 5;
+const DELTA_MIN_SAMPLE = 10;
+const LOW_SAMPLE_THRESHOLD = 10;
 
 const EMPTY_TIME_PATTERNS: TimePatternData = {
     byHour: [],
@@ -80,7 +90,205 @@ const EMPTY_STREAK: StreakData = {
     averageStreakLength: 0,
 };
 
-export const useAnalyticsData = (timeRange: AnalyticsTimeRange, lastN: number = 20, view?: AnalyticsView) => {
+const EMPTY_ENTITY_FILTERS: EntityAnalyticsFilters = {
+    ship: [],
+    prospectorWeapon: [],
+    equipment: [],
+    perk: [],
+    era: [],
+};
+
+const toPct = (value: number): number => Math.round(value * 1000) / 10;
+
+const toPlacementBucket = (placement: number | undefined | null): string => {
+    const parsed = Number(placement || 0);
+    if (!Number.isInteger(parsed) || parsed <= 0) return 'unknown';
+    if (parsed === 1) return '1';
+    if (parsed <= 3) return '2-3';
+    if (parsed <= 5) return '4-5';
+    return '6+';
+};
+
+const calculateComparison = (
+    label: string,
+    selectedMatches: any[],
+    baselineMatches: any[]
+): EntityComparison => {
+    const selectedSample = selectedMatches.length;
+    const baselineSample = baselineMatches.length;
+    const selectedWinRate = selectedSample > 0
+        ? toPct(selectedMatches.filter((m) => m.result === 'Win').length / selectedSample)
+        : 0;
+    const baselineWinRate = baselineSample > 0
+        ? toPct(baselineMatches.filter((m) => m.result === 'Win').length / baselineSample)
+        : 0;
+    const gated = selectedSample < DELTA_MIN_SAMPLE || baselineSample < DELTA_MIN_SAMPLE;
+    if (gated) {
+        return {
+            label,
+            selectedSample,
+            baselineSample,
+            selectedWinRate,
+            baselineWinRate,
+            absoluteDelta: null,
+            relativeDelta: null,
+            gated: true,
+            gateReason: `Minimum ${DELTA_MIN_SAMPLE} matches per side required`,
+        };
+    }
+    const absoluteDelta = toPct((selectedWinRate - baselineWinRate) / 100);
+    const relativeDelta = baselineWinRate > 0
+        ? toPct((selectedWinRate - baselineWinRate) / baselineWinRate)
+        : null;
+    return {
+        label,
+        selectedSample,
+        baselineSample,
+        selectedWinRate,
+        baselineWinRate,
+        absoluteDelta,
+        relativeDelta,
+        gated: false,
+    };
+};
+
+const buildEntityRows = (
+    matches: any[],
+    dimension: EntityDimensionKey
+): EntityMetricRow[] => {
+    const counters: Record<string, {
+        total: number;
+        wins: number;
+        placements: Record<string, number>;
+    }> = {};
+    matches.forEach((match) => {
+        const labels = (() => {
+            switch (dimension) {
+                case 'ship': {
+                    const ship = getMatchShip(match);
+                    return ship ? [ship] : ['Unknown'];
+                }
+                case 'prospectorWeapon':
+                    return getMatchProspectorWeapons(match);
+                case 'equipment':
+                    return getMatchEquipment(match);
+                case 'perk':
+                    return getMatchPerks(match);
+                case 'era':
+                    return [getMatchEra(match)];
+                default:
+                    return [];
+            }
+        })();
+        const unique = Array.from(new Set(labels.map((entry) => String(entry || '').trim()).filter(Boolean)));
+        unique.forEach((label) => {
+            const key = label.toLowerCase();
+            if (!counters[key]) {
+                counters[key] = { total: 0, wins: 0, placements: {} };
+            }
+            counters[key].total += 1;
+            if (match.result === 'Win') counters[key].wins += 1;
+            const bucket = toPlacementBucket(match.placement);
+            counters[key].placements[bucket] = (counters[key].placements[bucket] || 0) + 1;
+        });
+    });
+    const totalMatches = Math.max(matches.length, 1);
+    return Object.entries(counters)
+        .map(([key, value]) => ({
+            key,
+            label: key === 'expansion' ? 'Expansion' : key === 'baseline' ? 'Baseline' : key,
+            sampleCount: value.total,
+            usageRate: toPct(value.total / totalMatches),
+            winRate: toPct(value.wins / Math.max(value.total, 1)),
+            placementDistribution: value.placements,
+            lowSample: value.total < LOW_SAMPLE_THRESHOLD,
+        }))
+        .filter((row) => row.sampleCount >= METRIC_MIN_SAMPLE)
+        .sort((a, b) => b.sampleCount - a.sampleCount);
+};
+
+const matchPassesFilters = (match: any, filters: EntityAnalyticsFilters): boolean => {
+    const ship = getMatchShip(match);
+    const weapons = getMatchProspectorWeapons(match);
+    const equipment = getMatchEquipment(match);
+    const perks = getMatchPerks(match);
+    const era = getMatchEra(match);
+    if (filters.ship.length > 0 && !filters.ship.some((candidate) => candidate.toLowerCase() === ship.toLowerCase())) {
+        return false;
+    }
+    if (filters.prospectorWeapon.length > 0 && !filters.prospectorWeapon.some((candidate) => weapons.some((entry) => entry.toLowerCase() === candidate.toLowerCase()))) {
+        return false;
+    }
+    if (filters.equipment.length > 0 && !filters.equipment.some((candidate) => equipment.some((entry) => entry.toLowerCase() === candidate.toLowerCase()))) {
+        return false;
+    }
+    if (filters.perk.length > 0 && !filters.perk.every((candidate) => perks.some((entry) => entry.toLowerCase() === candidate.toLowerCase()))) {
+        return false;
+    }
+    if (filters.era.length > 0 && !filters.era.includes(era)) {
+        return false;
+    }
+    return true;
+};
+
+const EMPTY_ENTITY_ANALYTICS: EntityAnalyticsData = {
+    filters: EMPTY_ENTITY_FILTERS,
+    filteredCount: 0,
+    thresholds: {
+        showMetricsAt: METRIC_MIN_SAMPLE,
+        showDeltasAt: DELTA_MIN_SAMPLE,
+        lowSampleBelow: LOW_SAMPLE_THRESHOLD,
+    },
+    dimensions: {
+        ship: [],
+        prospectorWeapon: [],
+        equipment: [],
+        perk: [],
+        era: [],
+    },
+    comparisons: {
+        periodVsPrevious: {
+            label: 'Current Period vs Previous Period',
+            baselineSample: 0,
+            selectedSample: 0,
+            baselineWinRate: 0,
+            selectedWinRate: 0,
+            absoluteDelta: null,
+            relativeDelta: null,
+            gated: true,
+            gateReason: `Minimum ${DELTA_MIN_SAMPLE} matches per side required`,
+        },
+        selectedPerkSetVsAll: {
+            label: 'Selected Perk Set vs All Matches',
+            baselineSample: 0,
+            selectedSample: 0,
+            baselineWinRate: 0,
+            selectedWinRate: 0,
+            absoluteDelta: null,
+            relativeDelta: null,
+            gated: true,
+            gateReason: `Minimum ${DELTA_MIN_SAMPLE} matches per side required`,
+        },
+        selectedLoadoutVsGlobal: {
+            label: 'Selected Ship/Loadout vs Global Baseline',
+            baselineSample: 0,
+            selectedSample: 0,
+            baselineWinRate: 0,
+            selectedWinRate: 0,
+            absoluteDelta: null,
+            relativeDelta: null,
+            gated: true,
+            gateReason: `Minimum ${DELTA_MIN_SAMPLE} matches per side required`,
+        },
+    },
+};
+
+export const useAnalyticsData = (
+    timeRange: AnalyticsTimeRange,
+    lastN: number = 20,
+    view?: AnalyticsView,
+    entityFilters: EntityAnalyticsFilters = EMPTY_ENTITY_FILTERS
+) => {
     const { matches, playerProfiles } = useGameData();
     const { activeMode } = useUIState();
 
@@ -133,6 +341,7 @@ export const useAnalyticsData = (timeRange: AnalyticsTimeRange, lastN: number = 
     const wantInsights = wantOverview || view === 'insights';
     const wantSocial = wantOverview || view === 'social';
     const wantSynergy = wantOverview || view === 'synergy';
+    const wantEntities = wantOverview || view === 'pro';
 
     const winRate = useMemo(() => {
         if (filteredMatches.length === 0) return 0;
@@ -219,6 +428,39 @@ export const useAnalyticsData = (timeRange: AnalyticsTimeRange, lastN: number = 
         return Math.round(filteredMatches.length / spanDays);
     }, [filteredMatches, timeRange, rangeStart]);
 
+    const entityAnalytics = useMemo(() => {
+        if (!wantEntities) return EMPTY_ENTITY_ANALYTICS;
+        const selectedMatches = filteredMatches.filter((match) => matchPassesFilters(match, entityFilters));
+        const allInRange = filteredMatches;
+        const half = Math.floor(allInRange.length / 2);
+        const previousPeriodMatches = allInRange.slice(0, half);
+        const currentPeriodMatches = allInRange.slice(half);
+        const selectedPerkMatches = entityFilters.perk.length > 0
+            ? allInRange.filter((match) => matchPassesFilters(match, { ...EMPTY_ENTITY_FILTERS, perk: entityFilters.perk }))
+            : selectedMatches;
+        return {
+            filters: entityFilters,
+            filteredCount: selectedMatches.length,
+            thresholds: {
+                showMetricsAt: METRIC_MIN_SAMPLE,
+                showDeltasAt: DELTA_MIN_SAMPLE,
+                lowSampleBelow: LOW_SAMPLE_THRESHOLD,
+            },
+            dimensions: {
+                ship: buildEntityRows(selectedMatches, 'ship'),
+                prospectorWeapon: buildEntityRows(selectedMatches, 'prospectorWeapon'),
+                equipment: buildEntityRows(selectedMatches, 'equipment'),
+                perk: buildEntityRows(selectedMatches, 'perk'),
+                era: buildEntityRows(selectedMatches, 'era'),
+            },
+            comparisons: {
+                periodVsPrevious: calculateComparison('Current Period vs Previous Period', currentPeriodMatches, previousPeriodMatches),
+                selectedPerkSetVsAll: calculateComparison('Selected Perk Set vs All Matches', selectedPerkMatches, allInRange),
+                selectedLoadoutVsGlobal: calculateComparison('Selected Ship/Loadout vs Global Baseline', selectedMatches, allInRange),
+            },
+        } satisfies EntityAnalyticsData;
+    }, [wantEntities, filteredMatches, entityFilters]);
+
     return {
         filteredMatches,
         winRate,
@@ -236,5 +478,6 @@ export const useAnalyticsData = (timeRange: AnalyticsTimeRange, lastN: number = 
         momentum,
         avgSortiesPerDay,
         playerProfiles,
+        entityAnalytics,
     };
 };
