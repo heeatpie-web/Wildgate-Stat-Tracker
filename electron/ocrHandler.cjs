@@ -58,6 +58,7 @@ const OCR_CACHE_MAX = Math.min(500, Math.max(10, parseInt(process.env.WILDGATE_O
 const LOW_WORD_CONFIDENCE_THRESHOLD = Math.min(80, Math.max(0, parseInt(process.env.WILDGATE_OCR_WORD_CONF_MIN || '25', 10) || 25));
 const CPU_COUNT = Math.max(1, Number.isFinite(os.cpus()?.length) ? os.cpus().length : 1);
 const OCR_MAX_CONCURRENT = Math.min(4, Math.max(1, parseInt(process.env.WILDGATE_OCR_MAX_CONCURRENT || '1', 10) || 1));
+const OCR_PREPROCESS_DOWNSCALE_WIDTH = Math.min(4096, Math.max(1200, parseInt(process.env.WILDGATE_OCR_PREPROCESS_MAX_WIDTH || '1920', 10) || 1920));
 const DEFAULT_SHARP_CONCURRENCY = CPU_COUNT <= 4 ? 1 : 2;
 const OCR_SHARP_CONCURRENCY = Math.min(4, Math.max(1, parseInt(process.env.WILDGATE_OCR_SHARP_CONCURRENCY || String(DEFAULT_SHARP_CONCURRENCY), 10) || DEFAULT_SHARP_CONCURRENCY));
 const ocrResultCache = new Map(); // hash → { result, timestamp }
@@ -714,10 +715,12 @@ async function preprocessImage(imageBuffer) {
     const sourceWidth = Number(metadata.width) || 1920;
     const sourceHeight = Number(metadata.height) || 1080;
     // Three-way scaling policy:
-    // <2000px => 2x upsample, 2000-2400px => keep, >2400px => downscale to 1920px width.
+    // <2000px => 2x upsample, 2000-maxWidth => keep, >maxWidth => downscale to maxWidth.
+    const preprocessMode = sourceWidth < 2000 ? 'upsample_2x'
+      : (sourceWidth > OCR_PREPROCESS_DOWNSCALE_WIDTH ? 'downscale_cap' : 'keep_native');
     const scale = sourceWidth < 2000
       ? 2
-      : (sourceWidth > 2400 ? (1920 / sourceWidth) : 1);
+      : (sourceWidth > OCR_PREPROCESS_DOWNSCALE_WIDTH ? (OCR_PREPROCESS_DOWNSCALE_WIDTH / sourceWidth) : 1);
     const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
     const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
 
@@ -745,6 +748,10 @@ async function preprocessImage(imageBuffer) {
       height: targetHeight,
       originalWidth: sourceWidth,
       originalHeight: sourceHeight,
+      preprocessMeta: {
+        mode: preprocessMode,
+        downscaleCapWidth: OCR_PREPROCESS_DOWNSCALE_WIDTH,
+      },
     };
   } catch (error) {
     console.error('[OCR] Preprocessing failed:', error);
@@ -1607,7 +1614,12 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     // Preprocess image
     console.log('[OCR] Preprocessing image...');
     const processed = await preprocessImage(imageBuffer);
-    console.log('[OCR] Preprocessing done, dimensions:', processed.width, 'x', processed.height);
+    const preMeta = (processed && typeof processed.preprocessMeta === 'object') ? processed.preprocessMeta : {};
+    console.log(
+      `[OCR] Preprocessing done: original=${processed.originalWidth}x${processed.originalHeight}, ` +
+      `ocrInput=${processed.width}x${processed.height}, scale=${Number(processed.scale || 1).toFixed(4)}, ` +
+      `mode=${preMeta.mode || 'unknown'}, downscaleCapWidth=${preMeta.downscaleCapWidth || OCR_PREPROCESS_DOWNSCALE_WIDTH}`
+    );
 
     // Save raw capture debug image (also triggers cloud upload)
     // When sourceImagePath is provided (re-analysis), skip saving a duplicate
