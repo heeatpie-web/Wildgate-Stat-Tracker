@@ -976,6 +976,11 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
   };
 
   for (const cluster of knownGroups) {
+    if (cluster.color === 'unknown') {
+      dlog('[CrewHub] Skip unknown cluster to avoid spectator/near-black pollution');
+      continue;
+    }
+
     const players = [];
     for (const card of cluster.cards) {
       pushUniquePlayerName(players, card.name);

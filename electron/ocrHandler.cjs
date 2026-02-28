@@ -39,6 +39,10 @@ const DEBUG_DIR = path.join(app.getPath('userData'), 'ocr-debug');
 const OCR_CORPUS_ARCHIVE_DIR = path.join(app.getPath('userData'), 'ocr-corpus-archive');
 const OCR_TESSERACT_DIR = path.join(app.getPath('userData'), 'ocr-tesseract');
 const OCR_USER_WORDS_FILE = path.join(OCR_TESSERACT_DIR, 'wildgate_userwords.txt');
+const OCR_USER_WORDS_FILE_FALLBACKS = [
+  path.join(app.getPath('appData'), 'Wildgate Stat Tracker', 'ocr-tesseract', 'wildgate_userwords.txt'),
+  path.join(app.getPath('appData'), 'wildgate-stat-tracker', 'ocr-tesseract', 'wildgate_userwords.txt'),
+];
 
 // Ensure debug directory exists
 function ensureDebugDir() {
@@ -55,9 +59,10 @@ function ensureCorpusArchiveDir() {
 
 // ─── OCR Result Cache (LRU, max 50 entries) ───
 const OCR_CACHE_MAX = Math.min(500, Math.max(10, parseInt(process.env.WILDGATE_OCR_CACHE_MAX || '50', 10) || 50));
-const LOW_WORD_CONFIDENCE_THRESHOLD = Math.min(80, Math.max(0, parseInt(process.env.WILDGATE_OCR_WORD_CONF_MIN || '25', 10) || 25));
+const LOW_WORD_CONFIDENCE_THRESHOLD = Math.min(80, Math.max(0, parseInt(process.env.WILDGATE_OCR_WORD_CONF_MIN || '15', 10) || 15));
 const CPU_COUNT = Math.max(1, Number.isFinite(os.cpus()?.length) ? os.cpus().length : 1);
 const OCR_MAX_CONCURRENT = Math.min(4, Math.max(1, parseInt(process.env.WILDGATE_OCR_MAX_CONCURRENT || '1', 10) || 1));
+const OCR_PREPROCESS_DOWNSCALE_WIDTH = Math.min(4096, Math.max(1200, parseInt(process.env.WILDGATE_OCR_PREPROCESS_MAX_WIDTH || '1920', 10) || 1920));
 const DEFAULT_SHARP_CONCURRENCY = CPU_COUNT <= 4 ? 1 : 2;
 const OCR_SHARP_CONCURRENCY = Math.min(4, Math.max(1, parseInt(process.env.WILDGATE_OCR_SHARP_CONCURRENCY || String(DEFAULT_SHARP_CONCURRENCY), 10) || DEFAULT_SHARP_CONCURRENCY));
 const ocrResultCache = new Map(); // hash → { result, timestamp }
@@ -436,12 +441,20 @@ let activeUserWordsFile = null;
 let latestDictionaryStats = null;
 
 async function resolveExistingDictionaryFile() {
-  try {
-    await fsPromises.access(OCR_USER_WORDS_FILE, fs.constants.F_OK);
-    return OCR_USER_WORDS_FILE;
-  } catch {
-    return null;
+  const candidates = [OCR_USER_WORDS_FILE, ...OCR_USER_WORDS_FILE_FALLBACKS];
+  const seen = new Set();
+  for (const filePath of candidates) {
+    const normalized = String(filePath || '').trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    try {
+      await fsPromises.access(normalized, fs.constants.F_OK);
+      return normalized;
+    } catch {
+      // try next candidate
+    }
   }
+  return null;
 }
 
 function buildTesseractWorkerParameters(userWordsFile = null, psm = null) {
@@ -711,12 +724,21 @@ async function preprocessImage(imageBuffer) {
     const image = sharp(imageBuffer);
     const metadata = await image.metadata();
 
-    // Scale up 2x for better OCR if small
-    const scale = metadata.width < 2000 ? 2 : 1;
+    const sourceWidth = Number(metadata.width) || 1920;
+    const sourceHeight = Number(metadata.height) || 1080;
+    // Three-way scaling policy:
+    // <2000px => 2x upsample, 2000-maxWidth => keep, >maxWidth => downscale to maxWidth.
+    const preprocessMode = sourceWidth < 2000 ? 'upsample_2x'
+      : (sourceWidth > OCR_PREPROCESS_DOWNSCALE_WIDTH ? 'downscale_cap' : 'keep_native');
+    const scale = sourceWidth < 2000
+      ? 2
+      : (sourceWidth > OCR_PREPROCESS_DOWNSCALE_WIDTH ? (OCR_PREPROCESS_DOWNSCALE_WIDTH / sourceWidth) : 1);
+    const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
+    const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
 
     const processed = await image
-      .resize(metadata.width * scale, metadata.height * scale, {
-        kernel: sharp.kernel.nearest,
+      .resize(targetWidth, targetHeight, {
+        kernel: sharp.kernel.lanczos3,
       })
       .modulate({
         brightness: 1.1,
@@ -734,10 +756,14 @@ async function preprocessImage(imageBuffer) {
     return {
       buffer: processed,
       scale,
-      width: metadata.width * scale,
-      height: metadata.height * scale,
-      originalWidth: metadata.width,
-      originalHeight: metadata.height,
+      width: targetWidth,
+      height: targetHeight,
+      originalWidth: sourceWidth,
+      originalHeight: sourceHeight,
+      preprocessMeta: {
+        mode: preprocessMode,
+        downscaleCapWidth: OCR_PREPROCESS_DOWNSCALE_WIDTH,
+      },
     };
   } catch (error) {
     console.error('[OCR] Preprocessing failed:', error);
@@ -1600,7 +1626,12 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     // Preprocess image
     console.log('[OCR] Preprocessing image...');
     const processed = await preprocessImage(imageBuffer);
-    console.log('[OCR] Preprocessing done, dimensions:', processed.width, 'x', processed.height);
+    const preMeta = (processed && typeof processed.preprocessMeta === 'object') ? processed.preprocessMeta : {};
+    console.log(
+      `[OCR] Preprocessing done: original=${processed.originalWidth}x${processed.originalHeight}, ` +
+      `ocrInput=${processed.width}x${processed.height}, scale=${Number(processed.scale || 1).toFixed(4)}, ` +
+      `mode=${preMeta.mode || 'unknown'}, downscaleCapWidth=${preMeta.downscaleCapWidth || OCR_PREPROCESS_DOWNSCALE_WIDTH}`
+    );
 
     // Save raw capture debug image (also triggers cloud upload)
     // When sourceImagePath is provided (re-analysis), skip saving a duplicate
@@ -1711,7 +1742,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
 
           const stripBuf = await sharp(imageBuffer)
             .extract({ left: stripX1, top: stripY, width: stripW, height: stripH })
-            .resize(stripW * STRIP_SCALE, stripH * STRIP_SCALE, { kernel: sharp.kernel.nearest })
+            .resize(stripW * STRIP_SCALE, stripH * STRIP_SCALE, { kernel: sharp.kernel.lanczos3 })
+            .grayscale()
             .modulate({ brightness: 1.0 })
             .linear(1.3, -(0.3 * 128))
             .sharpen({ sigma: 2, m1: 1, m2: 0.5 })
@@ -1810,7 +1842,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
             if (h < 20) continue;
             const sliceBuf = await sharp(imageBuffer)
               .extract({ left: rX1, top: sy, width: rW, height: h })
-              .resize(rW * RSC, h * RSC, { kernel: sharp.kernel.nearest })
+              .resize(rW * RSC, h * RSC, { kernel: sharp.kernel.lanczos3 })
+              .grayscale()
               .modulate({ brightness: 1.15 })
               .linear(1.3, -(0.3 * 128))
               .sharpen({ sigma: 1.5, m1: 1, m2: 0.5 })
@@ -1887,7 +1920,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
             const BANNER_SCALE = 4;
             const bannerBuf = await sharp(imageBuffer)
               .extract({ left: bannerX1, top: bannerY1, width: bannerW, height: bannerH })
-              .resize(bannerW * BANNER_SCALE, bannerH * BANNER_SCALE, { kernel: sharp.kernel.nearest })
+              .resize(bannerW * BANNER_SCALE, bannerH * BANNER_SCALE, { kernel: sharp.kernel.lanczos3 })
+              .grayscale()
               .modulate({ brightness: 1.05 })
               .linear(1.4, -(0.4 * 128))
               .sharpen({ sigma: 1.5, m1: 1, m2: 0.5 })
@@ -1917,8 +1951,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         try {
           const origW = Math.round(processed.width / processed.scale);
           const origH = Math.round(processed.height / processed.scale);
-          const lStripXFrac1 = 0.184; // measured: player name cards start at ~18.4%
-          const lStripXFrac2 = 0.29;  // measured: right edge of name column at ~29%
+          const lStripXFrac1 = 0.08; // expanded left-panel name scan window start
+          const lStripXFrac2 = 0.46; // expanded left-panel name scan window end
           const lStripX1  = Math.round(origW * lStripXFrac1);
           const lStripX2  = Math.round(origW * lStripXFrac2);
           const lStripW   = lStripX2 - lStripX1;
@@ -1928,7 +1962,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
 
           const lStripBuf = await sharp(imageBuffer)
             .extract({ left: lStripX1, top: lStripY, width: lStripW, height: lStripH })
-            .resize(lStripW * L_STRIP_SCALE, lStripH * L_STRIP_SCALE, { kernel: sharp.kernel.nearest })
+            .resize(lStripW * L_STRIP_SCALE, lStripH * L_STRIP_SCALE, { kernel: sharp.kernel.lanczos3 })
+            .grayscale()
             .modulate({ brightness: 1.0 })
             .linear(1.3, -(0.3 * 128))
             .sharpen({ sigma: 2, m1: 1, m2: 0.5 })
