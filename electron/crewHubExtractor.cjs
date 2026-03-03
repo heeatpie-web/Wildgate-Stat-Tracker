@@ -43,7 +43,7 @@ const LAYOUT = {
     xMin: 0,
     xMax: 0.48,  // names can extend to ~46%, allow margin
     yMin: 0.22,  // skip team-name banner (~top 22% = y<238 on 1080p); player cards start below this
-    yMax: 0.85,
+    yMax: 0.85,  // includes split PARTY/TEAM layouts in holdout (match117/match118)
   },
   // Right panel: Enemy crews — single scrollable list of player cards
   ENEMY_PANEL: {
@@ -507,6 +507,39 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
     const expanded = parsePlayersFromLines(groupedLines);
     if (expanded.length > parsedPlayers.length) {
       parsedPlayers = expanded;
+    }
+  }
+
+  // Second sweep for split PARTY/TEAM left-panel layouts:
+  // in some captures the active user is in PARTY while teammates are listed in a
+  // separate TEAM section below the voice controls.
+  const isTeamHeaderLine = (line) => {
+    const raw = line.words
+      .map((w) => String(w?.text || '').trim())
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    if (!raw) return false;
+    if (/^\W*TEAM\W*$/i.test(raw)) return true;
+    const compact = raw.replace(/[^A-Za-z]/g, '').toUpperCase();
+    return compact === 'TEAM';
+  };
+  const teamHeaderLines = groupedLines
+    .filter(isTeamHeaderLine)
+    .sort((a, b) => a.y - b.y);
+  if (teamHeaderLines.length > 0) {
+    const teamHeader = teamHeaderLines[teamHeaderLines.length - 1];
+    const teamSectionLines = groupedLines.filter((line) => (
+      line.y > teamHeader.y &&
+      line.y <= leftBounds.yMax &&
+      (line.y - teamHeader.y) <= imageHeight * 0.45
+    ));
+    const teamSectionPlayers = parsePlayersFromLines(teamSectionLines);
+    for (const name of teamSectionPlayers) {
+      pushUniquePlayerName(parsedPlayers, name);
+    }
+    if (teamSectionPlayers.length > 0) {
+      dlog('[CrewHub] TEAM sweep merged players below y=' + Math.round(teamHeader.y) + ': ' + teamSectionPlayers.join(', '));
     }
   }
 
