@@ -26,7 +26,7 @@ const LAYOUT = {
   ENEMY_SHIPS: {
     xMin: 0.83,
     xMax: 1.0,
-    yMin: 0.00,
+    yMin: 0.06, // start below game perf HUD (FPS/GPU/CPU/LAT bar lives at ~0-3%)
     yMax: 0.10,
   },
   ENEMY_SHIPS2: {

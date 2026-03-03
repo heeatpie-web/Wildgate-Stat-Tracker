@@ -49,7 +49,7 @@
       ],
       "opponentTeams": [
         {
-          "teamName": "FPS23GPU26CPU84LATOMS",
+          "teamName": null,
           "teamColor": "Red",
           "shipType": "Hunter",
           "players": []

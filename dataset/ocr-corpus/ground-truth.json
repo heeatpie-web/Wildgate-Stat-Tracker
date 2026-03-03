@@ -47,7 +47,7 @@
       ],
       "opponentTeams": [
         {
-          "teamName": "FPS20GPU30CPU92LATOMS",
+          "teamName": null,
           "teamColor": "Red",
           "shipType": "",
           "players": []
@@ -77,7 +77,7 @@
       ],
       "opponentTeams": [
         {
-          "teamName": "FPS28GPU34CPU90LATOMS",
+          "teamName": "VANGUARD",
           "teamColor": "Red",
           "shipType": "Privateer",
           "players": []
@@ -250,7 +250,7 @@
       ],
       "opponentTeams": [
         {
-          "teamName": "FPS37GPU35CPU96LAT0MS",
+          "teamName": null,
           "teamColor": "Red",
           "shipType": "",
           "players": []
@@ -658,7 +658,7 @@
       ],
       "opponentTeams": [
         {
-          "teamName": "FPS24GPU34CPU100LATOMS",
+          "teamName": "LOW STANDARDS",
           "teamColor": "Red",
           "shipType": "Hunter",
           "players": []

@@ -333,8 +333,8 @@ const CREW_HUB_PADDLE_REGIONS = [
   // Right panel: opponent cards + team bars
   { xMin: 0.56, xMax: 0.84, yMin: 0.16, yMax: 0.92 },
 ];
-const TACTICAL_MAP_RIGHT_PANEL_REGION = { xMin: 0.64, xMax: 0.99, yMin: 0.04, yMax: 0.74 };
-const TACTICAL_MAP_RIGHT_PANEL_REGION_RELAXED = { xMin: 0.58, xMax: 0.99, yMin: 0.04, yMax: 0.74 };
+const TACTICAL_MAP_RIGHT_PANEL_REGION = { xMin: 0.64, xMax: 0.99, yMin: 0.07, yMax: 0.74 };
+const TACTICAL_MAP_RIGHT_PANEL_REGION_RELAXED = { xMin: 0.58, xMax: 0.99, yMin: 0.07, yMax: 0.74 };
 const TACTICAL_MAP_YOUR_SHIP_REGION = { xMin: 0.00, xMax: 0.34, yMin: 0.00, yMax: 0.28 };
 const TACTICAL_MAP_HAZARD_REGION = { xMin: 0.70, xMax: 0.99, yMin: 0.55, yMax: 0.90 };
 const TACTICAL_MAP_LAYOUT_OVERRIDES = {
