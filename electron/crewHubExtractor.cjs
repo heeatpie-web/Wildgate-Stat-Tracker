@@ -414,9 +414,10 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
   const parsePlayersFromLines = (lineSet) => {
     const out = [];
     // Narrow x-band for the name column: portraits are ~0-8%, names ~8-32%.
-    // Words beyond ~50% are typically voice/party control icons OCR'd as noise.
-    // Must be ≥0.45 so crewmate names at x≈756-839 (on 1920-wide images) pass.
-    const nameColXMax = imageWidth * 0.50;
+    // Words beyond ~38% are typically voice/party/control icon noise.
+    // Keep a small margin so right-edge glyphs (e.g. trailing "V" in long names)
+    // still fall inside the accepted teammate-name column.
+    const nameColXMax = imageWidth * 0.38;
     for (const line of lineSet) {
       if (Math.abs(line.y - 1355) < 10) {
         dlog('[LPdbg1355] words=' + line.words.map(w => '"'+w.text+'"(c'+Math.round(w.confidence)+')bbox=['+[w.bbox&&w.bbox.x0,w.bbox&&w.bbox.x1,w.bbox&&w.bbox.y0,w.bbox&&w.bbox.y1].join(',')+']').join(' '));

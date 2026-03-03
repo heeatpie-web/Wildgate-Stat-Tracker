@@ -12,6 +12,7 @@
  */
 
 const MAX_TEAM_PLAYERS = 4;
+const TEAM_COLOR_ORDER = ['red', 'orange', 'yellow', 'yellowgreen', 'green', 'blue', 'purple', 'unknown'];
 
 function capPlayerEntries(players = [], maxPlayers = MAX_TEAM_PLAYERS) {
   if (!Array.isArray(players) || players.length <= maxPlayers) return players || [];
@@ -26,6 +27,28 @@ function capPlayerEntries(players = [], maxPlayers = MAX_TEAM_PLAYERS) {
   });
 
   return scored.slice(0, maxPlayers);
+}
+
+function normalizeColorKey(color) {
+  return String(color || '').trim().toLowerCase();
+}
+
+function colorSortRank(color) {
+  const key = normalizeColorKey(color);
+  const idx = TEAM_COLOR_ORDER.indexOf(key);
+  return idx >= 0 ? idx : TEAM_COLOR_ORDER.length;
+}
+
+function sortTeamsByColor(teams = [], getColor) {
+  if (!Array.isArray(teams) || teams.length <= 1) return teams || [];
+  return [...teams].sort((a, b) => {
+    const aRank = colorSortRank(getColor(a));
+    const bRank = colorSortRank(getColor(b));
+    if (aRank !== bRank) return aRank - bRank;
+    const aName = String(a?.teamName || a?.name || '').toLowerCase();
+    const bName = String(b?.teamName || b?.name || '').toLowerCase();
+    return aName.localeCompare(bName);
+  });
 }
 
 /**
@@ -102,24 +125,14 @@ function mergeLegacyCrewHub(existing, newData) {
       const et = mergedTeams[idx];
       mergedTeams[idx] = {
         ...et,
-        teamName: pickPreferredTeamName(
-          et.teamName,
-          nt.teamName,
-          {
-            color: et.color || nt.color,
-            preferCandidate: et.teamNameSource !== 'team_bar' && nt.teamNameSource === 'team_bar',
-          }
-        ),
-        teamNameSource: (nt.teamNameSource === 'team_bar' || !et.teamNameSource)
-          ? (nt.teamNameSource || et.teamNameSource)
-          : et.teamNameSource,
+        teamName: (nt.teamName?.length || 0) > (et.teamName?.length || 0) ? nt.teamName : et.teamName,
         shipType: et.shipType || nt.shipType,
         color: et.color === 'unknown' ? nt.color : et.color,
         players: capPlayerEntries(mergePlayers(et.players || [], nt.players || [])),
         confidence: Math.round(((et.confidence || 0) + (nt.confidence || 0)) / 2),
       };
     } else if (mergedTeams.length < 4) {
-      mergedTeams.push({ ...nt, teamNameSource: nt.teamNameSource || 'fallback', players: capPlayerEntries(nt.players || []) });
+      mergedTeams.push({ ...nt, players: capPlayerEntries(nt.players || []) });
     }
   }
 
@@ -129,7 +142,7 @@ function mergeLegacyCrewHub(existing, newData) {
     playerTeamName: newData.playerTeamName || existing.playerTeamName,
     playerShip: existing.playerShip || newData.playerShip,
     teammates: capPlayerEntries(mergedTeammates),
-    opponentTeams: mergedTeams,
+    opponentTeams: sortTeamsByColor(mergedTeams, (team) => team?.color || team?.teamColor),
     reachModifiers: mergeHazards(existing.reachModifiers || [], newData.reachModifiers || []),
     overallConfidence: Math.round(((existing.overallConfidence || 0) + (newData.overallConfidence || 0)) / 2),
     isPartialCapture: (existing.isPartialCapture || newData.isPartialCapture) && false, // recalc below
@@ -145,7 +158,10 @@ function mergeLegacyTacticalMap(existing, newData) {
     ...existing,
     screenshotType: 'tactical_map',
     playerShip: newData.playerShip || existing.playerShip,
-    opponentTeams: mergeEnemyShips(existing.opponentTeams || [], newData.opponentTeams || []),
+    opponentTeams: sortTeamsByColor(
+      mergeEnemyShips(existing.opponentTeams || [], newData.opponentTeams || []),
+      (team) => team?.color || team?.teamColor
+    ),
     reachModifiers: mergeHazards(existing.reachModifiers || [], newData.reachModifiers || []),
     teammates: capPlayerEntries(mergePlayers(existing.teammates || [], newData.teammates || [])),
     overallConfidence: Math.round(((existing.overallConfidence || 0) + (newData.overallConfidence || 0)) / 2),
@@ -214,29 +230,44 @@ function crossMergeCrewHubAndMap(crewHub, tactMap) {
     return team;
   });
 
-  // If exactly one crew team is still missing shipType and exactly one map ship has no name match,
-  // assign positionally (last resort).
-  const unmatched = enrichedTeams.filter(t => !t.shipType);
-  const usedNames = new Set(
-    enrichedTeams.filter(t => t.shipType).map(t => normalizeTeamName(t.teamName))
-  );
-  const unmatchedMapShips = mapShipsByType.filter(s => !usedNames.has(normalizeTeamName(s.teamName)));
-  if (unmatched.length === 1 && unmatchedMapShips.length === 1) {
-    const idx = enrichedTeams.findIndex(t => !t.shipType);
-    enrichedTeams[idx] = { ...enrichedTeams[idx], shipType: unmatchedMapShips[0].shipType };
-  }
+  // Preserve map-only ships as empty teams so later crew captures (that include those
+  // teams) can merge by color/name without forcing positional mis-assignment.
+  const mapOnlyTeams = mapShipsByType.filter((ship) => {
+    const shipColor = String(ship?.color || ship?.teamColor || '').trim().toLowerCase();
+    const shipNameKey = normalizeTeamName(ship?.teamName || '');
+    return !enrichedTeams.some((team) => {
+      const teamColor = String(team?.color || team?.teamColor || '').trim().toLowerCase();
+      const teamNameKey = normalizeTeamName(team?.teamName || '');
+      if (shipColor && shipColor !== 'unknown' && teamColor && teamColor !== 'unknown' && shipColor === teamColor) {
+        return true;
+      }
+      return Boolean(shipNameKey && teamNameKey && shipNameKey === teamNameKey);
+    });
+  }).map((ship, idx) => ({
+    teamName: String(ship?.teamName || '').trim() || `Enemy Team ${enrichedTeams.length + idx + 1}`,
+    teamColor: String(ship?.color || ship?.teamColor || '').trim() || 'unknown',
+    color: String(ship?.color || ship?.teamColor || '').trim() || 'unknown',
+    shipType: ship?.shipType || '',
+    players: [],
+    confidence: Number(ship?.confidence || 60),
+  }));
+
+  const combinedTeams = [...enrichedTeams, ...mapOnlyTeams];
 
   return {
     ...crewHub,
     screenshotType: 'crew_hub',
     playerShip: crewHub.playerShip || tactMap.playerShip,
     teammates: mergePlayers(crewHub.teammates || [], tactMap.teammates || []).slice(0, MAX_TEAM_PLAYERS),
-    opponentTeams: enrichedTeams.map(team => {
-      if (!isPlaceholderTeamName(team.teamName, team.color)) return team;
-      const byColor = (tactMap.opponentTeams || []).find(s => s.color && team.color && s.color === team.color && !isPlaceholderTeamName(s.teamName, s.color));
-      if (!byColor?.teamName) return team;
-      return { ...team, teamName: byColor.teamName };
-    }),
+    opponentTeams: sortTeamsByColor(
+      combinedTeams.map(team => {
+        if (!isPlaceholderTeamName(team.teamName, team.color)) return team;
+        const byColor = (tactMap.opponentTeams || []).find(s => s.color && team.color && s.color === team.color && !isPlaceholderTeamName(s.teamName, s.color));
+        if (!byColor?.teamName) return team;
+        return { ...team, teamName: byColor.teamName };
+      }),
+      (team) => team?.color || team?.teamColor
+    ),
     reachModifiers: mergeHazards(crewHub.reachModifiers || [], tactMap.reachModifiers || []),
     captureTimestamp: crewHub.captureTimestamp || tactMap.captureTimestamp,
   };
@@ -418,7 +449,7 @@ function crossMergeInternalCrewAndMap(crew, map) {
       shipType: map.yourShip?.shipType || crew.yourTeam?.shipType,
       players: mergePlayers(yourPlayersFiltered, map.players || []),
     },
-    enemyTeams: finalEnrichedTeams,
+    enemyTeams: sortTeamsByColor(finalEnrichedTeams, (team) => team?.color || team?.teamColor),
     hazards: (map.hazards && map.hazards.length > 0) ? map.hazards : (crew.hazards || []),
     mapSeed: map.mapSeed,
     isPartialCapture: crew.isPartialCapture,
@@ -524,16 +555,8 @@ function mergeEnemyTeams(existingTeams = [], newTeams = []) {
       const existingTeam = mergedTeams[matchIndex];
 
       // Update team name if new one is longer/more complete
-      existingTeam.name = pickPreferredTeamName(
-        existingTeam.name,
-        newTeam.name,
-        {
-          color: existingTeam.color || newTeam.color,
-          preferCandidate: existingTeam.nameSource !== 'team_bar' && newTeam.nameSource === 'team_bar',
-        }
-      );
-      if (newTeam.nameSource === 'team_bar' || !existingTeam.nameSource) {
-        existingTeam.nameSource = newTeam.nameSource || existingTeam.nameSource;
+      if ((newTeam.name?.length || 0) > (existingTeam.name?.length || 0)) {
+        existingTeam.name = newTeam.name;
       }
 
       // Update color if we didn't have one
@@ -581,7 +604,6 @@ function mergeEnemyTeams(existingTeams = [], newTeams = []) {
         mergedTeams.push({
           ...newTeam,
           name: cleanedName,
-          nameSource: newTeam.nameSource || 'fallback',
           players: capPlayerEntries(newTeam.players || []),
         });
       } else {
@@ -590,18 +612,15 @@ function mergeEnemyTeams(existingTeams = [], newTeams = []) {
     }
   }
 
-  return mergedTeams.map((team) => ({
-    ...team,
-    players: capPlayerEntries(team.players || []),
-  }));
+  return sortTeamsByColor(
+    mergedTeams.map((team) => ({
+      ...team,
+      players: capPlayerEntries(team.players || []),
+    })),
+    (team) => team?.color || team?.teamColor
+  );
 }
 
-/**
- * Find matching team in array by name or color
- * @param {Array} teams - Existing teams
- * @param {Object} target - Team to match
- * @returns {number} Index of matching team, or -1
- */
 /**
  * Find matching team in array by name or color.
  * With v3 card scanner, team identity is primarily COLOR (from the bar below
@@ -727,7 +746,7 @@ function mergeEnemyShips(existing = [], newShips = []) {
     }
   }
 
-  return merged;
+  return sortTeamsByColor(merged, (team) => team?.color || team?.teamColor);
 }
 
 /**
@@ -768,6 +787,12 @@ function mergePlayers(existing = [], newPlayers = []) {
         if (name.length >= 8) {
           for (const existingKey of seen.keys()) {
             if (Math.abs(existingKey.length - key.length) > 2) continue;
+            const minLen = Math.min(existingKey.length, key.length);
+            const keyHasDigit = /\d/.test(key);
+            const existingHasDigit = /\d/.test(existingKey);
+            // Avoid conflating short digit-suffixed tags with letter-only tags
+            // (e.g. Riv2... vs Rive...): keep strict unless the shared stem is long.
+            if (keyHasDigit !== existingHasDigit && minLen < 10) continue;
             if (levenshteinDistance(key, existingKey) <= 2) { fuzzyKey = existingKey; break; }
           }
         }
