@@ -15,7 +15,7 @@ function parseArgs(argv) {
     const next = argv[i + 1];
     if (!next) break;
     if (token === '--truth') args.truth = next;
-    if (token === '--pred') args.pred = next;
+    if (token === '--pred' || token === '--predictions') args.pred = next;
     if (token === '--baseline') args.baseline = next;
     if (token === '--out') args.out = next;
   }
@@ -37,6 +37,8 @@ function safeArray(v) {
 
 function canonicalizeName(s) {
   return String(s || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .trim()
     .toLowerCase()
     .replace(/[_\-\s]+/g, '')

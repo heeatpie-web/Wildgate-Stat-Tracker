@@ -1281,6 +1281,91 @@ function applyMatchTeammatePropagation(predictions) {
   return predictions;
 }
 
+function applyCrossSessionTeammateCanonicalization(predictions) {
+  if (!Array.isArray(predictions) || predictions.length === 0) return predictions;
+
+  const byMatch = new Map();
+  for (const sample of predictions) {
+    const key = extractMatchKey(sample?.sampleId);
+    if (!byMatch.has(key)) byMatch.set(key, []);
+    byMatch.get(key).push(sample);
+  }
+
+  for (const samples of byMatch.values()) {
+    const canonicalNames = [];
+    const canonicalKeys = [];
+    const sourceSamples = samples.filter((sample) => {
+      const type = String(sample?.screenshotType || '').toLowerCase();
+      return type === 'crew_hub' || type === 'tactical_map';
+    });
+
+    for (const sample of sourceSamples) {
+      for (const rawName of sanitizePredictedPlayerList(safeArray(sample?.teammates))) {
+        const name = String(rawName || '').trim();
+        const key = fuzzyFoldNameKey(name);
+        if (!key) continue;
+
+        let bestIdx = -1;
+        let bestDist = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < canonicalKeys.length; i += 1) {
+          const dist = levenshteinDistance(key, canonicalKeys[i]);
+          if (dist > 1) continue;
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestIdx = i;
+          }
+        }
+
+        if (bestIdx < 0) {
+          canonicalNames.push(name);
+          canonicalKeys.push(key);
+          continue;
+        }
+
+        const currentCanonical = canonicalNames[bestIdx];
+        if (preferDisplayName(name, currentCanonical)) {
+          canonicalNames[bestIdx] = name;
+          canonicalKeys[bestIdx] = key;
+        }
+      }
+    }
+
+    if (canonicalNames.length === 0) continue;
+
+    for (const sample of samples) {
+      const current = sanitizePredictedPlayerList(safeArray(sample?.teammates));
+      if (current.length === 0) continue;
+
+      const next = [];
+      for (const rawName of current) {
+        const name = String(rawName || '').trim();
+        const key = fuzzyFoldNameKey(name);
+        if (!key) continue;
+
+        let bestIdx = -1;
+        let bestDist = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < canonicalNames.length; i += 1) {
+          const dist = levenshteinDistance(key, canonicalKeys[i]);
+          if (dist > 1) continue;
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestIdx = i;
+          } else if (dist === bestDist && bestIdx >= 0 && preferDisplayName(canonicalNames[i], canonicalNames[bestIdx])) {
+            bestIdx = i;
+          }
+        }
+
+        if (bestIdx >= 0) next.push(canonicalNames[bestIdx]);
+        else next.push(name);
+      }
+
+      sample.teammates = sanitizePredictedPlayerList(next).slice(0, 4);
+    }
+  }
+
+  return predictions;
+}
+
 function applyMatchModifierPropagation(predictions) {
   if (!Array.isArray(predictions) || predictions.length === 0) return predictions;
 
@@ -1398,6 +1483,65 @@ function applyOpponentHeuristics(predictions) {
     return {
       ...sample,
       opponentTeams: filtered,
+    };
+  });
+}
+
+function normalizeShipTypeForMatch(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function formatShipTypeDisplay(value) {
+  return String(value || '')
+    .trim()
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function isCompactTacticalTeamTag(value) {
+  return /^[A-Za-z0-9_]+$/.test(String(value || '').trim());
+}
+
+function applyTacticalFirstSlotShipTypeAlignment(predictions) {
+  if (!Array.isArray(predictions) || predictions.length === 0) return predictions;
+
+  return predictions.map((sample) => {
+    const screenshotType = String(sample?.screenshotType || '').toLowerCase();
+    if (screenshotType !== 'tactical_map') return sample;
+
+    const teams = safeArray(sample?.opponentTeams).map((team) => ({ ...team }));
+    if (teams.length < 2) return sample;
+
+    const yourShip = normalizeShipTypeForMatch(sample?.yourShipType);
+    const firstShip = normalizeShipTypeForMatch(teams[0]?.shipType);
+    if (!yourShip || !firstShip || firstShip === 'unknown') return sample;
+    if (!isCompactTacticalTeamTag(teams[0]?.teamName)) return sample;
+
+    const otherShips = teams
+      .slice(1)
+      .map((team) => normalizeShipTypeForMatch(team?.shipType))
+      .filter((ship) => ship && ship !== 'unknown');
+    const distinctOtherShips = [...new Set(otherShips)];
+    if (distinctOtherShips.length !== 1) return sample;
+
+    const dominantOtherShip = distinctOtherShips[0];
+    if (!dominantOtherShip || dominantOtherShip === yourShip || dominantOtherShip === firstShip) return sample;
+
+    // Tactical slot-0 can inherit the player's YOUR_SHIP label; when slot-1+ agree on
+    // a different non-player type, trust that consensus to relabel slot-0.
+    const firstLooksContaminated = firstShip === yourShip || firstShip === 'scout';
+    if (!firstLooksContaminated) return sample;
+
+    teams[0] = {
+      ...teams[0],
+      shipType: formatShipTypeDisplay(dominantOtherShip),
+    };
+
+    return {
+      ...sample,
+      opponentTeams: teams,
     };
   });
 }
@@ -1695,9 +1839,12 @@ async function main() {
 
   const rosterAdjustedPredictions = applyTeamRosterPrior(predictions, teamRosterPrior);
   const rosterCompletedPredictions = applyGlobalRosterCompletion(rosterAdjustedPredictions, teamRosterPrior);
-  const teammateAdjustedPredictions = applyMatchTeammatePropagation(rosterCompletedPredictions);
-  const opponentHeuristicPredictions = applyOpponentHeuristics(teammateAdjustedPredictions);
-  const modifierPropagatedPredictions = applyMatchModifierPropagation(opponentHeuristicPredictions);
+  const prePropagationCanonicalizedPredictions = applyCrossSessionTeammateCanonicalization(rosterCompletedPredictions);
+  const teammateAdjustedPredictions = applyMatchTeammatePropagation(prePropagationCanonicalizedPredictions);
+  const crossSessionCanonicalizedPredictions = applyCrossSessionTeammateCanonicalization(teammateAdjustedPredictions);
+  const opponentHeuristicPredictions = applyOpponentHeuristics(crossSessionCanonicalizedPredictions);
+  const tacticalShipAlignedPredictions = applyTacticalFirstSlotShipTypeAlignment(opponentHeuristicPredictions);
+  const modifierPropagatedPredictions = applyMatchModifierPropagation(tacticalShipAlignedPredictions);
   const heuristicPredictions = applyTacticalModifierHeuristics(modifierPropagatedPredictions);
   const finalPredictions = applyKnownEmptyModifierSuppression(heuristicPredictions, knownEmptyModifierSampleIds);
 
