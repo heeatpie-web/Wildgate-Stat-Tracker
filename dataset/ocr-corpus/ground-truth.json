@@ -45,10 +45,25 @@
         "Lanky Bastard",
         "H4VOK_XP"
       ],
-      "opponentTeams": [],
+      "opponentTeams": [
+        {
+          "teamName": "FPS20GPU30CPU92LATOMS",
+          "teamColor": "Red",
+          "shipType": "",
+          "players": []
+        }
+      ],
       "modifiers": [
         "Dead Sensors"
-      ]
+      ],
+      "yourShipType": "Hunter",
+      "shipTypeReview": {
+        "needsManualReview": true,
+        "reasons": [
+          "opponent_shipType_missing_team_1",
+          "opponent_shipType_low_conf_team_1_66"
+        ]
+      }
     },
     {
       "sampleId": "match128_03-06-26",
@@ -60,7 +75,20 @@
         "Lanky Bastard",
         "H4VOK_XP"
       ],
-      "opponentTeams": [],
+      "opponentTeams": [
+        {
+          "teamName": "FPS28GPU34CPU90LATOMS",
+          "teamColor": "Red",
+          "shipType": "Privateer",
+          "players": []
+        },
+        {
+          "teamName": "OUIJABOARDERS",
+          "teamColor": "Orange",
+          "shipType": "Privateer",
+          "players": []
+        }
+      ],
       "modifiers": [
         "Healing Artifact",
         "Sand Storm",
@@ -68,7 +96,8 @@
         "Legion Patrols",
         "Dead Worlds",
         "Few Ships"
-      ]
+      ],
+      "yourShipType": "Hunter"
     },
     {
       "sampleId": "match128_03-12-24",
@@ -149,12 +178,14 @@
         {
           "teamName": "GENUINE RISK",
           "teamColor": "Red",
-          "players": []
+          "players": [],
+          "shipType": "Bastion"
         },
         {
           "teamName": "FILTHY THIEVES",
           "teamColor": "Orange",
-          "players": []
+          "players": [],
+          "shipType": "Bastion"
         }
       ],
       "modifiers": [
@@ -164,7 +195,8 @@
         "Few Asteroids",
         "Legion Patrols",
         "Few Ships"
-      ]
+      ],
+      "yourShipType": "Hunter"
     },
     {
       "sampleId": "match121_01-10-33",
@@ -216,10 +248,25 @@
         "Stue Grifn",
         "BricksParts"
       ],
-      "opponentTeams": [],
+      "opponentTeams": [
+        {
+          "teamName": "FPS37GPU35CPU96LAT0MS",
+          "teamColor": "Red",
+          "shipType": "",
+          "players": []
+        }
+      ],
       "modifiers": [
         "Dead Sensors"
-      ]
+      ],
+      "yourShipType": "Hunter",
+      "shipTypeReview": {
+        "needsManualReview": true,
+        "reasons": [
+          "opponent_shipType_missing_team_1",
+          "opponent_shipType_low_conf_team_1_66"
+        ]
+      }
     },
     {
       "sampleId": "match116_20-33-47",
@@ -268,12 +315,14 @@
         {
           "teamName": "ELDRITCH LUNAR CORE",
           "teamColor": "Red",
-          "players": []
+          "players": [],
+          "shipType": "Hunter"
         },
         {
           "teamName": "POCO DIABLO",
           "teamColor": "Orange",
-          "players": []
+          "players": [],
+          "shipType": "Outlaw"
         }
       ],
       "modifiers": [
@@ -283,7 +332,8 @@
         "Gloaming Expanse",
         "Legion Patrols",
         "Few Ships"
-      ]
+      ],
+      "yourShipType": "Hunter"
     },
     {
       "sampleId": "match115_20-00-27",
@@ -331,12 +381,14 @@
         {
           "teamName": "TSUNAMI",
           "teamColor": "Red",
-          "players": []
+          "players": [],
+          "shipType": ""
         },
         {
           "teamName": "HAND TOSSED",
           "teamColor": "Orange",
-          "players": []
+          "players": [],
+          "shipType": "Outlaw"
         }
       ],
       "modifiers": [
@@ -348,7 +400,15 @@
         "Gloaming Expanse",
         "Legion Patrols",
         "Few Ships"
-      ]
+      ],
+      "yourShipType": "Hunter",
+      "shipTypeReview": {
+        "needsManualReview": true,
+        "reasons": [
+          "opponent_shipType_missing_team_1",
+          "opponent_shipType_low_conf_team_1_66"
+        ]
+      }
     },
     {
       "sampleId": "match114_19-21-48",
@@ -459,7 +519,20 @@
         "fartingPuppy",
         "H4VOK_XP"
       ],
-      "opponentTeams": [],
+      "opponentTeams": [
+        {
+          "teamName": "PORTALCOIL",
+          "teamColor": "Orange",
+          "shipType": "Hunter",
+          "players": []
+        },
+        {
+          "teamName": "COSMICSANS",
+          "teamColor": "Orange",
+          "shipType": "Hunter",
+          "players": []
+        }
+      ],
       "modifiers": [
         "Ice Artifact",
         "Fast Gate",
@@ -469,7 +542,8 @@
         "Lava Epics",
         "Lots of Asteroids",
         "Few Ships"
-      ]
+      ],
+      "yourShipType": "Hunter"
     },
     {
       "sampleId": "match111_23-15-14",
@@ -485,12 +559,14 @@
         {
           "teamName": "SCARING IS CARING",
           "teamColor": "Red",
-          "players": []
+          "players": [],
+          "shipType": "Hunter"
         },
         {
           "teamName": "CHECKMATE",
           "teamColor": "Orange",
-          "players": []
+          "players": [],
+          "shipType": "Hunter"
         }
       ],
       "modifiers": [
@@ -501,7 +577,8 @@
         "Legion Patrols",
         "Lava Epics",
         "Low Altitude Fog"
-      ]
+      ],
+      "yourShipType": "Hunter"
     },
     {
       "sampleId": "match111_23-15-22",
@@ -579,7 +656,20 @@
         "Rap1dWarrior",
         "XxBeachbums01Xx"
       ],
-      "opponentTeams": [],
+      "opponentTeams": [
+        {
+          "teamName": "FPS24GPU34CPU100LATOMS",
+          "teamColor": "Red",
+          "shipType": "Hunter",
+          "players": []
+        },
+        {
+          "teamName": "SHIPPYMCSHIPFACE",
+          "teamColor": "Yellow",
+          "shipType": "Hunter",
+          "players": []
+        }
+      ],
       "modifiers": [
         "Healing Artifact",
         "Haunted Storm",
@@ -589,7 +679,8 @@
         "Blooming Expanse",
         "Legion Patrols",
         "Few Ships"
-      ]
+      ],
+      "yourShipType": "Hunter"
     },
     {
       "sampleId": "match106_23-15-17",
@@ -730,7 +821,20 @@
         "Xiphorix",
         "fartingPuppy"
       ],
-      "opponentTeams": [],
+      "opponentTeams": [
+        {
+          "teamName": "COSMICSANS",
+          "teamColor": "Orange",
+          "shipType": "Outlaw",
+          "players": []
+        },
+        {
+          "teamName": "HEATOFTHEMOMENT",
+          "teamColor": "Orange",
+          "shipType": "Outlaw",
+          "players": []
+        }
+      ],
       "modifiers": [
         "Healing Artifact",
         "Haunted Storm",
@@ -738,7 +842,8 @@
         "Blooming Expanse",
         "Legion Patrols",
         "Few Ships"
-      ]
+      ],
+      "yourShipType": "Hunter"
     },
     {
       "sampleId": "match87_05-01-38",
@@ -781,14 +886,28 @@
         "Xiphorix",
         "fartingPuppy"
       ],
-      "opponentTeams": [],
+      "opponentTeams": [
+        {
+          "teamName": "LIVELAUGHSTEAL",
+          "teamColor": "Red",
+          "shipType": "Hunter",
+          "players": []
+        },
+        {
+          "teamName": "ATTACK-O-LANTERN",
+          "teamColor": "Orange",
+          "shipType": "Hunter",
+          "players": []
+        }
+      ],
       "modifiers": [
         "Healing Artifact",
         "Cosmic Storm",
         "Easy Loot",
         "Legion Patrols",
         "Few Ships"
-      ]
+      ],
+      "yourShipType": "Hunter"
     },
     {
       "sampleId": "match85_04-35-24",
@@ -916,7 +1035,20 @@
         "Stue Grifn",
         "BricksParts"
       ],
-      "opponentTeams": [],
+      "opponentTeams": [
+        {
+          "teamName": "METRONOME",
+          "teamColor": "Red",
+          "shipType": "Outlaw",
+          "players": []
+        },
+        {
+          "teamName": "MAXIMUMMOXIE",
+          "teamColor": "Orange",
+          "shipType": "Outlaw",
+          "players": []
+        }
+      ],
       "modifiers": [
         "Healing Artifact",
         "Ancient Vault",
@@ -927,7 +1059,8 @@
         "Cryon Rift",
         "Legion Patrols",
         "Few Ships"
-      ]
+      ],
+      "yourShipType": "Hunter"
     },
     {
       "sampleId": "match77_23-04-50",
@@ -939,10 +1072,24 @@
         "Riv",
         "GoblinaTTV"
       ],
-      "opponentTeams": [],
+      "opponentTeams": [
+        {
+          "teamName": "ANNUALZITCANUSA UNKNOWN",
+          "teamColor": "Unknown",
+          "shipType": "Hunter",
+          "players": []
+        }
+      ],
       "modifiers": [
         "Dead Sensors"
-      ]
+      ],
+      "yourShipType": "Hunter",
+      "shipTypeReview": {
+        "needsManualReview": true,
+        "reasons": [
+          "opponent_shipType_low_conf_team_1_65"
+        ]
+      }
     },
     {
       "sampleId": "match77_23-05-13",
@@ -1057,7 +1204,8 @@
         "Few Asteroids",
         "Gloaming Expanse",
         "Few Ships"
-      ]
+      ],
+      "yourShipType": "Bastion"
     },
     {
       "sampleId": "match72_06-15-30",
@@ -1124,7 +1272,8 @@
         "Gloaming Expanse",
         "Legion Patrols",
         "Few Ships"
-      ]
+      ],
+      "yourShipType": "Bastion"
     },
     {
       "sampleId": "match110_21-58-53",
@@ -1169,14 +1318,28 @@
         "Thought",
         "PurpleWhiteFo639"
       ],
-      "opponentTeams": [],
+      "opponentTeams": [
+        {
+          "teamName": "PUMPKINSPICELATTE UNKNOWN",
+          "teamColor": "Unknown",
+          "shipType": "Hunter",
+          "players": []
+        }
+      ],
       "modifiers": [
         "Dead Sensors",
         "Artifact",
         "Special Loot",
         "Wildgate",
         "Resources"
-      ]
+      ],
+      "yourShipType": "Hunter",
+      "shipTypeReview": {
+        "needsManualReview": true,
+        "reasons": [
+          "opponent_shipType_low_conf_team_1_65"
+        ]
+      }
     },
     {
       "sampleId": "match91_17-32-01",
@@ -1221,7 +1384,14 @@
         "IamthemilkmanTTV",
         "BricksParts"
       ],
-      "opponentTeams": [],
+      "opponentTeams": [
+        {
+          "teamName": "LIZARDLIZARDLIZARD",
+          "teamColor": "Orange",
+          "shipType": "Outlaw",
+          "players": []
+        }
+      ],
       "modifiers": [
         "Healing Artifact",
         "Fast Gate",
@@ -1231,7 +1401,8 @@
         "Lots of Asteroids",
         "Gloaming Expanse",
         "Legion Patrols"
-      ]
+      ],
+      "yourShipType": "Hunter"
     },
     {
       "sampleId": "match95_22-50-26",
@@ -1243,7 +1414,20 @@
         "IamthemilkmanTTV",
         "BricksParts"
       ],
-      "opponentTeams": [],
+      "opponentTeams": [
+        {
+          "teamName": "CRIMSONGUARD",
+          "teamColor": "Red",
+          "shipType": "Privateer",
+          "players": []
+        },
+        {
+          "teamName": "POCODIABLO",
+          "teamColor": "Orange",
+          "shipType": "Bastion",
+          "players": []
+        }
+      ],
       "modifiers": [
         "Ice Artifact",
         "Sand Storm",
@@ -1253,7 +1437,8 @@
         "Few Asteroids",
         "Dead Worlds",
         "Legion Patrols"
-      ]
+      ],
+      "yourShipType": "Hunter"
     },
     {
       "sampleId": "match95_22-50-36",
@@ -1399,7 +1584,14 @@
         "fartingPuppy",
         "H4VOK_XP"
       ],
-      "opponentTeams": [],
+      "opponentTeams": [
+        {
+          "teamName": "COSMICSANS",
+          "teamColor": "Orange",
+          "shipType": "Hunter",
+          "players": []
+        }
+      ],
       "modifiers": [
         "Weapon Artifact",
         "Cosmic Storm",
@@ -1407,7 +1599,8 @@
         "Low Altitude Fog",
         "Legion Patrols",
         "Few Ships"
-      ]
+      ],
+      "yourShipType": "Hunter"
     },
     {
       "sampleId": "match105_22-20-46",

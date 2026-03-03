@@ -47,14 +47,28 @@
         "leet",
         "H4VOK_XP"
       ],
-      "opponentTeams": [],
+      "opponentTeams": [
+        {
+          "teamName": "FPS23GPU26CPU84LATOMS",
+          "teamColor": "Red",
+          "shipType": "Hunter",
+          "players": []
+        },
+        {
+          "teamName": "CLAYBORNE",
+          "teamColor": "Orange",
+          "shipType": "Hunter",
+          "players": []
+        }
+      ],
       "modifiers": [
         "Weapon Artifact",
         "Sand Storm",
         "Dead Worlds",
         "Legion Patrols",
         "Few Ships"
-      ]
+      ],
+      "yourShipType": "Hunter"
     },
     {
       "sampleId": "match129_03-45-42",
@@ -418,7 +432,14 @@
         "PurpleWhiteFo639",
         "MP2EchoesGrenchler"
       ],
-      "opponentTeams": [],
+      "opponentTeams": [
+        {
+          "teamName": "WITCHESGETSTITCHES",
+          "teamColor": "Red",
+          "shipType": "Hunter",
+          "players": []
+        }
+      ],
       "modifiers": [
         "Ice Artifact",
         "Leech Swarms",
@@ -427,7 +448,8 @@
         "Lots of Asteroids",
         "Gloaming Expanse",
         "Few Ships"
-      ]
+      ],
+      "yourShipType": "Privateer"
     }
   ]
 }
