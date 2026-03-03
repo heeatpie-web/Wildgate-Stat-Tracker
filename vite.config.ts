@@ -37,7 +37,6 @@ export default defineConfig({
       '@google-cloud/storage',
       '@google-cloud/vision',
       'sharp',
-      'tesseract.js',
       'screenshot-desktop',
       'discord-rpc',
       'electron-updater',
@@ -51,7 +50,6 @@ export default defineConfig({
       external: [
         'electron',
         'sharp',
-        'tesseract.js',
         '@google-cloud/storage',
         '@google-cloud/vision',
         'screenshot-desktop',
