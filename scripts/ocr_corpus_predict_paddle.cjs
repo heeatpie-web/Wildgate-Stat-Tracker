@@ -291,6 +291,10 @@ function convertCrewHubToLegacyForPaddle(crewHubData, rawText, extractModifiers)
     isTeammate: true,
   })), 4);
 
+  // Corpus prediction reads a single captured crew-hub frame per sample.
+  // If the right panel was scrolled in-match, only the currently visible
+  // opponent cards can be recovered here. Runtime multi-capture completeness is
+  // handled by electron/ocrMerger.cjs, not by this corpus pass.
   const opponentTeams = (crewHubData?.enemyTeams || []).slice(0, 4).map((team) => ({
     teamName: team?.name || 'Unknown Team',
     teamNameSource: team?.nameSource || 'fallback',
