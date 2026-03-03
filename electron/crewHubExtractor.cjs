@@ -414,7 +414,8 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
   const parsePlayersFromLines = (lineSet) => {
     const out = [];
     // Narrow x-band for the name column: portraits are ~0-8%, names ~8-32%.
-    // Words beyond ~38% are typically voice/party/control icon noise.
+    // Lock at ~38%: this excludes icon/control chrome while preserving
+    // legitimate right-edge glyphs from long teammate names.
     // Keep a small margin so right-edge glyphs (e.g. trailing "V" in long names)
     // still fall inside the accepted teammate-name column.
     const nameColXMax = imageWidth * 0.38;
