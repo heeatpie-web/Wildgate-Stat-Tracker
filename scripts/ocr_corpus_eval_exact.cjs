@@ -85,7 +85,7 @@ function canonicalizeRosterKey(team) {
     .join('|');
 }
 
-function findMatchingPredOpponentTeam(truthTeam, predTeams) {
+function findMatchingPredOpponentTeam(truthTeam, truthTeams, predTeams) {
   const predByName = new Map();
   const predByRoster = new Map();
 
@@ -101,6 +101,21 @@ function findMatchingPredOpponentTeam(truthTeam, predTeams) {
 
   const truthRosterKey = canonicalizeRosterKey(truthTeam);
   if (truthRosterKey && predByRoster.has(truthRosterKey)) return predByRoster.get(truthRosterKey);
+
+  const truthColor = canonicalizeColor(truthTeam.teamColor);
+  if (truthColor) {
+    const truthColorMatches = safeArray(truthTeams)
+      .filter((team) => canonicalizeColor(team.teamColor) === truthColor);
+    const predColorMatches = safeArray(predTeams)
+      .filter((team) => canonicalizeColor(team.teamColor || team.color) === truthColor);
+    if (
+      truthColorMatches.length === 1 &&
+      predColorMatches.length === 1 &&
+      truthColorMatches[0] === truthTeam
+    ) {
+      return predColorMatches[0];
+    }
+  }
 
   return null;
 }
@@ -137,7 +152,11 @@ function computeShipTypeMetrics(truthSample, predSample) {
     if (!truthShipType) continue;
     opponentComparable += 1;
 
-    const matchedPredTeam = findMatchingPredOpponentTeam(truthTeam, safeArray(predSample && predSample.opponentTeams));
+    const matchedPredTeam = findMatchingPredOpponentTeam(
+      truthTeam,
+      safeArray(truthSample.opponentTeams),
+      safeArray(predSample && predSample.opponentTeams)
+    );
     const predShipType = canonicalizeShipType(matchedPredTeam && matchedPredTeam.shipType);
     if (predShipType && predShipType === truthShipType) opponentMatched += 1;
   }
