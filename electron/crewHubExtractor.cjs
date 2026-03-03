@@ -50,6 +50,8 @@ const LAYOUT = {
     xMin: 0.55,  // portraits start at ~55%
     xMax: 1.0,
     yMin: 0.08,
+    // Older purple-gradient crew-hub layouts (e.g. holdout match72) still fit
+    // inside this window; misses there are OCR/parsing quality, not bounds clip.
     yMax: 0.95,
   },
   // Team name header region (contains "'s Crew")
