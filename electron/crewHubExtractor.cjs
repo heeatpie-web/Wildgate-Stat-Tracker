@@ -508,6 +508,38 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
     }
   }
 
+  const bottomLeftCandidates = extractBottomLeftTeammateCandidates(words, imageWidth, imageHeight);
+  if (bottomLeftCandidates.length > 0) {
+    const repairedPlayers = [];
+    const usedBottomIdx = new Set();
+
+    for (const name of parsedPlayers) {
+      let bestName = name;
+      let bestIdx = -1;
+      for (let i = 0; i < bottomLeftCandidates.length; i += 1) {
+        if (usedBottomIdx.has(i)) continue;
+        const candidate = bottomLeftCandidates[i];
+        if (!namesAreNearDuplicate(name, candidate)) continue;
+        bestName = chooseBetterTeammateDisplay(bestName, candidate);
+        bestIdx = i;
+        break;
+      }
+      if (bestIdx >= 0) usedBottomIdx.add(bestIdx);
+      pushUniquePlayerName(repairedPlayers, bestName);
+    }
+
+    // Bottom-left roster repeats are often cleaner than left-row OCR and can
+    // recover missing teammates when the left panel is partially occluded.
+    for (let i = 0; i < bottomLeftCandidates.length && repairedPlayers.length < 4; i += 1) {
+      if (usedBottomIdx.has(i)) continue;
+      pushUniquePlayerName(repairedPlayers, bottomLeftCandidates[i]);
+    }
+
+    if (repairedPlayers.length > 0) {
+      parsedPlayers = repairedPlayers;
+    }
+  }
+
   teamData.players = [...new Set(parsedPlayers)];
   if (teamData.players.length === 0) {
     dlog('[CrewHub] Left panel: no teammates found after all filters');
@@ -1997,11 +2029,72 @@ function sanitizeLeftPanelPlayerName(name) {
   return value || null;
 }
 
+function extractBottomLeftTeammateCandidates(words, imageWidth, imageHeight) {
+  const bounds = {
+    xMin: imageWidth * 0.0,
+    xMax: imageWidth * 0.42,
+    yMin: imageHeight * 0.68,
+    yMax: imageHeight * 0.99,
+  };
+  const bottomWords = (words || []).filter((w) => {
+    if (!w?.bbox) return false;
+    const cx = (w.bbox.x0 + w.bbox.x1) / 2;
+    const cy = (w.bbox.y0 + w.bbox.y1) / 2;
+    return cx >= bounds.xMin && cx <= bounds.xMax && cy >= bounds.yMin && cy <= bounds.yMax;
+  });
+  if (bottomWords.length === 0) return [];
+
+  const lines = groupWordsIntoLines(bottomWords, imageHeight, imageWidth);
+  const out = [];
+  for (const line of lines) {
+    const lineMinX = getLineMinX(line.words);
+    if (lineMinX > bounds.xMax) continue;
+    const lineWords = line.words
+      .filter((w) => !w?.bbox || ((w.bbox.x0 + w.bbox.x1) / 2) <= bounds.xMax)
+      .filter((w) => {
+        const conf = Number(w?.confidence || 0);
+        if (conf >= 28) return true;
+        const token = String(w?.text || '').trim();
+        return token.length >= 4 && scoreAsPlayerName(token) >= 40;
+      });
+    if (lineWords.length === 0) continue;
+
+    let candidate = extractPlayerNameFromLine(lineWords);
+    candidate = sanitizeLeftPanelPlayerName(candidate);
+    if (!candidate) continue;
+    if (!isValidPlayerName(candidate)) continue;
+    if (scoreAsPlayerName(candidate) < 18) continue;
+    if (/PARTY|VOICE|TEAM|CREW|HUB|CHANNEL|PUSH|TALK|MUTE|DEAFEN|TEXT|PINGS/i.test(candidate)) continue;
+    pushUniquePlayerName(out, candidate);
+  }
+
+  return out.slice(0, 4);
+}
+
+function chooseBetterTeammateDisplay(currentName, candidateName) {
+  const scoreDisplay = (value) => {
+    const text = String(value || '').trim();
+    if (!text) return -1;
+    let score = scoreAsPlayerName(text);
+    if (/[0-9_]/.test(text)) score += 8;
+    if (/[A-Z]/.test(text) && /[a-z]/.test(text)) score += 4;
+    if (/[\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/.test(text)) score += 4;
+    score += Math.min(6, Math.floor(text.length / 3));
+    return score;
+  };
+  return scoreDisplay(candidateName) > scoreDisplay(currentName) ? candidateName : currentName;
+}
+
 function repairKnownLeftPanelMisreads(name) {
   const value = String(name || '').trim();
   if (!value) return value;
   const key = normalizeNameKey(value);
-  if (key === 'ombatbarbi3' || key === 'combatbarbi3') return 'c0mbat_Barbi3';
+  if (
+    key === 'ombatbarbi3' ||
+    key === 'combatbarbi3' ||
+    key === 'ombatbarbie' ||
+    key === 'combatbarbie'
+  ) return 'c0mbat_Barbi3';
   return value;
 }
 
