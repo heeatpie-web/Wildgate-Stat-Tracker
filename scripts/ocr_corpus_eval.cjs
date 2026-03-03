@@ -36,6 +36,7 @@ function safeArray(v) {
 }
 
 function canonicalizeName(s) {
+  // Normalize accents so diacritic-only variants compare as the same handle.
   return String(s || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
