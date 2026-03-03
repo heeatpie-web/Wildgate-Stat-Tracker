@@ -2,7 +2,7 @@
  * OCR Handler for Electron Main Process
  *
  * Redesigned OCR system with:
- * - Chinese language support (eng+chi_sim)
+ * - English OCR support (eng)
  * - Dynamic user anchor (activeUser from store)
  * - Color-based team detection
  * - Region-based extraction
@@ -17,7 +17,7 @@ const crypto = require('crypto');
 const os = require('os');
 
 // Import new extraction modules
-const { detectScreenType, detectScreenTypeFromLines, SCREEN_TYPES } = require('./screenDetector.cjs');
+const { detectScreenTypeFromLines, SCREEN_TYPES } = require('./screenDetector.cjs');
 const {
   extractCrewHub,
   groupWordsIntoLines: groupCrewHubWordsIntoLines,
@@ -27,22 +27,15 @@ const {
 } = require('./crewHubExtractor.cjs');
 const { extractMapScreen, extractPlayerList, KNOWN_HAZARDS, SHIP_TYPES: MAP_SHIP_TYPES, looksLikeTeamName: looksLikeMapTeamName } = require('./mapScreenExtractor.cjs');
 const { mergeCaptures, isSameMatch } = require('./ocrMerger.cjs');
-const { generateUserWordsFile } = require('./tesseractDictionary.cjs');
+const { paddleOcrBuffer, initPaddleOCR } = require('./paddleOcrHandler.cjs');
 
 // Dynamic imports (loaded when needed)
-let Tesseract = null;
 let screenshot = null;
 let sharp = null;
 
 // Debug directory for saving OCR images
 const DEBUG_DIR = path.join(app.getPath('userData'), 'ocr-debug');
 const OCR_CORPUS_ARCHIVE_DIR = path.join(app.getPath('userData'), 'ocr-corpus-archive');
-const OCR_TESSERACT_DIR = path.join(app.getPath('userData'), 'ocr-tesseract');
-const OCR_USER_WORDS_FILE = path.join(OCR_TESSERACT_DIR, 'wildgate_userwords.txt');
-const OCR_USER_WORDS_FILE_FALLBACKS = [
-  path.join(app.getPath('appData'), 'Wildgate Stat Tracker', 'ocr-tesseract', 'wildgate_userwords.txt'),
-  path.join(app.getPath('appData'), 'wildgate-stat-tracker', 'ocr-tesseract', 'wildgate_userwords.txt'),
-];
 
 // Ensure debug directory exists
 function ensureDebugDir() {
@@ -61,7 +54,7 @@ function ensureCorpusArchiveDir() {
 const OCR_CACHE_MAX = Math.min(500, Math.max(10, parseInt(process.env.WILDGATE_OCR_CACHE_MAX || '50', 10) || 50));
 const LOW_WORD_CONFIDENCE_THRESHOLD = Math.min(80, Math.max(0, parseInt(process.env.WILDGATE_OCR_WORD_CONF_MIN || '15', 10) || 15));
 const CPU_COUNT = Math.max(1, Number.isFinite(os.cpus()?.length) ? os.cpus().length : 1);
-const OCR_MAX_CONCURRENT = Math.min(4, Math.max(1, parseInt(process.env.WILDGATE_OCR_MAX_CONCURRENT || '1', 10) || 1));
+const OCR_MAX_CONCURRENT = Math.min(8, Math.max(1, parseInt(process.env.WILDGATE_OCR_MAX_CONCURRENT || '2', 10) || 2));
 const OCR_PREPROCESS_DOWNSCALE_WIDTH = Math.min(4096, Math.max(1200, parseInt(process.env.WILDGATE_OCR_PREPROCESS_MAX_WIDTH || '1920', 10) || 1920));
 const DEFAULT_SHARP_CONCURRENCY = CPU_COUNT <= 4 ? 1 : 2;
 const OCR_SHARP_CONCURRENCY = Math.min(4, Math.max(1, parseInt(process.env.WILDGATE_OCR_SHARP_CONCURRENCY || String(DEFAULT_SHARP_CONCURRENCY), 10) || DEFAULT_SHARP_CONCURRENCY));
@@ -436,230 +429,6 @@ async function archiveOcrSample(buffer, ocrText, metadata = {}) {
   }
 }
 
-const DICTIONARY_MATCH_LIMIT = 1000;
-let activeUserWordsFile = null;
-let latestDictionaryStats = null;
-
-async function resolveExistingDictionaryFile() {
-  const candidates = [OCR_USER_WORDS_FILE, ...OCR_USER_WORDS_FILE_FALLBACKS];
-  const seen = new Set();
-  for (const filePath of candidates) {
-    const normalized = String(filePath || '').trim();
-    if (!normalized || seen.has(normalized)) continue;
-    seen.add(normalized);
-    try {
-      await fsPromises.access(normalized, fs.constants.F_OK);
-      return normalized;
-    } catch {
-      // try next candidate
-    }
-  }
-  return null;
-}
-
-function buildTesseractWorkerParameters(userWordsFile = null, psm = null) {
-  const params = { preserve_interword_spaces: '1' };
-  if (userWordsFile && typeof userWordsFile === 'string' && userWordsFile.trim()) {
-    params.user_words_file = userWordsFile;
-  }
-  if (psm !== null && Number.isInteger(psm) && psm >= 0 && psm <= 13) {
-    params.tessedit_pageseg_mode = String(psm);
-  }
-  return params;
-}
-
-function sanitizePilotRegistryForDictionary(value) {
-  if (!Array.isArray(value)) return [];
-  const seen = new Set();
-  const out = [];
-  for (const item of value) {
-    if (typeof item !== 'string') continue;
-    const trimmed = item.replace(/\s+/g, ' ').trim();
-    if (!trimmed) continue;
-    const key = trimmed.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(trimmed);
-  }
-  return out;
-}
-
-function sanitizeDictionaryMatchHistory(value) {
-  if (!Array.isArray(value)) return [];
-  return value
-    .slice(-DICTIONARY_MATCH_LIMIT)
-    .map((entry) => {
-      if (!entry || typeof entry !== 'object') return null;
-      const teammates = Array.isArray(entry.teammates) ? entry.teammates.filter(v => typeof v === 'string') : [];
-      const opponents = Array.isArray(entry.opponents) ? entry.opponents.filter(v => typeof v === 'string') : [];
-      const opponentTeams = Array.isArray(entry.opponentTeams)
-        ? entry.opponentTeams.map((team) => {
-          const players = Array.isArray(team?.players) ? team.players.filter(v => typeof v === 'string') : [];
-          return players.length > 0 ? { players } : null;
-        }).filter(Boolean)
-        : [];
-      return {
-        player: typeof entry.player === 'string' ? entry.player : '',
-        teammates,
-        opponents,
-        opponentTeams,
-      };
-    })
-    .filter(Boolean);
-}
-
-async function applyDictionaryToWorkers(userWordsFile) {
-  activeUserWordsFile = userWordsFile || null;
-  if (!Array.isArray(tesseractWorkers) || tesseractWorkers.length === 0) {
-    return { appliedWorkers: 0 };
-  }
-
-  const params = buildTesseractWorkerParameters(activeUserWordsFile);
-  let appliedWorkers = 0;
-
-  await Promise.all(tesseractWorkers.map(async (worker, index) => {
-    try {
-      await worker.setParameters(params);
-      appliedWorkers += 1;
-    } catch (error) {
-      console.warn(`[OCR-Dict] Failed applying dictionary to worker ${index}:`, error?.message || error);
-    }
-  }));
-
-  return { appliedWorkers };
-}
-
-// Dedicated eng-only worker for crew hub player name extraction.
-// Rationale: eng+chi_sim OCR (used by the main pool) reliably reads the
-// coloured ship-name bars, but it *mangles* player name text (e.g., "Scipion"
-// becomes "ai"+"hr" garbage).  eng-only reads those same player names correctly
-// (c≥90) while producing c=0 garble for the coloured bars — which is fine
-// because garbled words get filtered out by isValidOpponentName anyway.
-let engOnlyWorker = null;
-
-// Tesseract worker pool (scheduler + multiple workers)
-const DEFAULT_WORKER_POOL_SIZE = CPU_COUNT >= 8 ? 2 : 1;
-const WORKER_POOL_SIZE = Math.min(4, Math.max(1, parseInt(process.env.WILDGATE_OCR_WORKER_POOL_SIZE || String(DEFAULT_WORKER_POOL_SIZE), 10) || DEFAULT_WORKER_POOL_SIZE));
-let tesseractScheduler = null;
-let tesseractWorkers = [];
-let schedulerReady = null; // Promise that resolves when pool is initialized
-
-/**
- * Get or create Tesseract worker pool via scheduler.
- * Uses 3 parallel workers for concurrent OCR processing.
- */
-async function getTesseractScheduler() {
-  if (tesseractScheduler && tesseractWorkers.length > 0) return tesseractScheduler;
-
-  if (!Tesseract) {
-    console.log('[OCR] Loading Tesseract.js module...');
-    Tesseract = require('tesseract.js');
-    console.log('[OCR] Tesseract.js module loaded');
-  }
-
-  if (!activeUserWordsFile) {
-    activeUserWordsFile = await resolveExistingDictionaryFile();
-  }
-
-  console.log(`[OCR] Initializing Tesseract worker pool (${WORKER_POOL_SIZE} workers, eng+chi_sim)...`);
-  if (activeUserWordsFile) {
-    console.log(`[OCR-Dict] Applying user words file: ${activeUserWordsFile}`);
-  }
-  tesseractScheduler = Tesseract.createScheduler();
-
-  for (let i = 0; i < WORKER_POOL_SIZE; i++) {
-    const worker = await Tesseract.createWorker('eng+chi_sim', 1, {
-      logger: m => {
-        if (m.status && m.progress === 1) {
-          console.log(`[OCR] Worker ${i}: ${m.status}`);
-        }
-      },
-      cacheMethod: 'readOnly',
-    });
-    await worker.setParameters(buildTesseractWorkerParameters(activeUserWordsFile));
-    tesseractScheduler.addWorker(worker);
-    tesseractWorkers.push(worker);
-    console.log(`[OCR] Worker ${i + 1}/${WORKER_POOL_SIZE} ready`);
-  }
-
-  console.log(`[OCR] Worker pool ready (${WORKER_POOL_SIZE} workers)`);
-  return tesseractScheduler;
-}
-
-// Backward-compatible: getTesseractWorker returns the first worker (for setParameters calls etc.)
-async function getTesseractWorker() {
-  await getTesseractScheduler();
-  return tesseractWorkers[0];
-}
-
-// Cleanup workers on app quit
-app.on('before-quit', async () => {
-  if (tesseractScheduler) {
-    await tesseractScheduler.terminate();
-    tesseractScheduler = null;
-    tesseractWorkers = [];
-  }
-  if (engOnlyWorker) {
-    try { await engOnlyWorker.terminate(); } catch {}
-    engOnlyWorker = null;
-  }
-});
-
-/**
- * Lazy-init a single eng-only Tesseract worker used exclusively for the
- * crew hub enemy-name band.  eng-only reads player names far better than
- * eng+chi_sim in this context (see comment on engOnlyWorker declaration).
- */
-async function getEngOnlyWorker() {
-  if (engOnlyWorker) return engOnlyWorker;
-  if (!Tesseract) {
-    Tesseract = require('tesseract.js');
-  }
-  console.log('[OCR-EngOnly] Initializing eng-only worker for crew hub player names...');
-  engOnlyWorker = await Tesseract.createWorker('eng', 1, {
-    logger: m => {
-      if (m.status && m.progress === 1) {
-        console.log('[OCR-EngOnly]', m.status);
-      }
-    },
-    cacheMethod: 'readOnly',
-  });
-  await engOnlyWorker.setParameters({ preserve_interword_spaces: '1' });
-  console.log('[OCR-EngOnly] eng-only worker ready');
-  return engOnlyWorker;
-}
-
-/**
- * Run an OCR pass using the eng-only worker.
- * Returns { words, allWords, text } in the same shape as runOCR().
- */
-async function runOCREngOnly(imageBuffer, psm = null) {
-  const worker = await getEngOnlyWorker();
-  if (psm !== null) {
-    try {
-      await worker.setParameters({ tessedit_pageseg_mode: String(psm), preserve_interword_spaces: '1' });
-    } catch {}
-  }
-  const result = await worker.recognize(imageBuffer);
-  const text = result?.data?.text || '';
-  const words = [];
-  try {
-    const blocks = result?.data?.blocks || [];
-    for (const block of blocks) {
-      for (const para of block?.paragraphs || []) {
-        for (const line of para?.lines || []) {
-          for (const w of line?.words || []) {
-            words.push(w);
-          }
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('[OCR-EngOnly] Failed to extract word hierarchy:', e.message);
-  }
-  return { words, allWords: words, text };
-}
-
 /**
  * Capture the game window (primary display)
  */
@@ -995,7 +764,7 @@ async function cropRegionAndOCR(
 
     console.log(`[OCR-Region] Cropped+upscaled buffer: ${cropped.length} bytes`);
 
-    // Run dedicated Tesseract pass on the cropped region
+    // Run dedicated OCR pass on the cropped region
     const regionOCR = await runOCR(cropped, psm);
     if (!regionOCR || !regionOCR.words || regionOCR.words.length === 0) {
       console.log('[OCR-Region] No words detected in cropped region');
@@ -1033,76 +802,111 @@ async function cropRegionAndOCR(
  * Returns structured data with words, lines, and text
  */
 async function runOCR(imageBuffer, psm = null) {
-  const scheduler = await getTesseractScheduler();
+  if (!imageBuffer || !Buffer.isBuffer(imageBuffer)) {
+    return {
+      text: '',
+      confidence: 0,
+      words: [],
+      allWords: [],
+      lines: [],
+    };
+  }
 
-  console.log(`[OCR] Running recognition (worker pool)${psm !== null ? ` PSM=${psm}` : ''}...`);
+  if (psm !== null) {
+    console.log(`[OCR] runOCR PSM override requested (${psm}) but ignored by PaddleOCR runtime`);
+  }
+
+  await initPaddleOCR();
+  console.log('[OCR] Running PaddleOCR recognition...');
   const startTime = Date.now();
 
-  // Apply per-recognition PSM when explicitly requested.
-  if (psm !== null) {
+  const paddleWords = await paddleOcrBuffer(imageBuffer, { threshold: 0.2 });
+  console.log(`[OCR] PaddleOCR complete in ${Date.now() - startTime}ms, rawWords=${paddleWords.length}`);
+
+  const words = paddleWords
+    .map((word) => {
+      const text = String(word?.text || '').trim();
+      if (!text) return null;
+      const bbox = word?.bbox || {};
+      const x0 = Number.isFinite(Number(bbox.x0)) ? Number(bbox.x0) : 0;
+      const y0 = Number.isFinite(Number(bbox.y0)) ? Number(bbox.y0) : 0;
+      const x1 = Number.isFinite(Number(bbox.x1)) ? Number(bbox.x1) : x0;
+      const y1 = Number.isFinite(Number(bbox.y1)) ? Number(bbox.y1) : y0;
+      const confidence = Number.isFinite(Number(word?.confidence)) ? Number(word.confidence) : 0;
+      return {
+        text,
+        confidence: Math.max(0, Math.min(100, confidence)),
+        bbox: {
+          x0: Math.min(x0, x1),
+          y0: Math.min(y0, y1),
+          x1: Math.max(x0, x1),
+          y1: Math.max(y0, y1),
+        },
+      };
+    })
+    .filter(Boolean)
+    .filter((word) => (word.confidence || 0) >= LOW_WORD_CONFIDENCE_THRESHOLD);
+
+  words.sort((a, b) => {
+    const ay = (a.bbox.y0 + a.bbox.y1) / 2;
+    const by = (b.bbox.y0 + b.bbox.y1) / 2;
+    if (ay !== by) return ay - by;
+    return a.bbox.x0 - b.bbox.x0;
+  });
+
+  let imageHeight = 1080;
+  let imageWidth = 1920;
+  if (sharp) {
     try {
-      await scheduler.addJob('setParameters', buildTesseractWorkerParameters(activeUserWordsFile, psm));
-    } catch {
-      // Non-critical: recognition can proceed with existing params.
+      const metadata = await sharp(imageBuffer).metadata();
+      if (Number.isFinite(metadata?.height) && metadata.height > 0) imageHeight = metadata.height;
+      if (Number.isFinite(metadata?.width) && metadata.width > 0) imageWidth = metadata.width;
+    } catch (error) {
+      console.warn('[OCR] Failed to read OCR image metadata:', error?.message || error);
     }
   }
 
-  const result = await scheduler.addJob('recognize', imageBuffer);
-
-  console.log(`[OCR] Recognition complete in ${Date.now() - startTime}ms`);
-
-  // Extract from hierarchical structure
-  const text = result?.data?.text || '';
-  const confidence = result?.data?.confidence || 0;
-
-  let words = [];
-  let lines = [];
-
-  try {
-    const blocks = result?.data?.blocks || [];
-    for (const block of blocks) {
-      const paragraphs = block?.paragraphs || [];
-      for (const para of paragraphs) {
-        const paraLines = para?.lines || [];
-        for (const line of paraLines) {
-          lines.push(line);
-          const lineWords = line?.words || [];
-          words.push(...lineWords);
+  const groupedLines = groupCrewHubWordsIntoLines(words, imageHeight, imageWidth);
+  const lines = groupedLines.map((line) => {
+    const lineWords = Array.isArray(line?.words) ? [...line.words].sort((a, b) => a.bbox.x0 - b.bbox.x0) : [];
+    const lineText = lineWords.map((word) => word.text).join(' ').trim();
+    const xs0 = lineWords.map((word) => word.bbox.x0);
+    const ys0 = lineWords.map((word) => word.bbox.y0);
+    const xs1 = lineWords.map((word) => word.bbox.x1);
+    const ys1 = lineWords.map((word) => word.bbox.y1);
+    const avgConfidence = lineWords.length > 0
+      ? (lineWords.reduce((sum, word) => sum + Number(word.confidence || 0), 0) / lineWords.length)
+      : 0;
+    return {
+      y: Number(line?.y || 0),
+      text: lineText,
+      confidence: avgConfidence,
+      bbox: lineWords.length > 0
+        ? {
+          x0: Math.min(...xs0),
+          y0: Math.min(...ys0),
+          x1: Math.max(...xs1),
+          y1: Math.max(...ys1),
         }
-      }
-    }
-    console.log('[OCR] Extracted:', { blocks: blocks.length, lines: lines.length, words: words.length });
-  } catch (e) {
-    console.warn('[OCR] Failed to extract from hierarchy:', e.message);
-  }
+        : { x0: 0, y0: 0, x1: 0, y1: 0 },
+      words: lineWords,
+    };
+  });
 
-  const filteredWords = words.filter(w => (w?.confidence || 0) >= LOW_WORD_CONFIDENCE_THRESHOLD);
-  console.log(`[OCR] Extracted: ${text.length} chars, ${filteredWords.length} words, ${lines.length} lines`);
+  const text = lines
+    .map((line) => line.text)
+    .filter(Boolean)
+    .join('\n');
+  const confidence = words.length > 0
+    ? (words.reduce((sum, word) => sum + Number(word.confidence || 0), 0) / words.length)
+    : 0;
 
   return {
     text,
     confidence,
-    words: filteredWords
-      .map(w => ({
-        text: w?.text || '',
-        confidence: w?.confidence || 0,
-        bbox: w?.bbox ? {
-          x0: w.bbox.x0 || 0,
-          y0: w.bbox.y0 || 0,
-          x1: w.bbox.x1 || 0,
-          y1: w.bbox.y1 || 0,
-        } : { x0: 0, y0: 0, x1: 0, y1: 0 },
-      })),
-    lines: lines.map(l => ({
-      text: l?.text || '',
-      confidence: l?.confidence || 0,
-      bbox: l?.bbox ? {
-        x0: l.bbox.x0 || 0,
-        y0: l.bbox.y0 || 0,
-        x1: l.bbox.x1 || 0,
-        y1: l.bbox.y1 || 0,
-      } : { x0: 0, y0: 0, x1: 0, y1: 0 },
-    })),
+    words,
+    allWords: words,
+    lines,
   };
 }
 
@@ -1585,9 +1389,6 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       normalizedScreenTypeHint === 'map_screen' ||
       normalizedScreenTypeHint === 'tactical_map'
     ) ? SCREEN_TYPES.MAP_SCREEN : null;
-    const ocrPsm = hintedScreenType === SCREEN_TYPES.CREW_HUB ? 4
-      : hintedScreenType === SCREEN_TYPES.MAP_SCREEN ? 11
-      : null;
     const ocrRegionFingerprint = getOcrRegionsCacheFingerprint(ocrRegions);
     const routingFingerprint = `${routingProfile}:${fontProfile}:${nameRerouteThreshold}:${maxReroutePasses}`;
     console.log('[OCR] Starting processCapture');
@@ -1651,7 +1452,6 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     // Skipped by default to reduce disk usage
 
     // ─── Run OCR based on ocrMode ───
-    const analysisPathsUsed = new Set(['local']);
     let routingDebug = {
       attempted: false,
       applied: false,
@@ -1664,7 +1464,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
 
     // Run local OCR
     console.log('[OCR] Running LOCAL-ONLY mode...');
-    const ocrResult = await runOCR(processed.buffer, ocrPsm);
+    const ocrResult = await runOCR(processed.buffer);
     console.log(`[OCR] Local OCR done, text length: ${ocrResult.text?.length || 0}`);
     console.log('[OCR] OCR complete, text length:', ocrResult.text?.length || 0);
 
@@ -1675,365 +1475,34 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       processed.height
     );
     console.log('[OCR] Screen detection:', screenDetection);
+    const resolvedScreenType = hintedScreenType || screenDetection.type;
+    if (resolvedScreenType !== screenDetection.type) {
+      console.log(`[OCR] Screen type override from hint: ${screenDetection.type} -> ${resolvedScreenType}`);
+    }
 
     // Extract based on screen type
     let extractedData = null;
-    const runtimeAnchors = deriveRuntimeAnchors(screenDetection.type, ocrResult, processed, ocrRegions);
+    const runtimeAnchors = deriveRuntimeAnchors(resolvedScreenType, ocrResult, processed, ocrRegions);
     const activeRegions = applyRuntimeAnchors(ocrRegions, runtimeAnchors);
     const targetedRetries = [];
 
-    if (screenDetection.type === SCREEN_TYPES.CREW_HUB) {
+    if (resolvedScreenType === SCREEN_TYPES.CREW_HUB) {
       console.log('[OCR] Processing as CREW HUB');
-
-      // Run eng-only OCR on the full preprocessed image to detect player names.
-      // eng+chi_sim (used by the main pool) reads coloured ship-name bars well but
-      // mangles player name text; eng-only does the opposite.
-      // We replace the name-band words wholesale with the eng-only results.
-      let engOnlyFullResult = null;
-      try {
-        engOnlyFullResult = await runOCREngOnly(processed.buffer);
-        console.log(`[OCR-CrewHub] Eng-only full-image pass: ${(engOnlyFullResult?.allWords || []).length} words`);
-      } catch (e) {
-        console.warn('[OCR-CrewHub] Eng-only full-image pass failed:', e.message);
-      }
-
-      const nameBandXMin = (activeRegions.crewHub?.enemyName?.xMin || 0.62) * processed.width;
-      const nameBandXMax = (activeRegions.crewHub?.enemyName?.xMax || 0.93) * processed.width;
-      const engOnlyWords = engOnlyFullResult?.allWords || [];
-      // runOCR() and mergeOCRResults() return { words } not { allWords };
-      // only runOCREngOnly() returns allWords. Fall back to .words to avoid crash.
-      const baseAllWords = ocrResult.allWords || ocrResult.words || [];
-      let allWordsWithEngOnly = engOnlyWords.length > 0
-        ? [
-            ...baseAllWords.filter(lw => {
-              const lxm = (lw.bbox.x0 + lw.bbox.x1) / 2;
-              return lxm < nameBandXMin || lxm > nameBandXMax;
-            }),
-            ...engOnlyWords.filter(ew => {
-              const exm = (ew.bbox.x0 + ew.bbox.x1) / 2;
-              // Exclude c=0 words: Tesseract produces confidence=0 for garbled
-              // bar-text (e.g. WITCH/PLEASE read as "wircHpieasE"), including them
-              // corrupts the name extraction despite looking like valid mixed-case names.
-              return exm >= nameBandXMin && exm <= nameBandXMax && ew.confidence > 0;
-            }),
-          ]
-        : baseAllWords;
-
-      // SUPPLEMENTARY: Narrow-strip PSM 11 pass for enemy names that are missed by
-      // the full-image eng-only pass (PSM 4).
-      //
-      // A 4× raw PSM 11 scan on a narrow horizontal strip (x=68-82% of the original
-      // image, y=190-870) reliably finds all ship-name bars AND all player names in
-      // one shot — including the low-contrast zones that the full-image PSM 4 misses.
-      // We append its words to the pool in 2× processed-image coordinates, letting
-      // the existing crewHubExtractor logic pick the best match per slot.
-      if (imageBuffer) {
-        try {
-          const origW = Math.round(processed.width / processed.scale);
-          const origH = Math.round(processed.height / processed.scale);
-          const stripXFrac1 = 0.55;
-          const stripXFrac2 = 0.88;
-          const stripX1  = Math.round(origW * stripXFrac1);
-          const stripX2  = Math.round(origW * stripXFrac2);
-          const stripW   = stripX2 - stripX1;
-          const stripY   = 120;
-          const stripH   = Math.max(0, Math.round(origH * 0.92) - stripY);
-          const STRIP_SCALE = 4;
-
-          const stripBuf = await sharp(imageBuffer)
-            .extract({ left: stripX1, top: stripY, width: stripW, height: stripH })
-            .resize(stripW * STRIP_SCALE, stripH * STRIP_SCALE, { kernel: sharp.kernel.lanczos3 })
-            .grayscale()
-            .modulate({ brightness: 1.0 })
-            .linear(1.4, -(0.3 * 128))
-            .sharpen({ sigma: 2, m1: 1, m2: 0.5 })
-            .png().toBuffer();
-          const stripResult = await runOCREngOnly(stripBuf, 11);
-          const stripResultPsm6 = await runOCREngOnly(stripBuf, 6);
-          let stripWordCount = 0;
-          for (const sw of [...(stripResult?.allWords || []), ...(stripResultPsm6?.allWords || [])]) {
-            // Map: strip-crop 4× coords → 1× full-image → 2× processed coords
-            const mapped2x = {
-              x0: Math.round((sw.bbox.x0 / STRIP_SCALE + stripX1) * processed.scale),
-              y0: Math.round((sw.bbox.y0 / STRIP_SCALE + stripY)  * processed.scale),
-              x1: Math.round((sw.bbox.x1 / STRIP_SCALE + stripX1) * processed.scale),
-              y1: Math.round((sw.bbox.y1 / STRIP_SCALE + stripY)  * processed.scale),
-            };
-            // Always check for duplicate first (before confidence gate) so that a
-            // low-confidence strip word can still REPLACE a shorter existing word
-            // (e.g. "PerfectSinil" c=0 from strip replaces "Perfectail" c=34).
-            const swCy = (mapped2x.y0 + mapped2x.y1) / 2;
-            const swTextNorm = sw.text.trim().toLowerCase();
-            const existingIdx = allWordsWithEngOnly.findIndex(ex => {
-              const exCy = (ex.bbox.y0 + ex.bbox.y1) / 2;
-              if (Math.abs(exCy - swCy) > 30) return false;
-              const exNorm = ex.text.trim().toLowerCase();
-              if (exNorm === swTextNorm) return true;
-              if (exNorm.length >= 4 && swTextNorm.includes(exNorm)) return true;
-              if (swTextNorm.length >= 4 && exNorm.includes(swTextNorm)) return true;
-              // Common prefix ≥5 chars (was 6, lowered to catch "Ledurricane"/"Ledvurricane")
-              const minLen = Math.min(exNorm.length, swTextNorm.length);
-              if (minLen >= 5) {
-                let cp = 0;
-                while (cp < minLen && exNorm[cp] === swTextNorm[cp]) cp++;
-                if (cp >= 5) return true;
-              }
-              // Edit distance ≤1 for long words (same player name read slightly differently)
-              if (minLen >= 7 && Math.abs(exNorm.length - swTextNorm.length) <= 2) {
-                // Quick row-by-row DP for edit distance
-                const a = exNorm, b = swTextNorm;
-                let prev = Array.from({length: b.length + 1}, (_, i) => i);
-                for (let i = 1; i <= a.length; i++) {
-                  const curr = [i];
-                  for (let j = 1; j <= b.length; j++) {
-                    curr[j] = a[i-1] === b[j-1] ? prev[j-1]
-                      : 1 + Math.min(prev[j-1], prev[j], curr[j-1]);
-                  }
-                  prev = curr;
-                }
-                if (prev[b.length] <= 1) return true;
-              }
-              return false;
-            });
-            if (existingIdx >= 0) {
-              const existing = allWordsWithEngOnly[existingIdx];
-              // Replace if strip word is longer — strip PSM11 often captures more
-              // of the name than the main pass (e.g. "eneva_echo" > "a_echo",
-              // "PerfectSinil" > "Perfectail")
-              if (sw.text.trim().length > existing.text.trim().length) {
-                allWordsWithEngOnly[existingIdx] = { ...sw, bbox: mapped2x };
-                stripWordCount++;
-              }
-              continue; // either replaced or skipped — don't add again
-            }
-            // Only add NEW words if confidence is sufficient.
-            // Long words (≥7 chars) get a lower floor (15) — they're unlikely to be
-            // random noise, and this recovers names like GoblinaTTyV(c16).
-            const textLen = sw.text.trim().length;
-            const confFloor = textLen >= 7 ? 10 : textLen >= 4 ? 12 : 15;
-            if (sw.confidence < confFloor) continue;
-            allWordsWithEngOnly.push({ ...sw, bbox: mapped2x });
-            stripWordCount++;
-          }
-          console.log(`[OCR-CrewHub] Strip PSM11/PSM6 pass: appended ${stripWordCount} words`);
-        } catch (e) {
-          console.warn('[OCR-CrewHub] Strip PSM11 pass failed:', e.message);
-        }
-      }
-
-      // PSM11 row-slice scan — catches player names skipped by full-height strip
-      // (Tesseract PSM11 on the full strip ignores player card text near large team
-      // name bars like ESCAPE VELOCITY; scanning each ~55px row in isolation fixes it)
-      if (imageBuffer) {
-        try {
-          const origW2 = Math.round(processed.width / processed.scale);
-          const origH2 = Math.round(processed.height / processed.scale);
-          const rX1    = Math.round(origW2 * 0.55);
-          const rW     = Math.round(origW2 * 0.88) - rX1;
-          const RSC    = 4;
-          const SLICE_H = 40;
-          const STEP    = 40;
-          const rowSliceYStart = Math.max(
-            120,
-            Math.round(origH2 * (activeRegions.crewHub?.enemyName?.yMin || 0.08)) + 10
-          );
-          const rowSliceYEnd   = Math.round(origH2 * 0.92);
-          let rowWordCount = 0;
-          for (let sy = rowSliceYStart; sy < rowSliceYEnd; sy += STEP) {
-            const h = Math.min(SLICE_H, rowSliceYEnd - sy);
-            if (h < 20) continue;
-            const sliceBuf = await sharp(imageBuffer)
-              .extract({ left: rX1, top: sy, width: rW, height: h })
-              .resize(rW * RSC, h * RSC, { kernel: sharp.kernel.lanczos3 })
-              .grayscale()
-              .modulate({ brightness: 1.15 })
-              .linear(1.4, -(0.3 * 128))
-              .sharpen({ sigma: 1.5, m1: 1, m2: 0.5 })
-              .png().toBuffer();
-            const sliceResult = await runOCREngOnly(sliceBuf, 11);
-            for (const sw of (sliceResult?.allWords || [])) {
-              const mapped2x = {
-                x0: Math.round((sw.bbox.x0 / RSC + rX1) * processed.scale),
-                y0: Math.round((sw.bbox.y0 / RSC + sy)  * processed.scale),
-                x1: Math.round((sw.bbox.x1 / RSC + rX1) * processed.scale),
-                y1: Math.round((sw.bbox.y1 / RSC + sy)  * processed.scale),
-              };
-              const swCy       = (mapped2x.y0 + mapped2x.y1) / 2;
-              const swTextNorm = sw.text.trim().toLowerCase();
-              const existingIdx = allWordsWithEngOnly.findIndex(ex => {
-                const exCy = (ex.bbox.y0 + ex.bbox.y1) / 2;
-                if (Math.abs(exCy - swCy) > 30) return false;
-                const exNorm = ex.text.trim().toLowerCase();
-                if (exNorm === swTextNorm) return true;
-                if (exNorm.length >= 4 && swTextNorm.includes(exNorm)) return true;
-                if (swTextNorm.length >= 4 && exNorm.includes(swTextNorm)) return true;
-                const minLen = Math.min(exNorm.length, swTextNorm.length);
-                if (minLen >= 5) {
-                  let cp = 0;
-                  while (cp < minLen && exNorm[cp] === swTextNorm[cp]) cp++;
-                  if (cp >= 5) return true;
-                }
-                if (minLen >= 7 && Math.abs(exNorm.length - swTextNorm.length) <= 2) {
-                  const a = exNorm, b = swTextNorm;
-                  let prev = Array.from({length: b.length + 1}, (_, i) => i);
-                  for (let i = 1; i <= a.length; i++) {
-                    const curr = [i];
-                    for (let j = 1; j <= b.length; j++) {
-                      curr[j] = a[i-1] === b[j-1] ? prev[j-1] : 1 + Math.min(prev[j-1], prev[j], curr[j-1]);
-                    }
-                    prev = curr;
-                  }
-                  if (prev[b.length] <= 1) return true;
-                }
-                return false;
-              });
-              if (existingIdx >= 0) {
-                if (sw.text.trim().length > allWordsWithEngOnly[existingIdx].text.trim().length)
-                  allWordsWithEngOnly[existingIdx] = { ...sw, bbox: mapped2x };
-                continue;
-              }
-              const swLen = sw.text.trim().length;
-              const rowConfFloor = swLen >= 7 ? 10 : swLen >= 4 ? 12 : 15;
-              if (sw.confidence < rowConfFloor) continue;
-              allWordsWithEngOnly.push({ ...sw, bbox: mapped2x });
-              rowWordCount++;
-            }
-          }
-          console.log(`[OCR-CrewHub] Row-slice PSM11 pass: appended ${rowWordCount} words`);
-        } catch (e) {
-          console.warn('[OCR-CrewHub] Row-slice scan failed:', e.message);
-        }
-      }
-
-      // DEDICATED: Left-panel team-name banner box (separate from the player-name strip).
-      // Reads just the top of the left panel where "SPEED RUN!"-style banners appear.
-      // Stored as leftPanelTeamName and used by extractCrewHub as a fallback team name.
-      let leftPanelTeamName = null;
-      if (imageBuffer) {
-        try {
-          const origW = Math.round(processed.width / processed.scale);
-          const origH = Math.round(processed.height / processed.scale);
-          const th = activeRegions.crewHub?.teamHeader || { xMin: 0.10, xMax: 0.45, yMin: 0.17, yMax: 0.23 };
-          const bannerX1 = Math.round(origW * th.xMin);
-          const bannerX2 = Math.round(origW * th.xMax);
-          const bannerY1 = Math.round(origH * th.yMin);
-          const bannerY2 = Math.round(origH * th.yMax);
-          const bannerW  = bannerX2 - bannerX1;
-          const bannerH  = bannerY2 - bannerY1;
-          if (bannerW > 0 && bannerH > 0) {
-            const BANNER_SCALE = 4;
-            const bannerBuf = await sharp(imageBuffer)
-              .extract({ left: bannerX1, top: bannerY1, width: bannerW, height: bannerH })
-              .resize(bannerW * BANNER_SCALE, bannerH * BANNER_SCALE, { kernel: sharp.kernel.lanczos3 })
-              .grayscale()
-              .modulate({ brightness: 1.05 })
-              .linear(1.4, -(0.4 * 128))
-              .sharpen({ sigma: 1.5, m1: 1, m2: 0.5 })
-              .png().toBuffer();
-            const bannerOcr = await runOCREngOnly(bannerBuf, 7); // PSM7 = single text line (preserves spaces)
-            const bannerText = (bannerOcr?.allWords || [])
-              .filter(w => w.confidence >= 30)
-              .map(w => w.text.trim())
-              .filter(Boolean)
-              .join(' ');
-            if (bannerText.length >= 3) {
-              // Strip trailing "'s Crew" if OCR caught it
-              leftPanelTeamName = bannerText.replace(/[\u2019\u2018\u0027\u0060]?s\s*Crew\s*$/i, '').trim();
-              console.log(`[OCR-CrewHub] Left-panel banner box: "${leftPanelTeamName}"`);
-            }
-          }
-        } catch (e) {
-          console.warn('[OCR-CrewHub] Left-panel banner box failed:', e.message);
-        }
-      }
-
-      // SUPPLEMENTARY: Left-panel PSM11 strip for your-team player names.
-      // The PSM4 full-image pass often misses names that sit at lower-contrast
-      // positions in the left panel (e.g. 3rd/4th teammate cards). The left
-      // panel does NOT scroll, so a single strip suffices for both crew screenshots.
-      if (imageBuffer) {
-        try {
-          const origW = Math.round(processed.width / processed.scale);
-          const origH = Math.round(processed.height / processed.scale);
-          const lStripXFrac1 = 0.08; // expanded left-panel name scan window start
-          const lStripXFrac2 = 0.46; // expanded left-panel name scan window end
-          const lStripX1  = Math.round(origW * lStripXFrac1);
-          const lStripX2  = Math.round(origW * lStripXFrac2);
-          const lStripW   = lStripX2 - lStripX1;
-          const lStripY   = Math.round(origH * 0.31); // measured: player cards start at ~31% height
-          const lStripH   = Math.max(0, Math.round(origH * 0.725) - lStripY); // measured: bottom at ~72.5%
-          const L_STRIP_SCALE = 3;
-
-          const lStripBuf = await sharp(imageBuffer)
-            .extract({ left: lStripX1, top: lStripY, width: lStripW, height: lStripH })
-            .resize(lStripW * L_STRIP_SCALE, lStripH * L_STRIP_SCALE, { kernel: sharp.kernel.lanczos3 })
-            .grayscale()
-            .modulate({ brightness: 1.0 })
-            .linear(1.3, -(0.3 * 128))
-            .sharpen({ sigma: 2, m1: 1, m2: 0.5 })
-            .png().toBuffer();
-          const lStripResult = await runOCREngOnly(lStripBuf, 11);
-          let lStripWordCount = 0;
-          for (const sw of (lStripResult?.allWords || [])) {
-            const mapped2x = {
-              x0: Math.round((sw.bbox.x0 / L_STRIP_SCALE + lStripX1) * processed.scale),
-              y0: Math.round((sw.bbox.y0 / L_STRIP_SCALE + lStripY)  * processed.scale),
-              x1: Math.round((sw.bbox.x1 / L_STRIP_SCALE + lStripX1) * processed.scale),
-              y1: Math.round((sw.bbox.y1 / L_STRIP_SCALE + lStripY)  * processed.scale),
-            };
-            const swCy = (mapped2x.y0 + mapped2x.y1) / 2;
-            const swTextNorm = sw.text.trim().toLowerCase();
-            const existingIdx = allWordsWithEngOnly.findIndex(ex => {
-              const exCy = (ex.bbox.y0 + ex.bbox.y1) / 2;
-              if (Math.abs(exCy - swCy) > 30) return false;
-              const exNorm = ex.text.trim().toLowerCase();
-              if (exNorm === swTextNorm) return true;
-              if (exNorm.length >= 4 && swTextNorm.includes(exNorm)) return true;
-              if (swTextNorm.length >= 4 && exNorm.includes(swTextNorm)) return true;
-              const minLen = Math.min(exNorm.length, swTextNorm.length);
-              if (minLen >= 5) {
-                let cp = 0;
-                while (cp < minLen && exNorm[cp] === swTextNorm[cp]) cp++;
-                if (cp >= 5) return true;
-              }
-              return false;
-            });
-            if (existingIdx >= 0) {
-              const existing = allWordsWithEngOnly[existingIdx];
-              if (sw.text.trim().length > existing.text.trim().length) {
-                allWordsWithEngOnly[existingIdx] = { ...sw, bbox: mapped2x };
-                lStripWordCount++;
-              }
-              continue;
-            }
-            const lConfFloor = sw.text.trim().length >= 7 ? 15 : 20;
-            if (sw.confidence < lConfFloor) continue;
-            allWordsWithEngOnly.push({ ...sw, bbox: mapped2x });
-            lStripWordCount++;
-          }
-          console.log(`[OCR-CrewHub] Left-strip PSM11 pass: appended ${lStripWordCount} words`);
-        } catch (e) {
-          console.warn('[OCR-CrewHub] Left-strip PSM11 pass failed:', e.message);
-        }
-      }
-
-      const mergedOcrResult = { ...ocrResult, allWords: allWordsWithEngOnly, leftPanelTeamName };
 
       extractedData = await extractCrewHub(
         processed.buffer,
         activeUser,
-        mergedOcrResult,
+        ocrResult,
         processed.width,
         processed.height,
-        processed.scale, // OCR words are on preprocessed/scaled image coordinates
-        imageBuffer, // keep color detection on original-color pixels
+        processed.scale,
+        imageBuffer,
         activeRegions.crewHub
       );
 
-      // Convert to legacy format for backwards compatibility
       extractedData = convertCrewHubToLegacy(extractedData, ocrResult.text);
 
-    } else if (screenDetection.type === SCREEN_TYPES.MAP_SCREEN) {
+    } else if (resolvedScreenType === SCREEN_TYPES.MAP_SCREEN) {
       console.log('[OCR] Processing as MAP SCREEN');
 
       const PLAYER_REGION = activeRegions.mapScreen.players;
@@ -2061,17 +1530,9 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       ]);
 
       const missingYourShip = !mapScreenData?.yourShip?.shipType;
-      const missingEnemySlots = (mapScreenData?.enemyShips || [])
-        .map((ship, idx) => ({ ship, idx }))
-        .filter(({ ship }) => !ship?.shipType || String(ship.shipType).toLowerCase() === 'unknown');
-      if (imageBuffer && (missingYourShip || missingEnemySlots.length > 0)) {
-        const retryRegions = missingYourShip
-          ? ['yourShip']
-          : [];
-        for (const m of missingEnemySlots) {
-          const key = ['enemyShips', 'enemyShips2', 'enemyShips3', 'enemyShips4'][m.idx];
-          if (key) retryRegions.push(key);
-        }
+      if (imageBuffer && missingYourShip) {
+        const retryRegions = ['yourShip'];
+        console.log('[OCR-Region] MAP_SCREEN: skipping enemy-panel retry strip passes');
 
         for (const key of retryRegions) {
           const region = activeRegions.mapScreen[key];
@@ -2118,21 +1579,6 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
               retryEntry.accepted = true;
               retryEntry.reason = 'ship_type_recovered';
             }
-          } else {
-            const idx = ['enemyShips', 'enemyShips2', 'enemyShips3', 'enemyShips4'].indexOf(key);
-            if (idx >= 0 && mapScreenData.enemyShips?.[idx]) {
-              const existingShip = mapScreenData.enemyShips[idx];
-              if (shipType && (!existingShip.shipType || String(existingShip.shipType).toLowerCase() === 'unknown')) {
-                mapScreenData.enemyShips[idx] = {
-                  ...existingShip,
-                  shipType,
-                  teamName: existingShip.teamName || teamName || existingShip.teamName,
-                  confidence: Math.max(72, Number(existingShip.confidence || 0)),
-                };
-                retryEntry.accepted = true;
-                retryEntry.reason = 'ship_type_recovered';
-              }
-            }
           }
           targetedRetries.push(retryEntry);
         }
@@ -2153,15 +1599,30 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           processed.originalHeight,
           activeRegions.mapScreen
         );
-        const existingCount = (extractedData.teammates || []).length;
+        const existingTeammates = Array.isArray(extractedData.teammates) ? extractedData.teammates : [];
+        const existingCount = existingTeammates.length;
         if (regionPlayers.length > 0) {
-          console.log(`[OCR-Region] Region OCR extracted ${regionPlayers.length} teammate(s) (full-image had ${existingCount}): ${regionPlayers.join(', ')}`);
-          // Prefer region results — they come from a higher-resolution, higher-contrast crop
-          extractedData.teammates = regionPlayers.map(name => ({
-            name,
-            confidence: 70,
-            isTeammate: true,
-          }));
+          const mergedTeammates = dedupeExtractedPlayers(
+            [
+              ...existingTeammates.map((player) => ({
+                name: typeof player === 'string' ? player : player?.name,
+                confidence: Number(player?.confidence || 68),
+                isTeammate: true,
+              })),
+              ...regionPlayers.map((name) => ({
+                name,
+                confidence: 76, // region crop is usually cleaner than full-image OCR
+                isTeammate: true,
+              })),
+            ],
+            4
+          ).map((player) => ({ ...player, isTeammate: true }));
+
+          const added = Math.max(0, mergedTeammates.length - existingCount);
+          console.log(
+            `[OCR-Region] Region OCR extracted ${regionPlayers.length} teammate(s) (full-image had ${existingCount}); merged=${mergedTeammates.length} (+${added}): ${mergedTeammates.map((p) => p.name).join(', ')}`
+          );
+          extractedData.teammates = mergedTeammates;
         } else {
           console.log(`[OCR-Region] Region OCR found ${regionResult.words.length} words but no valid player names; keeping ${existingCount} from full-image`);
         }
@@ -2170,17 +1631,18 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       }
 
     } else {
-      console.log('[OCR] Unknown screen type, returning minimal extraction');
+      console.log('[OCR] Unknown screen type, returning empty extraction');
       extractedData = {
         screenshotType: 'unknown',
-        rawText: ocrResult.text || '',
         playerTeamName: undefined,
         teammates: [],
         opponentTeams: [],
         reachModifiers: [],
+        hazards: [],
+        enemyShips: [],
         overallConfidence: 0,
-        isPartialCapture: true,
         captureTimestamp: Date.now(),
+        rawText: ocrResult.text || '',
       };
     }
 
@@ -2386,7 +1848,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         ocrResult,
         null,
         processed,
-        screenDetection.type,
+        resolvedScreenType,
         ocrRegions
       );
     }
@@ -2521,7 +1983,8 @@ function convertMapScreenToLegacy(mapScreenData, rawText) {
   const enemyShips = (mapScreenData.enemyShips || []).map(ship => ({
     teamName: ship.teamName || 'Unknown Team',
     shipType: ship.shipType || 'Unknown',
-    color: ship.color || 'unknown',
+    teamColor: ship.teamColor || ship.color || 'unknown',
+    color: ship.teamColor || ship.color || 'unknown',
     confidence: ship.confidence || 70,
   }));
 
@@ -2536,6 +1999,7 @@ function convertMapScreenToLegacy(mapScreenData, rawText) {
   const opponentTeams = enemyShips.map(ship => ({
     teamName: ship.teamName,
     shipType: ship.shipType,
+    teamColor: ship.teamColor || ship.color || 'unknown',
     color: ship.color,
     players: [],
     confidence: ship.confidence,
@@ -2719,45 +2183,11 @@ function registerOCRHandlers(mainWindow) {
   });
 
   ipcMain.handle('regenerate-ocr-dictionary', async (event, payload = {}) => {
-    try {
-      const safePayload = (payload && typeof payload === 'object' && !Array.isArray(payload))
-        ? payload
-        : {};
-      const pilotRegistry = sanitizePilotRegistryForDictionary(safePayload.pilotRegistry);
-      if (pilotRegistry.length === 0) {
-        return {
-          success: false,
-          error: 'No pilot names available to build OCR dictionary',
-        };
-      }
-
-      const matchHistory = sanitizeDictionaryMatchHistory(safePayload.matches);
-      const generated = await generateUserWordsFile({
-        pilotRegistry,
-        matchHistory,
-        outputPath: OCR_USER_WORDS_FILE,
-      });
-
-      const applyResult = await applyDictionaryToWorkers(generated.filePath);
-      const { content, ...summary } = generated;
-
-      latestDictionaryStats = {
-        ...summary,
-        appliedWorkers: applyResult.appliedWorkers,
-      };
-
-      console.log(`[OCR-Dict] Regenerated dictionary (${summary.totalWords} words, ${summary.pilotCount} pilots, workers=${applyResult.appliedWorkers})`);
-      return {
-        success: true,
-        ...latestDictionaryStats,
-      };
-    } catch (error) {
-      console.error('[OCR-Dict] regenerate-ocr-dictionary failed:', error);
-      return {
-        success: false,
-        error: error?.message || 'Dictionary regeneration failed',
-      };
-    }
+    console.log('[OCR-Dict] Dictionary regeneration requested, but PaddleOCR runtime does not use user dictionaries');
+    return {
+      success: false,
+      error: 'Dictionary regeneration is not supported with PaddleOCR runtime',
+    };
   });
 
   // Get OCR debug directory path
@@ -2786,7 +2216,6 @@ module.exports = {
   registerOCRHandlers,
   captureGameWindow,
   processCapture,
-  getTesseractWorker,
   preprocessImage,
   runOCR,
   extractModifiers,

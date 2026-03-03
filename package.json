@@ -28,12 +28,15 @@
     "snap:baseline": "node scripts/visual-snapshots.mjs --update-baseline",
     "snap:baseline:real": "node scripts/visual-snapshots.mjs --real-data --update-baseline",
     "audit:ui-hardcoded": "node scripts/ui-hardcoded-audit.cjs",
+    "audit:editor": "node scripts/start-audit-editor.cjs",
     "ocr:truth:add": "node scripts/ocr_corpus_add_sample.cjs --input dataset/ocr-corpus/ground-truth.input.txt",
     "ocr:truth:list": "node scripts/ocr_corpus_list_samples.cjs --input dataset/ocr-corpus/ground-truth.input.txt",
     "ocr:truth:validate": "node scripts/ocr_corpus_validate_input.cjs --input dataset/ocr-corpus/ground-truth.input.txt",
     "ocr:truth:build": "node scripts/ocr_corpus_from_text.cjs --in dataset/ocr-corpus/ground-truth.input.txt --out dataset/ocr-corpus/ground-truth.json",
     "ocr:predict": "set ELECTRON_ENABLE_LOGGING=0 && electron scripts/ocr_corpus_predict.cjs --truth dataset/ocr-corpus/ground-truth.json --out dataset/ocr-corpus/predictions.latest.json --ocr-mode both",
     "ocr:eval": "node scripts/ocr_corpus_eval.cjs --truth dataset/ocr-corpus/ground-truth.json --pred dataset/ocr-corpus/predictions.latest.json --baseline dataset/ocr-corpus/baseline.json --out dataset/ocr-corpus/reports/latest.json",
+    "ocr:eval:exact": "node scripts/ocr_corpus_eval_exact.cjs --truth dataset/ocr-corpus/ground-truth.json --pred dataset/ocr-corpus/predictions.latest.json --baseline dataset/ocr-corpus/baseline.json --out dataset/ocr-corpus/reports/latest.exact.json",
+    "eval:exact": "node scripts/ocr_corpus_eval_exact.cjs --truth dataset/ocr-corpus/ground-truth.json --pred dataset/ocr-corpus/predictions.latest.json --baseline dataset/ocr-corpus/baseline.json --out dataset/ocr-corpus/reports/latest.exact.json",
     "ocr:eval:sample": "node scripts/ocr_corpus_eval.cjs --truth dataset/ocr-corpus/ground-truth.sample.json --pred dataset/ocr-corpus/predictions.sample.json --baseline dataset/ocr-corpus/baseline.sample.json --out dataset/ocr-corpus/reports/sample-report.json",
     "ocr:regression:132": "node scripts/ocr_regression_match132.cjs",
     "ocr:baseline:promote": "node scripts/ocr_promote_baseline.cjs --report dataset/ocr-corpus/reports/latest.json --baseline dataset/ocr-corpus/baseline.json",
@@ -55,12 +58,11 @@
   "dependencies": {
     "discord-rpc": "^4.0.1",
     "electron-updater": "^6.7.3",
+    "onnxruntime-node": "^1.24.2",
     "screenshot-desktop": "^1.15.0",
-    "sharp": "^0.33.5",
-    "tesseract.js": "^5.1.1"
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
-    "canvas-confetti": "^1.9.2",
     "@tailwindcss/postcss": "^4.1.18",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -72,6 +74,7 @@
     "@typescript-eslint/parser": "^8.54.0",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.24",
+    "canvas-confetti": "^1.9.2",
     "concurrently": "^8.2.2",
     "electron": "^40.0.0",
     "electron-builder": "^26.4.0",

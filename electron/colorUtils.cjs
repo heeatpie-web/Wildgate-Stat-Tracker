@@ -42,11 +42,21 @@ const TEAM_COLORS = {
     rgb: { r: 0, g: 253, b: 205 },
     hsl: { h: 169, s: 100, l: 50 },
   },
+  black: {
+    hex: '#262626',
+    rgb: { r: 38, g: 38, b: 38 },
+    hsl: { h: 0, s: 0, l: 15 },
+  },
+  green: {
+    hex: '#00FF00',
+    rgb: { r: 0, g: 255, b: 0 },
+    hsl: { h: 120, s: 100, l: 50 },
+  },
 };
 
 // Tolerance values for HSL matching
 // SAT_TOLERANCE is set wide because team name text on the bar dilutes average saturation
-const HUE_TOLERANCE = 30;
+const HUE_TOLERANCE = 12;
 const SAT_TOLERANCE = 65;
 const LIGHT_TOLERANCE = 50;
 
@@ -114,11 +124,18 @@ function hueDistance(h1, h2) {
 function classifyTeamColorHSL(r, g, b) {
   const hsl = rgbToHsl(r, g, b);
 
-  // Detect spectator badges: very dark with low saturation (black/near-black labels)
-  // Spectators in Crew Hub have dark/black team labels. We classify these as 'spectator'
-  // so downstream code can filter them out of opponent lists.
-  if (hsl.l < 20 && hsl.s < 40) {
+  // Very-dark near-black badges are likely spectator cards.
+  if (hsl.l < 8 && hsl.s < 20) {
     return { color: 'spectator', confidence: 70 };
+  }
+
+  // Ground truth includes Black teams. Match black directly by lightness/saturation
+  // so hue wrapping does not misclassify it as unknown.
+  if (hsl.s < 20 && hsl.l < 35) {
+    const darknessScore = 1 - (Math.min(hsl.l, 35) / 35);
+    const satScore = 1 - (Math.min(hsl.s, 20) / 20);
+    const confidence = Math.round((darknessScore * 0.65 + satScore * 0.35) * 100);
+    return { color: 'black', confidence: Math.max(40, confidence) };
   }
 
   // Filter out grayscale/low saturation (UI background, not team colors)

@@ -46,37 +46,6 @@ function canonicalizeName(s) {
     .replace(/[^a-z0-9]/g, '');
 }
 
-// --- OCR-aware digit folding (matches src/utils/ocr/playerNameMatching.ts) ---
-const OCR_DIGIT_FOLD_MAP = {
-  '0': 'o', '1': 'i', '3': 'e', '4': 'a',
-  '5': 's', '6': 'g', '7': 't', '8': 'b', '9': 'g'
-};
-
-function digitFold(s) {
-  return s.replace(/[013456789]/g, ch => OCR_DIGIT_FOLD_MAP[ch] || ch);
-}
-
-// --- Levenshtein distance ---
-function levenshteinDistance(a, b) {
-  if (a === b) return 0;
-  if (a.length === 0) return b.length;
-  if (b.length === 0) return a.length;
-  const matrix = Array.from({ length: b.length + 1 }, () => Array(a.length + 1).fill(0));
-  for (let i = 0; i <= b.length; i++) matrix[i][0] = i;
-  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
-  for (let i = 1; i <= b.length; i++) {
-    for (let j = 1; j <= a.length; j++) {
-      const cost = b[i - 1] === a[j - 1] ? 0 : 1;
-      matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1,
-        matrix[i][j - 1] + 1,
-        matrix[i - 1][j - 1] + cost
-      );
-    }
-  }
-  return matrix[b.length][a.length];
-}
-
 function canonicalizeModifier(s) {
   let m = String(s || '').trim().toLowerCase();
   // Remove punctuation but keep spaces for word splitting
@@ -208,56 +177,28 @@ function uniqueNormalizedValues(list, normalize) {
     new Set(
       safeArray(list)
         .map(normalize)
-        .map(v => digitFold(v))
         .filter(Boolean)
     )
   );
 }
 
-function greedyFuzzyMatchCount(truthItems, predItems, maxDistance = 2) {
-  if (!truthItems.length || !predItems.length) return 0;
-
-  const candidates = [];
-  for (let t = 0; t < truthItems.length; t += 1) {
-    for (let p = 0; p < predItems.length; p += 1) {
-      const distance = levenshteinDistance(truthItems[t], predItems[p]);
-      if (distance <= maxDistance) {
-        candidates.push({ t, p, distance });
-      }
-    }
-  }
-
-  candidates.sort((a, b) => (
-    a.distance - b.distance ||
-    a.t - b.t ||
-    a.p - b.p
-  ));
-
-  const usedTruth = new Set();
-  const usedPred = new Set();
-  let matches = 0;
-  for (const candidate of candidates) {
-    if (usedTruth.has(candidate.t) || usedPred.has(candidate.p)) continue;
-    usedTruth.add(candidate.t);
-    usedPred.add(candidate.p);
-    matches += 1;
-  }
-
-  return matches;
-}
-
 function setStats(truthList, predList, normalize) {
   const truthItems = uniqueNormalizedValues(truthList, normalize);
   const predItems = uniqueNormalizedValues(predList, normalize);
+  const truthSet = new Set(truthItems);
+  const predSet = new Set(predItems);
 
-  const tp = greedyFuzzyMatchCount(truthItems, predItems, 2);
-  const fp = Math.max(0, predItems.length - tp);
-  const fn = Math.max(0, truthItems.length - tp);
-  const precision = predItems.length ? tp / predItems.length : 1;
-  const recall = truthItems.length ? tp / truthItems.length : 1;
+  let tp = 0;
+  for (const value of truthSet) {
+    if (predSet.has(value)) tp += 1;
+  }
+  const fp = Math.max(0, predSet.size - tp);
+  const fn = Math.max(0, truthSet.size - tp);
+  const precision = predSet.size ? tp / predSet.size : 1;
+  const recall = truthSet.size ? tp / truthSet.size : 1;
   const f1 = precision + recall ? (2 * precision * recall) / (precision + recall) : 0;
 
-  return { tp, fp, fn, precision, recall, f1, truthCount: truthItems.length, predCount: predItems.length };
+  return { tp, fp, fn, precision, recall, f1, truthCount: truthSet.size, predCount: predSet.size };
 }
 
 function flattenOpponentPlayers(teams) {
@@ -282,8 +223,8 @@ function teamGroupingAccuracy(truthTeams, predTeams) {
   for (let t = 0; t < truth.length; t += 1) {
     for (let p = 0; p < pred.length; p += 1) {
       if (truth[t].length !== pred[p].length) continue;
-      const matchedPlayers = greedyFuzzyMatchCount(truth[t], pred[p], 2);
-      if (matchedPlayers === truth[t].length) {
+      const exactMatch = truth[t].every((name, idx) => name === pred[p][idx]);
+      if (exactMatch) {
         candidates.push({ t, p });
       }
     }
@@ -608,7 +549,7 @@ function main() {
     perSample
   };
 
-  console.log('OCR Corpus Evaluation');
+  console.log('OCR Corpus Evaluation (Exact Match)');
   console.log('---------------------');
   console.log(`Samples: ${summary.totalSamples}`);
   console.log('');
