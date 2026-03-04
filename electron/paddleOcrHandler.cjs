@@ -295,12 +295,11 @@ async function paddleOcrBuffer(imageBuffer, opts = {}) {
     if (!recShapeLogged) {
       const logitsCharDim = Array.isArray(logits?.dims) ? logits.dims[2] : null;
       console.log(`[PaddleOCR] Rec dims check variant=${REC_VARIANT} dict=${charList.length} logits=${logitsCharDim}`);
-      const expectedWithCtcBlank = charList.length + 1;
-      if (
-        typeof logitsCharDim === 'number'
+      const expectedCtcDim = charList.length + 1; // +1 for CTC blank token
+      const hasRealMismatch = typeof logitsCharDim === 'number'
         && logitsCharDim !== charList.length
-        && logitsCharDim !== expectedWithCtcBlank
-      ) {
+        && logitsCharDim !== expectedCtcDim;
+      if (hasRealMismatch) {
         console.warn(`[PaddleOCR] Dict/model mismatch for variant=${REC_VARIANT}: dict=${charList.length}, logits=${logitsCharDim}`);
       }
       recShapeLogged = true;

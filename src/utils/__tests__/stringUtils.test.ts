@@ -202,11 +202,12 @@ describe('cleanMissionName', () => {
 
 describe('normalizeOcrName', () => {
   it('removes leading decorative glyphs', () => {
-    expect(normalizeOcrName('🚢   Alec')).toBe('Alec');
+    expect(normalizeOcrName('🚢   TestPilot')).toBe('TestPilot');
     expect(normalizeOcrName('⚓Ghost')).toBe('Ghost');
   });
 
   it('removes trailing decorative glyphs', () => {
-    expect(normalizeOcrName('Alec 🚀')).toBe('Alec');
+    expect(normalizeOcrName('TestPilot 🚀')).toBe('TestPilot');
   });
 });
+

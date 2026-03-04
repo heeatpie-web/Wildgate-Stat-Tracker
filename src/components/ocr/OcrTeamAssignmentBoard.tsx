@@ -53,9 +53,7 @@ const normalizeColorToken = (value: string): string => {
     const normalized = String(value || '').trim().toLowerCase();
     if (!normalized) return 'unknown';
     const compact = normalized.replace(/[\s_-]+/g, '');
-    if (compact.includes('yellowgreen') || compact.includes('yellowlime') || compact.includes('lime')) {
-        return 'yellowgreen';
-    }
+    if (compact.includes('yellowgreen') || compact.includes('chartreuse') || compact.includes('lime')) return 'yellowgreen';
     if (TEAM_COLOR_OPTIONS.includes(normalized as typeof TEAM_COLOR_OPTIONS[number])) return normalized;
     return 'unknown';
 };
@@ -205,14 +203,14 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                     const normalizedColor = normalizeColorToken(team.color);
                     const friendlyTeam = teamIndex === friendlyTeamIndex;
                     const displayColor = friendlyTeam ? 'friendly' : normalizedColor;
+                    const isYellowGreenTeam = !friendlyTeam && displayColor === 'yellowgreen';
                     const isOcrDetected = !friendlyTeam && ocrDetectedTeamIndices?.has(teamIndex);
-                    const shouldSpanFullRow = !friendlyTeam && normalizedColor === 'yellowgreen';
                     return (
                         <div
                             key={`${team.key}-${teamIndex}`}
                             data-testid={`ocr-team-card-${teamIndex}`}
-                            className={`ocr-assignment-team-card md3-surface-high ocr-assignment-team-card--color-${displayColor} ${dragHoverTeamIndex === teamIndex ? 'ocr-assignment-team-card--hover' : ''
-                                } ${shouldSpanFullRow ? 'ocr-assignment-team-card--full-row' : ''}`}
+                            className={`ocr-assignment-team-card md3-surface-high ocr-assignment-team-card--color-${displayColor} ${isYellowGreenTeam ? 'ocr-assignment-team-card--full-row' : ''} ${dragHoverTeamIndex === teamIndex ? 'ocr-assignment-team-card--hover' : ''
+                                }`}
                             onDragOver={(event) => allowDrop(event, teamIndex)}
                             onDragLeave={() => setDragHoverTeamIndex(null)}
                             onDrop={(event) => dropPlayer(event, teamIndex, null)}

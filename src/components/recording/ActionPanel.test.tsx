@@ -26,7 +26,7 @@ const gameData = {
 
 const uiState = {
   setShowWizard: vi.fn(),
-  activeUser: 'Alec',
+  activeUser: 'TestPilot',
   setShowReviewQueue: vi.fn(),
   setShowIdMapper: vi.fn(),
   smartCaptureRequest: null as any,
@@ -197,7 +197,7 @@ describe('ActionPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /smart capture/i }));
 
     await waitFor(() => {
-      expect(smartCaptureActions.capture).toHaveBeenCalledWith('Alec');
+      expect(smartCaptureActions.capture).toHaveBeenCalledWith('TestPilot');
     });
     expect(smartScan.handleSmartScan).not.toHaveBeenCalled();
   });
@@ -206,7 +206,7 @@ describe('ActionPanel', () => {
     const { ActionPanel } = await import('./ActionPanel');
     uiState.smartCaptureRequest = {
       requestId: 'header_1',
-      activeUser: 'Alec',
+      activeUser: 'TestPilot',
       matchId: 42,
       source: 'header',
     };
@@ -214,7 +214,7 @@ describe('ActionPanel', () => {
     render(<ActionPanel />);
 
     await waitFor(() => {
-      expect(smartCaptureActions.capture).toHaveBeenCalledWith('Alec', 42);
+      expect(smartCaptureActions.capture).toHaveBeenCalledWith('TestPilot', 42);
     });
     expect(uiState.clearSmartCaptureRequest).toHaveBeenCalledWith('header_1');
   });
@@ -350,7 +350,7 @@ describe('ActionPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /process ocr and review/i }));
 
     await waitFor(() => {
-      expect(smartCaptureActions.processAllStored).toHaveBeenCalledWith('Alec', null);
+      expect(smartCaptureActions.processAllStored).toHaveBeenCalledWith('TestPilot', null);
     });
     expect(initiateSubmission).not.toHaveBeenCalled();
 
@@ -393,7 +393,7 @@ describe('ActionPanel', () => {
     expect(initiateSubmission).toHaveBeenCalledWith('Win');
     expect(screen.queryByText(/queued smart captures detected/i)).not.toBeInTheDocument();
     await waitFor(() => {
-      expect(smartCaptureActions.processAllStored).toHaveBeenCalledWith('Alec', null);
+      expect(smartCaptureActions.processAllStored).toHaveBeenCalledWith('TestPilot', null);
     });
     expect(onSmartCaptureData).toHaveBeenCalledWith(reviewData);
   });
@@ -435,3 +435,4 @@ describe('ActionPanel', () => {
   });
 
 });
+

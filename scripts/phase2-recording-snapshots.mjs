@@ -57,7 +57,7 @@ function createSnapshotSeed() {
     timestamp: now - (i * 5 * 60 * 1000),
     date: new Date(now - (i * 5 * 60 * 1000)).toISOString().slice(0, 10),
     mode: 'Artifact Brawl',
-    player: 'Alec',
+    player: 'TestPilot',
     teammates: i % 2 === 0 ? ['Jinx'] : ['Nova'],
     opponents: ['Rival-1', 'Rival-2'],
     hero: i % 2 === 0 ? 'Adrian' : 'Kae',
@@ -77,8 +77,8 @@ function createSnapshotSeed() {
 
   return {
     matches,
-    players: ['Alec', 'Jinx', 'Nova', 'Rival-1', 'Rival-2'],
-    pilotRegistry: ['Alec', 'Jinx', 'Nova', 'Rival-1', 'Rival-2', 'Rook'],
+    players: ['TestPilot', 'Jinx', 'Nova', 'Rival-1', 'Rival-2'],
+    pilotRegistry: ['TestPilot', 'Jinx', 'Nova', 'Rival-1', 'Rival-2', 'Rook'],
     favorites: ['Jinx'],
     pilotNotes: {},
     playerIdMap: {},
@@ -93,7 +93,7 @@ function createSnapshotSeed() {
       showTimer: true,
       showSmartCaptureInHeader: true,
       tutorialCompleted: true,
-      activeUser: 'Alec',
+      activeUser: 'TestPilot',
       overlayStyle: 'compact',
       visualMode: 'dense',
       ocrMode: 'both',
@@ -173,7 +173,7 @@ async function setState(page, stateId) {
     s.setActiveShip?.('Hunter (4 Player)', 'telemetry');
     s.setActiveHero?.('Adrian', 'telemetry');
     s.setSessionTeams?.({
-      Cyan: ['Alec', 'Jinx'],
+      Cyan: ['TestPilot', 'Jinx'],
       Red: ['Rival-1', 'Rival-2'],
     });
     s.setSelectedTeammates?.(['Jinx']);
@@ -284,3 +284,4 @@ run().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+

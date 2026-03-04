@@ -2,6 +2,25 @@
   "version": 1,
   "runs": [
     {
+      "generatedAt": "2026-03-03T23:44:51.627Z",
+      "latestReport": "latest.exact.paddle.json",
+      "historyReport": "history/2026-03-03T23-44-51-627Z.json",
+      "teammateRecall": 97.37,
+      "teammatePrecision": 98.93,
+      "teammateF1": 98.14,
+      "opponentRecall": 100,
+      "opponentPrecision": 99.51,
+      "opponentF1": 99.75,
+      "modifierRecall": 16.81,
+      "modifierPrecision": 100,
+      "modifierF1": 28.79,
+      "teamGroupingAccuracy": 99.32,
+      "teamColorAccuracy": 88.33,
+      "sessionUsablePassRate": 100,
+      "yourShipTypeAccuracy": 100,
+      "opponentShipTypeAccuracy": 90
+    },
+    {
       "generatedAt": "2026-03-03T19:14:02.882Z",
       "latestReport": "prod_honest_baseline.fuzzy.json",
       "historyReport": "history/2026-03-03T19-14-02-882Z.json",

@@ -108,11 +108,11 @@ export const createDefaultOcrRegions = (): OcrRegionSettings => ({
   },
   mapScreen: {
     yourShip: { xMin: 0.0, xMax: 0.30, yMin: 0.0, yMax: 0.25 },
-    enemyShips: { xMin: 0.60, xMax: 1.0, yMin: 0.00, yMax: 0.10 },
-    enemyShips2: { xMin: 0.60, xMax: 1.0, yMin: 0.10, yMax: 0.20 },
-    enemyShips3: { xMin: 0.60, xMax: 1.0, yMin: 0.20, yMax: 0.30 },
-    enemyShips4: { xMin: 0.60, xMax: 1.0, yMin: 0.30, yMax: 0.40 },
-    hazards: { xMin: 0.60, xMax: 1.0, yMin: 0.30, yMax: 0.70 },
+    enemyShips: { xMin: 0.79, xMax: 0.98, yMin: 0.07, yMax: 0.22 },
+    enemyShips2: { xMin: 0.79, xMax: 0.98, yMin: 0.22, yMax: 0.37 },
+    enemyShips3: { xMin: 0.79, xMax: 0.98, yMin: 0.37, yMax: 0.52 },
+    enemyShips4: { xMin: 0.79, xMax: 0.98, yMin: 0.52, yMax: 0.67 },
+    hazards: { xMin: 0.79, xMax: 0.98, yMin: 0.07, yMax: 0.76 },
     players: { xMin: 0.0, xMax: 0.40, yMin: 0.70, yMax: 1.0 },
   },
 });

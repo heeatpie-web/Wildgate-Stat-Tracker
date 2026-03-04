@@ -12,7 +12,6 @@ import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import {
     getMatchArtifactsStructured,
-    rerunOCROnArtifact,
     rerunOCRMulti,
     removeMatchArtifact,
     addMatchArtifact,
@@ -26,7 +25,6 @@ import type { OCRProcessRuntimeOptions } from '../utils/electronBridge';
 import { getElectronAPI } from '../utils/electronAPI';
 import { useAppStore } from '../store/useAppStore';
 import type { OcrRegionSettings } from '../store/slices/createSettingsSlice';
-import { mergeOCRData, calculateOverallConfidence } from '../utils/ocr/ocrParser';
 import type { ExtractedModifier, OCRExtractedData } from '../utils/ocr/ocrTypes';
 import {
     assignDeterministicTeamColors,
@@ -171,23 +169,35 @@ export const resolveFriendlyTeamLabel = (
     || 'Friendly Team'
 );
 
-const POSITIONAL_TEAM_COLOR_ORDER = ['red', 'orange', 'yellow', 'yellowgreen', 'green'] as const;
-const OPPONENT_TEAM_DISPLAY_ORDER = ['red', 'orange', 'yellow', 'yellowgreen', 'green', 'blue', 'cyan', 'purple', 'unknown'] as const;
-const OPPONENT_TEAM_DISPLAY_ORDER_INDEX: Record<string, number> = OPPONENT_TEAM_DISPLAY_ORDER
-    .reduce<Record<string, number>>((acc, color, index) => {
-        acc[color] = index;
-        return acc;
-    }, {});
+const POSITIONAL_TEAM_COLOR_ORDER = ['red', 'orange', 'yellow', 'yellowgreen'] as const;
+const OPPONENT_COLOR_SORT_ORDER = ['red', 'orange', 'yellow', 'yellowgreen'] as const;
 
-const normalizeOpponentTeamColorToken = (rawColor: string | null | undefined): string => {
-    const compact = String(rawColor || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
-    if (!compact) return 'unknown';
-    if (compact.includes('yellowgreen') || compact.includes('yellowlime') || compact.includes('lime')) {
+const normalizeOpponentColorToken = (rawColor: string | null | undefined): string => {
+    const raw = String(rawColor || '').trim().toLowerCase();
+    if (!raw) return 'unknown';
+    const compact = raw.replace(/[\s_-]+/g, '');
+    if (compact.includes('yellowgreen') || compact.includes('chartreuse') || compact.includes('lime')) {
         return 'yellowgreen';
     }
-    const normalized = normalizeTeamColor(rawColor);
-    return normalized || 'unknown';
+    return normalizeTeamColor(raw);
 };
+
+const getOpponentColorSortIndex = (rawColor: string | null | undefined): number => {
+    const normalized = normalizeOpponentColorToken(rawColor);
+    const idx = OPPONENT_COLOR_SORT_ORDER.indexOf(normalized as typeof OPPONENT_COLOR_SORT_ORDER[number]);
+    return idx >= 0 ? idx : OPPONENT_COLOR_SORT_ORDER.length + 1;
+};
+
+const sortOpponentTeamsByPriority = (teams: OpponentTeam[]): OpponentTeam[] => (
+    [...(teams || [])].sort((left, right) => {
+        const colorDiff = getOpponentColorSortIndex(left?.color) - getOpponentColorSortIndex(right?.color);
+        if (colorDiff !== 0) return colorDiff;
+        const leftName = String(left?.teamName || '').trim().toLowerCase();
+        const rightName = String(right?.teamName || '').trim().toLowerCase();
+        if (leftName !== rightName) return leftName.localeCompare(rightName);
+        return String(left?.shipType || '').trim().localeCompare(String(right?.shipType || '').trim());
+    })
+);
 
 const applyPositionalTeamColorFallback = (
     teams: OpponentTeam[],
@@ -195,7 +205,7 @@ const applyPositionalTeamColorFallback = (
 ): OpponentTeam[] => {
     const claimed = new Set<string>();
     teams.forEach((team) => {
-        const parsed = normalizeOpponentTeamColorToken(team.color);
+        const parsed = normalizeOpponentColorToken(team.color);
         if (parsed !== 'unknown') {
             claimed.add(parsed);
             return;
@@ -204,7 +214,7 @@ const applyPositionalTeamColorFallback = (
     const fallbackQueue = POSITIONAL_TEAM_COLOR_ORDER.filter((color) => !claimed.has(color));
     let fallbackCursor = 0;
     return teams.map((team, index) => {
-        const parsed = normalizeOpponentTeamColorToken(team.color);
+        const parsed = normalizeOpponentColorToken(team.color);
         if (parsed !== 'unknown') {
             return { ...team, color: parsed };
         }
@@ -216,7 +226,7 @@ const applyPositionalTeamColorFallback = (
                 color: positional,
             };
         }
-        const assigned = normalizeOpponentTeamColorToken(assignedColors[index] || '');
+        const assigned = normalizeOpponentColorToken(assignedColors[index] || '');
         return {
             ...team,
             color: assigned !== 'unknown' ? assigned : 'unknown',
@@ -275,6 +285,7 @@ const SmartCapturesPanel: React.FC = () => {
     const [bulkBusy, setBulkBusy] = useState(false);
     const todayQueueDayKey = useMemo(() => toLocalDateKey(Date.now()), []);
     const [queueDayFilter, setQueueDayFilter] = useState<string>(todayQueueDayKey);
+    const queueDayManuallySelectedRef = useRef(false);
     const [modeFilter, setModeFilter] = useState<ModeFilter>('all');
     const [queueWidthPct, setQueueWidthPct] = useState(30);
     const [isResizing, setIsResizing] = useState(false);
@@ -299,10 +310,7 @@ const SmartCapturesPanel: React.FC = () => {
     const getMaxTeammatesForShip = useCallback((shipType?: string | null) => (
         getMaxTeammatesForShipLimit(shipType)
     ), []);
-    const queueRosterCandidate = useCallback((
-        rawName: string,
-        sourceCapture?: { screenshotPath?: string; screenshotLabel?: string; capturedAt?: number }
-    ) => {
+    const queueRosterCandidate = useCallback((rawName: string) => {
         const normalized = normalizeOcrName(rawName || '');
         if (!normalized || normalized.length < 2) return;
         const hasExact = pilotRegistry.some((pilot) => (
@@ -328,13 +336,6 @@ const SmartCapturesPanel: React.FC = () => {
             bestScore: suggestions[0]?.score,
             suggestions,
             source: 'ocr',
-            sourceCapture: sourceCapture?.screenshotPath
-                ? {
-                    screenshotPath: sourceCapture.screenshotPath,
-                    screenshotLabel: sourceCapture.screenshotLabel || 'OCR Screenshot',
-                    capturedAt: sourceCapture.capturedAt,
-                }
-                : undefined,
         });
         setToast({ message: `Queued roster candidate: ${normalized}`, type: 'info' });
     }, [addPendingReview, pendingReviews, pilotRegistry, setToast]);
@@ -441,13 +442,32 @@ const SmartCapturesPanel: React.FC = () => {
 
     useEffect(() => {
         if (availableQueueDayKeys.length === 0) return;
-        if (queueDayFilter === todayQueueDayKey) return;
+        const todayAvailable = availableQueueDayKeys.includes(todayQueueDayKey);
+        const selectedMatchDay = selectedMatchId
+            ? toLocalDateKey(matches.find((match) => match.id === selectedMatchId)?.timestamp)
+            : '';
+
+        if (!queueDayManuallySelectedRef.current) {
+            const autoDay = todayAvailable
+                ? todayQueueDayKey
+                : (selectedMatchDay && availableQueueDayKeys.includes(selectedMatchDay)
+                    ? selectedMatchDay
+                    : availableQueueDayKeys[0]);
+            if (autoDay && queueDayFilter !== autoDay) {
+                setQueueDayFilter(autoDay);
+            }
+            return;
+        }
         if (availableQueueDayKeys.includes(queueDayFilter)) return;
-        const fallbackDay = availableQueueDayKeys.includes(todayQueueDayKey)
+        const fallbackDay = todayAvailable
             ? todayQueueDayKey
-            : availableQueueDayKeys[0];
-        setQueueDayFilter(fallbackDay);
-    }, [availableQueueDayKeys, queueDayFilter, todayQueueDayKey]);
+            : (selectedMatchDay && availableQueueDayKeys.includes(selectedMatchDay)
+                ? selectedMatchDay
+                : availableQueueDayKeys[0]);
+        if (fallbackDay && queueDayFilter !== fallbackDay) {
+            setQueueDayFilter(fallbackDay);
+        }
+    }, [availableQueueDayKeys, matches, queueDayFilter, selectedMatchId, todayQueueDayKey]);
 
     const filteredMatches = useMemo(() => {
         let result = [...matches].sort((a, b) => b.timestamp - a.timestamp);
@@ -832,6 +852,8 @@ const SmartCapturesPanel: React.FC = () => {
         setBulkBusy(true);
         try {
             setToast({ message: `Rerunning OCR for ${ids.length} match${ids.length === 1 ? '' : 'es'}...`, type: 'info' });
+            let successMatches = 0;
+            let failedMatches = 0;
 
             for (const match of selectedMatches) {
                 const imagePaths = (artifactPathsByMatch.get(match.id) || [])
@@ -839,66 +861,29 @@ const SmartCapturesPanel: React.FC = () => {
                 if (imagePaths.length === 0) continue;
 
                 updateMatch({ ...match, ocrState: 'processing' });
-                const settled = await Promise.allSettled(
-                    imagePaths.map((p) => rerunOCROnArtifact(p, activeUser, ocrMode, ocrRegions, rerunRuntimeOptions))
+                const rerun = await rerunOCRMulti(
+                    imagePaths,
+                    activeUser,
+                    ocrMode,
+                    ocrRegions,
+                    rerunRuntimeOptions,
                 );
-                type BulkRerunResult = RerunOcrResult & { imagePath: string };
-                const results: BulkRerunResult[] = settled.map((s, i) => {
-                    if (s.status === 'fulfilled') return { ...s.value, imagePath: imagePaths[i] };
-                    return { success: false, error: (s as PromiseRejectedResult).reason?.message || 'Unknown error', imagePath: imagePaths[i] };
-                });
-
-                const successful = results.filter((r): r is BulkRerunResult & { success: true; data: OCRExtractedData } => !!(r.success && r.data));
-                if (successful.length === 0) continue;
-
-                let merged: Partial<OCRExtractedData> = {
-                    playerShip: undefined,
-                    reachModifiers: [],
-                    teammates: [],
-                    opponentTeams: [],
-                };
-
-                for (const r of successful) {
-                    const baseMods = normalizeModifierEntries(
-                        (r.data?.reachModifiers || []) as Array<string | ExtractedModifier>,
-                        normalizeModifierName
-                    );
-                    const hazardMods: ExtractedModifier[] = (r.data?.hazards || []).map((h: string) => ({
-                        name: normalizeModifierName(h),
-                        confidence: 80,
-                        rawText: h
-                    }));
-                    const allMods = [...baseMods, ...hazardMods];
-                    merged = mergeOCRData(merged, {
-                        playerShip: r.data.playerShip,
-                        reachModifiers: allMods,
-                        teammates: r.data.teammates || [],
-                        opponentTeams: r.data.opponentTeams || [],
-                    });
+                const combined = rerun.data as OCRExtractedData | undefined;
+                if (!rerun.success || !combined) {
+                    failedMatches += 1;
+                    updateMatch({ ...match, ocrState: 'error' });
+                    continue;
                 }
+                successMatches += 1;
 
-                const lastData = successful[successful.length - 1].data;
-                const combinedConfidence = calculateOverallConfidence(merged);
-                const combined: OCRExtractedData = {
-                    screenshotType: lastData.screenshotType || 'unknown',
-                    playerShip: merged.playerShip,
-                    reachModifiers: merged.reachModifiers || [],
-                    enemyShips: merged.enemyShips || lastData.enemyShips || [],
-                    hazards: lastData.hazards || [],
-                    teammates: merged.teammates || [],
-                    opponentTeams: merged.opponentTeams || [],
-                    overallConfidence: combinedConfidence,
-                    captureTimestamp: Date.now(),
-                    rawText: lastData.rawText,
-                    imagePreview: lastData.imagePreview,
-                    ocrSource: lastData.ocrSource,
-                    analysisPathsUsed: lastData.analysisPathsUsed,
-                    consensusScore: lastData.consensusScore,
-                    providerUsed: lastData.providerUsed,
-                    mergeStats: lastData.mergeStats,
-                };
-
-                const nextTeammates = (combined.teammates || []).map(t => t.name).filter(Boolean) as string[];
+                const activeUserKey = normalizeOcrName(activeUser || match.player || '').toLowerCase();
+                const nextTeammates = (combined.teammates || [])
+                    .map(t => t.name)
+                    .filter(Boolean)
+                    .filter((name) => {
+                        const key = normalizeOcrName(name).toLowerCase();
+                        return !!key && (!activeUserKey || key !== activeUserKey);
+                    }) as string[];
                 const unresolvedOppTeams: OpponentTeam[] = (combined.opponentTeams || []).map(t => ({
                     teamName: t.teamName || 'Team',
                     shipType: t.shipType || '',
@@ -911,47 +896,38 @@ const SmartCapturesPanel: React.FC = () => {
                 };
                 const rerunAssignedColors = assignDeterministicTeamColors(unresolvedOppTeams, { playerColorHints: mergedHints });
                 const coloredOppTeams = applyPositionalTeamColorFallback(unresolvedOppTeams, rerunAssignedColors);
-                const nextOppTeams: OpponentTeam[] = backfillOpponentTeamShipTypes(coloredOppTeams, {
+                const nextOppTeams: OpponentTeam[] = sortOpponentTeamsByPriority(backfillOpponentTeamShipTypes(coloredOppTeams, {
                     sessionShipTypes,
                     enemyShips: combined.enemyShips,
-                });
-                const nextOpponents = nextOppTeams.flatMap(t => t.players);
+                }));
+                const nextOpponents = Array.from(new Set(
+                    nextOppTeams
+                        .flatMap((team) => team.players || [])
+                        .filter((name) => {
+                            const key = normalizeOcrName(name).toLowerCase();
+                            return !!key && (!activeUserKey || key !== activeUserKey);
+                        })
+                ));
                 const shipForTeammateCap = combined.playerShip?.shipType || match.ship || '';
                 const cappedTeammates = capTeammateNames(nextTeammates, shipForTeammateCap);
                 const mergedArtifactSource = extractArtifactSourceFromReachModifiers(
                     (combined.reachModifiers || []) as Array<string | ExtractedModifier>
                 );
-                const mergedModifierNames = stripArtifactSourceModifiers(
-                    (combined.reachModifiers || []).map((modifier) => String(modifier?.name || '')).filter(Boolean)
+                const mergedModifierNames = toCanonicalModifierNames(
+                    (combined.reachModifiers || []) as Array<string | ExtractedModifier>,
+                    combined.hazards || [],
+                    normalizeModifierName
                 );
-
-                // Manually-entered names take priority: start from existing list, add OCR
-                // findings only when not already present (same as single-match rerun path).
-                const existingTeammates = match.teammates || [];
-                const existingTeammateKeys = new Set(existingTeammates.map(n => normalizeOcrName(n).toLowerCase()));
-                const mergedTeammates = [...existingTeammates];
-                for (const name of cappedTeammates) {
-                    const key = normalizeOcrName(name).toLowerCase();
-                    if (key && !existingTeammateKeys.has(key)) { mergedTeammates.push(name); existingTeammateKeys.add(key); }
-                }
-                const finalTeammates = capTeammateNames(mergedTeammates, shipForTeammateCap);
-
-                const existingOpponents = match.opponents || [];
-                const existingOpponentKeys = new Set(existingOpponents.map(n => normalizeOcrName(n).toLowerCase()));
-                const mergedOpponents = [...existingOpponents];
-                for (const name of nextOpponents) {
-                    const key = normalizeOcrName(name).toLowerCase();
-                    if (key && !existingOpponentKeys.has(key)) { mergedOpponents.push(name); existingOpponentKeys.add(key); }
-                }
+                const finalTeammates = capTeammateNames(cappedTeammates, shipForTeammateCap);
 
                 const updated: Match = {
                     ...match,
                     ship: combined.playerShip?.shipType ? combined.playerShip.shipType : match.ship,
-                    teammates: finalTeammates.length > 0 ? finalTeammates : existingTeammates,
-                    opponents: mergedOpponents.length > 0 ? mergedOpponents : existingOpponents,
-                    opponentTeams: nextOppTeams.length > 0 ? nextOppTeams : match.opponentTeams,
-                    reachModifiers: mergedModifierNames.length > 0 ? mergedModifierNames : (match.reachModifiers || []),
-                    artifactSource: mergedArtifactSource || match.artifactSource,
+                    teammates: finalTeammates,
+                    opponents: nextOpponents,
+                    opponentTeams: nextOppTeams,
+                    reachModifiers: mergedModifierNames,
+                    artifactSource: mergedArtifactSource || '',
                     ocrDebug: {
                         rawText: combined.rawText,
                         confidence: combined.overallConfidence,
@@ -975,7 +951,16 @@ const SmartCapturesPanel: React.FC = () => {
                 updateMatch(updated);
             }
 
-            setToast({ message: `OCR rerun complete for ${ids.length} selected match${ids.length === 1 ? '' : 'es'}`, type: 'success' });
+            if (successMatches === 0) {
+                setToast({ message: `OCR rerun failed for ${ids.length} selected match${ids.length === 1 ? '' : 'es'}.`, type: 'error' });
+            } else if (failedMatches > 0) {
+                setToast({
+                    message: `OCR rerun complete: ${successMatches} succeeded, ${failedMatches} failed.`,
+                    type: 'warning',
+                });
+            } else {
+                setToast({ message: `OCR rerun complete for ${successMatches} selected match${successMatches === 1 ? '' : 'es'}.`, type: 'success' });
+            }
         } catch (error) {
             setToast({ message: `Bulk OCR rerun failed: ${errorMessage(error)}`, type: 'error' });
         } finally {
@@ -1121,7 +1106,10 @@ const SmartCapturesPanel: React.FC = () => {
                                                     <select
                                                         aria-label="Match day"
                                                         value={queueDayFilter}
-                                                        onChange={(e) => setQueueDayFilter(e.target.value)}
+                                                        onChange={(e) => {
+                                                            queueDayManuallySelectedRef.current = true;
+                                                            setQueueDayFilter(e.target.value);
+                                                        }}
                                                         className="h-9 px-2 md3-surface rounded-control text-label-sm font-semibold outline-none"
                                                     >
                                                         <option value={todayQueueDayKey}>
@@ -1257,53 +1245,44 @@ const SmartCapturesPanel: React.FC = () => {
                                         onApplyToSession={(data) => {
                                             let appliedMatch: Match | null = null;
                                             const pendingMatchId = Number(useAppStore.getState().pendingMatchData?.id || 0);
-                                            const shouldSyncCurrentSession = Number.isFinite(pendingMatchId)
-                                                && pendingMatchId > 0
-                                                && pendingMatchId === Number(selectedMatch.id);
+                                            const hasPendingMatchContext = Number.isFinite(pendingMatchId) && pendingMatchId > 0;
+                                            const shouldSyncCurrentSession = !hasPendingMatchContext
+                                                || pendingMatchId === Number(selectedMatch.id);
                                             const detectedShip = data.playerShip?.shipType || '';
                                             if (detectedShip && shouldSyncCurrentSession) setActiveShip(detectedShip, 'ocr');
                                             const shipForCapacity = detectedShip || activeShip || telemetryDetectedShip || selectedMatch.ship || SHIPS[0];
                                             const friendlyShipSeed = detectedShip || telemetryDetectedShip || activeShip || selectedMatch.ship || '';
                                             const maxTeammates = getMaxTeammatesForShip(shipForCapacity);
-                                            const sourceScreenshotPath = (selectedMatch.artifacts || [])
-                                                .find((artifactPath) => IMAGE_EXTS.some((ext) => String(artifactPath || '').toLowerCase().endsWith(ext))) || '';
-                                            const sourceCapture = sourceScreenshotPath
-                                                ? {
-                                                    screenshotPath: sourceScreenshotPath,
-                                                    screenshotLabel: sourceScreenshotPath.split(/[\\/]/).pop() || 'OCR Screenshot',
-                                                    capturedAt: Number(selectedMatch.timestamp || Date.now()),
-                                                }
-                                                : undefined;
-
-                                            const teammateBaseline = shouldSyncCurrentSession
-                                                ? selectedTeammates
-                                                : (selectedMatch.teammates || []);
-                                            const mergedTeammates = [...teammateBaseline];
+                                            const activeUserKey = normalizeOcrName(activeUser || selectedMatch.player || '').toLowerCase();
+                                            const dedupeNames = (values: string[]) => Array.from(new Set(
+                                                values
+                                                    .map((value) => normalizeOcrName(String(value || '')))
+                                                    .filter(Boolean)
+                                            ));
+                                            const nextTeammates: string[] = [];
                                             if (data.teammates?.length > 0) {
-                                                const existing = new Set(mergedTeammates.map(n => normalizeOcrName(n).toLowerCase()));
+                                                const existing = new Set<string>();
                                                 for (const raw of data.teammates.map(t => t.name).filter(Boolean)) {
-                                                    queueRosterCandidate(raw, sourceCapture);
+                                                    queueRosterCandidate(raw);
                                                     const resolved = resolveRosterName(raw);
                                                     if (!resolved) continue;
                                                     const key = normalizeOcrName(resolved).toLowerCase();
+                                                    if (!key || (activeUserKey && key === activeUserKey)) continue;
                                                     if (existing.has(key)) continue;
-                                                    if (mergedTeammates.length >= maxTeammates) break;
-                                                    mergedTeammates.push(resolved);
+                                                    if (nextTeammates.length >= maxTeammates) break;
+                                                    nextTeammates.push(resolved);
                                                     existing.add(key);
                                                 }
                                             }
-                                            if (shouldSyncCurrentSession && mergedTeammates.length !== teammateBaseline.length) {
-                                                setSelectedTeammates(mergedTeammates);
+                                            const cappedTeammates = capTeammateNames(nextTeammates, shipForCapacity);
+                                            if (shouldSyncCurrentSession) {
+                                                setSelectedTeammates(cappedTeammates);
                                             }
 
                                             let resolvedOpponentTeams: OpponentTeam[] = [];
-                                            const opponentBaseline = shouldSyncCurrentSession
-                                                ? selectedOpponents
-                                                : (selectedMatch.opponents || []);
-                                            let mergedOpponents = [...opponentBaseline];
                                             if (data.opponentTeams?.length > 0) {
                                                 data.opponentTeams.forEach((team) => {
-                                                    team.players.forEach((player) => queueRosterCandidate(player.name || '', sourceCapture));
+                                                    team.players.forEach((player) => queueRosterCandidate(player.name || ''));
                                                 });
                                                 const unresolvedOpponentTeams: OpponentTeam[] = data.opponentTeams.map((team) => ({
                                                     teamName: team.teamName || 'Unknown Team',
@@ -1321,24 +1300,24 @@ const SmartCapturesPanel: React.FC = () => {
                                                 const assignedOpponentColors = assignDeterministicTeamColors(unresolvedOpponentTeams, {
                                                     playerColorHints: buildPlayerColorHints(sessionTeams),
                                                 });
-                                                resolvedOpponentTeams = backfillOpponentTeamShipTypes(
+                                                resolvedOpponentTeams = sortOpponentTeamsByPriority(backfillOpponentTeamShipTypes(
                                                     applyPositionalTeamColorFallback(unresolvedOpponentTeams, assignedOpponentColors),
                                                     {
                                                         sessionShipTypes,
                                                         enemyShips: data.enemyShips,
                                                     }
-                                                );
-
-                                                const existingOpp = new Set(opponentBaseline.map(n => normalizeOcrName(n).toLowerCase()));
-                                                for (const resolved of resolvedOpponentTeams.flatMap((team) => team.players)) {
-                                                    const key = normalizeOcrName(resolved).toLowerCase();
-                                                    if (!key || existingOpp.has(key)) continue;
-                                                    mergedOpponents.push(resolved);
-                                                    existingOpp.add(key);
-                                                }
+                                                ));
                                             }
-                                            if (shouldSyncCurrentSession && mergedOpponents.length !== opponentBaseline.length) {
-                                                setSelectedOpponents(mergedOpponents);
+                                            const resolvedOpponents = dedupeNames(
+                                                resolvedOpponentTeams
+                                                    .flatMap((team) => team.players || [])
+                                                    .filter((name) => {
+                                                        const key = normalizeOcrName(name).toLowerCase();
+                                                        return !!key && (!activeUserKey || key !== activeUserKey);
+                                                    })
+                                            );
+                                            if (shouldSyncCurrentSession) {
+                                                setSelectedOpponents(resolvedOpponents);
                                             }
 
                                             if (shouldSyncCurrentSession) {
@@ -1348,63 +1327,32 @@ const SmartCapturesPanel: React.FC = () => {
                                                     || 'You';
                                                 const friendlyTeamLabel = resolveFriendlyTeamLabel(friendlyShipSeed, '', captainSeed);
                                                 const friendlyTeamKey = `friendly:${friendlyTeamLabel}`;
-                                                const nextSessionTeams = { ...sessionTeams };
-                                                let sessionTeamsChanged = false;
-                                                const existingFriendlyKeys = new Set(
-                                                    (nextSessionTeams[friendlyTeamKey] || [])
-                                                        .map((name) => normalizeOcrName(name).toLowerCase())
-                                                );
-                                                const nextFriendlyMembers = [...(nextSessionTeams[friendlyTeamKey] || [])];
-                                                [captainSeed, ...mergedTeammates].forEach((name) => {
-                                                    const key = normalizeOcrName(name).toLowerCase();
-                                                    if (!key || existingFriendlyKeys.has(key)) return;
-                                                    nextFriendlyMembers.push(name);
-                                                    existingFriendlyKeys.add(key);
-                                                });
-                                                if (nextFriendlyMembers.length > 0) {
-                                                    const prevFriendly = nextSessionTeams[friendlyTeamKey] || [];
-                                                    const prevFriendlyKey = prevFriendly.map((name) => normalizeOcrName(name).toLowerCase()).join('|');
-                                                    const nextFriendlyKey = nextFriendlyMembers.map((name) => normalizeOcrName(name).toLowerCase()).join('|');
-                                                    if (prevFriendlyKey !== nextFriendlyKey) {
-                                                        nextSessionTeams[friendlyTeamKey] = nextFriendlyMembers;
-                                                        sessionTeamsChanged = true;
-                                                    }
+                                                const nextSessionTeams: Record<string, string[]> = {};
+                                                const friendlyMembers = dedupeNames([captainSeed, ...cappedTeammates]);
+                                                if (friendlyMembers.length > 0) {
+                                                    nextSessionTeams[friendlyTeamKey] = friendlyMembers;
                                                 }
-
                                                 resolvedOpponentTeams.forEach((team) => {
-                                                    const colorKey = team.color || 'unknown';
-                                                    if (!nextSessionTeams[colorKey]) {
-                                                        nextSessionTeams[colorKey] = [];
-                                                        sessionTeamsChanged = true;
+                                                    const colorKey = String(team.color || 'unknown').trim() || 'unknown';
+                                                    const players = dedupeNames(team.players || []);
+                                                    if (players.length > 0) {
+                                                        nextSessionTeams[colorKey] = players;
                                                     }
-                                                    const existingKeys = new Set(nextSessionTeams[colorKey].map((name) => normalizeOcrName(name).toLowerCase()));
-                                                    team.players.forEach((player) => {
-                                                        const playerKey = normalizeOcrName(player).toLowerCase();
-                                                        if (!playerKey || existingKeys.has(playerKey)) return;
-                                                        nextSessionTeams[colorKey].push(player);
-                                                        existingKeys.add(playerKey);
-                                                        sessionTeamsChanged = true;
-                                                    });
                                                 });
-                                                if (sessionTeamsChanged) {
-                                                    setSessionTeams(nextSessionTeams);
-                                                }
+                                                setSessionTeams(nextSessionTeams);
 
-                                                const nextShipTypes: Record<string, string> = { ...sessionShipTypes };
-                                                let shipTypeChanged = false;
+                                                const nextShipTypes: Record<string, string> = {};
                                                 const setShipType = (key: string, value: string) => {
                                                     const trimmedKey = String(key || '').trim();
                                                     const trimmedValue = String(value || '').trim();
                                                     if (!trimmedKey || !trimmedValue) return;
-                                                    if (nextShipTypes[trimmedKey] === trimmedValue) return;
                                                     nextShipTypes[trimmedKey] = trimmedValue;
-                                                    shipTypeChanged = true;
                                                 };
                                                 if (friendlyShipSeed) {
                                                     setShipType(friendlyTeamKey, friendlyShipSeed);
                                                     setShipType('friendly', friendlyShipSeed);
                                                     setShipType(captainSeed, friendlyShipSeed);
-                                                    mergedTeammates.forEach((name) => setShipType(name, friendlyShipSeed));
+                                                    cappedTeammates.forEach((name) => setShipType(name, friendlyShipSeed));
                                                 }
                                                 resolvedOpponentTeams.forEach((team) => {
                                                     const colorKey = team.color || 'unknown';
@@ -1413,10 +1361,9 @@ const SmartCapturesPanel: React.FC = () => {
                                                     setShipType(colorKey, teamShip);
                                                     team.players.forEach((name) => setShipType(name, teamShip));
                                                 });
-                                                if (shipTypeChanged) {
-                                                    setSessionShipTypes(nextShipTypes, 'manual');
-                                                }
+                                                setSessionShipTypes(nextShipTypes, 'manual');
                                             }
+
                                             const reachModifiers = data.reachModifiers ?? [];
                                             const hazards = data.hazards ?? [];
                                             const extractedArtifactSource = extractArtifactSourceFromReachModifiers(
@@ -1427,13 +1374,13 @@ const SmartCapturesPanel: React.FC = () => {
                                                 hazards,
                                                 normalizeModifierName
                                             );
-                                            if (shouldSyncCurrentSession && canonicalSessionModifiers.length > 0) {
+                                            if (shouldSyncCurrentSession) {
                                                 setSelectedReachModifiers(canonicalSessionModifiers, 'ocr');
                                             }
-                                            if (shouldSyncCurrentSession && extractedArtifactSource) {
+                                            if (shouldSyncCurrentSession) {
                                                 useAppStore.getState().setPendingMatchData({
                                                     ...(useAppStore.getState().pendingMatchData || {}),
-                                                    artifactSource: extractedArtifactSource,
+                                                    artifactSource: extractedArtifactSource || '',
                                                 });
                                             }
                                             setToast({
@@ -1445,33 +1392,11 @@ const SmartCapturesPanel: React.FC = () => {
                                             if (selectedMatch) {
                                                 const matchUpdates: Partial<Match> = { ocrReviewedAt: Date.now(), ocrState: 'saved' as const };
                                                 if (data.playerShip?.shipType) matchUpdates.ship = data.playerShip.shipType;
-                                                if (data.teammates?.length > 0) {
-                                                    const resolvedTeam = data.teammates
-                                                        .map(t => resolveRosterName(t.name || '', { allowFuzzy: false }))
-                                                        .filter(Boolean);
-                                                    const manualTeam = selectedMatch.teammates || [];
-                                                    const mergedTeam = [...manualTeam];
-                                                    const mergedTeamKeys = new Set(manualTeam.map((name) => normalizeOcrName(name).toLowerCase()));
-                                                    resolvedTeam.forEach((name) => {
-                                                        const key = normalizeOcrName(name).toLowerCase();
-                                                        if (!key || mergedTeamKeys.has(key)) return;
-                                                        mergedTeam.push(name);
-                                                        mergedTeamKeys.add(key);
-                                                    });
-                                                    matchUpdates.teammates = capTeammateNames(mergedTeam, shipForCapacity);
+                                                if (Array.isArray(data.teammates)) {
+                                                    matchUpdates.teammates = cappedTeammates;
                                                 }
-                                                if (resolvedOpponentTeams.length > 0) {
-                                                    const resolvedOpps = resolvedOpponentTeams.flatMap((team) => team.players).filter(Boolean);
-                                                    const manualOpponents = selectedMatch.opponents || [];
-                                                    const mergedOpponents = [...manualOpponents];
-                                                    const mergedOpponentKeys = new Set(manualOpponents.map((name) => normalizeOcrName(name).toLowerCase()));
-                                                    resolvedOpps.forEach((name) => {
-                                                        const key = normalizeOcrName(name).toLowerCase();
-                                                        if (!key || mergedOpponentKeys.has(key)) return;
-                                                        mergedOpponents.push(name);
-                                                        mergedOpponentKeys.add(key);
-                                                    });
-                                                    matchUpdates.opponents = mergedOpponents;
+                                                if (Array.isArray(data.opponentTeams)) {
+                                                    matchUpdates.opponents = resolvedOpponents;
                                                     matchUpdates.opponentTeams = resolvedOpponentTeams.map((team) => ({
                                                         teamName: team.teamName || 'Unknown Team',
                                                         shipType: team.shipType || '',
@@ -1486,12 +1411,8 @@ const SmartCapturesPanel: React.FC = () => {
                                                     haz,
                                                     normalizeModifierName
                                                 );
-                                                if (canonicalMatchModifiers.length > 0) {
-                                                    matchUpdates.reachModifiers = canonicalMatchModifiers;
-                                                }
-                                                if (extractedArtifactSource) {
-                                                    matchUpdates.artifactSource = extractedArtifactSource;
-                                                }
+                                                matchUpdates.reachModifiers = canonicalMatchModifiers;
+                                                matchUpdates.artifactSource = extractedArtifactSource || '';
                                                 const latest = useAppStore.getState().matches.find(m => m.id === selectedMatch.id) || selectedMatch;
                                                 const nextMatch: Match = { ...latest, ...matchUpdates };
                                                 updateMatch(nextMatch);
@@ -2414,26 +2335,17 @@ const SmartMatchDetail: React.FC<{
                         players: dedupeBoardNames(match.opponents || []),
                     }]
                     : [];
-            const opponentBoardTeams = normalizedOpponentTeams
-                .map((team, index) => {
-                    const color = normalizeOpponentTeamColorToken(team.color);
-                    return {
-                        key: `${String(color || `enemy-${index + 1}`).trim()}:${String(team.teamName || `Enemy Team ${index + 1}`).trim()}`,
-                        color,
-                        teamName: String(team.teamName || `Enemy Team ${index + 1}`).trim() || `Enemy Team ${index + 1}`,
-                        shipType: String(team.shipType || '').trim(),
-                        // Also filter the active user out of any opponent team (OCR sometimes misassigns them)
-                        players: dedupeBoardNames((team.players || []).filter(
-                            name => normalizeOcrName(name).toLowerCase() !== activeUserName && name !== ''
-                        )),
-                    };
-                })
-                .sort((left, right) => {
-                    const leftRank = OPPONENT_TEAM_DISPLAY_ORDER_INDEX[left.color] ?? OPPONENT_TEAM_DISPLAY_ORDER_INDEX.unknown;
-                    const rightRank = OPPONENT_TEAM_DISPLAY_ORDER_INDEX[right.color] ?? OPPONENT_TEAM_DISPLAY_ORDER_INDEX.unknown;
-                    if (leftRank !== rightRank) return leftRank - rightRank;
-                    return String(left.teamName || '').localeCompare(String(right.teamName || ''));
-                });
+            const orderedOpponentTeams = sortOpponentTeamsByPriority(normalizedOpponentTeams);
+            const opponentBoardTeams = orderedOpponentTeams.map((team, index) => ({
+                key: `${String(team.color || `enemy-${index + 1}`).trim()}:${String(team.teamName || `Enemy Team ${index + 1}`).trim()}`,
+                color: String(team.color || 'unknown').trim() || 'unknown',
+                teamName: String(team.teamName || `Enemy Team ${index + 1}`).trim() || `Enemy Team ${index + 1}`,
+                shipType: String(team.shipType || '').trim(),
+                // Also filter the active user out of any opponent team (OCR sometimes misassigns them)
+                players: dedupeBoardNames((team.players || []).filter(
+                    name => normalizeOcrName(name).toLowerCase() !== activeUserName && name !== ''
+                )),
+            }));
             return [{
                 key: `friendly:${friendlyTeamName}`,
                 color: 'friendly',
@@ -2467,12 +2379,12 @@ const SmartMatchDetail: React.FC<{
         const commitAssignmentBoardTeams = useCallback((nextTeams: OcrTeamAssignmentTeam[]) => {
             if (!Array.isArray(nextTeams) || nextTeams.length === 0) return;
             const [friendlyTeam, ...opponentTeamsRaw] = nextTeams;
-            const nextOpponentTeams: OpponentTeam[] = opponentTeamsRaw.map((team, index) => ({
+            const nextOpponentTeams: OpponentTeam[] = sortOpponentTeamsByPriority(opponentTeamsRaw.map((team, index) => ({
                 teamName: String(team.teamName || `Enemy Team ${index + 1}`).trim() || `Enemy Team ${index + 1}`,
                 shipType: String(team.shipType || '').trim(),
                 color: String(team.color || 'unknown').trim() || 'unknown',
                 players: dedupeBoardNames(team.players || []),
-            })).filter((team) => team.players.length > 0 || team.shipType);
+            })).filter((team) => team.players.length > 0 || team.shipType));
             onUpdate({
                 ...match,
                 ship: String(friendlyTeam.shipType || ''),
@@ -2504,12 +2416,6 @@ const SmartMatchDetail: React.FC<{
             });
             return detected;
         }, [assignmentBoardTeams]);
-        const activeUserDisplayKey = normalizeOcrName(activeUser || match.player || '').toLowerCase();
-        const formatPlayerNameForDisplay = useCallback((name: string) => {
-            const normalized = normalizeOcrName(name).toLowerCase();
-            if (activeUserDisplayKey && normalized && normalized === activeUserDisplayKey) return '(you)';
-            return name;
-        }, [activeUserDisplayKey]);
 
         const renderPlayerChips = (players: string[], type: 'teammate' | 'opponent') => {
             const chipClass = type === 'teammate' ? 'sc-player-chip sc-player-chip--teammate' : 'sc-player-chip sc-player-chip--opponent';
@@ -2540,7 +2446,7 @@ const SmartMatchDetail: React.FC<{
                                 {type === 'teammate' && (
                                     <ShieldCheck size={10} className="text-info shrink-0" />
                                 )}
-                                <span className="truncate max-w-[200px]">{formatPlayerNameForDisplay(p)}</span>
+                                <span className="truncate max-w-[200px]">{p}</span>
                                 <button
                                     onClick={e => { e.stopPropagation(); removePlayer(type, idx); }}
                                     className="opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity"

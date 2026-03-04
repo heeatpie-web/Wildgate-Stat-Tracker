@@ -10,6 +10,8 @@ describe('teamColorAssignment', () => {
   it('normalizes team colors from noisy strings', () => {
     expect(normalizeTeamColor(' Red Team ')).toBe('red');
     expect(normalizeTeamColor('BLUE')).toBe('blue');
+    expect(normalizeTeamColor('yellow-green')).toBe('green');
+    expect(normalizeTeamColor('yellowgreen')).toBe('green');
     expect(normalizeTeamColor('unknown')).toBe('unknown');
     expect(normalizeTeamColor('n/a')).toBe('unknown');
   });

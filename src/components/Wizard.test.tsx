@@ -40,7 +40,7 @@ const uiState = {
     setShowWizard: vi.fn(),
     isOverlayMode: false,
     activeMode: 'Artifact Brawl',
-    activeUser: 'Alec',
+    activeUser: 'TestPilot',
     setToast: vi.fn(),
     pushNotification: vi.fn(),
     requestSmartCapture: vi.fn(() => 'wizard-test-request'),
@@ -500,7 +500,7 @@ describe('Wizard', () => {
         await waitFor(() => {
             expect(rerunOCRMulti).toHaveBeenCalledWith(
                 ['C:\\captures\\wizard-1.png'],
-                'Alec',
+                'TestPilot',
                 'local',
                 undefined,
                 expect.objectContaining({ forceUncached: true }),
@@ -524,3 +524,4 @@ describe('Wizard', () => {
         }));
     });
 });
+

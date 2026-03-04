@@ -8,7 +8,7 @@ const uiState = {
   setActiveView: vi.fn(),
   setShowSettings: vi.fn(),
   setShowIdMapper: vi.fn(),
-  activeUser: 'Alec',
+  activeUser: 'TestPilot',
   setActiveUser: vi.fn(),
   setRenameModal: vi.fn(),
   setRenameValue: vi.fn(),
@@ -19,7 +19,7 @@ const uiState = {
 };
 
 const gameData = {
-  players: ['Alec', 'Nova'],
+  players: ['TestPilot', 'Nova'],
   deletePlayer: vi.fn(),
 };
 
@@ -35,7 +35,7 @@ describe('Sidebar', () => {
   beforeEach(() => {
     uiState.activeView = 'recording';
     uiState.sidebarCollapsed = false;
-    uiState.activeUser = 'Alec';
+    uiState.activeUser = 'TestPilot';
     vi.clearAllMocks();
   });
 
@@ -62,3 +62,4 @@ describe('Sidebar', () => {
     expect(uiState.setActiveView).toHaveBeenCalledWith('analytics');
   });
 });
+

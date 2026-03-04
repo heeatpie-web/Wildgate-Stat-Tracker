@@ -4,7 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 const uiState = {
-  activeUser: 'Alec',
+  activeUser: 'TestPilot',
   setActiveUser: vi.fn(),
   activeView: 'analytics',
   setActiveView: vi.fn(),
@@ -58,7 +58,7 @@ vi.mock('./NotificationCenter', () => ({
 describe('Header', () => {
   beforeEach(() => {
     Object.assign(uiState, {
-      activeUser: 'Alec',
+      activeUser: 'TestPilot',
       activeView: 'analytics',
       devMode: false,
       visionStatus: 'idle',
@@ -111,11 +111,11 @@ describe('Header', () => {
 
     const event = eventSpy.mock.calls[0][0] as CustomEvent;
     expect(uiState.requestSmartCapture).toHaveBeenCalledWith({
-      activeUser: 'Alec',
+      activeUser: 'TestPilot',
       source: 'header',
       matchId: null,
     });
-    expect(event.detail).toEqual({ activeUser: 'Alec', source: 'header', matchId: null, requestId: 'sc_req_1' });
+    expect(event.detail).toEqual({ activeUser: 'TestPilot', source: 'header', matchId: null, requestId: 'sc_req_1' });
 
     window.removeEventListener('smart-capture-request', eventSpy as EventListener);
   });
@@ -128,7 +128,7 @@ describe('Header', () => {
     appStoreState.matches = [{
       id: 9001,
       timestamp: now - 10_000,
-      player: 'Alec',
+      player: 'TestPilot',
       subType: 'Telemetry Draft',
     }];
     window.addEventListener('smart-capture-request', eventSpy as EventListener);
@@ -138,7 +138,7 @@ describe('Header', () => {
 
     expect(eventSpy).toHaveBeenCalledTimes(1);
     const event = eventSpy.mock.calls[0][0] as CustomEvent;
-    expect(event.detail).toEqual({ activeUser: 'Alec', source: 'header', matchId: 9001, requestId: 'sc_req_1' });
+    expect(event.detail).toEqual({ activeUser: 'TestPilot', source: 'header', matchId: 9001, requestId: 'sc_req_1' });
 
     window.removeEventListener('smart-capture-request', eventSpy as EventListener);
   });
@@ -151,3 +151,4 @@ describe('Header', () => {
     expect(screen.getByRole('button', { name: /smart capture/i })).toBeDisabled();
   });
 });
+

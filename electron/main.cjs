@@ -1118,14 +1118,14 @@ function probeUrlReady(urlString, timeoutMs = 450) {
 function startDevRendererWithRetry(win, targetUrl) {
   const url = targetUrl || DEV_SERVER_URL;
   const splashUrl = buildDevSplashDataUrl(url);
-  const DEV_RETRY_INTERVAL_MS = 2000;
-  const MAX_DEV_RETRY_ATTEMPTS = 240;
 
   let stopped = false;
   let inFlight = false;
   let attempt = 0;
   let retryTimer = null;
-  const retryStartedAt = Date.now();
+  const waitStartedAt = Date.now();
+  const RETRY_DELAY_MS = Math.max(1000, parseInt(process.env.WILDGATE_DEV_RETRY_DELAY_MS || '2000', 10) || 2000);
+  const MAX_DEV_ATTEMPTS = Math.max(60, parseInt(process.env.WILDGATE_DEV_MAX_ATTEMPTS || '240', 10) || 240);
 
   const stop = () => {
     if (stopped) return;
@@ -1145,34 +1145,33 @@ function startDevRendererWithRetry(win, targetUrl) {
     } catch { }
   };
 
-  const HEARTBEAT_INTERVAL = 5; // Update splash every N attempts to avoid spam
-  const getWaitingProgressPct = () => {
-    const elapsedMs = Math.max(0, Date.now() - retryStartedAt);
-    const elapsedSeconds = elapsedMs / 1000;
-    return Math.min(98, 18 + (elapsedSeconds * 0.45));
-  };
+  const HEARTBEAT_INTERVAL = 1;
   const tryLoad = async () => {
     if (stopped || inFlight || !win || win.isDestroyed()) return;
     inFlight = true;
     attempt += 1;
-    if (attempt > MAX_DEV_RETRY_ATTEMPTS) {
+    if (attempt > MAX_DEV_ATTEMPTS) {
       setSplashProgressDedupe(
         win,
-        getWaitingProgressPct(),
-        'Still waiting for dev server...',
-        `Extended startup wait (attempt ${attempt})`
+        96,
+        'Waiting for dev server...',
+        `Still starting after ${MAX_DEV_ATTEMPTS} attempts. Check Vite terminal output.`
       );
       inFlight = false;
-      retryTimer = setTimeout(tryLoad, DEV_RETRY_INTERVAL_MS);
+      retryTimer = setTimeout(tryLoad, RETRY_DELAY_MS);
       return;
     }
+    const elapsedMs = Date.now() - waitStartedAt;
+    // Keep dev wait progress moving forward from the main-process 90% milestone
+    // so long dependency re-optimization does not look frozen.
+    const waitPct = Math.min(96, 90 + Math.floor(elapsedMs / 2500));
     const isFirst = attempt === 1;
     const isHeartbeat = attempt % HEARTBEAT_INTERVAL === 0;
     if (isFirst || isHeartbeat) {
       setSplashProgressDedupe(
         win,
-        getWaitingProgressPct(),
-        'Connecting renderer...',
+        waitPct,
+        'Waiting for dev server...',
         `Checking dev server (attempt ${attempt})`
       );
     }
@@ -1183,17 +1182,17 @@ function startDevRendererWithRetry(win, targetUrl) {
         if (isFirst || isHeartbeat) {
           setSplashProgressDedupe(
             win,
-            getWaitingProgressPct(),
+            waitPct,
             'Waiting for dev server...',
             `Retrying connection (attempt ${attempt})`
           );
         }
         inFlight = false;
-        retryTimer = setTimeout(tryLoad, DEV_RETRY_INTERVAL_MS);
+        retryTimer = setTimeout(tryLoad, RETRY_DELAY_MS);
         return;
       }
 
-      setSplashProgressDedupe(win, 99, 'Loading interface...', 'Renderer is responding');
+      setSplashProgressDedupe(win, 95, 'Loading interface...', 'Renderer is responding');
       await win.loadURL(url);
       // stop() happens on did-finish-load once the dev URL successfully loads.
       inFlight = false;
@@ -1201,13 +1200,13 @@ function startDevRendererWithRetry(win, targetUrl) {
       if (isFirst || isHeartbeat) {
         setSplashProgressDedupe(
           win,
-          getWaitingProgressPct(),
+          waitPct,
           'Waiting for dev server...',
           `Retrying connection (attempt ${attempt})`
         );
       }
       inFlight = false;
-      retryTimer = setTimeout(tryLoad, DEV_RETRY_INTERVAL_MS);
+      retryTimer = setTimeout(tryLoad, RETRY_DELAY_MS);
     }
   };
 
@@ -1222,7 +1221,7 @@ function startDevRendererWithRetry(win, targetUrl) {
       win.show();
     }
   }).catch(() => { });
-  retryTimer = setTimeout(tryLoad, 500);
+  retryTimer = setTimeout(tryLoad, 250);
 }
 
 function createTray() {
@@ -1425,9 +1424,10 @@ ipcMain.handle('rerun-ocr-multi', async (event, { imagePaths, activeUser, ocrMod
         const _plC = (accumulatedData.opponentTeams || []).reduce((s, t) => s + (t.players?.length || 0), 0);
         _mDlog('merged: type=' + (accumulatedData.screenshotType || '?') + ' oppTeams=' + _oppC + ' totalPlayers=' + _plC);
       } else {
-        // Different match — just overwrite (shouldn't happen for a single match's artifacts)
-        _mDlog('MISMATCH overwrite with type=' + (entry.data.screenshotType || '?') + ' file=' + entry.imagePath.split(/[\\/]/).pop());
-        accumulatedData = entry.data;
+        // Rerun inputs are from one match's artifact list; prefer preserving aggregate
+        // fields over clobbering previously merged data when classifier disagrees.
+        _mDlog('MISMATCH forced-merge with type=' + (entry.data.screenshotType || '?') + ' file=' + entry.imagePath.split(/[\\/]/).pop());
+        accumulatedData = mergeCaptures(accumulatedData, entry.data);
       }
     }
     const _finOppC = accumulatedData?.opponentTeams?.length || 0;

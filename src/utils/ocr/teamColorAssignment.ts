@@ -79,6 +79,9 @@ export const normalizeTeamColor = (rawColor: string | null | undefined): TeamCol
   if (COLOR_SET.has(normalized as TeamColor)) {
     return normalized as TeamColor;
   }
+  const compact = normalized.replace(/[\s_-]+/g, '');
+  if (compact.includes('yellowgreen') || compact.includes('chartreuse') || compact.includes('lime')) return 'green';
+  if (normalized.includes('yellow') && normalized.includes('green')) return 'green';
   if (normalized.includes('red')) return 'red';
   if (normalized.includes('orange')) return 'orange';
   if (normalized.includes('yellow')) return 'yellow';

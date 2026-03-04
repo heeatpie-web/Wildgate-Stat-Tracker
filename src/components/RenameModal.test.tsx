@@ -41,13 +41,14 @@ describe('RenameModal', () => {
 
   it('sets the newly created profile as active on first-run profile creation', async () => {
     const { RenameModal } = await import('./RenameModal');
-    uiState.renameValue = '  Alec  ';
+    uiState.renameValue = '  TestPilot  ';
 
     render(<RenameModal />);
     fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
 
-    expect(gameData.addPlayer).toHaveBeenCalledWith('Alec');
-    expect(uiState.setActiveUser).toHaveBeenCalledWith('Alec');
+    expect(gameData.addPlayer).toHaveBeenCalledWith('TestPilot');
+    expect(uiState.setActiveUser).toHaveBeenCalledWith('TestPilot');
     expect(uiState.setRenameModal).toHaveBeenCalledWith(null);
   });
 });
+

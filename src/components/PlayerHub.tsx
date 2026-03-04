@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
     Users, Search, Star, Edit2, Trash2, ChevronRight, Merge,
     Undo2, ScanEye, Swords, Handshake, TrendingUp, X,
-    Check, AlertTriangle
+    Check, AlertTriangle, Image as ImageIcon
 } from 'lucide-react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
@@ -65,29 +65,19 @@ const PlayerHub: React.FC = () => {
     const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
     const [showFullProfile, setShowFullProfile] = useState(false);
     const [pendingCandidateEdits, setPendingCandidateEdits] = useState<Record<string, string>>({});
-    const [sourcePreview, setSourcePreview] = useState<{ path: string; label: string; capturedAt?: number } | null>(null);
+    const [sourcePreview, setSourcePreview] = useState<{ src: string; label: string } | null>(null);
 
     const socialData = useMemo(() => calculateSocialData(matches), [matches]);
     const pendingRosterCandidates = useMemo(() => {
-        const deduped = new Map<string, typeof pendingReviews[number]>();
-        (pendingReviews || [])
+        const seen = new Set<string>();
+        return (pendingReviews || [])
             .filter((review) => review.type === 'roster_candidate' && review.value && review.value.trim().length > 0)
-            .forEach((review) => {
+            .filter((review) => {
                 const key = review.value.trim().toLowerCase();
-                const existing = deduped.get(key);
-                if (!existing) {
-                    deduped.set(key, review);
-                    return;
-                }
-                const existingHasSource = Boolean(existing.sourceCapture?.screenshotPath);
-                const reviewHasSource = Boolean(review.sourceCapture?.screenshotPath);
-                const existingScore = Number(existing.bestScore || 0);
-                const reviewScore = Number(review.bestScore || 0);
-                if ((!existingHasSource && reviewHasSource) || reviewScore > existingScore) {
-                    deduped.set(key, review);
-                }
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
             });
-        return [...deduped.values()].sort((a, b) => Number(b.bestScore || 0) - Number(a.bestScore || 0));
     }, [pendingReviews]);
 
     useEffect(() => {
@@ -100,15 +90,6 @@ const PlayerHub: React.FC = () => {
             return next;
         });
     }, [pendingRosterCandidates]);
-
-    useEffect(() => {
-        if (!sourcePreview) return;
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') setSourcePreview(null);
-        };
-        window.addEventListener('keydown', onKeyDown);
-        return () => window.removeEventListener('keydown', onKeyDown);
-    }, [sourcePreview]);
 
     const teammateMap = useMemo(() => {
         const map: Record<string, { wins: number; total: number }> = {};
@@ -438,14 +419,10 @@ const PlayerHub: React.FC = () => {
                             <div className="flex flex-col gap-2 content-start">
                                 {filteredOcrCandidates.map((candidate) => {
                                     const pendingValue = pendingCandidateEdits[candidate.id] ?? candidate.value;
-                                    const sourcePath = String(candidate.sourceCapture?.screenshotPath || '').trim();
-                                    const sourceLabel = String(
-                                        candidate.sourceCapture?.screenshotLabel
-                                        || sourcePath.split(/[\\/]/).pop()
-                                        || 'Source Screenshot'
-                                    ).trim();
+                                    const sourceScreenshotPath = String(candidate.sourceCapture?.screenshotPath || '').trim();
+                                    const sourceScreenshotLabel = String(candidate.sourceCapture?.screenshotLabel || 'Captured Screenshot').trim() || 'Captured Screenshot';
                                     const sourceCapturedAt = Number(candidate.sourceCapture?.capturedAt || 0);
-                                    const sourceCapturedLabel = sourceCapturedAt > 0
+                                    const sourceCapturedLabel = Number.isFinite(sourceCapturedAt) && sourceCapturedAt > 0
                                         ? new Date(sourceCapturedAt).toLocaleString()
                                         : '';
                                     return (
@@ -467,41 +444,25 @@ const PlayerHub: React.FC = () => {
                                                 className="md3-textfield md3-textfield--outlined w-full text-label-sm font-semibold"
                                                 aria-label={`Pending OCR roster candidate ${candidate.id}`}
                                             />
-                                            {sourcePath && (
-                                                <div className="rounded-lg border border-info/20 bg-info-soft/25 p-1.5 flex items-center gap-2">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setSourcePreview({
-                                                            path: sourcePath,
-                                                            label: sourceLabel,
-                                                            capturedAt: sourceCapturedAt > 0 ? sourceCapturedAt : undefined,
-                                                        })}
-                                                        className="w-[92px] h-[58px] rounded-md overflow-hidden bg-md-sys-on-surface/5 border border-md-sys-outline/20 hover:border-md-sys-primary/40 shrink-0"
-                                                        aria-label={`Preview source screenshot for ${pendingValue || candidate.value}`}
-                                                        title="Open source screenshot"
-                                                    >
-                                                        <LocalImage
-                                                            src={sourcePath}
-                                                            alt={sourceLabel}
-                                                            className="w-full h-full object-contain"
-                                                        />
-                                                    </button>
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="text-label-xs font-semibold text-info truncate">{sourceLabel}</div>
+                                            {sourceScreenshotPath && (
+                                                <div className="rounded-lg border border-md-sys-outline/16 bg-md-sys-surface px-2 py-1.5 flex items-center justify-between gap-2">
+                                                    <div className="min-w-0">
+                                                        <div className="text-label-xs font-semibold truncate text-md-sys-on-surface/75">
+                                                            Source: {sourceScreenshotLabel}
+                                                        </div>
                                                         {sourceCapturedLabel && (
-                                                            <div className="text-label-xs text-md-sys-on-surface/55 truncate">{sourceCapturedLabel}</div>
+                                                            <div className="text-label-xs text-md-sys-on-surface/50 truncate">
+                                                                Captured: {sourceCapturedLabel}
+                                                            </div>
                                                         )}
                                                     </div>
                                                     <button
                                                         type="button"
-                                                        onClick={() => setSourcePreview({
-                                                            path: sourcePath,
-                                                            label: sourceLabel,
-                                                            capturedAt: sourceCapturedAt > 0 ? sourceCapturedAt : undefined,
-                                                        })}
-                                                        className="h-7 px-2 rounded-md text-label-xs font-bold bg-info-soft text-info hover:bg-info-soft-strong shrink-0"
+                                                        onClick={() => setSourcePreview({ src: sourceScreenshotPath, label: sourceScreenshotLabel })}
+                                                        className="h-7 px-2 rounded-md text-label-xs font-bold bg-info/15 text-info hover:bg-info/25 inline-flex items-center gap-1 shrink-0"
                                                     >
-                                                        View source
+                                                        <ImageIcon size={12} />
+                                                        View Source
                                                     </button>
                                                 </div>
                                             )}
@@ -1137,7 +1098,7 @@ const PlayerHub: React.FC = () => {
             </div>
             {sourcePreview && (
                 <div
-                    className="fixed inset-0 z-top bg-scrim-90 flex items-center justify-center p-8"
+                    className="fixed inset-0 z-top bg-scrim-90 flex items-center justify-center p-6"
                     onClick={() => setSourcePreview(null)}
                 >
                     <button
@@ -1146,27 +1107,22 @@ const PlayerHub: React.FC = () => {
                         className="absolute top-4 right-4 text-on-scrim-muted hover:text-on-scrim z-10"
                         aria-label="Close source screenshot preview"
                     >
-                        <X size={24} />
+                        <X size={22} />
                     </button>
                     <div
                         role="dialog"
                         aria-modal="true"
-                        aria-label={sourcePreview.label || 'OCR source screenshot'}
+                        aria-label={sourcePreview.label || 'Source screenshot'}
                         onClick={(event) => event.stopPropagation()}
                         className="max-w-full max-h-full"
                     >
                         <LocalImage
-                            src={sourcePreview.path}
-                            alt={sourcePreview.label || 'OCR source screenshot'}
-                            className="max-w-full max-h-[90vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
+                            src={sourcePreview.src}
+                            alt={sourcePreview.label || 'Source screenshot'}
+                            className="max-w-full max-h-[88vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
                         />
                         <div className="text-center mt-2 text-label-sm text-on-scrim-muted font-bold">
-                            {sourcePreview.label || 'OCR source screenshot'}
-                            {sourcePreview.capturedAt && (
-                                <span className="block text-label-xs opacity-70 mt-1">
-                                    {new Date(sourcePreview.capturedAt).toLocaleString()}
-                                </span>
-                            )}
+                            {sourcePreview.label || 'Source screenshot'}
                         </div>
                     </div>
                 </div>

@@ -155,10 +155,10 @@ describe('artifactService', () => {
 
     it('invokes rerun-ocr-on-artifact with imagePath, activeUser, ocrMode', async () => {
       mockInvoke.mockResolvedValue({ teammates: [], opponents: [] });
-      await rerunOCROnArtifact('/path/img.png', 'Alec', 'local');
+      await rerunOCROnArtifact('/path/img.png', 'TestPilot', 'local');
       expect(mockInvoke).toHaveBeenCalledWith('rerun-ocr-on-artifact', {
         imagePath: '/path/img.png',
-        activeUser: 'Alec',
+        activeUser: 'TestPilot',
         ocrMode: 'local',
       });
     });
@@ -182,10 +182,10 @@ describe('artifactService', () => {
           players: { xMin: 0, xMax: 0.4, yMin: 0.7, yMax: 1 },
         },
       };
-      await rerunOCROnArtifact('/path/img.png', 'Alec', 'cloud', ocrRegions);
+      await rerunOCROnArtifact('/path/img.png', 'TestPilot', 'cloud', ocrRegions);
       expect(mockInvoke).toHaveBeenCalledWith('rerun-ocr-on-artifact', {
         imagePath: '/path/img.png',
-        activeUser: 'Alec',
+        activeUser: 'TestPilot',
         ocrMode: 'cloud',
         ocrRegions,
       });
@@ -204,13 +204,14 @@ describe('artifactService', () => {
         forceMaxAnalysis: true,
         forceUncached: true,
       } as const;
-      await rerunOCROnArtifact('/path/img.png', 'Alec', 'both', undefined, runtimeOptions);
+      await rerunOCROnArtifact('/path/img.png', 'TestPilot', 'both', undefined, runtimeOptions);
       expect(mockInvoke).toHaveBeenCalledWith('rerun-ocr-on-artifact', {
         imagePath: '/path/img.png',
-        activeUser: 'Alec',
+        activeUser: 'TestPilot',
         ocrMode: 'both',
         runtimeOptions,
       });
     });
   });
 });
+

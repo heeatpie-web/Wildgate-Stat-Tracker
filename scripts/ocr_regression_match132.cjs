@@ -32,7 +32,7 @@ Module._resolveFilename = (req, parent, isMain, opts) =>
 const { processCapture } = require('../electron/ocrHandler.cjs');
 const { mergeCaptures } = require('../electron/ocrMerger.cjs');
 
-const ACTIVE_USER = 'AlixThus';
+const ACTIVE_USER = String(process.env.WG_OCR_ACTIVE_USER || process.env.ACTIVE_USER || '').trim();
 const ARTIFACT_DIR = path.join(
   process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'),
   'Wildgate Stat Tracker',
@@ -58,6 +58,9 @@ function listPlayers(team = {}) {
 }
 
 async function run() {
+  if (!ACTIVE_USER) {
+    throw new Error('Missing active user. Set WG_OCR_ACTIVE_USER=<your pilot name> before running this regression script.');
+  }
   let merged = null;
   for (const imgPath of IMAGES) {
     const base64 = fs.readFileSync(imgPath).toString('base64');

@@ -233,7 +233,7 @@ function createSnapshotSeed() {
       timestamp,
       date: new Date(timestamp).toISOString().slice(0, 10),
       mode: index % 3 === 0 ? 'Fleet Battle' : 'Artifact Brawl',
-      player: 'Alec',
+      player: 'TestPilot',
       teammates,
       opponents,
       hero,
@@ -283,9 +283,9 @@ function createSnapshotSeed() {
 
   return {
     matches,
-    players: ['Alec', 'Jinx', 'Rook', 'Nova', 'Vega', 'Kai', 'Marauder', 'Rival-1'],
-    pilotRegistry: ['Alec', 'Jinx', 'Rook', 'Nova', 'Vega', 'Kai', 'Marauder', 'Rival-1', 'Rival-2', 'Corsair', 'Ghost', 'Warden'],
-    favorites: ['Alec', 'Jinx', 'Rook'],
+    players: ['TestPilot', 'Jinx', 'Rook', 'Nova', 'Vega', 'Kai', 'Marauder', 'Rival-1'],
+    pilotRegistry: ['TestPilot', 'Jinx', 'Rook', 'Nova', 'Vega', 'Kai', 'Marauder', 'Rival-1', 'Rival-2', 'Corsair', 'Ghost', 'Warden'],
+    favorites: ['TestPilot', 'Jinx', 'Rook'],
     pilotNotes: {
       Jinx: 'Primary wingman.',
       Rook: 'High-tempo fragger.',
@@ -311,7 +311,7 @@ function createSnapshotSeed() {
       captureMode: 'auto',
       lockOcrTeams: false,
       tutorialCompleted: true,
-      activeUser: 'Alec',
+      activeUser: 'TestPilot',
     },
     layouts: {},
     lastActivity: now,
@@ -738,3 +738,4 @@ run().catch((err) => {
   console.error(err);
   process.exit(1);
 });
+

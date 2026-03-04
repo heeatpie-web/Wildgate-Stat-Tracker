@@ -55,6 +55,30 @@ const mergeNumberRecord = <T extends object>(base: T, incoming: unknown): T => {
 const mergeOcrRegions = (value: unknown) => {
   const defaults = createDefaultOcrRegions();
   if (!isRecord(value)) return defaults;
+  const mergedMapScreen = {
+    yourShip: mergeNumberRecord(defaults.mapScreen.yourShip, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.yourShip : undefined),
+    enemyShips: mergeNumberRecord(defaults.mapScreen.enemyShips, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.enemyShips : undefined),
+    enemyShips2: mergeNumberRecord(defaults.mapScreen.enemyShips2, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.enemyShips2 : undefined),
+    enemyShips3: mergeNumberRecord(defaults.mapScreen.enemyShips3, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.enemyShips3 : undefined),
+    enemyShips4: mergeNumberRecord(defaults.mapScreen.enemyShips4, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.enemyShips4 : undefined),
+    hazards: mergeNumberRecord(defaults.mapScreen.hazards, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.hazards : undefined),
+    players: mergeNumberRecord(defaults.mapScreen.players, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.players : undefined),
+  };
+  const looksLikeLegacyBroadEnemyLayout =
+    [mergedMapScreen.enemyShips, mergedMapScreen.enemyShips2, mergedMapScreen.enemyShips3, mergedMapScreen.enemyShips4]
+      .every((region) => Number(region.xMin) <= 0.61 && Number(region.xMax) >= 0.99)
+    && Number(mergedMapScreen.hazards.xMin) <= 0.61
+    && Number(mergedMapScreen.hazards.xMax) >= 0.99;
+  const normalizedMapScreen = looksLikeLegacyBroadEnemyLayout
+    ? {
+      ...mergedMapScreen,
+      enemyShips: { ...defaults.mapScreen.enemyShips },
+      enemyShips2: { ...defaults.mapScreen.enemyShips2 },
+      enemyShips3: { ...defaults.mapScreen.enemyShips3 },
+      enemyShips4: { ...defaults.mapScreen.enemyShips4 },
+      hazards: { ...defaults.mapScreen.hazards },
+    }
+    : mergedMapScreen;
   return {
     crewHub: {
       leftPanel: mergeNumberRecord(defaults.crewHub.leftPanel, value.crewHub && isRecord(value.crewHub) ? value.crewHub.leftPanel : undefined),
@@ -62,15 +86,7 @@ const mergeOcrRegions = (value: unknown) => {
       teamHeader: mergeNumberRecord(defaults.crewHub.teamHeader, value.crewHub && isRecord(value.crewHub) ? value.crewHub.teamHeader : undefined),
       enemyName: mergeNumberRecord(defaults.crewHub.enemyName, value.crewHub && isRecord(value.crewHub) ? value.crewHub.enemyName : undefined),
     },
-    mapScreen: {
-      yourShip: mergeNumberRecord(defaults.mapScreen.yourShip, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.yourShip : undefined),
-      enemyShips: mergeNumberRecord(defaults.mapScreen.enemyShips, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.enemyShips : undefined),
-      enemyShips2: mergeNumberRecord(defaults.mapScreen.enemyShips2, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.enemyShips2 : undefined),
-      enemyShips3: mergeNumberRecord(defaults.mapScreen.enemyShips3, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.enemyShips3 : undefined),
-      enemyShips4: mergeNumberRecord(defaults.mapScreen.enemyShips4, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.enemyShips4 : undefined),
-      hazards: mergeNumberRecord(defaults.mapScreen.hazards, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.hazards : undefined),
-      players: mergeNumberRecord(defaults.mapScreen.players, value.mapScreen && isRecord(value.mapScreen) ? value.mapScreen.players : undefined),
-    },
+    mapScreen: normalizedMapScreen,
   };
 };
 

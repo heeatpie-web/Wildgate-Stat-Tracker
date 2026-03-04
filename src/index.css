@@ -1056,6 +1056,10 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 60%), inset 0 0 0 100px color-mix(in srgb, var(--md-sys-color-primary), transparent 94%);
 }
 
+.ocr-assignment-team-card--full-row {
+  grid-column: 1 / -1;
+}
+
 .ocr-assignment-team-card--color-red      { --team-accent-color: #ef4444; }
 .ocr-assignment-team-card--color-orange   { --team-accent-color: #f59e0b; }
 .ocr-assignment-team-card--color-yellow   { --team-accent-color: #eab308; }

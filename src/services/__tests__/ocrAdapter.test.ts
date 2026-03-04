@@ -19,10 +19,10 @@ describe('ocrAdapter', () => {
         setOcrAdapter(mockAdapter as any);
 
         const artifacts = await getMatchArtifactsStructured(55, ['fallback.png']);
-        const rerun = await rerunOCROnArtifact('image.png', 'Alec', 'both');
+        const rerun = await rerunOCROnArtifact('image.png', 'TestPilot', 'both');
 
         expect(mockAdapter.getMatchArtifactsStructured).toHaveBeenCalledWith(55, ['fallback.png']);
-        expect(mockAdapter.rerunOCROnArtifact).toHaveBeenCalledWith('image.png', 'Alec', 'both', undefined, undefined);
+        expect(mockAdapter.rerunOCROnArtifact).toHaveBeenCalledWith('image.png', 'TestPilot', 'both', undefined, undefined);
         expect(artifacts.images).toEqual(['x']);
         expect(rerun.success).toBe(true);
     });
@@ -39,7 +39,8 @@ describe('ocrAdapter', () => {
         resetOcrAdapter();
 
         // Default adapter requires Electron bridge and should fail predictably in test env.
-        await expect(rerunOCROnArtifact('image.png', 'Alec', 'both')).rejects.toThrow('Electron API not available');
+        await expect(rerunOCROnArtifact('image.png', 'TestPilot', 'both')).rejects.toThrow('Electron API not available');
     });
 });
+
 

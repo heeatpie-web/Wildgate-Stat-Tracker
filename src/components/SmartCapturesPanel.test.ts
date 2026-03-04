@@ -238,11 +238,12 @@ describe('getRosterCandidateSuggestions', () => {
 
 describe('resolveFriendlyTeamLabel', () => {
   it('prefers ship-derived label over username', () => {
-    expect(resolveFriendlyTeamLabel('Hunter (4 Player)', '', 'Alec')).toBe('Hunter');
+    expect(resolveFriendlyTeamLabel('Hunter (4 Player)', '', 'TestPilot')).toBe('Hunter');
   });
 
   it('falls back to existing label and then captain name', () => {
-    expect(resolveFriendlyTeamLabel('', 'Blue Crew', 'Alec')).toBe('Blue Crew');
-    expect(resolveFriendlyTeamLabel('', '', 'Alec')).toBe('Alec');
+    expect(resolveFriendlyTeamLabel('', 'Blue Crew', 'TestPilot')).toBe('Blue Crew');
+    expect(resolveFriendlyTeamLabel('', '', 'TestPilot')).toBe('TestPilot');
   });
 });
+

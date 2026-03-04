@@ -87,7 +87,7 @@ import { StorageService } from './utils/storage';
 import { playSoundCue } from './utils/soundCues';
 import { shouldQueueLearningReview } from './utils/ocrAliasEngine';
 import { buildAliasVariantMap, resolveOcrName } from './utils/ocrNameResolver';
-import { assignDeterministicTeamColors, buildPlayerColorHints, normalizeTeamColor, type TeamColor } from './utils/ocr/teamColorAssignment';
+import { assignDeterministicTeamColors, buildPlayerColorHints, normalizeTeamColor } from './utils/ocr/teamColorAssignment';
 import { backfillOpponentTeamShipTypes } from './utils/ocr/opponentTeamShipTypes';
 import { capTeammatePlayers, getMaxTeammatesForShip } from './utils/teamLimits';
 import Logger from './utils/logger';
@@ -244,6 +244,7 @@ const App: React.FC = () => {
     const setupWizardShownThisLaunchRef = React.useRef(false);
     const fuzzyPromptCountRef = React.useRef(0);
     const idPromptCountRef = React.useRef(0);
+    const matchNormalizationSignatureRef = React.useRef('');
     const setTutorialCompleted = useAppStore(s => s.setTutorialCompleted);
     const tutorialCompleted = useAppStore(s => s.tutorialCompleted);
     const tipsEnabled = useAppStore(s => s.tipsEnabled);
@@ -657,49 +658,59 @@ const App: React.FC = () => {
 
         const normalizeName = (value: string) => String(value || '').trim().toLowerCase();
         const isUnknownLabel = (value: string) => UNKNOWN_PLAYER_LABELS.has(normalizeName(value));
+        const toNormalizationSignature = (inputMatches: Match[]) => (
+            inputMatches.map((match) => {
+                const teammateSignature = (Array.isArray(match.teammates) ? match.teammates : [])
+                    .map((name) => String(name || '').trim().toLowerCase())
+                    .join(',');
+                return [
+                    Number(match.id || 0),
+                    String(match.player || '').trim().toLowerCase(),
+                    teammateSignature,
+                ].join('|');
+            }).join('~')
+        );
 
-        const withImplicitSelf = matches.map((match) => {
+        const normalizedMatches = matches.map((match) => {
             const matchPlayer = String(match.player || '').trim();
             const activePlayer = String(activeUser || '').trim();
             const canonicalPlayer = !isUnknownLabel(matchPlayer)
                 ? matchPlayer
                 : (!isUnknownLabel(activePlayer) ? activePlayer : '');
+            const canonicalKey = normalizeName(canonicalPlayer);
+
             const teammatesRaw = Array.isArray(match.teammates) ? [...match.teammates] : [];
             const teammatesRawNormalized = teammatesRaw.map((name) => String(name || '').trim());
-            const teammates = teammatesRaw
-                .map((name) => String(name || '').trim())
-                .filter((name) => !!name && !(isUnknownLabel(matchPlayer) && isUnknownLabel(name)));
+            const teammates = teammatesRawNormalized
+                .filter((name) => !!name && !(isUnknownLabel(matchPlayer) && isUnknownLabel(name)))
+                .filter((name) => !canonicalKey || normalizeName(name) !== canonicalKey);
+
+            const teammatesChanged = (next: string[]) => {
+                if (next.length !== teammatesRawNormalized.length) return true;
+                return next.some((name, idx) => name !== teammatesRawNormalized[idx]);
+            };
+
             const needsPlayerRepair = !matchPlayer || isUnknownLabel(matchPlayer);
-            const teammatesChanged = (next: string[]) => (
-                next.length !== teammatesRawNormalized.length
-                || next.some((name, index) => name !== teammatesRawNormalized[index])
-            );
-            if (!canonicalPlayer) {
-                if (!teammatesChanged(teammates)) return match;
-                return {
-                    ...match,
-                    teammates,
-                };
-            }
-            const canonicalKey = normalizeName(canonicalPlayer);
-            const teammatesWithoutSelf = teammates
-                .filter((name) => normalizeName(name) !== canonicalKey);
-            const nextPlayer = needsPlayerRepair ? canonicalPlayer : match.player;
-            const playerChanged = String(nextPlayer || '') !== String(match.player || '');
-            if (!teammatesChanged(teammatesWithoutSelf) && !playerChanged) return match;
+            const nextPlayer = canonicalPlayer && needsPlayerRepair ? canonicalPlayer : match.player;
+            const playerChanged = nextPlayer !== match.player;
+
+            if (!teammatesChanged(teammates) && !playerChanged) return match;
             return {
                 ...match,
                 player: nextPlayer,
-                teammates: teammatesWithoutSelf,
+                teammates,
             };
         });
 
-        const changed = withImplicitSelf.some((match, idx) => match !== matches[idx]);
-
+        const changed = normalizedMatches.some((match, idx) => match !== matches[idx]);
         if (changed) {
-            setMatches(withImplicitSelf);
+            const nextSignature = toNormalizationSignature(normalizedMatches);
+            if (nextSignature === matchNormalizationSignatureRef.current) return;
+            matchNormalizationSignatureRef.current = nextSignature;
+            setMatches(normalizedMatches);
             return;
         }
+        matchNormalizationSignatureRef.current = toNormalizationSignature(matches);
     }, [activeUser, isStoreLoading, matches, setMatches]);
 
     const clearRestoreSessionSnapshot = useCallback(() => {
@@ -1838,7 +1849,7 @@ const App: React.FC = () => {
                 players: uniquePlayers,
             };
         });
-        const preferredFallbackOrder: TeamColor[] = ['red', 'orange', 'yellow', 'green'];
+        const preferredFallbackOrder = ['red', 'orange', 'yellow', 'yellowgreen'];
         const colorAssignedTeams = unresolvedTeams
             .map((team, index) => {
                 return {
@@ -1857,16 +1868,6 @@ const App: React.FC = () => {
             setSelectedOpponents((prev: string[]) => dedupeNames([...prev, ...mergedOpponents]));
         }
 
-        const ocrSourcePath = (Array.isArray(data.analysisPathsUsed) ? data.analysisPathsUsed : [])
-            .find((entry) => typeof entry === 'string' && String(entry || '').trim().length > 0);
-        const ocrSourceCapture = ocrSourcePath
-            ? {
-                screenshotPath: String(ocrSourcePath),
-                screenshotLabel: String(ocrSourcePath).split(/[\\/]/).pop() || 'OCR Screenshot',
-                capturedAt: Number(data.captureTimestamp || Date.now()),
-            }
-            : undefined;
-
         const autoAppliedPlayers = [...autoAppliedTeammates, ...mergedOpponents];
         autoAppliedPlayers.forEach((player) => {
             const normalized = normalizeOcrName(player || '');
@@ -1884,8 +1885,7 @@ const App: React.FC = () => {
                 bestMatch: suggestions.bestMatch,
                 bestScore: suggestions.bestScore,
                 suggestions: suggestions.suggestions,
-                source: 'ocr',
-                sourceCapture: ocrSourceCapture,
+                source: 'ocr'
             });
             pendingRosterCandidateKeys.add(key);
         });

@@ -10,7 +10,7 @@ const baseMatch: Match = {
   timestamp: new Date('2026-02-14T17:45:00.000Z').getTime(),
   date: '2026-02-14',
   mode: 'Artifact Brawl',
-  player: 'Alec',
+  player: 'TestPilot',
   teammates: ['Rook'],
   opponents: ['Bandit'],
   hero: 'Sal',
@@ -116,3 +116,4 @@ describe('QueueItemRichPreview', () => {
     expect(screen.queryByText(/\b\d+\s+warnings?\b/i)).toBeNull();
   });
 });
+

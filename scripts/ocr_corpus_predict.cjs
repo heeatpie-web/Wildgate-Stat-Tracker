@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
@@ -266,14 +267,13 @@ function isCanonicalEntry(s) {
 }
 
 function loadPilotRegistry() {
-  const appData = process.env.APPDATA || '';
+  const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+  const envOverride = (process.env.WG_USERWORDS_PATH || process.env.WILDGATE_USERWORDS_PATH || '').trim();
   const candidates = [
-    'C:\\Users\\Alec Gougebas\\AppData\\Roaming\\Wildgate Stat Tracker\\ocr-tesseract\\wildgate_userwords.txt',
-  ];
-  if (appData) {
-    candidates.push(path.join(appData, 'Wildgate Stat Tracker', 'ocr-tesseract', 'wildgate_userwords.txt'));
-    candidates.push(path.join(appData, 'wildgate-stat-tracker', 'ocr-tesseract', 'wildgate_userwords.txt'));
-  }
+    envOverride,
+    path.join(appData, 'Wildgate Stat Tracker', 'ocr-tesseract', 'wildgate_userwords.txt'),
+    path.join(appData, 'wildgate-stat-tracker', 'ocr-tesseract', 'wildgate_userwords.txt'),
+  ].filter(Boolean);
   let sourcePath = null;
   for (const candidate of candidates) {
     const resolved = path.resolve(candidate);
