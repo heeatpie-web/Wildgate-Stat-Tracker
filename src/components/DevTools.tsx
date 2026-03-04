@@ -6,6 +6,8 @@ import { useAppStore } from '../store/useAppStore';
 import { Match, SHIPS, CHARACTERS, UI_REACH_MODIFIERS } from '../types';
 import { TelemetryPanel } from './TelemetryPanel';
 
+const IS_DEV_BUILD = import.meta.env.DEV || process.env.NODE_ENV !== 'production';
+
 interface DevToolsProps {
     logFeed?: any[];
     logStatus?: any;
@@ -72,9 +74,11 @@ export const DevTools: React.FC<DevToolsProps> = ({ logFeed = [], logStatus = {}
                     <button onClick={() => setShowLogStream(!showLogStream)} className={`px-4 py-2 rounded-lg text-label-sm font-bold transition-all ${showLogStream ? 'bg-md-sys-primary text-md-sys-onPrimary' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3 text-md-sys-primary'}`}>
                         {showLogStream ? 'Hide Telemetry' : 'Show Telemetry'}
                     </button>
-                    <button onClick={() => setActiveView('dev-ocr')} className={`px-4 py-2 rounded-lg text-label-sm font-bold transition-all ${activeView === 'dev-ocr' ? 'bg-accent text-on-scrim shadow-lg scale-105' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3 text-accent'}`}>
-                        Dev OCR Lab
-                    </button>
+                    {IS_DEV_BUILD && (
+                        <button onClick={() => setActiveView('dev-ocr')} className={`px-4 py-2 rounded-lg text-label-sm font-bold transition-all ${activeView === 'dev-ocr' ? 'bg-accent text-on-scrim shadow-lg scale-105' : 'bg-md-sys-surface2 hover:bg-md-sys-surface3 text-accent'}`}>
+                            Dev OCR Lab
+                        </button>
+                    )}
                 </div>
             </div>
 

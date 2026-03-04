@@ -129,6 +129,7 @@ export interface SettingsSlice {
   performanceMode: boolean;
   showSmartCaptureInHeader: boolean;
   tipsEnabled: boolean;
+  tipLibraryIndex: number;
   soundEnabled: boolean;
   language: Language;
   showSessionTimer: boolean;
@@ -175,6 +176,8 @@ export interface SettingsSlice {
   setPerformanceMode: (enabled: boolean) => void;
   setShowSmartCaptureInHeader: (enabled: boolean) => void;
   setTipsEnabled: (enabled: boolean) => void;
+  setTipLibraryIndex: (index: number) => void;
+  advanceTipLibraryIndex: (step?: number) => void;
   setSoundEnabled: (enabled: boolean) => void;
   setLanguage: (lang: Language) => void;
   setShowSessionTimer: (show: boolean) => void;
@@ -237,6 +240,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   performanceMode: false,
   showSmartCaptureInHeader: true,
   tipsEnabled: true,
+  tipLibraryIndex: 0,
   soundEnabled: true,
   language: 'en',
   showSessionTimer: true,
@@ -294,6 +298,10 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   setPerformanceMode: (enabled) => set({ performanceMode: enabled, disableAnimations: enabled ? true : false }),
   setShowSmartCaptureInHeader: (enabled) => set({ showSmartCaptureInHeader: enabled }),
   setTipsEnabled: (enabled) => set({ tipsEnabled: enabled }),
+  setTipLibraryIndex: (index) => set({ tipLibraryIndex: Math.max(0, Math.floor(Number(index) || 0)) }),
+  advanceTipLibraryIndex: (step = 1) => set((state) => ({
+    tipLibraryIndex: Math.max(0, Math.floor(Number(state.tipLibraryIndex || 0) + Number(step || 1))),
+  })),
   setSoundEnabled: (enabled) => set({ soundEnabled: enabled }),
   setLanguage: (lang) => set({ language: lang }),
   setShowSessionTimer: (show) => set({ showSessionTimer: show }),

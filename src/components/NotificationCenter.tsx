@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell, CheckCheck, ChevronLeft, ChevronRight, Sparkles, Trash2, X, XCircle } from 'lucide-react';
+import { Bell, CheckCheck, Sparkles, Trash2, X, XCircle } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
 import type { AppNotification, NotificationDeepLink } from '../store/slices/createUISlice';
@@ -54,6 +54,7 @@ export const NotificationCenter: React.FC = () => {
         setSmartCapturesFocusMatchId,
     } = useUIState();
     const dismissNotification = useAppStore((state) => state.dismissNotification);
+    const advanceTipLibraryIndex = useAppStore((state) => state.advanceTipLibraryIndex);
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const [dismissedIds, setDismissedIds] = React.useState<Set<string>>(() => new Set());
 
@@ -80,14 +81,7 @@ export const NotificationCenter: React.FC = () => {
         () => [...visibleNotifications.filter((item) => item.type === 'tip')].sort((a, b) => b.createdAt - a.createdAt),
         [visibleNotifications]
     );
-    const [tipIndex, setTipIndex] = React.useState(0);
-    React.useEffect(() => {
-        setTipIndex((current) => {
-            if (tipNotifications.length === 0) return 0;
-            return Math.min(current, tipNotifications.length - 1);
-        });
-    }, [tipNotifications.length]);
-    const pinnedTip = tipNotifications[tipIndex] || null;
+    const pinnedTip = tipNotifications[0] || null;
     const unreadNonTips = unread.filter((item) => item.type !== 'tip');
     const readNonTips = read.filter((item) => item.type !== 'tip');
 
@@ -250,50 +244,31 @@ export const NotificationCenter: React.FC = () => {
                                 onKeyDown={(event) => onItemKeyDown(event, pinnedTip)}
                                 role="button"
                                 tabIndex={0}
-                                className="w-full text-left rounded-xl border border-accent/35 bg-accent-soft px-3 py-3 hover:bg-accent-soft-strong transition-colors cursor-pointer"
+                                className="w-full text-left rounded-lg border border-accent/30 bg-accent-soft/70 px-2.5 py-2.5 hover:bg-accent-soft transition-colors cursor-pointer"
                             >
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-2 min-w-0">
-                                        <Sparkles size={14} className="text-accent" />
+                                        <Sparkles size={13} className="text-accent" />
                                         <span className="text-label-xs font-bold uppercase tracking-wide text-accent">
-                                            Tip {tipNotifications.length > 0 ? tipIndex + 1 : 0}/{tipNotifications.length}
+                                            Tip
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
-                                        {tipNotifications.length > 1 && (
-                                            <>
-                                                <button
-                                                    type="button"
-                                                    className="w-6 h-6 rounded-full inline-flex items-center justify-center text-md-sys-on-surface/60 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10"
-                                                    aria-label="Previous tip"
-                                                    title="Previous tip"
-                                                    onClick={(event) => {
-                                                        event.preventDefault();
-                                                        event.stopPropagation();
-                                                        setTipIndex((current) => (
-                                                            current <= 0 ? tipNotifications.length - 1 : current - 1
-                                                        ));
-                                                    }}
-                                                >
-                                                    <ChevronLeft size={12} />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="w-6 h-6 rounded-full inline-flex items-center justify-center text-md-sys-on-surface/60 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10"
-                                                    aria-label="Next tip"
-                                                    title="Next tip"
-                                                    onClick={(event) => {
-                                                        event.preventDefault();
-                                                        event.stopPropagation();
-                                                        setTipIndex((current) => (
-                                                            current >= tipNotifications.length - 1 ? 0 : current + 1
-                                                        ));
-                                                    }}
-                                                >
-                                                    <ChevronRight size={12} />
-                                                </button>
-                                            </>
-                                        )}
+                                        <button
+                                            type="button"
+                                            className="h-6 px-2 rounded-control text-label-xs font-bold bg-md-sys-surface-container-high text-md-sys-on-surface/75 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10"
+                                            aria-label="Next tip"
+                                            title="Next tip"
+                                            onClick={(event) => {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                                if (typeof advanceTipLibraryIndex === 'function') {
+                                                    advanceTipLibraryIndex(1);
+                                                }
+                                            }}
+                                        >
+                                            Next tip →
+                                        </button>
                                         <button
                                             type="button"
                                             className="w-6 h-6 rounded-full inline-flex items-center justify-center text-md-sys-on-surface/55 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10"
@@ -305,7 +280,7 @@ export const NotificationCenter: React.FC = () => {
                                         </button>
                                     </div>
                                 </div>
-                                <div className="mt-1 text-body-sm font-semibold leading-snug">{pinnedTip.message}</div>
+                                <div className="mt-1 text-label-sm font-semibold leading-snug">{pinnedTip.message}</div>
                             </div>
                         )}
 

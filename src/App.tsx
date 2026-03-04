@@ -26,9 +26,13 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import Tutorial from './components/Tutorial';
 import FirstRunHealthCheck from './components/FirstRunHealthCheck';
 import { WindowResizer } from './components/WindowResizer';
+import { getTipsForView } from './utils/tipsLibrary';
+const IS_DEV_BUILD = import.meta.env.DEV || process.env.NODE_ENV !== 'production';
 type LazyDashboardView = 'analytics' | 'smart-captures' | 'players' | 'dev-ocr';
 type LazyDashboardModule = { default: React.ComponentType<object> };
-const DEFAULT_PRELOAD_QUEUE: LazyDashboardView[] = ['analytics', 'smart-captures', 'players', 'dev-ocr'];
+const DEFAULT_PRELOAD_QUEUE: LazyDashboardView[] = IS_DEV_BUILD
+    ? ['analytics', 'smart-captures', 'players', 'dev-ocr']
+    : ['analytics', 'smart-captures', 'players'];
 const lazyDashboardStatus: Record<LazyDashboardView, 'idle' | 'loading' | 'ready' | 'error'> = {
     analytics: 'idle',
     'smart-captures': 'idle',
@@ -46,8 +50,11 @@ const isLazyDashboardView = (view: string): view is LazyDashboardView =>
     view === 'analytics' ||
     view === 'smart-captures' ||
     view === 'players' ||
-    view === 'dev-ocr';
+    (view === 'dev-ocr' && IS_DEV_BUILD);
 const loadDashboardChunk = (view: LazyDashboardView): Promise<LazyDashboardModule> => {
+    if (view === 'dev-ocr' && !IS_DEV_BUILD) {
+        return Promise.reject(new Error('Dev OCR panel is disabled in production builds.'));
+    }
     if (lazyDashboardPromises[view]) return lazyDashboardPromises[view] as Promise<LazyDashboardModule>;
     lazyDashboardStatus[view] = 'loading';
     const task = lazyDashboardLoaders[view]()
@@ -238,6 +245,7 @@ const App: React.FC = () => {
     const idPromptNotificationCountRef = React.useRef(0);
     const tipLastSentAtRef = React.useRef(0);
     const tipByViewSentAtRef = React.useRef<Record<string, number>>({});
+    const previousTipLibraryIndexRef = React.useRef<number | null>(null);
     const restorePromptCheckedRef = React.useRef(false);
     const onboardingPromptedRef = React.useRef(false);
     const startupHealthPromptedRef = React.useRef(false);
@@ -248,6 +256,7 @@ const App: React.FC = () => {
     const setTutorialCompleted = useAppStore(s => s.setTutorialCompleted);
     const tutorialCompleted = useAppStore(s => s.tutorialCompleted);
     const tipsEnabled = useAppStore(s => s.tipsEnabled);
+    const tipLibraryIndex = useAppStore(s => s.tipLibraryIndex);
     const isStoreLoading = useAppStore(s => s.isLoading);
     const startupSmartPreloadEnabled = useAppStore(s => s.startupSmartPreloadEnabled);
     const adaptivePreloadEnabled = useAppStore(s => s.adaptivePreloadEnabled);
@@ -264,7 +273,7 @@ const App: React.FC = () => {
         analytics: lazyDashboardStatus.analytics === 'ready',
         'smart-captures': lazyDashboardStatus['smart-captures'] === 'ready',
         players: lazyDashboardStatus.players === 'ready',
-        'dev-ocr': lazyDashboardStatus['dev-ocr'] === 'ready',
+        'dev-ocr': IS_DEV_BUILD && lazyDashboardStatus['dev-ocr'] === 'ready',
     });
     const preloadStartedRef = React.useRef(false);
     const viewOpenStartRef = React.useRef<Partial<Record<LazyDashboardView, number>>>({});
@@ -523,28 +532,42 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (!tipsEnabled) return;
-        const tipsByView: Record<string, string> = {
-            'smart-captures': 'Tip: Use queue filters first, then open one match to apply OCR corrections quickly.',
-            history: 'Tip: Select multiple matches in History to rerun OCR in one pass.',
-            'dev-ocr': 'Tip: OCR Debug is best for threshold tuning after you confirm ROI in the visual editor.',
-        };
-        const tip = tipsByView[activeView];
-        if (!tip) return;
+        const tipPool = getTipsForView(activeView, IS_DEV_BUILD);
+        if (tipPool.length === 0) return;
+        const safeTipLibraryIndex = Number.isFinite(Number(tipLibraryIndex))
+            ? Math.floor(Number(tipLibraryIndex))
+            : 0;
+        const normalizedTipIndex = ((safeTipLibraryIndex % tipPool.length) + tipPool.length) % tipPool.length;
+        const tip = tipPool[normalizedTipIndex];
+        const tipIndexChanged = previousTipLibraryIndexRef.current !== null
+            && previousTipLibraryIndexRef.current !== safeTipLibraryIndex;
+        previousTipLibraryIndexRef.current = safeTipLibraryIndex;
         const now = Date.now();
         const tenMinutesMs = 10 * 60 * 1000;
-        if (now - tipLastSentAtRef.current < tenMinutesMs) return;
-        const lastForView = tipByViewSentAtRef.current[activeView] || 0;
-        if (now - lastForView < tenMinutesMs) return;
+        if (!tipIndexChanged) {
+            if (now - tipLastSentAtRef.current < tenMinutesMs) return;
+            const lastForView = tipByViewSentAtRef.current[activeView] || 0;
+            if (now - lastForView < tenMinutesMs) return;
+        }
         tipLastSentAtRef.current = now;
         tipByViewSentAtRef.current[activeView] = now;
         pushNotification({
-            message: tip,
+            message: `Tip: ${tip}`,
             type: 'tip',
             source: 'system',
-            durationMs: 5_000,
+            durationMs: 4_500,
+            action: {
+                label: 'Next tip →',
+                onClick: () => {
+                    const advanceTip = useAppStore.getState().advanceTipLibraryIndex;
+                    if (typeof advanceTip === 'function') {
+                        advanceTip(1);
+                    }
+                },
+            },
             deepLink: { type: 'openView', view: activeView },
         });
-    }, [activeView, pushNotification, tipsEnabled]);
+    }, [activeView, pushNotification, tipLibraryIndex, tipsEnabled]);
 
     useEffect(() => {
         if (welcomeBackToastShownRef.current) return;
@@ -2087,6 +2110,9 @@ const App: React.FC = () => {
                     </div>
                 );
             case 'dev-ocr':
+                if (!IS_DEV_BUILD) {
+                    return <RecordingView onSmartCaptureData={handleSmartCaptureData} />;
+                }
                 return (
                     <div className="h-full min-h-0 overflow-y-auto custom-scrollbar p-3">
                         <DevOCRPanel />

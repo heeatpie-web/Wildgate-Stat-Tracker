@@ -18,6 +18,8 @@ import {
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
 
+const IS_DEV_BUILD = import.meta.env.DEV || process.env.NODE_ENV !== 'production';
+
 export type AppView = 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr';
 
 interface NavItem {
@@ -144,23 +146,25 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
                     </button>
                 ))}
 
-                <button
-                    onClick={() => {
-                        setActiveView('dev-ocr');
-                        closeDrawerIfNeeded();
-                    }}
-                    aria-current={activeView === 'dev-ocr' ? 'page' : undefined}
-                    className={`relative w-full py-2.5 premium-nav-item md3-nav-item sidebar-nav-item flex items-center transition-all duration-150 group ${
-                        activeView === 'dev-ocr' ? 'premium-nav-item--active sidebar-nav-item--active' : 'text-md-sys-on-surface/60'
-                    } ${showLabels ? 'justify-start px-3 gap-2.5' : 'justify-center'}`}
-                    title="OCR Debug"
-                >
-                    <span className="sidebar-nav-accent" aria-hidden />
-                    <span className="md3-nav-icon premium-nav-icon">
-                        <FlaskConical size={18} />
-                    </span>
-                    {showLabels && <span className="text-label-xs font-semibold tracking-wide-02 leading-tight">OCR Debug</span>}
-                </button>
+                {IS_DEV_BUILD && (
+                    <button
+                        onClick={() => {
+                            setActiveView('dev-ocr');
+                            closeDrawerIfNeeded();
+                        }}
+                        aria-current={activeView === 'dev-ocr' ? 'page' : undefined}
+                        className={`relative w-full py-2.5 premium-nav-item md3-nav-item sidebar-nav-item flex items-center transition-all duration-150 group ${
+                            activeView === 'dev-ocr' ? 'premium-nav-item--active sidebar-nav-item--active' : 'text-md-sys-on-surface/60'
+                        } ${showLabels ? 'justify-start px-3 gap-2.5' : 'justify-center'}`}
+                        title="OCR Debug"
+                    >
+                        <span className="sidebar-nav-accent" aria-hidden />
+                        <span className="md3-nav-icon premium-nav-icon">
+                            <FlaskConical size={18} />
+                        </span>
+                        {showLabels && <span className="text-label-xs font-semibold tracking-wide-02 leading-tight">OCR Debug</span>}
+                    </button>
+                )}
             </div>
 
             <div ref={profileMenuRef} className="relative w-full" data-tour="profile-selector">

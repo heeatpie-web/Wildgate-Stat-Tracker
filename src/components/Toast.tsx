@@ -95,28 +95,35 @@ const ToastCard: React.FC<ToastCardProps> = ({ toast, soundEnabled, onClose }) =
 
   const accentClass = resolveAccentClass(toast.type);
   const icon = resolveIcon(toast.type);
+  const isTip = toast.type === 'tip';
 
   return (
     <div
-      className="pointer-events-auto rounded-2xl shadow-[0_24px_56px_rgba(0,0,0,0.46)] flex items-start gap-3 animate-slide-up w-full overflow-hidden border border-md-sys-outline bg-md-sys-surface text-md-sys-on-surface"
+      className={`pointer-events-auto flex items-start animate-slide-up w-full overflow-hidden border text-md-sys-on-surface ${
+        isTip
+          ? 'rounded-xl shadow-[0_10px_28px_rgba(0,0,0,0.32)] gap-2 border-accent/30 bg-md-sys-surface-container-high'
+          : 'rounded-2xl shadow-[0_24px_56px_rgba(0,0,0,0.46)] gap-3 border-md-sys-outline bg-md-sys-surface'
+      }`}
       role={toast.type === 'error' ? 'alert' : 'status'}
       aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
       aria-atomic="true"
     >
       <div className={`w-1.5 self-stretch shrink-0 border-r ${accentClass}`} />
-      <div className="pt-3 pb-3 pl-1">
+      <div className={isTip ? 'pt-2.5 pb-2.5 pl-1' : 'pt-3 pb-3 pl-1'}>
         <div className={accentClass}>{icon}</div>
       </div>
-      <div className="font-semibold text-body leading-tight flex-1 py-3 pr-1 tracking-tight">{toast.message}</div>
+      <div className={`${isTip ? 'font-semibold text-label-sm' : 'font-semibold text-body'} leading-tight flex-1 ${isTip ? 'py-2.5' : 'py-3'} pr-1 tracking-tight`}>
+        {toast.message}
+      </div>
       {toast.action && (
         <button
           onClick={() => { toast.action?.onClick(); onCloseRef.current(); }}
-          className="my-3 text-label-sm font-black uppercase tracking-wide underline underline-offset-2 hover:no-underline px-1 shrink-0 text-md-sys-primary"
+          className={`${isTip ? 'my-2.5 text-label-xs' : 'my-3 text-label-sm'} font-black uppercase tracking-wide underline underline-offset-2 hover:no-underline px-1 shrink-0 text-md-sys-primary`}
         >
           {toast.action.label}
         </button>
       )}
-      <button onClick={() => onCloseRef.current()} className="m-1.5 p-2 hover:bg-md-sys-on-surface/10 rounded-full shrink-0" aria-label="Dismiss notification"><X size={16} /></button>
+      <button onClick={() => onCloseRef.current()} className={`${isTip ? 'm-1 p-1.5' : 'm-1.5 p-2'} hover:bg-md-sys-on-surface/10 rounded-full shrink-0`} aria-label="Dismiss notification"><X size={isTip ? 14 : 16} /></button>
     </div>
   );
 };
