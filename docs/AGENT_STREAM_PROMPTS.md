@@ -21,6 +21,12 @@ Constraints:
 - Do not edit `src/utils/ocr/**`, `src/utils/scan/**`, `electron/**`, or OCR scripts.
 - If blocked by shared contracts, propose a small contract PR against `src/services/**` or `src/types.ts`.
 
+In-progress note:
+
+- Splash screen slowness in dev is from Vite re-optimizing dependencies (about 60 seconds on first run after `npm install`). This is expected.
+- Keep the text-only splash flow, and add a dev-mode-only reassurance after 10 seconds: "Vite is optimizing dependencies - this only happens once after updates."
+- Production builds should remain near-instant because Vite is not involved there.
+
 ## OCR Agent Prompt
 
 You own OCR stream work only.

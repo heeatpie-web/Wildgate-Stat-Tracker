@@ -1416,7 +1416,7 @@ const SmartCapturesPanel: React.FC = () => {
                                                 type: 'success'
                                             });
                                             if (selectedMatch) {
-                                                const matchUpdates: Partial<Match> = { ocrReviewedAt: Date.now(), ocrState: 'saved' as const };
+                                                const matchUpdates: Partial<Match> = { ocrState: 'reviewing' as const };
                                                 if (data.playerShip?.shipType) matchUpdates.ship = data.playerShip.shipType;
                                                 if (Array.isArray(data.teammates)) {
                                                     matchUpdates.teammates = cappedTeammates;
@@ -1724,7 +1724,7 @@ const SmartMatchDetail: React.FC<{
     onDeleteMatch?: (match: Match) => void;
     devMode?: boolean;
 }> = ({
-    match,
+    match: matchSnapshot,
     displayNumber,
     onUpdate,
     activeUser,
@@ -1742,6 +1742,11 @@ const SmartMatchDetail: React.FC<{
     onDeleteMatch,
     devMode = false,
 }) => {
+        const liveMatch = useAppStore(useCallback(
+            (state) => state.matches.find((entry) => entry.id === matchSnapshot.id) || null,
+            [matchSnapshot.id]
+        ));
+        const match = liveMatch || matchSnapshot;
         const [artifacts, setArtifacts] = useState<{ images: string[], imageFiles: ArtifactFile[], telemetry: TelemetryArchiveEvent[][] }>({ images: [], imageFiles: [], telemetry: [] });
         const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
         const screenshotsSectionRef = useRef<HTMLDivElement | null>(null);
@@ -1769,6 +1774,7 @@ const SmartMatchDetail: React.FC<{
         const [showSecondaryActions, setShowSecondaryActions] = useState(false);
         const secondaryActionsRef = useRef<HTMLDivElement | null>(null);
         const nonCurrentWizardSnapshotRef = useRef<NonCurrentWizardSnapshot | null>(null);
+        const rerunAutoOpenTimerRef = useRef<number | null>(null);
         const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
             screenshots: false,
             players: false,
@@ -1801,6 +1807,9 @@ const SmartMatchDetail: React.FC<{
             setPendingKilledBy,
             setPendingKilledByShip,
         } = useGameData();
+        const getLatestMatchSnapshot = useCallback((): Match => (
+            useAppStore.getState().matches.find((entry) => entry.id === match.id) || match
+        ), [match]);
         const normalizeModifierName = useCallback((name: string) => {
             const match = UI_REACH_MODIFIERS.find(m => m.toLowerCase() === name.toLowerCase());
             return match || name;
@@ -2155,7 +2164,19 @@ const SmartMatchDetail: React.FC<{
 
         useEffect(() => {
             setShowSecondaryActions(false);
+            setReviewData(null);
+            if (rerunAutoOpenTimerRef.current != null) {
+                window.clearTimeout(rerunAutoOpenTimerRef.current);
+                rerunAutoOpenTimerRef.current = null;
+            }
         }, [match.id]);
+
+        useEffect(() => () => {
+            if (rerunAutoOpenTimerRef.current != null) {
+                window.clearTimeout(rerunAutoOpenTimerRef.current);
+                rerunAutoOpenTimerRef.current = null;
+            }
+        }, []);
 
         useEffect(() => {
             if (!showSecondaryActions) return;
@@ -2622,7 +2643,8 @@ const SmartMatchDetail: React.FC<{
                 latestFileStatus: 'Collecting screenshots',
             });
             setReviewData(null);
-            onUpdate({ ...match, ocrState: 'processing' });
+            const processingBaseMatch = getLatestMatchSnapshot();
+            onUpdate({ ...processingBaseMatch, ocrState: 'processing' });
             const imageExts = ['.png', '.jpg', '.jpeg', '.bmp', '.webp'];
             const imagePaths = artifactCandidates.filter(p => imageExts.some(ext => p.toLowerCase().endsWith(ext)));
             if (imagePaths.length === 0) {
@@ -2658,7 +2680,6 @@ const SmartMatchDetail: React.FC<{
                 );
                 const perFileRaw = multiResult.perFile || [];
                 const successfulCount = perFileRaw.filter(f => f.success).length;
-                const failedCount = perFileRaw.length - successfulCount;
                 const mergedData = multiResult.data ?? null;
                 const results: RerunResultWithMeta[] = perFileRaw.map((entry) => ({
                     success: entry.success,
@@ -2687,7 +2708,8 @@ const SmartMatchDetail: React.FC<{
                         latestFile: latestSummary?.filename || '',
                         latestFileStatus: latestFileStatus || firstFailureReason || 'No successful OCR output',
                     });
-                    onUpdate({ ...match, ocrState: 'error' });
+                    const failedBaseMatch = getLatestMatchSnapshot();
+                    onUpdate({ ...failedBaseMatch, ocrState: 'error' });
                     setToast({
                         message: firstFailureReason
                             ? `OCR re-analysis failed for all screenshots: ${firstFailureReason}`
@@ -2707,12 +2729,32 @@ const SmartMatchDetail: React.FC<{
                     latestFileStatus: latestFileStatus || 'Completed',
                 });
                 setReviewData(mergedData);
-                onUpdate({ ...match, ocrState: 'reviewing' });
+                const reviewingBaseMatch = getLatestMatchSnapshot();
+                onUpdate({ ...reviewingBaseMatch, ocrState: 'reviewing' });
                 persistNameSourceHintsToPendingDraft(nextNameSources);
-                setToast({
-                    message: `Analysis complete: ${successfulCount}/${imagePaths.length} screenshot${imagePaths.length === 1 ? '' : 's'} processed. Review before applying.`,
-                    type: failedCount > 0 ? 'warning' : 'success',
-                });
+                if (rerunAutoOpenTimerRef.current != null) {
+                    window.clearTimeout(rerunAutoOpenTimerRef.current);
+                    rerunAutoOpenTimerRef.current = null;
+                }
+                rerunAutoOpenTimerRef.current = window.setTimeout(() => {
+                    if (onApplyToSession) {
+                        applyReviewDataToSession();
+                    } else {
+                        const latestForWizard = useAppStore.getState().matches.find((entry) => entry.id === match.id) || match;
+                        openWizardForMatch({
+                            matchOverride: latestForWizard,
+                            reusePendingDraft: false,
+                        });
+                        window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
+                            detail: { matchId: Number(latestForWizard?.id || match.id || 0) || null },
+                        }));
+                    }
+                    setToast({
+                        message: 'Analysis complete - review detected data before applying.',
+                        type: 'success',
+                    });
+                    rerunAutoOpenTimerRef.current = null;
+                }, 300);
             } catch (error) {
                 const reason = errorMessage(error);
                 setRerunProgress({
@@ -2724,7 +2766,8 @@ const SmartMatchDetail: React.FC<{
                     latestFile: '',
                     latestFileStatus: 'Rerun aborted',
                 });
-                onUpdate({ ...match, ocrState: 'error' });
+                const failedBaseMatch = getLatestMatchSnapshot();
+                onUpdate({ ...failedBaseMatch, ocrState: 'error' });
                 setToast({ message: `OCR rerun failed: ${reason}`, type: 'error' });
             } finally {
                 setRerunning(false);
@@ -2759,10 +2802,14 @@ const SmartMatchDetail: React.FC<{
             || !!String(rerunProgress.cloudStatus || '').trim()
             || !!String(rerunProgress.latestFile || '').trim()
             || !!String(rerunProgress.latestFileStatus || '').trim();
+        const normalizedOcrState = String(match.ocrState || '').trim().toLowerCase();
+        const hasPriorOcrRunFromState = normalizedOcrState !== ''
+            && normalizedOcrState !== 'idle'
+            && normalizedOcrState !== 'queued';
         const hasExistingOcrAnalysis = (
-            !!match.ocrReviewedAt
+            hasPriorOcrRunFromState
+            || !!match.ocrReviewedAt
             || !!match.ocrDebug
-            || (match.ocrState != null && String(match.ocrState) !== 'queued')
             || !!reviewData
         );
         const analyzeButtonLabel = hasExistingOcrAnalysis ? 'Re-analyze' : 'Analyze';
