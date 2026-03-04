@@ -197,6 +197,7 @@ export interface Match {
   ocrDebug?: {
     rawText?: string;
     confidence?: number;
+    hazards?: string[];
     source?: 'local' | 'cloud' | 'merged';
     fallbackReason?: string;
     cloudError?: string;

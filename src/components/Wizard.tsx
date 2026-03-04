@@ -261,6 +261,32 @@ export const Wizard: React.FC = () => {
             .filter((entry) => entry.startsWith('data:image/') || /\.(png|jpe?g|webp|bmp|gif)$/i.test(entry));
     }, [pendingMatchData?.artifacts]);
 
+    React.useEffect(() => {
+        if (!isWizardOpen || !pendingMatchData || !Array.isArray(pendingMatchData.opponentTeams)) return;
+        let changed = false;
+        const nextOpponentTeams = pendingMatchData.opponentTeams.map((team) => {
+            const currentShip = String(team.shipType || '').trim();
+            if (currentShip) return team;
+            const teamNameKey = String(team.teamName || '').trim();
+            const colorKey = String(team.color || '').trim();
+            const colorLower = colorKey.toLowerCase();
+            const fallbackShip = String(
+                sessionShipTypes?.[teamNameKey]
+                || sessionShipTypes?.[colorKey]
+                || sessionShipTypes?.[colorLower]
+                || ''
+            ).trim();
+            if (!fallbackShip) return team;
+            changed = true;
+            return { ...team, shipType: fallbackShip };
+        });
+        if (!changed) return;
+        useAppStore.getState().setPendingMatchData({
+            ...pendingMatchData,
+            opponentTeams: nextOpponentTeams,
+        });
+    }, [isWizardOpen, pendingMatchData, sessionShipTypes]);
+
     const defeatedTeams = React.useMemo(() => {
         const fromOpponentTeams = Array.isArray(pendingMatchData?.opponentTeams)
             ? pendingMatchData.opponentTeams.map((team) => ({
@@ -316,6 +342,9 @@ export const Wizard: React.FC = () => {
         equipment: [],
         characterWeapons: [],
         characterEquipment: [],
+        perks: [],
+        shipPerks: [],
+        characterPerks: [],
     };
     const shipWeaponEntriesFromLegacy = (pendingLoadout.weapons || [])
         .filter((entry) => !/tertiary\s+(weapon|equipment)/i.test(String(entry || '')))
@@ -350,8 +379,21 @@ export const Wizard: React.FC = () => {
         ? pendingMatchData.telemetryConsistency.loadoutSaves[pendingMatchData.telemetryConsistency.loadoutSaves.length - 1].source
         : null;
     const loadoutSourceBadgeLabel = getTelemetryLoadoutSourceLabel(latestTelemetryLoadoutSource) || 'Telemetry';
-    const displayedCharacterWeapons = (pendingLoadout.characterWeapons || []).slice(0, 2);
-    const displayedCharacterEquipment = (pendingLoadout.characterEquipment || []).slice(0, 2);
+    const displayedCharacterWeapons = pendingLoadout.characterWeapons || [];
+    const displayedCharacterEquipment = pendingLoadout.characterEquipment || [];
+    const displayedPerks = (() => {
+        const perkPool = [
+            ...(pendingLoadout.characterPerks || []),
+            ...(pendingLoadout.shipPerks || []),
+            ...(pendingLoadout.perks || []),
+            ...(pendingMatchData.perks || []),
+        ];
+        return Array.from(new Set(
+            perkPool
+                .map((entry) => String(entry || '').trim())
+                .filter(Boolean)
+        ));
+    })();
     const telemetryDurationSeconds = typeof pendingMatchData?.telemetryConsistency?.telemetryDurationSeconds === 'number'
         ? pendingMatchData.telemetryConsistency.telemetryDurationSeconds
         : null;
@@ -543,6 +585,9 @@ export const Wizard: React.FC = () => {
                     ...(pendingMatchData.ocrDebug || {}),
                     rawText: mergedData.rawText,
                     confidence: mergedData.overallConfidence,
+                    hazards: Array.isArray(mergedData.hazards)
+                        ? Array.from(new Set(mergedData.hazards.map((hazard: unknown) => String(hazard || '').trim()).filter(Boolean)))
+                        : undefined,
                     source: mergedData.ocrSource || pendingMatchData.ocrDebug?.source,
                     fallbackReason: mergedData.ocrFallbackReason,
                     cloudError: mergedData.ocrCloudError,
@@ -878,17 +923,20 @@ export const Wizard: React.FC = () => {
                                     )}
                                 </span>
                                 <div className="flex gap-1.5 items-center overflow-hidden">
-                                    {displayedCharacterWeapons.length > 0 ? displayedCharacterWeapons.map((w, i) => (
+                                    {displayedCharacterWeapons.length > 0 ? displayedCharacterWeapons.slice(0, 2).map((w, i) => (
                                         <span key={`w-${i}`} className="px-1.5 py-0.5 rounded bg-md-sys-surface-container-highest text-md-sys-on-surface text-[10px] font-bold uppercase truncate max-w-[80px]">{w}</span>
                                     )) : <span className="text-label-xs opacity-40">No Weapons</span>}
                                     <span className="opacity-20 mx-1">|</span>
-                                    {displayedCharacterEquipment.length > 0 ? displayedCharacterEquipment.map((e, i) => (
+                                    {displayedCharacterEquipment.length > 0 ? displayedCharacterEquipment.slice(0, 2).map((e, i) => (
                                         <span key={`e-${i}`} className="px-1.5 py-0.5 rounded bg-md-sys-surface-container-highest text-md-sys-on-surface text-[10px] font-bold uppercase truncate max-w-[80px]">{e}</span>
                                     )) : <span className="text-label-xs opacity-40">No Equipment</span>}
+                                    {(displayedCharacterWeapons.length + displayedCharacterEquipment.length + displayedPerks.length) > 4 && (
+                                        <span className="text-label-xs font-semibold opacity-50">+{(displayedCharacterWeapons.length + displayedCharacterEquipment.length + displayedPerks.length) - 4}</span>
+                                    )}
                                 </div>
                             </button>
                             {(loadoutExpanded || !hasTelemetryLoadout) && (
-                                <div className="mt-3 space-y-3">
+                                <div className="mt-3 space-y-3 max-h-[20rem] overflow-y-auto custom-scrollbar pr-1">
                                     <div className="flex flex-wrap items-center gap-2">
                                         <span className="inline-flex items-center gap-1 rounded-pill bg-md-sys-surface-container-high px-2 py-0.5 text-label-xs font-semibold text-md-sys-on-surface/80">
                                             Ship: {String(pendingLoadout.ship || pendingMatchData.ship || '--')}
@@ -909,6 +957,23 @@ export const Wizard: React.FC = () => {
                                             </span>
                                         )}
                                     </div>
+                                    {displayedPerks.length > 0 && (
+                                        <div>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-label-xs font-bold uppercase opacity-50">Perks</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1.5 mt-1">
+                                                {displayedPerks.map((perk) => (
+                                                    <span
+                                                        key={perk}
+                                                        className="px-2 py-0.5 rounded-pill bg-md-sys-surface-container-high text-md-sys-on-surface text-label-xs font-semibold"
+                                                    >
+                                                        {perk}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                     <div>
                                         <div className="flex items-center gap-1.5">
                                             <span className="text-label-xs font-bold uppercase opacity-50">Weapons (max 2)</span>
@@ -1036,12 +1101,12 @@ export const Wizard: React.FC = () => {
                         </button>
                     </div>
                 ) : (
-                    <div
+                        <div
                         data-testid="wizard-ocr-tab-panel"
                         className={`flex-1 min-h-0 flex flex-col ${isOverlayMode ? 'px-4 py-4 gap-3' : 'px-8 py-6 gap-4'}`}
                     >
                         <div className="flex items-center gap-3 rounded-xl mg-surface border border-md-sys-outline/10 px-4 py-2.5">
-                            <span className="text-label-sm font-bold text-md-sys-on-surface/70 whitespace-nowrap">OCR Review</span>
+                            <span className="text-label-sm font-bold text-md-sys-on-surface/70 whitespace-nowrap">Review Panel</span>
                             <span className="text-label-xs text-md-sys-on-surface/45 hidden sm:inline">·</span>
                             <span className="text-label-xs text-md-sys-on-surface/45 truncate hidden sm:inline">Correct players before final submit</span>
                             <button
