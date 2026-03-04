@@ -972,31 +972,6 @@ function buildDevSplashDataUrl(targetUrl) {
       }
       h1 { margin: 0; font-size: 14px; letter-spacing: 0.14em; text-transform: uppercase; }
       .sub { margin-top: 10px; font-size: 12px; opacity: 0.75; line-height: 1.35; }
-      .progress-wrap { margin-top: 12px; }
-      .progress-track {
-        width: 100%;
-        height: 8px;
-        border-radius: 999px;
-        background: rgba(255,255,255,0.10);
-        overflow: hidden;
-        border: 1px solid rgba(255,255,255,0.14);
-      }
-      .progress-fill {
-        width: 0%;
-        height: 100%;
-        border-radius: 999px;
-        background: linear-gradient(90deg, rgba(56,189,248,1) 0%, rgba(251,146,60,1) 100%);
-        box-shadow: 0 0 16px rgba(56,189,248,0.35);
-        transition: width 180ms ease;
-      }
-      .meta {
-        margin-top: 8px;
-        display: flex;
-        justify-content: space-between;
-        gap: 10px;
-        font-size: 11px;
-        opacity: 0.78;
-      }
       .spinner {
         width: 14px; height: 14px;
         border-radius: 999px;
@@ -1015,33 +990,28 @@ function buildDevSplashDataUrl(targetUrl) {
           <h1>Wildgate Stat Tracker</h1>
           <div class="sub row" style="margin-top:6px;">
             <div class="spinner"></div>
-            <div id="splash-status">Booting app shell...</div>
-          </div>
-          <div class="progress-wrap">
-            <div class="progress-track">
-              <div id="splash-progress-fill" class="progress-fill"></div>
-            </div>
-            <div class="meta">
-              <div id="splash-detail">Initializing</div>
-              <div id="splash-pct">0%</div>
-            </div>
+            <div id="splash-status">Getting ready…</div>
           </div>
         </div>
       </div>
     </div>
     <script>
-      window.__setSplashProgress = function (pct, status, detail) {
-        var v = Math.max(0, Math.min(100, Number(pct) || 0));
-        var fill = document.getElementById('splash-progress-fill');
-        var pctNode = document.getElementById('splash-pct');
-        var statusNode = document.getElementById('splash-status');
-        var detailNode = document.getElementById('splash-detail');
-        if (fill) fill.style.width = v + '%';
-        if (pctNode) pctNode.textContent = Math.round(v) + '%';
-        if (statusNode && typeof status === 'string' && status.trim()) statusNode.textContent = status;
-        if (detailNode && typeof detail === 'string' && detail.trim()) detailNode.textContent = detail;
+      var statuses = [
+        'Getting ready…',
+        'Starting up…',
+        'Preparing to data track…',
+        'Almost there…'
+      ];
+      var statusIndex = 0;
+      var statusNode = document.getElementById('splash-status');
+      var renderStatus = function () {
+        if (!statusNode) return;
+        statusNode.textContent = statuses[statusIndex % statuses.length];
+        statusIndex += 1;
       };
-      window.__setSplashProgress(2, 'Booting app shell...', 'Preparing startup');
+      renderStatus();
+      setInterval(renderStatus, 2500);
+      window.__setSplashProgress = function () {};
     </script>
   </body>
 </html>`;
