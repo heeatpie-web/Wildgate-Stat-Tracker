@@ -12,7 +12,7 @@ const MAX_NOTIFICATION_HISTORY = 200;
 const DEFAULT_NOTIFICATION_DURATION_MS = runtimeConfig.ui.toastDurationMs;
 const DUPLICATE_NOTIFICATION_WINDOW_MS = 8_000;
 
-export type AppView = 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr';
+export type AppView = 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr';
 export type NotificationKind = 'info' | 'warning' | 'error' | 'success' | 'tip';
 export type NotificationSource =
     | 'system'
@@ -432,9 +432,17 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     setOverlayTab: (tab) => set({ overlayTab: tab }),
     setOverlayPhase: (phase) => set({ overlayPhase: phase }),
     setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
-    setActiveView: (view) => set({ activeView: view }),
+    setActiveView: (view) => set({
+        activeView: view,
+        showIdMapper: view === 'id-mapper',
+    }),
     showIdMapper: false,
-    setShowIdMapper: (show) => set({ showIdMapper: show }),
+    setShowIdMapper: (show) => set((state) => ({
+        showIdMapper: show,
+        activeView: show
+            ? 'id-mapper'
+            : (state.activeView === 'id-mapper' ? 'recording' : state.activeView),
+    })),
     setVisionStatus: (status) => set({ visionStatus: status }),
     setTelemetryStatus: (status) => set((state) => ({ telemetryStatus: { ...state.telemetryStatus, ...status } })),
     smartCapturesFocusMatchId: null,

@@ -4,7 +4,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 const uiState = {
-  activeView: 'recording' as 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr',
+  activeView: 'recording' as 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr',
   setActiveView: vi.fn(),
   setShowSettings: vi.fn(),
   setShowIdMapper: vi.fn(),
@@ -39,7 +39,7 @@ describe('Sidebar', () => {
     vi.clearAllMocks();
   });
 
-  it('renders main navigation items and omits the standalone ID Mapper item', async () => {
+  it('renders main navigation items including ID Mapper', async () => {
     const { Sidebar } = await import('./Sidebar');
 
     render(<Sidebar />);
@@ -48,9 +48,9 @@ describe('Sidebar', () => {
     expect(screen.getByRole('button', { name: /analytics/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /smart captures/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /players/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /id mapper/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /history/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ocr debug/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /id mapper/i })).toBeNull();
   });
 
   it('updates active view when a navigation item is clicked', async () => {

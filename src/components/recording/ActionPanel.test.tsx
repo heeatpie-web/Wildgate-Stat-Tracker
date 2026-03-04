@@ -157,22 +157,15 @@ describe('ActionPanel', () => {
     expect(screen.getByRole('button', { name: /stop match timer/i })).toBeInTheDocument();
   });
 
-  it('opens ID Mapper from the default recording layout', async () => {
+  it('does not render legacy ID Mapper buttons in recording layouts', async () => {
     const { ActionPanel } = await import('./ActionPanel');
 
     render(<ActionPanel />);
-    fireEvent.click(screen.getByRole('button', { name: /id mapper/i }));
+    expect(screen.queryByRole('button', { name: /id mapper/i })).toBeNull();
 
-    expect(uiState.setShowIdMapper).toHaveBeenCalledWith(true);
-  });
-
-  it('opens ID Mapper from the transparent recording layout', async () => {
-    const { ActionPanel } = await import('./ActionPanel');
-
+    vi.clearAllMocks();
     render(<ActionPanel variant="transparent" />);
-    fireEvent.click(screen.getByRole('button', { name: /id mapper/i }));
-
-    expect(uiState.setShowIdMapper).toHaveBeenCalledWith(true);
+    expect(screen.queryByRole('button', { name: /id mapper/i })).toBeNull();
   });
 
   it('falls back to smart scan when smart capture callback is not provided', async () => {

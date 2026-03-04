@@ -17,7 +17,7 @@ const uiState = {
   setShowWizard: vi.fn(),
   activeUser: 'Pilot',
   activeMode: 'Artifact Brawl',
-  activeView: 'recording' as 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr',
+  activeView: 'recording' as 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr',
   setActiveView: vi.fn(),
   pushNotification: vi.fn(),
   toast: null as { message: string; type?: 'success' | 'error' | 'warning' | 'info' | 'tip'; durationMs?: number } | null,
@@ -233,14 +233,12 @@ describe('App', () => {
     expect(uiState.setShowChangelog).toHaveBeenCalledWith(false);
   });
 
-  it('renders id mapper dialog semantics and closes on Escape', async () => {
+  it('renders ID Mapper inline when routed to the ID Mapper tab', async () => {
+    uiState.activeView = 'id-mapper';
     uiState.showIdMapper = true;
     const { default: App } = await import('./App');
     render(<App />);
 
-    expect(screen.getAllByRole('dialog', { name: /id mapper/i }).length).toBeGreaterThan(0);
-
-    fireEvent.keyDown(window, { key: 'Escape' });
-    expect(uiState.setShowIdMapper).toHaveBeenCalledWith(false);
+    expect(screen.getByTestId('id-mapper')).toBeInTheDocument();
   });
 });

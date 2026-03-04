@@ -99,11 +99,11 @@ const SystemPulse: React.FC = () => {
     const indicators = [
         {
             id: 'data',
-            label: safetyState.label === 'Protected' ? '' : safetyState.label,
+            label: 'Data Protection',
             icon: <ShieldCheck size={12} />,
             active: enableAutoLogRecording,
             color: enableAutoLogRecording ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
-            dotVar: safetyState.colorVar,
+            dotVar: enableAutoLogRecording ? safetyState.colorVar : '--indicator-idle',
             pulse: enableAutoLogRecording,
             tooltip: safety
                 ? `Data: ${safetyState.label}\nLast Save: ${fmtTs(safety.dbMtime)}\nWAL Pending: ${safety.walExists ? 'Yes' : 'No'}\nWAL Time: ${fmtTs(safety.walMtime)}\nPrevious Snapshot: ${fmtTs(safety.prevMtime)}\nLast Backup: ${fmtTs(safety.lastBackupMtime)}${safety.error ? `\nError: ${safety.error}` : ''}`
@@ -153,7 +153,7 @@ const SystemPulse: React.FC = () => {
         },
         {
             id: 'mission',
-            label: '',
+            label: 'Backup Timer',
             icon: <Timer size={12} />,
             active: isMatchInProgress,
             color: isMatchInProgress ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
@@ -181,7 +181,7 @@ const SystemPulse: React.FC = () => {
                     <span className={indicator.color}>{indicator.icon}</span>
                     {indicator.label && <span>{indicator.label}</span>}
                     <span
-                        className={`system-pulse-dot w-2.5 h-2.5 rounded-full ring-1 ring-inset ring-white/10 ${indicator.pulse ? 'animate-pulse' : ''}`}
+                        className={`system-pulse-dot w-2 h-2 rounded-full ring-1 ring-inset ring-white/10 ${indicator.pulse ? 'animate-pulse' : ''}`}
                         style={{
                             backgroundColor: `var(${indicator.dotVar})`,
                             boxShadow: indicator.active ? `0 0 6px var(${indicator.dotVar})` : 'none',

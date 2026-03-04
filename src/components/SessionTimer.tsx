@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Pause, Play, Swords, RotateCcw } from 'lucide-react';
+import { Pause, Play, Swords, RotateCcw } from 'lucide-react';
 import { Match } from '../types';
 
 interface SessionTimerProps {
@@ -200,65 +200,61 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
         );
     }
 
-    // Default variant - full horizontal layout
+    // Default variant - flattened single container
     return (
-        <div className="flex items-center gap-4 md3-card px-5 py-3 rounded-2xl border border-md-sys-outline/10 shadow-lg animate-fade-in">
-            <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 rounded-control border border-md-sys-outline/12 bg-md-sys-surface-container-high px-3 py-2.5">
+            <div className="flex items-center gap-1.5 shrink-0">
                 <button
                     onClick={togglePause}
                     className={`p-2 rounded-full transition-all ${isPaused ? 'bg-warning text-ink-strong hover:brightness-110' : 'md3-btn-tonal text-md-sys-on-surface hover:bg-md-sys-primary hover:text-md-sys-onPrimary'}`}
                     title={isPaused ? "Resume Session" : "Pause Session"}
                     aria-label={isPaused ? "Resume session timer" : "Pause session timer"}
                 >
-                    {isPaused ? <Play size={20} /> : <Pause size={20} />}
+                    {isPaused ? <Play size={16} /> : <Pause size={16} />}
                 </button>
-
-                <div className="h-8 w-px bg-md-sys-outline/10 mx-1"></div>
 
                 {!isMatchInProgress ? (
                     <button
                         onClick={onStartMatch}
-                        className="md3-btn-tonal rounded-full hover:bg-success hover:text-md-sys-on-surface transition-all flex items-center gap-2 px-4"
+                        className="md3-btn-tonal rounded-full hover:bg-success hover:text-md-sys-on-surface transition-all flex items-center gap-1.5 px-3 h-8"
                         title="Start New Mission"
                     >
-                        <Swords size={20} />
-                        <span className="text-label-sm font-bold uppercase tracking-wider">Start Mission</span>
+                        <Swords size={14} />
+                        <span className="text-label-xs font-bold uppercase tracking-wide">Start Mission</span>
                     </button>
                 ) : (
-                    <div className="flex items-center gap-3 md3-surface-high rounded-full px-4 py-1.5 border border-md-sys-primary/30 animate-pulse-slow">
-                        <div className="flex flex-col items-center">
-                            <span className="text-label-xs font-bold uppercase text-md-sys-primary">Live Mission</span>
-                            <span className="font-mono tabular-nums font-bold text-xl tracking-wide text-md-sys-primary">{matchElapsedDisplay}</span>
-                        </div>
-                        <button
-                            onClick={onResetMatch}
-                            className="p-1 text-md-sys-on-surface/40 hover:text-danger transition-colors"
-                            title="Reset Mission Timer"
-                            aria-label="Reset mission timer"
-                        >
-                            <RotateCcw size={14} />
-                        </button>
+                    <button
+                        onClick={onResetMatch}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-md-sys-errorContainer/35 text-md-sys-error px-3 h-8 hover:bg-md-sys-error/20 transition-colors"
+                        title="Reset Mission Timer"
+                        aria-label="Reset mission timer"
+                    >
+                        <RotateCcw size={14} />
+                        <span className="text-label-xs font-bold uppercase tracking-wide">Reset Mission</span>
+                    </button>
+                )}
+            </div>
+
+            <div className="min-w-0 flex-1">
+                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/60 mb-0.5">
+                    {isMatchInProgress ? 'Mission Time' : (isPaused ? 'Session Paused' : 'Session Time')}
+                </div>
+                <div className={`font-mono tabular-nums font-bold text-2xl leading-none tracking-wide ${isPaused ? 'opacity-60' : 'text-md-sys-primary'}`}>
+                    {isMatchInProgress ? matchElapsedDisplay : elapsedDisplay}
+                </div>
+                {isMatchInProgress && (
+                    <div className="text-label-xs font-semibold text-md-sys-on-surface/55 mt-1">
+                        Session {elapsedDisplay}
                     </div>
                 )}
             </div>
 
-            <div className="h-8 w-px bg-md-sys-outline/10"></div>
-
-            <div className="flex flex-col items-end">
-                <div className="text-label-sm font-bold uppercase opacity-60 leading-none mb-1 flex items-center gap-1">
-                    {isPaused ? <span className="text-warning flex items-center gap-1">Paused</span> : "Session Time"}
-                </div>
-                <div className={`font-mono tabular-nums font-bold text-3xl leading-none tracking-wide ${isPaused ? 'opacity-60' : 'text-md-sys-primary'}`}>
-                    {elapsedDisplay}
-                </div>
-            </div>
-            <div className="h-8 w-px bg-md-sys-outline/10"></div>
-            <div>
-                <div className="text-label-sm font-bold uppercase opacity-60 leading-none mb-1">Session Record</div>
-                <div className="font-bold text-xl leading-none flex items-center gap-1">
-                    <span className="text-md-sys-primary">{sessionWins}</span>
-                    <span className="opacity-40 text-body">/</span>
-                    <span>{sessionMatches.length}</span>
+            <div className="text-right shrink-0">
+                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/60 mb-0.5">W/L</div>
+                <div className="font-bold text-lg leading-none flex items-center gap-1">
+                    <span className="text-success">{sessionWins}</span>
+                    <span className="text-md-sys-on-surface/40">/</span>
+                    <span className="text-md-sys-on-surface/70">{sessionMatches.length}</span>
                 </div>
             </div>
         </div>

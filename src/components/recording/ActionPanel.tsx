@@ -10,7 +10,6 @@ import {
     RefreshCw,
     X,
     ChevronRight,
-    UserPlus,
     Trash2
 } from 'lucide-react';
 import { SessionTimer } from '../SessionTimer';
@@ -583,16 +582,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     <span>Smart Capture</span>
                 </button>
 
-                <button
-                    type="button"
-                    onClick={() => setShowIdMapper(true)}
-                    className="rounded-control text-label-sm font-semibold text-md-sys-on-surface/70 hover:text-md-sys-primary flex items-center justify-center gap-1.5 py-1.5"
-                    title="Manage player ID mappings"
-                >
-                    <UserPlus size={12} />
-                    ID Mapper
-                </button>
-
                 {captureError && (
                     <div className="bg-md-sys-errorContainer/20 border border-md-sys-error/20 rounded-control px-3 py-2 text-label-sm text-md-sys-error flex justify-between items-center mg-blur">
                         <span>{captureError}</span>
@@ -681,19 +670,17 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     </button>
                 )}
 
-                <div className="mg-surface rounded-card p-2 border border-md-sys-outline/10">
-                    <SessionTimer
-                        startTime={sessionStartTime}
-                        matches={matches}
-                        lastActivity={lastActivity}
-                        onRefreshActivity={() => setLastActivity(Date.now())}
-                        matchStartTime={matchStartTime}
-                        isMatchInProgress={isMatchInProgress}
-                        onStartMatch={() => { setIsMatchInProgress(true); setMatchStartTime(Date.now()); }}
-                        onResetMatch={() => { setMatchStartTime(null); setIsMatchInProgress(false); }}
-                        variant="compact"
-                    />
-                </div>
+                <SessionTimer
+                    startTime={sessionStartTime}
+                    matches={matches}
+                    lastActivity={lastActivity}
+                    onRefreshActivity={() => setLastActivity(Date.now())}
+                    matchStartTime={matchStartTime}
+                    isMatchInProgress={isMatchInProgress}
+                    onStartMatch={() => { setIsMatchInProgress(true); setMatchStartTime(Date.now()); }}
+                    onResetMatch={() => { setMatchStartTime(null); setIsMatchInProgress(false); }}
+                    variant="compact"
+                />
 
                 <div className="mt-1">
                     <ResultButtons compact />
@@ -740,19 +727,17 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     </div>
                 )}
 
-                <div className={`mg-surface rounded-card border border-md-sys-outline/10 ${isCompact ? 'p-1.5' : 'p-2'}`}>
-                    <SessionTimer
-                        startTime={sessionStartTime}
-                        matches={matches}
-                        lastActivity={lastActivity}
-                        onRefreshActivity={() => setLastActivity(Date.now())}
-                        matchStartTime={matchStartTime}
-                        isMatchInProgress={isMatchInProgress}
-                        onStartMatch={() => { setIsMatchInProgress(true); setMatchStartTime(Date.now()); }}
-                        onResetMatch={() => { setMatchStartTime(null); setIsMatchInProgress(false); }}
-                        variant={isCompact ? 'compact' : 'default'}
-                    />
-                </div>
+                <SessionTimer
+                    startTime={sessionStartTime}
+                    matches={matches}
+                    lastActivity={lastActivity}
+                    onRefreshActivity={() => setLastActivity(Date.now())}
+                    matchStartTime={matchStartTime}
+                    isMatchInProgress={isMatchInProgress}
+                    onStartMatch={() => { setIsMatchInProgress(true); setMatchStartTime(Date.now()); }}
+                    onResetMatch={() => { setMatchStartTime(null); setIsMatchInProgress(false); }}
+                    variant={isCompact ? 'compact' : 'default'}
+                />
 
                 <ResultButtons compact={isCompact} />
 
@@ -770,16 +755,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                             {pendingOcrCountForSubmission}
                         </span>
                     )}
-                </button>
-
-                <button
-                    type="button"
-                    onClick={() => setShowIdMapper(true)}
-                    className="rounded-control text-label-sm font-semibold text-md-sys-on-surface/70 hover:text-md-sys-primary flex items-center justify-center gap-1.5 py-1.5"
-                    title="Manage player ID mappings"
-                >
-                    <UserPlus size={12} />
-                    ID Mapper
                 </button>
 
                 {isMatchInProgress ? (

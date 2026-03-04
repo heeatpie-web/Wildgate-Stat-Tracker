@@ -115,7 +115,7 @@ interface TelemetryDraftPromptState {
 }
 
 interface RestoreSessionPayload {
-    activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr';
+    activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr';
     showWizard: WizardResult | null;
     pendingMatchData: Partial<Match> | null;
     selectedTeammates: string[];
@@ -298,9 +298,6 @@ const App: React.FC = () => {
     const changelogDialogTitleId = React.useId();
     const changelogDialogDescriptionId = React.useId();
     const changelogFocusTrapRef = useFocusTrap<HTMLDivElement>(showChangelog);
-    const idMapperDialogTitleId = React.useId();
-    const idMapperDialogDescriptionId = React.useId();
-    const idMapperFocusTrapRef = useFocusTrap<HTMLDivElement>(showIdMapper);
 
     const {
         matches,
@@ -888,13 +885,20 @@ const App: React.FC = () => {
             return;
         }
         const payloadRecord = parsed.payload as Record<string, unknown>;
+        const rawActiveView = String(payloadRecord.activeView || '');
+        const parsedActiveView: RestoreSessionPayload['activeView'] = (
+            isLazyDashboardView(rawActiveView)
+            || rawActiveView === 'recording'
+            || rawActiveView === 'history'
+            || rawActiveView === 'id-mapper'
+        )
+            ? (rawActiveView as RestoreSessionPayload['activeView'])
+            : 'recording';
         const snapshot: RestoreSessionSnapshot = {
             version: 1,
             savedAt,
             payload: {
-                activeView: isLazyDashboardView(String(payloadRecord.activeView || ''))
-                    ? String(payloadRecord.activeView) as LazyDashboardView
-                    : (String(payloadRecord.activeView || '') === 'recording' ? 'recording' : 'recording'),
+                activeView: parsedActiveView,
                 showWizard: payloadRecord.showWizard === 'Win'
                     || payloadRecord.showWizard === 'Loss'
                     || payloadRecord.showWizard === 'Draw'
@@ -2010,20 +2014,14 @@ const App: React.FC = () => {
     }, [setShowChangelog]);
 
     useEffect(() => {
-        if (!showChangelog && !showIdMapper) return;
+        if (!showChangelog) return;
         const onOverlayEscape = (event: KeyboardEvent) => {
             if (event.key !== 'Escape') return;
-            if (showIdMapper) {
-                setShowIdMapper(false);
-                return;
-            }
-            if (showChangelog) {
-                closeChangelog();
-            }
+            closeChangelog();
         };
         window.addEventListener('keydown', onOverlayEscape);
         return () => window.removeEventListener('keydown', onOverlayEscape);
-    }, [closeChangelog, showChangelog, showIdMapper, setShowIdMapper]);
+    }, [closeChangelog, showChangelog]);
 
     useEffect(() => {
         if (isStoreLoading) return;
@@ -2080,6 +2078,12 @@ const App: React.FC = () => {
                 return (
                     <div className="h-full min-h-0 overflow-hidden p-3">
                         <PlayerHub />
+                    </div>
+                );
+            case 'id-mapper':
+                return (
+                    <div className="h-full min-h-0 overflow-y-auto custom-scrollbar p-3">
+                        <IdMapper />
                     </div>
                 );
             case 'dev-ocr':
@@ -2295,25 +2299,6 @@ const App: React.FC = () => {
             )}
 
             <DevTools logFeed={logFeed} logStatus={logStatus} />
-
-            {showIdMapper && (
-                <div className="fixed inset-0 z-popover bg-scrim-60 backdrop-blur-sm flex items-center justify-center p-8" onClick={() => setShowIdMapper(false)}>
-                    <div
-                        ref={idMapperFocusTrapRef}
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby={idMapperDialogTitleId}
-                        aria-describedby={idMapperDialogDescriptionId}
-                        className="max-w-xl w-full"
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <h2 id={idMapperDialogTitleId} className="a11y-sr-only">ID Mapper</h2>
-                        <p id={idMapperDialogDescriptionId} className="a11y-sr-only">Review and edit detected ID mappings.</p>
-                        <IdMapper />
-                        <button type="button" onClick={() => setShowIdMapper(false)} className="mt-4 w-full py-2 bg-md-sys-surface1 rounded-lg text-label-sm hover:bg-md-sys-surface2">Close</button>
-                    </div>
-                </div>
-            )}
 
             {restoreSessionPrompt && (
                 <div className="fixed inset-0 z-popover bg-scrim-60 backdrop-blur-sm flex items-center justify-center p-4">

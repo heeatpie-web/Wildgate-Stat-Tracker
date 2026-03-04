@@ -102,8 +102,8 @@ interface UIStateContextType {
     setShowWizard: (result: WizardResult | null) => void;
     devMode: boolean;
     setDevMode: (enabled: boolean) => void;
-    activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr';
-    setActiveView: (view: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr') => void;
+    activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr';
+    setActiveView: (view: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr') => void;
     hiddenForScan: boolean;
     setHiddenForScan: (hidden: boolean) => void;
     showIdMapper: boolean;

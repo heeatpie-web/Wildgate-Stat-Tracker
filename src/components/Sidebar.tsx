@@ -13,11 +13,12 @@ import {
     Edit,
     MinusCircle,
     HelpCircle,
+    UserPlus,
 } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
 
-export type AppView = 'recording' | 'analytics' | 'smart-captures' | 'players' | 'history' | 'dev-ocr';
+export type AppView = 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr';
 
 interface NavItem {
     id: AppView;
@@ -30,6 +31,7 @@ const navItems: NavItem[] = [
     { id: 'analytics', icon: <BarChart3 size={18} />, label: 'Analytics' },
     { id: 'smart-captures', icon: <ScanEye size={18} />, label: 'Smart Captures' },
     { id: 'players', icon: <Users size={18} />, label: 'Players' },
+    { id: 'id-mapper', icon: <UserPlus size={18} />, label: 'ID Mapper' },
     { id: 'history', icon: <History size={18} />, label: 'History' },
 ];
 
