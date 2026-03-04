@@ -274,6 +274,7 @@ export function extractShipType(text: string): string | null {
       if (upper.includes('HUNTER')) return 'Hunter';
       if (upper.includes('BASTION')) return 'Bastion';
       if (upper.includes('PRIVATEER')) return 'Privateer';
+      if (upper.includes('BATTLE') && upper.includes('SCOUT')) return 'Battle Scout';
       if (upper.includes('SCOUT')) return 'Scout';
       if (upper.includes('SOLO') && upper.includes('OUTLAW')) return 'Solo Outlaw';
       if (upper.includes('OUTLAW')) return 'Outlaw';

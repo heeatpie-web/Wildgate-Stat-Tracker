@@ -24,7 +24,7 @@ export const isSpectatorColor = (color: string | undefined): boolean => {
     return color?.toLowerCase() === 'spectator';
 };
 
-const KNOWN_SHIPS = new Set(['hunter', 'bastion', 'privateer', 'scout', 'outlaw', 'solo outlaw']);
+const KNOWN_SHIPS = new Set(['hunter', 'bastion', 'privateer', 'battle scout', 'scout', 'outlaw', 'solo outlaw']);
 
 export const resolveTagShipMetadata = (
     rawLabel: string | null | undefined,

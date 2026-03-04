@@ -241,6 +241,7 @@ export const getShipColor = (ship: string): string => {
   if (normalized === "Hunter") return "var(--ship-hunter)";
   if (normalized === "Bastion") return "var(--ship-bastion)";
   if (normalized === "Privateer") return "var(--ship-privateer)";
+  if (normalized === "Battle Scout") return "var(--ship-scout)";
   if (normalized === "Scout") return "var(--ship-scout)";
   return "var(--ship-default)";
 };
@@ -258,6 +259,9 @@ export const normalizeShipName = (ship: string | null | undefined): string => {
     privatear: 'Privateer',
     prlvateer: 'Privateer',
     privateerr: 'Privateer',
+    battlescout: 'Battle Scout',
+    battiescout: 'Battle Scout',
+    batt1escout: 'Battle Scout',
     scut: 'Scout',
     scoui: 'Scout',
     scuut: 'Scout',
@@ -268,6 +272,7 @@ export const normalizeShipName = (ship: string | null | undefined): string => {
   };
   if (OCR_SHIP_CORRECTIONS[compactKey]) return OCR_SHIP_CORRECTIONS[compactKey];
   if (SHIP_NAME_ALIASES[cleaned]) return SHIP_NAME_ALIASES[cleaned];
+  if (/battle\s*scout/i.test(cleaned)) return 'Battle Scout';
   if (/solo\s*outlaw/i.test(cleaned)) return 'Solo Outlaw';
   if (/outlaw/i.test(cleaned)) return 'Outlaw';
   if (/hunter/i.test(cleaned)) return 'Hunter';

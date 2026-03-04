@@ -124,5 +124,5 @@ export function getModifierName(modifier: string | ModifierObject | unknown): st
     return '';
 }
 
-export const SHIP_TYPES = ['HUNTER', 'BASTION', 'PRIVATEER', 'SCOUT', 'OUTLAW', 'SOLO OUTLAW', 'SWER'];
+export const SHIP_TYPES = ['HUNTER', 'BASTION', 'PRIVATEER', 'BATTLE SCOUT', 'SCOUT', 'OUTLAW', 'SOLO OUTLAW', 'SWER'];
 export const SHIP_NAME_KEYWORDS = ['MURDER', 'SPAGHURDER', 'MEANR', 'THAN', 'AVG', 'DODGE', 'BULLET'];

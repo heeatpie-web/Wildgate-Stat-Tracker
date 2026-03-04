@@ -48,6 +48,7 @@ export const SHIP_MAP: Record<string, string> = {
   "HUNTER": "Hunter",
   "BASTION": "Bastion",
   "PRIVATEER": "Privateer",
+  "BATTLE SCOUT": "Battle Scout",
   "SCOUT": "Scout",
   "OUTLAW": "Outlaw",
   "SOLO OUTLAW": "Solo Outlaw",
@@ -60,7 +61,7 @@ export const SHIP_MAP: Record<string, string> = {
  * Ship type detection keywords
  */
 export const SHIP_KEYWORDS = [
-  'HUNTER', 'BASTION', 'PRIVATEER', 'SCOUT', 'OUTLAW',
+  'HUNTER', 'BASTION', 'PRIVATEER', 'BATTLE', 'SCOUT', 'OUTLAW',
   'SOLO', 'PLAYER', '4P', '3P', '2P'
 ];
 

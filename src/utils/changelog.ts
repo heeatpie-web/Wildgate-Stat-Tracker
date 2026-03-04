@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.0.0": [
+    "Release: Version 3.0 ships with the PaddleOCR runtime as a core OCR engine path for improved extraction reliability.",
+    "Improvement: Analytics workflows and data quality were refined with stronger filtering and tracking improvements.",
+    "Polish: Broad UI/UX cleanup across capture review, panels, and workflow surfaces for a cleaner experience."
+  ],
   "v2.19.1": [
     "Release: Initial beta release is now live for external testing.",
     "Beta: Added first-run health check with startup guidance for OCR, telemetry, backups, and capture readiness.",
