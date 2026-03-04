@@ -424,12 +424,25 @@ export interface MomentumData {
 
 export type EntityDimensionKey = 'ship' | 'prospectorWeapon' | 'equipment' | 'perk' | 'era';
 
+export interface EraPatchNote {
+  version: string;
+  date?: string;
+  description: string;
+}
+
+export interface EraDefinition {
+  key: string;
+  label: string;
+  description?: string;
+  patches?: EraPatchNote[];
+}
+
 export interface EntityAnalyticsFilters {
   ship: string[];
   prospectorWeapon: string[];
   equipment: string[];
   perk: string[];
-  era: Array<'baseline' | 'expansion'>;
+  era: string[];
 }
 
 export interface EntityMetricRow {

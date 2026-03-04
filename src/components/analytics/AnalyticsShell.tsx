@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { AnalyticsView, AnalyticsTimeRange, DrillDownTarget, EntityAnalyticsFilters } from '../../types';
-import { Activity, ArrowLeft, Download, LayoutGrid, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Activity, ArrowLeft, ChevronDown, ChevronUp, Download, LayoutGrid, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
 import { useUserPreferences } from '../../providers/UserPreferencesProvider';
@@ -24,6 +24,8 @@ import { MomentumView } from './MomentumView';
 import { VisualEssayView } from './VisualEssayView';
 import { AnalyticsNavigation, AnalyticsCategory } from './AnalyticsNavigation';
 import { EntityAnalyticsView } from './EntityAnalyticsView';
+import { ERA_DEFINITIONS } from './eraConfig';
+import { getMatchEra, getMatchEquipment, getMatchPerks, getMatchProspectorWeapons, getMatchShip } from '../patch/patchEntityCatalog';
 
 const VIEW_LABELS: Record<AnalyticsView, string> = {
     overview: 'Overview',
@@ -82,6 +84,7 @@ export const AnalyticsShell: React.FC = () => {
     const [exporting, setExporting] = useState(false);
     const [isProMode, setIsProMode] = useState(false);
     const [proCategory, setProCategory] = useState<ProCategory>('core');
+    const [showPatchHistory, setShowPatchHistory] = useState(false);
     const [entityFilters, setEntityFilters] = useState<EntityAnalyticsFilters>({
         ship: [],
         prospectorWeapon: [],
@@ -92,6 +95,31 @@ export const AnalyticsShell: React.FC = () => {
     const contentRef = useRef<HTMLDivElement>(null);
 
     const data = useAnalyticsData(timeRange, lastN, currentView, entityFilters);
+    const collectSortedUnique = (values: string[]): string[] => (
+        Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)))
+            .sort((a, b) => a.localeCompare(b))
+    );
+    const shipFilterOptions = useMemo(
+        () => collectSortedUnique(data.filteredMatches.map((match) => getMatchShip(match))),
+        [data.filteredMatches]
+    );
+    const weaponFilterOptions = useMemo(
+        () => collectSortedUnique(data.filteredMatches.flatMap((match) => getMatchProspectorWeapons(match))),
+        [data.filteredMatches]
+    );
+    const equipmentFilterOptions = useMemo(
+        () => collectSortedUnique(data.filteredMatches.flatMap((match) => getMatchEquipment(match))),
+        [data.filteredMatches]
+    );
+    const perkFilterOptions = useMemo(
+        () => collectSortedUnique(data.filteredMatches.flatMap((match) => getMatchPerks(match))),
+        [data.filteredMatches]
+    );
+    const eraFilterOptions = useMemo(
+        () => collectSortedUnique(data.filteredMatches.map((match) => getMatchEra(match))),
+        [data.filteredMatches]
+    );
+    const filterSelectClassName = 'px-2.5 py-1.5 rounded-control border border-md-sys-outline/20 bg-md-sys-surface text-md-sys-on-surface text-label-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary';
 
     const onDrillDown = (name: string, type: DrillDownTarget['type']) => {
         setDrillDownTarget({ name, type });
@@ -400,43 +428,105 @@ export const AnalyticsShell: React.FC = () => {
                         ))}
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <input
-                            type="text"
-                            placeholder="Ship filter (comma-separated)"
-                            value={entityFilters.ship.join(', ')}
-                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, ship: e.target.value.split(',').map((v) => v.trim()).filter(Boolean) }))}
-                            className="px-2 py-1 rounded-control bg-md-sys-surfaceContainerHigh text-label-sm"
-                        />
-                        <input
-                            type="text"
-                            placeholder="Weapon filter (comma-separated)"
-                            value={entityFilters.prospectorWeapon.join(', ')}
-                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, prospectorWeapon: e.target.value.split(',').map((v) => v.trim()).filter(Boolean) }))}
-                            className="px-2 py-1 rounded-control bg-md-sys-surfaceContainerHigh text-label-sm"
-                        />
-                        <input
-                            type="text"
-                            placeholder="Equipment filter (comma-separated)"
-                            value={entityFilters.equipment.join(', ')}
-                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, equipment: e.target.value.split(',').map((v) => v.trim()).filter(Boolean) }))}
-                            className="px-2 py-1 rounded-control bg-md-sys-surfaceContainerHigh text-label-sm"
-                        />
-                        <input
-                            type="text"
-                            placeholder="Perk set filter (contains all)"
-                            value={entityFilters.perk.join(', ')}
-                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, perk: e.target.value.split(',').map((v) => v.trim()).filter(Boolean) }))}
-                            className="px-2 py-1 rounded-control bg-md-sys-surfaceContainerHigh text-label-sm"
-                        />
+                        <select
+                            value={entityFilters.ship[0] || ''}
+                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, ship: e.target.value ? [e.target.value] : [] }))}
+                            className={filterSelectClassName}
+                        >
+                            <option value="">All Ships</option>
+                            {shipFilterOptions.map((option) => (
+                                <option key={option} value={option}>{option}</option>
+                            ))}
+                        </select>
+                        <select
+                            value={entityFilters.prospectorWeapon[0] || ''}
+                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, prospectorWeapon: e.target.value ? [e.target.value] : [] }))}
+                            className={filterSelectClassName}
+                        >
+                            <option value="">All Weapons</option>
+                            {weaponFilterOptions.map((option) => (
+                                <option key={option} value={option}>{option}</option>
+                            ))}
+                        </select>
+                        <select
+                            value={entityFilters.equipment[0] || ''}
+                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, equipment: e.target.value ? [e.target.value] : [] }))}
+                            className={filterSelectClassName}
+                        >
+                            <option value="">All Equipment</option>
+                            {equipmentFilterOptions.map((option) => (
+                                <option key={option} value={option}>{option}</option>
+                            ))}
+                        </select>
+                        <select
+                            value={entityFilters.perk[0] || ''}
+                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, perk: e.target.value ? [e.target.value] : [] }))}
+                            className={filterSelectClassName}
+                        >
+                            <option value="">All Perk Sets</option>
+                            {perkFilterOptions.map((option) => (
+                                <option key={option} value={option}>{option}</option>
+                            ))}
+                        </select>
                         <select
                             value={entityFilters.era[0] || ''}
-                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, era: e.target.value ? [e.target.value as 'baseline' | 'expansion'] : [] }))}
-                            className="px-2 py-1 rounded-control bg-md-sys-surfaceContainerHigh text-label-sm"
+                            onChange={(e) => setEntityFilters((prev) => ({ ...prev, era: e.target.value ? [e.target.value] : [] }))}
+                            className={filterSelectClassName}
                         >
                             <option value="">All Eras</option>
-                            <option value="baseline">Baseline</option>
-                            <option value="expansion">Expansion</option>
+                            {ERA_DEFINITIONS.filter((era) => eraFilterOptions.includes(era.key)).map((era) => (
+                                <option key={era.key} value={era.key}>{era.label}</option>
+                            ))}
                         </select>
+                    </div>
+                    <div className="rounded-control border border-md-sys-outline/15 bg-md-sys-surface-container-high p-2.5">
+                        <button
+                            type="button"
+                            onClick={() => setShowPatchHistory((prev) => !prev)}
+                            className="w-full flex items-center justify-between text-left"
+                            aria-expanded={showPatchHistory}
+                        >
+                            <span className="text-label-sm font-bold uppercase tracking-wide text-md-sys-on-surface/70">
+                                Patch History
+                            </span>
+                            {showPatchHistory ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </button>
+                        {showPatchHistory && (
+                            <div className="mt-2 space-y-2">
+                                {ERA_DEFINITIONS.map((era) => (
+                                    <div key={era.key} className="rounded-control border border-md-sys-outline/12 bg-md-sys-surface p-2.5">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div>
+                                                <div className="text-label-sm font-bold text-md-sys-on-surface">{era.label}</div>
+                                                {era.description && (
+                                                    <div className="text-label-xs text-md-sys-on-surface/60">{era.description}</div>
+                                                )}
+                                            </div>
+                                            {entityFilters.era[0] === era.key && (
+                                                <span className="text-label-xs font-bold uppercase tracking-wide text-md-sys-primary">
+                                                    Active Filter
+                                                </span>
+                                            )}
+                                        </div>
+                                        {era.patches && era.patches.length > 0 ? (
+                                            <div className="mt-2 space-y-1.5">
+                                                {era.patches.map((patch) => (
+                                                    <div key={`${era.key}-${patch.version}`} className="rounded-control bg-md-sys-surface-container-highest/80 px-2 py-1.5">
+                                                        <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface">
+                                                            {patch.version}
+                                                            {patch.date ? ` • ${patch.date}` : ''}
+                                                        </div>
+                                                        <div className="text-label-sm text-md-sys-on-surface/75">{patch.description}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="mt-2 text-label-xs text-md-sys-on-surface/60">No patch notes defined yet.</div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

@@ -61,6 +61,7 @@ export const PERK_CATALOG: PerkCatalogEntry[] = [
 ];
 
 const normalize = (value: unknown): string => String(value || '').trim().toLowerCase();
+const LOADOUT_ENTRY_SPLIT_PATTERN = /\s+(?:and|&)\s+|,\s*/gi;
 
 const dedupeByCaseInsensitive = (values: string[]): string[] => {
     const seen = new Set<string>();
@@ -97,9 +98,19 @@ const getLoadout = (match: Match): Record<string, unknown> => (
     (match?.loadout || {}) as Record<string, unknown>
 );
 
+const splitCompositeLoadoutEntry = (value: unknown): string[] => {
+    const raw = String(value || '').trim();
+    if (!raw) return [];
+    const expanded = raw
+        .split(LOADOUT_ENTRY_SPLIT_PATTERN)
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    return expanded.length > 1 ? expanded : [raw];
+};
+
 const getStringArray = (value: unknown): string[] => (
     Array.isArray(value)
-        ? value.map((entry) => String(entry || '').trim()).filter(Boolean)
+        ? value.flatMap((entry) => splitCompositeLoadoutEntry(entry))
         : []
 );
 
