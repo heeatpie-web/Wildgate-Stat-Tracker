@@ -26,7 +26,7 @@ const LAYOUT = {
   ENEMY_SHIPS: {
     xMin: 0.83,
     xMax: 1.0,
-    yMin: 0.00,
+    yMin: 0.06, // start below game perf HUD (FPS/GPU/CPU/LAT bar lives at ~0-3%)
     yMax: 0.10,
   },
   ENEMY_SHIPS2: {
@@ -136,7 +136,61 @@ function resolveMapLayout(layoutOverrides) {
 /**
  * Known ship types
  */
-const SHIP_TYPES = ['HUNTER', 'BASTION', 'PRIVATEER', 'SCOUT', 'SOLO OUTLAW', 'OUTLAW'];
+// Keep multi-word / more specific ship names before generic ones so findShipType
+// matches "BATTLE SCOUT" instead of the shorter "SCOUT", and "SOLO OUTLAW"
+// before "OUTLAW".
+const SHIP_TYPES = ['SOLO OUTLAW', 'BATTLE SCOUT', 'PRIVATEER', 'BASTION', 'HUNTER', 'SCOUT', 'OUTLAW'];
+const SHIP_TYPE_TEAM_WORDS = new Set(['SOLO', 'OUTLAW', 'BATTLE', 'SCOUT', 'PRIVATEER', 'BASTION', 'HUNTER', 'GUNSHIP']);
+const TEAM_NAME_STRIP_WORDS = new Set([
+  ...SHIP_TYPE_TEAM_WORDS,
+  'SHIP', 'SHIPS', 'YOUR', 'ENEMY',
+  'CREW', 'CREWSIZE', 'SIZE', 'HEALTH',
+  'KNOWN', 'HAZARDS', 'FEATURES',
+  'ARTIFACT', 'SPECIAL', 'RESOURCES', 'WILDGATE',
+]);
+
+function normalizeShipTypeKey(value) {
+  return String(value || '').trim().toUpperCase().replace(/\s+/g, ' ');
+}
+
+function isKnownShipType(value) {
+  const key = normalizeShipTypeKey(value);
+  return Boolean(key) && key !== 'UNKNOWN';
+}
+
+function isShipOnlyTeamLabel(input) {
+  const cleaned = String(input || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return false;
+  if (SHIP_TYPES.includes(cleaned)) return true;
+  const words = cleaned.split(' ').filter(Boolean);
+  if (words.length === 0) return false;
+  return words.every((word) => SHIP_TYPE_TEAM_WORDS.has(word));
+}
+
+function sanitizeTeamNameCandidate(input) {
+  const compact = String(input || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!compact) return '';
+  const stripped = compact
+    .split(' ')
+    .filter((token) => token && !TEAM_NAME_STRIP_WORDS.has(token))
+    .reduce((acc, token) => {
+      if (acc.length === 0 || acc[acc.length - 1] !== token) acc.push(token);
+      return acc;
+    }, [])
+    .join(' ')
+    .trim();
+  if (!stripped) return '';
+  if (!looksLikeTeamName(stripped)) return '';
+  return formatTeamName(stripped);
+}
 
 /**
  * Known hazards/modifiers
@@ -155,14 +209,18 @@ const KNOWN_HAZARDS = {
   'DEAD SENSORS': 'Dead Sensors',
   'DEAD WORLDS': 'Dead Worlds',
   'DEADWORLDS': 'Dead Worlds',
+  'COSMIC STORM': 'Cosmic Storm',
   'EASY LOOT': 'Easy Loot',
   'EPIC LOOT': 'Epic Loot',
   'FAST GATE': 'Fast Gate',
   'FEW ASTEROIDS': 'Few Asteroids',
   'FEW SHIPS': 'Few Ships',
+  'LOTS OF ASTEROIDS': 'Lots of Asteroids',
   'GLOAMING EXPANSE': 'Gloaming Expanse',
+  'BLOOMING EXPANSE': 'Blooming Expanse',
   'HAUNTED STORM': 'Haunted Storm',
   'ICE STORM': 'Ice Storm',
+  'LEECH DEMONS': 'Leech Demons',
   'LAVA EPICS': 'Lava Epics',
   'LEECH SWARMS': 'Leech Swarms',
   'LEGION PATROLS': 'Legion Patrols',
@@ -173,13 +231,21 @@ const KNOWN_HAZARDS = {
   'ROGUE TURRETS': 'Rogue Turrets',
   'SANDSTORM': 'Sandstorm',
   'SAND STORM': 'Sandstorm',         // OCR sometimes splits as two words
-  // NOTE: 'ARTIFACT SPECIAL LOOT', 'WILDGATE RESOURCES', 'LUCKY DOCKS' are
-  // map POI icon labels (below the modifier list), NOT modifiers — do not add them here.
 };
+const KNOWN_HAZARD_COMPACT_KEYS = new Set(
+  Object.keys(KNOWN_HAZARDS)
+    .map((key) => String(key || '').toUpperCase().replace(/[^A-Z]/g, ''))
+    .filter(Boolean)
+);
+const HAZARD_TEAM_NOISE_WORDS = new Set(
+  Object.keys(KNOWN_HAZARDS)
+    .flatMap((key) => String(key || '').toUpperCase().split(/[^A-Z0-9]+/g))
+    .filter((token) => token && token.length >= 3)
+);
 
 const PLAYER_NOISE_WORDS = new Set([
   'YOUR', 'SHIP', 'ENEMY', 'SHIPS', 'HAZARDS', 'PARTY', 'VOICE',
-  'HUNTER', 'BASTION', 'PRIVATEER', 'SCOUT', 'OUTLAW', 'SOLO',
+  'HUNTER', 'BASTION', 'PRIVATEER', 'SCOUT', 'OUTLAW', 'SOLO', 'BATTLE',
   'ARTIFACT', 'HEALING', 'ICE', 'WEAPON', 'ANCIENT', 'VAULT',
   'CRYON', 'REACH', 'DEAD', 'SENSORS', 'DEADWORLDS', 'EASY', 'LOOT',
   'EPIC', 'FAST', 'GATE', 'FEW', 'MANY', 'ASTEROIDS', 'LAVA', 'LEGION',
@@ -360,15 +426,14 @@ async function extractYourShip(imageBuffer, words, lines, text, imageWidth, imag
       const shipIdx = lineText.indexOf(foundShip);
       const beforeShip = lineText.substring(0, shipIdx).trim();
       const afterShip  = lineText.substring(shipIdx + foundShip.length).trim();
-      if (beforeShip.length >= 2) teamNameParts.push(formatTeamName(beforeShip));
-      if (afterShip.length >= 2 && looksLikeTeamName(afterShip)) {
-        teamNameParts.push(formatTeamName(afterShip));
-      }
+      const beforeTeam = sanitizeTeamNameCandidate(beforeShip);
+      const afterTeam = sanitizeTeamNameCandidate(afterShip);
+      if (beforeTeam) teamNameParts.push(beforeTeam);
+      if (afterTeam) teamNameParts.push(afterTeam);
     } else if (!shipType && lineText.length >= 2 && lineText.length <= 40) {
       // Accumulate team name parts — team names can span multiple words/lines
-      if (looksLikeTeamName(lineText)) {
-        teamNameParts.push(formatTeamName(lineText));
-      }
+      const lineTeam = sanitizeTeamNameCandidate(lineText);
+      if (lineTeam) teamNameParts.push(lineTeam);
     }
   }
 
@@ -403,7 +468,7 @@ async function extractYourShip(imageBuffer, words, lines, text, imageWidth, imag
 async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, imageHeight, layout = LAYOUT) {
   console.log('[MapScreen] Extracting ENEMY SHIPS');
 
-  const enemyShips = [];
+  let enemyShips = [];
   const enemyRegions = [
     layout.ENEMY_SHIPS,
     layout.ENEMY_SHIPS2,
@@ -423,6 +488,10 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
     .map(w => w.charAt(0) + w.slice(1).toLowerCase())
     .join(' ');
   const findShipType = (upperText) => {
+    const hasWord = (word) => new RegExp(`\\b${word}\\b`).test(upperText);
+    // Handle split-token OCR where "SOLO" / "BATTLE" can be separated from ship word.
+    if (hasWord('SOLO') && hasWord('OUTLAW')) return 'SOLO OUTLAW';
+    if (hasWord('BATTLE') && hasWord('SCOUT')) return 'BATTLE SCOUT';
     let foundShip = SHIP_TYPES.find(type => upperText.includes(type));
     if (foundShip) return foundShip;
     const lineWords = upperText.split(/\s+/);
@@ -442,8 +511,23 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
   const isNoiseTeamLabel = (input) => {
     const t = String(input || '').toUpperCase().trim();
     if (!t) return true;
+    const compact = t.replace(/[^A-Z]/g, '');
+    const tokens = t.split(/\s+/).filter(Boolean);
+    if (KNOWN_HAZARD_COMPACT_KEYS.has(compact)) return true;
+    if (tokens.length > 0 && tokens.every((token) => (
+      HAZARD_TEAM_NOISE_WORDS.has(token) || SHIP_TYPE_TEAM_WORDS.has(token)
+    ))) {
+      return true;
+    }
+    if (tokens.length >= 2 && new Set(tokens).size === 1) {
+      const onlyToken = tokens[0];
+      if (HAZARD_TEAM_NOISE_WORDS.has(onlyToken) || SHIP_TYPE_TEAM_WORDS.has(onlyToken)) {
+        return true;
+      }
+    }
     if (/KNOWN|HAZARD|FEATURE|ARTIFACT|RESOURCES|WILDGATE|SPECIAL/.test(t)) return true;
     if (/^ENEMY TEAM \d+$/i.test(t)) return true;
+    if (isShipOnlyTeamLabel(t)) return true;
     return false;
   };
 
@@ -499,8 +583,9 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
       if (!upperText || /^ENEMY(\s+SHIPS?)?$/.test(upperText) || /^SHIPS?$/.test(upperText)) continue;
       const ship = findShipType(upperText);
       if (!ship) {
-        if (!teamName && lineText.length >= 2 && lineText.length <= 34 && looksLikeTeamName(upperText)) {
-          teamName = formatTeamName(upperText);
+        const standaloneTeam = sanitizeTeamNameCandidate(upperText);
+        if (!teamName && lineText.length >= 2 && lineText.length <= 34 && standaloneTeam) {
+          teamName = standaloneTeam;
           confidence = Math.max(confidence, 66);
         }
         continue;
@@ -509,12 +594,21 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
       let lineTeam = '';
       let rawShipIdx = upperText.includes(foundShip) ? upperText.indexOf(foundShip) : -1;
       if (rawShipIdx < 0) rawShipIdx = 0;
-      const beforeShip = upperText.substring(0, rawShipIdx).trim();
-      const afterShip = upperText.substring(rawShipIdx + foundShip.length).trim();
-      if (beforeShip.length >= 2) lineTeam = formatTeamName(beforeShip);
-      if (afterShip.length >= 3 && looksLikeTeamName(afterShip)) {
-        lineTeam = lineTeam ? `${lineTeam} ${formatTeamName(afterShip)}` : formatTeamName(afterShip);
+      let beforeShip = upperText.substring(0, rawShipIdx).trim();
+      let afterShip = upperText.substring(rawShipIdx + foundShip.length).trim();
+      // If we matched a ship using split-token logic (e.g. SOLO + OUTLAW), don't
+      // let modifier words leak into teamName.
+      if (foundShip === 'SOLO OUTLAW') {
+        beforeShip = beforeShip.replace(/\bSOLO\b/g, ' ').trim();
+        afterShip = afterShip.replace(/\bSOLO\b/g, ' ').trim();
+      } else if (foundShip === 'BATTLE SCOUT') {
+        beforeShip = beforeShip.replace(/\bBATTLE\b/g, ' ').trim();
+        afterShip = afterShip.replace(/\bBATTLE\b/g, ' ').trim();
       }
+      const beforeTeam = sanitizeTeamNameCandidate(beforeShip);
+      const afterTeam = sanitizeTeamNameCandidate(afterShip);
+      if (beforeTeam) lineTeam = beforeTeam;
+      if (afterTeam) lineTeam = lineTeam ? `${lineTeam} ${afterTeam}` : afterTeam;
       if (lineTeam && (!teamName || lineTeam.length > teamName.length)) {
         teamName = lineTeam;
       }
@@ -529,18 +623,18 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
         .join(' ')
         .toUpperCase();
       foundShip = findShipType(joinedUpper) || '';
-      if (foundShip && !teamName && looksLikeTeamName(joinedUpper.replace(foundShip, ' ').trim())) {
-        teamName = formatTeamName(joinedUpper.replace(foundShip, ' ').trim());
-      }
+      if (foundShip && !teamName) teamName = sanitizeTeamNameCandidate(joinedUpper.replace(foundShip, ' ').trim());
       if (foundShip) confidence = Math.max(confidence, teamName ? 74 : 62);
     }
 
-    const likelyEnemySlot = slotIdx <= 1 || Boolean(foundShip);
+    const likelyEnemySlot = slotIdx <= 1 || Boolean(foundShip) || Boolean(teamName);
     if (likelyEnemySlot && (foundShip || teamName) && !isNoiseTeamLabel(teamName)) {
       enemyShips.push({
         teamName: teamName || `Enemy Team ${enemyShips.length + 1}`,
         shipType: foundShip ? toTitle(foundShip) : 'Unknown',
+        teamColor: slotColor,
         color: slotColor,
+        players: [],
         confidence,
         _slotIndex: slotIdx,
         _slotCenterY: (slotBounds.yMin + slotBounds.yMax) / 2,
@@ -569,6 +663,214 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
     }
   }
 
+  // Supplemental parse: pair team-name lines with the next ship-type line by Y order.
+  // This recovers rows when slot segmentation misses one lane but OCR text is present.
+  {
+    const pairByY = async () => {
+      const bandXMin = boundsList[0].xMin;
+      const bandXMax = boundsList[0].xMax;
+
+      const rightBandWords = (words || []).filter((w) => {
+        if (!w?.bbox || !w?.text) return false;
+        const cx = (w.bbox.x0 + w.bbox.x1) / 2;
+        return cx >= bandXMin && cx <= bandXMax;
+      });
+      if (rightBandWords.length === 0) return [];
+
+      let hazardsHeaderY = null;
+      for (const w of rightBandWords) {
+        const t = String(w.text || '').toUpperCase().replace(/[^A-Z]/g, '');
+        if (t === 'KNOWN' || t === 'HAZARDS') {
+          const y = (w.bbox.y0 + w.bbox.y1) / 2;
+          if (hazardsHeaderY == null || y < hazardsHeaderY) hazardsHeaderY = y;
+        }
+      }
+      const maxEnemyY = (hazardsHeaderY != null ? hazardsHeaderY - Math.max(6, imageHeight * 0.01) : imageHeight * 0.72);
+      const upperWords = rightBandWords.filter((w) => {
+        const cy = (w.bbox.y0 + w.bbox.y1) / 2;
+        return cy >= boundsList[0].yMin && cy <= maxEnemyY;
+      });
+      if (upperWords.length === 0) return [];
+
+      const linesParsed = groupWordsIntoLines(upperWords, imageHeight).map((line) => {
+        const lineText = line.words.map(w => String(w.text || '').trim()).join(' ').trim();
+        const upperText = lineText.toUpperCase();
+        const firstWord = line.words[0] || null;
+        const y = line.y;
+
+        let foundShip = findShipType(upperText) || '';
+        let inlineTeam = '';
+        if (foundShip) {
+          const rawShipIdx = upperText.indexOf(foundShip);
+          const beforeShip = (rawShipIdx >= 0 ? upperText.substring(0, rawShipIdx) : '').trim();
+          const afterShip = (rawShipIdx >= 0 ? upperText.substring(rawShipIdx + foundShip.length) : '').trim();
+          const beforeTeam = sanitizeTeamNameCandidate(beforeShip);
+          const afterTeam = sanitizeTeamNameCandidate(afterShip);
+          if (beforeTeam) inlineTeam = beforeTeam;
+          if (afterTeam) {
+            inlineTeam = inlineTeam ? `${inlineTeam} ${afterTeam}` : afterTeam;
+          }
+        }
+
+        const teamOnlyCandidate = !foundShip ? sanitizeTeamNameCandidate(upperText) : '';
+        const teamOnly = (teamOnlyCandidate && !isNoiseTeamLabel(teamOnlyCandidate))
+          ? teamOnlyCandidate
+          : '';
+
+        return {
+          y,
+          firstWord,
+          foundShip,
+          inlineTeam,
+          teamOnly,
+        };
+      });
+
+      const immediate = [];
+      const teamOnlyLines = [];
+      const shipOnlyLines = [];
+      for (const line of linesParsed) {
+        if (line.foundShip && line.inlineTeam && !isNoiseTeamLabel(line.inlineTeam)) {
+          immediate.push({
+            teamName: line.inlineTeam,
+            shipType: toTitle(line.foundShip),
+            y: line.y,
+            firstWord: line.firstWord,
+          });
+        } else if (line.foundShip) {
+          shipOnlyLines.push(line);
+        } else if (line.teamOnly) {
+          teamOnlyLines.push(line);
+        }
+      }
+
+      const paired = [...immediate];
+      const usedShipIdx = new Set();
+      const maxPairGap = Math.max(24, imageHeight * 0.09);
+      for (const teamLine of teamOnlyLines.sort((a, b) => a.y - b.y)) {
+        let bestIdx = -1;
+        let bestGap = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < shipOnlyLines.length; i++) {
+          if (usedShipIdx.has(i)) continue;
+          const gap = shipOnlyLines[i].y - teamLine.y;
+          if (gap <= 0 || gap > maxPairGap) continue;
+          if (gap < bestGap) {
+            bestGap = gap;
+            bestIdx = i;
+          }
+        }
+        if (bestIdx >= 0) {
+          usedShipIdx.add(bestIdx);
+          paired.push({
+            teamName: teamLine.teamOnly,
+            shipType: toTitle(shipOnlyLines[bestIdx].foundShip),
+            y: teamLine.y,
+            firstWord: teamLine.firstWord,
+          });
+        }
+      }
+
+      const out = [];
+      for (const item of paired) {
+        const teamName = String(item.teamName || '').trim();
+        if (!teamName || isNoiseTeamLabel(teamName)) continue;
+        let slotColor = 'unknown';
+        if (imageBuffer && item.firstWord?.bbox) {
+          try {
+            const colorResult = await detectBadgeColorNearText(imageBuffer, item.firstWord.bbox, 1);
+            if (colorResult?.color) slotColor = colorResult.color;
+          } catch (_) {}
+        }
+        out.push({
+          teamName,
+          shipType: String(item.shipType || '').trim() || 'Unknown',
+          teamColor: slotColor,
+          color: slotColor,
+          players: [],
+          confidence: 78,
+        });
+      }
+
+      const normalizeKey = (value) => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const dedup = [];
+      for (const team of out) {
+        const color = String(team?.color || team?.teamColor || '').trim().toLowerCase();
+        const key = normalizeKey(team?.teamName);
+        const idx = dedup.findIndex((existing) => {
+          const existingColor = String(existing?.color || existing?.teamColor || '').trim().toLowerCase();
+          if (color && color !== 'unknown' && existingColor === color) return true;
+          const existingKey = normalizeKey(existing?.teamName);
+          return Boolean(key && existingKey && key === existingKey);
+        });
+        if (idx < 0) {
+          dedup.push(team);
+        } else {
+          const cur = dedup[idx];
+          dedup[idx] = {
+            ...cur,
+            teamName: (team.teamName?.length || 0) > (cur.teamName?.length || 0) ? team.teamName : cur.teamName,
+            shipType: cur.shipType && cur.shipType !== 'Unknown' ? cur.shipType : team.shipType,
+            teamColor: cur.teamColor || team.teamColor,
+            color: cur.color || team.color,
+            confidence: Math.max(Number(cur.confidence || 0), Number(team.confidence || 0)),
+          };
+        }
+      }
+      return dedup.slice(0, 4);
+    };
+
+    const yPairShips = await pairByY();
+    if (yPairShips.length > 0) {
+      const normalizeKey = (value) => String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const merged = [...enemyShips];
+      for (const yShip of yPairShips) {
+        const yColor = String(yShip?.color || yShip?.teamColor || '').trim().toLowerCase();
+        const yNameKey = normalizeKey(yShip?.teamName);
+        let idx = merged.findIndex((existing) => {
+          const eColor = String(existing?.color || existing?.teamColor || '').trim().toLowerCase();
+          return Boolean(yColor && yColor !== 'unknown' && eColor === yColor);
+        });
+        if (idx < 0) {
+          idx = merged.findIndex((existing) => {
+            const eNameKey = normalizeKey(existing?.teamName);
+            return Boolean(yNameKey && eNameKey && yNameKey === eNameKey);
+          });
+        }
+        if (idx < 0) {
+          merged.push({ ...yShip });
+        } else {
+          const cur = merged[idx];
+          const curShip = String(cur?.shipType || '').trim();
+          const yShipType = String(yShip?.shipType || '').trim();
+          const shipsConflict = isKnownShipType(curShip)
+            && isKnownShipType(yShipType)
+            && normalizeShipTypeKey(curShip) !== normalizeShipTypeKey(yShipType);
+          const preferYShipType = isKnownShipType(yShipType) && (
+            !isKnownShipType(curShip)
+            || (
+              shipsConflict
+              && (
+                Number(cur?._slotIndex) === 0
+                || Number(cur?.confidence || 0) + 4 < Number(yShip?.confidence || 0)
+              )
+            )
+          );
+          merged[idx] = {
+            ...cur,
+            teamName: (yShip.teamName?.length || 0) > (cur.teamName?.length || 0) ? yShip.teamName : cur.teamName,
+            shipType: preferYShipType
+              ? yShipType
+              : (isKnownShipType(curShip) ? curShip : yShipType || curShip),
+            teamColor: cur.teamColor || yShip.teamColor,
+            color: cur.color || yShip.color,
+            confidence: Math.max(Number(cur.confidence || 0), Number(yShip.confidence || 0)),
+          };
+        }
+      }
+      enemyShips = merged;
+    }
+  }
+
   // Fallback: Try text-based extraction if we found nothing
   if (enemyShips.length === 0) {
     console.log('[MapScreen] Trying text-based enemy ship extraction');
@@ -591,8 +893,9 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
         let teamName = '';
 
         const beforeShip = upperLine.substring(0, upperLine.indexOf(foundShip)).trim();
-        if (beforeShip.length >= 3) {
-          teamName = formatTeamName(beforeShip);
+        const beforeTeam = sanitizeTeamNameCandidate(beforeShip);
+        if (beforeTeam) {
+          teamName = beforeTeam;
         } else {
           // Check previous lines
           for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
@@ -600,7 +903,8 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
             const prevLine = textLines[j].trim();
             if (prevLine.length >= 3 && prevLine.length <= 30 &&
                 !SHIP_TYPES.some(s => prevLine.toUpperCase().includes(s))) {
-              teamName = formatTeamName(prevLine);
+              teamName = sanitizeTeamNameCandidate(prevLine);
+              if (!teamName) continue;
               usedLines.add(j);
               break;
             }
@@ -610,7 +914,9 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
         enemyShips.push({
           teamName: teamName || `Enemy Team ${enemyShips.length + 1}`,
           shipType: foundShip.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' '),
+          teamColor: 'unknown',
           color: 'unknown',
+          players: [],
           confidence: teamName ? 65 : 50,
         });
 
@@ -770,7 +1076,7 @@ function groupWordsIntoLinesWithThreshold(words, lineThreshold) {
 function extractPlayerNameFromLine(words) {
   if (!words || words.length === 0) return null;
 
-  const parts = [];
+  const scoredTokens = [];
   let bestToken = '';
   let bestTokenScore = 0;
 
@@ -781,27 +1087,39 @@ function extractPlayerNameFromLine(words) {
     if (text.length < 2) continue;
     // Filter tactical map grid coordinate labels (e.g. A1, B3, H8)
     if (/^[A-H]\d{1,2}$/i.test(text)) continue;
-    if (/^[XPCD]$/i.test(text) && parts.length > 0) continue;
+    if (/^[XPCD]$/i.test(text)) continue;
     if (/^[|=\-~#%&*]+$/.test(text)) continue;
 
     const cleanedToken = cleanupPlayerToken(text);
     const tokenScore = scoreAsMapPlayerToken(cleanedToken);
+    // Keep only plausible name tokens; this drops tiny UI fragments ("Je", "x", "g")
+    // that otherwise pollute multi-token joins.
+    if (tokenScore < 18) continue;
     if (tokenScore > bestTokenScore) {
       bestTokenScore = tokenScore;
       bestToken = cleanedToken;
     }
-    parts.push(cleanedToken);
+    scoredTokens.push({ token: cleanedToken, score: tokenScore });
   }
 
-  if (parts.length === 0) return null;
+  if (scoredTokens.length === 0) return null;
 
-  // For tiny map text, a single strong token is often better than joining noisy neighbors.
-  if (bestToken && bestTokenScore >= 45 && parts.length <= 3) {
+  if (scoredTokens.length === 1) {
+    return scoredTokens[0].token.length >= 3 ? scoredTokens[0].token : null;
+  }
+
+  const hasLongToken = scoredTokens.some(({ token }) => token.length >= 4);
+  if (hasLongToken) {
+    const joined = cleanupPlayerToken(scoredTokens.map(({ token }) => token).join(''));
+    if (joined.length >= 3) return joined;
+  }
+
+  // Fallback: if only short fragments remain, return the strongest token.
+  if (bestToken && bestTokenScore >= 18) {
     return bestToken.length >= 3 ? bestToken : null;
   }
 
-  const joined = cleanupPlayerToken(parts.join(''));
-  return joined.length >= 3 ? joined : null;
+  return null;
 }
 
 /**
@@ -891,7 +1209,11 @@ function dedupePlayerNames(players) {
     if (!key) continue;
     const exists = out.some(existing => {
       const existingKey = normalizeNameKey(existing);
-      return existingKey === key || existingKey.includes(key) || key.includes(existingKey);
+      if (existingKey === key) return true;
+      // Keep short tags strict: don't collapse names like "Riv", "Rive", "Riv2".
+      const shorter = existingKey.length <= key.length ? existingKey : key;
+      const longer = existingKey.length <= key.length ? key : existingKey;
+      return shorter.length >= 10 && longer.includes(shorter);
     });
     if (!exists) out.push(candidate);
   }
@@ -917,6 +1239,7 @@ function looksLikeTeamName(text) {
   if (!text) return false;
   const cleaned = text.replace(/\s+/g, ' ').trim();
   if (cleaned.length < 4 || cleaned.length > 40) return false;
+  if (isShipOnlyTeamLabel(cleaned)) return false;
 
   const letters = cleaned.match(/[A-Za-z]/g) || [];
   const upperLetters = cleaned.match(/[A-Z]/g) || [];

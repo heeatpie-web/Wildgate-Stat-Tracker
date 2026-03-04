@@ -26,6 +26,19 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
     const { setActiveView, setSmartCapturesFocusMatchId, activeUser, pushNotification } = useUIState();
     const ocrMode = useAppStore((state) => state.ocrMode);
     const ocrRegions = useAppStore((state) => state.ocrRegions);
+    const normalizeNameKey = useCallback((value: string) => (
+        String(value || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/g, '')
+    ), []);
+    const activeUserNameKey = useMemo(() => normalizeNameKey(activeUser || ''), [activeUser, normalizeNameKey]);
+    const toDisplayName = useCallback((name: string) => {
+        const cleaned = String(name || '').trim();
+        if (!cleaned) return cleaned;
+        if (activeUserNameKey && normalizeNameKey(cleaned) === activeUserNameKey) return '(you)';
+        return cleaned;
+    }, [activeUserNameKey, normalizeNameKey]);
 
     const onDrillDown = (name: string, type: DrillDownTarget['type']) => {
         setDrillDownTarget({ name, type });
@@ -730,7 +743,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                                         <div className="flex flex-wrap gap-1">
                                                             {(m.teammates && m.teammates.length > 0) ? m.teammates.map((t, i) => (
                                                                 <span key={i} onClick={(e) => { e.stopPropagation(); onDrillDown?.(t, 'Teammate'); }} className="px-2 py-0.5 rounded-md bg-info/8 text-info/80 hover:bg-info/15 cursor-pointer transition-colors text-label-sm font-medium">
-                                                                    {t}
+                                                                    {toDisplayName(t)}
                                                                 </span>
                                                             )) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
                                                         </div>
@@ -743,7 +756,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                                                 <>
                                                                     {m.opponents.slice(0, 5).map((o, i) => (
                                                                         <span key={i} onClick={(e) => { e.stopPropagation(); onDrillDown?.(o, 'Opponent'); }} className="px-2 py-0.5 rounded-md bg-danger/8 text-danger/80 hover:bg-danger/15 cursor-pointer transition-colors text-label-sm font-medium">
-                                                                            {o}
+                                                                            {toDisplayName(o)}
                                                                         </span>
                                                                     ))}
                                                                     {m.opponents.length > 5 && (
@@ -990,7 +1003,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                     <div className="flex flex-wrap gap-2">
                                         {(selectedMatchForDetails.teammates || []).length > 0 ? (selectedMatchForDetails.teammates || []).map(t => (
                                             <span key={t} onClick={() => onDrillDown?.(t, 'Teammate')} className="px-3 py-1 bg-info-soft text-info rounded-lg text-label-sm font-bold cursor-pointer hover:bg-info-soft-strong transition-colors">
-                                                {t}
+                                                {toDisplayName(t)}
                                             </span>
                                         )) : <span className="opacity-40 text-label-sm italic">None</span>}
                                     </div>
@@ -1002,7 +1015,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                             <>
                                                 {(selectedMatchForDetails.opponents || []).slice(0, 5).map(t => (
                                                     <span key={t} onClick={() => onDrillDown?.(t, 'Opponent')} className="px-3 py-1 bg-danger-soft text-danger rounded-lg text-label-sm font-bold cursor-pointer hover:bg-danger-soft-strong transition-colors">
-                                                        {t}
+                                                        {toDisplayName(t)}
                                                     </span>
                                                 ))}
                                                 {(selectedMatchForDetails.opponents || []).length > 5 && (
