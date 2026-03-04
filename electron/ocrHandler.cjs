@@ -1274,8 +1274,31 @@ function fuzzyMatchesPlayerName(candidateName, targetName, maxDistance = 1) {
   const targetKey = normalizeNameKey(targetName);
   if (!candidateKey || !targetKey) return false;
   if (candidateKey === targetKey) return true;
-  if (Math.abs(candidateKey.length - targetKey.length) > maxDistance) return false;
-  return levenshtein(candidateKey, targetKey) <= maxDistance;
+  const adaptiveDistance = Math.max(
+    maxDistance,
+    Math.min(2, Math.floor(Math.min(candidateKey.length, targetKey.length) / 6))
+  );
+  if (Math.abs(candidateKey.length - targetKey.length) > adaptiveDistance) return false;
+  return levenshtein(candidateKey, targetKey) <= adaptiveDistance;
+}
+
+function isActiveUserNameMatch(candidateName, activeUserName) {
+  const candidateClean = cleanupCrewHubPlayerName(String(candidateName || ''));
+  const activeClean = cleanupCrewHubPlayerName(String(activeUserName || ''));
+  if (!candidateClean || !activeClean) return false;
+  if (fuzzyMatchesPlayerName(candidateClean, activeClean, 1)) return true;
+
+  const candidateKey = normalizeNameKey(candidateClean);
+  const activeKey = normalizeNameKey(activeClean);
+  if (!candidateKey || !activeKey) return false;
+
+  const similarity = levenshteinSimilarity(candidateKey, activeKey);
+  if (similarity >= 0.9) return true;
+
+  const shorter = candidateKey.length <= activeKey.length ? candidateKey : activeKey;
+  const longer = candidateKey.length <= activeKey.length ? activeKey : candidateKey;
+  if (shorter.length >= 6 && longer.includes(shorter)) return true;
+  return false;
 }
 
 function isPrefixVariantName(leftName, rightName) {
@@ -1301,7 +1324,7 @@ function filterImplicitActiveUserFromTeammates(teammates, activeUser) {
   let removedCount = 0;
   teammates.forEach((player) => {
     const name = String(player?.name || '').trim();
-    if (fuzzyMatchesPlayerName(name, trimmedActiveUser, 1)) {
+    if (isActiveUserNameMatch(name, trimmedActiveUser)) {
       removedCount += 1;
       return;
     }

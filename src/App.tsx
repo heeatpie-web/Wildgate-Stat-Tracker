@@ -658,6 +658,13 @@ const App: React.FC = () => {
 
         const normalizeName = (value: string) => String(value || '').trim().toLowerCase();
         const isUnknownLabel = (value: string) => UNKNOWN_PLAYER_LABELS.has(normalizeName(value));
+        const isCanonicalOrNearActive = (candidate: string, canonical: string): boolean => {
+            const candidateClean = String(candidate || '').trim();
+            const canonicalClean = String(canonical || '').trim();
+            if (!candidateClean || !canonicalClean) return false;
+            if (normalizeName(candidateClean) === normalizeName(canonicalClean)) return true;
+            return combinedNameSimilarityScore(candidateClean, canonicalClean) >= 90;
+        };
         const toNormalizationSignature = (inputMatches: Match[]) => (
             inputMatches.map((match) => {
                 const teammateSignature = (Array.isArray(match.teammates) ? match.teammates : [])
@@ -677,13 +684,12 @@ const App: React.FC = () => {
             const canonicalPlayer = !isUnknownLabel(matchPlayer)
                 ? matchPlayer
                 : (!isUnknownLabel(activePlayer) ? activePlayer : '');
-            const canonicalKey = normalizeName(canonicalPlayer);
 
             const teammatesRaw = Array.isArray(match.teammates) ? [...match.teammates] : [];
             const teammatesRawNormalized = teammatesRaw.map((name) => String(name || '').trim());
             const teammates = teammatesRawNormalized
                 .filter((name) => !!name && !(isUnknownLabel(matchPlayer) && isUnknownLabel(name)))
-                .filter((name) => !canonicalKey || normalizeName(name) !== canonicalKey);
+                .filter((name) => !isCanonicalOrNearActive(name, canonicalPlayer));
 
             const teammatesChanged = (next: string[]) => {
                 if (next.length !== teammatesRawNormalized.length) return true;

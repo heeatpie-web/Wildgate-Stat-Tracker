@@ -182,6 +182,19 @@ const buildTeamDraftFromPendingData = (
     if (!hasPendingTeamData) {
         return buildTeamDraft(sessionTeams, sessionShipTypes);
     }
+    const activeUserSeed = normalizeSubmittedName(
+        activeUser
+        || String(pendingMatchData?.player || '').trim()
+        || ''
+    );
+    const activeUserKey = normalizeNameKey(activeUserSeed);
+    const isActiveUserCandidate = (value: string): boolean => {
+        const cleaned = normalizeSubmittedName(String(value || ''));
+        const key = normalizeNameKey(cleaned);
+        if (!activeUserKey || !key) return false;
+        if (key === activeUserKey) return true;
+        return similarityScore(key, activeUserKey) >= 90;
+    };
 
     const friendlyCaptain = normalizeSubmittedName(
         activeUser
@@ -196,7 +209,9 @@ const buildTeamDraftFromPendingData = (
         : '';
     const friendlyPlayers = dedupeNames([
         friendlyCaptain,
-        ...((pendingMatchData?.teammates || []).map((name) => normalizeSubmittedName(String(name || '')))),
+        ...((pendingMatchData?.teammates || [])
+            .map((name) => normalizeSubmittedName(String(name || '')))
+            .filter((name) => !isActiveUserCandidate(name))),
     ].filter(Boolean));
     const friendlyTeamName = normalizeShipTeamLabel(String(pendingMatchData?.ship || ''))
         || normalizeSubmittedName(String((pendingMatchData as { playerTeamName?: string } | null | undefined)?.playerTeamName || ''))
@@ -217,7 +232,11 @@ const buildTeamDraftFromPendingData = (
     fromPendingOpponents.forEach((team, index) => {
         const teamColor = String(team?.color || '').trim() || 'unknown';
         const teamName = String(team?.teamName || '').trim() || `Enemy Team ${index + 1}`;
-        const players = dedupeNames((team?.players || []).map((name) => normalizeSubmittedName(String(name || ''))));
+        const players = dedupeNames(
+            (team?.players || [])
+                .map((name) => normalizeSubmittedName(String(name || '')))
+                .filter((name) => !isActiveUserCandidate(name))
+        );
         const shipType = normalizeSubmittedName(String(team?.shipType || ''))
             || resolveInitialTeamShip(`${teamColor}:${teamName}`, teamColor, players, sessionShipTypes);
         teams.push({

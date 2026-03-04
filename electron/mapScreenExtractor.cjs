@@ -178,6 +178,17 @@ function isShipOnlyTeamLabel(input) {
   return words.every((word) => SHIP_TYPE_TEAM_WORDS.has(word));
 }
 
+function sanitizeExtractedTeamName(rawTeamName, shipType = '') {
+  const cleaned = formatTeamName(String(rawTeamName || '')).trim();
+  if (!cleaned) return '';
+  const teamNameKey = normalizeShipTypeKey(cleaned);
+  const shipKey = normalizeShipTypeKey(shipType);
+  if (SHIP_TYPES.includes(teamNameKey)) return '';
+  if (shipKey && teamNameKey === shipKey) return '';
+  if (isShipOnlyTeamLabel(cleaned)) return '';
+  return cleaned;
+}
+
 /**
  * Known hazards/modifiers
  */
@@ -441,7 +452,7 @@ async function extractYourShip(
     }
   }
 
-  const teamName = teamNameParts.join(' ').trim();
+  const teamName = sanitizeExtractedTeamName(teamNameParts.join(' ').trim(), shipType);
 
   if (shipType) {
     return {
@@ -622,10 +633,12 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
     }
 
     const likelyEnemySlot = slotIdx <= 1 || Boolean(foundShip) || Boolean(teamName);
-    if (likelyEnemySlot && (foundShip || teamName) && !isNoiseTeamLabel(teamName)) {
+    const displayShipType = foundShip ? toTitle(foundShip) : 'Unknown';
+    const sanitizedTeamName = sanitizeExtractedTeamName(teamName, displayShipType);
+    if (likelyEnemySlot && (foundShip || sanitizedTeamName) && !isNoiseTeamLabel(sanitizedTeamName)) {
       enemyShips.push({
-        teamName: teamName || `Enemy Team ${enemyShips.length + 1}`,
-        shipType: foundShip ? toTitle(foundShip) : 'Unknown',
+        teamName: sanitizedTeamName || `Enemy Team ${enemyShips.length + 1}`,
+        shipType: displayShipType,
         teamColor: slotColor,
         color: slotColor,
         players: [],
@@ -763,7 +776,7 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
 
       const out = [];
       for (const item of paired) {
-        const teamName = String(item.teamName || '').trim();
+        const teamName = sanitizeExtractedTeamName(item.teamName, item.shipType);
         if (!teamName || isNoiseTeamLabel(teamName)) continue;
         let slotColor = 'unknown';
         if (imageBuffer && item.firstWord?.bbox) {
@@ -900,8 +913,12 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
           }
         }
 
+        const sanitizedTeamName = sanitizeExtractedTeamName(
+          teamName,
+          foundShip.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ')
+        );
         enemyShips.push({
-          teamName: teamName || `Enemy Team ${enemyShips.length + 1}`,
+          teamName: sanitizedTeamName || `Enemy Team ${enemyShips.length + 1}`,
           shipType: foundShip.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' '),
           teamColor: 'unknown',
           color: 'unknown',

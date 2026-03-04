@@ -877,13 +877,21 @@ const SmartCapturesPanel: React.FC = () => {
                 }
                 successMatches += 1;
 
-                const activeUserKey = normalizeOcrName(activeUser || match.player || '').toLowerCase();
+                const activeUserReference = normalizeOcrName(activeUser || match.player || '');
+                const isActiveUserLike = (rawName: string) => {
+                    const candidate = normalizeOcrName(rawName || '');
+                    const key = candidate.toLowerCase();
+                    if (!candidate || !key) return false;
+                    if (activeUserReference && key === activeUserReference.toLowerCase()) return true;
+                    if (!activeUserReference) return false;
+                    return combinedNameSimilarityScore(candidate, activeUserReference) >= 90;
+                };
                 const nextTeammates = (combined.teammates || [])
                     .map(t => t.name)
                     .filter(Boolean)
                     .filter((name) => {
                         const key = normalizeOcrName(name).toLowerCase();
-                        return !!key && (!activeUserKey || key !== activeUserKey);
+                        return !!key && !isActiveUserLike(name);
                     }) as string[];
                 const unresolvedOppTeams: OpponentTeam[] = (combined.opponentTeams || []).map(t => ({
                     teamName: t.teamName || 'Team',
@@ -906,7 +914,7 @@ const SmartCapturesPanel: React.FC = () => {
                         .flatMap((team) => team.players || [])
                         .filter((name) => {
                             const key = normalizeOcrName(name).toLowerCase();
-                            return !!key && (!activeUserKey || key !== activeUserKey);
+                            return !!key && !isActiveUserLike(name);
                         })
                 ));
                 const shipForTeammateCap = combined.playerShip?.shipType || match.ship || '';
@@ -1254,7 +1262,15 @@ const SmartCapturesPanel: React.FC = () => {
                                             const shipForCapacity = detectedShip || activeShip || telemetryDetectedShip || selectedMatch.ship || SHIPS[0];
                                             const friendlyShipSeed = detectedShip || telemetryDetectedShip || activeShip || selectedMatch.ship || '';
                                             const maxTeammates = getMaxTeammatesForShip(shipForCapacity);
-                                            const activeUserKey = normalizeOcrName(activeUser || selectedMatch.player || '').toLowerCase();
+                                            const activeUserReference = normalizeOcrName(activeUser || selectedMatch.player || '');
+                                            const isActiveUserLike = (rawName: string) => {
+                                                const candidate = normalizeOcrName(rawName || '');
+                                                const key = candidate.toLowerCase();
+                                                if (!candidate || !key) return false;
+                                                if (activeUserReference && key === activeUserReference.toLowerCase()) return true;
+                                                if (!activeUserReference) return false;
+                                                return combinedNameSimilarityScore(candidate, activeUserReference) >= 90;
+                                            };
                                             const dedupeNames = (values: string[]) => Array.from(new Set(
                                                 values
                                                     .map((value) => normalizeOcrName(String(value || '')))
@@ -1267,7 +1283,7 @@ const SmartCapturesPanel: React.FC = () => {
                                                     const resolved = resolveRosterName(raw);
                                                     if (!resolved) continue;
                                                     const key = normalizeOcrName(resolved).toLowerCase();
-                                                    if (!key || (activeUserKey && key === activeUserKey)) continue;
+                                                    if (!key || isActiveUserLike(resolved)) continue;
                                                     queueRosterCandidate(resolved);
                                                     if (existing.has(key)) continue;
                                                     if (nextTeammates.length >= maxTeammates) break;
@@ -1293,7 +1309,7 @@ const SmartCapturesPanel: React.FC = () => {
                                                                     const resolved = resolveRosterName(player.name || '');
                                                                     if (!resolved) return '';
                                                                     const key = normalizeOcrName(resolved).toLowerCase();
-                                                                    if (!key || (activeUserKey && key === activeUserKey)) return '';
+                                                                    if (!key || isActiveUserLike(resolved)) return '';
                                                                     queueRosterCandidate(resolved);
                                                                     return resolved;
                                                                 })
@@ -1318,7 +1334,7 @@ const SmartCapturesPanel: React.FC = () => {
                                                     .flatMap((team) => team.players || [])
                                                     .filter((name) => {
                                                         const key = normalizeOcrName(name).toLowerCase();
-                                                        return !!key && (!activeUserKey || key !== activeUserKey);
+                                                        return !!key && !isActiveUserLike(name);
                                                     })
                                             );
                                             if (shouldSyncCurrentSession) {
@@ -1793,11 +1809,22 @@ const SmartMatchDetail: React.FC<{
             () => normalizeOcrName(activeUser || match.player || '').toLowerCase(),
             [activeUser, match.player]
         );
+        const activeUserReference = useMemo(
+            () => normalizeOcrName(activeUser || match.player || ''),
+            [activeUser, match.player]
+        );
+        const isActiveUserLike = useCallback((rawName: string) => {
+            const candidate = normalizeOcrName(rawName || '');
+            const key = candidate.toLowerCase();
+            if (!candidate || !key) return false;
+            if (activeUserDisplayKey && key === activeUserDisplayKey) return true;
+            if (!activeUserReference) return false;
+            return combinedNameSimilarityScore(candidate, activeUserReference) >= 90;
+        }, [activeUserDisplayKey, activeUserReference]);
         const toDisplayPlayerName = useCallback((rawName: string) => {
-            const key = normalizeOcrName(rawName || '').toLowerCase();
-            if (activeUserDisplayKey && key && key === activeUserDisplayKey) return '(you)';
+            if (isActiveUserLike(rawName)) return '(you)';
             return rawName;
-        }, [activeUserDisplayKey]);
+        }, [isActiveUserLike]);
         const persistNameSourceHintsToPendingDraft = useCallback((nameSources: OcrNameSourceMap) => {
             const storeState = useAppStore.getState();
             const pending = (storeState.pendingMatchData || null) as Partial<Match> | null;
@@ -1930,25 +1957,38 @@ const SmartMatchDetail: React.FC<{
                     eliminatedByTeam: String(pendingDraft?.eliminatedByTeam || liveMatch.eliminatedByTeam || '') || undefined,
                 } as Match)
                 : liveMatch;
-            const dedupeNames = (names: string[]) => Array.from(new Set(
-                names
-                    .map((name) => String(name || '').trim())
-                    .filter(Boolean)
-            ));
+            const dedupeNames = (names: string[]) => {
+                const seen = new Set<string>();
+                const next: string[] = [];
+                names.forEach((name) => {
+                    const cleaned = normalizeOcrName(String(name || ''));
+                    const key = cleaned.toLowerCase();
+                    if (!cleaned || !key || seen.has(key)) return;
+                    seen.add(key);
+                    next.push(cleaned);
+                });
+                return next;
+            };
             const normalizedOpponentTeams: OpponentTeam[] = Array.isArray(latestMatch.opponentTeams) && latestMatch.opponentTeams.length > 0
-                ? latestMatch.opponentTeams
+                ? latestMatch.opponentTeams.map((team) => ({
+                    ...team,
+                    players: dedupeNames((team.players || []).filter((name) => !isActiveUserLike(name))),
+                }))
                 : (latestMatch.opponents || []).length > 0
                     ? [{
                         teamName: 'Enemy Team',
                         color: 'enemy',
                         shipType: '',
-                        players: [...(latestMatch.opponents || [])],
+                        players: dedupeNames((latestMatch.opponents || []).filter((name) => !isActiveUserLike(name))),
                     }]
                     : [];
 
             const captainSeed = normalizeOcrName(activeUser || latestMatch.player || 'You') || 'You';
             const friendlyTeamLabel = resolveFriendlyTeamLabel(latestMatch.ship, '', captainSeed);
-            const friendlySeed = dedupeNames([captainSeed, ...(latestMatch.teammates || [])]);
+            const friendlySeed = dedupeNames([
+                captainSeed,
+                ...(latestMatch.teammates || []).filter((name) => !isActiveUserLike(name)),
+            ]);
             const friendlyTeamKey = `friendly:${friendlyTeamLabel}`;
             const seededSessionTeams: Record<string, string[]> = {};
             const seededShipTypes: Record<string, string> = {};
@@ -1979,10 +2019,10 @@ const SmartMatchDetail: React.FC<{
                 }
             });
 
-            setSelectedTeammates(dedupeNames(latestMatch.teammates || []));
+            setSelectedTeammates(dedupeNames((latestMatch.teammates || []).filter((name) => !isActiveUserLike(name))));
             const seededOpponents = normalizedOpponentTeams.length > 0
                 ? dedupeNames(normalizedOpponentTeams.flatMap((team) => team.players || []))
-                : dedupeNames(latestMatch.opponents || []);
+                : dedupeNames((latestMatch.opponents || []).filter((name) => !isActiveUserLike(name)));
             setSelectedOpponents(seededOpponents);
             setSessionTeams(seededSessionTeams);
             setSessionShipTypes(seededShipTypes, 'manual');
@@ -2055,7 +2095,7 @@ const SmartMatchDetail: React.FC<{
                 ? priorResult
                 : 'Match Result';
             setShowWizard(wizardResult);
-        }, [activeUser, match, setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setShowWizard, setTimeMin, setTimeSec, setToast]);
+        }, [activeUser, isActiveUserLike, match, setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setShowWizard, setTimeMin, setTimeSec, setToast]);
 
         useEffect(() => {
             if (showWizard !== null) return;
@@ -2179,15 +2219,9 @@ const SmartMatchDetail: React.FC<{
         );
         const removePlayer = (type: 'teammate' | 'opponent', idx: number) => {
             const arr = type === 'teammate' ? [...(match.teammates || [])] : [...(match.opponents || [])];
-            if (type === 'teammate') {
-                const target = normalizeOcrName(arr[idx] || '').toLowerCase();
-                const selfKeys = [activeUser, match.player]
-                    .map((name) => normalizeOcrName(String(name || '')).toLowerCase())
-                    .filter(Boolean);
-                if (target && selfKeys.includes(target)) {
-                    setToast({ message: "You can't remove yourself from teammates.", type: 'error' });
-                    return;
-                }
+            if (type === 'teammate' && isActiveUserLike(arr[idx] || '')) {
+                setToast({ message: "You can't remove yourself from teammates.", type: 'error' });
+                return;
             }
             arr.splice(idx, 1);
             onUpdate({ ...match, [type === 'teammate' ? 'teammates' : 'opponents']: arr });
@@ -2358,8 +2392,9 @@ const SmartMatchDetail: React.FC<{
         )), []);
         const assignmentBoardTeams = useMemo<OcrTeamAssignmentTeam[]>(() => {
             const friendlyTeamName = resolveFriendlyTeamLabel(match.ship, '', activeUser || match.player || 'You');
-            const activeUserName = normalizeOcrName(activeUser || match.player || 'You').toLowerCase();
-            const friendlyPlayers = dedupeBoardNames([...(match.teammates || [])]).filter(name => normalizeOcrName(name).toLowerCase() !== activeUserName && name !== '');
+            const friendlyPlayers = dedupeBoardNames([...(match.teammates || [])]).filter((name) => (
+                !isActiveUserLike(name) && name !== ''
+            ));
             const normalizedOpponentTeams: OpponentTeam[] = Array.isArray(match.opponentTeams) && match.opponentTeams.length > 0
                 ? match.opponentTeams
                 : (match.opponents || []).length > 0
@@ -2378,7 +2413,7 @@ const SmartMatchDetail: React.FC<{
                 shipType: String(team.shipType || '').trim(),
                 // Also filter the active user out of any opponent team (OCR sometimes misassigns them)
                 players: dedupeBoardNames((team.players || []).filter(
-                    name => normalizeOcrName(name).toLowerCase() !== activeUserName && name !== ''
+                    (name) => !isActiveUserLike(name) && name !== ''
                 )),
             }));
             return [{
@@ -2388,7 +2423,7 @@ const SmartMatchDetail: React.FC<{
                 shipType: String(match.ship || ''),
                 players: friendlyPlayers,
             }, ...opponentBoardTeams];
-        }, [activeUser, dedupeBoardNames, match.opponentTeams, match.opponents, match.player, match.ship, match.teammates]);
+        }, [activeUser, dedupeBoardNames, isActiveUserLike, match.opponentTeams, match.opponents, match.player, match.ship, match.teammates]);
         const assignmentBoardFuzzyMatches = useMemo<Record<string, string>>(() => {
             if (!Array.isArray(pilotRegistry) || pilotRegistry.length === 0) return {};
             const exactRegistryKeys = new Set(
@@ -2663,19 +2698,11 @@ const SmartMatchDetail: React.FC<{
                 });
                 setReviewData(mergedData);
                 onUpdate({ ...match, ocrState: 'reviewing' });
+                persistNameSourceHintsToPendingDraft(nextNameSources);
                 setToast({
-                    message: `Analysis complete: ${successfulCount}/${imagePaths.length} screenshot${imagePaths.length === 1 ? '' : 's'} processed. Opening OCR review...`,
+                    message: `Analysis complete: ${successfulCount}/${imagePaths.length} screenshot${imagePaths.length === 1 ? '' : 's'} processed. Review before applying.`,
                     type: failedCount > 0 ? 'warning' : 'success',
                 });
-                // Auto-open the OCR wizard tab for immediate review
-                if (onApplyToSession) {
-                    const appliedMatch = onApplyToSession(mergedData);
-                    persistNameSourceHintsToPendingDraft(nextNameSources);
-                    openWizardForMatch({ matchOverride: appliedMatch, reusePendingDraft: false });
-                    window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
-                        detail: { matchId: Number(appliedMatch?.id || match.id || 0) || null },
-                    }));
-                }
             } catch (error) {
                 const reason = errorMessage(error);
                 setRerunProgress({
@@ -3167,6 +3194,10 @@ const SmartMatchDetail: React.FC<{
 
                         <Section title="Players" collapsible collapsed={!!collapsedSections.players} onToggle={() => toggleSection('players')}>
                             <div className="space-y-2">
+                                <div className="inline-flex items-center gap-2 rounded-control px-2 py-1.5 bg-success-soft/30 border border-success/20">
+                                    <span className="w-2 h-2 rounded-full bg-success" />
+                                    <span className="text-label-sm font-semibold text-success">(you)</span>
+                                </div>
                                 <OcrTeamAssignmentBoard
                                     teams={assignmentBoardTeams}
                                     shipOptions={SHIPS}

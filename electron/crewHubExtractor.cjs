@@ -1935,6 +1935,21 @@ function scoreAsPlayerName(text) {
  * Clean up OCR artifacts from player name
  * Supports: Latin, Extended Latin, Cyrillic, CJK characters
  */
+function splitCamelCaseFallback(name) {
+  const raw = String(name || '').trim();
+  if (!raw) return '';
+  if (/\s/.test(raw)) return raw;
+  if (raw.length <= 8) return raw;
+  const uppercaseCount = (raw.match(/[A-Z]/g) || []).length;
+  if (uppercaseCount < 3) return raw;
+  if (!/[a-z][A-Z]/.test(raw) && !/[A-Z][A-Z][a-z]/.test(raw)) return raw;
+  return raw
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function cleanupPlayerName(name) {
   if (!name) return '';
 
@@ -1985,6 +2000,7 @@ function cleanupPlayerName(name) {
   );
 
   cleaned = stripLikelyCrewHubUiDigitSuffix(cleaned);
+  cleaned = splitCamelCaseFallback(cleaned);
 
   return cleaned;
 }

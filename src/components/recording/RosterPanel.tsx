@@ -55,7 +55,7 @@ export const RosterPanel: React.FC = () => {
         const normalized = String(name || '').trim().toLowerCase();
         const me = String(activeUser || '').trim().toLowerCase();
         if (!normalized || !me) return name;
-        return normalized === me ? 'You' : name;
+        return normalized === me ? '(you)' : name;
     };
 
     // Manual lobby scan UI removed; Smart Capture auto-detects and applies roster/modifiers.
@@ -173,7 +173,7 @@ export const RosterPanel: React.FC = () => {
                             <span className="text-label-sm px-1.5 py-0.5 rounded-full md3-surface">{selectedTeammates.length}</span>
                         </div>
                     </div>
-                    {hasTeammates && (
+                    {hasTeammates ? (
                         <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto custom-scrollbar pr-1">
                             {selectedTeammates.map((p: string) => (
                                 <button
@@ -184,6 +184,11 @@ export const RosterPanel: React.FC = () => {
                                     {displayName(p)}
                                 </button>
                             ))}
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-2 rounded-control px-2 py-1.5 bg-success-soft/30 border border-success/20">
+                            <span className="w-2 h-2 rounded-full bg-success" />
+                            <span className="text-label-sm font-semibold text-success">(you)</span>
                         </div>
                     )}
                 </div>
