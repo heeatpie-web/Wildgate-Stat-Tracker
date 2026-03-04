@@ -1071,6 +1071,11 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 .ocr-assignment-team-card--color-friendly { --team-accent-color: #2563eb; }
 .ocr-assignment-team-card--color-unknown  { --team-accent-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 40%); }
 
+body[data-mode='twilight'] .ocr-assignment-team-card {
+  border-left-width: 4px;
+  border-left-color: var(--team-accent-color, color-mix(in srgb, var(--md-sys-color-outline), transparent 40%));
+}
+
 .ocr-assignment-team-head {
   display: flex;
   align-items: center;
@@ -2069,9 +2074,9 @@ body[data-mode='twilight'] .sc-detail-sticky-header {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
-  min-height: 76px;
+  gap: 10px;
+  padding: 12px 14px;
+  min-height: 70px;
   border-radius: var(--md-sys-shape-corner-large);
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 60%);
   background: color-mix(in srgb, var(--md-sys-color-surface-container), transparent 10%);
@@ -2098,49 +2103,27 @@ body[data-mode='twilight'] .sc-stat-card {
 
 .sc-stat-card__icon {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: box-shadow 120ms ease;
+  transition: box-shadow 120ms ease, background-color 120ms ease, border-color 120ms ease;
+  color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 38%);
+  background: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 92%);
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-on-surface), transparent 84%);
+  box-shadow: none;
 }
 
-.sc-stat-card--primary .sc-stat-card__icon {
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--md-sys-color-primary), transparent 78%),
-    color-mix(in srgb, var(--md-sys-color-tertiary), transparent 82%));
-  color: var(--md-sys-color-primary);
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-primary), transparent 72%);
-  box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--md-sys-color-primary), transparent 60%);
-}
-
-.sc-stat-card--danger .sc-stat-card__icon {
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--md-sys-color-danger), transparent 80%),
-    color-mix(in srgb, var(--md-sys-color-danger), transparent 90%));
-  color: var(--md-sys-color-danger);
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-danger), transparent 68%);
-  box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--md-sys-color-danger), transparent 65%);
-}
-
-.sc-stat-card--success .sc-stat-card__icon {
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--md-sys-color-success), transparent 80%),
-    color-mix(in srgb, var(--md-sys-color-success), transparent 90%));
-  color: var(--md-sys-color-success);
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-success), transparent 68%);
-  box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--md-sys-color-success), transparent 65%);
-}
-
+.sc-stat-card--primary .sc-stat-card__icon,
+.sc-stat-card--danger .sc-stat-card__icon,
+.sc-stat-card--success .sc-stat-card__icon,
 .sc-stat-card--warning .sc-stat-card__icon {
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--md-sys-color-warning), transparent 78%),
-    color-mix(in srgb, var(--md-sys-color-warning), transparent 88%));
-  color: var(--md-sys-color-warning);
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-warning), transparent 68%);
-  box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--md-sys-color-warning), transparent 65%);
+  color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 38%);
+  background: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 92%);
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-on-surface), transparent 84%);
+  box-shadow: none;
 }
 
 .sc-stat-card__body {

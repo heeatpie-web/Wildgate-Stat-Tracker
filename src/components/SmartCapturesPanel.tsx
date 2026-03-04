@@ -82,6 +82,8 @@ import {
 
 export { backfillOpponentTeamShipTypes } from '../utils/ocr/opponentTeamShipTypes';
 
+const IS_DEV_BUILD = import.meta.env.DEV || process.env.NODE_ENV !== 'production';
+
 const errorMessage = (error: unknown): string =>
     error instanceof Error ? error.message : 'Unknown error';
 
@@ -940,6 +942,9 @@ const SmartCapturesPanel: React.FC = () => {
                     ocrDebug: {
                         rawText: combined.rawText,
                         confidence: combined.overallConfidence,
+                        hazards: Array.isArray(combined.hazards)
+                            ? Array.from(new Set(combined.hazards.map((hazard) => String(hazard || '').trim()).filter(Boolean)))
+                            : undefined,
                         source: combined.ocrSource || match.ocrDebug?.source,
                         fallbackReason: combined.ocrFallbackReason || match.ocrDebug?.fallbackReason,
                         cloudError: combined.ocrCloudError || match.ocrDebug?.cloudError,
@@ -1514,7 +1519,9 @@ const SmartCapturesPanel: React.FC = () => {
                             <section className="md3-surface rounded-card p-4 border border-md-sys-outline/10" aria-labelledby="sc-tools-debug-heading">
                                 <h2 id="sc-tools-debug-heading" className="text-label-lg font-bold text-md-sys-on-surface mb-3">OCR Tools</h2>
                                 <p className="text-label-sm text-md-sys-on-surface/60 mb-3">
-                                    Adjust OCR capture boxes (ROI) and open OCR Debug tools directly from Smart Captures.
+                                    {IS_DEV_BUILD
+                                        ? 'Adjust OCR capture boxes (ROI) and open OCR Debug tools directly from Smart Captures.'
+                                        : 'Adjust OCR capture boxes (ROI) directly from Smart Captures.'}
                                 </p>
                                 <div className="flex flex-col gap-2">
                                     <Button
@@ -1526,14 +1533,16 @@ const SmartCapturesPanel: React.FC = () => {
                                     >
                                         Adjust OCR Boxes
                                     </Button>
-                                    <Button
-                                        type="button"
-                                        className="px-3 py-2 text-label-sm font-bold rounded-control w-full justify-start"
-                                        onClick={() => setActiveView('dev-ocr')}
-                                        icon={<FlaskConical size={14} />}
-                                    >
-                                        Open OCR Debug
-                                    </Button>
+                                    {IS_DEV_BUILD && (
+                                        <Button
+                                            type="button"
+                                            className="px-3 py-2 text-label-sm font-bold rounded-control w-full justify-start"
+                                            onClick={() => setActiveView('dev-ocr')}
+                                            icon={<FlaskConical size={14} />}
+                                        >
+                                            Open OCR Debug
+                                        </Button>
+                                    )}
                                 </div>
                             </section>
                             <section className="md3-surface rounded-card p-4 border border-md-sys-outline/10" aria-labelledby="sc-tools-artifact-repair-heading">
@@ -1758,7 +1767,6 @@ const SmartMatchDetail: React.FC<{
         const [ocrNameSources, setOcrNameSources] = useState<OcrNameSourceMap>({});
         const [rerunProgress, setRerunProgress] = useState<RerunProgressState>({ ...INITIAL_RERUN_PROGRESS });
         const [showSecondaryActions, setShowSecondaryActions] = useState(false);
-        const [loadoutTab, setLoadoutTab] = useState<'loadout' | 'ship-weapons'>('loadout');
         const secondaryActionsRef = useRef<HTMLDivElement | null>(null);
         const nonCurrentWizardSnapshotRef = useRef<NonCurrentWizardSnapshot | null>(null);
         const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
@@ -1766,6 +1774,8 @@ const SmartMatchDetail: React.FC<{
             players: false,
             modifiers: false,
             loadout: false,
+            loadoutDetails: false,
+            loadoutShipWeapons: false,
             poi: false,
             ocrMeta: true,
             telemetry: true,
@@ -2749,6 +2759,13 @@ const SmartMatchDetail: React.FC<{
             || !!String(rerunProgress.cloudStatus || '').trim()
             || !!String(rerunProgress.latestFile || '').trim()
             || !!String(rerunProgress.latestFileStatus || '').trim();
+        const hasExistingOcrAnalysis = (
+            !!match.ocrReviewedAt
+            || !!match.ocrDebug
+            || (match.ocrState != null && String(match.ocrState) !== 'queued')
+            || !!reviewData
+        );
+        const analyzeButtonLabel = hasExistingOcrAnalysis ? 'Re-analyze' : 'Analyze';
         const hasResult = match.result === 'Win' || match.result === 'Loss' || match.result === 'Draw';
         const hasArtifacts = (artifacts.images && artifacts.images.length > 0) || (match.artifacts && match.artifacts.length > 0);
         const queueStatus = getQueueStatus(match);
@@ -3129,25 +3146,25 @@ const SmartMatchDetail: React.FC<{
                     <div className="lg:col-span-9 lg:col-start-1 space-y-3 min-w-0 sc-detail-editor-block">
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sc-detail-stats-grid">
                             <EditableStatCard
-                                icon={<Clock size={15} />} label="Time" value={match.time || '--'}
+                                icon={<Clock size={14} className="text-md-sys-on-surface/62" />} label="Time" value={match.time || '--'}
                                 onSave={(v) => onUpdate({ ...match, time: v })}
                                 placeholder="MM:SS"
                                 accent="primary"
                             />
                             <EditableStatCard
-                                icon={<HeartCrack size={15} />} label="Damage" value={match.damageTaken?.toString() || '0'}
+                                icon={<HeartCrack size={14} className="text-md-sys-on-surface/62" />} label="Damage" value={match.damageTaken?.toString() || '0'}
                                 onSave={(v) => onUpdate({ ...match, damageTaken: parseInt(v) || 0 })}
                                 type="number"
                                 accent="danger"
                             />
                             <EditableStatCard
-                                icon={<Target size={15} />} label="Kills" value={totalKills.toString()}
+                                icon={<Target size={14} className="text-md-sys-on-surface/62" />} label="Kills" value={totalKills.toString()}
                                 readOnly
                                 accent="success"
                             />
                             <div className="sc-stat-card sc-stat-card--warning">
                                 <div className="sc-stat-card__icon">
-                                    <Trophy size={15} />
+                                    <Trophy size={14} className="text-md-sys-on-surface/62" />
                                 </div>
                                 <div className="sc-stat-card__body">
                                     <span className="sc-stat-card__label">Place</span>
@@ -3194,9 +3211,25 @@ const SmartMatchDetail: React.FC<{
 
                         <Section title="Players" collapsible collapsed={!!collapsedSections.players} onToggle={() => toggleSection('players')}>
                             <div className="space-y-2">
-                                <div className="inline-flex items-center gap-2 rounded-control px-2 py-1.5 bg-success-soft/30 border border-success/20">
-                                    <span className="w-2 h-2 rounded-full bg-success" />
-                                    <span className="text-label-sm font-semibold text-success">(you)</span>
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="inline-flex items-center gap-2 rounded-control px-2 py-1.5 bg-success-soft/30 border border-success/20">
+                                        <span className="w-2 h-2 rounded-full bg-success" />
+                                        <span className="text-label-sm font-semibold text-success">(you)</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="md3-btn-text text-label-xs font-bold text-danger"
+                                        onClick={() => onUpdate({
+                                            ...match,
+                                            teammates: [],
+                                            opponents: [],
+                                            opponentTeams: [],
+                                            eliminatedByTeam: undefined,
+                                        })}
+                                        title="Clear all detected players and team assignments"
+                                    >
+                                        Clear All
+                                    </button>
                                 </div>
                                 <OcrTeamAssignmentBoard
                                     teams={assignmentBoardTeams}
@@ -3315,159 +3348,164 @@ const SmartMatchDetail: React.FC<{
                         </Section>
 
                         <Section title="Loadout" collapsible collapsed={!!collapsedSections.loadout} onToggle={() => toggleSection('loadout')}>
-                            {/* Tab bar */}
-                            <div className="flex mb-3 rounded-lg overflow-hidden border border-md-sys-outline/15 text-label-xs font-bold uppercase tracking-wider">
-                                <button
-                                    type="button"
-                                    onClick={() => setLoadoutTab('loadout')}
-                                    className={`flex-1 py-1.5 transition-colors ${loadoutTab === 'loadout' ? 'bg-md-sys-primary/14 text-md-sys-on-surface' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/6'}`}
-                                >
-                                    Loadout
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setLoadoutTab('ship-weapons')}
-                                    className={`flex-1 py-1.5 transition-colors ${loadoutTab === 'ship-weapons' ? 'bg-md-sys-primary/14 text-md-sys-on-surface' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/6'}`}
-                                >
-                                    Ship Weapons
-                                </button>
-                            </div>
-
-                            {loadoutTab === 'loadout' && (
-                            <div className="space-y-3">
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="flex flex-col gap-1.5">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Prospector</span>
-                                            {loadoutTelemetrySourceBadgeLabel && (
-                                                <span className="px-1 py-px rounded text-[9px] font-bold bg-success-soft text-success leading-tight">{loadoutTelemetrySourceBadgeLabel}</span>
-                                            )}
-                                        </div>
-                                        <select
-                                            value={match.hero || ''}
-                                            onChange={(e) => onUpdate({ ...match, hero: e.target.value })}
-                                            className="h-8 md3-surface-high rounded-lg px-2.5 text-label-xs font-bold outline-none border border-md-sys-outline/10 focus:border-md-sys-primary/40 focus:ring-1 focus:ring-md-sys-primary/40 transition-all"
-                                        >
-                                            <option value="">--</option>
-                                            {CHARACTERS.map(c => <option key={c} value={c}>{c}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="flex flex-col gap-1.5">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Ship</span>
-                                            {loadoutTelemetrySourceBadgeLabel && (
-                                                <span className="px-1 py-px rounded text-[9px] font-bold bg-success-soft text-success leading-tight">{loadoutTelemetrySourceBadgeLabel}</span>
-                                            )}
-                                        </div>
-                                        <select
-                                            value={match.ship || ''}
-                                            onChange={(e) => onUpdate({ ...match, ship: e.target.value })}
-                                            className="h-8 md3-surface-high rounded-lg px-2.5 text-label-xs font-bold outline-none border border-md-sys-outline/10 focus:border-md-sys-primary/40 focus:ring-1 focus:ring-md-sys-primary/40 transition-all"
-                                        >
-                                            <option value="">--</option>
-                                            {SHIPS.map(s => <option key={s} value={s}>{s}</option>)}
-                                        </select>
-                                    </div>
+                            {loadoutTelemetrySourceBadgeLabel && (
+                                <div className="mb-3 inline-flex items-center gap-1.5 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                                    {loadoutTelemetrySourceBadgeLabel}
                                 </div>
-
-                                {((match.loadout?.characterWeapons && match.loadout.characterWeapons.filter(Boolean).slice(0, 2).length > 0) ||
-                                  (match.loadout?.characterEquipment && match.loadout.characterEquipment.filter(Boolean).slice(0, 2).length > 0)) && (
-                                    <>
-                                        <div className="h-px w-full bg-md-sys-outline/10" />
-                                        <div className="space-y-2">
-                                            {match.loadout?.characterWeapons && match.loadout.characterWeapons.filter(Boolean).slice(0, 2).length > 0 && (
-                                                <div className="flex gap-2 items-center">
-                                                    <div className="w-24 shrink-0 flex items-center gap-1">
-                                                        <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Weapons</span>
-                                                        {loadoutTelemetrySourceBadgeLabel && (
-                                                            <span className="px-1 py-px rounded text-[9px] font-bold bg-success-soft text-success leading-tight">{loadoutTelemetrySourceBadgeLabel}</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {match.loadout.characterWeapons.filter(Boolean).slice(0, 2).map((weapon, i) => (
-                                                            <span key={i} className="px-2 py-0.5 bg-success-soft text-success rounded-md text-label-xs font-bold">{weapon}</span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {match.loadout?.characterEquipment && match.loadout.characterEquipment.filter(Boolean).slice(0, 2).length > 0 && (
-                                                <div className="flex gap-2 items-center">
-                                                    <div className="w-24 shrink-0 flex items-center gap-1">
-                                                        <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Equipment</span>
-                                                        {loadoutTelemetrySourceBadgeLabel && (
-                                                            <span className="px-1 py-px rounded text-[9px] font-bold bg-success-soft text-success leading-tight">{loadoutTelemetrySourceBadgeLabel}</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {match.loadout.characterEquipment.filter(Boolean).slice(0, 2).map((equipment, i) => (
-                                                            <span key={i} className="px-2 py-0.5 bg-success-soft text-success rounded-md text-label-xs font-bold">{equipment}</span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </>
-                                )}
-                            </div>
                             )}
-
-                            {loadoutTab === 'ship-weapons' && (
-                            <div className="space-y-1.5">
-                                <div className="w-full flex items-center justify-between">
-                                    <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Ship Weapons</span>
-                                    <span className="text-label-xs font-bold bg-md-sys-surface-container-high px-2 py-0.5 rounded-pill text-md-sys-on-surface/70">
-                                        {detailShipWeaponTotal}/10 slots
-                                    </span>
-                                </div>
-                                <div className="space-y-1">
-                                    {Object.entries(detailShipWeaponCounts).length === 0 ? (
-                                        <span className="text-label-xs opacity-55">No ship weapons selected.</span>
-                                    ) : (
-                                        Object.entries(detailShipWeaponCounts).map(([weaponName, qty]) => (
-                                            <div key={weaponName} className="flex items-center justify-between gap-2 rounded-md px-2 py-0.5 md3-surface-high">
-                                                <span className="text-label-xs font-bold">{weaponName}</span>
-                                                <div className="inline-flex items-center gap-1">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setDetailShipWeaponQuantity(weaponName, qty - 1)}
-                                                        className="w-5 h-5 rounded-control md3-surface inline-flex items-center justify-center text-label-xs text-md-sys-on-surface/70 hover:text-md-sys-on-surface"
-                                                        aria-label={`Decrease ${weaponName}`}
+                            <div className="space-y-3">
+                                <div className="rounded-lg border border-md-sys-outline/10 overflow-hidden">
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleSection('loadoutDetails')}
+                                        className="w-full px-2.5 py-1.5 flex items-center justify-between text-label-xs font-bold uppercase tracking-wider bg-md-sys-surface-container-high hover:bg-md-sys-on-surface/6 transition-colors"
+                                    >
+                                        <span>Loadout</span>
+                                        <span>{collapsedSections.loadoutDetails ? 'Show' : 'Hide'}</span>
+                                    </button>
+                                    {!collapsedSections.loadoutDetails && (
+                                        <div className="p-2.5 space-y-3">
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="flex flex-col gap-1.5">
+                                                    <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Prospector</span>
+                                                    <select
+                                                        value={match.hero || ''}
+                                                        onChange={(e) => onUpdate({ ...match, hero: e.target.value })}
+                                                        className="h-8 md3-surface-high rounded-lg px-2.5 text-label-xs font-bold outline-none border border-md-sys-outline/10 focus:border-md-sys-primary/40 focus:ring-1 focus:ring-md-sys-primary/40 transition-all"
                                                     >
-                                                        -
-                                                    </button>
-                                                    <span className="min-w-[1.25rem] text-center text-label-xs font-black">{qty}</span>
-                                                    <button
-                                                        type="button"
-                                                        disabled={detailShipWeaponTotal >= 10}
-                                                        onClick={() => setDetailShipWeaponQuantity(weaponName, qty + 1)}
-                                                        className="w-5 h-5 rounded-control md3-surface inline-flex items-center justify-center text-label-xs text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
-                                                        aria-label={`Increase ${weaponName}`}
+                                                        <option value="">--</option>
+                                                        {CHARACTERS.map(c => <option key={c} value={c}>{c}</option>)}
+                                                    </select>
+                                                </div>
+                                                <div className="flex flex-col gap-1.5">
+                                                    <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Ship</span>
+                                                    <select
+                                                        value={match.ship || ''}
+                                                        onChange={(e) => onUpdate({ ...match, ship: e.target.value })}
+                                                        className="h-8 md3-surface-high rounded-lg px-2.5 text-label-xs font-bold outline-none border border-md-sys-outline/10 focus:border-md-sys-primary/40 focus:ring-1 focus:ring-md-sys-primary/40 transition-all"
                                                     >
-                                                        +
-                                                    </button>
+                                                        <option value="">--</option>
+                                                        {SHIPS.map(s => <option key={s} value={s}>{s}</option>)}
+                                                    </select>
                                                 </div>
                                             </div>
-                                        ))
+
+                                            {((match.loadout?.characterWeapons && match.loadout.characterWeapons.filter(Boolean).length > 0) ||
+                                                (match.loadout?.characterEquipment && match.loadout.characterEquipment.filter(Boolean).length > 0)) && (
+                                                <>
+                                                    <div className="h-px w-full bg-md-sys-outline/10" />
+                                                    <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                                                        {match.loadout?.characterWeapons && match.loadout.characterWeapons.filter(Boolean).length > 0 && (
+                                                            <div className="flex gap-2 items-start">
+                                                                <div className="w-24 shrink-0">
+                                                                    <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Weapons</span>
+                                                                </div>
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {match.loadout.characterWeapons.filter(Boolean).map((weapon, i) => (
+                                                                        <span key={i} className="px-2 py-0.5 bg-success-soft text-success rounded-md text-label-xs font-bold">{weapon}</span>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {match.loadout?.characterEquipment && match.loadout.characterEquipment.filter(Boolean).length > 0 && (
+                                                            <div className="flex gap-2 items-start">
+                                                                <div className="w-24 shrink-0">
+                                                                    <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Equipment</span>
+                                                                </div>
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {match.loadout.characterEquipment.filter(Boolean).map((equipment, i) => (
+                                                                        <span key={i} className="px-2 py-0.5 bg-success-soft text-success rounded-md text-label-xs font-bold">{equipment}</span>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        {match.loadout?.perks && match.loadout.perks.filter(Boolean).length > 0 && (
+                                                            <div className="flex gap-2 items-start">
+                                                                <div className="w-24 shrink-0">
+                                                                    <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Perks</span>
+                                                                </div>
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {match.loadout.perks.filter(Boolean).map((perk, i) => (
+                                                                        <span key={i} className="px-2 py-0.5 bg-md-sys-surface-container-high rounded-md text-label-xs font-semibold">{perk}</span>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
-                                <div className="flex flex-wrap gap-1">
-                                    {WEAPONS
-                                        .filter((weapon) => !detailShipWeaponCounts[weapon])
-                                        .map((weapon) => (
-                                            <button
-                                                key={weapon}
-                                                type="button"
-                                                disabled={detailShipWeaponTotal >= 10}
-                                                onClick={() => setDetailShipWeaponQuantity(weapon, 1)}
-                                                className="px-1.5 py-0.5 rounded-md text-label-xs font-bold md3-surface-high text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
-                                            >
-                                                + {weapon}
-                                            </button>
-                                        ))}
+
+                                <div className="rounded-lg border border-md-sys-outline/10 overflow-hidden">
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleSection('loadoutShipWeapons')}
+                                        className="w-full px-2.5 py-1.5 flex items-center justify-between text-label-xs font-bold uppercase tracking-wider bg-md-sys-surface-container-high hover:bg-md-sys-on-surface/6 transition-colors"
+                                    >
+                                        <span>Ship Weapons</span>
+                                        <span>{collapsedSections.loadoutShipWeapons ? 'Show' : 'Hide'}</span>
+                                    </button>
+                                    {!collapsedSections.loadoutShipWeapons && (
+                                        <div className="p-2.5 space-y-1.5">
+                                            <div className="w-full flex items-center justify-between">
+                                                <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Ship Weapons</span>
+                                                <span className="text-label-xs font-bold bg-md-sys-surface-container-high px-2 py-0.5 rounded-pill text-md-sys-on-surface/70">
+                                                    {detailShipWeaponTotal}/10 slots
+                                                </span>
+                                            </div>
+                                            <div className="space-y-1">
+                                                {Object.entries(detailShipWeaponCounts).length === 0 ? (
+                                                    <span className="text-label-xs opacity-55">No ship weapons selected.</span>
+                                                ) : (
+                                                    Object.entries(detailShipWeaponCounts).map(([weaponName, qty]) => (
+                                                        <div key={weaponName} className="flex items-center justify-between gap-2 rounded-md px-2 py-0.5 md3-surface-high">
+                                                            <span className="text-label-xs font-bold">{weaponName}</span>
+                                                            <div className="inline-flex items-center gap-1">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setDetailShipWeaponQuantity(weaponName, qty - 1)}
+                                                                    className="w-5 h-5 rounded-control md3-surface inline-flex items-center justify-center text-label-xs text-md-sys-on-surface/70 hover:text-md-sys-on-surface"
+                                                                    aria-label={`Decrease ${weaponName}`}
+                                                                >
+                                                                    -
+                                                                </button>
+                                                                <span className="min-w-[1.25rem] text-center text-label-xs font-black">{qty}</span>
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={detailShipWeaponTotal >= 10}
+                                                                    onClick={() => setDetailShipWeaponQuantity(weaponName, qty + 1)}
+                                                                    className="w-5 h-5 rounded-control md3-surface inline-flex items-center justify-center text-label-xs text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
+                                                                    aria-label={`Increase ${weaponName}`}
+                                                                >
+                                                                    +
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                            <div className="flex flex-wrap gap-1">
+                                                {WEAPONS
+                                                    .filter((weapon) => !detailShipWeaponCounts[weapon])
+                                                    .map((weapon) => (
+                                                        <button
+                                                            key={weapon}
+                                                            type="button"
+                                                            disabled={detailShipWeaponTotal >= 10}
+                                                            onClick={() => setDetailShipWeaponQuantity(weapon, 1)}
+                                                            className="px-1.5 py-0.5 rounded-md text-label-xs font-bold md3-surface-high text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
+                                                        >
+                                                            + {weapon}
+                                                        </button>
+                                                    ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
-                            )}
-
                         </Section>
 
                         <Section title="Points of Interest">
@@ -3559,7 +3597,7 @@ const SmartMatchDetail: React.FC<{
                         </Section>
                     </div>
 
-                    <div className="lg:col-span-3 lg:col-start-10 space-y-3 min-w-0 sc-detail-rail-block" ref={screenshotsSectionRef}>
+                    <div className="lg:col-span-3 lg:col-start-10 lg:self-start space-y-3 min-w-0 sc-detail-rail-block" ref={screenshotsSectionRef}>
                         {artifacts.images.length > 0 && (
                             <div className="rounded-card md3-surface-high p-3 border border-md-sys-outline/10 space-y-3">
                                 <div className="flex flex-col gap-2">
@@ -3572,7 +3610,7 @@ const SmartMatchDetail: React.FC<{
                                             title="Run OCR analysis on the bundled screenshots"
                                         >
                                             <RefreshCw size={12} className={rerunning ? 'animate-spin' : ''} />
-                                            {rerunning ? 'Analyzing...' : `Re-analyze ${countImages(artifacts.images.length > 0 ? artifacts.images : (match.artifacts || []))}`}
+                                            {rerunning ? 'Analyzing...' : `${analyzeButtonLabel} ${countImages(artifacts.images.length > 0 ? artifacts.images : (match.artifacts || []))}`}
                                         </button>
                                     </div>
                                 </div>
