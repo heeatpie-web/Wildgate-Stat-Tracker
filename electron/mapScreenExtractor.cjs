@@ -231,7 +231,7 @@ const PLAYER_NOISE_WORDS = new Set([
  * @param {Object} layoutOverrides - Optional percentage-based layout overrides
  * @returns {Promise<Object>} Extracted data
  */
-async function extractMapScreen(imageBuffer, ocrResult, imageWidth, imageHeight, layoutOverrides = null) {
+async function extractMapScreen(imageBuffer, ocrResult, imageWidth, imageHeight, layoutOverrides = null, options = null) {
   console.log('[MapScreen] Starting extraction');
   const layout = resolveMapLayout(layoutOverrides);
 
@@ -285,7 +285,8 @@ async function extractMapScreen(imageBuffer, ocrResult, imageWidth, imageHeight,
       text,
       imageWidth,
       imageHeight,
-      layout
+      layout,
+      options?.yourShipRegionWords
     );
 
     // Step 2: Extract ENEMY SHIPS info
@@ -330,8 +331,29 @@ async function extractMapScreen(imageBuffer, ocrResult, imageWidth, imageHeight,
 /**
  * Extract YOUR SHIP info from top-left region
  */
-async function extractYourShip(imageBuffer, words, lines, text, imageWidth, imageHeight, layout = LAYOUT) {
+async function extractYourShip(
+  imageBuffer,
+  words,
+  lines,
+  text,
+  imageWidth,
+  imageHeight,
+  layout = LAYOUT,
+  yourShipRegionWords = null
+) {
   console.log('[MapScreen] Extracting YOUR SHIP');
+
+  const dedicatedRegionWords = Array.isArray(yourShipRegionWords)
+    ? yourShipRegionWords
+    : [];
+  if (dedicatedRegionWords.length > 0) {
+    const preview = dedicatedRegionWords
+      .map((word) => String(word?.text || '').trim())
+      .filter(Boolean)
+      .slice(0, 18);
+    console.log(`[MapScreen] YOUR_SHIP dedicated region OCR words (${dedicatedRegionWords.length}): ${preview.join(' | ')}`);
+  }
+  const candidateWords = [...(Array.isArray(words) ? words : []), ...dedicatedRegionWords];
 
   // Define region bounds
   const bounds = {
@@ -343,7 +365,7 @@ async function extractYourShip(imageBuffer, words, lines, text, imageWidth, imag
 
   // Filter words in YOUR SHIP region.
   // Drop very-low-confidence words (icon artefacts) and the far-left icon column (x<5%).
-  const regionWords = words.filter(w => {
+  const regionWords = candidateWords.filter(w => {
     if (!w.bbox) return false;
     const centerX = (w.bbox.x0 + w.bbox.x1) / 2;
     const centerY = (w.bbox.y0 + w.bbox.y1) / 2;

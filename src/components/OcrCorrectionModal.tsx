@@ -1230,28 +1230,30 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                         </span>
                                         <span className="text-label-sm opacity-60">{reviewScreenshots.length} image(s)</span>
                                     </div>
-                                    <div className="flex gap-2 overflow-x-auto pb-1">
-                                        {reviewScreenshots.map((imagePath, index) => (
-                                            <button
-                                                key={`${imagePath}-${index}`}
-                                                type="button"
-                                                onClick={() => setLightboxIdx(index)}
-                                                className="rounded-control border border-md-sys-outline/20 p-1 bg-md-sys-surface min-w-[92px] hover:border-md-sys-primary/40 transition-all"
-                                                aria-label={`Open screenshot ${index + 1}`}
-                                            >
-                                                <div className="w-[82px] h-[56px] rounded overflow-hidden bg-md-sys-on-surface/5">
-                                                    <LocalImage
-                                                        src={imagePath}
-                                                        alt={`Reference screenshot ${index + 1}`}
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                </div>
-                                                <div className="mt-1 flex items-center justify-center gap-1 text-label-xs opacity-70">
-                                                    <Eye size={10} />
-                                                    #{index + 1}
-                                                </div>
-                                            </button>
-                                        ))}
+                                    <div className="overflow-x-auto pb-1">
+                                        <div className="flex flex-col gap-3 min-w-[800px]">
+                                            {reviewScreenshots.map((imagePath, index) => (
+                                                <button
+                                                    key={`${imagePath}-${index}`}
+                                                    type="button"
+                                                    onClick={() => setLightboxIdx(index)}
+                                                    className="rounded-control border border-md-sys-outline/20 p-2 bg-md-sys-surface w-full hover:border-md-sys-primary/40 transition-all"
+                                                    aria-label={`Open screenshot ${index + 1}`}
+                                                >
+                                                    <div className="w-full min-h-[220px] md:min-h-[300px] lg:min-h-[380px] rounded overflow-hidden bg-md-sys-on-surface/5">
+                                                        <LocalImage
+                                                            src={imagePath}
+                                                            alt={`Reference screenshot ${index + 1}`}
+                                                            className="w-full h-full object-contain"
+                                                        />
+                                                    </div>
+                                                    <div className="mt-1 flex items-center justify-center gap-1 text-label-xs opacity-70">
+                                                        <Eye size={11} />
+                                                        Screenshot #{index + 1}
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
                             )}

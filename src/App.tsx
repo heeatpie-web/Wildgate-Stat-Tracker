@@ -658,39 +658,46 @@ const App: React.FC = () => {
         const normalizeName = (value: string) => String(value || '').trim().toLowerCase();
         const isUnknownLabel = (value: string) => UNKNOWN_PLAYER_LABELS.has(normalizeName(value));
 
-        const withSelfBackfill = matches.map((match) => {
+        const withImplicitSelf = matches.map((match) => {
             const matchPlayer = String(match.player || '').trim();
             const activePlayer = String(activeUser || '').trim();
             const canonicalPlayer = !isUnknownLabel(matchPlayer)
                 ? matchPlayer
                 : (!isUnknownLabel(activePlayer) ? activePlayer : '');
-            if (!canonicalPlayer) return match;
             const teammatesRaw = Array.isArray(match.teammates) ? [...match.teammates] : [];
+            const teammatesRawNormalized = teammatesRaw.map((name) => String(name || '').trim());
             const teammates = teammatesRaw
                 .map((name) => String(name || '').trim())
                 .filter((name) => !!name && !(isUnknownLabel(matchPlayer) && isUnknownLabel(name)));
-            const canonicalKey = normalizeName(canonicalPlayer);
-            const hasSelf = teammates.some((name) => normalizeName(name) === canonicalKey);
             const needsPlayerRepair = !matchPlayer || isUnknownLabel(matchPlayer);
-            if (hasSelf) {
-                if (teammates.length === teammatesRaw.length && !needsPlayerRepair) return match;
+            const teammatesChanged = (next: string[]) => (
+                next.length !== teammatesRawNormalized.length
+                || next.some((name, index) => name !== teammatesRawNormalized[index])
+            );
+            if (!canonicalPlayer) {
+                if (!teammatesChanged(teammates)) return match;
                 return {
                     ...match,
-                    player: needsPlayerRepair ? canonicalPlayer : match.player,
                     teammates,
                 };
             }
+            const canonicalKey = normalizeName(canonicalPlayer);
+            const teammatesWithoutSelf = teammates
+                .filter((name) => normalizeName(name) !== canonicalKey);
+            const nextPlayer = needsPlayerRepair ? canonicalPlayer : match.player;
+            const playerChanged = String(nextPlayer || '') !== String(match.player || '');
+            if (!teammatesChanged(teammatesWithoutSelf) && !playerChanged) return match;
             return {
                 ...match,
-                player: needsPlayerRepair ? canonicalPlayer : match.player,
-                teammates: [...teammates, canonicalPlayer],
+                player: nextPlayer,
+                teammates: teammatesWithoutSelf,
             };
         });
 
-        const changed = withSelfBackfill.some((match, idx) => match !== matches[idx]);
+        const changed = withImplicitSelf.some((match, idx) => match !== matches[idx]);
 
         if (changed) {
-            setMatches(withSelfBackfill);
+            setMatches(withImplicitSelf);
             return;
         }
     }, [activeUser, isStoreLoading, matches, setMatches]);
@@ -1850,6 +1857,16 @@ const App: React.FC = () => {
             setSelectedOpponents((prev: string[]) => dedupeNames([...prev, ...mergedOpponents]));
         }
 
+        const ocrSourcePath = (Array.isArray(data.analysisPathsUsed) ? data.analysisPathsUsed : [])
+            .find((entry) => typeof entry === 'string' && String(entry || '').trim().length > 0);
+        const ocrSourceCapture = ocrSourcePath
+            ? {
+                screenshotPath: String(ocrSourcePath),
+                screenshotLabel: String(ocrSourcePath).split(/[\\/]/).pop() || 'OCR Screenshot',
+                capturedAt: Number(data.captureTimestamp || Date.now()),
+            }
+            : undefined;
+
         const autoAppliedPlayers = [...autoAppliedTeammates, ...mergedOpponents];
         autoAppliedPlayers.forEach((player) => {
             const normalized = normalizeOcrName(player || '');
@@ -1867,7 +1884,8 @@ const App: React.FC = () => {
                 bestMatch: suggestions.bestMatch,
                 bestScore: suggestions.bestScore,
                 suggestions: suggestions.suggestions,
-                source: 'ocr'
+                source: 'ocr',
+                sourceCapture: ocrSourceCapture,
             });
             pendingRosterCandidateKeys.add(key);
         });

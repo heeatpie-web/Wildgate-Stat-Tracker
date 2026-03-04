@@ -44,14 +44,18 @@ interface OcrTeamAssignmentBoardProps {
     onAddToRoster?: (name: string) => void;
 }
 
-const TEAM_COLOR_OPTIONS = ['red', 'orange', 'yellow', 'green', 'blue', 'cyan', 'purple', 'friendly', 'unknown'] as const;
-const TEAM_COLOR_CYCLE = ['red', 'orange', 'yellow', 'green', 'blue', 'cyan', 'purple', 'unknown'] as const;
+const TEAM_COLOR_OPTIONS = ['red', 'orange', 'yellow', 'yellowgreen', 'green', 'blue', 'cyan', 'purple', 'friendly', 'unknown'] as const;
+const TEAM_COLOR_CYCLE = ['red', 'orange', 'yellow', 'yellowgreen', 'green', 'blue', 'cyan', 'purple', 'unknown'] as const;
 const DRAG_DATA_KEY = 'application/x-wildgate-player-drag';
 const TEAM_COLOR_OPTION_LIST = [...TEAM_COLOR_CYCLE];
 
 const normalizeColorToken = (value: string): string => {
     const normalized = String(value || '').trim().toLowerCase();
     if (!normalized) return 'unknown';
+    const compact = normalized.replace(/[\s_-]+/g, '');
+    if (compact.includes('yellowgreen') || compact.includes('yellowlime') || compact.includes('lime')) {
+        return 'yellowgreen';
+    }
     if (TEAM_COLOR_OPTIONS.includes(normalized as typeof TEAM_COLOR_OPTIONS[number])) return normalized;
     return 'unknown';
 };
@@ -202,12 +206,13 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                     const friendlyTeam = teamIndex === friendlyTeamIndex;
                     const displayColor = friendlyTeam ? 'friendly' : normalizedColor;
                     const isOcrDetected = !friendlyTeam && ocrDetectedTeamIndices?.has(teamIndex);
+                    const shouldSpanFullRow = !friendlyTeam && normalizedColor === 'yellowgreen';
                     return (
                         <div
                             key={`${team.key}-${teamIndex}`}
                             data-testid={`ocr-team-card-${teamIndex}`}
                             className={`ocr-assignment-team-card md3-surface-high ocr-assignment-team-card--color-${displayColor} ${dragHoverTeamIndex === teamIndex ? 'ocr-assignment-team-card--hover' : ''
-                                }`}
+                                } ${shouldSpanFullRow ? 'ocr-assignment-team-card--full-row' : ''}`}
                             onDragOver={(event) => allowDrop(event, teamIndex)}
                             onDragLeave={() => setDragHoverTeamIndex(null)}
                             onDrop={(event) => dropPlayer(event, teamIndex, null)}

@@ -171,7 +171,23 @@ export const resolveFriendlyTeamLabel = (
     || 'Friendly Team'
 );
 
-const POSITIONAL_TEAM_COLOR_ORDER = ['red', 'orange', 'yellow', 'green'] as const;
+const POSITIONAL_TEAM_COLOR_ORDER = ['red', 'orange', 'yellow', 'yellowgreen', 'green'] as const;
+const OPPONENT_TEAM_DISPLAY_ORDER = ['red', 'orange', 'yellow', 'yellowgreen', 'green', 'blue', 'cyan', 'purple', 'unknown'] as const;
+const OPPONENT_TEAM_DISPLAY_ORDER_INDEX: Record<string, number> = OPPONENT_TEAM_DISPLAY_ORDER
+    .reduce<Record<string, number>>((acc, color, index) => {
+        acc[color] = index;
+        return acc;
+    }, {});
+
+const normalizeOpponentTeamColorToken = (rawColor: string | null | undefined): string => {
+    const compact = String(rawColor || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+    if (!compact) return 'unknown';
+    if (compact.includes('yellowgreen') || compact.includes('yellowlime') || compact.includes('lime')) {
+        return 'yellowgreen';
+    }
+    const normalized = normalizeTeamColor(rawColor);
+    return normalized || 'unknown';
+};
 
 const applyPositionalTeamColorFallback = (
     teams: OpponentTeam[],
@@ -179,7 +195,7 @@ const applyPositionalTeamColorFallback = (
 ): OpponentTeam[] => {
     const claimed = new Set<string>();
     teams.forEach((team) => {
-        const parsed = normalizeTeamColor(team.color);
+        const parsed = normalizeOpponentTeamColorToken(team.color);
         if (parsed !== 'unknown') {
             claimed.add(parsed);
             return;
@@ -188,7 +204,7 @@ const applyPositionalTeamColorFallback = (
     const fallbackQueue = POSITIONAL_TEAM_COLOR_ORDER.filter((color) => !claimed.has(color));
     let fallbackCursor = 0;
     return teams.map((team, index) => {
-        const parsed = normalizeTeamColor(team.color);
+        const parsed = normalizeOpponentTeamColorToken(team.color);
         if (parsed !== 'unknown') {
             return { ...team, color: parsed };
         }
@@ -200,7 +216,7 @@ const applyPositionalTeamColorFallback = (
                 color: positional,
             };
         }
-        const assigned = normalizeTeamColor(assignedColors[index] || '');
+        const assigned = normalizeOpponentTeamColorToken(assignedColors[index] || '');
         return {
             ...team,
             color: assigned !== 'unknown' ? assigned : 'unknown',
@@ -283,7 +299,10 @@ const SmartCapturesPanel: React.FC = () => {
     const getMaxTeammatesForShip = useCallback((shipType?: string | null) => (
         getMaxTeammatesForShipLimit(shipType)
     ), []);
-    const queueRosterCandidate = useCallback((rawName: string) => {
+    const queueRosterCandidate = useCallback((
+        rawName: string,
+        sourceCapture?: { screenshotPath?: string; screenshotLabel?: string; capturedAt?: number }
+    ) => {
         const normalized = normalizeOcrName(rawName || '');
         if (!normalized || normalized.length < 2) return;
         const hasExact = pilotRegistry.some((pilot) => (
@@ -309,6 +328,13 @@ const SmartCapturesPanel: React.FC = () => {
             bestScore: suggestions[0]?.score,
             suggestions,
             source: 'ocr',
+            sourceCapture: sourceCapture?.screenshotPath
+                ? {
+                    screenshotPath: sourceCapture.screenshotPath,
+                    screenshotLabel: sourceCapture.screenshotLabel || 'OCR Screenshot',
+                    capturedAt: sourceCapture.capturedAt,
+                }
+                : undefined,
         });
         setToast({ message: `Queued roster candidate: ${normalized}`, type: 'info' });
     }, [addPendingReview, pendingReviews, pilotRegistry, setToast]);
@@ -1239,6 +1265,15 @@ const SmartCapturesPanel: React.FC = () => {
                                             const shipForCapacity = detectedShip || activeShip || telemetryDetectedShip || selectedMatch.ship || SHIPS[0];
                                             const friendlyShipSeed = detectedShip || telemetryDetectedShip || activeShip || selectedMatch.ship || '';
                                             const maxTeammates = getMaxTeammatesForShip(shipForCapacity);
+                                            const sourceScreenshotPath = (selectedMatch.artifacts || [])
+                                                .find((artifactPath) => IMAGE_EXTS.some((ext) => String(artifactPath || '').toLowerCase().endsWith(ext))) || '';
+                                            const sourceCapture = sourceScreenshotPath
+                                                ? {
+                                                    screenshotPath: sourceScreenshotPath,
+                                                    screenshotLabel: sourceScreenshotPath.split(/[\\/]/).pop() || 'OCR Screenshot',
+                                                    capturedAt: Number(selectedMatch.timestamp || Date.now()),
+                                                }
+                                                : undefined;
 
                                             const teammateBaseline = shouldSyncCurrentSession
                                                 ? selectedTeammates
@@ -1247,7 +1282,7 @@ const SmartCapturesPanel: React.FC = () => {
                                             if (data.teammates?.length > 0) {
                                                 const existing = new Set(mergedTeammates.map(n => normalizeOcrName(n).toLowerCase()));
                                                 for (const raw of data.teammates.map(t => t.name).filter(Boolean)) {
-                                                    queueRosterCandidate(raw);
+                                                    queueRosterCandidate(raw, sourceCapture);
                                                     const resolved = resolveRosterName(raw);
                                                     if (!resolved) continue;
                                                     const key = normalizeOcrName(resolved).toLowerCase();
@@ -1268,7 +1303,7 @@ const SmartCapturesPanel: React.FC = () => {
                                             let mergedOpponents = [...opponentBaseline];
                                             if (data.opponentTeams?.length > 0) {
                                                 data.opponentTeams.forEach((team) => {
-                                                    team.players.forEach((player) => queueRosterCandidate(player.name || ''));
+                                                    team.players.forEach((player) => queueRosterCandidate(player.name || '', sourceCapture));
                                                 });
                                                 const unresolvedOpponentTeams: OpponentTeam[] = data.opponentTeams.map((team) => ({
                                                     teamName: team.teamName || 'Unknown Team',
@@ -2379,16 +2414,26 @@ const SmartMatchDetail: React.FC<{
                         players: dedupeBoardNames(match.opponents || []),
                     }]
                     : [];
-            const opponentBoardTeams = normalizedOpponentTeams.map((team, index) => ({
-                key: `${String(team.color || `enemy-${index + 1}`).trim()}:${String(team.teamName || `Enemy Team ${index + 1}`).trim()}`,
-                color: String(team.color || 'unknown').trim() || 'unknown',
-                teamName: String(team.teamName || `Enemy Team ${index + 1}`).trim() || `Enemy Team ${index + 1}`,
-                shipType: String(team.shipType || '').trim(),
-                // Also filter the active user out of any opponent team (OCR sometimes misassigns them)
-                players: dedupeBoardNames((team.players || []).filter(
-                    name => normalizeOcrName(name).toLowerCase() !== activeUserName && name !== ''
-                )),
-            }));
+            const opponentBoardTeams = normalizedOpponentTeams
+                .map((team, index) => {
+                    const color = normalizeOpponentTeamColorToken(team.color);
+                    return {
+                        key: `${String(color || `enemy-${index + 1}`).trim()}:${String(team.teamName || `Enemy Team ${index + 1}`).trim()}`,
+                        color,
+                        teamName: String(team.teamName || `Enemy Team ${index + 1}`).trim() || `Enemy Team ${index + 1}`,
+                        shipType: String(team.shipType || '').trim(),
+                        // Also filter the active user out of any opponent team (OCR sometimes misassigns them)
+                        players: dedupeBoardNames((team.players || []).filter(
+                            name => normalizeOcrName(name).toLowerCase() !== activeUserName && name !== ''
+                        )),
+                    };
+                })
+                .sort((left, right) => {
+                    const leftRank = OPPONENT_TEAM_DISPLAY_ORDER_INDEX[left.color] ?? OPPONENT_TEAM_DISPLAY_ORDER_INDEX.unknown;
+                    const rightRank = OPPONENT_TEAM_DISPLAY_ORDER_INDEX[right.color] ?? OPPONENT_TEAM_DISPLAY_ORDER_INDEX.unknown;
+                    if (leftRank !== rightRank) return leftRank - rightRank;
+                    return String(left.teamName || '').localeCompare(String(right.teamName || ''));
+                });
             return [{
                 key: `friendly:${friendlyTeamName}`,
                 color: 'friendly',
@@ -2459,6 +2504,12 @@ const SmartMatchDetail: React.FC<{
             });
             return detected;
         }, [assignmentBoardTeams]);
+        const activeUserDisplayKey = normalizeOcrName(activeUser || match.player || '').toLowerCase();
+        const formatPlayerNameForDisplay = useCallback((name: string) => {
+            const normalized = normalizeOcrName(name).toLowerCase();
+            if (activeUserDisplayKey && normalized && normalized === activeUserDisplayKey) return '(you)';
+            return name;
+        }, [activeUserDisplayKey]);
 
         const renderPlayerChips = (players: string[], type: 'teammate' | 'opponent') => {
             const chipClass = type === 'teammate' ? 'sc-player-chip sc-player-chip--teammate' : 'sc-player-chip sc-player-chip--opponent';
@@ -2489,7 +2540,7 @@ const SmartMatchDetail: React.FC<{
                                 {type === 'teammate' && (
                                     <ShieldCheck size={10} className="text-info shrink-0" />
                                 )}
-                                <span className="truncate max-w-[200px]">{p}</span>
+                                <span className="truncate max-w-[200px]">{formatPlayerNameForDisplay(p)}</span>
                                 <button
                                     onClick={e => { e.stopPropagation(); removePlayer(type, idx); }}
                                     className="opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity"
@@ -2700,12 +2751,12 @@ const SmartMatchDetail: React.FC<{
         const maxTeammatesForShip = (shipType?: string | null) => getMaxTeammatesForShipLimit(shipType);
         const TEAM_COLOR_MAP: Record<string, string> = {
             red: 'bg-danger', orange: 'bg-warning', yellow: 'bg-warning',
-            green: 'bg-success', blue: 'bg-info', cyan: 'bg-info',
+            yellowgreen: 'bg-success', green: 'bg-success', blue: 'bg-info', cyan: 'bg-info',
             purple: 'bg-accent', unknown: 'bg-neutral',
         };
         const TEAM_TEXT_MAP: Record<string, string> = {
             red: 'text-danger', orange: 'text-warning', yellow: 'text-warning',
-            green: 'text-success', blue: 'text-info', cyan: 'text-info',
+            yellowgreen: 'text-success', green: 'text-success', blue: 'text-info', cyan: 'text-info',
             purple: 'text-accent', unknown: 'text-md-sys-on-surface/60',
         };
         const rerunSuccessCount = rerunResults

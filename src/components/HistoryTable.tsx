@@ -30,6 +30,18 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
     const onDrillDown = (name: string, type: DrillDownTarget['type']) => {
         setDrillDownTarget({ name, type });
     };
+    const normalizeDisplayKey = useCallback((value: string | null | undefined) => (
+        String(value || '').trim().toLowerCase()
+    ), []);
+    const activeUserKey = useMemo(
+        () => normalizeDisplayKey(activeUser || ''),
+        [activeUser, normalizeDisplayKey]
+    );
+    const formatPlayerForDisplay = useCallback((name: string) => {
+        const key = normalizeDisplayKey(name);
+        if (activeUserKey && key && key === activeUserKey) return '(you)';
+        return name;
+    }, [activeUserKey, normalizeDisplayKey]);
 
     const t = TRANSLATIONS[language];
     const [searchInput, setSearchInput] = useState('');
@@ -730,7 +742,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                                         <div className="flex flex-wrap gap-1">
                                                             {(m.teammates && m.teammates.length > 0) ? m.teammates.map((t, i) => (
                                                                 <span key={i} onClick={(e) => { e.stopPropagation(); onDrillDown?.(t, 'Teammate'); }} className="px-2 py-0.5 rounded-md bg-info/8 text-info/80 hover:bg-info/15 cursor-pointer transition-colors text-label-sm font-medium">
-                                                                    {t}
+                                                                    {formatPlayerForDisplay(t)}
                                                                 </span>
                                                             )) : <span className="text-md-sys-on-surface/40 italic text-label-sm">None</span>}
                                                         </div>
@@ -990,7 +1002,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                     <div className="flex flex-wrap gap-2">
                                         {(selectedMatchForDetails.teammates || []).length > 0 ? (selectedMatchForDetails.teammates || []).map(t => (
                                             <span key={t} onClick={() => onDrillDown?.(t, 'Teammate')} className="px-3 py-1 bg-info-soft text-info rounded-lg text-label-sm font-bold cursor-pointer hover:bg-info-soft-strong transition-colors">
-                                                {t}
+                                                {formatPlayerForDisplay(t)}
                                             </span>
                                         )) : <span className="opacity-40 text-label-sm italic">None</span>}
                                     </div>

@@ -798,18 +798,21 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
 
               {expandedSections.screenshots && (
                 <div className="p-3 pt-0">
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="overflow-x-auto pb-1">
+                    <div className="flex flex-col gap-3 min-w-[800px]">
                     {screenshots.map((src, i) => (
                       <button
                         key={i}
                         onClick={() => setLightboxIdx(i)}
-                        className="relative aspect-video bg-scrim-solid rounded-lg overflow-hidden group"
+                        className="relative w-full bg-scrim-solid rounded-lg overflow-hidden group border border-md-sys-outline/20 hover:border-md-sys-primary/40 transition-colors"
                       >
+                        <div className="w-full min-h-[220px] md:min-h-[300px] lg:min-h-[380px] bg-scrim-solid">
                         <LocalImage
                           src={src}
                           alt={`Screenshot ${i + 1}`}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain"
                         />
+                        </div>
                         <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                           <Eye size={16} className="text-on-scrim" />
                         </div>
@@ -818,6 +821,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                         </span>
                       </button>
                     ))}
+                    </div>
                   </div>
                 </div>
               )}

@@ -1012,8 +1012,14 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 
 .ocr-assignment-board-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
   gap: 6px;
+}
+
+@media (max-width: 980px) {
+  .ocr-assignment-board-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .ocr-assignment-team-card {
@@ -1028,6 +1034,10 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
   -webkit-backdrop-filter: blur(8px);
   overflow: hidden;
   border-left: 3px solid var(--team-accent-color, color-mix(in srgb, var(--md-sys-color-outline), transparent 50%));
+}
+
+.ocr-assignment-team-card--full-row {
+  grid-column: 1 / -1;
 }
 
 /* Re-apply inner padding to children since card has no padding */
@@ -1049,6 +1059,7 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 .ocr-assignment-team-card--color-red      { --team-accent-color: #ef4444; }
 .ocr-assignment-team-card--color-orange   { --team-accent-color: #f59e0b; }
 .ocr-assignment-team-card--color-yellow   { --team-accent-color: #eab308; }
+.ocr-assignment-team-card--color-yellowgreen { --team-accent-color: #84cc16; }
 .ocr-assignment-team-card--color-green    { --team-accent-color: #22c55e; }
 .ocr-assignment-team-card--color-blue     { --team-accent-color: #60a5fa; }
 .ocr-assignment-team-card--color-cyan     { --team-accent-color: #06b6d4; }
@@ -1108,6 +1119,10 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 
 .ocr-assignment-team-dot--yellow {
   background: #facc15;
+}
+
+.ocr-assignment-team-dot--yellowgreen {
+  background: #84cc16;
 }
 
 .ocr-assignment-team-dot--green {

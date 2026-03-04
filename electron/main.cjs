@@ -1118,11 +1118,14 @@ function probeUrlReady(urlString, timeoutMs = 450) {
 function startDevRendererWithRetry(win, targetUrl) {
   const url = targetUrl || DEV_SERVER_URL;
   const splashUrl = buildDevSplashDataUrl(url);
+  const DEV_RETRY_INTERVAL_MS = 2000;
+  const MAX_DEV_RETRY_ATTEMPTS = 240;
 
   let stopped = false;
   let inFlight = false;
   let attempt = 0;
   let retryTimer = null;
+  const retryStartedAt = Date.now();
 
   const stop = () => {
     if (stopped) return;
@@ -1143,39 +1146,68 @@ function startDevRendererWithRetry(win, targetUrl) {
   };
 
   const HEARTBEAT_INTERVAL = 5; // Update splash every N attempts to avoid spam
+  const getWaitingProgressPct = () => {
+    const elapsedMs = Math.max(0, Date.now() - retryStartedAt);
+    const elapsedSeconds = elapsedMs / 1000;
+    return Math.min(98, 18 + (elapsedSeconds * 0.45));
+  };
   const tryLoad = async () => {
     if (stopped || inFlight || !win || win.isDestroyed()) return;
     inFlight = true;
     attempt += 1;
+    if (attempt > MAX_DEV_RETRY_ATTEMPTS) {
+      setSplashProgressDedupe(
+        win,
+        getWaitingProgressPct(),
+        'Still waiting for dev server...',
+        `Extended startup wait (attempt ${attempt})`
+      );
+      inFlight = false;
+      retryTimer = setTimeout(tryLoad, DEV_RETRY_INTERVAL_MS);
+      return;
+    }
     const isFirst = attempt === 1;
     const isHeartbeat = attempt % HEARTBEAT_INTERVAL === 0;
     if (isFirst || isHeartbeat) {
-      setSplashProgressDedupe(win, Math.min(92, 18 + attempt * 3), 'Connecting renderer...', `Checking dev server (attempt ${attempt})`);
+      setSplashProgressDedupe(
+        win,
+        getWaitingProgressPct(),
+        'Connecting renderer...',
+        `Checking dev server (attempt ${attempt})`
+      );
     }
 
     try {
       const ready = await probeUrlReady(url);
       if (!ready) {
         if (isFirst || isHeartbeat) {
-          setSplashProgressDedupe(win, Math.min(92, 16 + attempt * 2), 'Waiting for dev server...', `Retrying connection (attempt ${attempt})`);
+          setSplashProgressDedupe(
+            win,
+            getWaitingProgressPct(),
+            'Waiting for dev server...',
+            `Retrying connection (attempt ${attempt})`
+          );
         }
-        const delay = Math.min(1400, 90 + (attempt * 90));
         inFlight = false;
-        retryTimer = setTimeout(tryLoad, delay);
+        retryTimer = setTimeout(tryLoad, DEV_RETRY_INTERVAL_MS);
         return;
       }
 
-      setSplashProgressDedupe(win, 95, 'Loading interface...', 'Renderer is responding');
+      setSplashProgressDedupe(win, 99, 'Loading interface...', 'Renderer is responding');
       await win.loadURL(url);
       // stop() happens on did-finish-load once the dev URL successfully loads.
       inFlight = false;
     } catch {
       if (isFirst || isHeartbeat) {
-        setSplashProgressDedupe(win, Math.min(92, 16 + attempt * 2), 'Waiting for dev server...', `Retrying connection (attempt ${attempt})`);
+        setSplashProgressDedupe(
+          win,
+          getWaitingProgressPct(),
+          'Waiting for dev server...',
+          `Retrying connection (attempt ${attempt})`
+        );
       }
-      const delay = Math.min(1400, 90 + (attempt * 90));
       inFlight = false;
-      retryTimer = setTimeout(tryLoad, delay);
+      retryTimer = setTimeout(tryLoad, DEV_RETRY_INTERVAL_MS);
     }
   };
 
@@ -1190,7 +1222,7 @@ function startDevRendererWithRetry(win, targetUrl) {
       win.show();
     }
   }).catch(() => { });
-  retryTimer = setTimeout(tryLoad, 25);
+  retryTimer = setTimeout(tryLoad, 500);
 }
 
 function createTray() {

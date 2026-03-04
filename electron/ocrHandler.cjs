@@ -742,7 +742,8 @@ async function cropRegionAndOCR(
   fullWidth,
   fullHeight,
   psm = null,
-  fontProfile = 'default'
+  fontProfile = 'default',
+  ocrOptions = null
 ) {
   if (!sharp) {
     console.warn('[OCR-Region] sharp not available, skipping region OCR');
@@ -765,7 +766,7 @@ async function cropRegionAndOCR(
     console.log(`[OCR-Region] Cropped+upscaled buffer: ${cropped.length} bytes`);
 
     // Run dedicated OCR pass on the cropped region
-    const regionOCR = await runOCR(cropped, psm);
+    const regionOCR = await runOCR(cropped, psm, ocrOptions || undefined);
     if (!regionOCR || !regionOCR.words || regionOCR.words.length === 0) {
       console.log('[OCR-Region] No words detected in cropped region');
       return null;
@@ -801,7 +802,7 @@ async function cropRegionAndOCR(
  * Run OCR on image buffer
  * Returns structured data with words, lines, and text
  */
-async function runOCR(imageBuffer, psm = null) {
+async function runOCR(imageBuffer, psm = null, options = {}) {
   if (!imageBuffer || !Buffer.isBuffer(imageBuffer)) {
     return {
       text: '',
@@ -820,7 +821,10 @@ async function runOCR(imageBuffer, psm = null) {
   console.log('[OCR] Running PaddleOCR recognition...');
   const startTime = Date.now();
 
-  const paddleWords = await paddleOcrBuffer(imageBuffer, { threshold: 0.2 });
+  const detectionThreshold = Number.isFinite(Number(options?.threshold))
+    ? Number(options.threshold)
+    : 0.2;
+  const paddleWords = await paddleOcrBuffer(imageBuffer, { threshold: detectionThreshold });
   console.log(`[OCR] PaddleOCR complete in ${Date.now() - startTime}ms, rawWords=${paddleWords.length}`);
 
   const words = paddleWords
@@ -1265,6 +1269,99 @@ function dedupeExtractedPlayers(players, maxCount = 4) {
     .slice(0, Math.max(1, Number(maxCount || 4)));
 }
 
+function fuzzyMatchesPlayerName(candidateName, targetName, maxDistance = 1) {
+  const candidateKey = normalizeNameKey(candidateName);
+  const targetKey = normalizeNameKey(targetName);
+  if (!candidateKey || !targetKey) return false;
+  if (candidateKey === targetKey) return true;
+  if (Math.abs(candidateKey.length - targetKey.length) > maxDistance) return false;
+  return levenshtein(candidateKey, targetKey) <= maxDistance;
+}
+
+function isPrefixVariantName(leftName, rightName) {
+  const leftKey = normalizeNameKey(leftName);
+  const rightKey = normalizeNameKey(rightName);
+  if (!leftKey || !rightKey || leftKey === rightKey) return false;
+  const shorter = leftKey.length <= rightKey.length ? leftKey : rightKey;
+  const longer = leftKey.length <= rightKey.length ? rightKey : leftKey;
+  if (shorter.length < 4) return false;
+  if (!longer.startsWith(shorter)) return false;
+  return levenshtein(shorter, longer) <= 2;
+}
+
+function filterImplicitActiveUserFromTeammates(teammates, activeUser) {
+  if (!Array.isArray(teammates) || teammates.length === 0) {
+    return { teammates: [], removedCount: 0 };
+  }
+  const trimmedActiveUser = String(activeUser || '').trim();
+  if (!trimmedActiveUser) {
+    return { teammates: [...teammates], removedCount: 0 };
+  }
+  const filtered = [];
+  let removedCount = 0;
+  teammates.forEach((player) => {
+    const name = String(player?.name || '').trim();
+    if (fuzzyMatchesPlayerName(name, trimmedActiveUser, 1)) {
+      removedCount += 1;
+      return;
+    }
+    filtered.push(player);
+  });
+  return { teammates: filtered, removedCount };
+}
+
+function collapsePrefixTeammateVariants(teammates, maxCount = 4) {
+  if (!Array.isArray(teammates) || teammates.length === 0) return { teammates: [], collapsedCount: 0 };
+  const ranked = teammates
+    .map((player) => ({
+      ...player,
+      name: String(player?.name || '').trim(),
+      confidence: Number.isFinite(Number(player?.confidence)) ? Number(player.confidence) : 74,
+    }))
+    .filter((player) => player.name)
+    .sort((a, b) => {
+      const confDiff = Number(b.confidence || 0) - Number(a.confidence || 0);
+      if (confDiff !== 0) return confDiff;
+      return normalizeNameKey(b.name).length - normalizeNameKey(a.name).length;
+    });
+
+  const kept = [];
+  let collapsedCount = 0;
+  ranked.forEach((candidate) => {
+    let merged = false;
+    for (let idx = 0; idx < kept.length; idx += 1) {
+      const existing = kept[idx];
+      if (!isPrefixVariantName(existing.name, candidate.name)) continue;
+      merged = true;
+      collapsedCount += 1;
+      const existingKeyLen = normalizeNameKey(existing.name).length;
+      const candidateKeyLen = normalizeNameKey(candidate.name).length;
+      const shouldReplace = candidateKeyLen > existingKeyLen
+        || (candidateKeyLen === existingKeyLen && Number(candidate.confidence || 0) > Number(existing.confidence || 0));
+      if (shouldReplace) {
+        kept[idx] = {
+          ...candidate,
+          confidence: Math.max(Number(candidate.confidence || 0), Number(existing.confidence || 0)),
+        };
+      } else {
+        kept[idx] = {
+          ...existing,
+          confidence: Math.max(Number(existing.confidence || 0), Number(candidate.confidence || 0)),
+        };
+      }
+      break;
+    }
+    if (!merged) kept.push(candidate);
+  });
+
+  return {
+    teammates: kept
+      .sort((a, b) => Number(b.confidence || 0) - Number(a.confidence || 0))
+      .slice(0, Math.max(1, Number(maxCount || 4))),
+    collapsedCount,
+  };
+}
+
 function extractCrewHubNamesFromWords(words, imageWidth, imageHeight) {
   if (!Array.isArray(words) || words.length === 0) return [];
   const lines = groupCrewHubWordsIntoLines(words, imageHeight, imageWidth);
@@ -1506,17 +1603,11 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       console.log('[OCR] Processing as MAP SCREEN');
 
       const PLAYER_REGION = activeRegions.mapScreen.players;
+      const YOUR_SHIP_REGION = activeRegions.mapScreen.yourShip;
       if (imageBuffer) {
         console.log('[OCR-Region] Running region-specific OCR for map teammate list');
       }
-      const [mapScreenData, regionResult] = await Promise.all([
-        extractMapScreen(
-          processed.buffer,
-          ocrResult,
-          processed.width,
-          processed.height,
-          activeRegions.mapScreen
-        ),
+      const [regionResult, yourShipRegionResult] = await Promise.all([
         imageBuffer
           ? cropRegionAndOCR(
             imageBuffer,
@@ -1527,7 +1618,60 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
             fontProfile
           )
           : Promise.resolve(null),
+        imageBuffer
+          ? cropRegionAndOCR(
+            imageBuffer,
+            YOUR_SHIP_REGION,
+            processed.originalWidth,
+            processed.originalHeight,
+            6,
+            fontProfile,
+            { threshold: 0.15 }
+          )
+          : Promise.resolve(null),
       ]);
+
+      const yourShipRegionWordsRaw = Array.isArray(yourShipRegionResult?.words)
+        ? yourShipRegionResult.words
+        : [];
+      if (imageBuffer) {
+        if (yourShipRegionWordsRaw.length > 0) {
+          const previewTokens = yourShipRegionWordsRaw
+            .map((word) => String(word?.text || '').trim())
+            .filter(Boolean)
+            .slice(0, 18);
+          console.log(
+            `[OCR-Region] YOUR_SHIP region words (${yourShipRegionWordsRaw.length}, threshold=0.15): ${previewTokens.join(' | ')}`
+          );
+        } else {
+          console.log('[OCR-Region] YOUR_SHIP region OCR returned no words (threshold=0.15)');
+        }
+      }
+
+      const yourShipScaleX = processed.originalWidth > 0
+        ? (processed.width / processed.originalWidth)
+        : 1;
+      const yourShipScaleY = processed.originalHeight > 0
+        ? (processed.height / processed.originalHeight)
+        : 1;
+      const yourShipRegionWordsForMap = yourShipRegionWordsRaw.map((word) => ({
+        ...word,
+        bbox: {
+          x0: Number(word?.bbox?.x0 || 0) * yourShipScaleX,
+          y0: Number(word?.bbox?.y0 || 0) * yourShipScaleY,
+          x1: Number(word?.bbox?.x1 || 0) * yourShipScaleX,
+          y1: Number(word?.bbox?.y1 || 0) * yourShipScaleY,
+        },
+      }));
+
+      const mapScreenData = await extractMapScreen(
+        processed.buffer,
+        ocrResult,
+        processed.width,
+        processed.height,
+        activeRegions.mapScreen,
+        { yourShipRegionWords: yourShipRegionWordsForMap }
+      );
 
       const missingYourShip = !mapScreenData?.yourShip?.shipType;
       if (imageBuffer && missingYourShip) {
@@ -1806,6 +1950,42 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     };
 
     await mergeReroutedNames();
+
+    if (Array.isArray(extractedData?.teammates) && extractedData.teammates.length > 0) {
+      const normalizedTeammates = extractedData.teammates
+        .map((player) => {
+          const source = (player && typeof player === 'object') ? player : {};
+          const rawName = typeof player === 'string' ? player : source?.name;
+          const cleanedName = cleanupCrewHubPlayerName(String(rawName || ''));
+          if (!cleanedName) return null;
+          return {
+            ...source,
+            name: cleanedName,
+            confidence: Number.isFinite(Number(source?.confidence))
+              ? Number(source.confidence)
+              : 74,
+            isTeammate: true,
+          };
+        })
+        .filter(Boolean);
+
+      const { teammates: withoutActiveUser, removedCount } = filterImplicitActiveUserFromTeammates(
+        normalizedTeammates,
+        activeUser
+      );
+      const { teammates: collapsedTeammates, collapsedCount } = collapsePrefixTeammateVariants(
+        withoutActiveUser,
+        4
+      );
+      extractedData.teammates = collapsedTeammates.map((player) => ({ ...player, isTeammate: true }));
+
+      if (removedCount > 0) {
+        console.log(`[OCR] Removed ${removedCount} implicit active-user teammate entr${removedCount === 1 ? 'y' : 'ies'} from OCR output`);
+      }
+      if (collapsedCount > 0) {
+        console.log(`[OCR] Collapsed ${collapsedCount} near-duplicate teammate name entr${collapsedCount === 1 ? 'y' : 'ies'} (prefix/edit-distance merge)`);
+      }
+    }
 
     console.log('[OCR] Extraction complete:', {
       type: extractedData.screenshotType,

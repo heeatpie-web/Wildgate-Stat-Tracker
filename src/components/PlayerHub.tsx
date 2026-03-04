@@ -8,6 +8,7 @@ import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { calculateSocialData } from '../utils/analyticsSocial';
 import { getShipColor } from '../types';
+import { LocalImage } from './LocalImage';
 
 type SortMode = 'alpha' | 'favorites' | 'recent' | 'encounters';
 type PlayerHubMode = 'roster' | 'ocr-work';
@@ -64,18 +65,29 @@ const PlayerHub: React.FC = () => {
     const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
     const [showFullProfile, setShowFullProfile] = useState(false);
     const [pendingCandidateEdits, setPendingCandidateEdits] = useState<Record<string, string>>({});
+    const [sourcePreview, setSourcePreview] = useState<{ path: string; label: string; capturedAt?: number } | null>(null);
 
     const socialData = useMemo(() => calculateSocialData(matches), [matches]);
     const pendingRosterCandidates = useMemo(() => {
-        const seen = new Set<string>();
-        return (pendingReviews || [])
+        const deduped = new Map<string, typeof pendingReviews[number]>();
+        (pendingReviews || [])
             .filter((review) => review.type === 'roster_candidate' && review.value && review.value.trim().length > 0)
-            .filter((review) => {
+            .forEach((review) => {
                 const key = review.value.trim().toLowerCase();
-                if (seen.has(key)) return false;
-                seen.add(key);
-                return true;
+                const existing = deduped.get(key);
+                if (!existing) {
+                    deduped.set(key, review);
+                    return;
+                }
+                const existingHasSource = Boolean(existing.sourceCapture?.screenshotPath);
+                const reviewHasSource = Boolean(review.sourceCapture?.screenshotPath);
+                const existingScore = Number(existing.bestScore || 0);
+                const reviewScore = Number(review.bestScore || 0);
+                if ((!existingHasSource && reviewHasSource) || reviewScore > existingScore) {
+                    deduped.set(key, review);
+                }
             });
+        return [...deduped.values()].sort((a, b) => Number(b.bestScore || 0) - Number(a.bestScore || 0));
     }, [pendingReviews]);
 
     useEffect(() => {
@@ -88,6 +100,15 @@ const PlayerHub: React.FC = () => {
             return next;
         });
     }, [pendingRosterCandidates]);
+
+    useEffect(() => {
+        if (!sourcePreview) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setSourcePreview(null);
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [sourcePreview]);
 
     const teammateMap = useMemo(() => {
         const map: Record<string, { wins: number; total: number }> = {};
@@ -417,6 +438,16 @@ const PlayerHub: React.FC = () => {
                             <div className="flex flex-col gap-2 content-start">
                                 {filteredOcrCandidates.map((candidate) => {
                                     const pendingValue = pendingCandidateEdits[candidate.id] ?? candidate.value;
+                                    const sourcePath = String(candidate.sourceCapture?.screenshotPath || '').trim();
+                                    const sourceLabel = String(
+                                        candidate.sourceCapture?.screenshotLabel
+                                        || sourcePath.split(/[\\/]/).pop()
+                                        || 'Source Screenshot'
+                                    ).trim();
+                                    const sourceCapturedAt = Number(candidate.sourceCapture?.capturedAt || 0);
+                                    const sourceCapturedLabel = sourceCapturedAt > 0
+                                        ? new Date(sourceCapturedAt).toLocaleString()
+                                        : '';
                                     return (
                                         <div key={candidate.id} className="rounded-xl border border-md-sys-outline/14 bg-md-sys-surface-container p-2.5 space-y-2">
                                             <input
@@ -436,6 +467,44 @@ const PlayerHub: React.FC = () => {
                                                 className="md3-textfield md3-textfield--outlined w-full text-label-sm font-semibold"
                                                 aria-label={`Pending OCR roster candidate ${candidate.id}`}
                                             />
+                                            {sourcePath && (
+                                                <div className="rounded-lg border border-info/20 bg-info-soft/25 p-1.5 flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSourcePreview({
+                                                            path: sourcePath,
+                                                            label: sourceLabel,
+                                                            capturedAt: sourceCapturedAt > 0 ? sourceCapturedAt : undefined,
+                                                        })}
+                                                        className="w-[92px] h-[58px] rounded-md overflow-hidden bg-md-sys-on-surface/5 border border-md-sys-outline/20 hover:border-md-sys-primary/40 shrink-0"
+                                                        aria-label={`Preview source screenshot for ${pendingValue || candidate.value}`}
+                                                        title="Open source screenshot"
+                                                    >
+                                                        <LocalImage
+                                                            src={sourcePath}
+                                                            alt={sourceLabel}
+                                                            className="w-full h-full object-contain"
+                                                        />
+                                                    </button>
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="text-label-xs font-semibold text-info truncate">{sourceLabel}</div>
+                                                        {sourceCapturedLabel && (
+                                                            <div className="text-label-xs text-md-sys-on-surface/55 truncate">{sourceCapturedLabel}</div>
+                                                        )}
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSourcePreview({
+                                                            path: sourcePath,
+                                                            label: sourceLabel,
+                                                            capturedAt: sourceCapturedAt > 0 ? sourceCapturedAt : undefined,
+                                                        })}
+                                                        className="h-7 px-2 rounded-md text-label-xs font-bold bg-info-soft text-info hover:bg-info-soft-strong shrink-0"
+                                                    >
+                                                        View source
+                                                    </button>
+                                                </div>
+                                            )}
                                             <div className="flex items-center gap-1.5 shrink-0">
                                                 <button
                                                     type="button"
@@ -1066,6 +1135,42 @@ const PlayerHub: React.FC = () => {
                     )}
                 </div>
             </div>
+            {sourcePreview && (
+                <div
+                    className="fixed inset-0 z-top bg-scrim-90 flex items-center justify-center p-8"
+                    onClick={() => setSourcePreview(null)}
+                >
+                    <button
+                        type="button"
+                        onClick={() => setSourcePreview(null)}
+                        className="absolute top-4 right-4 text-on-scrim-muted hover:text-on-scrim z-10"
+                        aria-label="Close source screenshot preview"
+                    >
+                        <X size={24} />
+                    </button>
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label={sourcePreview.label || 'OCR source screenshot'}
+                        onClick={(event) => event.stopPropagation()}
+                        className="max-w-full max-h-full"
+                    >
+                        <LocalImage
+                            src={sourcePreview.path}
+                            alt={sourcePreview.label || 'OCR source screenshot'}
+                            className="max-w-full max-h-[90vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
+                        />
+                        <div className="text-center mt-2 text-label-sm text-on-scrim-muted font-bold">
+                            {sourcePreview.label || 'OCR source screenshot'}
+                            {sourcePreview.capturedAt && (
+                                <span className="block text-label-xs opacity-70 mt-1">
+                                    {new Date(sourcePreview.capturedAt).toLocaleString()}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
