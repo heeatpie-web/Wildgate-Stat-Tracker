@@ -42,6 +42,16 @@ interface DetectedPlayer {
     confidence?: number;
 }
 
+interface OcrDetectedNameSource {
+    imagePath: string;
+    imageIndex: number;
+    sourceRole?: 'teammate' | 'opponent';
+    teamName?: string;
+    teamColor?: string;
+}
+
+type OcrDetectedNameSourceMap = Record<string, OcrDetectedNameSource[]>;
+
 type PendingBatchAction = 'accept' | 'ignore' | null;
 
 interface TeamDraft {
@@ -74,6 +84,9 @@ const getStoredHelpBannerDismissed = (): boolean => {
 
 const normalizeNameKey = (name: string): string => String(name || '').trim().toLowerCase();
 const normalizeSubmittedName = (name: string): string => String(name || '').trim();
+const normalizeArtifactPathKey = (value: string): string => (
+    String(value || '').trim().replace(/[\\/]+/g, '\\').toLowerCase()
+);
 const foldLikelyOcrDigits = (value: string): string => (
     String(value || '').replace(/[013456789]/g, (char) => (
         char === '0' ? 'o'
@@ -321,6 +334,65 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             .filter((entry) => entry.length > 0)
             .filter((entry) => entry.startsWith('data:image/') || IMAGE_FILE_PATTERN.test(entry))
     ), [screenshots]);
+    const screenshotIndexByPath = useMemo(() => {
+        const out = new Map<string, number>();
+        reviewScreenshots.forEach((path, index) => {
+            out.set(normalizeArtifactPathKey(path), index);
+        });
+        return out;
+    }, [reviewScreenshots]);
+    const nameSourceHints = useMemo<OcrDetectedNameSourceMap>(() => {
+        const raw = (pendingMatchData as { ocrDebug?: { nameSources?: unknown } } | null | undefined)?.ocrDebug?.nameSources;
+        if (!raw || typeof raw !== 'object') return {};
+        const out: OcrDetectedNameSourceMap = {};
+        Object.entries(raw as Record<string, unknown>).forEach(([nameKey, entries]) => {
+            const normalizedNameKey = normalizeNameKey(nameKey);
+            if (!normalizedNameKey || !Array.isArray(entries)) return;
+            const normalizedEntries: OcrDetectedNameSource[] = [];
+            entries.forEach((entry) => {
+                if (!entry || typeof entry !== 'object') return;
+                const record = entry as Record<string, unknown>;
+                const imagePath = String(record.imagePath || '').trim();
+                if (!imagePath) return;
+                const knownIndex = Number(record.imageIndex);
+                const fallbackIndex = screenshotIndexByPath.get(normalizeArtifactPathKey(imagePath));
+                normalizedEntries.push({
+                    imagePath,
+                    imageIndex: Number.isInteger(knownIndex) && knownIndex >= 0
+                        ? knownIndex
+                        : (fallbackIndex ?? -1),
+                    sourceRole: record.sourceRole === 'teammate' || record.sourceRole === 'opponent'
+                        ? record.sourceRole
+                        : undefined,
+                    teamName: String(record.teamName || '').trim() || undefined,
+                    teamColor: String(record.teamColor || '').trim() || undefined,
+                });
+            });
+            normalizedEntries.sort((left, right) => left.imageIndex - right.imageIndex);
+            if (normalizedEntries.length > 0) out[normalizedNameKey] = normalizedEntries;
+        });
+        return out;
+    }, [pendingMatchData, screenshotIndexByPath]);
+    const activeUserDisplayKey = useMemo(
+        () => normalizeNameKey(activeUser || pendingMatchData?.player || ''),
+        [activeUser, pendingMatchData?.player]
+    );
+    const toDisplayPlayerName = useCallback((name: string) => {
+        const key = normalizeNameKey(name);
+        if (activeUserDisplayKey && key && key === activeUserDisplayKey) return '(you)';
+        return name;
+    }, [activeUserDisplayKey]);
+    const resolvePlayerSources = useCallback((playerName: string): OcrDetectedNameSource[] => {
+        const key = normalizeNameKey(playerName);
+        if (!key) return [];
+        const direct = nameSourceHints[key] || [];
+        if (direct.length > 0) return direct;
+        const foldedKey = normalizeNameKey(foldLikelyOcrDigits(playerName));
+        if (foldedKey && foldedKey !== key) {
+            return nameSourceHints[foldedKey] || [];
+        }
+        return [];
+    }, [nameSourceHints]);
     const updateDropdownAnchor = useCallback((playerName: string | null) => {
         if (!playerName) {
             setDropdownAnchor(null);
@@ -1271,6 +1343,14 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                     const hasCorrected = corrections[player.name];
                                     const priorCorrection = ocrCorrections?.[player.name];
                                     const conf = player.confidence || 70;
+                                    const playerSources = resolvePlayerSources(player.name);
+                                    const primaryPlayerSource = playerSources[0] || null;
+                                    const sourceScreenshotIndex = primaryPlayerSource && primaryPlayerSource.imageIndex >= 0
+                                        ? primaryPlayerSource.imageIndex
+                                        : -1;
+                                    const sourceLabel = sourceScreenshotIndex >= 0
+                                        ? `Screenshot #${sourceScreenshotIndex + 1}`
+                                        : (primaryPlayerSource?.imagePath?.split(/[\\/]/).pop() || '');
                                     const filteredRegistry = getFilteredRegistry(player.name);
                                     const isFriendlyDetectedPlayer = friendlyPlayerKeys.has(normalizeNameKey(player.name));
                                     const learningCount = Math.max(1, Number(priorCorrection?.count || 1));
@@ -1312,7 +1392,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                                     {/* Name & Details */}
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center gap-2">
-                                                            <span className="font-bold truncate">{player.name}</span>
+                                                            <span className="font-bold truncate">{toDisplayPlayerName(player.name)}</span>
                                                             {isFriendlyDetectedPlayer && (
                                                                 <span className="ocr-teammate-chip ocr-teammate-chip--compact" title="Friendly teammate">
                                                                     <Shield size={10} />
@@ -1336,6 +1416,11 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                                                 Ship: {player.shipType}
                                                             </div>
                                                         )}
+                                                        {primaryPlayerSource && sourceLabel && (
+                                                            <div className="text-label-sm opacity-60 mt-0.5">
+                                                                Source: {sourceLabel}{playerSources.length > 1 ? ` (+${playerSources.length - 1} more)` : ''}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
 
@@ -1349,6 +1434,21 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                                     </button>
                                                 ) : (
                                                     <div className="ocr-detected-player-actions flex items-center gap-2">
+                                                        {primaryPlayerSource && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    if (sourceScreenshotIndex >= 0) {
+                                                                        setLightboxIdx(sourceScreenshotIndex);
+                                                                    }
+                                                                }}
+                                                                disabled={sourceScreenshotIndex < 0}
+                                                                className="md3-btn-text text-label-sm whitespace-nowrap disabled:opacity-50"
+                                                                title={sourceLabel || 'View source screenshot'}
+                                                            >
+                                                                View source
+                                                            </button>
+                                                        )}
                                                         {/* Correction Dropdown */}
                                                         <div className={`relative ${activeInputPlayer === player.name ? 'z-30' : ''}`}>
                                                             <div className="ocr-roster-search-field md3-textfield md3-textfield--outlined flex items-center gap-1 px-2 py-1 bg-md-sys-surface-container-highest">

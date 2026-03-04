@@ -74,6 +74,7 @@ import {
     isEliminatedByTeamMatch,
 } from '../utils/eliminatorTeam';
 import { rerunMatchArtifacts } from '../utils/ocr/rerunMatchArtifacts';
+import { buildOcrNameSourceMap, type OcrNameSourceMap } from '../utils/ocr/nameSourceHints';
 import {
     extractArtifactSourceFromReachModifiers,
     stripArtifactSourceModifiers,
@@ -1263,11 +1264,11 @@ const SmartCapturesPanel: React.FC = () => {
                                             if (data.teammates?.length > 0) {
                                                 const existing = new Set<string>();
                                                 for (const raw of data.teammates.map(t => t.name).filter(Boolean)) {
-                                                    queueRosterCandidate(raw);
                                                     const resolved = resolveRosterName(raw);
                                                     if (!resolved) continue;
                                                     const key = normalizeOcrName(resolved).toLowerCase();
                                                     if (!key || (activeUserKey && key === activeUserKey)) continue;
+                                                    queueRosterCandidate(resolved);
                                                     if (existing.has(key)) continue;
                                                     if (nextTeammates.length >= maxTeammates) break;
                                                     nextTeammates.push(resolved);
@@ -1281,9 +1282,6 @@ const SmartCapturesPanel: React.FC = () => {
 
                                             let resolvedOpponentTeams: OpponentTeam[] = [];
                                             if (data.opponentTeams?.length > 0) {
-                                                data.opponentTeams.forEach((team) => {
-                                                    team.players.forEach((player) => queueRosterCandidate(player.name || ''));
-                                                });
                                                 const unresolvedOpponentTeams: OpponentTeam[] = data.opponentTeams.map((team) => ({
                                                     teamName: team.teamName || 'Unknown Team',
                                                     shipType: team.shipType || '',
@@ -1291,7 +1289,14 @@ const SmartCapturesPanel: React.FC = () => {
                                                     players: Array.from(
                                                         new Map(
                                                             team.players
-                                                                .map((player) => resolveRosterName(player.name || ''))
+                                                                .map((player) => {
+                                                                    const resolved = resolveRosterName(player.name || '');
+                                                                    if (!resolved) return '';
+                                                                    const key = normalizeOcrName(resolved).toLowerCase();
+                                                                    if (!key || (activeUserKey && key === activeUserKey)) return '';
+                                                                    queueRosterCandidate(resolved);
+                                                                    return resolved;
+                                                                })
                                                                 .filter(Boolean)
                                                                 .map((name) => [normalizeOcrName(name).toLowerCase(), name])
                                                         ).values()
@@ -1734,6 +1739,7 @@ const SmartMatchDetail: React.FC<{
         const [rerunning, setRerunning] = useState(false);
         const [rerunResults, setRerunResults] = useState<RerunResultWithMeta[] | null>(null);
         const [reviewData, setReviewData] = useState<OCRExtractedData | null>(null);
+        const [ocrNameSources, setOcrNameSources] = useState<OcrNameSourceMap>({});
         const [rerunProgress, setRerunProgress] = useState<RerunProgressState>({ ...INITIAL_RERUN_PROGRESS });
         const [showSecondaryActions, setShowSecondaryActions] = useState(false);
         const [loadoutTab, setLoadoutTab] = useState<'loadout' | 'ship-weapons'>('loadout');
@@ -1783,6 +1789,28 @@ const SmartMatchDetail: React.FC<{
             const fuzzy = findClosestMatch(normalized, pilotRegistry, threshold);
             return fuzzy || normalized;
         }, [pilotRegistry]);
+        const activeUserDisplayKey = useMemo(
+            () => normalizeOcrName(activeUser || match.player || '').toLowerCase(),
+            [activeUser, match.player]
+        );
+        const toDisplayPlayerName = useCallback((rawName: string) => {
+            const key = normalizeOcrName(rawName || '').toLowerCase();
+            if (activeUserDisplayKey && key && key === activeUserDisplayKey) return '(you)';
+            return rawName;
+        }, [activeUserDisplayKey]);
+        const persistNameSourceHintsToPendingDraft = useCallback((nameSources: OcrNameSourceMap) => {
+            const storeState = useAppStore.getState();
+            const pending = (storeState.pendingMatchData || null) as Partial<Match> | null;
+            if (!pending) return;
+            const hasAny = Object.keys(nameSources || {}).length > 0;
+            storeState.setPendingMatchData({
+                ...pending,
+                ocrDebug: {
+                    ...(pending.ocrDebug || {}),
+                    nameSources: hasAny ? nameSources : undefined,
+                },
+            });
+        }, []);
         const rosterSuggestionsId = useId();
         const shipSuggestionsId = useId();
         const isInPilotRegistry = useCallback((name: string) => {
@@ -1978,6 +2006,11 @@ const SmartMatchDetail: React.FC<{
             );
             setPendingKilledBy(String(latestMatch.killedBy || ''));
             setPendingKilledByShip(String(latestMatch.killedByShip || ''));
+            const pendingNameSources = pendingDraft?.ocrDebug?.nameSources;
+            const mergedOcrDebug = {
+                ...(latestMatch.ocrDebug || {}),
+                ...(pendingNameSources ? { nameSources: pendingNameSources } : {}),
+            };
 
             const pendingMatchData: Partial<Match> = {
                 id: latestMatch.id,
@@ -2001,7 +2034,7 @@ const SmartMatchDetail: React.FC<{
                 artifacts: [...(latestMatch.artifacts || [])],
                 ocrState: latestMatch.ocrState,
                 opponentTeams: latestMatch.opponentTeams || undefined,
-                ocrDebug: latestMatch.ocrDebug || undefined,
+                ocrDebug: Object.keys(mergedOcrDebug).length > 0 ? mergedOcrDebug : undefined,
                 eliminatedByTeam: latestMatch.eliminatedByTeam || undefined,
                 // Restore previously saved result so Wizard pre-selects it
                 result: latestMatch.result,
@@ -2060,6 +2093,7 @@ const SmartMatchDetail: React.FC<{
                 return;
             }
             const appliedMatch = onApplyToSession(reviewData);
+            persistNameSourceHintsToPendingDraft(ocrNameSources);
             openWizardForMatch({
                 matchOverride: appliedMatch,
                 reusePendingDraft: false,
@@ -2067,7 +2101,7 @@ const SmartMatchDetail: React.FC<{
             window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
                 detail: { matchId: Number(appliedMatch?.id || match.id || 0) || null },
             }));
-        }, [onApplyToSession, openWizardForMatch, reviewData, setToast, match.id]);
+        }, [onApplyToSession, openWizardForMatch, reviewData, setToast, match.id, ocrNameSources, persistNameSourceHintsToPendingDraft]);
 
         useEffect(() => {
             setShowSecondaryActions(false);
@@ -2096,6 +2130,7 @@ const SmartMatchDetail: React.FC<{
         useEffect(() => {
             setArtifacts({ images: [], imageFiles: [], telemetry: [] });
             setRerunResults(null);
+            setOcrNameSources({});
             setRerunProgress({ ...INITIAL_RERUN_PROGRESS });
             setEditingTeamOpponentPlayer(null);
             setEditingTeamOpponentValue('');
@@ -2446,7 +2481,7 @@ const SmartMatchDetail: React.FC<{
                                 {type === 'teammate' && (
                                     <ShieldCheck size={10} className="text-info shrink-0" />
                                 )}
-                                <span className="truncate max-w-[200px]">{p}</span>
+                                <span className="truncate max-w-[200px]">{toDisplayPlayerName(p)}</span>
                                 <button
                                     onClick={e => { e.stopPropagation(); removePlayer(type, idx); }}
                                     className="opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity"
@@ -2534,6 +2569,7 @@ const SmartMatchDetail: React.FC<{
             if (!artifactCandidates || artifactCandidates.length === 0) return;
             setRerunning(true);
             setRerunResults(null);
+            setOcrNameSources({});
             setRerunProgress({
                 ...INITIAL_RERUN_PROGRESS,
                 phase: 'prepare',
@@ -2586,7 +2622,9 @@ const SmartMatchDetail: React.FC<{
                     imagePath: entry.imagePath,
                     filename: entry.imagePath.split(/[\\/]/).pop() || entry.imagePath,
                 }));
+                const nextNameSources = buildOcrNameSourceMap(perFileRaw);
                 setRerunResults(results);
+                setOcrNameSources(nextNameSources);
 
                 const latestSummary = results[results.length - 1];
                 const firstFailureReason = results.find((entry) => !entry.success)?.error || multiResult.error || '';
@@ -2632,6 +2670,7 @@ const SmartMatchDetail: React.FC<{
                 // Auto-open the OCR wizard tab for immediate review
                 if (onApplyToSession) {
                     const appliedMatch = onApplyToSession(mergedData);
+                    persistNameSourceHintsToPendingDraft(nextNameSources);
                     openWizardForMatch({ matchOverride: appliedMatch, reusePendingDraft: false });
                     window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
                         detail: { matchId: Number(appliedMatch?.id || match.id || 0) || null },

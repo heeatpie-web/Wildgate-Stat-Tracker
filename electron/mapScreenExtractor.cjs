@@ -141,6 +141,20 @@ function resolveMapLayout(layoutOverrides) {
 // before "OUTLAW".
 const SHIP_TYPES = ['SOLO OUTLAW', 'BATTLE SCOUT', 'PRIVATEER', 'BASTION', 'HUNTER', 'SCOUT', 'OUTLAW'];
 const SHIP_TYPE_TEAM_WORDS = new Set(['SOLO', 'OUTLAW', 'BATTLE', 'SCOUT', 'PRIVATEER', 'BASTION', 'HUNTER']);
+const HUD_TEAM_LABEL_NOISE_FRAGMENTS = [
+  'YOURSHIP',
+  'CREWSIZE',
+  'HEALTH',
+  'GUNSHIP',
+  'SHIELDSDOWN',
+  'FASTERSHIELDSDOWN',
+];
+
+function hasHudStatNoiseText(input) {
+  const compact = String(input || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!compact) return false;
+  return HUD_TEAM_LABEL_NOISE_FRAGMENTS.some((fragment) => compact.includes(fragment));
+}
 
 function normalizeShipTypeKey(value) {
   return String(value || '').trim().toUpperCase().replace(/\s+/g, ' ');
@@ -501,6 +515,7 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
   const isNoiseTeamLabel = (input) => {
     const t = String(input || '').toUpperCase().trim();
     if (!t) return true;
+    if (hasHudStatNoiseText(t)) return true;
     const compact = t.replace(/[^A-Z]/g, '');
     if (KNOWN_HAZARD_COMPACT_KEYS.has(compact)) return true;
     if (/KNOWN|HAZARD|FEATURE|ARTIFACT|RESOURCES|WILDGATE|SPECIAL/.test(t)) return true;
@@ -1213,6 +1228,7 @@ function looksLikeTeamName(text) {
   if (!text) return false;
   const cleaned = text.replace(/\s+/g, ' ').trim();
   if (cleaned.length < 4 || cleaned.length > 40) return false;
+  if (hasHudStatNoiseText(cleaned)) return false;
   if (isShipOnlyTeamLabel(cleaned)) return false;
 
   const letters = cleaned.match(/[A-Za-z]/g) || [];

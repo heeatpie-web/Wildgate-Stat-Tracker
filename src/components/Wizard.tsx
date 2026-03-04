@@ -22,6 +22,7 @@ import { useAppStore } from '../store/useAppStore';
 import { getElectronAPI } from '../utils/electronAPI';
 import type { OCRProcessRuntimeOptions } from '../utils/electronBridge';
 import { rerunOCRMulti } from '../utils/artifactService';
+import { buildOcrNameSourceMap } from '../utils/ocr/nameSourceHints';
 import {
     getEliminatorDisplayLabel,
     getPrimaryEliminatedByTeamValue,
@@ -500,6 +501,7 @@ export const Wizard: React.FC = () => {
             const successfulCount = perFileResults.filter(f => f.success).length;
             const failedCount = perFileResults.length - successfulCount;
             const mergedData = rerun.data;
+            const nameSources = buildOcrNameSourceMap(perFileResults);
             if (!mergedData || successfulCount === 0) {
                 pushNotification({
                     message: 'OCR rerun failed for all artifacts.',
@@ -546,6 +548,7 @@ export const Wizard: React.FC = () => {
                     cloudError: mergedData.ocrCloudError,
                     geminiError: mergedData.ocrGeminiError,
                     mergeStats: mergedData.mergeStats,
+                    nameSources: Object.keys(nameSources).length > 0 ? nameSources : undefined,
                     timestamp: Date.now(),
                 },
             });

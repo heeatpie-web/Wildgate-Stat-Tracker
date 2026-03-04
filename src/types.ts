@@ -202,6 +202,13 @@ export interface Match {
     cloudError?: string;
     geminiError?: string;
     mergeStats?: { total: number; agreed: number; cloudPreferred: number; localOnly: number; cloudOnly: number; conflicts: number };
+    nameSources?: Record<string, Array<{
+      imagePath: string;
+      imageIndex: number;
+      sourceRole?: 'teammate' | 'opponent';
+      teamName?: string;
+      teamColor?: string;
+    }>>;
     fieldConfidence?: { teammateNames: number; opponentNames: number; ship: number; modifiers: number };
     routing?: {
       attempted: boolean;
