@@ -116,6 +116,13 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
   const extraModifiers = editedData.reachModifiers.filter(
     m => !UI_REACH_MODIFIERS.some(u => u.toLowerCase() === m.name.toLowerCase())
   );
+  const detectedHazards = useMemo(() => (
+    Array.from(new Set(
+      (data.hazards || [])
+        .map((hazard) => normalizeModifierName(String(hazard || '').trim()))
+        .filter(Boolean)
+    ))
+  ), [data.hazards]);
   const nameChanges = useMemo<NameChangeRecord[]>(() => {
     const original = originalDataRef.current;
     const changes: NameChangeRecord[] = [];
@@ -708,7 +715,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
         <p id={dialogDescriptionId} className="a11y-sr-only">
           Review OCR teammates, opponents, ship, and modifiers. Use Tab to navigate controls, Escape to close, and Control Enter to apply.
         </p>
-        <div className="ocr-review-body flex-1 min-h-0 overflow-y-auto space-y-5 custom-scrollbar md3-dialog-content">
+        <div className="ocr-review-body flex-1 min-h-0 overflow-y-auto space-y-6 custom-scrollbar md3-dialog-content">
           <div className="grid grid-cols-4 gap-3 ocr-review-metrics-grid">
             <div className="ocr-review-metric-card md3-surface-high rounded-card p-2 text-center">
               <div className="text-label-xs uppercase opacity-60">Ship</div>
@@ -825,6 +832,25 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+          {detectedHazards.length > 0 && (
+            <div className="md3-card rounded-card p-3 border border-success/20 bg-success-soft/20">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-label-sm font-bold uppercase tracking-wider text-success">Detected Hazards</span>
+                <span className="text-label-xs text-success/80">Auto-accepted</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {detectedHazards.map((hazard) => (
+                  <span
+                    key={hazard}
+                    className="inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-label-sm font-semibold bg-success-soft text-success"
+                  >
+                    <Check size={12} />
+                    {hazard}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
           {editedData.playerShip && (
@@ -1326,9 +1352,9 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
         <div className="md3-dialog-actions ocr-review-actions shrink-0">
           <button
             onClick={onCancel}
-            className="md3-btn-text"
+            className="md3-btn-tonal text-danger border border-danger/30"
           >
-            Cancel
+            Discard
           </button>
           {onSkip && (
             <button

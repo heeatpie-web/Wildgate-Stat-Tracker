@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, Search, Info, Users, Image as ImageIcon, Eye, Shield, Minus, Plus, ArrowLeft } from 'lucide-react';
+import { X, Check, Search, Info, Users, Image as ImageIcon, Eye, Shield, Minus, Plus, ArrowLeft, Trash2 } from 'lucide-react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
@@ -276,6 +276,85 @@ const serializeTeamDraftSeed = (teams: TeamDraft[]): string => JSON.stringify(
     }))
 );
 
+const clonePendingMatchDraft = (value: Partial<Match> | null | undefined): Partial<Match> | null => {
+    if (!value) return null;
+    return {
+        ...value,
+        teammates: Array.isArray(value.teammates) ? [...value.teammates] : value.teammates,
+        opponents: Array.isArray(value.opponents) ? [...value.opponents] : value.opponents,
+        opponentTeams: Array.isArray(value.opponentTeams)
+            ? value.opponentTeams.map((team) => ({
+                teamName: String(team.teamName || ''),
+                shipType: String(team.shipType || ''),
+                color: String(team.color || ''),
+                players: Array.isArray(team.players) ? [...team.players] : [],
+            }))
+            : value.opponentTeams,
+        artifacts: Array.isArray(value.artifacts) ? [...value.artifacts] : value.artifacts,
+        reachModifiers: Array.isArray(value.reachModifiers) ? [...value.reachModifiers] : value.reachModifiers,
+        kills: value.kills ? { ...value.kills } : value.kills,
+        loadout: value.loadout
+            ? {
+                ...value.loadout,
+                shipWeapons: Array.isArray(value.loadout.shipWeapons)
+                    ? value.loadout.shipWeapons.map((entry) => ({ ...entry }))
+                    : value.loadout.shipWeapons,
+                weapons: Array.isArray(value.loadout.weapons) ? [...value.loadout.weapons] : [],
+                equipment: Array.isArray(value.loadout.equipment) ? [...value.loadout.equipment] : [],
+                characterWeapons: Array.isArray(value.loadout.characterWeapons) ? [...value.loadout.characterWeapons] : value.loadout.characterWeapons,
+                characterEquipment: Array.isArray(value.loadout.characterEquipment) ? [...value.loadout.characterEquipment] : value.loadout.characterEquipment,
+                perks: Array.isArray(value.loadout.perks) ? [...value.loadout.perks] : value.loadout.perks,
+                characterPerks: Array.isArray(value.loadout.characterPerks) ? [...value.loadout.characterPerks] : value.loadout.characterPerks,
+                shipPerks: Array.isArray(value.loadout.shipPerks) ? [...value.loadout.shipPerks] : value.loadout.shipPerks,
+            }
+            : value.loadout,
+        ocrDebug: value.ocrDebug
+            ? {
+                ...value.ocrDebug,
+                nameSources: value.ocrDebug.nameSources
+                    ? Object.fromEntries(
+                        Object.entries(value.ocrDebug.nameSources).map(([key, entries]) => [
+                            key,
+                            Array.isArray(entries) ? entries.map((entry) => ({ ...entry })) : entries,
+                        ])
+                    )
+                    : value.ocrDebug.nameSources,
+            }
+            : value.ocrDebug,
+    };
+};
+
+const serializeShipTypeMap = (map: Record<string, string> | null | undefined): string => JSON.stringify(
+    Object.entries(map || {})
+        .map(([rawKey, rawValue]) => [normalizeSubmittedName(rawKey), normalizeSubmittedName(rawValue)] as const)
+        .filter(([key, value]) => key.length > 0 && value.length > 0)
+        .sort((left, right) => left[0].localeCompare(right[0]))
+);
+
+const buildSessionShipTypeMapFromDraft = (
+    teams: TeamDraft[],
+    baseMap: Record<string, string> | null | undefined
+): Record<string, string> => {
+    const next: Record<string, string> = { ...(baseMap || {}) };
+    teams.forEach((team, index) => {
+        const shipType = normalizeSubmittedName(team.shipType);
+        if (!shipType) return;
+        const teamColor = normalizeSubmittedName(team.color).toLowerCase();
+        const teamName = normalizeSubmittedName(team.teamName) || `Team ${index + 1}`;
+        const teamKey = normalizeSubmittedName(team.key);
+        if (teamColor) next[teamColor] = shipType;
+        if (teamName) next[teamName] = shipType;
+        if (teamKey) next[teamKey] = shipType;
+        (team.players || []).forEach((playerName) => {
+            const normalizedPlayer = normalizeSubmittedName(playerName);
+            if (normalizedPlayer) {
+                next[normalizedPlayer] = shipType;
+            }
+        });
+    });
+    return next;
+};
+
 export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     isOpen,
     onClose,
@@ -341,6 +420,8 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     const suppressSeedSyncRef = useRef(false);
     const teamDraftSeedRef = useRef<string>('');
     const initialTeamDraftRef = useRef<TeamDraft[]>([]);
+    const initialPendingDraftRef = useRef<Partial<Match> | null>(null);
+    const initialSessionShipTypesRef = useRef<Record<string, string>>({});
     const [dropdownAnchor, setDropdownAnchor] = useState<DropdownAnchor | null>(null);
     const teamAssignmentRosterListId = useId();
     const dialogTitleId = useId();
@@ -392,6 +473,11 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         });
         return out;
     }, [pendingMatchData, screenshotIndexByPath]);
+    const detectedHazards = useMemo(() => {
+        const rawHazards = (pendingMatchData as { ocrDebug?: { hazards?: unknown } } | null | undefined)?.ocrDebug?.hazards;
+        if (!Array.isArray(rawHazards)) return [];
+        return dedupeNames(rawHazards.map((entry) => normalizeSubmittedName(String(entry || ''))).filter(Boolean));
+    }, [pendingMatchData]);
     const activeUserDisplayKey = useMemo(
         () => normalizeNameKey(activeUser || pendingMatchData?.player || ''),
         [activeUser, pendingMatchData?.player]
@@ -479,9 +565,11 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             ...team,
             players: [...(team.players || [])],
         }));
+        initialPendingDraftRef.current = clonePendingMatchDraft(pendingMatchData);
+        initialSessionShipTypesRef.current = { ...(sessionShipTypes || {}) };
         teamDraftSeedRef.current = seededTeamDraftSignature;
         setLightboxIdx(null);
-    }, [isOpen, seededTeamDraft, seededTeamDraftSignature]);
+    }, [isOpen, pendingMatchData, seededTeamDraft, seededTeamDraftSignature, sessionShipTypes]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -660,6 +748,13 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             ship: friendlyTeam?.shipType || String(pendingMatchData?.ship || ''),
         });
     }, [activeUser, inferredFriendlyTeamIndex, isOpen, pendingMatchData, setPendingMatchData, teamDraft]);
+
+    useEffect(() => {
+        if (!isOpen || teamDraft.length === 0) return;
+        const nextSessionShipTypes = buildSessionShipTypeMapFromDraft(teamDraft, initialSessionShipTypesRef.current);
+        if (serializeShipTypeMap(sessionShipTypes) === serializeShipTypeMap(nextSessionShipTypes)) return;
+        setSessionShipTypes(nextSessionShipTypes, 'manual');
+    }, [isOpen, sessionShipTypes, setSessionShipTypes, teamDraft]);
 
     // Filter pilot registry for autocomplete
     const getFilteredRegistry = (playerName: string) => {
@@ -1015,6 +1110,17 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         }
     };
 
+    const handleDiscardReview = () => {
+        const pendingSnapshot = initialPendingDraftRef.current;
+        setPendingMatchData(clonePendingMatchDraft(pendingSnapshot));
+        const sessionShipSnapshot = { ...(initialSessionShipTypesRef.current || {}) };
+        if (serializeShipTypeMap(sessionShipSnapshot) !== serializeShipTypeMap(sessionShipTypes)) {
+            setSessionShipTypes(sessionShipSnapshot, 'manual');
+        }
+        announce('Discarded OCR review changes.', 'polite');
+        onClose();
+    };
+
     const updateTeamShip = (teamIndex: number, shipType: string) => {
         setTeamDraft((prev) => prev.map((team, index) => (
             index === teamIndex ? { ...team, shipType } : team
@@ -1202,7 +1308,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                             </div>
                         )}
 
-                        <div className="md3-card p-4 mb-3 border border-md-sys-outline/20 ocr-correction-batch-card space-y-3">
+                        <div className="md3-card p-4 md:p-5 mb-4 border border-md-sys-outline/20 ocr-correction-batch-card space-y-4">
                             <div className="flex items-center justify-between">
                                 <span className="text-label-sm font-bold uppercase text-md-sys-on-surface/70">Batch Operations</span>
                                 <span className="text-label-xs text-md-sys-on-surface/45">
@@ -1271,8 +1377,8 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                         </div>
 
                         {teamDraft.length > 0 && (
-                            <section className="md3-card p-3 mb-3 border border-md-sys-outline/20 ocr-team-assignment-shell">
-                                <div className="flex items-center justify-between gap-2 mb-2">
+                            <section className="md3-card p-4 md:p-5 mb-4 border border-md-sys-outline/20 ocr-team-assignment-shell">
+                                <div className="flex items-center justify-between gap-2 mb-3">
                                     <span className="text-label-sm font-bold uppercase opacity-60 flex items-center gap-1">
                                         <Users size={14} />
                                         Team Assignment
@@ -1310,10 +1416,34 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                             </section>
                         )}
 
+                        {detectedHazards.length > 0 && (
+                            <section className="md3-card p-4 md:p-5 mb-4 border border-md-sys-outline/20">
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                    <span className="text-label-sm font-bold uppercase opacity-60">
+                                        Detected Hazards
+                                    </span>
+                                    <span className="text-label-xs text-md-sys-on-surface/45">
+                                        Auto-accepted
+                                    </span>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {detectedHazards.map((hazard) => (
+                                        <span
+                                            key={hazard}
+                                            className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-sm font-semibold"
+                                        >
+                                            <Check size={12} />
+                                            {hazard}
+                                        </span>
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+
                         {/* Player List */}
-                        <div className="space-y-4">
+                        <div className="space-y-5">
                             {reviewScreenshots.length > 0 && (
-                                <div className="sticky top-0 z-20 md3-card p-2 border border-md-sys-outline/15 bg-md-sys-surface/95 backdrop-blur-sm">
+                                <div className="sticky top-0 z-20 md3-card p-3 border border-md-sys-outline/15 bg-md-sys-surface/95 backdrop-blur-sm">
                                     <div className="flex items-center justify-between gap-2 mb-1">
                                         <span className="text-label-sm font-bold uppercase opacity-60 flex items-center gap-1">
                                             <ImageIcon size={14} />
@@ -1612,6 +1742,14 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                         </button>
 
                         <div className="flex items-center gap-2">
+                            <button
+                                onClick={handleDiscardReview}
+                                className="md3-btn-tonal inline-flex items-center gap-1.5 text-danger border border-danger/30"
+                                title="Discard all OCR review edits and close"
+                            >
+                                <Trash2 size={14} />
+                                Discard
+                            </button>
                             <button
                                 onClick={handleAcceptAllHigh}
                                 className="md3-btn-tonal"
