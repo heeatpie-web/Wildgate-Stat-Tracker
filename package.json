@@ -127,6 +127,10 @@
     ],
     "extraResources": [
       {
+        "from": "models/paddleocr",
+        "to": "models/paddleocr"
+      },
+      {
         "from": "electron/assets/icon.ico",
         "to": "icon.ico"
       },

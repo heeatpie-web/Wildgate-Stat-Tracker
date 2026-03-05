@@ -74,6 +74,11 @@ export const Wizard: React.FC = () => {
         pendingKilledBy, setPendingKilledBy,
         pendingKilledByShip, setPendingKilledByShip,
         sessionTeams, sessionShipTypes,
+        setSelectedTeammates,
+        setSelectedOpponents,
+        setSelectedReachModifiers,
+        setSessionTeams,
+        setSessionShipTypes,
         timeMin, setTimeMin,
         timeSec, setTimeSec,
         damageTaken, setDamageTaken,
@@ -232,7 +237,9 @@ export const Wizard: React.FC = () => {
         const pendingMatchId = Number((pendingMatchData as Match | null)?.id || 0);
         if (
             requestedOcrReviewMatchId === null
-            || (Number.isInteger(pendingMatchId) && pendingMatchId > 0 && pendingMatchId === requestedOcrReviewMatchId)
+            || !Number.isInteger(pendingMatchId)
+            || pendingMatchId <= 0
+            || pendingMatchId === requestedOcrReviewMatchId
         ) {
             setActiveTab('ocr');
             setRequestedOcrReviewMatchId(undefined);
@@ -320,11 +327,13 @@ export const Wizard: React.FC = () => {
         || (pendingPlacement != null && pendingPlacement >= 2 && pendingPlacement <= 5)
     );
     const canFinalizeResult = hasSelectedResult && hasSelectedOutcomeType && hasValidCombatLossPlacement;
+    const hasPendingOcrReview = String(pendingMatchData?.ocrState || '').trim().toLowerCase() === 'reviewing';
     const finalizeButtonLabel = (() => {
         if (!hasSelectedResult) return 'Select Match Result';
         if (selectedResult === 'Draw') return 'Finalize Draw';
         if (!hasSelectedOutcomeType) return selectedResult === 'Loss' ? 'Choose Loss Type' : 'Choose Win Type';
         if (!hasValidCombatLossPlacement) return 'Select Placement';
+        if (hasPendingOcrReview) return 'Open OCR Review';
         return selectedResult === 'Loss'
             ? `Finalize ${selectedWinType} Loss`
             : `Finalize ${selectedWinType} Win`;
@@ -572,23 +581,65 @@ export const Wizard: React.FC = () => {
             const nextOpponents = dedupeNames(nextOpponentTeams.flatMap((team: { players: string[] }) => team.players));
             const nextModifiers = dedupeNames((mergedData.reachModifiers || []).map((entry: any) => String(entry?.name || entry || '').trim()));
             const rerunShip = String(mergedData.playerShip?.shipType || '').trim();
+            const latestPending = (useAppStore.getState().pendingMatchData || pendingMatchData || {}) as Partial<Match>;
+            const captainSeed = String(activeUser || latestPending.player || 'You').trim() || 'You';
+            const friendlyShipSeed = rerunShip || String(latestPending.ship || '').trim();
+            const friendlyTeamLabel = friendlyShipSeed || captainSeed || 'Friendly Team';
+            const friendlyTeamKey = `friendly:${friendlyTeamLabel}`;
+            const friendlyMembers = dedupeNames([captainSeed, ...nextTeammates]);
+            const nextSessionTeams: Record<string, string[]> = {};
+            if (friendlyMembers.length > 0) {
+                nextSessionTeams[friendlyTeamKey] = friendlyMembers;
+            }
+            nextOpponentTeams.forEach((team) => {
+                const colorKey = String(team.color || 'unknown').trim() || 'unknown';
+                if (team.players.length > 0) {
+                    nextSessionTeams[colorKey] = [...team.players];
+                }
+            });
+            const nextSessionShipTypes: Record<string, string> = {};
+            if (friendlyShipSeed) {
+                nextSessionShipTypes[friendlyTeamKey] = friendlyShipSeed;
+                nextSessionShipTypes.friendly = friendlyShipSeed;
+                nextSessionShipTypes[captainSeed] = friendlyShipSeed;
+                nextTeammates.forEach((name) => {
+                    nextSessionShipTypes[name] = friendlyShipSeed;
+                });
+            }
+            nextOpponentTeams.forEach((team) => {
+                const teamShip = String(team.shipType || '').trim();
+                if (!teamShip) return;
+                const colorKey = String(team.color || 'unknown').trim() || 'unknown';
+                nextSessionShipTypes[colorKey] = teamShip;
+                team.players.forEach((name) => {
+                    nextSessionShipTypes[name] = teamShip;
+                });
+            });
+
+            setSelectedTeammates(nextTeammates);
+            setSelectedOpponents(nextOpponents);
+            setSessionTeams(nextSessionTeams);
+            setSessionShipTypes(nextSessionShipTypes, 'ocr');
+            if (nextModifiers.length > 0) {
+                setSelectedReachModifiers(nextModifiers, 'ocr');
+            }
 
             useAppStore.getState().setPendingMatchData({
-                ...pendingMatchData,
-                ship: rerunShip || String(pendingMatchData.ship || ''),
-                teammates: nextTeammates.length > 0 ? nextTeammates : (pendingMatchData.teammates || []),
-                opponents: nextOpponents.length > 0 ? nextOpponents : (pendingMatchData.opponents || []),
-                opponentTeams: nextOpponentTeams.length > 0 ? nextOpponentTeams : (pendingMatchData.opponentTeams || []),
-                reachModifiers: nextModifiers.length > 0 ? nextModifiers : (pendingMatchData.reachModifiers || []),
+                ...latestPending,
+                ship: rerunShip || String(latestPending.ship || ''),
+                teammates: nextTeammates.length > 0 ? nextTeammates : (latestPending.teammates || []),
+                opponents: nextOpponents.length > 0 ? nextOpponents : (latestPending.opponents || []),
+                opponentTeams: nextOpponentTeams.length > 0 ? nextOpponentTeams : (latestPending.opponentTeams || []),
+                reachModifiers: nextModifiers.length > 0 ? nextModifiers : (latestPending.reachModifiers || []),
                 ocrState: 'reviewing',
                 ocrDebug: {
-                    ...(pendingMatchData.ocrDebug || {}),
+                    ...(latestPending.ocrDebug || {}),
                     rawText: mergedData.rawText,
                     confidence: mergedData.overallConfidence,
                     hazards: Array.isArray(mergedData.hazards)
                         ? Array.from(new Set(mergedData.hazards.map((hazard: unknown) => String(hazard || '').trim()).filter(Boolean)))
                         : undefined,
-                    source: mergedData.ocrSource || pendingMatchData.ocrDebug?.source,
+                    source: mergedData.ocrSource || latestPending.ocrDebug?.source,
                     fallbackReason: mergedData.ocrFallbackReason,
                     cloudError: mergedData.ocrCloudError,
                     geminiError: mergedData.ocrGeminiError,
@@ -1092,7 +1143,13 @@ export const Wizard: React.FC = () => {
                         </button>
 
                         <button
-                            onClick={() => processFinalSubmission(selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat'))}
+                            onClick={() => {
+                                if (hasPendingOcrReview) {
+                                    setActiveTab('ocr');
+                                    return;
+                                }
+                                processFinalSubmission(selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat'));
+                            }}
                             disabled={submitting || !canFinalizeResult}
                             className={`w-full ${isOverlayMode ? 'py-4' : 'py-5'} rounded-3xl font-bold uppercase tracking-wide-30 text-label-sm transition-all shadow-xl active:scale-95 ${submitting ? 'opacity-disabled grayscale' : (!canFinalizeResult ? 'opacity-disabled grayscale' : (selectedResult === 'Draw' ? 'bg-info text-ink-strong' : (selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong' : 'bg-md-sys-primary text-md-sys-onPrimary')))}`
                             }

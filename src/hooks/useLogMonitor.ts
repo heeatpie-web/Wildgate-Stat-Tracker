@@ -6,6 +6,7 @@ import { useSoundEffects } from '../hooks/useSoundEffects';
 import { HERO_GUIDS, SHIP_GUIDS, WEAPON_GUIDS, EQUIPMENT_GUIDS } from '../utils/guids';
 import { SHIPS, CHARACTERS, UNNAMED_PLAYER_PREFIX, Match, Loadout, TelemetryConsistency } from '../types';
 import { EQUIPMENT_DB } from '../utils/equipmentDb';
+import { getPerkCatalog, MAX_PERKS_PER_MATCH } from '../components/patch/patchEntityCatalog';
 import { processTelemetryEvent, TelemetryActions, TelemetryContext } from '../utils/telemetryProcessor';
 import Logger from '../utils/logger';
 import { getElectronAPI } from '../utils/electronAPI';
@@ -102,8 +103,10 @@ const CHARACTER_EQUIPMENT_NAMES = EQUIPMENT_DB
     .filter((item) => item.type === 'CharacterEquipment')
     .map((item) => item.name)
     .filter(Boolean);
+const CHARACTER_PERK_NAMES = getPerkCatalog().filter(Boolean);
 const PROSPECTOR_WEAPON_SET = new Set(CHARACTER_WEAPON_NAMES);
 const PROSPECTOR_EQUIPMENT_SET = new Set(CHARACTER_EQUIPMENT_NAMES);
+const PROSPECTOR_PERK_SET = new Set(CHARACTER_PERK_NAMES);
 
 const TELEMETRY_PROSPECTOR_WEAPON_NAMES = Array.from(new Set([
     ...CHARACTER_WEAPON_NAMES,
@@ -111,6 +114,10 @@ const TELEMETRY_PROSPECTOR_WEAPON_NAMES = Array.from(new Set([
 
 const TELEMETRY_PROSPECTOR_EQUIPMENT_NAMES = Array.from(new Set([
     ...CHARACTER_EQUIPMENT_NAMES,
+]));
+
+const TELEMETRY_PROSPECTOR_PERK_NAMES = Array.from(new Set([
+    ...CHARACTER_PERK_NAMES,
 ]));
 
 /**
@@ -856,6 +863,16 @@ export const useLogMonitor = (activeUser?: string) => {
                             if (value == null) return '';
                             const raw = String(value).trim();
                             if (!raw) return '';
+                            const afterPipe = raw.includes('|') ? (raw.split('|').pop() || raw) : raw;
+                            const afterSlash = afterPipe.includes('/') ? (afterPipe.split('/').pop() || afterPipe) : afterPipe;
+                            const afterDot = afterSlash.includes('.') ? (afterSlash.split('.').pop() || afterSlash) : afterSlash;
+                            const afterColon = afterDot.includes(':') ? (afterDot.split(':').pop() || afterDot) : afterDot;
+                            return afterColon.replace(/[{}-]/g, '').trim().toUpperCase();
+                        };
+                        const normalizeGuidLookupKey = (value: unknown): string => {
+                            if (value == null) return '';
+                            const raw = String(value).trim();
+                            if (!raw) return '';
                             const afterColon = raw.includes(':') ? (raw.split(':').pop() || '') : raw;
                             return afterColon.replace(/[{}-]/g, '').trim().toUpperCase();
                         };
@@ -870,6 +887,22 @@ export const useLogMonitor = (activeUser?: string) => {
                             }
                             return undefined;
                         };
+                        const buildCanonicalGuidLookup = (source: Record<string, string>) => {
+                            const lookup: Record<string, string> = {};
+                            Object.entries(source || {}).forEach(([rawKey, rawValue]) => {
+                                const key = normalizeGuidLookupKey(rawKey);
+                                const value = String(rawValue || '').trim();
+                                if (!key || !value || lookup[key]) return;
+                                lookup[key] = value;
+                            });
+                            return lookup;
+                        };
+                        const canonicalKnownMappings = buildCanonicalGuidLookup(knownMappings);
+                        const canonicalUidWeaponMappings = buildCanonicalGuidLookup(uidMappings.weapons);
+                        const canonicalUidEquipmentMappings = buildCanonicalGuidLookup(uidMappings.equipment);
+                        const canonicalUidPerkMappings = buildCanonicalGuidLookup(uidMappings.perks);
+                        const canonicalWeaponDb = buildCanonicalGuidLookup(WEAPON_GUIDS);
+                        const canonicalEquipmentDb = buildCanonicalGuidLookup(EQUIPMENT_GUIDS);
 
                         const rawHeroGuid = getLoadoutField(loadoutData, ['guidhero', 'heroguid', 'guid_hero', 'heroid', 'hero_id']);
                         const rawHero = getLoadoutField(loadoutData, ['hero', 'heroname', 'hero_name']);
@@ -1020,23 +1053,34 @@ export const useLogMonitor = (activeUser?: string) => {
                             }
                             return out;
                         };
-                        const resolveGuid = (guid: string, db: Record<string, string>, type: 'Weapon' | 'Equipment') => {
+                        const resolveGuid = (guid: string, db: Record<string, string>, type: 'Weapon' | 'Equipment' | 'Perk') => {
                             if (!guid) return null;
                             const clean = normalizeGuid(guid);
                             if (!clean) return null;
-                            const domain = type === 'Weapon' ? 'weapons' : 'equipment';
+                            const domainMappings = type === 'Weapon'
+                                ? uidMappings.weapons
+                                : (type === 'Equipment' ? uidMappings.equipment : uidMappings.perks);
+                            const canonicalDomainMappings = type === 'Weapon'
+                                ? canonicalUidWeaponMappings
+                                : (type === 'Equipment' ? canonicalUidEquipmentMappings : canonicalUidPerkMappings);
+                            const canonicalDb = type === 'Weapon'
+                                ? canonicalWeaponDb
+                                : (type === 'Equipment' ? canonicalEquipmentDb : {});
                             const cleanUpper = clean.toUpperCase();
                             const cleanLower = clean.toLowerCase();
                             const name =
-                                uidMappings[domain][clean]
-                                || uidMappings[domain][cleanUpper]
-                                || uidMappings[domain][cleanLower]
+                                domainMappings[clean]
+                                || domainMappings[cleanUpper]
+                                || domainMappings[cleanLower]
+                                || canonicalDomainMappings[cleanUpper]
                                 || knownMappings[clean]
                                 || knownMappings[cleanUpper]
                                 || knownMappings[cleanLower]
+                                || canonicalKnownMappings[cleanUpper]
                                 || db[clean]
                                 || db[cleanUpper]
-                                || db[cleanLower];
+                                || db[cleanLower]
+                                || canonicalDb[cleanUpper];
                             if (!name) {
                                 if (isStableGuid(clean)) {
                                     registerUnknownId(cleanUpper, type);
@@ -1072,6 +1116,18 @@ export const useLogMonitor = (activeUser?: string) => {
                             'crewEquipment', 'crewGear', 'loadoutCharacterEquipment', 'loadoutCharEquipment',
                             'equipment', 'equipmentGuids', 'equipmentIds', 'equipmentSlots', 'equipmentSlotData', 'equipmentLoadout',
                         ]);
+                        const perkGuidCandidates = extractByKeys(loadoutData, [
+                            'guidPerkPrimary', 'guidPerkSecondary',
+                            'perkGuidPrimary', 'perkGuidSecondary',
+                            'guidPerk1', 'guidPerk2',
+                            'perkGuid1', 'perkGuid2',
+                            'primaryPerkGuid', 'secondaryPerkGuid',
+                            'perk_guid_primary', 'perk_guid_secondary',
+                            'guid_perk_primary', 'guid_perk_secondary',
+                            'perkGuids', 'perksGuids', 'perkIds', 'perkSlots', 'perkSlotData', 'perkLoadout',
+                            'characterPerks', 'characterPerk', 'characterPerkSlots', 'characterPerkLoadout',
+                            'traits', 'traitIds', 'traitGuids',
+                        ]);
                         const weaponNameCandidates = extractByKeys(loadoutData, [
                             'weapons', 'weaponSlots', 'weaponSlotData', 'weaponLoadout',
                             'weaponPrimary', 'weaponSecondary',
@@ -1101,6 +1157,12 @@ export const useLogMonitor = (activeUser?: string) => {
                             'charEquipment', 'charEquipments', 'charGear', 'charEquipmentSlots', 'charEquipmentLoadout',
                             'crewEquipment', 'crewGear', 'loadoutCharacterEquipment', 'loadoutCharEquipment',
                         ]);
+                        const perkNameCandidates = extractByKeys(loadoutData, [
+                            'perks', 'perkNames', 'perkDisplayNames', 'perkLoadout',
+                            'characterPerks', 'characterPerk', 'characterPerkSlots', 'characterPerkLoadout',
+                            'traits', 'traitNames', 'traitDisplayNames',
+                            'loadoutPerks', 'loadoutCharacterPerks',
+                        ]);
                         const hasCharacterWeaponSignal = [
                             'characterWeapons', 'characterWeapon', 'characterWeaponSlots', 'characterWeaponLoadout',
                             'charWeapons', 'charWeapon', 'charWeaponSlots', 'charWeaponLoadout',
@@ -1112,12 +1174,20 @@ export const useLogMonitor = (activeUser?: string) => {
                             'charEquipment', 'charEquipments', 'charGear', 'charEquipmentSlots', 'charEquipmentLoadout',
                             'crewEquipment', 'crewGear', 'loadoutCharacterEquipment', 'loadoutCharEquipment',
                         ].some((key) => getLoadoutField(loadoutData, [key]) !== undefined);
+                        const hasCharacterPerkSignal = [
+                            'characterPerks', 'characterPerk', 'characterPerkSlots', 'characterPerkLoadout',
+                            'perks', 'perkSlots', 'perkLoadout',
+                            'traits', 'traitIds', 'traitGuids',
+                        ].some((key) => getLoadoutField(loadoutData, [key]) !== undefined);
 
                         const resolvedGuidWeapons = weaponGuidCandidates
                             .map((g) => resolveGuid(g, WEAPON_GUIDS, 'Weapon'))
                             .filter(Boolean) as string[];
                         const resolvedGuidEquipment = equipmentGuidCandidates
                             .map((g) => resolveGuid(g, EQUIPMENT_GUIDS, 'Equipment'))
+                            .filter(Boolean) as string[];
+                        const resolvedGuidPerks = perkGuidCandidates
+                            .map((g) => resolveGuid(g, {}, 'Perk'))
                             .filter(Boolean) as string[];
 
                         const matchedWeaponNames = Array.from(new Set([
@@ -1132,6 +1202,11 @@ export const useLogMonitor = (activeUser?: string) => {
                         ]
                             .map((n) => fuzzyMatchList(n, TELEMETRY_PROSPECTOR_EQUIPMENT_NAMES))
                             .filter(Boolean) as string[]));
+                        const matchedPerkNames = Array.from(new Set(
+                            perkNameCandidates
+                                .map((n) => fuzzyMatchList(n, TELEMETRY_PROSPECTOR_PERK_NAMES))
+                                .filter(Boolean) as string[]
+                        ));
 
                         const resolvedProspectorWeapons = Array.from(new Set([
                             ...resolvedGuidWeapons.filter((name) => PROSPECTOR_WEAPON_SET.has(name)),
@@ -1141,8 +1216,13 @@ export const useLogMonitor = (activeUser?: string) => {
                             ...resolvedGuidEquipment.filter((name) => PROSPECTOR_EQUIPMENT_SET.has(name)),
                             ...matchedEquipmentNames.filter((name) => PROSPECTOR_EQUIPMENT_SET.has(name)),
                         ])).slice(0, 2);
+                        const resolvedProspectorPerks = Array.from(new Set([
+                            ...resolvedGuidPerks.filter((name) => PROSPECTOR_PERK_SET.has(name)),
+                            ...matchedPerkNames.filter((name) => PROSPECTOR_PERK_SET.has(name)),
+                        ])).slice(0, MAX_PERKS_PER_MATCH);
                         const shouldApplyCharacterWeapons = hasCharacterWeaponSignal || resolvedProspectorWeapons.length > 0;
                         const shouldApplyCharacterEquipment = hasCharacterEquipmentSignal || resolvedProspectorEquipment.length > 0;
+                        const shouldApplyCharacterPerks = hasCharacterPerkSignal || resolvedProspectorPerks.length > 0;
                         const finalHero = (heroName && !heroName.startsWith('Unknown')) ? heroName : currentLoadoutRef.current?.hero;
                         const finalShip = (shipName && !shipName.startsWith('Unknown')) ? shipName : currentLoadoutRef.current?.ship;
 
@@ -1158,6 +1238,12 @@ export const useLogMonitor = (activeUser?: string) => {
                             characterEquipment: shouldApplyCharacterEquipment
                                 ? resolvedProspectorEquipment
                                 : (currentLoadoutRef.current?.characterEquipment || []),
+                            characterPerks: shouldApplyCharacterPerks
+                                ? resolvedProspectorPerks
+                                : (currentLoadoutRef.current?.characterPerks || currentLoadoutRef.current?.perks || []),
+                            perks: shouldApplyCharacterPerks
+                                ? resolvedProspectorPerks
+                                : (currentLoadoutRef.current?.perks || currentLoadoutRef.current?.characterPerks || []),
                         };
                         const previousLoadoutNames = new Set([
                             ...(currentLoadoutRef.current?.weapons || []),

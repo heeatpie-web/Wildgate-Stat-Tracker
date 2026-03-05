@@ -31,37 +31,6 @@ interface ActionPanelProps {
 
 type MatchResult = 'Win' | 'Loss' | 'Draw';
 
-const TelemetryIndicatorDot: React.FC<{
-    detectedShip?: string;
-    detectedHero?: string;
-    activeShip?: string;
-    activeHero?: string;
-}> = ({ detectedShip, detectedHero, activeShip, activeHero }) => {
-    const lines: string[] = [];
-    if (detectedShip) {
-        const shipLabel = detectedShip.split('(')[0].trim();
-        const overridden = activeShip && detectedShip !== activeShip;
-        lines.push(`Ship: ${shipLabel}${overridden ? ' (overridden)' : ''}`);
-    }
-    if (detectedHero) {
-        const overridden = activeHero && detectedHero !== activeHero;
-        lines.push(`Prospector: ${detectedHero}${overridden ? ' (overridden)' : ''}`);
-    }
-    return (
-        <div className="flex items-center gap-1.5 group/telemetry relative">
-            <span className="w-1.5 h-1.5 rounded-full bg-info flex-shrink-0 animate-pulse" />
-            <span className="text-label-xs text-info font-semibold uppercase tracking-wide opacity-60 group-hover/telemetry:opacity-100 transition-opacity cursor-default select-none">Telemetry</span>
-            <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/telemetry:block z-50 pointer-events-none">
-                <div className="bg-md-sys-surface border border-md-sys-outline/20 rounded-control shadow-lg px-2.5 py-1.5 text-label-xs space-y-0.5 whitespace-nowrap">
-                    {lines.map((line, i) => (
-                        <div key={i} className="text-md-sys-on-surface">{line}</div>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-};
-
 export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', density = 'standard', onSmartCaptureData }) => {
     const {
         sessionStartTime,
@@ -69,8 +38,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         lastActivity, setLastActivity,
         matchStartTime, isMatchInProgress,
         setMatchStartTime, setIsMatchInProgress,
-        activeShip, shipSource, telemetryDetectedShip,
-        activeHero, heroSource, telemetryDetectedHero,
         pendingReviews,
         detectedUnknowns,
         setSessionTeams
@@ -167,11 +134,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     };
 
     const isBusy = isScanning || isCapturing || isProcessing;
-    const hasTelemetryIndicators = Boolean(
-        telemetryDetectedShip
-        || telemetryDetectedHero
-    );
-
     const handleDiscardMatch = React.useCallback(() => {
         discardMatch();
         clearCaptures();
@@ -692,15 +654,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     </div>
                 )}
 
-                {hasTelemetryIndicators && (
-                    <TelemetryIndicatorDot
-                        detectedShip={telemetryDetectedShip}
-                        detectedHero={telemetryDetectedHero}
-                        activeShip={activeShip ?? undefined}
-                        activeHero={activeHero ?? undefined}
-                    />
-                )}
-
                 <StatusOverlay />
                 <OcrDecisionPrompt />
             </div>
@@ -828,15 +781,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     <div className="text-label-sm font-semibold text-md-sys-on-surface/60 px-1">
                         OCR queue: {processingProgress.current}/{processingProgress.total}
                     </div>
-                )}
-
-                {hasTelemetryIndicators && (
-                    <TelemetryIndicatorDot
-                        detectedShip={telemetryDetectedShip}
-                        detectedHero={telemetryDetectedHero}
-                        activeShip={activeShip ?? undefined}
-                        activeHero={activeHero ?? undefined}
-                    />
                 )}
 
                 <StatusOverlay />

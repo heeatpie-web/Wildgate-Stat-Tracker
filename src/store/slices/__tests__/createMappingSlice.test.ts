@@ -131,6 +131,28 @@ describe('createMappingSlice', () => {
     });
   });
 
+  describe('unknown ID normalization', () => {
+    it('coalesces GUID format variants into a single unknown entry', () => {
+      const canonical = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+      store.getState().registerUnknownId('{aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa}', 'Perk');
+      store.getState().registerUnknownId(canonical, 'Perk');
+
+      const unknownKeys = Object.keys(store.getState().detectedUnknowns);
+      expect(unknownKeys).toEqual([canonical]);
+      expect(store.getState().detectedUnknowns[canonical]?.type).toBe('Perk');
+    });
+
+    it('clears normalized unknown GUID entries when mapping is added under another format', () => {
+      const canonical = 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
+      store.getState().registerUnknownId(canonical, 'Weapon');
+      expect(Object.keys(store.getState().detectedUnknowns)).toEqual([canonical]);
+
+      store.getState().setUidMapping('weapons', '{bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb}', 'Test Weapon');
+      expect(Object.keys(store.getState().detectedUnknowns)).toHaveLength(0);
+      expect(store.getState().uidMappings.weapons[canonical]).toBe('Test Weapon');
+    });
+  });
+
   // ── OCR Corrections ──
 
   describe('ocrCorrections', () => {

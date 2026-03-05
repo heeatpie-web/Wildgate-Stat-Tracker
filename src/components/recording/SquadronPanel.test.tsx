@@ -26,9 +26,18 @@ vi.mock('../../providers/GameDataProvider', () => ({
   useGameData: () => gameData,
 }));
 
+const uiState = {
+  telemetryStatus: { exists: true },
+};
+
+vi.mock('../../providers/UIStateProvider', () => ({
+  useUIState: () => uiState,
+}));
+
 describe('SquadronPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    uiState.telemetryStatus = { exists: true };
     gameData.activeShip = 'Hunter';
     gameData.shipSource = 'telemetry';
     gameData.telemetryDetectedShip = 'Hunter (2 Player)';
@@ -37,22 +46,24 @@ describe('SquadronPanel', () => {
     gameData.telemetryDetectedHero = 'Adrian';
   });
 
-  it('shows ship and prospector sections in standard mode without a telemetry active badge', () => {
+  it('shows ship and prospector sections in standard mode with a single telemetry summary badge', () => {
     render(<SquadronPanel />);
 
     expect(screen.getByText('Ship and Loadout')).toBeInTheDocument();
     expect(screen.getByText('Ship')).toBeInTheDocument();
     expect(screen.getByText('Prospector')).toBeInTheDocument();
-    expect(screen.queryByText(/telemetry active/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId('recording-telemetry-summary')).toHaveTextContent('Telemetry 3/3');
+    expect(screen.queryAllByText(/^Telemetry$/i)).toHaveLength(0);
   });
 
-  it('shows ship and prospector sections in compact mode without a telemetry active badge', () => {
+  it('shows ship and prospector sections in compact mode with a single telemetry summary badge', () => {
     render(<SquadronPanel density="compact" />);
 
     expect(screen.getByText('Ship and Loadout')).toBeInTheDocument();
     expect(screen.getByText('Ship')).toBeInTheDocument();
     expect(screen.getByText('Prospector')).toBeInTheDocument();
-    expect(screen.queryByText(/telemetry active/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId('recording-telemetry-summary')).toHaveTextContent('Telemetry 3/3');
+    expect(screen.queryAllByText(/^Telemetry$/i)).toHaveLength(0);
   });
 
   it('highlights ship selection when telemetry and active ship use equivalent labels', () => {

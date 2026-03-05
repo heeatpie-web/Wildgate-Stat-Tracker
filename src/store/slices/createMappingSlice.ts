@@ -258,6 +258,40 @@ const buildTeamIdentityKey = (teamName: string, color?: string): string => {
     return `${normalizedName}|${normalizeTeamIdentityColor(color)}`;
 };
 
+const GUID_HEX_PATTERN = /^[A-F0-9]{32}$/i;
+
+const normalizeGuidLikeId = (value: unknown): string => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const direct = raw.replace(/[{}-]/g, '');
+    if (GUID_HEX_PATTERN.test(direct)) return direct.toUpperCase();
+
+    const segments = raw.split(/[|/\\:.]/g).map((part) => part.trim()).filter(Boolean);
+    for (let index = segments.length - 1; index >= 0; index -= 1) {
+        const candidate = segments[index].replace(/[{}-]/g, '');
+        if (GUID_HEX_PATTERN.test(candidate)) return candidate.toUpperCase();
+    }
+    return raw;
+};
+
+const buildIdAliases = (value: unknown): string[] => {
+    const raw = String(value || '').trim();
+    if (!raw) return [];
+    const canonical = normalizeGuidLikeId(raw);
+    return Array.from(new Set(
+        [raw, raw.toLowerCase(), raw.toUpperCase(), canonical, canonical.toLowerCase(), canonical.toUpperCase()]
+            .map((entry) => String(entry || '').trim())
+            .filter(Boolean)
+    ));
+};
+
+const idsEquivalent = (left: unknown, right: unknown): boolean => {
+    const leftAliases = buildIdAliases(left);
+    const rightAliases = new Set(buildIdAliases(right));
+    if (leftAliases.length === 0 || rightAliases.size === 0) return false;
+    return leftAliases.some((alias) => rightAliases.has(alias));
+};
+
 const emptyTeamIdentityContexts = (): Record<OcrAliasContext, number> => ({
     lobby: 0,
     tactical: 0,
@@ -772,27 +806,37 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
 
     // Legacy methods for backwards compatibility
     addMapping: (id, name) => set((state) => {
-        Logger.info('MappingSlice', `Added mapping: ${id} -> ${name}`);
+        const normalizedId = normalizeGuidLikeId(id);
+        if (!normalizedId) return {};
+        Logger.info('MappingSlice', `Added mapping: ${normalizedId} -> ${name}`);
 
         // Also update player profile
-        const existing = state.playerProfiles[id] || createEmptyProfile(id);
+        const existingProfileEntry = Object.entries(state.playerProfiles)
+            .find(([profileId]) => idsEquivalent(profileId, normalizedId));
+        const existing = existingProfileEntry?.[1] || createEmptyProfile(normalizedId);
 
         return {
-            knownMappings: { ...state.knownMappings, [id]: name },
-            playerProfiles: { ...state.playerProfiles, [id]: { ...existing, name } },
+            knownMappings: { ...state.knownMappings, [normalizedId]: name },
+            playerProfiles: { ...state.playerProfiles, [existing.id || normalizedId]: { ...existing, id: existing.id || normalizedId, name } },
             uidMappings: {
                 ...state.uidMappings,
-                players: { ...state.uidMappings.players, [id]: name }
+                players: { ...state.uidMappings.players, [normalizedId]: name }
             },
             detectedUnknowns: Object.fromEntries(
-                Object.entries(state.detectedUnknowns).filter(([k]) => k !== id)
+                Object.entries(state.detectedUnknowns).filter(([k]) => !idsEquivalent(k, normalizedId))
             )
         };
     }),
 
     removeMapping: (id) => set((state) => {
-        const { [id]: _, ...rest } = state.knownMappings;
-        const { [id]: __, ...restPlayers } = state.uidMappings.players;
+        const normalizedId = normalizeGuidLikeId(id);
+        if (!normalizedId) return {};
+        const rest = Object.fromEntries(
+            Object.entries(state.knownMappings).filter(([key]) => !idsEquivalent(key, normalizedId))
+        );
+        const restPlayers = Object.fromEntries(
+            Object.entries(state.uidMappings.players).filter(([key]) => !idsEquivalent(key, normalizedId))
+        );
         Logger.info('MappingSlice', `Removed mapping: ${id}`);
         return {
             knownMappings: rest,
@@ -801,38 +845,50 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
     }),
 
     registerUnknownId: (id, type) => set((state) => {
-        if (state.knownMappings[id]) return {};
-        if (state.uidMappings.players[id]
-            || state.uidMappings.ships[id]
-            || state.uidMappings.weapons[id]
-            || state.uidMappings.equipment[id]
-            || state.uidMappings.perks[id]) return {};
+        const normalizedId = normalizeGuidLikeId(id);
+        if (!normalizedId) return {};
+        const aliases = buildIdAliases(normalizedId);
+        const hasResolvedMapping = aliases.some((alias) => (
+            state.knownMappings[alias]
+            || state.uidMappings.players[alias]
+            || state.uidMappings.ships[alias]
+            || state.uidMappings.weapons[alias]
+            || state.uidMappings.equipment[alias]
+            || state.uidMappings.perks[alias]
+        ));
+        if (hasResolvedMapping) return {};
 
         // Initialize profile if needed
-        const existingProfile = state.playerProfiles[id] || createEmptyProfile(id);
+        const existingProfileEntry = Object.entries(state.playerProfiles)
+            .find(([profileId]) => idsEquivalent(profileId, normalizedId));
+        const profileKey = existingProfileEntry?.[0] || normalizedId;
+        const existingProfile = existingProfileEntry?.[1] || createEmptyProfile(profileKey);
+        const existingUnknownEntry = Object.entries(state.detectedUnknowns)
+            .find(([unknownId]) => idsEquivalent(unknownId, normalizedId));
+        const existingUnknownId = existingUnknownEntry?.[0];
 
-        if (state.detectedUnknowns[id]) {
+        if (existingUnknownId) {
             return {
                 detectedUnknowns: {
                     ...state.detectedUnknowns,
-                    [id]: { ...state.detectedUnknowns[id], lastSeen: Date.now() }
+                    [existingUnknownId]: { ...state.detectedUnknowns[existingUnknownId], lastSeen: Date.now() }
                 },
                 playerProfiles: {
                     ...state.playerProfiles,
-                    [id]: { ...existingProfile, lastSeen: Date.now(), sightings: existingProfile.sightings + 1 }
+                    [profileKey]: { ...existingProfile, id: profileKey, lastSeen: Date.now(), sightings: existingProfile.sightings + 1 }
                 }
             };
         }
 
-        Logger.debug('MappingSlice', `Registered unknown ID: ${id} (${type})`);
+        Logger.debug('MappingSlice', `Registered unknown ID: ${normalizedId} (${type})`);
         return {
             detectedUnknowns: {
                 ...state.detectedUnknowns,
-                [id]: { type, lastSeen: Date.now() }
+                [normalizedId]: { type, lastSeen: Date.now() }
             },
             playerProfiles: {
                 ...state.playerProfiles,
-                [id]: existingProfile
+                [profileKey]: { ...existingProfile, id: profileKey }
             }
         };
     }),
@@ -865,19 +921,24 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
     },
 
     setUidMapping: (domain, id, name) => set((state) => {
-        const nextDomain = { ...state.uidMappings[domain], [id]: name };
+        const normalizedId = normalizeGuidLikeId(id);
+        if (!normalizedId) return {};
+        const nextDomain = { ...state.uidMappings[domain], [normalizedId]: name };
         const base: Partial<MappingSlice> = {
             uidMappings: { ...state.uidMappings, [domain]: nextDomain },
             detectedUnknowns: Object.fromEntries(
-                Object.entries(state.detectedUnknowns).filter(([k]) => k !== id)
+                Object.entries(state.detectedUnknowns).filter(([k]) => !idsEquivalent(k, normalizedId))
             )
         };
         if (domain === 'players') {
-            const existing = state.playerProfiles[id] || createEmptyProfile(id);
+            const existingProfileEntry = Object.entries(state.playerProfiles)
+                .find(([profileId]) => idsEquivalent(profileId, normalizedId));
+            const profileKey = existingProfileEntry?.[0] || normalizedId;
+            const existing = existingProfileEntry?.[1] || createEmptyProfile(profileKey);
             return {
                 ...base,
-                knownMappings: { ...state.knownMappings, [id]: name },
-                playerProfiles: { ...state.playerProfiles, [id]: { ...existing, name } }
+                knownMappings: { ...state.knownMappings, [normalizedId]: name },
+                playerProfiles: { ...state.playerProfiles, [profileKey]: { ...existing, id: profileKey, name } }
             };
         }
         return {
@@ -886,10 +947,16 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
     }),
 
     removeUidMapping: (domain, id) => set((state) => {
-        const { [id]: _, ...rest } = state.uidMappings[domain];
+        const normalizedId = normalizeGuidLikeId(id);
+        if (!normalizedId) return {};
+        const rest = Object.fromEntries(
+            Object.entries(state.uidMappings[domain]).filter(([key]) => !idsEquivalent(key, normalizedId))
+        );
         const next = { ...state.uidMappings, [domain]: rest };
         if (domain === 'players') {
-            const { [id]: __, ...km } = state.knownMappings;
+            const km = Object.fromEntries(
+                Object.entries(state.knownMappings).filter(([key]) => !idsEquivalent(key, normalizedId))
+            );
             return { uidMappings: next, knownMappings: km };
         }
         return { uidMappings: next };

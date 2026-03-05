@@ -115,6 +115,7 @@ describe('useLogMonitor', () => {
     processTelemetryEvent.mockClear();
     appStoreState.setPlayerName.mockClear();
     appStoreState.resetSelectionSourcesForNewMatch.mockClear();
+    appStoreState.registerUnknownId.mockClear();
     ipcMock.send.mockClear();
     ipcMock.on.mockClear();
     gameDataState.setCurrentLoadout.mockClear();
@@ -339,6 +340,55 @@ describe('useLogMonitor', () => {
     expect(latestLoadout?.weapons || []).toHaveLength(0);
     expect(latestLoadout?.characterWeapons).toEqual(expect.arrayContaining(['Double Whammy', 'The Doctor']));
     expect(latestLoadout?.characterEquipment).toEqual(expect.arrayContaining(['Repair Drone']));
+  });
+
+  it('resolves telemetry perk payloads into prospector perks on current loadout', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'CharacterLoadoutChanged',
+          Payload: {
+            isLocalPlayer: true,
+            hero: 'Adrian',
+            ship: 'Hunter',
+            perks: ['Boarder'],
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      characterPerks?: string[];
+      perks?: string[];
+    };
+    expect(latestLoadout?.characterPerks || []).toEqual(expect.arrayContaining(['Boarder']));
+    expect(latestLoadout?.perks || []).toEqual(expect.arrayContaining(['Boarder']));
+  });
+
+  it('registers unknown telemetry perk GUIDs for ID mapper resolution', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'CharacterLoadoutChanged',
+          Payload: {
+            isLocalPlayer: true,
+            hero: 'Adrian',
+            ship: 'Hunter',
+            guidPerkPrimary: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(appStoreState.registerUnknownId).toHaveBeenCalledWith('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'Perk');
   });
 
   it('clears stale telemetry character loadout selections when payload explicitly sends empty slots', async () => {

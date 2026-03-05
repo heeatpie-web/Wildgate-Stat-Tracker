@@ -140,7 +140,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
 
                 <div className="flex-1 min-w-0 flex justify-center px-2" data-tour="system-pulse" style={{ WebkitAppRegion: 'no-drag' } as any}>
-                    <div className="max-w-full overflow-x-auto no-scrollbar">
+                    <div className="max-w-full overflow-hidden no-scrollbar">
                         <SystemPulse />
                     </div>
                 </div>

@@ -1400,13 +1400,24 @@ const SmartCapturesPanel: React.FC = () => {
                                                 hazards,
                                                 normalizeModifierName
                                             );
+                                            const normalizedOpponentTeamsForMatch = resolvedOpponentTeams.map((team) => ({
+                                                teamName: team.teamName || 'Unknown Team',
+                                                shipType: team.shipType || '',
+                                                color: team.color || 'unknown',
+                                                players: [...team.players],
+                                            }));
                                             if (shouldSyncCurrentSession) {
                                                 setSelectedReachModifiers(canonicalSessionModifiers, 'ocr');
-                                            }
-                                            if (shouldSyncCurrentSession) {
+                                                const latestPendingDraft = (useAppStore.getState().pendingMatchData || {}) as Partial<Match>;
                                                 useAppStore.getState().setPendingMatchData({
-                                                    ...(useAppStore.getState().pendingMatchData || {}),
+                                                    ...latestPendingDraft,
+                                                    ship: data.playerShip?.shipType || String(latestPendingDraft.ship || ''),
+                                                    teammates: cappedTeammates,
+                                                    opponents: resolvedOpponents,
+                                                    opponentTeams: normalizedOpponentTeamsForMatch,
+                                                    reachModifiers: canonicalSessionModifiers,
                                                     artifactSource: extractedArtifactSource || '',
+                                                    ocrState: 'reviewing',
                                                 });
                                             }
                                             setToast({
@@ -1423,12 +1434,7 @@ const SmartCapturesPanel: React.FC = () => {
                                                 }
                                                 if (Array.isArray(data.opponentTeams)) {
                                                     matchUpdates.opponents = resolvedOpponents;
-                                                    matchUpdates.opponentTeams = resolvedOpponentTeams.map((team) => ({
-                                                        teamName: team.teamName || 'Unknown Team',
-                                                        shipType: team.shipType || '',
-                                                        color: team.color || 'unknown',
-                                                        players: [...team.players],
-                                                    }));
+                                                    matchUpdates.opponentTeams = normalizedOpponentTeamsForMatch;
                                                 }
                                                 const mods = data.reachModifiers ?? [];
                                                 const haz = data.hazards ?? [];
@@ -1439,7 +1445,26 @@ const SmartCapturesPanel: React.FC = () => {
                                                 );
                                                 matchUpdates.reachModifiers = canonicalMatchModifiers;
                                                 matchUpdates.artifactSource = extractedArtifactSource || '';
+                                                const hazards = Array.isArray(data.hazards)
+                                                    ? Array.from(new Set(data.hazards.map((hazard) => String(hazard || '').trim()).filter(Boolean)))
+                                                    : undefined;
                                                 const latest = useAppStore.getState().matches.find(m => m.id === selectedMatch.id) || selectedMatch;
+                                                matchUpdates.ocrDebug = {
+                                                    ...(latest.ocrDebug || {}),
+                                                    rawText: data.rawText?.substring(0, 2000) || latest.ocrDebug?.rawText,
+                                                    confidence: Number.isFinite(Number(data.overallConfidence))
+                                                        ? Number(data.overallConfidence)
+                                                        : latest.ocrDebug?.confidence,
+                                                    hazards: hazards ?? latest.ocrDebug?.hazards,
+                                                    source: data.ocrSource || latest.ocrDebug?.source,
+                                                    fallbackReason: data.ocrFallbackReason || latest.ocrDebug?.fallbackReason,
+                                                    cloudError: data.ocrCloudError || latest.ocrDebug?.cloudError,
+                                                    geminiError: data.ocrGeminiError || latest.ocrDebug?.geminiError,
+                                                    mergeStats: data.mergeStats || latest.ocrDebug?.mergeStats,
+                                                    fieldConfidence: data.fieldConfidence || latest.ocrDebug?.fieldConfidence,
+                                                    routing: data.ocrRouting || latest.ocrDebug?.routing,
+                                                    timestamp: Number(data.captureTimestamp || Date.now()),
+                                                };
                                                 const nextMatch: Match = { ...latest, ...matchUpdates };
                                                 updateMatch(nextMatch);
                                                 appliedMatch = nextMatch;
@@ -2142,16 +2167,17 @@ const SmartMatchDetail: React.FC<{
             useAppStore.getState().setPendingMatchData(snapshot.pendingMatchData ? { ...snapshot.pendingMatchData } : null);
         }, [setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setTimeMin, setTimeSec, showWizard]);
 
-        const applyReviewDataToSession = useCallback(() => {
+        const applyReviewDataToSession = useCallback((readyReviewData?: OCRExtractedData | null) => {
             if (!onApplyToSession) {
                 setToast({ message: 'Apply OCR is unavailable in this context.', type: 'warning' });
                 return;
             }
-            if (!reviewData) {
+            const dataToApply = readyReviewData || reviewData;
+            if (!dataToApply) {
                 setToast({ message: 'No OCR analysis is ready yet. Run Re-analyze first.', type: 'warning' });
                 return;
             }
-            const appliedMatch = onApplyToSession(reviewData);
+            const appliedMatch = onApplyToSession(dataToApply);
             persistNameSourceHintsToPendingDraft(ocrNameSources);
             openWizardForMatch({
                 matchOverride: appliedMatch,
@@ -2738,7 +2764,7 @@ const SmartMatchDetail: React.FC<{
                 }
                 rerunAutoOpenTimerRef.current = window.setTimeout(() => {
                     if (onApplyToSession) {
-                        applyReviewDataToSession();
+                        applyReviewDataToSession(mergedData);
                     } else {
                         const latestForWizard = useAppStore.getState().matches.find((entry) => entry.id === match.id) || match;
                         openWizardForMatch({
@@ -3069,7 +3095,7 @@ const SmartMatchDetail: React.FC<{
                                 <div className="flex items-center gap-1.5">
                                     {onApplyToSession && (
                                         <button
-                                            onClick={applyReviewDataToSession}
+                                            onClick={() => applyReviewDataToSession()}
                                             className={`sc-detail-action-btn sc-detail-action-btn--tonal ${reviewData ? '' : 'opacity-80'}`}
                                             title={reviewData
                                                 ? 'Apply latest OCR extraction to the current recording session and open wizard'

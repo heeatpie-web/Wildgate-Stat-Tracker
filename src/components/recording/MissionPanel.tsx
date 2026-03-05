@@ -71,10 +71,12 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
     const telemetryProspectorPerks = Array.isArray(currentLoadout?.characterPerks)
         ? currentLoadout.characterPerks.filter(Boolean).slice(0, MAX_PERKS_PER_MATCH)
         : (Array.isArray(currentLoadout?.perks) ? currentLoadout.perks.filter(Boolean).slice(0, MAX_PERKS_PER_MATCH) : []);
-    const telemetryProspectorWeaponsLabel = telemetryProspectorWeapons.join(', ');
-    const telemetryProspectorEquipmentLabel = telemetryProspectorEquipment.join(', ');
-    const telemetryProspectorPerksLabel = telemetryProspectorPerks.join(', ');
-    const hasTelemetryLoadout = telemetryProspectorWeapons.length > 0 || telemetryProspectorEquipment.length > 0 || telemetryProspectorPerks.length > 0;
+    const telemetrySignalsFilled = Math.min(2, telemetryProspectorWeapons.length)
+        + Math.min(2, telemetryProspectorEquipment.length)
+        + Math.min(2, telemetryProspectorPerks.length);
+    const telemetrySignalsTotal = 6;
+    const hasTelemetryLoadout = telemetrySignalsFilled > 0;
+    const telemetrySummaryTooltip = `Telemetry synced: ${telemetrySignalsFilled}/${telemetrySignalsTotal} (Weapons ${Math.min(2, telemetryProspectorWeapons.length)}/2, Equipment ${Math.min(2, telemetryProspectorEquipment.length)}/2, Perks ${Math.min(2, telemetryProspectorPerks.length)}/2)`;
     const prospectorWeaponCatalog = React.useMemo(() => getProspectorWeaponCatalog(CHARACTER_WEAPONS || []), []);
     const prospectorEquipmentCatalog = React.useMemo(() => getProspectorEquipmentCatalog(CHARACTER_EQUIPMENT || []), []);
     const perkCatalog = React.useMemo(() => getPerkCatalog(), []);
@@ -210,9 +212,13 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                     </div>
                     {hasTelemetryLoadout && (
                         <div className="recording-panel-heading-meta">
-                            <span className="recording-telemetry-indicator is-active" title="Loadout synced from telemetry">
+                            <span
+                                data-testid="mission-telemetry-summary"
+                                className="recording-telemetry-indicator is-active"
+                                title={telemetrySummaryTooltip}
+                            >
                                 <span className="recording-telemetry-dot" />
-                                Telemetry
+                                Telemetry {telemetrySignalsFilled}/{telemetrySignalsTotal}
                             </span>
                         </div>
                     )}
@@ -376,21 +382,9 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                 title="Weapons"
                                 badge={`${totalWeapons}/${MAX_WEAPONS}`}
                                 indicator={(
-                                    <>
-                                        <span className="text-label-xs font-semibold text-md-sys-on-surface/60 truncate max-w-180px">
-                                            {selectedCharacterWeaponsLabel}
-                                        </span>
-                                        {telemetryProspectorWeapons.length > 0 && (
-                                            <span
-                                                data-testid="telemetry-prospector-weapons"
-                                                className="inline-flex items-center gap-1.5 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold whitespace-nowrap"
-                                                title={`Telemetry source for prospector weapons: ${telemetryProspectorWeaponsLabel || 'detected loadout'}`}
-                                            >
-                                                <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                                                Source: Telemetry
-                                            </span>
-                                        )}
-                                    </>
+                                    <span className="text-label-xs font-semibold text-md-sys-on-surface/60 truncate max-w-180px">
+                                        {selectedCharacterWeaponsLabel}
+                                    </span>
                                 )}
                             />
                             {isSectionExpanded('charWeapons') && (
@@ -458,21 +452,9 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                 title="Equipment"
                                 badge={`${totalEquipment}/${MAX_EQUIPMENT}`}
                                 indicator={(
-                                    <>
-                                        <span className="text-label-xs font-semibold text-md-sys-on-surface/60 truncate max-w-180px">
-                                            {selectedCharacterEquipmentLabel}
-                                        </span>
-                                        {telemetryProspectorEquipment.length > 0 && (
-                                            <span
-                                                data-testid="telemetry-prospector-equipment"
-                                                className="inline-flex items-center gap-1.5 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold whitespace-nowrap"
-                                                title={`Telemetry source for prospector equipment: ${telemetryProspectorEquipmentLabel || 'detected loadout'}`}
-                                            >
-                                                <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                                                Source: Telemetry
-                                            </span>
-                                        )}
-                                    </>
+                                    <span className="text-label-xs font-semibold text-md-sys-on-surface/60 truncate max-w-180px">
+                                        {selectedCharacterEquipmentLabel}
+                                    </span>
                                 )}
                             />
                             {isSectionExpanded('equipment') && (
@@ -532,21 +514,9 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                             title="Perks"
                             badge={`${selectedCharacterPerks.length}/${MAX_PERKS_PER_MATCH}`}
                             indicator={(
-                                <>
-                                    <span className="text-label-xs font-semibold text-md-sys-on-surface/60 truncate max-w-180px">
-                                        {selectedCharacterPerksLabel}
-                                    </span>
-                                    {telemetryProspectorPerks.length > 0 && (
-                                        <span
-                                            data-testid="telemetry-prospector-perks"
-                                            className="inline-flex items-center gap-1.5 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold whitespace-nowrap"
-                                            title={`Telemetry source for prospector perks: ${telemetryProspectorPerksLabel || 'detected loadout'}`}
-                                        >
-                                            <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                                            Source: Telemetry
-                                        </span>
-                                    )}
-                                </>
+                                <span className="text-label-xs font-semibold text-md-sys-on-surface/60 truncate max-w-180px">
+                                    {selectedCharacterPerksLabel}
+                                </span>
                             )}
                         />
                         {isSectionExpanded('perks') && (

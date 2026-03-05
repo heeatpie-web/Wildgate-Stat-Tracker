@@ -53,10 +53,10 @@ describe('RecordingView', () => {
     expect(screen.queryByRole('button', { name: /actions/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /loadout/i })).toBeNull();
 
-    // SquadronPanel uses standard density; ActionPanel always compact in this layout.
+    // Wide layout keeps the loadout panel slightly compact; ActionPanel stays compact.
     const squadProps = screen.getByTestId('SquadronPanel').getAttribute('data-props') || '';
     const actionProps = screen.getByTestId('ActionPanel').getAttribute('data-props') || '';
-    expect(squadProps).not.toContain('"density":"compact"');
+    expect(squadProps).toContain('"density":"compact"');
     expect(actionProps).toContain('"density":"compact"');
   }, 10000);
 

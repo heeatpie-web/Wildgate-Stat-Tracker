@@ -99,7 +99,7 @@ const SystemPulse: React.FC = () => {
     const indicators = [
         {
             id: 'data',
-            label: 'Data Protection',
+            label: '',
             icon: <ShieldCheck size={12} />,
             active: enableAutoLogRecording,
             color: enableAutoLogRecording ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',
@@ -153,7 +153,7 @@ const SystemPulse: React.FC = () => {
         },
         {
             id: 'mission',
-            label: 'Backup Timer',
+            label: '',
             icon: <Timer size={12} />,
             active: isMatchInProgress,
             color: isMatchInProgress ? 'text-md-sys-on-surface/85' : 'text-md-sys-on-surface/60',

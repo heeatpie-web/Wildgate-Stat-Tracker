@@ -118,28 +118,19 @@ describe('MissionPanel', () => {
     expect(gameData.setTimeSec).toHaveBeenCalledWith('59');
   });
 
-  it('shows telemetry source badges directly on prospector loadout sections', async () => {
+  it('shows a single mission telemetry summary badge and removes per-section telemetry badges', async () => {
     const { MissionPanel } = await import('./MissionPanel');
     render(<MissionPanel accordionMode />);
 
-    expect(screen.getAllByText(/^Telemetry$/i).length).toBeGreaterThanOrEqual(1);
+    const summary = screen.getByTestId('mission-telemetry-summary');
+    expect(summary).toHaveTextContent('Telemetry 3/6');
+    expect(summary).toHaveAttribute('title', expect.stringContaining('Weapons 1/2'));
+    expect(summary).toHaveAttribute('title', expect.stringContaining('Equipment 1/2'));
+    expect(summary).toHaveAttribute('title', expect.stringContaining('Perks 1/2'));
 
-    // Find the Weapons section header that contains the telemetry badge
-    const weaponsTelemetryBadge = screen.getByTestId('telemetry-prospector-weapons');
-    const charWeaponsHeader = weaponsTelemetryBadge.closest('button');
-    expect(charWeaponsHeader).toBeInTheDocument();
-    expect(within(charWeaponsHeader!).getByTestId('telemetry-prospector-weapons')).toHaveTextContent('Source: Telemetry');
-
-    // Find the Equipment section header that contains the telemetry badge
-    const equipmentTelemetryBadge = screen.getByTestId('telemetry-prospector-equipment');
-    const equipmentHeader = equipmentTelemetryBadge.closest('button');
-    expect(equipmentHeader).toBeInTheDocument();
-    expect(within(equipmentHeader!).getByTestId('telemetry-prospector-equipment')).toHaveTextContent('Source: Telemetry');
-
-    const perksTelemetryBadge = screen.getByTestId('telemetry-prospector-perks');
-    const perksHeader = perksTelemetryBadge.closest('button');
-    expect(perksHeader).toBeInTheDocument();
-    expect(within(perksHeader!).getByTestId('telemetry-prospector-perks')).toHaveTextContent('Source: Telemetry');
+    expect(screen.queryByTestId('telemetry-prospector-weapons')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('telemetry-prospector-equipment')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('telemetry-prospector-perks')).not.toBeInTheDocument();
   });
 
   it('includes patch-era prospector loadout options for manual entry', async () => {

@@ -48,7 +48,7 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
     const isNarrow = viewport.w < 980;
     const isHeightConstrained = viewport.h < 720;
     const density: 'standard' | 'compact' = (isHeightConstrained || isNarrow) ? 'compact' : 'standard';
-    const shouldScrollLeftPanel = !isNarrow && isHeightConstrained;
+    const shouldScrollLeftPanel = !isNarrow;
     const shouldScrollWideLayout = !isNarrow && isHeightConstrained;
     const [leftTab, setLeftTab] = React.useState<'actions' | 'loadout'>('actions');
 
@@ -83,12 +83,12 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
     const leftShellChrome = isNarrow ? 'recording-left-shell rounded-2xl p-4' : '';
 
     const LeftPanel = (
-        <div className={`min-h-0 ${!isNarrow ? 'h-full' : ''} flex flex-col gap-4 ${leftShellChrome} ${shouldScrollLeftPanel ? 'overflow-y-auto custom-scrollbar pr-1' : 'overflow-hidden'}`}>
+        <div className={`min-h-0 ${!isNarrow ? 'h-full' : ''} flex flex-col gap-3 ${leftShellChrome} ${shouldScrollLeftPanel ? 'overflow-y-auto custom-scrollbar pr-1' : 'overflow-hidden'}`}>
             {LeftTabBar}
             {density === 'standard' ? (
                 <>
                     <div className="shrink-0">
-                        <SquadronPanel />
+                        <SquadronPanel density="compact" />
                     </div>
                     <div data-tour="action-panel" className="shrink-0">
                         <ActionPanel onSmartCaptureData={onSmartCaptureData} density="compact" />
@@ -132,7 +132,7 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
                 <div
                     data-tour="view-recording"
                     className={`h-full min-h-0 grid gap-4 p-4 pb-6 ${shouldScrollWideLayout ? 'overflow-y-auto custom-scrollbar' : 'overflow-hidden'}`}
-                    style={{ gridTemplateColumns: 'minmax(240px, 300px) minmax(320px, 1fr) minmax(420px, 1.65fr)' }}
+                    style={{ gridTemplateColumns: 'minmax(280px, 1fr) minmax(300px, 1fr) minmax(300px, 1fr)' }}
                 >
                     <div className="min-h-0 overflow-hidden">
                         {LeftPanel}

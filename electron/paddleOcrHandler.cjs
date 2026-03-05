@@ -5,15 +5,29 @@ const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
 
-const MODELS_DIR = path.join(__dirname, '..', 'models', 'paddleocr');
-const DET_MODEL_PATH = path.join(MODELS_DIR, 'det.onnx');
 const REC_VARIANT = process.env.REC_VARIANT || 'v5_en';
+
+const MODEL_ROOT_CANDIDATES = [
+  process.resourcesPath ? path.join(process.resourcesPath, 'models', 'paddleocr') : '',
+  path.join(__dirname, '..', 'models', 'paddleocr'),
+  path.join(process.cwd(), 'models', 'paddleocr'),
+].filter(Boolean);
+
+const findFirstExistingFile = (paths) => paths.find((candidate) => fs.existsSync(candidate)) || '';
+
+const resolveModelFile = (...segments) => {
+  const candidates = MODEL_ROOT_CANDIDATES.map((root) => path.join(root, ...segments));
+  const existing = findFirstExistingFile(candidates);
+  return existing || candidates[0] || path.join(__dirname, '..', 'models', 'paddleocr', ...segments);
+};
+
+const DET_MODEL_PATH = resolveModelFile('det.onnx');
 const REC_MODEL_PATH = REC_VARIANT === 'default'
-  ? path.join(MODELS_DIR, 'rec.onnx')
-  : path.join(MODELS_DIR, REC_VARIANT, 'rec.onnx');
+  ? resolveModelFile('rec.onnx')
+  : resolveModelFile(REC_VARIANT, 'rec.onnx');
 const EN_DICT_PATH = REC_VARIANT === 'default'
-  ? path.join(MODELS_DIR, 'en_dict.txt')
-  : path.join(MODELS_DIR, REC_VARIANT, 'dict.txt');
+  ? resolveModelFile('en_dict.txt')
+  : resolveModelFile(REC_VARIANT, 'dict.txt');
 const DET_USE_CONTAIN = process.env.PREPROC_DET_CONTAIN === '1';
 const PADY_FACTOR = process.env.PREPROC_PADY_FACTOR && Number.isFinite(Number(process.env.PREPROC_PADY_FACTOR))
   ? Number(process.env.PREPROC_PADY_FACTOR)
@@ -29,6 +43,16 @@ let recShapeLogged = false;
 async function initPaddleOCR() {
   if (detSession && recSession && charList) return;
 
+  if (!fs.existsSync(DET_MODEL_PATH)) {
+    throw new Error(`PaddleOCR det model missing: ${DET_MODEL_PATH}`);
+  }
+  if (!fs.existsSync(REC_MODEL_PATH)) {
+    throw new Error(`PaddleOCR rec model missing: ${REC_MODEL_PATH}`);
+  }
+  if (!fs.existsSync(EN_DICT_PATH)) {
+    throw new Error(`PaddleOCR dict missing: ${EN_DICT_PATH}`);
+  }
+
   detSession = await ort.InferenceSession.create(DET_MODEL_PATH, { executionProviders: ['cpu'] });
   recSession = await ort.InferenceSession.create(REC_MODEL_PATH, { executionProviders: ['cpu'] });
 
@@ -38,7 +62,7 @@ async function initPaddleOCR() {
 
   if (!paddleReadyLogged) {
     console.log(
-      `[PaddleOCR] Ready. Variant=${REC_VARIANT} Detection=det.onnx Recognition=${path.relative(MODELS_DIR, REC_MODEL_PATH)} Dict=${charList.length} DetFit=${DET_USE_CONTAIN ? 'contain' : 'fill'} PadY=${PADY_FACTOR} Normalise=${REC_USE_NORMALISE}`
+      `[PaddleOCR] Ready. Variant=${REC_VARIANT} Detection=${DET_MODEL_PATH} Recognition=${REC_MODEL_PATH} Dict=${charList.length} DetFit=${DET_USE_CONTAIN ? 'contain' : 'fill'} PadY=${PADY_FACTOR} Normalise=${REC_USE_NORMALISE}`
     );
     paddleReadyLogged = true;
   }

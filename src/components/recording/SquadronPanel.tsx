@@ -2,6 +2,7 @@ import React from 'react';
 import { CHARACTERS, SHIPS } from '../../types';
 import { Rocket } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
+import { useUIState } from '../../providers/UIStateProvider';
 
 export interface SquadronPanelProps {
   density?: 'standard' | 'compact';
@@ -17,23 +18,17 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
     heroSource,
     telemetryDetectedHero,
     setActiveHero,
-    currentLoadout,
   } = useGameData();
+  const { telemetryStatus } = useUIState();
 
   const toShipKey = (value: string | null | undefined) => (value || '').split('(')[0].trim().toLowerCase();
   const sameShip = (a: string | null | undefined, b: string | null | undefined) => toShipKey(a) && toShipKey(a) === toShipKey(b);
   const hasShipManualOverride = Boolean(telemetryDetectedShip && activeShip && !sameShip(telemetryDetectedShip, activeShip));
   const hasHeroManualOverride = Boolean(telemetryDetectedHero && activeHero && telemetryDetectedHero !== activeHero);
-  const shipWeapons = Array.isArray(currentLoadout?.shipWeapons) && currentLoadout.shipWeapons.length > 0
-    ? currentLoadout.shipWeapons
-        .flatMap((entry) => Array.from({ length: Math.max(1, Number(entry?.quantity || 1)) }, () => String(entry?.name || '').trim()))
-        .filter(Boolean)
-    : (currentLoadout?.weapons || []);
-  const prospectorWeapons = currentLoadout?.characterWeapons || [];
-  const prospectorEquipment = currentLoadout?.characterEquipment || currentLoadout?.equipment || [];
-  const hasShipWeapons = shipWeapons.length > 0;
-  const hasProspectorWeapons = prospectorWeapons.length > 0;
-  const hasProspectorEquipment = prospectorEquipment.length > 0;
+  const hasMatchTelemetry = Boolean(telemetryStatus?.exists);
+  const telemetrySignalsFilled = (telemetryDetectedShip ? 1 : 0) + (telemetryDetectedHero ? 1 : 0) + (hasMatchTelemetry ? 1 : 0);
+  const telemetrySignalsTotal = 3;
+  const telemetrySummaryTooltip = `Telemetry signals: ${telemetrySignalsFilled}/${telemetrySignalsTotal} (Ship ${telemetryDetectedShip ? 'ok' : 'missing'}, Prospector ${telemetryDetectedHero ? 'ok' : 'missing'}, Match ${hasMatchTelemetry ? 'ok' : 'missing'})`;
 
   const sourceChip = (label: string, source?: 'manual' | 'telemetry' | 'ocr') => {
     if (!source || source === 'manual' || source === 'telemetry') return null;
@@ -75,6 +70,16 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
             <h3 className="recording-panel-heading-title">Ship and Loadout</h3>
           </div>
           <div className="recording-panel-heading-meta">
+            {telemetrySignalsFilled > 0 && (
+              <span
+                data-testid="recording-telemetry-summary"
+                className="recording-telemetry-indicator is-active"
+                title={telemetrySummaryTooltip}
+              >
+                <span className="recording-telemetry-dot" />
+                Telemetry {telemetrySignalsFilled}/{telemetrySignalsTotal}
+              </span>
+            )}
             {sourceChip('Ship', shipSource)}
             {sourceChip('Prospector', heroSource)}
           </div>
@@ -86,12 +91,6 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <span className="text-label-sm font-semibold text-md-sys-on-surface/60">Ship</span>
-            {shipSource === 'telemetry' && (
-              <span className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-1.5 py-0.5 text-[10px] font-semibold">
-                <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                Telemetry
-              </span>
-            )}
           </div>
           <div className="grid grid-cols-2 gap-1.5">
             {SHIPS.map(s => (
@@ -113,12 +112,6 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2">
             <span className="text-label-sm font-semibold text-md-sys-on-surface/60">Prospector</span>
-            {heroSource === 'telemetry' && (
-              <span className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-1.5 py-0.5 text-[10px] font-semibold">
-                <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                Telemetry
-              </span>
-            )}
           </div>
           <div className="grid grid-cols-4 gap-1.5">
             {[...CHARACTERS].sort().map(c => (
@@ -153,6 +146,16 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
           <h3 className="recording-panel-heading-title">Ship and Loadout</h3>
         </div>
         <div className="recording-panel-heading-meta">
+          {telemetrySignalsFilled > 0 && (
+            <span
+              data-testid="recording-telemetry-summary"
+              className="recording-telemetry-indicator is-active"
+              title={telemetrySummaryTooltip}
+            >
+              <span className="recording-telemetry-dot" />
+              Telemetry {telemetrySignalsFilled}/{telemetrySignalsTotal}
+            </span>
+          )}
           {sourceChip('Ship', shipSource)}
           {sourceChip('Prospector', heroSource)}
         </div>
@@ -164,12 +167,6 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <span className="md3-label text-md-sys-on-surface/60">Ship</span>
-          {shipSource === 'telemetry' && (
-            <span className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-1.5 py-0.5 text-[10px] font-semibold">
-              <span className="w-1.5 h-1.5 rounded-full bg-success" />
-              Telemetry
-            </span>
-          )}
         </div>
       <div className="grid grid-cols-2 gap-2">
         {SHIPS.map(s => (
@@ -191,12 +188,6 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <span className="md3-label text-md-sys-on-surface/60">Prospector</span>
-          {heroSource === 'telemetry' && (
-            <span className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-1.5 py-0.5 text-[10px] font-semibold">
-              <span className="w-1.5 h-1.5 rounded-full bg-success" />
-              Telemetry
-            </span>
-          )}
         </div>
         <div className="grid grid-cols-3 gap-2">
           {[...CHARACTERS].sort().map(c => (

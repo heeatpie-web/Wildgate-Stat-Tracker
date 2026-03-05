@@ -4230,6 +4230,17 @@ body:not([data-mode]) .ship-select-readable {
   background: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 42%);
 }
 
+/* Hide scrollbars entirely for horizontal utility rails/chips. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 body[data-mode='twilight'] .custom-scrollbar::-webkit-scrollbar-track,
 body[data-mode='dark'] .custom-scrollbar::-webkit-scrollbar-track {
   background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), transparent 22%);

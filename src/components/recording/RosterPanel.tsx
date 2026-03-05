@@ -52,10 +52,10 @@ export const RosterPanel: React.FC = () => {
     const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
     const removeOcrAliasCorrection = useAppStore(s => s.removeOcrAliasCorrection);
     const displayName = (name: string) => {
-        const normalized = String(name || '').trim().toLowerCase();
-        const me = String(activeUser || '').trim().toLowerCase();
+        const normalized = normalizeOcrName(name || '').toLowerCase();
+        const me = normalizeOcrName(activeUser || '').toLowerCase();
         if (!normalized || !me) return name;
-        return normalized === me ? '(you)' : name;
+        return normalized === me ? `${name} (you)` : name;
     };
 
     // Manual lobby scan UI removed; Smart Capture auto-detects and applies roster/modifiers.
