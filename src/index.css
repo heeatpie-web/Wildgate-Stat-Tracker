@@ -271,21 +271,21 @@ body[data-mode='twilight'] .player-list-name {
 }
 
 .roster-you-chip {
-  border: 1px solid color-mix(in srgb, var(--color-success), transparent 74%);
+  border: 1px solid var(--wg-border-subtle, rgba(255, 255, 255, 0.16));
   background: color-mix(in srgb, var(--color-success), transparent 90%);
 }
 
 body[data-mode='twilight'] .roster-you-chip {
-  border-color: color-mix(in srgb, var(--color-success), transparent 78%);
+  border-color: var(--wg-border-subtle, rgba(255, 255, 255, 0.14));
   background: color-mix(in srgb, var(--color-success), transparent 92%);
 }
 
 .toast-card-standard {
-  border-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 72%);
+  border-color: var(--wg-border-subtle, rgba(255, 255, 255, 0.18));
 }
 
 body[data-mode='twilight'] .toast-card-standard {
-  border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 44%);
+  border-color: var(--wg-border-strong, rgba(255, 255, 255, 0.22));
 }
 
 /* Explicit gradient shells to avoid mg-surface override flattening. */
