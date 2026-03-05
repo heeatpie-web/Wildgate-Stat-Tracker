@@ -755,6 +755,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     for (const capture of screenshots) {
       merged = mergeOCRData(merged, {
         playerShip: capture.data.playerShip,
+        playerTeamName: capture.data.playerTeamName,
         reachModifiers: capture.data.reachModifiers,
         teammates: capture.data.teammates,
         opponentTeams: capture.data.opponentTeams,
@@ -775,7 +776,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     return {
       screenshotType,
       playerShip: merged.playerShip,
-      playerTeamName: undefined,
+      playerTeamName: merged.playerTeamName,
       reachModifiers: merged.reachModifiers || [],
       enemyShips: merged.enemyShips || [],
       teammates: mergedTeammates,
@@ -809,7 +810,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       const created = {
         screenshotType: normalizedData.screenshotType,
         playerShip: normalizedData.playerShip,
-        playerTeamName: undefined,
+        playerTeamName: normalizedData.playerTeamName,
         reachModifiers: normalizedData.reachModifiers || [],
         enemyShips: normalizedData.enemyShips || [],
         teammates: cappedTeammates,
@@ -825,6 +826,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
     const merged = mergeOCRData(previous, {
       playerShip: normalizedData.playerShip,
+      playerTeamName: normalizedData.playerTeamName,
       reachModifiers: normalizedData.reachModifiers,
       teammates: normalizedData.teammates,
       opponentTeams: normalizedData.opponentTeams,
@@ -841,6 +843,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       ...previous,
       screenshotType,
       playerShip: merged.playerShip || previous.playerShip,
+      playerTeamName: merged.playerTeamName || previous.playerTeamName || normalizedData.playerTeamName,
       reachModifiers: merged.reachModifiers || previous.reachModifiers,
       teammates: cappedMergedTeammates,
       opponentTeams: merged.opponentTeams || previous.opponentTeams,

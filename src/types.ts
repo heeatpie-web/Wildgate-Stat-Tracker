@@ -220,6 +220,8 @@ export interface Match {
       latencyMs: number;
       fontProfile: 'default' | 'ealing-black-italic';
     };
+    playerTeamName?: string;
+    playerShipTeamName?: string;
     timestamp?: number;
   };
   /** Explicit OCR pipeline state for this match's artifacts. */

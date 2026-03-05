@@ -78,6 +78,11 @@ interface ScreenshotLoupeState {
     relY: number;
 }
 
+interface SubmitCorrectionsOptions {
+    closeAfterApply?: boolean;
+    correctionOverrides?: Record<string, string>;
+}
+
 const IMAGE_FILE_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
 const OCR_REVIEW_HELP_DISMISSED_STORAGE_KEY = 'wg_ocr_review_help_dismissed_v1';
 
@@ -832,13 +837,15 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         announce(`Accepted ${name} as a new player.`, 'polite');
     };
 
-    const handleSubmitCorrections = () => {
+    const handleSubmitCorrections = (options?: SubmitCorrectionsOptions) => {
+        const closeAfterApply = options?.closeAfterApply ?? true;
+        const correctionOverrides = options?.correctionOverrides || {};
         let corrected = 0;
         let added = 0;
         const correctionContext = embedded ? 'matchstats' : 'lobby';
         const confidenceByName = new Map(detectedPlayers.map(player => [player.name, Number(player.confidence || 0)]));
         const calibrationMode = normalizeOcrCalibrationMode(ocrMode);
-        const effectiveCorrections: Record<string, string> = { ...corrections };
+        const effectiveCorrections: Record<string, string> = { ...corrections, ...correctionOverrides };
         Object.entries(searchQuery).forEach(([ocrName, queryValue]) => {
             const normalized = normalizeSubmittedName(queryValue);
             if (!normalized) return;
@@ -1047,19 +1054,31 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         }
 
         announce(`Applied ${corrected + added} correction decisions.`, 'polite');
-        onAcceptAll();
+        if (closeAfterApply) {
+            onAcceptAll();
+        }
     };
 
-    const applyBatchAccept = (threshold: number) => {
+    const applyBatchAccept = (threshold: number): Record<string, string> => {
         const eligible = getHighConfidenceBatchEligible(detectedPlayers, corrections, ignored, threshold);
-        if (eligible.length === 0) return;
+        if (eligible.length === 0) return {};
 
+        const nextCorrections: Record<string, string> = {};
         eligible.forEach((player) => {
             const priorCorrection = ocrCorrections?.[player.name];
-            handleCorrection(player.name, priorCorrection?.correctedTo || player.name);
+            const correctedName = normalizeSubmittedName(priorCorrection?.correctedTo || player.name);
+            if (!correctedName) return;
+            nextCorrections[player.name] = correctedName;
         });
-        announce(`Auto-filled ${eligible.length} high-confidence players.`, 'polite');
-        Logger.info('OcrBatch', `Batch accepted ${eligible.length} players at ${threshold}% threshold`);
+
+        const appliedEntries = Object.entries(nextCorrections);
+        if (appliedEntries.length === 0) return {};
+
+        setCorrections((prev) => ({ ...prev, ...nextCorrections }));
+        setSearchQuery((prev) => ({ ...prev, ...nextCorrections }));
+        announce(`Auto-filled ${appliedEntries.length} high-confidence players.`, 'polite');
+        Logger.info('OcrBatch', `Batch accepted ${appliedEntries.length} players at ${threshold}% threshold`);
+        return nextCorrections;
     };
 
     const applyBatchIgnore = (threshold: number) => {
@@ -1075,6 +1094,14 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
 
     const handleAcceptAllHigh = () => {
         applyBatchAccept(ocrBatchAcceptThreshold);
+    };
+
+    const handleApplyBestResults = () => {
+        const autoCorrections = applyBatchAccept(ocrBatchAcceptThreshold);
+        handleSubmitCorrections({
+            closeAfterApply: false,
+            correctionOverrides: autoCorrections,
+        });
     };
 
     const handleIgnoreNext = () => {
@@ -1784,14 +1811,14 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                 Discard
                             </button>
                             <button
-                                onClick={handleAcceptAllHigh}
+                                onClick={handleApplyBestResults}
                                 className="md3-btn-tonal"
-                                title="Auto-fill players that already have strong confidence"
+                                title="Apply high-confidence OCR links and keep this review open"
                             >
-                                Auto Fill Confident
+                                Apply Best Results
                             </button>
                             <button
-                                onClick={handleSubmitCorrections}
+                                onClick={() => handleSubmitCorrections()}
                                 className="md3-btn-filled flex items-center gap-2"
                                 title="Save all reviewed links so future OCR can reuse them"
                             >

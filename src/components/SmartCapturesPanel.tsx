@@ -960,6 +960,20 @@ const SmartCapturesPanel: React.FC = () => {
                         fallbackReason: combined.ocrFallbackReason || match.ocrDebug?.fallbackReason,
                         cloudError: combined.ocrCloudError || match.ocrDebug?.cloudError,
                         geminiError: combined.ocrGeminiError || match.ocrDebug?.geminiError,
+                        playerTeamName: String(
+                            combined.playerTeamName
+                            || combined.playerShip?.teamName
+                            || match.ocrDebug?.playerTeamName
+                            || match.ocrDebug?.playerShipTeamName
+                            || ''
+                        ).trim() || undefined,
+                        playerShipTeamName: String(
+                            combined.playerShip?.teamName
+                            || combined.playerTeamName
+                            || match.ocrDebug?.playerShipTeamName
+                            || match.ocrDebug?.playerTeamName
+                            || ''
+                        ).trim() || undefined,
                         mergeStats: combined.mergeStats ? {
                             total: combined.mergeStats.total,
                             agreed: combined.mergeStats.agreed,
@@ -2043,7 +2057,12 @@ const SmartMatchDetail: React.FC<{
                     : [];
 
             const captainSeed = normalizeOcrName(activeUser || latestMatch.player || 'You') || 'You';
-            const friendlyTeamLabel = resolveFriendlyTeamLabel(latestMatch.ship, '', captainSeed);
+            const friendlyTeamNameSeed = String(
+                latestMatch.ocrDebug?.playerTeamName
+                || latestMatch.ocrDebug?.playerShipTeamName
+                || ''
+            ).trim();
+            const friendlyTeamLabel = resolveFriendlyTeamLabel(latestMatch.ship, friendlyTeamNameSeed, captainSeed);
             const friendlySeed = dedupeNames([
                 captainSeed,
                 ...(latestMatch.teammates || []).filter((name) => !isActiveUserLike(name)),
@@ -2463,7 +2482,12 @@ const SmartMatchDetail: React.FC<{
                 .filter(Boolean)
         )), []);
         const assignmentBoardTeams = useMemo<OcrTeamAssignmentTeam[]>(() => {
-            const friendlyTeamName = resolveFriendlyTeamLabel(match.ship, '', activeUser || match.player || 'You');
+            const friendlyTeamNameSeed = String(
+                match.ocrDebug?.playerTeamName
+                || match.ocrDebug?.playerShipTeamName
+                || ''
+            ).trim();
+            const friendlyTeamName = resolveFriendlyTeamLabel(match.ship, friendlyTeamNameSeed, activeUser || match.player || 'You');
             const friendlyPlayers = dedupeBoardNames([...(match.teammates || [])]).filter((name) => (
                 !isActiveUserLike(name) && name !== ''
             ));
@@ -2495,7 +2519,7 @@ const SmartMatchDetail: React.FC<{
                 shipType: String(match.ship || ''),
                 players: friendlyPlayers,
             }, ...opponentBoardTeams];
-        }, [activeUser, dedupeBoardNames, isActiveUserLike, match.opponentTeams, match.opponents, match.player, match.ship, match.teammates]);
+        }, [activeUser, dedupeBoardNames, isActiveUserLike, match.ocrDebug?.playerShipTeamName, match.ocrDebug?.playerTeamName, match.opponentTeams, match.opponents, match.player, match.ship, match.teammates]);
         const assignmentBoardFuzzyMatches = useMemo<Record<string, string>>(() => {
             if (!Array.isArray(pilotRegistry) || pilotRegistry.length === 0) return {};
             const exactRegistryKeys = new Set(

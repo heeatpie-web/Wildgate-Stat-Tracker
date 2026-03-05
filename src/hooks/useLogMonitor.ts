@@ -825,11 +825,18 @@ export const useLogMonitor = (activeUser?: string) => {
                             'guidship', 'shipguid', 'ship', 'shipname',
                             'guidweaponprimary', 'guidweaponsecondary', 'weaponprimary', 'weaponnameprimary',
                             'guidequipmentprimary', 'guidequipmentsecondary', 'equipmentprimary', 'equipmentnameprimary',
+                            'guidperkprimary', 'guidperksecondary', 'perkprimary', 'perknameprimary',
+                            'guidtraitprimary', 'guidtraitsecondary', 'traitprimary', 'traitnameprimary',
                             'weapons', 'equipment', 'characterweapons', 'charweapons', 'charactergear', 'characterequipment',
+                            'perks', 'characterperks', 'charperks', 'traits',
                             'weaponguids', 'equipmentguids',
+                            'perkguids', 'traitguids',
                             'weaponids', 'equipmentids',
+                            'perkids', 'traitids',
                             'weaponslots', 'equipmentslots',
+                            'perkslots', 'traitslots',
                             'loadoutweapons', 'loadoutequipment', 'loadoutcharacterweapons', 'loadoutcharacterequipment',
+                            'loadoutperks', 'loadoutcharacterperks', 'loadouttraits',
                         ]);
                         const payloadKeysLower = Object.keys(payload || {}).map((k) => k.toLowerCase());
                         const hasSignals = payloadKeysLower.some((k) => loadoutSignals.has(k));
@@ -1022,7 +1029,7 @@ export const useLogMonitor = (activeUser?: string) => {
                                 return;
                             }
                             if (!isRecord(value)) return;
-                            const preferredTokens = ['guid', 'id', 'name', 'display', 'weapon', 'equipment', 'item', 'slot'];
+                            const preferredTokens = ['guid', 'id', 'name', 'display', 'weapon', 'equipment', 'perk', 'trait', 'item', 'slot'];
                             const entries = Object.entries(value);
                             let matchedPreferred = false;
                             entries.forEach(([key, candidate]) => {
@@ -1057,6 +1064,7 @@ export const useLogMonitor = (activeUser?: string) => {
                             if (!guid) return null;
                             const clean = normalizeGuid(guid);
                             if (!clean) return null;
+                            const rawGuidText = String(guid || '').trim();
                             const domainMappings = type === 'Weapon'
                                 ? uidMappings.weapons
                                 : (type === 'Equipment' ? uidMappings.equipment : uidMappings.perks);
@@ -1082,7 +1090,17 @@ export const useLogMonitor = (activeUser?: string) => {
                                 || db[cleanLower]
                                 || canonicalDb[cleanUpper];
                             if (!name) {
-                                if (isStableGuid(clean)) {
+                                const matchesKnownPerkName = type === 'Perk'
+                                    ? !!fuzzyMatchList(rawGuidText, TELEMETRY_PROSPECTOR_PERK_NAMES)
+                                    : false;
+                                const shouldRegisterUnknownPerk = type === 'Perk'
+                                    && !matchesKnownPerkName
+                                    && (
+                                        isStableGuid(clean)
+                                        || /perk|trait/i.test(rawGuidText)
+                                        || (clean.length >= 10 && /\d/.test(clean))
+                                    );
+                                if (isStableGuid(clean) || shouldRegisterUnknownPerk) {
                                     registerUnknownId(cleanUpper, type);
                                 }
                                 return null;

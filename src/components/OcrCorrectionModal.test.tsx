@@ -178,6 +178,30 @@ describe('OcrCorrectionModal', () => {
         expect(gameData.setSessionTeams).toHaveBeenCalledWith({ red: ['PilotOneEdited'] });
     });
 
+    it('applies best results without dismissing embedded OCR review', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['PilotOne', 'PilotTwo'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['PilotOne', 'PilotTwo'];
+
+        render(
+            <OcrCorrectionModal
+                isOpen
+                embedded
+                onClose={onClose}
+                onAcceptAll={onAcceptAll}
+            />
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: /apply best results/i }));
+
+        expect(gameData.setSessionTeams).toHaveBeenCalled();
+        expect(onAcceptAll).not.toHaveBeenCalled();
+    });
+
     it('shows friendly team chip in assignment board and teammate markers in review rows', async () => {
         const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
         const onClose = vi.fn();

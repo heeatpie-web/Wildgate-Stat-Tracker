@@ -161,6 +161,7 @@ const SETTINGS_FOCUS_SECTION_STORAGE_KEY = 'wg_settings_focus_section_v1';
 const STARTUP_HEALTH_CHECK_SEEN_KEY_PREFIX = 'wg_startup_health_check_seen_v2';
 const STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY_PREFIX = 'wg_startup_health_check_skipped_launch_v2';
 const UNKNOWN_PLAYER_LABELS = new Set(['unknown', 'unknown player', 'n/a', 'na', '?']);
+const STARTUP_INTERACTION_GRACE_MS = 3500;
 const getOnboardingUserScope = (user: string | null | undefined): string => {
     const normalized = String(user || '').trim().toLowerCase();
     return normalized || '__global__';
@@ -232,6 +233,7 @@ const App: React.FC = () => {
     const [showIdInfoPrompt, setShowIdInfoPrompt] = useState(false);
     const [showStartupHealthCheck, setShowStartupHealthCheck] = useState(false);
     const [startupFlowReady, setStartupFlowReady] = useState(false);
+    const [startupInteractionReady, setStartupInteractionReady] = useState(false);
     const [isCompactNav, setIsCompactNav] = useState(() => window.innerWidth < 1024);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const navToggleRef = React.useRef<HTMLButtonElement | null>(null);
@@ -620,6 +622,29 @@ const App: React.FC = () => {
     }, [activeUser, isStoreLoading, players, showSetupWizard, setShowSetupWizard]);
 
     useEffect(() => {
+        if (isStoreLoading) {
+            setStartupInteractionReady(false);
+            return;
+        }
+        let armed = true;
+        const disarm = () => {
+            if (!armed) return;
+            armed = false;
+            setStartupInteractionReady(true);
+        };
+        const timeoutId = window.setTimeout(disarm, STARTUP_INTERACTION_GRACE_MS);
+        const pointerOpts: AddEventListenerOptions = { passive: true };
+        window.addEventListener('pointerdown', disarm, pointerOpts);
+        window.addEventListener('keydown', disarm);
+        return () => {
+            armed = false;
+            window.clearTimeout(timeoutId);
+            window.removeEventListener('pointerdown', disarm, pointerOpts);
+            window.removeEventListener('keydown', disarm);
+        };
+    }, [isStoreLoading]);
+
+    useEffect(() => {
         if (showSetupWizard) {
             setupWizardShownThisLaunchRef.current = true;
         }
@@ -675,6 +700,7 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (isStoreLoading) return;
+        if (!startupInteractionReady) return;
 
         const normalizeName = (value: string) => String(value || '').trim().toLowerCase();
         const isUnknownLabel = (value: string) => UNKNOWN_PLAYER_LABELS.has(normalizeName(value));
@@ -737,7 +763,7 @@ const App: React.FC = () => {
             return;
         }
         matchNormalizationSignatureRef.current = toNormalizationSignature(matches);
-    }, [activeUser, isStoreLoading, matches, setMatches]);
+    }, [activeUser, isStoreLoading, matches, setMatches, startupInteractionReady]);
 
     const clearRestoreSessionSnapshot = useCallback(() => {
         try {
@@ -1135,7 +1161,7 @@ const App: React.FC = () => {
     }, [mobileNavOpen, isCompactNav]);
 
     useEffect(() => {
-        if (isOverlayMode || isStoreLoading || performanceMode || !startupSmartPreloadEnabled) return;
+        if (isOverlayMode || isStoreLoading || performanceMode || !startupSmartPreloadEnabled || !startupInteractionReady) return;
         if (preloadStartedRef.current) return;
         preloadStartedRef.current = true;
 
@@ -1235,6 +1261,7 @@ const App: React.FC = () => {
         isStoreLoading,
         performanceMode,
         startupSmartPreloadEnabled,
+        startupInteractionReady,
         adaptivePreloadEnabled,
         adaptivePreloadBudgetMs,
         dashboardPreloadStats,
@@ -1978,6 +2005,8 @@ const App: React.FC = () => {
                 mergeStats: data.mergeStats,
                 fieldConfidence: data.fieldConfidence,
                 routing: data.ocrRouting,
+                playerTeamName: String(data.playerTeamName || data.playerShip?.teamName || '').trim() || undefined,
+                playerShipTeamName: String(data.playerShip?.teamName || data.playerTeamName || '').trim() || undefined,
                 timestamp: data.captureTimestamp || Date.now(),
             }
         });
