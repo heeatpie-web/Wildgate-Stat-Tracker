@@ -85,6 +85,13 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
     teammates: true,
     opponents: true,
   });
+  const [screenshotLoupe, setScreenshotLoupe] = useState<{
+    imagePath: string;
+    relX: number;
+    relY: number;
+    clientX: number;
+    clientY: number;
+  } | null>(null);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const dialogTitleId = useId();
   const dialogDescriptionId = useId();
@@ -197,6 +204,12 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
     if (lightboxIdx === null || !Array.isArray(screenshots) || screenshots.length === 0) return;
     announce(`Opened screenshot ${lightboxIdx + 1} of ${screenshots.length}.`, 'polite');
   }, [lightboxIdx, screenshots, announce]);
+
+  useEffect(() => {
+    if (lightboxIdx !== null) {
+      setScreenshotLoupe(null);
+    }
+  }, [lightboxIdx]);
 
   const dismissCoachmark = () => {
     setShowCoachmark(false);
@@ -649,6 +662,26 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
     announce('Closed screenshot preview.', 'polite');
   };
 
+  const updateScreenshotLoupe = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    imagePath: string
+  ) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      setScreenshotLoupe(null);
+      return;
+    }
+    const relX = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const relY = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+    setScreenshotLoupe({
+      imagePath,
+      relX,
+      relY,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
+  };
+
   useKeyboardShortcuts([
     {
       key: 'Escape',
@@ -811,6 +844,10 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                       <button
                         key={i}
                         onClick={() => setLightboxIdx(i)}
+                        onMouseEnter={(event) => updateScreenshotLoupe(event, src)}
+                        onMouseMove={(event) => updateScreenshotLoupe(event, src)}
+                        onMouseLeave={() => setScreenshotLoupe(null)}
+                        onBlur={() => setScreenshotLoupe(null)}
                         className="relative w-full bg-scrim-solid rounded-lg overflow-hidden group border border-md-sys-outline/20 hover:border-md-sys-primary/40 transition-colors"
                       >
                         <div className="w-full min-h-[220px] md:min-h-[300px] lg:min-h-[380px] bg-scrim-solid">
@@ -821,7 +858,10 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
                         />
                         </div>
                         <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <Eye size={16} className="text-on-scrim" />
+                          <div className="inline-flex items-center gap-2 text-on-scrim text-label-sm font-semibold bg-scrim-50 px-2.5 py-1 rounded-pill">
+                            <Eye size={16} />
+                            Open / Hover to Zoom
+                          </div>
                         </div>
                         <span className="absolute bottom-1 left-1 text-label-xs bg-scrim-60 px-1 rounded font-bold text-on-scrim-muted">
                           {i + 1}
@@ -1382,7 +1422,32 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
             Apply and Learn
           </button>
         </div>
-      </div>
+        </div>
+      {screenshotLoupe && lightboxIdx === null && (() => {
+        const loupeSize = 220;
+        const margin = 16;
+        const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
+        const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 1080;
+        const left = Math.max(8, Math.min(viewportWidth - loupeSize - 8, screenshotLoupe.clientX + margin));
+        const top = Math.max(8, Math.min(viewportHeight - loupeSize - 8, screenshotLoupe.clientY + margin));
+        return (
+          <div
+            className="fixed z-top pointer-events-none rounded-card overflow-hidden border border-md-sys-primary/35 bg-md-sys-surface shadow-2xl"
+            style={{ width: loupeSize, height: loupeSize, left, top }}
+          >
+            <LocalImage
+              src={screenshotLoupe.imagePath}
+              alt="Screenshot loupe preview"
+              className="w-full h-full object-cover select-none"
+              style={{
+                transform: 'scale(2.8)',
+                transformOrigin: `${Math.round(screenshotLoupe.relX * 100)}% ${Math.round(screenshotLoupe.relY * 100)}%`,
+              }}
+            />
+            <div className="absolute inset-0 border border-white/20" />
+          </div>
+        );
+      })()}
       {lightboxIdx !== null && screenshots && screenshots[lightboxIdx] && (
         <div
           className="fixed inset-0 z-top bg-scrim-90 flex items-center justify-center p-8"
@@ -1427,7 +1492,7 @@ export const OCRReviewModal: React.FC<OCRReviewModalProps> = ({
             <LocalImage
               src={screenshots[lightboxIdx]}
               alt={`Screenshot ${lightboxIdx + 1}`}
-              className="max-w-full max-h-85vh object-contain rounded-lg"
+              className="max-w-[95vw] max-h-[92vh] w-auto h-auto object-contain rounded-lg"
             />
               <div id={lightboxTitleId} className="text-center mt-2 text-label-sm text-on-scrim-muted font-bold">
               Screenshot {lightboxIdx + 1} of {screenshots.length}
