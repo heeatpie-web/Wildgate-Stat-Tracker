@@ -34,6 +34,7 @@ vi.mock('../../utils/ocr/ocrParser', () => ({
     ...next,
     playerShip: next.playerShip ?? existing.playerShip,
     reachModifiers: next.reachModifiers ?? existing.reachModifiers ?? [],
+    hazards: next.hazards ?? existing.hazards ?? [],
     teammates: next.teammates ?? existing.teammates ?? [],
     opponentTeams: next.opponentTeams ?? existing.opponentTeams ?? [],
   })),
@@ -236,6 +237,87 @@ describe('useSmartCapture', () => {
     );
     expect(result.current[0].savedCaptures[0]?.ocrProcessed).toBe(true);
     expect(actions.getPendingData('match-42')).not.toBeNull();
+  });
+
+  it('preserves hazards in pending OCR data and merged results', async () => {
+    vi.mocked(isElectron).mockReturnValue(true);
+    vi.mocked(captureGameWindow).mockResolvedValue({
+      success: true,
+      imageBase64: 'ZmFrZQ==',
+    });
+    vi.mocked(saveScreenshot).mockResolvedValue({
+      success: true,
+      filePath: 'C:\\captures\\hazards.png',
+      filename: 'hazards.png',
+    });
+    vi.mocked(rerunOCROnArtifact).mockResolvedValue({
+      success: true,
+      data: {
+        screenshotType: 'crew_hub',
+        playerShip: undefined,
+        playerTeamName: '',
+        reachModifiers: [],
+        hazards: ['Sandstorm'],
+        enemyShips: [],
+        teammates: [],
+        opponentTeams: [],
+        overallConfidence: 84,
+        captureTimestamp: Date.now(),
+      },
+    });
+
+    const { result } = renderHook(() => useSmartCapture());
+    const [, actions] = result.current;
+
+    await act(async () => {
+      await actions.captureOnly('match-hazards');
+    });
+    await act(async () => {
+      await actions.processStoredImage('C:\\captures\\hazards.png', 'Pilot');
+    });
+
+    expect(result.current[1].getPendingData('match-hazards')?.hazards).toEqual(['Sandstorm']);
+    expect(result.current[1].getMergedData()?.hazards).toEqual(['Sandstorm']);
+  });
+
+  it('does not classify crew-hub hazard-only OCR as empty output', async () => {
+    vi.mocked(isElectron).mockReturnValue(true);
+    vi.mocked(captureGameWindow).mockResolvedValue({
+      success: true,
+      imageBase64: 'ZmFrZQ==',
+    });
+    vi.mocked(saveScreenshot).mockResolvedValue({
+      success: true,
+      filePath: 'C:\\captures\\hazard-only.png',
+      filename: 'hazard-only.png',
+    });
+    vi.mocked(rerunOCROnArtifact).mockResolvedValue({
+      success: true,
+      data: {
+        screenshotType: 'crew_hub',
+        playerShip: undefined,
+        playerTeamName: '',
+        reachModifiers: [],
+        hazards: ['Ancient Vault'],
+        enemyShips: [],
+        teammates: [],
+        opponentTeams: [],
+        overallConfidence: 86,
+        captureTimestamp: Date.now(),
+      },
+    });
+
+    const { result } = renderHook(() => useSmartCapture());
+    const [, actions] = result.current;
+
+    await act(async () => {
+      await actions.captureOnly('match-hazard-only');
+    });
+    await act(async () => {
+      await actions.processStoredImage('C:\\captures\\hazard-only.png', 'Pilot');
+    });
+
+    expect(result.current[0].qualityHint?.level).not.toBe('poor');
   });
 
   it('uses configured OCR name reroute threshold in runtime options', async () => {

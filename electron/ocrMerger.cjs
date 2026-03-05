@@ -778,6 +778,17 @@ function shouldMergeEnemyShipEntry(existingShip, incomingShip) {
 
   const existingColor = normalizeColorToken(existingShip?.color || existingShip?.teamColor || '');
   const incomingColor = normalizeColorToken(incomingShip?.color || incomingShip?.teamColor || '');
+  const existingShipTypeKey = normalizeShipTypeKey(existingShip?.shipType || '');
+  const incomingShipTypeKey = normalizeShipTypeKey(incomingShip?.shipType || '');
+  if (
+    existingColor === 'unknown' &&
+    incomingColor === 'unknown' &&
+    existingShipTypeKey &&
+    incomingShipTypeKey &&
+    existingShipTypeKey === incomingShipTypeKey
+  ) {
+    return true;
+  }
   if (!existingColor || !incomingColor || existingColor === 'unknown' || incomingColor === 'unknown') {
     return false;
   }
@@ -790,8 +801,6 @@ function shouldMergeEnemyShipEntry(existingShip, incomingShip) {
     return false;
   }
 
-  const existingShipTypeKey = normalizeShipTypeKey(existingShip?.shipType || '');
-  const incomingShipTypeKey = normalizeShipTypeKey(incomingShip?.shipType || '');
   if (existingShipTypeKey && incomingShipTypeKey && existingShipTypeKey !== incomingShipTypeKey) {
     // Same color placeholder rows can still represent distinct ships.
     return false;

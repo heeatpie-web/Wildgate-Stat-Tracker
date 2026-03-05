@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { Match, OpponentTeam } from '../types';
 import type { OCRExtractedData } from '../utils/ocr/ocrTypes';
 import { backfillOpponentTeamShipTypes } from '../utils/ocr/opponentTeamShipTypes';
-import { commitPendingMatchDataForWizard, getRosterCandidateSuggestions, resolveFriendlyTeamLabel } from './SmartCapturesPanel';
+import {
+  commitPendingMatchDataForWizard,
+  clearSmartCapturePlayerAssignments,
+  getRosterCandidateSuggestions,
+  resolveFriendlyTeamLabel,
+  shouldSyncOcrApplyToCurrentSession,
+} from './SmartCapturesPanel';
 
 const makeTeam = (overrides: Partial<OpponentTeam> = {}): OpponentTeam => ({
   teamName: 'Enemy Team',
@@ -213,6 +219,52 @@ describe('commitPendingMatchDataForWizard', () => {
   });
 });
 
+describe('shouldSyncOcrApplyToCurrentSession', () => {
+  it('returns true only when the pending match id matches the selected match id', () => {
+    expect(shouldSyncOcrApplyToCurrentSession(44, 44)).toBe(true);
+    expect(shouldSyncOcrApplyToCurrentSession('44', 44)).toBe(true);
+  });
+
+  it('returns false when there is no valid pending match context', () => {
+    expect(shouldSyncOcrApplyToCurrentSession(null, 44)).toBe(false);
+    expect(shouldSyncOcrApplyToCurrentSession(0, 44)).toBe(false);
+    expect(shouldSyncOcrApplyToCurrentSession(undefined, 44)).toBe(false);
+  });
+
+  it('returns false for historical matches with a different pending match id', () => {
+    expect(shouldSyncOcrApplyToCurrentSession(45, 44)).toBe(false);
+  });
+});
+
+describe('clearSmartCapturePlayerAssignments', () => {
+  it('clears players, team assignments, and reach hazards together', () => {
+    const cleared = clearSmartCapturePlayerAssignments({
+      id: 55,
+      teammates: ['Wingman'],
+      opponents: ['Hostile'],
+      opponentTeams: [makeTeam({ teamName: 'Raiders', color: 'red', players: ['Hostile'] })],
+      reachModifiers: ['Sandstorm', 'Artifact: Ice'],
+      artifactSource: 'Ice',
+      eliminatedByTeam: 'Raiders',
+      ocrDebug: {
+        rawText: 'ocr text',
+        confidence: 88,
+        hazards: ['Sandstorm'],
+      },
+    } as Match);
+
+    expect(cleared.teammates).toEqual([]);
+    expect(cleared.opponents).toEqual([]);
+    expect(cleared.opponentTeams).toEqual([]);
+    expect(cleared.reachModifiers).toEqual([]);
+    expect(cleared.artifactSource).toBe('');
+    expect(cleared.eliminatedByTeam).toBeUndefined();
+    expect(cleared.ocrDebug?.hazards).toEqual([]);
+    expect(cleared.ocrDebug?.rawText).toBe('ocr text');
+    expect(cleared.ocrDebug?.confidence).toBe(88);
+  });
+});
+
 describe('getRosterCandidateSuggestions', () => {
   it('uses combined name similarity scoring for OCR-close names', () => {
     const suggestions = getRosterCandidateSuggestions('Ace', ['Axe', 'Ace Pilot', 'RandomName']);
@@ -237,9 +289,9 @@ describe('getRosterCandidateSuggestions', () => {
 });
 
 describe('resolveFriendlyTeamLabel', () => {
-  it('uses detected ship/team label while avoiding raw ship types', () => {
+  it('uses detected ship/team label, preferring custom crew names over ship types', () => {
     expect(resolveFriendlyTeamLabel("Starlight's Crew", '', 'TestPilot')).toBe('Starlight');
-    expect(resolveFriendlyTeamLabel('Hunter (4 Player)', '', 'TestPilot')).toBe('TestPilot');
+    expect(resolveFriendlyTeamLabel('Hunter (4 Player)', '', 'TestPilot')).toBe('Hunter');
   });
 
   it('falls back to existing label and then captain name', () => {

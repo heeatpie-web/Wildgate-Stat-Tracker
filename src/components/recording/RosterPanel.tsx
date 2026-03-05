@@ -30,6 +30,7 @@ export const RosterPanel: React.FC = () => {
         mergeHistory,
         setDrillDownTarget,
         setSessionTeams,
+        setSessionShipTypes,
         sessionTeams,
         selectedReachModifiers,
         setSelectedReachModifiers,
@@ -51,6 +52,8 @@ export const RosterPanel: React.FC = () => {
     const [newAlias, setNewAlias] = useState("");
     const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
     const removeOcrAliasCorrection = useAppStore(s => s.removeOcrAliasCorrection);
+    const pendingMatchData = useAppStore(s => s.pendingMatchData);
+    const setPendingMatchData = useAppStore(s => s.setPendingMatchData);
     const displayName = (name: string) => {
         const normalized = normalizeOcrName(name || '').toLowerCase();
         const me = normalizeOcrName(activeUser || '').toLowerCase();
@@ -62,11 +65,34 @@ export const RosterPanel: React.FC = () => {
 
     const hasTeammates = selectedTeammates.length > 0;
     const hasOpponents = selectedOpponents.length > 0;
+    const hasRosterContext = hasTeammates || hasOpponents || selectedReachModifiers.length > 0;
     const clearTeammates = () => {
         [...selectedTeammates].forEach((name) => toggleTeammate(name));
     };
     const clearHostiles = () => {
         [...selectedOpponents].forEach((name) => toggleOpponent(name));
+    };
+    const clearRosterContext = () => {
+        clearTeammates();
+        clearHostiles();
+        setSelectedReachModifiers([], 'manual');
+        setSessionTeams({});
+        setSessionShipTypes({}, 'manual');
+        if (!pendingMatchData) return;
+        setPendingMatchData({
+            ...pendingMatchData,
+            teammates: [],
+            opponents: [],
+            opponentTeams: [],
+            reachModifiers: [],
+            artifactSource: '',
+            ocrDebug: pendingMatchData.ocrDebug
+                ? {
+                    ...pendingMatchData.ocrDebug,
+                    hazards: [],
+                }
+                : pendingMatchData.ocrDebug,
+        });
     };
 
     const filtered = Array.from(new Set(pilotRegistry))
@@ -133,6 +159,18 @@ export const RosterPanel: React.FC = () => {
                     </span>
                     <h3 className="recording-panel-heading-title">Roster Manager</h3>
                 </div>
+                {hasRosterContext && (
+                    <button
+                        type="button"
+                        onClick={clearRosterContext}
+                        className="md3-btn-text inline-flex items-center gap-1.5 text-danger"
+                        title="Clear teammates, hostiles, and reach hazards"
+                        aria-label="Clear all roster selections"
+                    >
+                        <Trash2 size={12} />
+                        Clear All
+                    </button>
+                )}
             </div>
 
             {mergeHistory && mergeHistory.length > 0 && (() => {

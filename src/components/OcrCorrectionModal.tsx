@@ -25,6 +25,8 @@ import Logger from '../utils/logger';
 import { getElectronAPI } from '../utils/electronAPI';
 import { findClosestMatch, similarityScore } from '../utils/stringUtils';
 import { OcrTeamAssignmentBoard } from './ocr/OcrTeamAssignmentBoard';
+import { UI_REACH_MODIFIERS } from '../utils/constants';
+import { extractArtifactSourceFromReachModifiers } from '../utils/artifactSource';
 
 interface OcrCorrectionModalProps {
     isOpen: boolean;
@@ -97,6 +99,13 @@ const getStoredHelpBannerDismissed = (): boolean => {
 
 const normalizeNameKey = (name: string): string => String(name || '').trim().toLowerCase();
 const normalizeSubmittedName = (name: string): string => String(name || '').trim();
+const normalizeModifierName = (name: string): string => {
+    const normalized = normalizeSubmittedName(name);
+    if (!normalized) return '';
+    const match = UI_REACH_MODIFIERS.find((entry) => entry.toLowerCase() === normalized.toLowerCase());
+    return match || normalized;
+};
+const normalizeModifierKey = (name: string): string => normalizeModifierName(name).toLowerCase();
 const normalizeArtifactPathKey = (value: string): string => (
     String(value || '').trim().replace(/[\\/]+/g, '\\').toLowerCase()
 );
@@ -127,6 +136,25 @@ const dedupeNames = (names: string[]): string[] => {
     });
     return out;
 };
+
+const dedupeModifierNames = (names: string[]): string[] => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    names.forEach((name) => {
+        const normalized = normalizeModifierName(name);
+        const key = normalizeModifierKey(normalized);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        out.push(normalized);
+    });
+    return out;
+};
+
+const toHazardDebugValues = (modifierNames: string[]): string[] => (
+    dedupeModifierNames(
+        modifierNames.filter((name) => !/^artifact\s*:/i.test(String(name || '')))
+    )
+);
 
 const FRIENDLY_SHIP_SUFFIX_PATTERN = /\s*\(\s*\d+\s*player[s]?\s*\)\s*$/i;
 const normalizeShipTeamLabel = (value: string): string => (
@@ -324,6 +352,7 @@ const clonePendingMatchDraft = (value: Partial<Match> | null | undefined): Parti
         ocrDebug: value.ocrDebug
             ? {
                 ...value.ocrDebug,
+                hazards: Array.isArray(value.ocrDebug.hazards) ? [...value.ocrDebug.hazards] : value.ocrDebug.hazards,
                 nameSources: value.ocrDebug.nameSources
                     ? Object.fromEntries(
                         Object.entries(value.ocrDebug.nameSources).map(([key, entries]) => [
@@ -383,6 +412,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         selectedTeammates,
         setSelectedTeammates,
         setSelectedOpponents,
+        setSelectedReachModifiers,
         setSessionTeams,
         setSessionShipTypes,
     } = useGameData();
@@ -429,6 +459,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     const [isHelpBannerDismissed, setIsHelpBannerDismissed] = useState<boolean>(() => (
         embedded || getStoredHelpBannerDismissed()
     ));
+    const modifierSuggestionsId = useId();
     const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
     const scrollBodyRef = useRef<HTMLDivElement | null>(null);
     const suppressSeedSyncRef = useRef(false);
@@ -492,6 +523,26 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         if (!Array.isArray(rawHazards)) return [];
         return dedupeNames(rawHazards.map((entry) => normalizeSubmittedName(String(entry || ''))).filter(Boolean));
     }, [pendingMatchData]);
+    const seededModifierDraft = useMemo(() => (
+        dedupeModifierNames([
+            ...((Array.isArray(pendingMatchData?.reachModifiers) ? pendingMatchData.reachModifiers : [])
+                .map((entry) => normalizeSubmittedName(String(entry || '')))
+                .filter(Boolean)),
+            ...detectedHazards,
+        ])
+    ), [detectedHazards, pendingMatchData?.reachModifiers]);
+    const [modifierDraft, setModifierDraft] = useState<string[]>(() => seededModifierDraft);
+    const [modifierInput, setModifierInput] = useState('');
+    const modifierSuggestions = useMemo(() => {
+        const normalizedInput = normalizeModifierName(modifierInput).toLowerCase();
+        const existing = new Set(modifierDraft.map((entry) => normalizeModifierKey(entry)));
+        return UI_REACH_MODIFIERS.filter((entry) => {
+            const key = normalizeModifierKey(entry);
+            if (existing.has(key)) return false;
+            if (!normalizedInput) return true;
+            return entry.toLowerCase().includes(normalizedInput);
+        }).slice(0, 8);
+    }, [modifierDraft, modifierInput]);
     const activeUserDisplayKey = useMemo(
         () => normalizeNameKey(activeUser || pendingMatchData?.player || ''),
         [activeUser, pendingMatchData?.player]
@@ -575,6 +626,8 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         setDropdownAnchor(null);
         setPendingBatchAction(null);
         setTeamDraft(seededTeamDraft);
+        setModifierDraft(seededModifierDraft);
+        setModifierInput('');
         initialTeamDraftRef.current = seededTeamDraft.map((team) => ({
             ...team,
             players: [...(team.players || [])],
@@ -583,7 +636,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         initialSessionShipTypesRef.current = { ...(sessionShipTypes || {}) };
         teamDraftSeedRef.current = seededTeamDraftSignature;
         setLightboxIdx(null);
-    }, [isOpen, pendingMatchData, seededTeamDraft, seededTeamDraftSignature, sessionShipTypes]);
+    }, [isOpen, pendingMatchData, seededModifierDraft, seededTeamDraft, seededTeamDraftSignature, sessionShipTypes]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -837,6 +890,18 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         announce(`Accepted ${name} as a new player.`, 'polite');
     };
 
+    const addModifierToDraft = (rawValue: string) => {
+        const normalized = normalizeModifierName(rawValue);
+        if (!normalized) return;
+        setModifierDraft((prev) => dedupeModifierNames([...prev, normalized]));
+        setModifierInput('');
+    };
+
+    const removeModifierFromDraft = (name: string) => {
+        const targetKey = normalizeModifierKey(name);
+        setModifierDraft((prev) => prev.filter((entry) => normalizeModifierKey(entry) !== targetKey));
+    };
+
     const handleSubmitCorrections = (options?: SubmitCorrectionsOptions) => {
         const closeAfterApply = options?.closeAfterApply ?? true;
         const correctionOverrides = options?.correctionOverrides || {};
@@ -955,8 +1020,13 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             });
         });
 
+        const nextReachModifiers = dedupeModifierNames(modifierDraft);
+        const nextHazardDebug = toHazardDebugValues(nextReachModifiers);
+        const nextArtifactSource = extractArtifactSourceFromReachModifiers(nextReachModifiers);
+
         setSessionTeams(nextSessionTeams);
         setSessionShipTypes(nextShipTypes, 'manual');
+        setSelectedReachModifiers(nextReachModifiers, 'manual');
 
         const activeUserKey = normalizeNameKey(activeUser || '');
         let friendlyTeamIndex = resolvedTeams.findIndex((team) => (
@@ -1021,6 +1091,12 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 color: team.color || 'unknown',
                 players: [...(team.players || [])],
             })),
+            reachModifiers: nextReachModifiers,
+            artifactSource: nextArtifactSource || '',
+            ocrDebug: {
+                ...((pendingMatchData && pendingMatchData.ocrDebug) || {}),
+                hazards: nextHazardDebug,
+            },
         });
 
         if (corrected > 0 && reviewScreenshots.length > 0) {
@@ -1471,29 +1547,71 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                             </section>
                         )}
 
-                        {detectedHazards.length > 0 && (
-                            <section className="md3-card p-4 md:p-5 mb-4 border border-md-sys-outline/20">
-                                <div className="flex items-center justify-between gap-2 mb-2">
-                                    <span className="text-label-sm font-bold uppercase opacity-60">
-                                        Detected Hazards
-                                    </span>
-                                    <span className="text-label-xs text-md-sys-on-surface/45">
-                                        Auto-accepted
-                                    </span>
+                        <section className="md3-card p-4 md:p-5 mb-4 border border-md-sys-outline/20">
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                                <span className="text-label-sm font-bold uppercase opacity-60">
+                                    Reach Hazards &amp; Modifiers
+                                </span>
+                                <span className="text-label-xs text-md-sys-on-surface/45">
+                                    Review before apply
+                                </span>
+                            </div>
+                            <div className="flex flex-col gap-3">
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    <input
+                                        type="text"
+                                        list={modifierSuggestionsId}
+                                        value={modifierInput}
+                                        onChange={(event) => setModifierInput(event.target.value)}
+                                        onKeyDown={(event) => {
+                                            if (event.key !== 'Enter') return;
+                                            event.preventDefault();
+                                            addModifierToDraft(modifierInput);
+                                        }}
+                                        placeholder="Add reach modifier..."
+                                        aria-label="Add reach modifier"
+                                        className="md3-textfield md3-textfield--outlined flex-1 px-3 py-2 bg-md-sys-surface-container-highest"
+                                    />
+                                    <datalist id={modifierSuggestionsId}>
+                                        {modifierSuggestions.map((modifier) => (
+                                            <option key={modifier} value={modifier} />
+                                        ))}
+                                    </datalist>
+                                    <button
+                                        type="button"
+                                        onClick={() => addModifierToDraft(modifierInput)}
+                                        className="md3-btn-tonal whitespace-nowrap"
+                                    >
+                                        Add Modifier
+                                    </button>
                                 </div>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {detectedHazards.map((hazard) => (
-                                        <span
-                                            key={hazard}
-                                            className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-sm font-semibold"
-                                        >
-                                            <Check size={12} />
-                                            {hazard}
-                                        </span>
-                                    ))}
-                                </div>
-                            </section>
-                        )}
+                                {modifierDraft.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {modifierDraft.map((modifier) => (
+                                            <span
+                                                key={modifier}
+                                                className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-sm font-semibold"
+                                            >
+                                                <span>{modifier}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeModifierFromDraft(modifier)}
+                                                    className="inline-flex items-center justify-center rounded-full hover:bg-success/15"
+                                                    aria-label={`Remove modifier ${modifier}`}
+                                                    title={`Remove ${modifier}`}
+                                                >
+                                                    <X size={12} />
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-label-sm text-md-sys-on-surface/55">
+                                        No reach hazards or modifiers added yet.
+                                    </p>
+                                )}
+                            </div>
+                        </section>
 
                         {/* Player List */}
                         <div className="space-y-5">

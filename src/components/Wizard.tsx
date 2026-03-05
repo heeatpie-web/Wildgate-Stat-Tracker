@@ -633,7 +633,7 @@ export const Wizard: React.FC = () => {
             setSessionTeams(nextSessionTeams);
             setSessionShipTypes(nextSessionShipTypes, 'ocr');
             if (nextModifiers.length > 0) {
-                setSelectedReachModifiers(nextModifiers, 'ocr');
+                setSelectedReachModifiers(nextModifiers, 'manual');
             }
 
             useAppStore.getState().setPendingMatchData({

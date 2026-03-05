@@ -25,7 +25,14 @@ const {
   cleanupPlayerName: cleanupCrewHubPlayerName,
   isValidPlayerName: isValidCrewHubPlayerName,
 } = require('./crewHubExtractor.cjs');
-const { extractMapScreen, extractPlayerList, KNOWN_HAZARDS, SHIP_TYPES: MAP_SHIP_TYPES, looksLikeTeamName: looksLikeMapTeamName } = require('./mapScreenExtractor.cjs');
+const {
+  extractMapScreen,
+  extractPlayerList,
+  extractHazards,
+  KNOWN_HAZARDS,
+  SHIP_TYPES: MAP_SHIP_TYPES,
+  looksLikeTeamName: looksLikeMapTeamName,
+} = require('./mapScreenExtractor.cjs');
 const { mergeCaptures, isSameMatch } = require('./ocrMerger.cjs');
 const { paddleOcrBuffer, initPaddleOCR } = require('./paddleOcrHandler.cjs');
 
@@ -813,10 +820,6 @@ async function runOCR(imageBuffer, psm = null, options = {}) {
     };
   }
 
-  if (psm !== null) {
-    console.log(`[OCR] runOCR PSM override requested (${psm}) but ignored by PaddleOCR runtime`);
-  }
-
   await initPaddleOCR();
   console.log('[OCR] Running PaddleOCR recognition...');
   const startTime = Date.now();
@@ -1062,6 +1065,84 @@ function levenshteinSimilarity(a, b) {
   return 1 - levenshtein(a, b) / maxLen;
 }
 
+function normalizeHazardTokenSequence(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+}
+
+function isSingleEditOrTranspositionAway(left, right) {
+  const a = String(left || '');
+  const b = String(right || '');
+  if (!a || !b) return false;
+  if (a === b) return true;
+
+  const lenDiff = Math.abs(a.length - b.length);
+  if (lenDiff > 1) return false;
+
+  if (a.length === b.length) {
+    const mismatches = [];
+    for (let i = 0; i < a.length; i += 1) {
+      if (a[i] !== b[i]) mismatches.push(i);
+      if (mismatches.length > 2) return false;
+    }
+    if (mismatches.length === 1) return true; // substitution
+    if (mismatches.length === 2) {
+      const [i, j] = mismatches;
+      return j === i + 1 && a[i] === b[j] && a[j] === b[i]; // transposition
+    }
+    return false;
+  }
+
+  const shorter = a.length < b.length ? a : b;
+  const longer = a.length < b.length ? b : a;
+  let si = 0;
+  let li = 0;
+  let edits = 0;
+
+  while (si < shorter.length && li < longer.length) {
+    if (shorter[si] === longer[li]) {
+      si += 1;
+      li += 1;
+      continue;
+    }
+    edits += 1;
+    if (edits > 1) return false;
+    li += 1; // one insertion/deletion
+  }
+
+  return true;
+}
+
+function fuzzyHazardPatternMatch(textWords, patternWords) {
+  if (!Array.isArray(textWords) || !Array.isArray(patternWords)) return false;
+  if (patternWords.length === 0 || textWords.length === 0) return false;
+
+  if (patternWords.length === 1) {
+    return textWords.some((word) => isSingleEditOrTranspositionAway(patternWords[0], word));
+  }
+
+  if (patternWords.length > textWords.length) return false;
+  for (let start = 0; start <= (textWords.length - patternWords.length); start += 1) {
+    let matchedWords = 0;
+    let windowMatch = true;
+    for (let i = 0; i < patternWords.length; i += 1) {
+      if (!isSingleEditOrTranspositionAway(patternWords[i], textWords[start + i])) {
+        windowMatch = false;
+        break;
+      }
+      matchedWords += 1;
+    }
+    if (windowMatch && matchedWords >= 2) return true;
+  }
+
+  return false;
+}
+
 /**
  * Compute bounding-box Intersection over Union (IoU)
  */
@@ -1083,12 +1164,14 @@ function bboxIoU(a, b) {
  * Used for both screen types
  */
 function extractModifiers(text) {
-  const modifiers = [];
+  const modifiersByName = new Map();
+  const exactMatchedPatterns = new Set();
   const upperText = (text || '').toUpperCase();
 
   for (const [pattern, displayName] of Object.entries(KNOWN_HAZARDS)) {
     if (upperText.includes(pattern)) {
-      modifiers.push({
+      exactMatchedPatterns.add(pattern);
+      modifiersByName.set(displayName.toLowerCase(), {
         name: displayName,
         confidence: 95,
         rawText: pattern,
@@ -1096,7 +1179,23 @@ function extractModifiers(text) {
     }
   }
 
-  return modifiers;
+  const normalizedWords = normalizeHazardTokenSequence(text);
+  if (normalizedWords.length > 0) {
+    for (const [pattern, displayName] of Object.entries(KNOWN_HAZARDS)) {
+      if (exactMatchedPatterns.has(pattern)) continue;
+      const patternWords = normalizeHazardTokenSequence(pattern);
+      if (!fuzzyHazardPatternMatch(normalizedWords, patternWords)) continue;
+      const key = displayName.toLowerCase();
+      if (modifiersByName.has(key)) continue;
+      modifiersByName.set(key, {
+        name: displayName,
+        confidence: 70,
+        rawText: pattern,
+      });
+    }
+  }
+
+  return Array.from(modifiersByName.values());
 }
 
 function mergeModifierLists(primary = [], fallback = []) {
@@ -1696,6 +1795,44 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
         { yourShipRegionWords: yourShipRegionWordsForMap }
       );
 
+      if (imageBuffer && (Array.isArray(mapScreenData?.hazards) ? mapScreenData.hazards.length : 0) < 2) {
+        const fallbackHazardRegion = { xMin: 0.65, xMax: 1.0, yMin: 0.40, yMax: 1.0 };
+        const hazardRegion = activeRegions?.mapScreen?.hazards || fallbackHazardRegion;
+        const hazardRetry = await cropRegionAndOCR(
+          imageBuffer,
+          hazardRegion,
+          processed.originalWidth,
+          processed.originalHeight,
+          6,
+          fontProfile
+        );
+        const retryWords = Array.isArray(hazardRetry?.words) ? hazardRetry.words : [];
+        const retryLineText = groupCrewHubWordsIntoLines(retryWords, processed.originalHeight)
+          .map(line => line.words.map(w => String(w.text || '').trim()).join(' ').trim())
+          .filter(Boolean)
+          .join('\n');
+        const retryText = String(hazardRetry?.text || retryLineText || '').trim();
+        const retryHazards = retryText
+          ? extractHazards(
+            retryText,
+            retryWords,
+            processed.originalWidth,
+            processed.originalHeight,
+            { HAZARDS: hazardRegion }
+          )
+          : [];
+        if (retryHazards.length > 0) {
+          const mergedHazards = new Map();
+          [...(mapScreenData.hazards || []), ...retryHazards].forEach((hazard) => {
+            const name = String(hazard || '').trim();
+            const key = name.toLowerCase();
+            if (!key || mergedHazards.has(key)) return;
+            mergedHazards.set(key, name);
+          });
+          mapScreenData.hazards = Array.from(mergedHazards.values());
+        }
+      }
+
       const missingYourShip = !mapScreenData?.yourShip?.shipType;
       if (imageBuffer && missingYourShip) {
         const retryRegions = ['yourShip'];
@@ -2140,6 +2277,9 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
     const ranked = [...players].sort((a, b) => (Number(b?.confidence || 0) - Number(a?.confidence || 0)));
     return ranked.slice(0, maxCount);
   };
+  const hazardNames = Array.isArray(crewHubData?.hazards)
+    ? Array.from(new Set(crewHubData.hazards.map((hazard) => String(hazard || '').trim()).filter(Boolean)))
+    : [];
 
   const teammates = capPlayers((crewHubData.yourTeam?.players || []).map(name => ({
     name: typeof name === 'string' ? name : name.name,
@@ -2175,6 +2315,11 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
     crewHubData.yourTeam?.name || '',
     crewHubData.yourTeam?.shipType || ''
   ) || undefined;
+  const hazardModifiers = hazardNames.map((name) => ({
+    name,
+    confidence: 70,
+    rawText: name,
+  }));
 
   return {
     screenshotType: 'crew_hub',
@@ -2182,7 +2327,8 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
     playerShipName,
     teammates,
     opponentTeams,
-    reachModifiers: extractModifiers(rawText),
+    reachModifiers: mergeModifierLists(extractModifiers(rawText), hazardModifiers),
+    hazards: hazardNames,
     overallConfidence,
     isPartialCapture: crewHubData.isPartialCapture || false,
     captureTimestamp: Date.now(),
@@ -2414,7 +2560,6 @@ function registerOCRHandlers(mainWindow) {
   });
 
   ipcMain.handle('regenerate-ocr-dictionary', async (event, payload = {}) => {
-    console.log('[OCR-Dict] Dictionary regeneration requested, but PaddleOCR runtime does not use user dictionaries');
     return {
       success: false,
       error: 'Dictionary regeneration is not supported with PaddleOCR runtime',

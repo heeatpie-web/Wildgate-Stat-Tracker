@@ -252,6 +252,93 @@ const KNOWN_HAZARD_COMPACT_KEYS = new Set(
     .filter(Boolean)
 );
 
+function normalizeHazardTokenSequence(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+}
+
+function isSingleEditOrTranspositionAway(left, right) {
+  const a = String(left || '');
+  const b = String(right || '');
+  if (!a || !b) return false;
+  if (a === b) return true;
+
+  const lenDiff = Math.abs(a.length - b.length);
+  if (lenDiff > 1) return false;
+
+  if (a.length === b.length) {
+    const mismatches = [];
+    for (let i = 0; i < a.length; i += 1) {
+      if (a[i] !== b[i]) mismatches.push(i);
+      if (mismatches.length > 2) return false;
+    }
+    if (mismatches.length === 1) return true; // substitution
+    if (mismatches.length === 2) {
+      const [i, j] = mismatches;
+      return j === i + 1 && a[i] === b[j] && a[j] === b[i]; // transposition
+    }
+    return false;
+  }
+
+  const shorter = a.length < b.length ? a : b;
+  const longer = a.length < b.length ? b : a;
+  let si = 0;
+  let li = 0;
+  let edits = 0;
+
+  while (si < shorter.length && li < longer.length) {
+    if (shorter[si] === longer[li]) {
+      si += 1;
+      li += 1;
+      continue;
+    }
+    edits += 1;
+    if (edits > 1) return false;
+    li += 1; // one insertion/deletion
+  }
+
+  return true;
+}
+
+function fuzzyHazardPatternMatch(textWords, patternWords) {
+  if (!Array.isArray(textWords) || !Array.isArray(patternWords)) return false;
+  if (patternWords.length === 0 || textWords.length === 0) return false;
+
+  if (patternWords.length === 1) {
+    return textWords.some((word) => isSingleEditOrTranspositionAway(patternWords[0], word));
+  }
+
+  if (patternWords.length > textWords.length) return false;
+  for (let start = 0; start <= (textWords.length - patternWords.length); start += 1) {
+    let matchedWords = 0;
+    let windowMatch = true;
+    for (let i = 0; i < patternWords.length; i += 1) {
+      if (!isSingleEditOrTranspositionAway(patternWords[i], textWords[start + i])) {
+        windowMatch = false;
+        break;
+      }
+      matchedWords += 1;
+    }
+    if (windowMatch && matchedWords >= 2) return true;
+  }
+
+  return false;
+}
+
+function looksLikeHazardHeaderToken(rawToken) {
+  const token = String(rawToken || '').toUpperCase().replace(/[^A-Z]/g, '');
+  if (!token) return false;
+  if (token === 'KNOWN' || token === 'HAZARDS') return true;
+  if (token.includes('HAZARD')) return true;
+  return isSingleEditOrTranspositionAway(token, 'HAZARD')
+    || isSingleEditOrTranspositionAway(token, 'HAZARDS');
+}
+
 const PLAYER_NOISE_WORDS = new Set([
   'YOUR', 'SHIP', 'ENEMY', 'SHIPS', 'HAZARDS', 'PARTY', 'VOICE',
   'HUNTER', 'BASTION', 'PRIVATEER', 'SCOUT', 'OUTLAW', 'SOLO', 'BATTLE',
@@ -653,7 +740,7 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
       if (foundShip) confidence = Math.max(confidence, teamName ? 74 : 62);
     }
 
-    const likelyEnemySlot = slotIdx <= 1 || Boolean(foundShip) || Boolean(teamName);
+    const likelyEnemySlot = Boolean(foundShip) || Boolean(teamName);
     const displayShipType = foundShip ? toTitle(foundShip) : 'Unknown';
     const sanitizedTeamName = sanitizeExtractedTeamName(teamName, displayShipType);
     if (likelyEnemySlot && (foundShip || sanitizedTeamName) && !isNoiseTeamLabel(sanitizedTeamName)) {
@@ -684,7 +771,7 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
         bestIdx = i;
       }
     }
-    if (bestIdx >= 0 && bestDist < imageHeight * 0.08) {
+    if (bestIdx >= 0 && bestDist < imageHeight * 0.12) {
       ship.shipType = shipWordCandidates[bestIdx].shipType;
       ship.confidence = Math.max(ship.confidence || 0, 70);
       usedCandidateIdx.add(bestIdx);
@@ -707,8 +794,7 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
 
       let hazardsHeaderY = null;
       for (const w of rightBandWords) {
-        const t = String(w.text || '').toUpperCase().replace(/[^A-Z]/g, '');
-        if (t === 'KNOWN' || t === 'HAZARDS') {
+        if (looksLikeHazardHeaderToken(w.text || '')) {
           const y = (w.bbox.y0 + w.bbox.y1) / 2;
           if (hazardsHeaderY == null || y < hazardsHeaderY) hazardsHeaderY = y;
         }
@@ -960,13 +1046,28 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
  */
 function extractHazards(text, words = [], imageWidth = 0, imageHeight = 0, layout = LAYOUT) {
   const hazards = new Set();
-  const upperText = String(text || '').toUpperCase();
-
-  for (const [pattern, displayName] of Object.entries(KNOWN_HAZARDS)) {
-    if (upperText.includes(pattern)) {
-      hazards.add(displayName);
+  const exactMatchedPatterns = new Set();
+  const scanForHazards = (sourceText) => {
+    const upperText = String(sourceText || '').toUpperCase();
+    for (const [pattern, displayName] of Object.entries(KNOWN_HAZARDS)) {
+      if (upperText.includes(pattern)) {
+        hazards.add(displayName);
+        exactMatchedPatterns.add(pattern);
+      }
     }
-  }
+
+    const normalizedWords = normalizeHazardTokenSequence(sourceText);
+    if (normalizedWords.length === 0) return;
+    for (const [pattern, displayName] of Object.entries(KNOWN_HAZARDS)) {
+      if (exactMatchedPatterns.has(pattern)) continue;
+      const patternWords = normalizeHazardTokenSequence(pattern);
+      if (fuzzyHazardPatternMatch(normalizedWords, patternWords)) {
+        hazards.add(displayName);
+      }
+    }
+  };
+
+  scanForHazards(text);
 
   if (Array.isArray(words) && words.length > 0 && imageWidth > 0 && imageHeight > 0) {
     // Anchor hazard search to the "KNOWN HAZARDS" or "HAZARDS" header word.
@@ -978,23 +1079,22 @@ function extractHazards(text, words = [], imageWidth = 0, imageHeight = 0, layou
       return (w.bbox.x0 + w.bbox.x1) / 2 >= rightXMin;
     });
 
-    // Find the header Y — look for a word that is "HAZARDS" or "KNOWN"
+    // Find the header Y — tolerate OCR variants around "HAZARD(S)".
     let headerY = null;
     for (const w of rightXWords) {
-      const t = (w.text || '').toUpperCase().replace(/[^A-Z]/g, '');
-      if (t === 'HAZARDS' || t === 'KNOWN') {
+      if (looksLikeHazardHeaderToken(w.text || '')) {
         headerY = (w.bbox.y0 + w.bbox.y1) / 2;
         break;
       }
     }
 
-    // If header found, scan below it; otherwise fall back to lower 60% of image
+    // If header found, scan deeper below it; otherwise fall back to a broad lower pane.
     const scanYMin = headerY != null
-      ? headerY                        // start right at the header row itself
-      : imageHeight * 0.25;            // generous fallback — catches even at top
+      ? headerY
+      : imageHeight * 0.15;
     const scanYMax = headerY != null
-      ? headerY + imageHeight * 0.40   // ~40% of screen height below header
-      : imageHeight * 0.75;
+      ? headerY + imageHeight * 0.55
+      : imageHeight * 0.90;
 
     const regionWords = rightXWords.filter(w => {
       const cy = (w.bbox.y0 + w.bbox.y1) / 2;
@@ -1006,11 +1106,7 @@ function extractHazards(text, words = [], imageWidth = 0, imageHeight = 0, layou
         .map(line => line.words.map(w => w.text).join(' ').trim())
         .join('\n')
         .toUpperCase();
-      for (const [pattern, displayName] of Object.entries(KNOWN_HAZARDS)) {
-        if (regionText.includes(pattern)) {
-          hazards.add(displayName);
-        }
-      }
+      scanForHazards(regionText);
     }
   }
 

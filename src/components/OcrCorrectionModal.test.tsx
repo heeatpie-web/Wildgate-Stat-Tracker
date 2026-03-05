@@ -11,7 +11,9 @@ const gameData = {
     pilotRegistry: [] as string[],
     addToRegistry: vi.fn(),
     matches: [],
+    selectedReachModifiers: [] as string[],
     selectedTeammates: [] as string[],
+    setSelectedReachModifiers: vi.fn(),
     setSelectedTeammates: vi.fn(),
     setSelectedOpponents: vi.fn(),
     setSessionTeams: vi.fn(),
@@ -51,6 +53,7 @@ vi.mock('../store/useAppStore', () => ({
 vi.mock('../providers/UIStateProvider', () => ({
     useUIState: () => ({
         activeUser: 'ActivePilot',
+        setToast: vi.fn(),
     }),
 }));
 
@@ -60,6 +63,7 @@ describe('OcrCorrectionModal', () => {
         gameData.sessionShipTypes = {};
         gameData.pilotRegistry = [];
         gameData.matches = [];
+        gameData.selectedReachModifiers = [];
         gameData.selectedTeammates = [];
         appStoreState.ocrCorrections = {};
         appStoreState.pendingMatchData = null;
@@ -176,6 +180,49 @@ describe('OcrCorrectionModal', () => {
         fireEvent.click(screen.getByRole('button', { name: /apply and learn/i }));
 
         expect(gameData.setSessionTeams).toHaveBeenCalledWith({ red: ['PilotOneEdited'] });
+    });
+
+    it('allows editing reach modifiers before apply and persists reviewed hazards', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['PilotOne'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['PilotOne'];
+        appStoreState.pendingMatchData = {
+            player: 'ActivePilot',
+            ship: 'Hunter (2 Player)',
+            teammates: ['PilotOne'],
+            opponents: [],
+            opponentTeams: [],
+            reachModifiers: ['Artifact: Ice'],
+            ocrDebug: {
+                hazards: ['Sandstorm'],
+            },
+        };
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        expect(screen.getByText('Sandstorm')).toBeInTheDocument();
+        expect(screen.getByText('Artifact: Ice')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /remove modifier sandstorm/i }));
+        fireEvent.change(screen.getByLabelText(/add reach modifier/i), { target: { value: 'Ancient Vault' } });
+        fireEvent.click(screen.getByRole('button', { name: /add modifier/i }));
+        fireEvent.click(screen.getByRole('button', { name: /apply and learn/i }));
+
+        expect(gameData.setSelectedReachModifiers).toHaveBeenCalledWith(
+            ['Artifact: Ice', 'Ancient Vault'],
+            'manual'
+        );
+        expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
+            reachModifiers: ['Artifact: Ice', 'Ancient Vault'],
+            artifactSource: 'Ice',
+            ocrDebug: expect.objectContaining({
+                hazards: ['Ancient Vault'],
+            }),
+        }));
     });
 
     it('applies best results without dismissing embedded OCR review', async () => {

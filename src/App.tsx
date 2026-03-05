@@ -488,6 +488,7 @@ const App: React.FC = () => {
         const minScorePct = Math.round((Number(ocrAutoApplyMinScore) || 0.83) * 100);
         const autoMergeEligible = (pendingReviews || []).filter((review) => (
             review.type === 'roster_candidate'
+            && review.source !== 'ocr'
             && Number(review.bestScore || 0) >= minScorePct
             && String(review.bestMatch || '').trim().length > 0
         ));
@@ -1868,7 +1869,7 @@ const App: React.FC = () => {
                 if (!key || sessionModifierMap.has(key)) return;
                 sessionModifierMap.set(key, name);
             });
-            setSelectedReachModifiers(Array.from(sessionModifierMap.values()), 'ocr');
+            setSelectedReachModifiers(Array.from(sessionModifierMap.values()), 'manual');
         }
 
         const shipForCapacity = data.playerShip?.shipType || useAppStore.getState().activeShip || activeShip;

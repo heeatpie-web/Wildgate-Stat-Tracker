@@ -208,6 +208,84 @@ const CREW_HUB_HAZARDS = {
   'SANDSTORM': 'Sandstorm',
 };
 
+function normalizeHazardTokenSequence(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+}
+
+function isSingleEditOrTranspositionAway(left, right) {
+  const a = String(left || '');
+  const b = String(right || '');
+  if (!a || !b) return false;
+  if (a === b) return true;
+
+  const lenDiff = Math.abs(a.length - b.length);
+  if (lenDiff > 1) return false;
+
+  if (a.length === b.length) {
+    const mismatches = [];
+    for (let i = 0; i < a.length; i += 1) {
+      if (a[i] !== b[i]) mismatches.push(i);
+      if (mismatches.length > 2) return false;
+    }
+    if (mismatches.length === 1) return true;
+    if (mismatches.length === 2) {
+      const [i, j] = mismatches;
+      return j === i + 1 && a[i] === b[j] && a[j] === b[i];
+    }
+    return false;
+  }
+
+  const shorter = a.length < b.length ? a : b;
+  const longer = a.length < b.length ? b : a;
+  let si = 0;
+  let li = 0;
+  let edits = 0;
+
+  while (si < shorter.length && li < longer.length) {
+    if (shorter[si] === longer[li]) {
+      si += 1;
+      li += 1;
+      continue;
+    }
+    edits += 1;
+    if (edits > 1) return false;
+    li += 1;
+  }
+
+  return true;
+}
+
+function fuzzyHazardPatternMatch(textWords, patternWords) {
+  if (!Array.isArray(textWords) || !Array.isArray(patternWords)) return false;
+  if (patternWords.length === 0 || textWords.length === 0) return false;
+
+  if (patternWords.length === 1) {
+    return textWords.some((word) => isSingleEditOrTranspositionAway(patternWords[0], word));
+  }
+
+  if (patternWords.length > textWords.length) return false;
+  for (let start = 0; start <= (textWords.length - patternWords.length); start += 1) {
+    let matchedWords = 0;
+    let windowMatch = true;
+    for (let i = 0; i < patternWords.length; i += 1) {
+      if (!isSingleEditOrTranspositionAway(patternWords[i], textWords[start + i])) {
+        windowMatch = false;
+        break;
+      }
+      matchedWords += 1;
+    }
+    if (windowMatch && matchedWords >= 2) return true;
+  }
+
+  return false;
+}
+
 /**
  * Main entry point: Extract all data from Crew Hub screenshot.
  *
@@ -297,8 +375,21 @@ async function extractCrewHub(
     {
       const upperText = text.toUpperCase();
       const foundHazards = new Set();
+      const exactMatchedPatterns = new Set();
       for (const [pattern, displayName] of Object.entries(CREW_HUB_HAZARDS)) {
-        if (upperText.includes(pattern)) foundHazards.add(displayName);
+        if (!upperText.includes(pattern)) continue;
+        foundHazards.add(displayName);
+        exactMatchedPatterns.add(pattern);
+      }
+      const normalizedWords = normalizeHazardTokenSequence(text);
+      if (normalizedWords.length > 0) {
+        for (const [pattern, displayName] of Object.entries(CREW_HUB_HAZARDS)) {
+          if (exactMatchedPatterns.has(pattern)) continue;
+          const patternWords = normalizeHazardTokenSequence(pattern);
+          if (fuzzyHazardPatternMatch(normalizedWords, patternWords)) {
+            foundHazards.add(displayName);
+          }
+        }
       }
       if (foundHazards.size > 0) {
         result.hazards = Array.from(foundHazards).sort();

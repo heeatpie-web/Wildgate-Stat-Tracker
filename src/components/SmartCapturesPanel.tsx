@@ -177,12 +177,41 @@ export const resolveFriendlyTeamLabel = (
     shipName: string | null | undefined,
     existingFriendlyLabel: string | null | undefined,
     captainName: string | null | undefined
-): string => (
-    normalizeFriendlyLabelCandidate(shipName)
-    || normalizeFriendlyLabelCandidate(existingFriendlyLabel)
-    || normalizeOcrName(String(captainName || ''))
-    || 'Friendly Team'
-);
+): string => {
+    // Strip player-count suffix and 's crew suffix, but accept ship type names
+    // (unlike normalizeFriendlyLabelCandidate which rejects them)
+    const strippedLabel = (val: string | null | undefined): string => {
+        const s = normalizeOcrName(
+            String(val || '').replace(FRIENDLY_SHIP_SUFFIX_PATTERN, '').replace(/\s*['']s\s+crew\s*$/i, '').trim()
+        );
+        const lo = s.toLowerCase();
+        return (lo === 'your team' || lo === 'friendly team' || lo === 'my crew') ? '' : s;
+    };
+    return (
+        normalizeFriendlyLabelCandidate(shipName)
+        || strippedLabel(shipName)
+        || normalizeFriendlyLabelCandidate(existingFriendlyLabel)
+        || strippedLabel(existingFriendlyLabel)
+        || normalizeOcrName(String(captainName || ''))
+        || 'Friendly Team'
+    );
+};
+
+export const clearSmartCapturePlayerAssignments = (match: Match): Match => ({
+    ...match,
+    teammates: [],
+    opponents: [],
+    opponentTeams: [],
+    reachModifiers: [],
+    artifactSource: '',
+    eliminatedByTeam: undefined,
+    ocrDebug: match.ocrDebug
+        ? {
+            ...match.ocrDebug,
+            hazards: [],
+        }
+        : match.ocrDebug,
+});
 
 const POSITIONAL_TEAM_COLOR_ORDER = ['red', 'orange', 'yellow', 'yellowgreen'] as const;
 const OPPONENT_COLOR_SORT_ORDER = ['red', 'orange', 'yellow', 'yellowgreen'] as const;
@@ -1302,10 +1331,11 @@ const SmartCapturesPanel: React.FC = () => {
                                         }}
                                         onApplyToSession={(data) => {
                                             let appliedMatch: Match | null = null;
-                                            const pendingMatchId = Number(useAppStore.getState().pendingMatchData?.id || 0);
-                                            const hasPendingMatchContext = Number.isFinite(pendingMatchId) && pendingMatchId > 0;
-                                            const shouldSyncCurrentSession = !hasPendingMatchContext
-                                                || pendingMatchId === Number(selectedMatch.id);
+                                            const pendingMatchId = useAppStore.getState().pendingMatchData?.id;
+                                            const shouldSyncCurrentSession = shouldSyncOcrApplyToCurrentSession(
+                                                pendingMatchId,
+                                                selectedMatch.id
+                                            );
                                             const detectedShip = data.playerShip?.shipType || '';
                                             if (detectedShip && shouldSyncCurrentSession) setActiveShip(detectedShip, 'ocr');
                                             const shipForCapacity = detectedShip || activeShip || telemetryDetectedShip || selectedMatch.ship || SHIPS[0];
@@ -1443,14 +1473,12 @@ const SmartCapturesPanel: React.FC = () => {
 
                                             const reachModifiers = data.reachModifiers ?? [];
                                             const hazards = data.hazards ?? [];
-                                            const extractedArtifactSource = extractArtifactSourceFromReachModifiers(
-                                                reachModifiers as Array<string | ExtractedModifier>
-                                            );
                                             const canonicalSessionModifiers = toCanonicalModifierNames(
                                                 reachModifiers as Array<string | ExtractedModifier>,
                                                 hazards,
                                                 normalizeModifierName
                                             );
+                                            const extractedArtifactSource = extractArtifactSourceFromReachModifiers(canonicalSessionModifiers);
                                             const normalizedOpponentTeamsForMatch = resolvedOpponentTeams.map((team) => ({
                                                 teamName: team.teamName || 'Unknown Team',
                                                 shipType: team.shipType || '',
@@ -1458,7 +1486,10 @@ const SmartCapturesPanel: React.FC = () => {
                                                 players: [...team.players],
                                             }));
                                             if (shouldSyncCurrentSession) {
-                                                setSelectedReachModifiers(canonicalSessionModifiers, 'ocr');
+                                                const nextPendingHazards = Array.isArray(data.hazards)
+                                                    ? Array.from(new Set(data.hazards.map((hazard) => String(hazard || '').trim()).filter(Boolean)))
+                                                    : [];
+                                                setSelectedReachModifiers(canonicalSessionModifiers, 'manual');
                                                 const latestPendingDraft = (useAppStore.getState().pendingMatchData || {}) as Partial<Match>;
                                                 useAppStore.getState().setPendingMatchData({
                                                     ...latestPendingDraft,
@@ -1469,6 +1500,11 @@ const SmartCapturesPanel: React.FC = () => {
                                                     reachModifiers: canonicalSessionModifiers,
                                                     artifactSource: extractedArtifactSource || '',
                                                     ocrState: 'reviewing',
+                                                    ocrDebug: {
+                                                        ...(latestPendingDraft.ocrDebug || {}),
+                                                        hazards: nextPendingHazards,
+                                                        timestamp: Number(data.captureTimestamp || Date.now()),
+                                                    },
                                                 });
                                             }
                                             setToast({
@@ -1751,6 +1787,21 @@ type OpenWizardForMatchOptions = {
 
 type PendingMatchWriter = (data: Partial<Match> | null) => void;
 type PendingMatchReader = () => Partial<Match> | null;
+
+const normalizePositiveMatchId = (value: unknown): number | null => {
+    const parsed = Number(value || 0);
+    if (!Number.isInteger(parsed) || parsed <= 0) return null;
+    return parsed;
+};
+
+export const shouldSyncOcrApplyToCurrentSession = (
+    pendingMatchId: unknown,
+    selectedMatchId: unknown
+): boolean => {
+    const pendingId = normalizePositiveMatchId(pendingMatchId);
+    const selectedId = normalizePositiveMatchId(selectedMatchId);
+    return pendingId != null && selectedId != null && pendingId === selectedId;
+};
 
 export const commitPendingMatchDataForWizard = (
     pendingData: Partial<Match>,
@@ -2235,6 +2286,17 @@ const SmartMatchDetail: React.FC<{
                 return;
             }
             const appliedMatch = onApplyToSession(dataToApply);
+            // Ensure the wizard can access screenshot file paths for its Re-run OCR button
+            const artifactPaths = (match.artifacts || [])
+                .map((p) => String(p || '').trim())
+                .filter((p) => p.length > 0 && /\.(png|jpe?g|webp|bmp|gif)$/i.test(p));
+            if (artifactPaths.length > 0) {
+                const currentPending = useAppStore.getState().pendingMatchData || {};
+                useAppStore.getState().setPendingMatchData({
+                    ...currentPending,
+                    artifacts: artifactPaths,
+                });
+            }
             persistNameSourceHintsToPendingDraft(ocrNameSources);
             openWizardForMatch({
                 matchOverride: appliedMatch,
@@ -2243,7 +2305,7 @@ const SmartMatchDetail: React.FC<{
             window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
                 detail: { matchId: Number(appliedMatch?.id || match.id || 0) || null },
             }));
-        }, [onApplyToSession, openWizardForMatch, reviewData, setToast, match.id, ocrNameSources, persistNameSourceHintsToPendingDraft]);
+        }, [onApplyToSession, openWizardForMatch, reviewData, setToast, match.artifacts, match.id, ocrNameSources, persistNameSourceHintsToPendingDraft]);
 
         useEffect(() => {
             setShowSecondaryActions(false);
@@ -3141,10 +3203,10 @@ const SmartMatchDetail: React.FC<{
                                     </button>
                                 ) : null}
                                 <div className="flex items-center gap-1.5">
-                                    {onApplyToSession && (
+                                    {onApplyToSession && reviewData && (
                                         <button
                                             onClick={() => applyReviewDataToSession()}
-                                            className={`sc-detail-action-btn sc-detail-action-btn--tonal ${reviewData ? '' : 'opacity-80'}`}
+                                            className="sc-detail-action-btn sc-detail-action-btn--tonal"
                                             title={reviewData
                                                 ? 'Apply latest OCR extraction to the current recording session and open wizard'
                                                 : 'Run Re-analyze first, then apply OCR'}
@@ -3340,14 +3402,8 @@ const SmartMatchDetail: React.FC<{
                                     <button
                                         type="button"
                                         className="md3-btn-text text-label-xs font-bold text-danger"
-                                        onClick={() => onUpdate({
-                                            ...match,
-                                            teammates: [],
-                                            opponents: [],
-                                            opponentTeams: [],
-                                            eliminatedByTeam: undefined,
-                                        })}
-                                        title="Clear all detected players and team assignments"
+                                        onClick={() => onUpdate(clearSmartCapturePlayerAssignments(match))}
+                                        title="Clear all detected players, team assignments, and reach hazards"
                                     >
                                         Clear All
                                     </button>

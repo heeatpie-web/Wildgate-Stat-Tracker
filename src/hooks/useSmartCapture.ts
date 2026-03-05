@@ -460,7 +460,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
     const teamCount = data.teammates?.length || 0;
     const oppCount = data.opponentTeams?.reduce((sum, t) => sum + (t.players?.length || 0), 0) || 0;
-    const modCount = data.reachModifiers?.length || 0;
+    const modCount = Math.max(data.reachModifiers?.length || 0, data.hazards?.length || 0);
     const confidence = data.overallConfidence || 0;
     const source = data.ocrSource || 'local';
 
@@ -748,6 +748,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       playerShip: undefined,
       playerShipName: undefined,
       reachModifiers: [],
+      hazards: [],
       teammates: [],
       opponentTeams: [],
       enemyShips: [],
@@ -759,6 +760,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         playerTeamName: capture.data.playerTeamName,
         playerShipName: capture.data.playerShipName,
         reachModifiers: capture.data.reachModifiers,
+        hazards: capture.data.hazards,
         teammates: capture.data.teammates,
         opponentTeams: capture.data.opponentTeams,
         enemyShips: capture.data.enemyShips,
@@ -781,6 +783,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       playerTeamName: merged.playerTeamName,
       playerShipName: merged.playerShipName,
       reachModifiers: merged.reachModifiers || [],
+      hazards: merged.hazards || [],
       enemyShips: merged.enemyShips || [],
       teammates: mergedTeammates,
       opponentTeams: merged.opponentTeams || [],
@@ -816,6 +819,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         playerTeamName: normalizedData.playerTeamName,
         playerShipName: normalizedData.playerShipName,
         reachModifiers: normalizedData.reachModifiers || [],
+        hazards: normalizedData.hazards || [],
         enemyShips: normalizedData.enemyShips || [],
         teammates: cappedTeammates,
         opponentTeams: normalizedData.opponentTeams || [],
@@ -833,6 +837,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       playerTeamName: normalizedData.playerTeamName,
       playerShipName: normalizedData.playerShipName,
       reachModifiers: normalizedData.reachModifiers,
+      hazards: normalizedData.hazards,
       teammates: normalizedData.teammates,
       opponentTeams: normalizedData.opponentTeams,
       enemyShips: normalizedData.enemyShips,
@@ -851,6 +856,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       playerTeamName: merged.playerTeamName || previous.playerTeamName || normalizedData.playerTeamName,
       playerShipName: merged.playerShipName || previous.playerShipName || normalizedData.playerShipName,
       reachModifiers: merged.reachModifiers || previous.reachModifiers,
+      hazards: merged.hazards || previous.hazards || normalizedData.hazards || [],
       teammates: cappedMergedTeammates,
       opponentTeams: merged.opponentTeams || previous.opponentTeams,
       enemyShips: merged.enemyShips || previous.enemyShips || normalizedData.enemyShips || [],
