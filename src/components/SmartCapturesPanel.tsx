@@ -157,17 +157,29 @@ const sameShip = (left: string | null | undefined, right: string | null | undefi
 };
 
 const FRIENDLY_SHIP_SUFFIX_PATTERN = /\s*\(\s*\d+\s*player[s]?\s*\)\s*$/i;
-const toShipTeamLabel = (shipName: string | null | undefined): string => (
-    normalizeOcrName(String(shipName || '').replace(FRIENDLY_SHIP_SUFFIX_PATTERN, ''))
+const SHIP_TYPE_LABEL_KEYS = new Set(
+    SHIPS.map((entry) => toShipKey(entry)).filter(Boolean)
 );
+const normalizeFriendlyLabelCandidate = (value: string | null | undefined): string => {
+    const stripped = String(value || '')
+        .replace(FRIENDLY_SHIP_SUFFIX_PATTERN, '')
+        .replace(/\s*['’]s\s+crew\s*$/i, '')
+        .trim();
+    const normalized = normalizeOcrName(stripped);
+    if (!normalized) return '';
+    const lowered = normalized.toLowerCase();
+    if (lowered === 'your team' || lowered === 'friendly team' || lowered === 'my crew') return '';
+    if (SHIP_TYPE_LABEL_KEYS.has(toShipKey(normalized))) return '';
+    return normalized;
+};
 
 export const resolveFriendlyTeamLabel = (
     shipName: string | null | undefined,
     existingFriendlyLabel: string | null | undefined,
     captainName: string | null | undefined
 ): string => (
-    toShipTeamLabel(shipName)
-    || normalizeOcrName(String(existingFriendlyLabel || ''))
+    normalizeFriendlyLabelCandidate(shipName)
+    || normalizeFriendlyLabelCandidate(existingFriendlyLabel)
     || normalizeOcrName(String(captainName || ''))
     || 'Friendly Team'
 );
@@ -974,6 +986,13 @@ const SmartCapturesPanel: React.FC = () => {
                             || match.ocrDebug?.playerTeamName
                             || ''
                         ).trim() || undefined,
+                        playerShipName: String(
+                            combined.playerShipName
+                            || combined.playerTeamName
+                            || combined.playerShip?.teamName
+                            || match.ocrDebug?.playerShipName
+                            || ''
+                        ).trim() || undefined,
                         mergeStats: combined.mergeStats ? {
                             total: combined.mergeStats.total,
                             agreed: combined.mergeStats.agreed,
@@ -1379,7 +1398,10 @@ const SmartCapturesPanel: React.FC = () => {
                                                 const detectedFriendlyTeamName = normalizeOcrName(
                                                     String(data.playerTeamName || data.playerShip?.teamName || '')
                                                 );
-                                                const friendlyTeamSeed = detectedFriendlyTeamName || friendlyShipSeed;
+                                                const detectedFriendlyShipName = normalizeFriendlyLabelCandidate(
+                                                    String(data.playerShipName || '')
+                                                );
+                                                const friendlyTeamSeed = detectedFriendlyShipName || detectedFriendlyTeamName;
                                                 const friendlyTeamLabel = resolveFriendlyTeamLabel(friendlyTeamSeed, '', captainSeed);
                                                 const friendlyTeamKey = `friendly:${friendlyTeamLabel}`;
                                                 const nextSessionTeams: Record<string, string[]> = {};
@@ -2058,11 +2080,12 @@ const SmartMatchDetail: React.FC<{
 
             const captainSeed = normalizeOcrName(activeUser || latestMatch.player || 'You') || 'You';
             const friendlyTeamNameSeed = String(
-                latestMatch.ocrDebug?.playerTeamName
+                latestMatch.ocrDebug?.playerShipName
+                || latestMatch.ocrDebug?.playerTeamName
                 || latestMatch.ocrDebug?.playerShipTeamName
                 || ''
             ).trim();
-            const friendlyTeamLabel = resolveFriendlyTeamLabel(latestMatch.ship, friendlyTeamNameSeed, captainSeed);
+            const friendlyTeamLabel = resolveFriendlyTeamLabel(friendlyTeamNameSeed, '', captainSeed);
             const friendlySeed = dedupeNames([
                 captainSeed,
                 ...(latestMatch.teammates || []).filter((name) => !isActiveUserLike(name)),
@@ -2483,11 +2506,12 @@ const SmartMatchDetail: React.FC<{
         )), []);
         const assignmentBoardTeams = useMemo<OcrTeamAssignmentTeam[]>(() => {
             const friendlyTeamNameSeed = String(
-                match.ocrDebug?.playerTeamName
+                match.ocrDebug?.playerShipName
+                || match.ocrDebug?.playerTeamName
                 || match.ocrDebug?.playerShipTeamName
                 || ''
             ).trim();
-            const friendlyTeamName = resolveFriendlyTeamLabel(match.ship, friendlyTeamNameSeed, activeUser || match.player || 'You');
+            const friendlyTeamName = resolveFriendlyTeamLabel(friendlyTeamNameSeed, '', activeUser || match.player || 'You');
             const friendlyPlayers = dedupeBoardNames([...(match.teammates || [])]).filter((name) => (
                 !isActiveUserLike(name) && name !== ''
             ));
@@ -2519,7 +2543,7 @@ const SmartMatchDetail: React.FC<{
                 shipType: String(match.ship || ''),
                 players: friendlyPlayers,
             }, ...opponentBoardTeams];
-        }, [activeUser, dedupeBoardNames, isActiveUserLike, match.ocrDebug?.playerShipTeamName, match.ocrDebug?.playerTeamName, match.opponentTeams, match.opponents, match.player, match.ship, match.teammates]);
+        }, [activeUser, dedupeBoardNames, isActiveUserLike, match.ocrDebug?.playerShipName, match.ocrDebug?.playerShipTeamName, match.ocrDebug?.playerTeamName, match.opponentTeams, match.opponents, match.player, match.ship, match.teammates]);
         const assignmentBoardFuzzyMatches = useMemo<Record<string, string>>(() => {
             if (!Array.isArray(pilotRegistry) || pilotRegistry.length === 0) return {};
             const exactRegistryKeys = new Set(

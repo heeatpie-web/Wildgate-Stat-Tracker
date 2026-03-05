@@ -6,6 +6,30 @@
 import type { OCRExtractedData, ExtractedPlayer, ExtractedOpponentTeam, ExtractedModifier } from './ocrTypes';
 import { deduplicatePlayersByLikelyName } from './playerNameMatching';
 
+const SHIP_TYPE_SUFFIX_PATTERN = /\s*\(\s*\d+\s*player[s]?\s*\)\s*$/i;
+
+function toShipKey(value: string | null | undefined): string {
+  return String(value || '')
+    .replace(SHIP_TYPE_SUFFIX_PATTERN, '')
+    .trim()
+    .toLowerCase();
+}
+
+function normalizePlayerShipName(
+  value: string | null | undefined,
+  shipType: string | null | undefined
+): string {
+  const stripped = String(value || '')
+    .replace(/\s*['’]s\s+crew\s*$/i, '')
+    .trim();
+  if (!stripped) return '';
+  const lowered = stripped.toLowerCase();
+  if (lowered === 'your team' || lowered === 'friendly team' || lowered === 'my crew') return '';
+  const shipKey = toShipKey(shipType);
+  if (shipKey && toShipKey(stripped) === shipKey) return '';
+  return stripped;
+}
+
 /**
  * Deduplicate players by likely OCR-normalized name
  * Keeps highest confidence while preferring cleaner display names
@@ -153,6 +177,11 @@ export function mergeFullOCRData(
 
   // Player team name: prefer non-empty
   const mergedPlayerTeamName = existing.playerTeamName || incoming.playerTeamName;
+  const shipTypeHint = incoming.playerShip?.shipType || mergedPlayerShip?.shipType || existing.playerShip?.shipType;
+  const incomingPlayerShipName = normalizePlayerShipName(incoming.playerShipName, shipTypeHint);
+  const existingPlayerShipName = normalizePlayerShipName(existing.playerShipName, shipTypeHint);
+  const fallbackPlayerShipName = normalizePlayerShipName(mergedPlayerTeamName, shipTypeHint);
+  const mergedPlayerShipName = incomingPlayerShipName || existingPlayerShipName || fallbackPlayerShipName || undefined;
 
   // Calculate overall confidence based on merged data
   const allConfidences = [
@@ -204,6 +233,7 @@ export function mergeFullOCRData(
     screenshotType: mergedType,
     playerShip: mergedPlayerShip,
     playerTeamName: mergedPlayerTeamName,
+    playerShipName: mergedPlayerShipName,
     reachModifiers: mergedModifiers,
     enemyShips: mergedEnemyShips,
     teammates: mergedTeammates,

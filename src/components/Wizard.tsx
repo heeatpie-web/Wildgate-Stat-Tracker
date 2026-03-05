@@ -584,6 +584,11 @@ export const Wizard: React.FC = () => {
             const latestPending = (useAppStore.getState().pendingMatchData || pendingMatchData || {}) as Partial<Match>;
             const captainSeed = String(activeUser || latestPending.player || 'You').trim() || 'You';
             const friendlyShipSeed = rerunShip || String(latestPending.ship || '').trim();
+            const detectedFriendlyShipName = String(
+                mergedData.playerShipName
+                || latestPending.ocrDebug?.playerShipName
+                || ''
+            ).trim();
             const detectedFriendlyTeamName = String(
                 mergedData.playerTeamName
                 || mergedData.playerShip?.teamName
@@ -591,7 +596,7 @@ export const Wizard: React.FC = () => {
                 || latestPending.ocrDebug?.playerShipTeamName
                 || ''
             ).trim();
-            const friendlyTeamLabel = detectedFriendlyTeamName || captainSeed || 'Friendly Team';
+            const friendlyTeamLabel = detectedFriendlyShipName || detectedFriendlyTeamName || captainSeed || 'Friendly Team';
             const friendlyTeamKey = `friendly:${friendlyTeamLabel}`;
             const friendlyMembers = dedupeNames([captainSeed, ...nextTeammates]);
             const nextSessionTeams: Record<string, string[]> = {};
@@ -653,6 +658,7 @@ export const Wizard: React.FC = () => {
                     mergeStats: mergedData.mergeStats,
                     playerTeamName: String(mergedData.playerTeamName || mergedData.playerShip?.teamName || latestPending.ocrDebug?.playerTeamName || '').trim() || undefined,
                     playerShipTeamName: String(mergedData.playerShip?.teamName || mergedData.playerTeamName || latestPending.ocrDebug?.playerShipTeamName || '').trim() || undefined,
+                    playerShipName: String(mergedData.playerShipName || mergedData.playerTeamName || mergedData.playerShip?.teamName || latestPending.ocrDebug?.playerShipName || '').trim() || undefined,
                     nameSources: Object.keys(nameSources).length > 0 ? nameSources : undefined,
                     timestamp: Date.now(),
                 },

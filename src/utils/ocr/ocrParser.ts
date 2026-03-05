@@ -480,6 +480,20 @@ export function mergeOCRData(
     const text = String(value || '').trim();
     return text && text.toLowerCase() !== 'your team' ? text : '';
   };
+  const normalizeShipLabel = (value?: string | null, shipType?: string | null): string => {
+    const strippedCrewSuffix = String(value || '')
+      .replace(/\s*['’]s\s+crew\s*$/i, '')
+      .trim();
+    if (!strippedCrewSuffix) return '';
+    const lowered = strippedCrewSuffix.toLowerCase();
+    if (lowered === 'your team' || lowered === 'friendly team' || lowered === 'my crew') return '';
+    const shipTypeKey = String(shipType || '')
+      .replace(/\s*\(\s*\d+\s*player[s]?\s*\)\s*$/i, '')
+      .trim()
+      .toLowerCase();
+    if (shipTypeKey && lowered === shipTypeKey) return '';
+    return strippedCrewSuffix;
+  };
   if (newData.playerShip) {
     const existingShip = merged.playerShip;
     const incomingShip = {
@@ -502,6 +516,14 @@ export function mergeOCRData(
   const existingPlayerTeamName = normalizeTeamLabel(merged.playerTeamName);
   const playerShipTeamName = normalizeTeamLabel(merged.playerShip?.teamName);
   merged.playerTeamName = incomingPlayerTeamName || existingPlayerTeamName || playerShipTeamName || undefined;
+  const shipTypeHint = newData.playerShip?.shipType || merged.playerShip?.shipType;
+  const incomingPlayerShipName = normalizeShipLabel(newData.playerShipName, shipTypeHint);
+  const existingPlayerShipName = normalizeShipLabel(merged.playerShipName, shipTypeHint);
+  const fallbackShipName = normalizeShipLabel(
+    incomingPlayerTeamName || existingPlayerTeamName || playerShipTeamName,
+    shipTypeHint
+  );
+  merged.playerShipName = incomingPlayerShipName || existingPlayerShipName || fallbackShipName || undefined;
   if (newData.reachModifiers) {
     const existingMods = new Map<string, ExtractedModifier>();
     for (const mod of merged.reachModifiers || []) {

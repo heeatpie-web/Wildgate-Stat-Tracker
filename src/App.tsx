@@ -2007,6 +2007,7 @@ const App: React.FC = () => {
                 routing: data.ocrRouting,
                 playerTeamName: String(data.playerTeamName || data.playerShip?.teamName || '').trim() || undefined,
                 playerShipTeamName: String(data.playerShip?.teamName || data.playerTeamName || '').trim() || undefined,
+                playerShipName: String(data.playerShipName || data.playerTeamName || data.playerShip?.teamName || '').trim() || undefined,
                 timestamp: data.captureTimestamp || Date.now(),
             }
         });

@@ -136,10 +136,18 @@ function mergeLegacyCrewHub(existing, newData) {
     }
   }
 
+  const shipTypeHint = newData.playerShip?.shipType || existing.playerShip?.shipType || '';
+  const mergedPlayerShipName = normalizePlayerShipName(newData.playerShipName, shipTypeHint)
+    || normalizePlayerShipName(existing.playerShipName, shipTypeHint)
+    || normalizePlayerShipName(newData.playerTeamName, shipTypeHint)
+    || normalizePlayerShipName(existing.playerTeamName, shipTypeHint)
+    || undefined;
+
   return {
     ...existing,
     screenshotType: 'crew_hub',
     playerTeamName: newData.playerTeamName || existing.playerTeamName,
+    playerShipName: mergedPlayerShipName,
     playerShip: existing.playerShip || newData.playerShip,
     teammates: capPlayerEntries(mergedTeammates),
     opponentTeams: sortTeamsByColor(mergedTeams, (team) => team?.color || team?.teamColor),
@@ -154,9 +162,17 @@ function mergeLegacyCrewHub(existing, newData) {
  * Merge two legacy tactical_map captures.
  */
 function mergeLegacyTacticalMap(existing, newData) {
+  const shipTypeHint = newData.playerShip?.shipType || existing.playerShip?.shipType || '';
+  const mergedPlayerShipName = normalizePlayerShipName(newData.playerShipName, shipTypeHint)
+    || normalizePlayerShipName(existing.playerShipName, shipTypeHint)
+    || normalizePlayerShipName(newData.playerTeamName, shipTypeHint)
+    || normalizePlayerShipName(existing.playerTeamName, shipTypeHint)
+    || undefined;
+
   return {
     ...existing,
     screenshotType: 'tactical_map',
+    playerShipName: mergedPlayerShipName,
     playerShip: newData.playerShip || existing.playerShip,
     opponentTeams: sortTeamsByColor(
       mergeEnemyShips(existing.opponentTeams || [], newData.opponentTeams || []),
@@ -254,9 +270,17 @@ function crossMergeCrewHubAndMap(crewHub, tactMap) {
 
   const combinedTeams = [...enrichedTeams, ...mapOnlyTeams];
 
+  const shipTypeHint = crewHub.playerShip?.shipType || tactMap.playerShip?.shipType || '';
+  const mergedPlayerShipName = normalizePlayerShipName(crewHub.playerShipName, shipTypeHint)
+    || normalizePlayerShipName(tactMap.playerShipName, shipTypeHint)
+    || normalizePlayerShipName(crewHub.playerTeamName, shipTypeHint)
+    || normalizePlayerShipName(tactMap.playerTeamName, shipTypeHint)
+    || undefined;
+
   return {
     ...crewHub,
     screenshotType: 'crew_hub',
+    playerShipName: mergedPlayerShipName,
     playerShip: crewHub.playerShip || tactMap.playerShip,
     teammates: mergePlayers(crewHub.teammates || [], tactMap.teammates || []).slice(0, MAX_TEAM_PLAYERS),
     opponentTeams: sortTeamsByColor(
@@ -670,6 +694,25 @@ function findMatchingTeam(teams, target) {
 function normalizeTeamName(name) {
   if (!name) return '';
   return name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function normalizeShipTypeKey(value) {
+  return String(value || '')
+    .replace(/\s*\(\s*\d+\s*player[s]?\s*\)\s*$/i, '')
+    .trim()
+    .toLowerCase();
+}
+
+function normalizePlayerShipName(value, shipType = '') {
+  const stripped = String(value || '')
+    .replace(/\s*['’]s\s+crew\s*$/i, '')
+    .trim();
+  if (!stripped) return '';
+  const lowered = stripped.toLowerCase();
+  if (lowered === 'your team' || lowered === 'friendly team' || lowered === 'my crew') return '';
+  const shipKey = normalizeShipTypeKey(shipType);
+  if (shipKey && normalizeShipTypeKey(stripped) === shipKey) return '';
+  return stripped;
 }
 
 function isPlaceholderTeamName(name, color = '') {

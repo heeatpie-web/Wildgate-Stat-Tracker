@@ -586,6 +586,46 @@ describe('calculateOverallConfidence', () => {
     expect(merged.enemyShips.every((ship) => ship.shipType === 'Hunter')).toBe(true);
   });
 
+  it('merges and normalizes player ship name separately from ship type', () => {
+    const merged = mergeOCRData(
+      {
+        playerShip: { shipType: 'Hunter', confidence: 88 },
+        playerShipName: 'Your Team',
+      },
+      {
+        playerShip: { shipType: 'Hunter', confidence: 90 },
+        playerShipName: "Starlight's Crew",
+      }
+    );
+    expect(merged.playerShipName).toBe('Starlight');
+  });
+
+  it('preserves non-possessive crew names for player ship label', () => {
+    const merged = mergeOCRData(
+      {
+        playerShip: { shipType: 'Hunter', confidence: 86 },
+      },
+      {
+        playerShip: { shipType: 'Hunter', confidence: 90 },
+        playerShipName: 'Blue Crew',
+      }
+    );
+    expect(merged.playerShipName).toBe('Blue Crew');
+  });
+
+  it('does not fall back to ship type when ship name is unavailable', () => {
+    const merged = mergeOCRData(
+      {
+        playerShip: { shipType: 'Hunter', confidence: 88 },
+      },
+      {
+        playerShip: { shipType: 'Hunter', confidence: 90 },
+        playerShipName: 'Hunter',
+      }
+    );
+    expect(merged.playerShipName).toBeUndefined();
+  });
+
   it('weights ship confidence higher', () => {
     const withShip = calculateOverallConfidence({
       playerShip: { shipType: 'Hunter', confidence: 90 },

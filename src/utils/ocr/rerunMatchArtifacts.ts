@@ -141,6 +141,7 @@ export const rerunMatchArtifacts = async ({
     let merged: Partial<OCRExtractedData> = {
         playerShip: undefined,
         playerTeamName: undefined,
+        playerShipName: undefined,
         reachModifiers: [],
         teammates: [],
         opponentTeams: [],
@@ -160,6 +161,7 @@ export const rerunMatchArtifacts = async ({
         merged = mergeOCRData(merged, {
             playerShip: data.playerShip,
             playerTeamName: String(data.playerTeamName || data.playerShip?.teamName || '').trim() || undefined,
+            playerShipName: String(data.playerShipName || data.playerTeamName || data.playerShip?.teamName || '').trim() || undefined,
             reachModifiers: [...baseModifiers, ...hazardModifiers],
             teammates: data.teammates || [],
             opponentTeams: data.opponentTeams || [],
@@ -199,6 +201,7 @@ export const rerunMatchArtifacts = async ({
         screenshotType: lastData.screenshotType || 'unknown',
         playerShip: merged.playerShip,
         playerTeamName: String(merged.playerTeamName || lastData.playerTeamName || merged.playerShip?.teamName || lastData.playerShip?.teamName || '').trim() || undefined,
+        playerShipName: String(merged.playerShipName || lastData.playerShipName || merged.playerTeamName || lastData.playerTeamName || merged.playerShip?.teamName || lastData.playerShip?.teamName || '').trim() || undefined,
         reachModifiers: merged.reachModifiers || [],
         enemyShips: mergedEnemyShips,
         hazards: dedupeStrings(successful.flatMap(({ data }) => data.hazards || [])),

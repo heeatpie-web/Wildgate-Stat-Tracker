@@ -2119,6 +2119,21 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
 /**
  * Convert new Crew Hub format to legacy format for backwards compatibility
  */
+function normalizePlayerShipName(rawName, shipType = '') {
+  const base = String(rawName || '')
+    .replace(/\s*['’]s\s+crew\s*$/i, '')
+    .trim();
+  if (!base) return '';
+  const lowered = base.toLowerCase();
+  if (lowered === 'your team' || lowered === 'friendly team' || lowered === 'my crew') return '';
+  const normalizedShipType = String(shipType || '')
+    .replace(/\s*\(\s*\d+\s*player[s]?\s*\)\s*$/i, '')
+    .trim()
+    .toLowerCase();
+  if (normalizedShipType && lowered === normalizedShipType) return '';
+  return base;
+}
+
 function convertCrewHubToLegacy(crewHubData, rawText) {
   const capPlayers = (players, maxCount = 4) => {
     if (!Array.isArray(players)) return [];
@@ -2155,9 +2170,16 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
     ? allConfidences.reduce((a, b) => a + b, 0) / allConfidences.length
     : 0;
 
+  const playerTeamName = String(crewHubData.yourTeam?.name || '').trim() || undefined;
+  const playerShipName = normalizePlayerShipName(
+    crewHubData.yourTeam?.name || '',
+    crewHubData.yourTeam?.shipType || ''
+  ) || undefined;
+
   return {
     screenshotType: 'crew_hub',
-    playerTeamName: crewHubData.yourTeam?.name || undefined,
+    playerTeamName,
+    playerShipName,
     teammates,
     opponentTeams,
     reachModifiers: extractModifiers(rawText),
@@ -2182,6 +2204,11 @@ function convertMapScreenToLegacy(mapScreenData, rawText) {
     teamName: mapScreenData.yourShip.teamName,
     confidence: mapScreenData.yourShip.confidence || 80,
   } : undefined;
+  const mapPlayerTeamName = String(mapScreenData.yourShip?.teamName || '').trim() || undefined;
+  const mapPlayerShipName = normalizePlayerShipName(
+    mapScreenData.yourShip?.shipName || mapScreenData.yourShip?.teamName || '',
+    mapScreenData.yourShip?.shipType || ''
+  ) || undefined;
 
   const enemyShips = (mapScreenData.enemyShips || []).map((ship, index) => ({
     teamName: String(ship.teamName || '').trim() || `Enemy Team ${index + 1}`,
@@ -2220,7 +2247,8 @@ function convertMapScreenToLegacy(mapScreenData, rawText) {
   return {
     screenshotType: 'tactical_map',
     playerShip,
-    playerTeamName: mapScreenData.yourShip?.teamName || undefined,
+    playerTeamName: mapPlayerTeamName,
+    playerShipName: mapPlayerShipName,
     enemyShips,
     teammates,
     opponentTeams,

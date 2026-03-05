@@ -222,6 +222,7 @@ export interface Match {
     };
     playerTeamName?: string;
     playerShipTeamName?: string;
+    playerShipName?: string;
     timestamp?: number;
   };
   /** Explicit OCR pipeline state for this match's artifacts. */

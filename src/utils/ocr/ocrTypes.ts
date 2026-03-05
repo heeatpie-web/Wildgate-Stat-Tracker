@@ -55,6 +55,7 @@ export interface OCRExtractedData {
   // From Tactical Map
   playerShip?: ExtractedShip;
   playerTeamName?: string;
+  playerShipName?: string;
   reachModifiers: ExtractedModifier[];
   enemyShips: Array<{ teamName: string; shipType: string; color: TeamColor }>;
   hazards?: string[];

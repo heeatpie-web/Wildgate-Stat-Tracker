@@ -746,6 +746,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
     let merged: Partial<OCRExtractedData> = {
       playerShip: undefined,
+      playerShipName: undefined,
       reachModifiers: [],
       teammates: [],
       opponentTeams: [],
@@ -756,6 +757,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       merged = mergeOCRData(merged, {
         playerShip: capture.data.playerShip,
         playerTeamName: capture.data.playerTeamName,
+        playerShipName: capture.data.playerShipName,
         reachModifiers: capture.data.reachModifiers,
         teammates: capture.data.teammates,
         opponentTeams: capture.data.opponentTeams,
@@ -777,6 +779,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       screenshotType,
       playerShip: merged.playerShip,
       playerTeamName: merged.playerTeamName,
+      playerShipName: merged.playerShipName,
       reachModifiers: merged.reachModifiers || [],
       enemyShips: merged.enemyShips || [],
       teammates: mergedTeammates,
@@ -811,6 +814,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         screenshotType: normalizedData.screenshotType,
         playerShip: normalizedData.playerShip,
         playerTeamName: normalizedData.playerTeamName,
+        playerShipName: normalizedData.playerShipName,
         reachModifiers: normalizedData.reachModifiers || [],
         enemyShips: normalizedData.enemyShips || [],
         teammates: cappedTeammates,
@@ -827,6 +831,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     const merged = mergeOCRData(previous, {
       playerShip: normalizedData.playerShip,
       playerTeamName: normalizedData.playerTeamName,
+      playerShipName: normalizedData.playerShipName,
       reachModifiers: normalizedData.reachModifiers,
       teammates: normalizedData.teammates,
       opponentTeams: normalizedData.opponentTeams,
@@ -844,6 +849,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       screenshotType,
       playerShip: merged.playerShip || previous.playerShip,
       playerTeamName: merged.playerTeamName || previous.playerTeamName || normalizedData.playerTeamName,
+      playerShipName: merged.playerShipName || previous.playerShipName || normalizedData.playerShipName,
       reachModifiers: merged.reachModifiers || previous.reachModifiers,
       teammates: cappedMergedTeammates,
       opponentTeams: merged.opponentTeams || previous.opponentTeams,

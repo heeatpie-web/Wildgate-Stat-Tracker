@@ -189,6 +189,23 @@ function sanitizeExtractedTeamName(rawTeamName, shipType = '') {
   return cleaned;
 }
 
+function sanitizePlayerShipName(rawShipName, shipType = '') {
+  const strippedCrewSuffix = String(rawShipName || '')
+    .replace(/\s*['’]s\s+crew\s*$/i, '')
+    .trim();
+  const cleaned = formatTeamName(strippedCrewSuffix).trim();
+  if (!cleaned) return '';
+  const normalized = cleaned.toLowerCase();
+  if (normalized === 'your team' || normalized === 'friendly team' || normalized === 'my crew') {
+    return '';
+  }
+  const shipKey = normalizeShipTypeKey(shipType);
+  const nameKey = normalizeShipTypeKey(cleaned);
+  if (SHIP_TYPES.includes(nameKey)) return '';
+  if (shipKey && nameKey === shipKey) return '';
+  return cleaned;
+}
+
 /**
  * Known hazards/modifiers
  */
@@ -455,10 +472,12 @@ async function extractYourShip(
   }
 
   const teamName = sanitizeExtractedTeamName(teamNameParts.join(' ').trim(), shipType);
+  const playerShipName = sanitizePlayerShipName(teamName, shipType);
 
   if (shipType) {
     return {
       teamName: teamName || 'Your Team',
+      shipName: playerShipName || undefined,
       shipType,
       confidence: teamName ? 85 : 70,
     };

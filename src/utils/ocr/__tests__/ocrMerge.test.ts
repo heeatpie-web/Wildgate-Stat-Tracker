@@ -197,6 +197,39 @@ describe('mergeOCRData', () => {
     expect(merged.playerTeamName).toBe('MyTeam');
   });
 
+  it('preserves playerShipName when available across merges', () => {
+    const existing = makeOCRData({ playerShipName: 'Starlight' });
+    const incoming = makeOCRData({ playerShipName: '' });
+    const merged = mergeOCRData(existing, incoming);
+    expect(merged.playerShipName).toBe('Starlight');
+  });
+
+  it('normalizes possessive crew suffix in incoming playerShipName', () => {
+    const existing = makeOCRData({
+      playerShip: { shipType: 'Hunter', confidence: 70 },
+      playerShipName: 'Your Team',
+    });
+    const incoming = makeOCRData({
+      playerShip: { shipType: 'Hunter', confidence: 80 },
+      playerShipName: "Starlight's Crew",
+    });
+    const merged = mergeOCRData(existing, incoming);
+    expect(merged.playerShipName).toBe('Starlight');
+  });
+
+  it('does not fallback playerShipName to ship type labels', () => {
+    const existing = makeOCRData({
+      playerShip: { shipType: 'Hunter', confidence: 70 },
+    });
+    const incoming = makeOCRData({
+      playerShip: { shipType: 'Hunter', confidence: 80 },
+      playerTeamName: 'Hunter',
+      playerShipName: '',
+    });
+    const merged = mergeOCRData(existing, incoming);
+    expect(merged.playerShipName).toBeUndefined();
+  });
+
   it('uses earliest capture timestamp', () => {
     const existing = makeOCRData({ captureTimestamp: 1000 });
     const incoming = makeOCRData({ captureTimestamp: 500 });

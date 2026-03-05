@@ -237,8 +237,9 @@ describe('getRosterCandidateSuggestions', () => {
 });
 
 describe('resolveFriendlyTeamLabel', () => {
-  it('prefers ship-derived label over username', () => {
-    expect(resolveFriendlyTeamLabel('Hunter (4 Player)', '', 'TestPilot')).toBe('Hunter');
+  it('uses detected ship/team label while avoiding raw ship types', () => {
+    expect(resolveFriendlyTeamLabel("Starlight's Crew", '', 'TestPilot')).toBe('Starlight');
+    expect(resolveFriendlyTeamLabel('Hunter (4 Player)', '', 'TestPilot')).toBe('TestPilot');
   });
 
   it('falls back to existing label and then captain name', () => {
