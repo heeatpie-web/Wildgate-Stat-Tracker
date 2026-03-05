@@ -876,6 +876,10 @@ export const useLogMonitor = (activeUser?: string) => {
                             const afterColon = afterDot.includes(':') ? (afterDot.split(':').pop() || afterDot) : afterDot;
                             return afterColon.replace(/[{}-]/g, '').trim().toUpperCase();
                         };
+                        const normalizePerkNameCandidate = (value: unknown): string => String(value || '')
+                            .toLowerCase()
+                            .replace(/[^a-z0-9]+/g, ' ')
+                            .trim();
                         const normalizeGuidLookupKey = (value: unknown): string => {
                             if (value == null) return '';
                             const raw = String(value).trim();
@@ -1225,6 +1229,33 @@ export const useLogMonitor = (activeUser?: string) => {
                                 .map((n) => fuzzyMatchList(n, TELEMETRY_PROSPECTOR_PERK_NAMES))
                                 .filter(Boolean) as string[]
                         ));
+                        const NON_ACTIONABLE_PERK_TOKENS = new Set([
+                            'perk', 'perks', 'trait', 'traits',
+                            'slot', 'slots', 'primary', 'secondary',
+                            'name', 'names', 'id', 'ids',
+                            'none', 'unknown', 'empty', 'null', 'default',
+                        ]);
+                        if (hasCharacterPerkSignal) {
+                            const seenUnknownPerkKeys = new Set<string>();
+                            perkNameCandidates.forEach((candidate) => {
+                                const rawCandidate = String(candidate || '').trim();
+                                if (!rawCandidate) return;
+                                const normalizedKey = normalizePerkNameCandidate(rawCandidate);
+                                if (!normalizedKey || seenUnknownPerkKeys.has(normalizedKey)) return;
+                                seenUnknownPerkKeys.add(normalizedKey);
+
+                                if (fuzzyMatchList(rawCandidate, TELEMETRY_PROSPECTOR_PERK_NAMES)) return;
+                                const guidCandidate = normalizeGuid(rawCandidate);
+                                if (isStableGuid(guidCandidate)) return;
+                                if (normalizedKey.length < 3 || normalizedKey.length > 64) return;
+                                if (!/[a-z]/.test(normalizedKey)) return;
+                                const words = normalizedKey.split(/\s+/).filter(Boolean);
+                                if (words.length === 0) return;
+                                if (words.every((word) => NON_ACTIONABLE_PERK_TOKENS.has(word))) return;
+
+                                registerUnknownId(rawCandidate, 'Perk');
+                            });
+                        }
 
                         const resolvedProspectorWeapons = Array.from(new Set([
                             ...resolvedGuidWeapons.filter((name) => PROSPECTOR_WEAPON_SET.has(name)),

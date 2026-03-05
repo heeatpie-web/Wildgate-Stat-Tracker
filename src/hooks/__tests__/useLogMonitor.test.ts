@@ -391,6 +391,28 @@ describe('useLogMonitor', () => {
     expect(appStoreState.registerUnknownId).toHaveBeenCalledWith('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', 'Perk');
   });
 
+  it('registers unknown telemetry perk names for ID mapper resolution', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'CharacterLoadoutChanged',
+          Payload: {
+            isLocalPlayer: true,
+            hero: 'Adrian',
+            ship: 'Hunter',
+            perks: ['Voidweave Overdrive'],
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(appStoreState.registerUnknownId).toHaveBeenCalledWith('Voidweave Overdrive', 'Perk');
+  });
+
   it('clears stale telemetry character loadout selections when payload explicitly sends empty slots', async () => {
     gameDataState.currentLoadout = {
       hero: 'Adrian',
