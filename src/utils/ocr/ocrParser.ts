@@ -455,11 +455,32 @@ export function mergeOCRData(
   newData: Partial<OCRExtractedData>
 ): Partial<OCRExtractedData> {
   const merged: Partial<OCRExtractedData> = { ...existing };
+  const normalizeTeamLabel = (value?: string | null): string => {
+    const text = String(value || '').trim();
+    return text && text.toLowerCase() !== 'your team' ? text : '';
+  };
   if (newData.playerShip) {
-    if (!merged.playerShip || newData.playerShip.confidence >= (merged.playerShip.confidence || 0) + 3) {
-      merged.playerShip = newData.playerShip;
+    const existingShip = merged.playerShip;
+    const incomingShip = {
+      ...newData.playerShip,
+      teamName: normalizeTeamLabel(newData.playerShip.teamName) || undefined,
+    };
+    if (!existingShip || incomingShip.confidence >= (existingShip.confidence || 0) + 3) {
+      merged.playerShip = {
+        ...incomingShip,
+        teamName: incomingShip.teamName || normalizeTeamLabel(existingShip?.teamName) || undefined,
+      };
+    } else if (!normalizeTeamLabel(existingShip.teamName) && incomingShip.teamName) {
+      merged.playerShip = {
+        ...existingShip,
+        teamName: incomingShip.teamName,
+      };
     }
   }
+  const incomingPlayerTeamName = normalizeTeamLabel(newData.playerTeamName);
+  const existingPlayerTeamName = normalizeTeamLabel(merged.playerTeamName);
+  const playerShipTeamName = normalizeTeamLabel(merged.playerShip?.teamName);
+  merged.playerTeamName = incomingPlayerTeamName || existingPlayerTeamName || playerShipTeamName || undefined;
   if (newData.reachModifiers) {
     const existingMods = new Map<string, ExtractedModifier>();
     for (const mod of merged.reachModifiers || []) {

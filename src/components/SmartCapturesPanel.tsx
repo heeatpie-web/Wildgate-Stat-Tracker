@@ -599,6 +599,17 @@ const SmartCapturesPanel: React.FC = () => {
         });
     }, []);
 
+    const selectQueueRow = useCallback((id: number) => {
+        setSelectedMatchId(id);
+        if (queueCollapsed) return;
+        setSelectedIds((prev) => {
+            if (prev.has(id)) return prev;
+            const next = new Set(prev);
+            next.add(id);
+            return next;
+        });
+    }, [queueCollapsed, setSelectedMatchId]);
+
     const selectVisible = useCallback((mode: 'all' | 'none') => {
         if (mode === 'none') {
             setSelectedIds(new Set());
@@ -1206,7 +1217,7 @@ const SmartCapturesPanel: React.FC = () => {
                                                         match={match}
                                                         isSelected={match.id === selectedMatchId}
                                                         isMultiSelected={selectedIds.has(match.id)}
-                                                        onClick={() => setSelectedMatchId(match.id)}
+                                                        onClick={() => selectQueueRow(match.id)}
                                                         onToggleSelect={queueCollapsed ? undefined : () => toggleSelected(match.id)}
                                                     />
                                                 );
@@ -1351,7 +1362,11 @@ const SmartCapturesPanel: React.FC = () => {
                                                     || activeUser
                                                     || selectedMatch.player
                                                     || 'You';
-                                                const friendlyTeamLabel = resolveFriendlyTeamLabel(friendlyShipSeed, '', captainSeed);
+                                                const detectedFriendlyTeamName = normalizeOcrName(
+                                                    String(data.playerTeamName || data.playerShip?.teamName || '')
+                                                );
+                                                const friendlyTeamSeed = detectedFriendlyTeamName || friendlyShipSeed;
+                                                const friendlyTeamLabel = resolveFriendlyTeamLabel(friendlyTeamSeed, '', captainSeed);
                                                 const friendlyTeamKey = `friendly:${friendlyTeamLabel}`;
                                                 const nextSessionTeams: Record<string, string[]> = {};
                                                 const friendlyMembers = dedupeNames([captainSeed, ...cappedTeammates]);
@@ -2762,25 +2777,10 @@ const SmartMatchDetail: React.FC<{
                     window.clearTimeout(rerunAutoOpenTimerRef.current);
                     rerunAutoOpenTimerRef.current = null;
                 }
-                rerunAutoOpenTimerRef.current = window.setTimeout(() => {
-                    if (onApplyToSession) {
-                        applyReviewDataToSession(mergedData);
-                    } else {
-                        const latestForWizard = useAppStore.getState().matches.find((entry) => entry.id === match.id) || match;
-                        openWizardForMatch({
-                            matchOverride: latestForWizard,
-                            reusePendingDraft: false,
-                        });
-                        window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
-                            detail: { matchId: Number(latestForWizard?.id || match.id || 0) || null },
-                        }));
-                    }
-                    setToast({
-                        message: 'Analysis complete - review detected data before applying.',
-                        type: 'success',
-                    });
-                    rerunAutoOpenTimerRef.current = null;
-                }, 300);
+                setToast({
+                    message: 'Analysis complete - review detected data, then click Apply when ready.',
+                    type: 'success',
+                });
             } catch (error) {
                 const reason = errorMessage(error);
                 setRerunProgress({
@@ -3285,7 +3285,7 @@ const SmartMatchDetail: React.FC<{
                         <Section title="Players" collapsible collapsed={!!collapsedSections.players} onToggle={() => toggleSection('players')}>
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between gap-2">
-                                    <div className="inline-flex items-center gap-2 rounded-control px-2 py-1.5 bg-success-soft/30 border border-success/20">
+                                    <div className="roster-you-chip inline-flex items-center gap-2 rounded-control px-2 py-1.5">
                                         <span className="w-2 h-2 rounded-full bg-success" />
                                         <span className="text-label-sm font-semibold text-success">(you)</span>
                                     </div>

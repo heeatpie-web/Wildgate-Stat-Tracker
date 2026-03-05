@@ -70,6 +70,14 @@ interface DropdownAnchor {
     placeAbove: boolean;
 }
 
+interface ScreenshotLoupeState {
+    imagePath: string;
+    clientX: number;
+    clientY: number;
+    relX: number;
+    relY: number;
+}
+
 const IMAGE_FILE_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
 const OCR_REVIEW_HELP_DISMISSED_STORAGE_KEY = 'wg_ocr_review_help_dismissed_v1';
 
@@ -412,6 +420,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     );
     const [teamDraft, setTeamDraft] = useState<TeamDraft[]>(() => seededTeamDraft);
     const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+    const [screenshotLoupe, setScreenshotLoupe] = useState<ScreenshotLoupeState | null>(null);
     const [isHelpBannerDismissed, setIsHelpBannerDismissed] = useState<boolean>(() => (
         embedded || getStoredHelpBannerDismissed()
     ));
@@ -1096,8 +1105,27 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
 
     const closeLightbox = () => {
         setLightboxIdx(null);
+        setScreenshotLoupe(null);
         announce('Closed screenshot preview.', 'polite');
     };
+
+    const clearScreenshotLoupe = useCallback(() => {
+        setScreenshotLoupe(null);
+    }, []);
+
+    const handleScreenshotLoupeMove = useCallback((event: React.MouseEvent<HTMLDivElement>, imagePath: string) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
+        const relX = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+        const relY = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+        setScreenshotLoupe({
+            imagePath,
+            clientX: event.clientX,
+            clientY: event.clientY,
+            relX,
+            relY,
+        });
+    }, []);
 
     const dismissHelpBanner = () => {
         setIsHelpBannerDismissed(true);
@@ -1458,10 +1486,15 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                                     key={`${imagePath}-${index}`}
                                                     type="button"
                                                     onClick={() => setLightboxIdx(index)}
+                                                    onMouseLeave={clearScreenshotLoupe}
                                                     className="rounded-control border border-md-sys-outline/20 p-2 bg-md-sys-surface w-full hover:border-md-sys-primary/40 transition-all"
                                                     aria-label={`Open screenshot ${index + 1}`}
                                                 >
-                                                    <div className="w-full min-h-[220px] md:min-h-[300px] lg:min-h-[380px] rounded overflow-hidden bg-md-sys-on-surface/5">
+                                                    <div
+                                                        className="w-full min-h-[220px] md:min-h-[300px] lg:min-h-[380px] rounded overflow-hidden bg-md-sys-on-surface/5"
+                                                        onMouseMove={(event) => handleScreenshotLoupeMove(event, imagePath)}
+                                                        onMouseLeave={clearScreenshotLoupe}
+                                                    >
                                                         <LocalImage
                                                             src={imagePath}
                                                             alt={`Reference screenshot ${index + 1}`}
@@ -1778,6 +1811,31 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 onCancel={() => setPendingBatchAction(null)}
                 confirmLabel={pendingBatchAction === 'accept' ? 'Accept Players' : 'Ignore Players'}
             />
+            {screenshotLoupe && lightboxIdx === null && (() => {
+                const loupeSize = 220;
+                const margin = 16;
+                const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
+                const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 1080;
+                const left = Math.max(8, Math.min(viewportWidth - loupeSize - 8, screenshotLoupe.clientX + margin));
+                const top = Math.max(8, Math.min(viewportHeight - loupeSize - 8, screenshotLoupe.clientY + margin));
+                return (
+                    <div
+                        className="fixed z-top pointer-events-none rounded-card overflow-hidden border border-md-sys-primary/35 bg-md-sys-surface shadow-2xl"
+                        style={{ width: loupeSize, height: loupeSize, left, top }}
+                    >
+                        <LocalImage
+                            src={screenshotLoupe.imagePath}
+                            alt="Screenshot loupe preview"
+                            className="w-full h-full object-cover select-none"
+                            style={{
+                                transform: 'scale(2.8)',
+                                transformOrigin: `${Math.round(screenshotLoupe.relX * 100)}% ${Math.round(screenshotLoupe.relY * 100)}%`,
+                            }}
+                        />
+                        <div className="absolute inset-0 border border-white/20" />
+                    </div>
+                );
+            })()}
             {lightboxIdx !== null && reviewScreenshots[lightboxIdx] && (
                 <div
                     className="fixed inset-0 z-top bg-scrim-90 flex items-center justify-center p-8"

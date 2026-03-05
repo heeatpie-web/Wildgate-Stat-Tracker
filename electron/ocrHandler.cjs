@@ -2183,8 +2183,8 @@ function convertMapScreenToLegacy(mapScreenData, rawText) {
     confidence: mapScreenData.yourShip.confidence || 80,
   } : undefined;
 
-  const enemyShips = (mapScreenData.enemyShips || []).map(ship => ({
-    teamName: ship.teamName || 'Unknown Team',
+  const enemyShips = (mapScreenData.enemyShips || []).map((ship, index) => ({
+    teamName: String(ship.teamName || '').trim() || `Enemy Team ${index + 1}`,
     shipType: ship.shipType || 'Unknown',
     teamColor: ship.teamColor || ship.color || 'unknown',
     color: ship.teamColor || ship.color || 'unknown',

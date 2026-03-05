@@ -186,7 +186,7 @@ export const RosterPanel: React.FC = () => {
                             ))}
                         </div>
                     ) : (
-                        <div className="flex items-center gap-2 rounded-control px-2 py-1.5 bg-success-soft/30 border border-success/20">
+                        <div className="roster-you-chip flex items-center gap-2 rounded-control px-2 py-1.5">
                             <span className="w-2 h-2 rounded-full bg-success" />
                             <span className="text-label-sm font-semibold text-success">(you)</span>
                         </div>

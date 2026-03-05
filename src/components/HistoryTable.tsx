@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Match, Language, DrillDownTarget } from '../types';
 import { TRANSLATIONS } from '../utils/translations';
-import { Trash2, Edit2, Pin, Clock, Image as ImageIcon, Download, ArrowUpDown, Swords, X, FileText, Save, Ghost, Trophy, TrendingUp, Flame, Search, ChevronLeft, ChevronRight, Zap, ScanEye, AlertTriangle, RefreshCw, Filter, ChevronDown } from 'lucide-react';
+import { Trash2, Edit2, Pin, Clock, Image as ImageIcon, Download, ArrowUpDown, Swords, X, FileText, Save, Ghost, Trophy, TrendingUp, Flame, Search, ChevronLeft, ChevronRight, Zap, ScanEye, AlertTriangle, RefreshCw, Filter, ChevronDown, Check } from 'lucide-react';
 import { EditMatchModal } from './EditMatchModal';
 import { exportMatchesAsImage } from './history/historyExport';
 import { timeAgo, formatDayHeader, getRowBg } from './history/historyUtils';
@@ -216,6 +216,10 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
         setSelectedMatches(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
     };
 
+    const selectMatch = (id: number) => {
+        setSelectedMatches((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    };
+
     const selectAll = () => {
         const pageIds = paginatedMatches.map(m => m.id);
         const allSelected = pageIds.every(id => selectedMatches.includes(id));
@@ -298,10 +302,26 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
         setActiveView('smart-captures');
     };
 
-    const handleExportJPG = async () => {
+    const handleExportPng = async () => {
         if (selectedMatches.length === 0) return;
         const targetMatches = sortedMatches.filter(m => selectedMatches.includes(m.id));
-        await exportMatchesAsImage(targetMatches);
+        try {
+            await exportMatchesAsImage(targetMatches);
+            pushNotification({
+                message: `Exported ${targetMatches.length} match${targetMatches.length === 1 ? '' : 'es'} as PNG`,
+                type: 'success',
+                source: 'history',
+                deepLink: { type: 'openView', view: 'history' },
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown export error';
+            pushNotification({
+                message: `Export failed: ${message}`,
+                type: 'error',
+                source: 'history',
+                deepLink: { type: 'openView', view: 'history' },
+            });
+        }
     };
 
     /* ── derived stats for summary strip ── */
@@ -494,7 +514,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                         <div className="flex items-center gap-2 py-2 px-3 rounded-control border border-md-sys-primary/20" style={{ background: 'color-mix(in srgb, var(--md-sys-color-primary), transparent 92%)' }}>
                             <span className="text-label-sm font-bold text-md-sys-primary mr-1">{selectedMatches.length} selected</span>
                             <div className="w-px h-4 bg-md-sys-primary/20" />
-                            <Button variant="secondary" onClick={handleExportJPG} className="h-9 px-3 text-label-sm font-bold text-md-sys-on-surface/70" icon={<Download size={13} />} title="Export as image">
+                            <Button variant="secondary" onClick={handleExportPng} className="h-9 px-3 text-label-sm font-bold text-md-sys-on-surface/70" icon={<Download size={13} />} title="Export selected matches as PNG">
                                 Export PNG
                             </Button>
                             <Button variant="secondary" onClick={handleBulkRerunOcr} disabled={bulkOcrBusy} loading={bulkOcrBusy} className="h-9 px-3 text-label-sm font-bold text-md-sys-on-surface/70" icon={!bulkOcrBusy ? <RefreshCw size={13} /> : undefined} title="Rerun OCR on selected matches">
@@ -646,12 +666,15 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                             const isLoss = m.result === 'Loss';
                                             const isOngoing = m.result === 'Ongoing';
                                             const hazards = m.reachModifiers || [];
+                                            const isSelected = selectedMatches.includes(m.id);
 
                                             return (
                                                 <tr
                                                     key={m.id}
-                                                    onClick={() => setSelectedMatchForDetails(m)}
-                                                    className={`border-b border-md-sys-outline/5 transition-all duration-200 group cursor-pointer ${getRowBg(m)} active:bg-md-sys-on-surface/[0.07]`}
+                                                    onClick={() => selectMatch(m.id)}
+                                                    onDoubleClick={() => setSelectedMatchForDetails(m)}
+                                                    className={`border-b border-md-sys-outline/5 transition-all duration-200 group cursor-pointer ${isSelected ? 'bg-md-sys-primary/10' : getRowBg(m)} active:bg-md-sys-on-surface/[0.07]`}
+                                                    title="Click to select. Double-click to open details."
                                                 >
                                                     {/* left accent bar */}
                                                     <td className="w-1 p-0 relative">
@@ -781,7 +804,19 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
 
                                                     {/* checkbox */}
                                                     <td className="pr-5 py-4 pl-2 text-right" onClick={e => e.stopPropagation()}>
-                                                        <input type="checkbox" checked={selectedMatches.includes(m.id)} onChange={() => toggleSelection(m.id)} className="w-3.5 h-3.5 rounded cursor-pointer accent-md-sys-primary" />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleSelection(m.id)}
+                                                            aria-label={isSelected ? 'Deselect match' : 'Select match'}
+                                                            title={isSelected ? 'Deselect match' : 'Select match'}
+                                                            className={`h-6 w-6 rounded-md border inline-flex items-center justify-center transition-all ${
+                                                                isSelected
+                                                                    ? 'opacity-100 border-md-sys-primary/55 bg-md-sys-primary/14 text-md-sys-primary'
+                                                                    : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto border-md-sys-outline/32 text-md-sys-on-surface/60 hover:text-md-sys-primary hover:border-md-sys-primary/45'
+                                                            }`}
+                                                        >
+                                                            {isSelected ? <Check size={12} /> : null}
+                                                        </button>
                                                     </td>
                                                 </tr>
                                             );

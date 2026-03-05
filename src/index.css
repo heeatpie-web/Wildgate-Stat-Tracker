@@ -270,6 +270,24 @@ body[data-mode='twilight'] .player-list-name {
   padding-right: 8px;
 }
 
+.roster-you-chip {
+  border: 1px solid color-mix(in srgb, var(--color-success), transparent 74%);
+  background: color-mix(in srgb, var(--color-success), transparent 90%);
+}
+
+body[data-mode='twilight'] .roster-you-chip {
+  border-color: color-mix(in srgb, var(--color-success), transparent 78%);
+  background: color-mix(in srgb, var(--color-success), transparent 92%);
+}
+
+.toast-card-standard {
+  border-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 72%);
+}
+
+body[data-mode='twilight'] .toast-card-standard {
+  border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 44%);
+}
+
 /* Explicit gradient shells to avoid mg-surface override flattening. */
 .analytics-shell-gradient {
   background:

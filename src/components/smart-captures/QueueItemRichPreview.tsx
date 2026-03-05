@@ -2,6 +2,7 @@ import React from 'react';
 import {
   AlertCircle,
   AlertTriangle,
+  Check,
   CheckCircle2,
   Clock3,
   ShieldAlert,
@@ -27,14 +28,6 @@ interface QueueItemRichPreviewProps {
   onClick: () => void;
   onToggleSelect?: () => void;
 }
-
-const BORDER_BY_TONE: Record<'success' | 'warning' | 'danger' | 'info' | 'neutral', string> = {
-  success: 'var(--md-sys-color-success)',
-  warning: 'var(--md-sys-color-warning)',
-  danger: 'var(--md-sys-color-danger)',
-  info: 'var(--md-sys-color-info)',
-  neutral: 'var(--md-sys-color-outline)',
-};
 
 const STATUS_PILL_BY_TONE: Record<'success' | 'warning' | 'danger' | 'info' | 'neutral', string> = {
   success: 'bg-success-soft text-success',
@@ -101,7 +94,6 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
   const timestampLabel = formatQueueTimestamp(when);
   const tooltipLabel = `Match ${displayNumber} - ${timestampLabel}`;
   const tone = getSemanticStatusTone(qs.key);
-  const displayTone = statusMeta.tone;
   const resultClass = match.result === 'Win'
     ? 'sc-queue-item--result-win'
     : match.result === 'Loss'
@@ -109,8 +101,6 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
       : match.result === 'Draw'
         ? 'sc-queue-item--result-draw'
         : 'sc-queue-item--result-ongoing';
-  const artifactCount = Array.isArray(match.artifacts) ? match.artifacts.length : 0;
-  const teammateCount = Array.isArray(match.teammates) ? match.teammates.length : 0;
 
   const collapsedGlyph = getCollapsedQueueGlyph(match);
   const collapsedIcon = (() => {
@@ -152,21 +142,6 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
       title={tooltipLabel}
     >
       <div className="flex items-start gap-2.5">
-        {onToggleSelect ? (
-          <input
-            type="checkbox"
-            checked={isMultiSelected}
-            onChange={() => { onToggleSelect(); onClick(); }}
-            onClick={(e) => e.stopPropagation()}
-            style={{ accentColor: 'var(--md-sys-color-primary)' }}
-            className={`w-4 h-4 mt-1 flex-shrink-0 transition-opacity ${isMultiSelected
-              ? 'opacity-100 pointer-events-auto'
-              : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto'
-              }`}
-            title="Select row"
-          />
-        ) : null}
-
         <div className="flex-1 min-w-0 flex flex-col gap-1.5">
           <div className="flex items-center justify-between min-w-0">
             <div className="flex items-center gap-2 min-w-0">
@@ -188,6 +163,33 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
             </span>
           </div>
         </div>
+
+        {onToggleSelect ? (
+          <span
+            role="checkbox"
+            aria-checked={isMultiSelected}
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggleSelect();
+              }
+            }}
+            aria-label={isMultiSelected ? 'Deselect match' : 'Select match'}
+            title={isMultiSelected ? 'Deselect match' : 'Select match'}
+            className={`mt-0.5 h-7 w-7 rounded-md border inline-flex items-center justify-center shrink-0 transition-all ${isMultiSelected
+              ? 'opacity-100 border-md-sys-primary/55 bg-md-sys-primary/14 text-md-sys-primary'
+              : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto border-md-sys-outline/30 text-md-sys-on-surface/60 hover:text-md-sys-primary hover:border-md-sys-primary/45'
+              }`}
+          >
+            {isMultiSelected ? <Check size={12} /> : null}
+          </span>
+        ) : null}
       </div>
     </button>
   );

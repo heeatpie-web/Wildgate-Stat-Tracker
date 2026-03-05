@@ -440,13 +440,15 @@ async function extractYourShip(
       const shipIdx = lineText.indexOf(foundShip);
       const beforeShip = lineText.substring(0, shipIdx).trim();
       const afterShip  = lineText.substring(shipIdx + foundShip.length).trim();
-      if (beforeShip.length >= 2) teamNameParts.push(formatTeamName(beforeShip));
-      if (afterShip.length >= 2 && looksLikeTeamName(afterShip)) {
+      if (beforeShip.length >= 2 && looksLikeFriendlyTeamName(beforeShip)) {
+        teamNameParts.push(formatTeamName(beforeShip));
+      }
+      if (afterShip.length >= 2 && looksLikeFriendlyTeamName(afterShip)) {
         teamNameParts.push(formatTeamName(afterShip));
       }
     } else if (!shipType && lineText.length >= 2 && lineText.length <= 40) {
       // Accumulate team name parts — team names can span multiple words/lines
-      if (looksLikeTeamName(lineText)) {
+      if (looksLikeFriendlyTeamName(lineText)) {
         teamNameParts.push(formatTeamName(lineText));
       }
     }
@@ -1236,6 +1238,29 @@ function formatTeamName(name) {
     .replace(/[^a-zA-Z0-9_.'\-!? ]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * Friendly-team labels (your ship name) are often title-case or mixed-case,
+ * unlike enemy team bars which skew heavily uppercase. Keep this check permissive
+ * but aggressively filter known HUD/noise tokens.
+ */
+function looksLikeFriendlyTeamName(text) {
+  if (!text) return false;
+  const cleaned = formatTeamName(text);
+  if (cleaned.length < 3 || cleaned.length > 40) return false;
+  if (hasHudStatNoiseText(cleaned)) return false;
+  if (isShipOnlyTeamLabel(cleaned)) return false;
+
+  const upper = cleaned.toUpperCase();
+  const compact = upper.replace(/[^A-Z]/g, '');
+  if (KNOWN_HAZARD_COMPACT_KEYS.has(compact)) return false;
+  if (/^(YOUR|SHIP|YOUR SHIP|ENEMY SHIPS?|HEALTH|CREW SIZE|KNOWN HAZARDS?|FEATURES|ARTIFACT)$/i.test(upper)) return false;
+
+  const letterCount = (cleaned.match(/[A-Za-z]/g) || []).length;
+  if (letterCount < 2) return false;
+
+  return true;
 }
 
 /**

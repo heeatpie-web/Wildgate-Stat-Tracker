@@ -140,6 +140,7 @@ export const rerunMatchArtifacts = async ({
 
     let merged: Partial<OCRExtractedData> = {
         playerShip: undefined,
+        playerTeamName: undefined,
         reachModifiers: [],
         teammates: [],
         opponentTeams: [],
@@ -158,6 +159,7 @@ export const rerunMatchArtifacts = async ({
         }));
         merged = mergeOCRData(merged, {
             playerShip: data.playerShip,
+            playerTeamName: String(data.playerTeamName || data.playerShip?.teamName || '').trim() || undefined,
             reachModifiers: [...baseModifiers, ...hazardModifiers],
             teammates: data.teammates || [],
             opponentTeams: data.opponentTeams || [],
@@ -182,14 +184,26 @@ export const rerunMatchArtifacts = async ({
                 ? (allCloudErrors[0] ? `Cloud OCR unavailable (${allCloudErrors[0]})` : 'Cloud OCR unavailable')
                 : ''));
 
+    const mergedEnemyShips = merged.enemyShips || lastData.enemyShips || [];
+    const mergedOpponentTeams = (merged.opponentTeams && merged.opponentTeams.length > 0)
+        ? merged.opponentTeams
+        : mergedEnemyShips.map((ship, index) => ({
+            teamName: String(ship.teamName || '').trim() || `Enemy Team ${index + 1}`,
+            shipType: String(ship.shipType || '').trim(),
+            color: ship.color || 'unknown',
+            players: [],
+            confidence: 68,
+        }));
+
     const mergedData: OCRExtractedData = {
         screenshotType: lastData.screenshotType || 'unknown',
         playerShip: merged.playerShip,
+        playerTeamName: String(merged.playerTeamName || lastData.playerTeamName || merged.playerShip?.teamName || lastData.playerShip?.teamName || '').trim() || undefined,
         reachModifiers: merged.reachModifiers || [],
-        enemyShips: merged.enemyShips || lastData.enemyShips || [],
+        enemyShips: mergedEnemyShips,
         hazards: dedupeStrings(successful.flatMap(({ data }) => data.hazards || [])),
         teammates: merged.teammates || [],
-        opponentTeams: merged.opponentTeams || [],
+        opponentTeams: mergedOpponentTeams,
         artifactType: lastData.artifactType,
         overallConfidence: calculateOverallConfidence(merged),
         captureTimestamp: Date.now(),
