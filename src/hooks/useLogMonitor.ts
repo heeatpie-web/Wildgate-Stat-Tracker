@@ -6,7 +6,7 @@ import { useSoundEffects } from '../hooks/useSoundEffects';
 import { HERO_GUIDS, SHIP_GUIDS, WEAPON_GUIDS, EQUIPMENT_GUIDS } from '../utils/guids';
 import { SHIPS, CHARACTERS, UNNAMED_PLAYER_PREFIX, Match, Loadout, TelemetryConsistency } from '../types';
 import { EQUIPMENT_DB } from '../utils/equipmentDb';
-import { getPerkCatalog, MAX_PERKS_PER_MATCH } from '../components/patch/patchEntityCatalog';
+import { getPerkCatalog, getProspectorWeaponCatalog, MAX_PERKS_PER_MATCH } from '../components/patch/patchEntityCatalog';
 import { processTelemetryEvent, TelemetryActions, TelemetryContext } from '../utils/telemetryProcessor';
 import Logger from '../utils/logger';
 import { getElectronAPI } from '../utils/electronAPI';
@@ -95,21 +95,47 @@ const extractTelemetryStringList = (value: unknown, depth = 0): string[] => {
     return Object.values(value).flatMap((entry) => extractTelemetryStringList(entry, depth + 1));
 };
 
-const CHARACTER_WEAPON_NAMES = EQUIPMENT_DB
+const normalizeEntityLabel = (value: unknown): string => String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\b\d+\s*player\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const buildCanonicalEntityNameMap = (values: string[]): Map<string, string> => {
+    const map = new Map<string, string>();
+    values.forEach((value) => {
+        const cleaned = String(value || '').trim();
+        const key = normalizeEntityLabel(cleaned);
+        if (!cleaned || !key || map.has(key)) return;
+        map.set(key, cleaned);
+    });
+    return map;
+};
+
+const RAW_CHARACTER_WEAPON_NAMES = EQUIPMENT_DB
     .filter((item) => item.type === 'CharacterWeapon')
     .map((item) => item.name)
     .filter(Boolean);
+const CHARACTER_WEAPON_NAMES = getProspectorWeaponCatalog(RAW_CHARACTER_WEAPON_NAMES).filter(Boolean);
 const CHARACTER_EQUIPMENT_NAMES = EQUIPMENT_DB
     .filter((item) => item.type === 'CharacterEquipment')
     .map((item) => item.name)
     .filter(Boolean);
 const CHARACTER_PERK_NAMES = getPerkCatalog().filter(Boolean);
-const PROSPECTOR_WEAPON_SET = new Set(CHARACTER_WEAPON_NAMES);
+const PROSPECTOR_WEAPON_NAME_MAP = buildCanonicalEntityNameMap(CHARACTER_WEAPON_NAMES);
+const PROSPECTOR_WEAPON_SET = new Set(Array.from(PROSPECTOR_WEAPON_NAME_MAP.keys()));
 const PROSPECTOR_EQUIPMENT_SET = new Set(CHARACTER_EQUIPMENT_NAMES);
 const PROSPECTOR_PERK_SET = new Set(CHARACTER_PERK_NAMES);
+const toCanonicalProspectorWeaponName = (value: unknown): string => {
+    const key = normalizeEntityLabel(value);
+    if (!key || !PROSPECTOR_WEAPON_SET.has(key)) return '';
+    return PROSPECTOR_WEAPON_NAME_MAP.get(key) || '';
+};
 
 const TELEMETRY_PROSPECTOR_WEAPON_NAMES = Array.from(new Set([
-    ...CHARACTER_WEAPON_NAMES,
+    ...Array.from(PROSPECTOR_WEAPON_NAME_MAP.values()),
 ]));
 
 const TELEMETRY_PROSPECTOR_EQUIPMENT_NAMES = Array.from(new Set([
@@ -1258,8 +1284,8 @@ export const useLogMonitor = (activeUser?: string) => {
                         }
 
                         const resolvedProspectorWeapons = Array.from(new Set([
-                            ...resolvedGuidWeapons.filter((name) => PROSPECTOR_WEAPON_SET.has(name)),
-                            ...matchedWeaponNames.filter((name) => PROSPECTOR_WEAPON_SET.has(name)),
+                            ...resolvedGuidWeapons.map((name) => toCanonicalProspectorWeaponName(name)).filter(Boolean),
+                            ...matchedWeaponNames.map((name) => toCanonicalProspectorWeaponName(name)).filter(Boolean),
                         ])).slice(0, 2);
                         const resolvedProspectorEquipment = Array.from(new Set([
                             ...resolvedGuidEquipment.filter((name) => PROSPECTOR_EQUIPMENT_SET.has(name)),
