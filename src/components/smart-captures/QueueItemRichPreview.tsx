@@ -184,7 +184,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
             title={isMultiSelected ? 'Deselect match' : 'Select match'}
             className={`mt-0.5 h-7 w-7 rounded-md border inline-flex items-center justify-center shrink-0 transition-all ${isMultiSelected
               ? 'opacity-100 border-md-sys-primary/55 bg-md-sys-primary/14 text-md-sys-primary'
-              : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto border-md-sys-outline/30 text-md-sys-on-surface/60 hover:text-md-sys-primary hover:border-md-sys-primary/45'
+              : 'invisible opacity-0 pointer-events-none group-hover:visible group-hover:opacity-100 group-hover:pointer-events-auto border-md-sys-outline/30 bg-transparent text-md-sys-on-surface/60 hover:text-md-sys-primary hover:border-md-sys-primary/45'
               }`}
           >
             {isMultiSelected ? <Check size={12} /> : null}

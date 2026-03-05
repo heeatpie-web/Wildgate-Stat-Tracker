@@ -55,19 +55,22 @@ export async function exportMatchesAsImage(targetMatches: Match[]): Promise<void
         });
     });
 
-    const blob = await new Promise<Blob | null>((resolve) => {
-        canvas.toBlob(resolve, 'image/png');
-    });
-    if (!blob) {
-        throw new Error('Failed to encode PNG.');
+    const filename = `wildgate-export-${Date.now()}.png`;
+    const blob = await canvasToPngBlob(canvas);
+    if (blob) {
+        downloadBlob(blob, filename);
+        return;
     }
 
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.download = `wildgate-export-${Date.now()}.png`;
-    link.href = url;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    if (typeof canvas.toDataURL === 'function') {
+        const fallbackUrl = canvas.toDataURL('image/png');
+        if (fallbackUrl && fallbackUrl !== 'data:,') {
+            downloadDataUrl(fallbackUrl, filename);
+            return;
+        }
+    }
+
+    throw new Error('Failed to encode PNG.');
 }
 
 interface ExportPalette {
@@ -232,4 +235,45 @@ const strokeRoundedRect = (
 const readCssColor = (styles: CSSStyleDeclaration, cssVar: string, fallback: string) => {
     const value = styles.getPropertyValue(cssVar).trim();
     return value || fallback;
+};
+
+const canvasToPngBlob = async (canvas: HTMLCanvasElement): Promise<Blob | null> => {
+    if (typeof canvas.toBlob !== 'function') return null;
+    return await new Promise<Blob | null>((resolve) => {
+        let settled = false;
+        const finish = (value: Blob | null) => {
+            if (settled) return;
+            settled = true;
+            resolve(value);
+        };
+        try {
+            canvas.toBlob((blob) => finish(blob), 'image/png');
+        } catch {
+            finish(null);
+            return;
+        }
+        window.setTimeout(() => finish(null), 1200);
+    });
+};
+
+const clickDownloadLink = (link: HTMLAnchorElement) => {
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
+const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = url;
+    clickDownloadLink(link);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+};
+
+const downloadDataUrl = (dataUrl: string, filename: string) => {
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = dataUrl;
+    clickDownloadLink(link);
 };

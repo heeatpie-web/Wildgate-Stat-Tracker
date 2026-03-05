@@ -98,19 +98,40 @@ const teamRosterOverlapRatio = (a: ExtractedOpponentTeam, b: ExtractedOpponentTe
 
 type EnemyShipEntry = OCRExtractedData['enemyShips'][number];
 
-const normalizeEnemyShipKey = (entry: EnemyShipEntry): { key: string; shipType: string } | null => {
+const hasMeaningfulEnemyTeamName = (value?: string): boolean => {
+  const trimmed = String(value || '').trim();
+  return !!trimmed && !isPlaceholderTeamName(trimmed);
+};
+
+const normalizeEnemyShipKey = (
+  entry: EnemyShipEntry,
+  anonymousCounts: Map<string, number>
+): { key: string; shipType: string } | null => {
   const normalizedType = String(entry.shipType || '').trim();
   if (!normalizedType) return null;
-  const teamNameKey = String(entry.teamName || '').trim().toLowerCase();
+  const shipTypeKey = normalizedType.toLowerCase();
+  const rawTeamName = String(entry.teamName || '').trim();
+  const teamNameKey = hasMeaningfulEnemyTeamName(rawTeamName) ? normalizedTeamName(rawTeamName) : '';
   const colorKey = String(entry.color || 'unknown').trim().toLowerCase();
-  const key = teamNameKey || `${colorKey}:${normalizedType.toLowerCase()}`;
-  return { key, shipType: normalizedType };
+  if (teamNameKey) {
+    return { key: `team:${teamNameKey}`, shipType: normalizedType };
+  }
+  if (colorKey && colorKey !== 'unknown') {
+    return { key: `color:${colorKey}:${shipTypeKey}`, shipType: normalizedType };
+  }
+
+  // Keep slot-level multiplicity when OCR only yields anonymous entries.
+  const nextIndex = (anonymousCounts.get(shipTypeKey) || 0) + 1;
+  anonymousCounts.set(shipTypeKey, nextIndex);
+  return { key: `anon:${shipTypeKey}:${nextIndex}`, shipType: normalizedType };
 };
 
 const shouldPreferEnemyShipEntry = (current: EnemyShipEntry, candidate: EnemyShipEntry): boolean => {
   if (current.color === 'unknown' && candidate.color !== 'unknown') return true;
-  if (!current.teamName && candidate.teamName) return true;
-  if ((current.teamName?.length || 0) < (candidate.teamName?.length || 0)) {
+  const currentHasTeamName = hasMeaningfulEnemyTeamName(current.teamName);
+  const candidateHasTeamName = hasMeaningfulEnemyTeamName(candidate.teamName);
+  if (!currentHasTeamName && candidateHasTeamName) return true;
+  if (currentHasTeamName && candidateHasTeamName && (current.teamName?.length || 0) < (candidate.teamName?.length || 0)) {
     return true;
   }
   return false;
@@ -548,8 +569,8 @@ export function mergeOCRData(
   }
   if (newData.enemyShips) {
     const enemyShipMap = new Map<string, EnemyShipEntry>();
-    const addEntry = (entry: EnemyShipEntry) => {
-      const normalized = normalizeEnemyShipKey(entry);
+    const addEntry = (entry: EnemyShipEntry, anonymousCounts: Map<string, number>) => {
+      const normalized = normalizeEnemyShipKey(entry, anonymousCounts);
       if (!normalized) return;
       const existingEntry = enemyShipMap.get(normalized.key);
       const storedEntry: EnemyShipEntry = {
@@ -565,8 +586,10 @@ export function mergeOCRData(
         enemyShipMap.set(normalized.key, storedEntry);
       }
     };
-    (merged.enemyShips || []).forEach(addEntry);
-    newData.enemyShips.forEach(addEntry);
+    const existingAnonymousCounts = new Map<string, number>();
+    const incomingAnonymousCounts = new Map<string, number>();
+    (merged.enemyShips || []).forEach((entry) => addEntry(entry, existingAnonymousCounts));
+    newData.enemyShips.forEach((entry) => addEntry(entry, incomingAnonymousCounts));
     merged.enemyShips = Array.from(enemyShipMap.values());
   }
   if (newData.hazards) {

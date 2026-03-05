@@ -304,7 +304,17 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
 
     const handleExportPng = async () => {
         if (selectedMatches.length === 0) return;
-        const targetMatches = sortedMatches.filter(m => selectedMatches.includes(m.id));
+        const selectedIdSet = new Set(selectedMatches);
+        const targetMatches = matches.filter(m => selectedIdSet.has(m.id));
+        if (targetMatches.length === 0) {
+            pushNotification({
+                message: 'Export failed: selected matches are no longer available.',
+                type: 'warning',
+                source: 'history',
+                deepLink: { type: 'openView', view: 'history' },
+            });
+            return;
+        }
         try {
             await exportMatchesAsImage(targetMatches);
             pushNotification({
@@ -812,7 +822,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                                             className={`h-6 w-6 rounded-md border inline-flex items-center justify-center transition-all ${
                                                                 isSelected
                                                                     ? 'opacity-100 border-md-sys-primary/55 bg-md-sys-primary/14 text-md-sys-primary'
-                                                                    : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto border-md-sys-outline/32 text-md-sys-on-surface/60 hover:text-md-sys-primary hover:border-md-sys-primary/45'
+                                                                    : 'invisible opacity-0 pointer-events-none group-hover:visible group-hover:opacity-100 group-hover:pointer-events-auto border-md-sys-outline/32 bg-transparent text-md-sys-on-surface/60 hover:text-md-sys-primary hover:border-md-sys-primary/45'
                                                             }`}
                                                         >
                                                             {isSelected ? <Check size={12} /> : null}

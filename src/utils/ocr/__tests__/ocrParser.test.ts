@@ -554,6 +554,38 @@ describe('calculateOverallConfidence', () => {
     expect(merged.enemyShips).toEqual(existing.enemyShips);
   });
 
+  it('does not collapse placeholder enemy ship entries with different ship types', () => {
+    const existing: Partial<OCRExtractedData> = {
+      enemyShips: [
+        { teamName: 'Unknown', shipType: 'Hunter', color: 'unknown' },
+        { teamName: 'Unknown', shipType: 'Scout', color: 'unknown' },
+      ],
+    };
+    const newData: Partial<OCRExtractedData> = {
+      enemyShips: [
+        { teamName: 'unknown', shipType: 'Hunter', color: 'unknown' },
+        { teamName: 'unknown', shipType: 'Scout', color: 'unknown' },
+      ],
+    };
+    const merged = mergeOCRData(existing, newData);
+    expect(merged.enemyShips).toHaveLength(2);
+    expect(merged.enemyShips.map((ship) => ship.shipType).sort()).toEqual(['Hunter', 'Scout']);
+  });
+
+  it('preserves multiplicity for anonymous same-type enemy ships', () => {
+    const merged = mergeOCRData(
+      { enemyShips: [] },
+      {
+        enemyShips: [
+          { teamName: 'Unknown', shipType: 'Hunter', color: 'unknown' },
+          { teamName: 'Unknown', shipType: 'Hunter', color: 'unknown' },
+        ],
+      }
+    );
+    expect(merged.enemyShips).toHaveLength(2);
+    expect(merged.enemyShips.every((ship) => ship.shipType === 'Hunter')).toBe(true);
+  });
+
   it('weights ship confidence higher', () => {
     const withShip = calculateOverallConfidence({
       playerShip: { shipType: 'Hunter', confidence: 90 },
