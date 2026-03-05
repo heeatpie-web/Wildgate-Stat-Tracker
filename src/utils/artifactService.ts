@@ -122,6 +122,8 @@ export interface MatchArtifactsStructured {
     images: string[];
     imageFiles: ArtifactFile[];
     telemetry: TelemetryArchiveEvent[][];
+    missingImages: string[];
+    resolvedFromDisk: boolean;
 }
 
 export type RerunOcrResult = OCRProcessResult & {
@@ -169,28 +171,58 @@ export const getMatchArtifactsStructured = async (
     fallbackImages: string[] = []
 ): Promise<MatchArtifactsStructured> => {
     const api = getElectronAPI();
-    if (!api) return { images: mergeArtifactPaths([], fallbackImages), imageFiles: [], telemetry: [] };
+    if (!api) {
+        return {
+            images: mergeArtifactPaths([], fallbackImages),
+            imageFiles: [],
+            telemetry: [],
+            missingImages: [],
+            resolvedFromDisk: false,
+        };
+    }
     try {
         const raw = await api.invoke('get-match-artifacts', { matchId, fallbackImages });
         const result = unwrapIpcResult<MatchArtifactsPayload | string[]>(raw);
         if (!result.ok) {
             console.warn('[artifactService] get-match-artifacts failed:', result.code, result.message);
-            return { images: mergeArtifactPaths([], fallbackImages), imageFiles: [], telemetry: [] };
+            return {
+                images: mergeArtifactPaths([], fallbackImages),
+                imageFiles: [],
+                telemetry: [],
+                missingImages: [],
+                resolvedFromDisk: false,
+            };
         }
         // Handle both old (string[]) and new ({images, imageFiles, telemetry}) formats
         if (Array.isArray(result.data)) {
-            return { images: mergeArtifactPaths(result.data, fallbackImages), imageFiles: [], telemetry: [] };
+            return {
+                images: mergeArtifactPaths(result.data, fallbackImages),
+                imageFiles: [],
+                telemetry: [],
+                missingImages: [],
+                resolvedFromDisk: false,
+            };
         }
         const payload = isRecord(result.data) ? result.data : {};
         const payloadImages = Array.isArray(payload.images)
             ? payload.images.filter((img): img is string => typeof img === 'string')
             : [];
-        const mergedImages = mergeArtifactPaths(payloadImages, fallbackImages);
+        const normalizedPayloadImageKeys = new Set(
+            payloadImages.map((imagePath) => normalizeArtifactPath(imagePath).toLowerCase())
+        );
+        const missingImages = fallbackImages
+            .map((imagePath) => normalizeArtifactPath(imagePath))
+            .filter(Boolean)
+            .filter((imagePath) => {
+                const key = imagePath.toLowerCase();
+                return !normalizedPayloadImageKeys.has(key);
+            });
         const payloadImageFiles = Array.isArray(payload.imageFiles) ? payload.imageFiles.filter(isArtifactFile) : [];
         const fileByPath = new Map(
             payloadImageFiles.map((entry) => [normalizeArtifactPath(entry.path).toLowerCase(), entry])
         );
-        const mergedImageFiles = mergedImages.map((imagePath) => {
+        const normalizedImages = payloadImages.map((imagePath) => normalizeArtifactPath(imagePath));
+        const mergedImageFiles = normalizedImages.map((imagePath) => {
             const key = normalizeArtifactPath(imagePath).toLowerCase();
             const existing = fileByPath.get(key);
             if (existing) return existing;
@@ -201,12 +233,20 @@ export const getMatchArtifactsStructured = async (
             } as ArtifactFile;
         });
         return {
-            images: mergedImages,
+            images: normalizedImages,
             imageFiles: mergedImageFiles,
             telemetry: normalizeTelemetryArchiveCollection(payload.telemetry),
+            missingImages,
+            resolvedFromDisk: true,
         };
     } catch (e) {
-        return { images: mergeArtifactPaths([], fallbackImages), imageFiles: [], telemetry: [] };
+        return {
+            images: mergeArtifactPaths([], fallbackImages),
+            imageFiles: [],
+            telemetry: [],
+            missingImages: [],
+            resolvedFromDisk: false,
+        };
     }
 };
 

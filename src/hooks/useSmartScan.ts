@@ -10,6 +10,10 @@ import { SHIPS, UNNAMED_PLAYER_PREFIX } from '../utils/constants';
 import Logger from '../utils/logger';
 import { shouldQueueLearningReview, type OcrAliasContext } from '../utils/ocrAliasEngine';
 import { buildAliasVariantMap, resolveOcrName } from '../utils/ocrNameResolver';
+import {
+    deriveCanonicalRosterCandidateTargetKey,
+    shouldQueueCanonicalRosterCandidate,
+} from '../utils/pendingReviewUtils';
 
 const OCR_THRESHOLDS = {
     REJECT: 55,
@@ -312,6 +316,20 @@ export const useSmartScan = () => {
                                         const normalizedCleaned = normalizeOcrName(cleaned);
                                         if (!pendingValues.has(normalizedCleaned)) {
                                             const suggestions = buildRosterSuggestions(cleaned);
+                                            const canonicalTargetKey = deriveCanonicalRosterCandidateTargetKey({
+                                                rawName: cleaned,
+                                                bestMatch: suggestions.bestMatch,
+                                                aliasResolvedName: aliasResolution?.resolvedName || aliasResolution?.suggestedName,
+                                                pilotRegistry,
+                                            });
+                                            if (!shouldQueueCanonicalRosterCandidate({
+                                                rawName: cleaned,
+                                                pendingReviews,
+                                                pilotRegistry,
+                                                canonicalTargetKey,
+                                            })) {
+                                                continue;
+                                            }
                                             addPendingReview({
                                                 id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
                                                 type: 'roster_candidate',
@@ -321,6 +339,7 @@ export const useSmartScan = () => {
                                                 bestMatch: suggestions.bestMatch,
                                                 bestScore: suggestions.bestScore,
                                                 suggestions: suggestions.suggestions,
+                                                canonicalTargetKey,
                                                 source: 'ocr'
                                             });
                                             pendingValues.add(normalizedCleaned);

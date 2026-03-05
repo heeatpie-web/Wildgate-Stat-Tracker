@@ -5,6 +5,7 @@ import { backfillOpponentTeamShipTypes } from '../utils/ocr/opponentTeamShipType
 import {
   commitPendingMatchDataForWizard,
   clearSmartCapturePlayerAssignments,
+  getSmartCaptureFriendlyTeamName,
   getRosterCandidateSuggestions,
   resolveFriendlyTeamLabel,
   shouldSyncOcrApplyToCurrentSession,
@@ -240,6 +241,7 @@ describe('clearSmartCapturePlayerAssignments', () => {
   it('clears players, team assignments, and reach hazards together', () => {
     const cleared = clearSmartCapturePlayerAssignments({
       id: 55,
+      ship: 'Hunter',
       teammates: ['Wingman'],
       opponents: ['Hostile'],
       opponentTeams: [makeTeam({ teamName: 'Raiders', color: 'red', players: ['Hostile'] })],
@@ -250,9 +252,13 @@ describe('clearSmartCapturePlayerAssignments', () => {
         rawText: 'ocr text',
         confidence: 88,
         hazards: ['Sandstorm'],
+        playerTeamName: 'Crew Alpha',
+        playerShipTeamName: 'Ship Crew',
+        playerShipName: 'Stormchaser',
       },
     } as Match);
 
+    expect(cleared.ship).toBe('');
     expect(cleared.teammates).toEqual([]);
     expect(cleared.opponents).toEqual([]);
     expect(cleared.opponentTeams).toEqual([]);
@@ -260,8 +266,43 @@ describe('clearSmartCapturePlayerAssignments', () => {
     expect(cleared.artifactSource).toBe('');
     expect(cleared.eliminatedByTeam).toBeUndefined();
     expect(cleared.ocrDebug?.hazards).toEqual([]);
+    expect(cleared.ocrDebug?.playerTeamName).toBe('');
+    expect(cleared.ocrDebug?.playerShipTeamName).toBe('');
+    expect(cleared.ocrDebug?.playerShipName).toBe('');
     expect(cleared.ocrDebug?.rawText).toBe('ocr text');
     expect(cleared.ocrDebug?.confidence).toBe(88);
+  });
+});
+
+describe('getSmartCaptureFriendlyTeamName', () => {
+  it('uses an explicitly persisted friendly team name when present', () => {
+    expect(getSmartCaptureFriendlyTeamName({
+      id: 1,
+      ocrDebug: {
+        playerTeamName: 'Crew Delta',
+        playerShipName: 'Ignored Ship Name',
+      },
+    } as Match)).toBe('Crew Delta');
+  });
+
+  it('keeps an explicitly cleared friendly team name blank', () => {
+    expect(getSmartCaptureFriendlyTeamName({
+      id: 2,
+      ocrDebug: {
+        playerTeamName: '',
+        playerShipName: 'Should Not Return',
+      },
+    } as Match)).toBe('');
+  });
+
+  it('falls back to OCR ship/team labels without defaulting to the captain name', () => {
+    expect(getSmartCaptureFriendlyTeamName({
+      id: 3,
+      ocrDebug: {
+        playerShipTeamName: "Starlight's Crew",
+      },
+      player: 'AlexThus',
+    } as Match)).toBe('Starlight');
   });
 });
 

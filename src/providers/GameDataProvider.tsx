@@ -131,6 +131,7 @@ interface GameDataContextType {
     pendingReviews: PendingReview[];
     addPendingReview: (review: PendingReview) => void;
     removePendingReview: (id: string) => void;
+    removePendingReviews: (ids: string[]) => void;
     clearPendingReviews: () => void;
     detectedUnknowns: Record<string, DetectedUnknownMapping>;
     addMapping: (id: string, name: string) => void;
@@ -207,7 +208,7 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         addTimelineEvent: s.addTimelineEvent,
         activeMode: s.activeMode,
         pendingReviews: s.pendingReviews, addPendingReview: s.addPendingReview,
-        removePendingReview: s.removePendingReview, clearPendingReviews: s.clearPendingReviews,
+        removePendingReview: s.removePendingReview, removePendingReviews: s.removePendingReviews, clearPendingReviews: s.clearPendingReviews,
         detectedUnknowns: s.detectedUnknowns, addMapping: s.addMapping,
         setOverlayPhase: s.setOverlayPhase,
         playerProfiles: s.playerProfiles,

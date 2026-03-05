@@ -327,7 +327,9 @@ export const Wizard: React.FC = () => {
         || (pendingPlacement != null && pendingPlacement >= 2 && pendingPlacement <= 5)
     );
     const canFinalizeResult = hasSelectedResult && hasSelectedOutcomeType && hasValidCombatLossPlacement;
-    const hasPendingOcrReview = String(pendingMatchData?.ocrState || '').trim().toLowerCase() === 'reviewing';
+    const normalizedPendingOcrState = String(pendingMatchData?.ocrState || '').trim().toLowerCase();
+    const hasPendingOcrReview = normalizedPendingOcrState === 'reviewing';
+    const hasSavedOcrReview = normalizedPendingOcrState === 'saved' || Boolean(pendingMatchData?.ocrReviewedAt);
     const finalizeButtonLabel = (() => {
         if (!hasSelectedResult) return 'Select Match Result';
         if (selectedResult === 'Draw') return 'Finalize Draw';
@@ -727,13 +729,28 @@ export const Wizard: React.FC = () => {
                             className={`wizard-tab-btn rounded-2xl py-3 text-label-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${activeTab === 'ocr' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-md' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/80 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'}`}
                         >
                             <Users size={16} />
-                            OCR Review {detectedPlayerCount > 0 ? `(${detectedPlayerCount})` : ''}
+                            {hasSavedOcrReview && !hasPendingOcrReview ? 'Review Again' : 'OCR Review'} {detectedPlayerCount > 0 ? `(${detectedPlayerCount})` : ''}
+                            {hasSavedOcrReview && (
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-black tracking-normal ${activeTab === 'ocr' ? 'bg-white/20 text-current' : 'bg-success-soft text-success'}`}>
+                                    Reviewed
+                                </span>
+                            )}
                         </button>
                     </div>
                 </div>
 
                 {activeTab === 'result' ? (
                     <div className={`overflow-y-auto overscroll-contain flex-1 flex flex-col ${isOverlayMode ? 'gap-3 px-4 py-4' : 'gap-5 px-8 py-6'} custom-scrollbar`}>
+                        {hasSavedOcrReview && (
+                            <div className="rounded-2xl border border-success/20 bg-success-soft px-4 py-3 text-label-sm text-success flex items-center justify-between gap-3">
+                                <span className="font-semibold">OCR review saved.</span>
+                                {pendingMatchData?.ocrReviewedAt ? (
+                                    <span className="font-mono text-label-xs opacity-80">
+                                        {new Date(Number(pendingMatchData.ocrReviewedAt)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                ) : null}
+                            </div>
+                        )}
                         <div className={cardClass}>
                             <span className={labelClass}>Outcome</span>
                             <div className="grid grid-cols-3 gap-2">

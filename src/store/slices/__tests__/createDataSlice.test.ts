@@ -335,6 +335,16 @@ describe('createDataSlice', () => {
       expect(store.getState().pendingReviews).toHaveLength(0);
     });
 
+    it('removes multiple pending reviews at once', () => {
+      store.getState().addPendingReview({ id: '1', type: 'player_name', value: 'test', originalConfidence: 50 });
+      store.getState().addPendingReview({ id: '2', type: 'roster_candidate', value: 'pilot', originalConfidence: 88, canonicalTargetKey: 'pilotprime' });
+      store.getState().addPendingReview({ id: '3', type: 'modifier', value: 'storm', originalConfidence: 60 });
+      store.getState().removePendingReviews(['1', '2']);
+      expect(store.getState().pendingReviews).toEqual([
+        expect.objectContaining({ id: '3', value: 'storm' }),
+      ]);
+    });
+
     it('clears all pending reviews', () => {
       store.getState().addPendingReview({ id: '1', type: 'player_name', value: 'a', originalConfidence: 50 });
       store.getState().addPendingReview({ id: '2', type: 'modifier', value: 'b', originalConfidence: 60 });

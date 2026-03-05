@@ -576,8 +576,14 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
       // (3-word names like "sticks and stones" are valid)
       if (playerName.split(/\s+/).length >= 4) continue;
       // (b) Very short all-lowercase names are often OCR noise fragments.
-      // Keep 6+ chars to preserve legitimate lowercase handles (e.g. "frncrd").
-      if (/^[a-z\s]+$/.test(playerName) && playerName.replace(/\s+/g, '').length < 6) continue;
+      // Keep 6+ chars by default, but allow high-confidence short single-token
+      // names so cleaned OCR like "leetI9" -> "leet" survives.
+      const lineMaxConfidence = nameColWords.reduce((max, word) => Math.max(max, Number(word?.confidence || 0)), 0);
+      if (
+        /^[a-z\s]+$/.test(playerName) &&
+        playerName.replace(/\s+/g, '').length < 6 &&
+        !(playerName.length >= 4 && !playerName.includes(' ') && lineMaxConfidence >= 70)
+      ) continue;
       // (c) All-uppercase name 5 or fewer letters = button/label fragment (e.g. "ATTLE", "N JI")
       if (/^[A-Z\s]+$/.test(playerName) && playerName.replace(/\s+/g, '').length <= 5) continue;
       pushUniquePlayerName(out, playerName);
@@ -2091,6 +2097,7 @@ function cleanupPlayerName(name) {
   );
 
   cleaned = stripLikelyCrewHubUiDigitSuffix(cleaned);
+  cleaned = stripLikelyCrewHubI9ArtifactSuffix(cleaned);
   cleaned = splitCamelCaseFallback(cleaned);
 
   return cleaned;
@@ -2117,6 +2124,15 @@ function stripLikelyCrewHubUiDigitSuffix(name) {
   }
 
   return value;
+}
+
+function stripLikelyCrewHubI9ArtifactSuffix(name) {
+  const value = String(name || '').trim();
+  const m = value.match(/^([A-Za-z\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]{3,5})([Ii1l]9)$/);
+  if (!m) return value;
+  const stem = m[1];
+  if (/[0-9]/.test(stem)) return value;
+  return stem;
 }
 
 function stripLikelyLeftPanelSlotDigitSuffix(name) {

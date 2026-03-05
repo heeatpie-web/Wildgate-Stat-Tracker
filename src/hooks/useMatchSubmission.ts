@@ -470,11 +470,19 @@ export const useMatchSubmission = () => {
                 ...bundledArtifacts,
             ]);
             const diskArtifacts = Array.isArray(structuredArtifacts.images) ? structuredArtifacts.images : [];
+            const missingArtifactKeys = structuredArtifacts.resolvedFromDisk
+                ? new Set(
+                    (structuredArtifacts.missingImages || [])
+                        .map((artifactPath) => toArtifactKey(artifactPath))
+                        .filter(Boolean)
+                )
+                : new Set<string>();
             const mergedArtifacts: string[] = [];
             const seenArtifactKeys = new Set<string>();
             const pushArtifact = (artifactPath?: string) => {
                 if (!artifactPath || typeof artifactPath !== 'string' || !artifactPath.trim()) return;
                 const key = toArtifactKey(artifactPath.trim());
+                if (structuredArtifacts.resolvedFromDisk && missingArtifactKeys.has(key)) return;
                 if (seenArtifactKeys.has(key)) return;
                 seenArtifactKeys.add(key);
                 mergedArtifacts.push(artifactPath.trim());

@@ -160,6 +160,7 @@ export interface PendingReview {
   bestMatch?: string;
   bestScore?: number;
   suggestions?: Array<{ name: string; score: number }>;
+  canonicalTargetKey?: string;
   source?: 'ocr' | 'telemetry' | 'manual';
   sourceCapture?: PendingReviewSource;
 }
@@ -250,6 +251,7 @@ export interface DataSlice {
   pendingReviews: PendingReview[];
   addPendingReview: (review: PendingReview) => void;
   removePendingReview: (id: string) => void;
+  removePendingReviews: (ids: string[]) => void;
   clearPendingReviews: () => void;
 
   setLastActivity: (timestamp: number) => void;
@@ -329,6 +331,11 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
   pendingReviews: [],
   addPendingReview: (review) => set((state) => ({ pendingReviews: [...state.pendingReviews, review] })),
   removePendingReview: (id) => set((state) => ({ pendingReviews: state.pendingReviews.filter(r => r.id !== id) })),
+  removePendingReviews: (ids) => set((state) => {
+    const idSet = new Set((ids || []).filter(Boolean));
+    if (idSet.size === 0) return {};
+    return { pendingReviews: state.pendingReviews.filter((review) => !idSet.has(review.id)) };
+  }),
   clearPendingReviews: () => set({ pendingReviews: [] }),
 
   mergeHistory: [],

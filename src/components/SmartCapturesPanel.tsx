@@ -18,8 +18,8 @@ import {
     previewArtifactRepair,
     applyArtifactRepair,
     type ArtifactRepairResult,
+    type MatchArtifactsStructured,
     type RerunOcrResult,
-    ArtifactFile,
 } from '../utils/artifactService';
 import type { OCRProcessRuntimeOptions } from '../utils/electronBridge';
 import { getElectronAPI } from '../utils/electronAPI';
@@ -58,6 +58,7 @@ import OcrRegionEditorModal from './OcrRegionEditorModal';
 import { SmartCaptureSummaryBar } from './smart-captures/detail/SmartCaptureSummaryBar';
 import { SmartCaptureActionBar } from './smart-captures/detail/SmartCaptureActionBar';
 import { OcrTeamAssignmentBoard, type OcrTeamAssignmentTeam } from './ocr/OcrTeamAssignmentBoard';
+import { WorkspaceImageViewer } from './media/WorkspaceImageViewer';
 import { combinedNameSimilarityScore, findClosestMatch, normalizeOcrName } from '../utils/stringUtils';
 import { getTelemetryEventTimestamp, type TelemetryArchiveEvent } from '../utils/telemetryArchive';
 import {
@@ -79,6 +80,10 @@ import {
     extractArtifactSourceFromReachModifiers,
     stripArtifactSourceModifiers,
 } from '../utils/artifactSource';
+import {
+    deriveCanonicalRosterCandidateTargetKey,
+    shouldQueueCanonicalRosterCandidate,
+} from '../utils/pendingReviewUtils';
 
 export { backfillOpponentTeamShipTypes } from '../utils/ocr/opponentTeamShipTypes';
 
@@ -199,6 +204,7 @@ export const resolveFriendlyTeamLabel = (
 
 export const clearSmartCapturePlayerAssignments = (match: Match): Match => ({
     ...match,
+    ship: '',
     teammates: [],
     opponents: [],
     opponentTeams: [],
@@ -209,9 +215,30 @@ export const clearSmartCapturePlayerAssignments = (match: Match): Match => ({
         ? {
             ...match.ocrDebug,
             hazards: [],
+            playerTeamName: '',
+            playerShipTeamName: '',
+            playerShipName: '',
         }
         : match.ocrDebug,
 });
+
+const hasExplicitFriendlyTeamLabel = (match: Match): boolean => (
+    Boolean(match.ocrDebug)
+    && Object.prototype.hasOwnProperty.call(match.ocrDebug, 'playerTeamName')
+);
+
+export const getSmartCaptureFriendlyTeamName = (match: Match): string => {
+    if (hasExplicitFriendlyTeamLabel(match)) {
+        return String(match.ocrDebug?.playerTeamName || '').trim();
+    }
+    const fallbackSeed = String(
+        match.ocrDebug?.playerShipTeamName
+        || match.ocrDebug?.playerShipName
+        || ''
+    ).trim();
+    const resolved = resolveFriendlyTeamLabel(fallbackSeed, '', '');
+    return resolved === 'Friendly Team' ? '' : resolved;
+};
 
 const POSITIONAL_TEAM_COLOR_ORDER = ['red', 'orange', 'yellow', 'yellowgreen'] as const;
 const OPPONENT_COLOR_SORT_ORDER = ['red', 'orange', 'yellow', 'yellowgreen'] as const;
@@ -357,19 +384,29 @@ const SmartCapturesPanel: React.FC = () => {
     const queueRosterCandidate = useCallback((rawName: string) => {
         const normalized = normalizeOcrName(rawName || '');
         if (!normalized || normalized.length < 2) return;
-        const hasExact = pilotRegistry.some((pilot) => (
-            normalizeOcrName(pilot).toLowerCase() === normalized.toLowerCase()
-        ));
-        if (hasExact) return;
-
-        const pendingSet = new Set(
-            (pendingReviews || [])
-                .filter((review) => review.type === 'roster_candidate')
-                .map((review) => normalizeOcrName(review.value).toLowerCase())
-        );
-        if (pendingSet.has(normalized.toLowerCase())) return;
-
+        const state = useAppStore.getState();
         const suggestions = getRosterCandidateSuggestions(normalized, pilotRegistry);
+        const aliasResolution = state.resolveOcrAlias(normalized, {
+            context: 'matchstats',
+            minScore: state.ocrAutoApplyMinScore,
+            minCount: state.ocrAutoApplyMinCount,
+            strictMode: state.ocrLearningStrictMode,
+            reviewMode: state.ocrLearningReviewMode,
+            autoPromoteCount: state.ocrLearningAutoPromoteCount,
+        });
+        if (aliasResolution?.resolvedName) return;
+        const canonicalTargetKey = deriveCanonicalRosterCandidateTargetKey({
+            rawName: normalized,
+            bestMatch: suggestions[0]?.name,
+            aliasResolvedName: aliasResolution?.suggestedName,
+            pilotRegistry,
+        });
+        if (!shouldQueueCanonicalRosterCandidate({
+            rawName: normalized,
+            pendingReviews,
+            pilotRegistry,
+            canonicalTargetKey,
+        })) return;
         addPendingReview({
             id: `sc_roster_${Date.now()}_${Math.random().toString(36).slice(2)}`,
             type: 'roster_candidate',
@@ -379,6 +416,7 @@ const SmartCapturesPanel: React.FC = () => {
             bestMatch: suggestions[0]?.name,
             bestScore: suggestions[0]?.score,
             suggestions,
+            canonicalTargetKey,
             source: 'ocr',
         });
         setToast({ message: `Queued roster candidate: ${normalized}`, type: 'info' });
@@ -1874,8 +1912,14 @@ const SmartMatchDetail: React.FC<{
             [matchSnapshot.id]
         ));
         const match = liveMatch || matchSnapshot;
-        const [artifacts, setArtifacts] = useState<{ images: string[], imageFiles: ArtifactFile[], telemetry: TelemetryArchiveEvent[][] }>({ images: [], imageFiles: [], telemetry: [] });
-        const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+        const [artifacts, setArtifacts] = useState<MatchArtifactsStructured>({
+            images: [],
+            imageFiles: [],
+            telemetry: [],
+            missingImages: [],
+            resolvedFromDisk: false,
+        });
+        const [activeScreenshotIndex, setActiveScreenshotIndex] = useState<number | null>(null);
         const screenshotsSectionRef = useRef<HTMLDivElement | null>(null);
         const [editingField, setEditingField] = useState<string | null>(null);
         const [editValue, setEditValue] = useState('');
@@ -2344,18 +2388,40 @@ const SmartMatchDetail: React.FC<{
         }, [showSecondaryActions]);
 
         useEffect(() => {
-            setArtifacts({ images: [], imageFiles: [], telemetry: [] });
+            setArtifacts({ images: [], imageFiles: [], telemetry: [], missingImages: [], resolvedFromDisk: false });
             setRerunResults(null);
             setOcrNameSources({});
             setRerunProgress({ ...INITIAL_RERUN_PROGRESS });
             setEditingTeamOpponentPlayer(null);
             setEditingTeamOpponentValue('');
+            setActiveScreenshotIndex(null);
             getMatchArtifactsStructured(match.id, match.artifacts || [])
-                .then(setArtifacts)
+                .then((nextArtifacts) => {
+                    setArtifacts(nextArtifacts);
+                    if (!nextArtifacts.resolvedFromDisk || nextArtifacts.missingImages.length === 0) return;
+                    const missingKeys = new Set(
+                        nextArtifacts.missingImages
+                            .map((imagePath) => toArtifactKey(imagePath))
+                            .filter(Boolean)
+                    );
+                    const existingArtifacts = Array.isArray(match.artifacts) ? match.artifacts : [];
+                    const prunedArtifacts = existingArtifacts.filter((artifactPath) => {
+                        const normalizedPath = String(artifactPath || '').trim();
+                        if (!IMAGE_EXTS.some((ext) => normalizedPath.toLowerCase().endsWith(ext))) return true;
+                        return !missingKeys.has(toArtifactKey(normalizedPath));
+                    });
+                    if (prunedArtifacts.length === existingArtifacts.length) return;
+                    onUpdate({ ...match, artifacts: prunedArtifacts });
+                    const removedCount = existingArtifacts.length - prunedArtifacts.length;
+                    setToast({
+                        message: `Removed ${removedCount} missing screenshot reference${removedCount === 1 ? '' : 's'} from this match.`,
+                        type: 'info',
+                    });
+                })
                 .catch((error: unknown) => {
                     Logger.warn('SmartCapturesPanel', `Failed to load artifacts for match ${match.id}`, error);
                 });
-        }, [match.artifacts, match.id]);
+        }, [match, match.artifacts, match.id, onUpdate, setToast]);
 
         const totalKills = Object.values(match.kills || {}).reduce((a, b) => a + (Number(b) || 0), 0);
         const startEdit = (field: string, currentValue: string) => {
@@ -2567,13 +2633,7 @@ const SmartMatchDetail: React.FC<{
                 .filter(Boolean)
         )), []);
         const assignmentBoardTeams = useMemo<OcrTeamAssignmentTeam[]>(() => {
-            const friendlyTeamNameSeed = String(
-                match.ocrDebug?.playerShipName
-                || match.ocrDebug?.playerTeamName
-                || match.ocrDebug?.playerShipTeamName
-                || ''
-            ).trim();
-            const friendlyTeamName = resolveFriendlyTeamLabel(friendlyTeamNameSeed, '', activeUser || match.player || 'You');
+            const friendlyTeamName = getSmartCaptureFriendlyTeamName(match);
             const friendlyPlayers = dedupeBoardNames([...(match.teammates || [])]).filter((name) => (
                 !isActiveUserLike(name) && name !== ''
             ));
@@ -2599,13 +2659,13 @@ const SmartMatchDetail: React.FC<{
                 )),
             }));
             return [{
-                key: `friendly:${friendlyTeamName}`,
+                key: `friendly:${friendlyTeamName || 'empty'}`,
                 color: 'friendly',
                 teamName: friendlyTeamName,
                 shipType: String(match.ship || ''),
                 players: friendlyPlayers,
             }, ...opponentBoardTeams];
-        }, [activeUser, dedupeBoardNames, isActiveUserLike, match.ocrDebug?.playerShipName, match.ocrDebug?.playerShipTeamName, match.ocrDebug?.playerTeamName, match.opponentTeams, match.opponents, match.player, match.ship, match.teammates]);
+        }, [dedupeBoardNames, isActiveUserLike, match, match.opponentTeams, match.opponents, match.ship, match.teammates]);
         const assignmentBoardFuzzyMatches = useMemo<Record<string, string>>(() => {
             if (!Array.isArray(pilotRegistry) || pilotRegistry.length === 0) return {};
             const exactRegistryKeys = new Set(
@@ -2643,6 +2703,10 @@ const SmartMatchDetail: React.FC<{
                 teammates: dedupeBoardNames(friendlyTeam.players || []),
                 opponents: dedupeBoardNames(nextOpponentTeams.flatMap((team) => team.players || [])),
                 opponentTeams: nextOpponentTeams,
+                ocrDebug: {
+                    ...(match.ocrDebug || {}),
+                    playerTeamName: String(friendlyTeam.teamName || '').trim(),
+                },
             });
         }, [dedupeBoardNames, match, onUpdate]);
         const mutateAssignmentBoardTeams = useCallback((
@@ -3150,7 +3214,7 @@ const SmartMatchDetail: React.FC<{
         }, [applyResult, applyReviewDataToSession, match, queueOnly, onNext, onPrev, onResolve, rerunning, onApplyToSession]);
 
         return (
-            <div className="px-3 lg:px-4 pb-3 lg:pb-4 sc-detail-workspace">
+            <div className="relative px-3 lg:px-4 pb-3 lg:pb-4 sc-detail-workspace">
                 {pilotRegistry.length > 0 && (
                     <datalist id={rosterSuggestionsId}>
                         {pilotRegistry.map((pilot) => (
@@ -3174,6 +3238,15 @@ const SmartMatchDetail: React.FC<{
                                         {statusIcon}
                                         {statusMeta.label}
                                     </span>
+                                    {match.ocrReviewedAt && (
+                                        <span
+                                            className="sc-detail-chip bg-success-soft text-success"
+                                            title={`Reviewed at ${new Date(match.ocrReviewedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                                        >
+                                            <Check size={10} />
+                                            Reviewed
+                                        </span>
+                                    )}
                                     {hasResult && (
                                         <span className={`sc-detail-chip sc-result-chip--${match.result?.toLowerCase()}`}>
                                             {match.result === 'Win' ? <Trophy size={10} /> : match.result === 'Loss' ? <Skull size={10} /> : <AlertTriangle size={10} />}
@@ -3394,11 +3467,7 @@ const SmartMatchDetail: React.FC<{
 
                         <Section title="Players" collapsible collapsed={!!collapsedSections.players} onToggle={() => toggleSection('players')}>
                             <div className="space-y-2">
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="roster-you-chip inline-flex items-center gap-2 rounded-control px-2 py-1.5">
-                                        <span className="w-2 h-2 rounded-full bg-success" />
-                                        <span className="text-label-sm font-semibold text-success">(you)</span>
-                                    </div>
+                                <div className="flex items-center justify-end gap-2">
                                     <button
                                         type="button"
                                         className="md3-btn-text text-label-xs font-bold text-danger"
@@ -3414,6 +3483,10 @@ const SmartMatchDetail: React.FC<{
                                     pilotRegistry={pilotRegistry}
                                     rosterSuggestionsId={pilotRegistry.length > 0 ? rosterSuggestionsId : undefined}
                                     friendlyTeamIndex={0}
+                                    friendlyFixedPlayer={activeUserReference ? {
+                                        canonicalName: activeUserReference,
+                                        displayLabel: '(you)',
+                                    } : null}
                                     compact={true}
                                     allowColorEdit={true}
                                     allowTeamAddRemove={true}
@@ -3887,9 +3960,9 @@ const SmartMatchDetail: React.FC<{
                                 {artifacts.images.map((src, i) => (
                                     <div
                                         key={i}
-                                        className="relative aspect-video md3-surface-high rounded-xl overflow-hidden group sc-shot-thumb border border-md-sys-outline/10 shadow-sm"
+                                        className="relative min-h-[220px] md:min-h-[280px] md3-surface-high rounded-xl overflow-hidden group sc-shot-thumb border border-md-sys-outline/10 shadow-sm"
                                     >
-                                        <button onClick={() => setLightboxSrc(src)} className="w-full h-full">
+                                        <button onClick={() => setActiveScreenshotIndex(i)} className="w-full h-full">
                                             <LocalImage
                                                 src={src}
                                                 alt={`Screenshot ${i + 1}`}
@@ -4086,16 +4159,20 @@ const SmartMatchDetail: React.FC<{
                         )}
                     </div>
                 </div>
-                {lightboxSrc && (
-                    <div className="fixed inset-0 z-modal bg-scrim-90 p-8" onClick={() => setLightboxSrc(null)}>
-                        <button onClick={() => setLightboxSrc(null)} className="absolute top-4 right-4 text-md-sys-on-surface/60 hover:text-md-sys-on-surface z-10">
-                            <X size={24} />
-                        </button>
-                        <LocalImage
-                            src={lightboxSrc}
-                            alt="Screenshot"
-                            className="w-full h-full object-contain rounded-lg"
-                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                {activeScreenshotIndex !== null && artifacts.images[activeScreenshotIndex] && (
+                    <div className="absolute inset-0 z-modal rounded-2xl bg-md-sys-surface/98 p-3 backdrop-blur-md">
+                        <WorkspaceImageViewer
+                            images={artifacts.images}
+                            activeIndex={activeScreenshotIndex}
+                            onActiveIndexChange={setActiveScreenshotIndex}
+                            onClose={() => setActiveScreenshotIndex(null)}
+                            title="Match Screenshots"
+                            subtitle="Zoom, pan, and hover for loupe. Use the thumbnail rail to switch images."
+                            className="h-full"
+                            stageClassName="min-h-[420px]"
+                            imageAltPrefix="Match screenshot"
+                            enableLoupe={true}
+                            autoFocus={true}
                         />
                     </div>
                 )}

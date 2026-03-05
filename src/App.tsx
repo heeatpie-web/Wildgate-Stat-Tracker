@@ -97,6 +97,11 @@ import { buildAliasVariantMap, resolveOcrName } from './utils/ocrNameResolver';
 import { assignDeterministicTeamColors, buildPlayerColorHints, normalizeTeamColor } from './utils/ocr/teamColorAssignment';
 import { backfillOpponentTeamShipTypes } from './utils/ocr/opponentTeamShipTypes';
 import { capTeammatePlayers, getMaxTeammatesForShip } from './utils/teamLimits';
+import {
+    deriveCanonicalRosterCandidateTargetKey,
+    getRosterCandidatePruneIds,
+    shouldQueueCanonicalRosterCandidate,
+} from './utils/pendingReviewUtils';
 import Logger from './utils/logger';
 import { runtimeConfig } from './config/runtimeConfig';
 
@@ -324,6 +329,7 @@ const App: React.FC = () => {
         selectedReachModifiers, setSelectedReachModifiers,
         addPendingReview,
         removePendingReview,
+        removePendingReviews,
         pendingReviews,
         detectedUnknowns,
         sessionTeams, setSessionTeams,
@@ -465,6 +471,15 @@ const App: React.FC = () => {
             if (!hasTarget) {
                 addToRegistry(target);
             }
+            const duplicateIds = getRosterCandidatePruneIds({
+                pendingReviews: useAppStore.getState().pendingReviews || [],
+                rawName: source,
+                canonicalTargetKey: target,
+                excludeIds: [review.id],
+            });
+            if (duplicateIds.length > 0) {
+                removePendingReviews(duplicateIds);
+            }
             approved += 1;
         });
         setShowFuzzyReviewPrompt(false);
@@ -480,6 +495,7 @@ const App: React.FC = () => {
         pilotRegistry,
         recordOcrAliasCorrection,
         removePendingReview,
+        removePendingReviews,
         setShowFuzzyReviewPrompt,
         setToast,
     ]);
@@ -514,6 +530,15 @@ const App: React.FC = () => {
             if (!hasTarget) {
                 addToRegistry(target);
             }
+            const duplicateIds = getRosterCandidatePruneIds({
+                pendingReviews: useAppStore.getState().pendingReviews || [],
+                rawName: source,
+                canonicalTargetKey: target,
+                excludeIds: [review.id],
+            });
+            if (duplicateIds.length > 0) {
+                removePendingReviews(duplicateIds);
+            }
             mergedCount += 1;
         });
 
@@ -530,6 +555,7 @@ const App: React.FC = () => {
         pilotRegistry,
         recordOcrAliasCorrection,
         removePendingReview,
+        removePendingReviews,
         setToast,
     ]);
 
@@ -1626,19 +1652,33 @@ const App: React.FC = () => {
     const queueRosterCandidate = useCallback((rawName: string) => {
         const normalized = normalizeOcrName(rawName || '');
         if (!normalized || normalized.length < 2) return;
-        const hasExact = pilotRegistry.some((pilot) => (
-            normalizeOcrName(pilot).toLowerCase() === normalized.toLowerCase()
-        ));
-        if (hasExact) return;
-        const pendingValues = new Set((pendingReviews || [])
-            .filter((review) => review.type === 'roster_candidate')
-            .map((review) => normalizeOcrName(review.value).toLowerCase()));
-        if (pendingValues.has(normalized.toLowerCase())) return;
+        const state = useAppStore.getState();
         const scored = pilotRegistry.map((pilot) => ({
             name: pilot,
             score: combinedNameSimilarityScore(normalized, normalizeOcrName(pilot)),
         })).sort((a, b) => b.score - a.score);
         const suggestions = scored.filter((entry) => entry.score > 0).slice(0, 3);
+        const aliasResolution = state.resolveOcrAlias(normalized, {
+            context: 'matchstats',
+            minScore: state.ocrAutoApplyMinScore,
+            minCount: state.ocrAutoApplyMinCount,
+            strictMode: state.ocrLearningStrictMode,
+            reviewMode: state.ocrLearningReviewMode,
+            autoPromoteCount: state.ocrLearningAutoPromoteCount,
+        });
+        if (aliasResolution?.resolvedName) return;
+        const canonicalTargetKey = deriveCanonicalRosterCandidateTargetKey({
+            rawName: normalized,
+            bestMatch: suggestions[0]?.name,
+            aliasResolvedName: aliasResolution?.suggestedName,
+            pilotRegistry,
+        });
+        if (!shouldQueueCanonicalRosterCandidate({
+            rawName: normalized,
+            pendingReviews,
+            pilotRegistry,
+            canonicalTargetKey,
+        })) return;
         addPendingReview({
             id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
             type: 'roster_candidate',
@@ -1648,6 +1688,7 @@ const App: React.FC = () => {
             bestMatch: suggestions[0]?.name,
             bestScore: suggestions[0]?.score,
             suggestions,
+            canonicalTargetKey,
             source: 'ocr',
         });
         setToast({ message: `Queued roster candidate: ${normalized}`, type: 'info' });
@@ -1944,13 +1985,43 @@ const App: React.FC = () => {
         }
 
         const autoAppliedPlayers = [...autoAppliedTeammates, ...mergedOpponents];
+        const currentSessionPlayerKeys = new Set(
+            [
+                ...(useAppStore.getState().selectedTeammates || []),
+                ...(selectedOpponents || []),
+                ...structuredTeams.flatMap((team) => team.players || []),
+            ]
+                .map((player) => toNameKey(player))
+                .filter(Boolean)
+        );
         autoAppliedPlayers.forEach((player) => {
             const normalized = normalizeOcrName(player || '');
             const key = toNameKey(normalized);
             if (!normalized || normalized.length <= 2 || pendingRosterCandidateKeys.has(key)) return;
-            const hasExact = pilotRegistry.some((pilot) => toNameKey(pilot) === key);
-            if (hasExact) return;
             const suggestions = buildRosterSuggestions(normalized);
+            const state = useAppStore.getState();
+            const aliasResolution = state.resolveOcrAlias(normalized, {
+                context: 'matchstats',
+                minScore: state.ocrAutoApplyMinScore,
+                minCount: state.ocrAutoApplyMinCount,
+                strictMode: state.ocrLearningStrictMode,
+                reviewMode: state.ocrLearningReviewMode,
+                autoPromoteCount: state.ocrLearningAutoPromoteCount,
+            });
+            if (aliasResolution?.resolvedName) return;
+            const canonicalTargetKey = deriveCanonicalRosterCandidateTargetKey({
+                rawName: normalized,
+                bestMatch: suggestions.bestMatch,
+                aliasResolvedName: aliasResolution?.suggestedName,
+                pilotRegistry,
+            });
+            if (canonicalTargetKey && currentSessionPlayerKeys.has(canonicalTargetKey)) return;
+            if (!shouldQueueCanonicalRosterCandidate({
+                rawName: normalized,
+                pendingReviews,
+                pilotRegistry,
+                canonicalTargetKey,
+            })) return;
             addPendingReview({
                 id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
                 type: 'roster_candidate',
@@ -1960,6 +2031,7 @@ const App: React.FC = () => {
                 bestMatch: suggestions.bestMatch,
                 bestScore: suggestions.bestScore,
                 suggestions: suggestions.suggestions,
+                canonicalTargetKey,
                 source: 'ocr'
             });
             pendingRosterCandidateKeys.add(key);

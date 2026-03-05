@@ -54,7 +54,7 @@ describe('artifactService', () => {
     it('returns empty structure when Electron API is not available', async () => {
       vi.mocked(getElectronAPI).mockReturnValue(null);
       const result = await getMatchArtifactsStructured(1);
-      expect(result).toEqual({ images: [], imageFiles: [], telemetry: [] });
+      expect(result).toEqual({ images: [], imageFiles: [], telemetry: [], missingImages: [], resolvedFromDisk: false });
       expect(mockInvoke).not.toHaveBeenCalled();
     });
 
@@ -73,10 +73,12 @@ describe('artifactService', () => {
         images: ['\\a.png'],
         imageFiles: [{ artifactId: 'tok_1', filename: 'a.png', path: '/a.png' }],
         telemetry: [[{ event: 'test' }]],
+        missingImages: [],
+        resolvedFromDisk: true,
       });
     });
 
-    it('prefers primary artifact images over fallback duplicates by filename', async () => {
+    it('returns only disk-backed images and reports missing fallback references', async () => {
       mockInvoke.mockResolvedValue({
         success: true,
         data: {
@@ -85,21 +87,26 @@ describe('artifactService', () => {
           telemetry: [],
         },
       });
-      const result = await getMatchArtifactsStructured(12, ['D:\\\\old\\\\match_artifacts\\\\12\\\\shot_1.png']);
+      const result = await getMatchArtifactsStructured(12, [
+        'D:\\\\old\\\\match_artifacts\\\\12\\\\shot_1.png',
+        'D:\\\\old\\\\match_artifacts\\\\12\\\\shot_2.png',
+      ]);
       expect(result.images).toEqual(['C:\\new\\match_artifacts\\12\\shot_1.png']);
       expect(result.imageFiles[0]?.path).toBe('C:\\\\new\\\\match_artifacts\\\\12\\\\shot_1.png');
+      expect(result.missingImages).toEqual(['D:\\old\\match_artifacts\\12\\shot_1.png', 'D:\\old\\match_artifacts\\12\\shot_2.png']);
+      expect(result.resolvedFromDisk).toBe(true);
     });
 
     it('handles legacy array result (backward compatibility)', async () => {
       mockInvoke.mockResolvedValue(['/img1.png', '/img2.png']);
       const result = await getMatchArtifactsStructured(1);
-      expect(result).toEqual({ images: ['\\img1.png', '\\img2.png'], imageFiles: [], telemetry: [] });
+      expect(result).toEqual({ images: ['\\img1.png', '\\img2.png'], imageFiles: [], telemetry: [], missingImages: [], resolvedFromDisk: false });
     });
 
     it('returns empty structure when invoke throws', async () => {
       mockInvoke.mockRejectedValue(new Error('IPC error'));
       const result = await getMatchArtifactsStructured(1);
-      expect(result).toEqual({ images: [], imageFiles: [], telemetry: [] });
+      expect(result).toEqual({ images: [], imageFiles: [], telemetry: [], missingImages: [], resolvedFromDisk: false });
     });
   });
 

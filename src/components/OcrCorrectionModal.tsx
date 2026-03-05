@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, Search, Info, Users, Image as ImageIcon, Eye, Shield, Minus, Plus, ArrowLeft, Trash2 } from 'lucide-react';
+import { X, Check, Search, Info, Users, Image as ImageIcon, Shield, Minus, Plus, ArrowLeft, Trash2 } from 'lucide-react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
@@ -19,14 +19,15 @@ import { normalizeOcrCalibrationMode } from '../utils/ocrCalibration';
 import { tryMoveOpponentPlayerBetweenTeams } from '../utils/opponentTeamTransfer';
 import { ConfidenceMeter } from './ConfidenceMeter';
 import { BatchActionConfirmDialog } from './BatchActionConfirmDialog';
-import { LocalImage } from './LocalImage';
 import { Match, SHIPS } from '../types';
 import Logger from '../utils/logger';
 import { getElectronAPI } from '../utils/electronAPI';
 import { findClosestMatch, similarityScore } from '../utils/stringUtils';
 import { OcrTeamAssignmentBoard } from './ocr/OcrTeamAssignmentBoard';
+import { WorkspaceImageViewer } from './media/WorkspaceImageViewer';
 import { UI_REACH_MODIFIERS } from '../utils/constants';
 import { extractArtifactSourceFromReachModifiers } from '../utils/artifactSource';
+import { getRosterCandidatePruneIds } from '../utils/pendingReviewUtils';
 
 interface OcrCorrectionModalProps {
     isOpen: boolean;
@@ -72,14 +73,6 @@ interface DropdownAnchor {
     placeAbove: boolean;
 }
 
-interface ScreenshotLoupeState {
-    imagePath: string;
-    clientX: number;
-    clientY: number;
-    relX: number;
-    relY: number;
-}
-
 interface SubmitCorrectionsOptions {
     closeAfterApply?: boolean;
     correctionOverrides?: Record<string, string>;
@@ -109,6 +102,10 @@ const normalizeModifierKey = (name: string): string => normalizeModifierName(nam
 const normalizeArtifactPathKey = (value: string): string => (
     String(value || '').trim().replace(/[\\/]+/g, '\\').toLowerCase()
 );
+const clampSelectedScreenshotIndex = (value: number, count: number): number => {
+    if (!Number.isFinite(value) || count <= 0) return 0;
+    return Math.max(0, Math.min(count - 1, Math.floor(value)));
+};
 const foldLikelyOcrDigits = (value: string): string => (
     String(value || '').replace(/[013456789]/g, (char) => (
         char === '0' ? 'o'
@@ -193,12 +190,19 @@ const resolveInitialTeamShip = (
 
 const buildTeamDraft = (
     sessionTeams: Record<string, string[]> | undefined,
-    sessionShipTypes: Record<string, string> | undefined
+    sessionShipTypes: Record<string, string> | undefined,
+    activeUser: string | null | undefined
 ): TeamDraft[] => {
     if (!sessionTeams) return [];
+    const activeUserKey = normalizeNameKey(activeUser || '');
     return Object.entries(sessionTeams).map(([teamKey, teamPlayers], index) => {
         const { color, teamName } = parseTeamKey(teamKey, index);
-        const players = dedupeNames((teamPlayers || []).map((name) => String(name || '').trim()).filter(Boolean));
+        const players = dedupeNames(
+            (teamPlayers || [])
+                .map((name) => String(name || '').trim())
+                .filter(Boolean)
+                .filter((name) => normalizeNameKey(name) !== activeUserKey)
+        );
         return {
             key: teamKey,
             color,
@@ -221,7 +225,7 @@ const buildTeamDraftFromPendingData = (
     const hasPendingTeamData = fromPendingOpponents.length > 0
         || Array.isArray(pendingMatchData?.teammates);
     if (!hasPendingTeamData) {
-        return buildTeamDraft(sessionTeams, sessionShipTypes);
+        return buildTeamDraft(sessionTeams, sessionShipTypes, activeUser);
     }
     const activeUserSeed = normalizeSubmittedName(
         activeUser
@@ -237,11 +241,6 @@ const buildTeamDraftFromPendingData = (
         return similarityScore(key, activeUserKey) >= 90;
     };
 
-    const friendlyCaptain = normalizeSubmittedName(
-        activeUser
-        || String(pendingMatchData?.player || '').trim()
-        || 'You'
-    );
     const seededFriendlyLabel = Object.keys(sessionTeams || {}).find((teamKey) => (
         String(teamKey || '').toLowerCase().startsWith('friendly:')
     ));
@@ -249,7 +248,6 @@ const buildTeamDraftFromPendingData = (
         ? parseTeamKey(seededFriendlyLabel, 0).teamName
         : '';
     const friendlyPlayers = dedupeNames([
-        friendlyCaptain,
         ...((pendingMatchData?.teammates || [])
             .map((name) => normalizeSubmittedName(String(name || '')))
             .filter((name) => !isActiveUserCandidate(name))),
@@ -257,7 +255,6 @@ const buildTeamDraftFromPendingData = (
     const friendlyTeamName = normalizeShipTeamLabel(String(pendingMatchData?.ship || ''))
         || normalizeSubmittedName(String((pendingMatchData as { playerTeamName?: string } | null | undefined)?.playerTeamName || ''))
         || normalizeSubmittedName(parsedFriendlyLabel)
-        || friendlyCaptain
         || 'Friendly Team';
     const friendlyShipType = normalizeSubmittedName(
         String(pendingMatchData?.ship || '')
@@ -415,6 +412,8 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         setSelectedReachModifiers,
         setSessionTeams,
         setSessionShipTypes,
+        pendingReviews,
+        removePendingReviews,
     } = useGameData();
     const { activeUser, setToast } = useUIState();
     const {
@@ -454,8 +453,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         [seededTeamDraft]
     );
     const [teamDraft, setTeamDraft] = useState<TeamDraft[]>(() => seededTeamDraft);
-    const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
-    const [screenshotLoupe, setScreenshotLoupe] = useState<ScreenshotLoupeState | null>(null);
+    const [selectedScreenshotIdx, setSelectedScreenshotIdx] = useState(0);
     const [isHelpBannerDismissed, setIsHelpBannerDismissed] = useState<boolean>(() => (
         embedded || getStoredHelpBannerDismissed()
     ));
@@ -471,6 +469,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     const teamAssignmentRosterListId = useId();
     const dialogTitleId = useId();
     const dialogDescriptionId = useId();
+    const evidenceSectionRef = useRef<HTMLElement | null>(null);
     const focusTrapRef = useFocusTrap<HTMLDivElement>(isOpen && pendingBatchAction === null);
     const { announce } = useAriaLiveRegion(isOpen);
     const reviewScreenshots = useMemo(() => (
@@ -635,7 +634,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         initialPendingDraftRef.current = clonePendingMatchDraft(pendingMatchData);
         initialSessionShipTypesRef.current = { ...(sessionShipTypes || {}) };
         teamDraftSeedRef.current = seededTeamDraftSignature;
-        setLightboxIdx(null);
+        setSelectedScreenshotIdx(0);
     }, [isOpen, pendingMatchData, seededModifierDraft, seededTeamDraft, seededTeamDraftSignature, sessionShipTypes]);
 
     useEffect(() => {
@@ -675,9 +674,14 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     }, [activeInputPlayer, searchQuery, updateDropdownAnchor]);
 
     useEffect(() => {
-        if (lightboxIdx === null || reviewScreenshots.length === 0) return;
-        announce(`Opened screenshot ${lightboxIdx + 1} of ${reviewScreenshots.length}.`, 'polite');
-    }, [lightboxIdx, reviewScreenshots.length, announce]);
+        if (reviewScreenshots.length === 0) return;
+        setSelectedScreenshotIdx((current) => clampSelectedScreenshotIndex(current, reviewScreenshots.length));
+    }, [reviewScreenshots.length]);
+
+    useEffect(() => {
+        if (reviewScreenshots.length === 0) return;
+        announce(`Viewing screenshot ${selectedScreenshotIdx + 1} of ${reviewScreenshots.length}.`, 'polite');
+    }, [announce, reviewScreenshots.length, selectedScreenshotIdx]);
 
     // Collect all detected players from the editable team draft.
     const detectedPlayers = useMemo(() => {
@@ -903,7 +907,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     };
 
     const handleSubmitCorrections = (options?: SubmitCorrectionsOptions) => {
-        const closeAfterApply = options?.closeAfterApply ?? true;
+        const closeAfterApply = options?.closeAfterApply ?? false;
         const correctionOverrides = options?.correctionOverrides || {};
         let corrected = 0;
         let added = 0;
@@ -946,6 +950,21 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 added++;
             }
         });
+        const pendingPruneIds = new Set<string>();
+        Object.entries(effectiveCorrections).forEach(([ocrName, correctedName]) => {
+            if (ignored.has(ocrName)) return;
+            const rawName = normalizeSubmittedName(ocrName);
+            const canonicalTargetKey = normalizeNameKey(correctedName);
+            if (!rawName || !canonicalTargetKey) return;
+            getRosterCandidatePruneIds({
+                pendingReviews,
+                rawName,
+                canonicalTargetKey,
+            }).forEach((reviewId) => pendingPruneIds.add(reviewId));
+        });
+        if (pendingPruneIds.size > 0) {
+            removePendingReviews(Array.from(pendingPruneIds));
+        }
 
         Logger.info('OcrCorrection', `Corrections applied: ${corrected} linked, ${added} accepted as-is, ${ignored.size} ignored`);
 
@@ -1093,6 +1112,8 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             })),
             reachModifiers: nextReachModifiers,
             artifactSource: nextArtifactSource || '',
+            ocrState: closeAfterApply ? 'saved' : 'reviewing',
+            ocrReviewedAt: closeAfterApply ? Date.now() : pendingMatchData?.ocrReviewedAt,
             ocrDebug: {
                 ...((pendingMatchData && pendingMatchData.ocrDebug) || {}),
                 hazards: nextHazardDebug,
@@ -1206,30 +1227,6 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         setPendingBatchAction(null);
     };
 
-    const closeLightbox = () => {
-        setLightboxIdx(null);
-        setScreenshotLoupe(null);
-        announce('Closed screenshot preview.', 'polite');
-    };
-
-    const clearScreenshotLoupe = useCallback(() => {
-        setScreenshotLoupe(null);
-    }, []);
-
-    const handleScreenshotLoupeMove = useCallback((event: React.MouseEvent<HTMLDivElement>, imagePath: string) => {
-        const rect = event.currentTarget.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0) return;
-        const relX = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-        const relY = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
-        setScreenshotLoupe({
-            imagePath,
-            clientX: event.clientX,
-            clientY: event.clientY,
-            relX,
-            relY,
-        });
-    }, []);
-
     const dismissHelpBanner = () => {
         setIsHelpBannerDismissed(true);
         try {
@@ -1338,13 +1335,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         { key: 'Enter', ctrl: true, handler: () => handleSubmitCorrections() },
         {
             key: 'Escape',
-            handler: () => {
-                if (lightboxIdx !== null) {
-                    closeLightbox();
-                    return;
-                }
-                onClose();
-            }
+            handler: () => onClose()
         },
         { key: 'a', ctrl: true, handler: () => handleAcceptAllHigh() },
         { key: 'i', ctrl: true, handler: () => handleIgnoreNext() },
@@ -1421,7 +1412,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                 <div className="flex-1 min-w-0">
                                     <p className="text-body font-medium">How this helps</p>
                                     <p id={dialogDescriptionId} className="text-label-sm opacity-60 mt-0.5">
-                                        Pick the real player name for each OCR guess, then press <span className="font-semibold">Apply and Learn</span>.
+                                        Pick the real player name for each OCR guess, then use <span className="font-semibold">Apply and Stay</span> or <span className="font-semibold">Apply and Close</span>.
                                     </p>
                                     <p className="text-label-sm opacity-60 mt-0.5">
                                         These links are remembered, so OCR gets better in future matches.
@@ -1531,6 +1522,10 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                     pilotRegistry={pilotRegistry}
                                     rosterSuggestionsId={pilotRegistry.length > 0 ? teamAssignmentRosterListId : undefined}
                                     friendlyTeamIndex={displayFriendlyTeamIndex}
+                                    friendlyFixedPlayer={activeUserDisplayKey ? {
+                                        canonicalName: activeUser || String(pendingMatchData?.player || '').trim() || 'You',
+                                        displayLabel: '(you)',
+                                    } : null}
                                     compact={embedded}
                                     allowColorEdit={true}
                                     fuzzyMatches={fuzzyMatchByPlayer}
@@ -1616,45 +1611,29 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                         {/* Player List */}
                         <div className="space-y-5">
                             {reviewScreenshots.length > 0 && (
-                                <div className="sticky top-0 z-20 md3-card p-3 border border-md-sys-outline/15 bg-md-sys-surface/95 backdrop-blur-sm">
-                                    <div className="flex items-center justify-between gap-2 mb-1">
-                                        <span className="text-label-sm font-bold uppercase opacity-60 flex items-center gap-1">
+                                <section
+                                    ref={evidenceSectionRef}
+                                    className="md3-card border border-md-sys-outline/15 bg-md-sys-surface/98 p-3 md:p-4"
+                                >
+                                    <div className="mb-3 flex items-center justify-between gap-2">
+                                        <span className="flex items-center gap-1 text-label-sm font-bold uppercase opacity-60">
                                             <ImageIcon size={14} />
-                                            Screenshot References
+                                            Evidence
                                         </span>
                                         <span className="text-label-sm opacity-60">{reviewScreenshots.length} image(s)</span>
                                     </div>
-                                    <div className="overflow-x-auto pb-1">
-                                        <div className="flex flex-col gap-3 min-w-[800px]">
-                                            {reviewScreenshots.map((imagePath, index) => (
-                                                <button
-                                                    key={`${imagePath}-${index}`}
-                                                    type="button"
-                                                    onClick={() => setLightboxIdx(index)}
-                                                    onMouseLeave={clearScreenshotLoupe}
-                                                    className="rounded-control border border-md-sys-outline/20 p-2 bg-md-sys-surface w-full hover:border-md-sys-primary/40 transition-all"
-                                                    aria-label={`Open screenshot ${index + 1}`}
-                                                >
-                                                    <div
-                                                        className="w-full min-h-[220px] md:min-h-[300px] lg:min-h-[380px] rounded overflow-hidden bg-md-sys-on-surface/5"
-                                                        onMouseMove={(event) => handleScreenshotLoupeMove(event, imagePath)}
-                                                        onMouseLeave={clearScreenshotLoupe}
-                                                    >
-                                                        <LocalImage
-                                                            src={imagePath}
-                                                            alt={`Reference screenshot ${index + 1}`}
-                                                            className="w-full h-full object-contain"
-                                                        />
-                                                    </div>
-                                                    <div className="mt-1 flex items-center justify-center gap-1 text-label-xs opacity-70">
-                                                        <Eye size={11} />
-                                                        Screenshot #{index + 1}
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
+                                    <WorkspaceImageViewer
+                                        images={reviewScreenshots}
+                                        activeIndex={selectedScreenshotIdx}
+                                        onActiveIndexChange={setSelectedScreenshotIdx}
+                                        title="Screenshot Evidence"
+                                        subtitle="Hover for loupe, click thumbnails to switch, drag to pan when zoomed."
+                                        stageClassName="min-h-[340px] md:min-h-[460px]"
+                                        imageAltPrefix="Reference screenshot"
+                                        enableLoupe={true}
+                                        autoFocus={false}
+                                    />
+                                </section>
                             )}
 
                             {detectedPlayers.length === 0 ? (
@@ -1766,7 +1745,8 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                                                 type="button"
                                                                 onClick={() => {
                                                                     if (sourceScreenshotIndex >= 0) {
-                                                                        setLightboxIdx(sourceScreenshotIndex);
+                                                                        setSelectedScreenshotIdx(sourceScreenshotIndex);
+                                                                        evidenceSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                                                                     }
                                                                 }}
                                                                 disabled={sourceScreenshotIndex < 0}
@@ -1889,14 +1869,14 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                         {detectedPlayers.length > 0 &&
                             detectedPlayers.every(p => corrections[p.name] || ignored.has(p.name)) && (
                                 <div className="px-3 py-2 text-center text-label-sm text-success font-medium">
-                                    All players reviewed. Press "Apply Corrections" to save.
+                                    All players reviewed. Apply changes when ready.
                                 </div>
                             )}
 
                         <div className="px-3 py-2 text-label-sm border-t border-md-sys-outline/15 bg-md-sys-surface-container-low text-md-sys-on-surface/80 flex items-center flex-wrap gap-2">
                             <span className="inline-flex items-center gap-1">
                                 <kbd className="px-1.5 py-0.5 rounded bg-md-sys-surface3 border border-md-sys-outline/20 font-mono text-label-xs">Ctrl+Enter</kbd>
-                                Apply
+                                Apply and Stay
                             </span>
                             <span className="inline-flex items-center gap-1">
                                 <kbd className="px-1.5 py-0.5 rounded bg-md-sys-surface3 border border-md-sys-outline/20 font-mono text-label-xs">Esc</kbd>
@@ -1936,12 +1916,20 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                 Apply Best Results
                             </button>
                             <button
-                                onClick={() => handleSubmitCorrections()}
-                                className="md3-btn-filled flex items-center gap-2"
-                                title="Save all reviewed links so future OCR can reuse them"
+                                onClick={() => handleSubmitCorrections({ closeAfterApply: false })}
+                                className="md3-btn-tonal flex items-center gap-2"
+                                title="Save reviewed OCR corrections and keep this review open"
                             >
                                 <Check size={16} />
-                                Apply and Learn
+                                Apply and Stay
+                            </button>
+                            <button
+                                onClick={() => handleSubmitCorrections({ closeAfterApply: true })}
+                                className="md3-btn-filled flex items-center gap-2"
+                                title="Save reviewed OCR corrections and close this review"
+                            >
+                                <Check size={16} />
+                                Apply and Close
                             </button>
                         </div>
                     </div>
@@ -1956,62 +1944,6 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 onCancel={() => setPendingBatchAction(null)}
                 confirmLabel={pendingBatchAction === 'accept' ? 'Accept Players' : 'Ignore Players'}
             />
-            {screenshotLoupe && lightboxIdx === null && (() => {
-                const loupeSize = 220;
-                const margin = 16;
-                const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1920;
-                const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 1080;
-                const left = Math.max(8, Math.min(viewportWidth - loupeSize - 8, screenshotLoupe.clientX + margin));
-                const top = Math.max(8, Math.min(viewportHeight - loupeSize - 8, screenshotLoupe.clientY + margin));
-                return (
-                    <div
-                        className="fixed z-top pointer-events-none rounded-card overflow-hidden border border-md-sys-primary/35 bg-md-sys-surface shadow-2xl"
-                        style={{ width: loupeSize, height: loupeSize, left, top }}
-                    >
-                        <LocalImage
-                            src={screenshotLoupe.imagePath}
-                            alt="Screenshot loupe preview"
-                            className="w-full h-full object-cover select-none"
-                            style={{
-                                transform: 'scale(2.8)',
-                                transformOrigin: `${Math.round(screenshotLoupe.relX * 100)}% ${Math.round(screenshotLoupe.relY * 100)}%`,
-                            }}
-                        />
-                        <div className="absolute inset-0 border border-white/20" />
-                    </div>
-                );
-            })()}
-            {lightboxIdx !== null && reviewScreenshots[lightboxIdx] && (
-                <div
-                    className="fixed inset-0 z-top bg-scrim-90 flex items-center justify-center p-8"
-                    onClick={closeLightbox}
-                >
-                    <button
-                        type="button"
-                        onClick={closeLightbox}
-                        className="absolute top-4 right-4 text-on-scrim-muted hover:text-on-scrim z-10"
-                        aria-label="Close screenshot preview"
-                    >
-                        <X size={24} />
-                    </button>
-                    <div
-                        role="dialog"
-                        aria-modal="true"
-                        aria-label={`Screenshot ${lightboxIdx + 1} of ${reviewScreenshots.length}`}
-                        onClick={(event) => event.stopPropagation()}
-                        className="max-w-full max-h-full"
-                    >
-                        <LocalImage
-                            src={reviewScreenshots[lightboxIdx]}
-                            alt={`Screenshot ${lightboxIdx + 1}`}
-                            className="max-w-full max-h-[90vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
-                        />
-                        <div className="text-center mt-2 text-label-sm text-on-scrim-muted font-bold">
-                            Screenshot {lightboxIdx + 1} of {reviewScreenshots.length}
-                        </div>
-                    </div>
-                </div>
-            )}
         </>
     );
 };

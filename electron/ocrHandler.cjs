@@ -157,7 +157,7 @@ function createDefaultOcrRegions() {
       enemyShips2: { xMin: 0.79, xMax: 0.98, yMin: 0.22, yMax: 0.37 },
       enemyShips3: { xMin: 0.79, xMax: 0.98, yMin: 0.37, yMax: 0.52 },
       enemyShips4: { xMin: 0.79, xMax: 0.98, yMin: 0.52, yMax: 0.67 },
-      hazards: { xMin: 0.79, xMax: 0.98, yMin: 0.07, yMax: 0.76 },
+      hazards: { xMin: 0.60, xMax: 1.0, yMin: 0.28, yMax: 0.63 },
       players: { xMin: 0.0, xMax: 0.40, yMin: 0.70, yMax: 1.0 },
     },
   };
@@ -329,7 +329,7 @@ function applyRuntimeAnchors(ocrRegions, anchors) {
   if (anchors.mapScreen?.hazardsHeaderY != null) {
     const headerY = anchors.mapScreen.hazardsHeaderY;
     next.mapScreen.hazards.yMin = Math.max(0, headerY - 0.01);
-    next.mapScreen.hazards.yMax = Math.min(1, headerY + 0.42);
+    next.mapScreen.hazards.yMax = Math.min(1, headerY + 0.55);
   }
 
   if (anchors.crewHub?.enemyPanelTopY != null) {
@@ -1167,9 +1167,20 @@ function extractModifiers(text) {
   const modifiersByName = new Map();
   const exactMatchedPatterns = new Set();
   const upperText = (text || '').toUpperCase();
+  const compactText = upperText.replace(/[^A-Z0-9]/g, '');
 
   for (const [pattern, displayName] of Object.entries(KNOWN_HAZARDS)) {
     if (upperText.includes(pattern)) {
+      exactMatchedPatterns.add(pattern);
+      modifiersByName.set(displayName.toLowerCase(), {
+        name: displayName,
+        confidence: 95,
+        rawText: pattern,
+      });
+      continue;
+    }
+    const compactPattern = pattern.replace(/[^A-Z0-9]/g, '');
+    if (compactPattern && compactText.includes(compactPattern)) {
       exactMatchedPatterns.add(pattern);
       modifiersByName.set(displayName.toLowerCase(), {
         name: displayName,
@@ -1404,6 +1415,9 @@ function isPrefixVariantName(leftName, rightName) {
   const leftKey = normalizeNameKey(leftName);
   const rightKey = normalizeNameKey(rightName);
   if (!leftKey || !rightKey || leftKey === rightKey) return false;
+  if (Math.min(leftKey.length, rightKey.length) >= 5 && levenshtein(leftKey, rightKey) <= 1) {
+    return true;
+  }
   const shorter = leftKey.length <= rightKey.length ? leftKey : rightKey;
   const longer = leftKey.length <= rightKey.length ? rightKey : leftKey;
   if (shorter.length < 4) return false;
@@ -1597,8 +1611,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
     const maxReroutePasses = Math.max(0, Math.min(2, Math.round(Number(rawMaxReroutePasses) || 1)));
     const ocrRegions = sanitizeOcrRegions(rawOcrRegions);
     const inferredScreenType =
-      (typeof rawScreenTypeHint === 'string' ? rawScreenTypeHint : '')
-      || (typeof existingData?.screenshotType === 'string' ? existingData.screenshotType : '');
+      (typeof rawScreenTypeHint === 'string' ? rawScreenTypeHint : '');
     const normalizedScreenTypeHint = String(inferredScreenType || '').trim().toLowerCase();
     const hintedScreenType = (
       normalizedScreenTypeHint === 'crewhub' ||
@@ -1694,8 +1707,11 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       processed.height
     );
     console.log('[OCR] Screen detection:', screenDetection);
-    const resolvedScreenType = hintedScreenType || screenDetection.type;
-    if (resolvedScreenType !== screenDetection.type) {
+    const resolvedScreenType = hintedScreenType
+      && (screenDetection.type === SCREEN_TYPES.UNKNOWN || Number(screenDetection.confidence || 0) < 70)
+      ? hintedScreenType
+      : screenDetection.type;
+    if (hintedScreenType && resolvedScreenType !== screenDetection.type) {
       console.log(`[OCR] Screen type override from hint: ${screenDetection.type} -> ${resolvedScreenType}`);
     }
 
@@ -1796,7 +1812,7 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       );
 
       if (imageBuffer && (Array.isArray(mapScreenData?.hazards) ? mapScreenData.hazards.length : 0) < 2) {
-        const fallbackHazardRegion = { xMin: 0.65, xMax: 1.0, yMin: 0.40, yMax: 1.0 };
+        const fallbackHazardRegion = { xMin: 0.60, xMax: 1.0, yMin: 0.28, yMax: 0.90 };
         const hazardRegion = activeRegions?.mapScreen?.hazards || fallbackHazardRegion;
         const hazardRetry = await cropRegionAndOCR(
           imageBuffer,
@@ -1830,6 +1846,41 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
             mergedHazards.set(key, name);
           });
           mapScreenData.hazards = Array.from(mergedHazards.values());
+        }
+      }
+
+      if (imageBuffer && Array.isArray(mapScreenData?.enemyShips) && mapScreenData.enemyShips.length > 0) {
+        const enemyRegionKeys = ['enemyShips', 'enemyShips2', 'enemyShips3', 'enemyShips4'];
+        for (const ship of mapScreenData.enemyShips) {
+          const currentShipType = String(ship?.shipType || '').trim();
+          const slotIndex = Number(ship?._slotIndex);
+          if (currentShipType && currentShipType.toLowerCase() !== 'unknown') continue;
+          if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= enemyRegionKeys.length) continue;
+          const regionKey = enemyRegionKeys[slotIndex];
+          const region = activeRegions?.mapScreen?.[regionKey];
+          if (!region) continue;
+          const retryResult = await cropRegionAndOCR(
+            imageBuffer,
+            region,
+            processed.originalWidth,
+            processed.originalHeight,
+            6,
+            fontProfile
+          );
+          const retryWords = retryResult?.words || [];
+          const retryText = groupCrewHubWordsIntoLines(retryWords, processed.originalHeight)
+            .map(line => line.words.map(w => String(w.text || '').trim()).join(' ').trim())
+            .filter(Boolean)
+            .join(' ')
+            .toUpperCase();
+          const shipTypeRaw = MAP_SHIP_TYPES.find(type => retryText.includes(type))
+            || MAP_SHIP_TYPES.find(type => retryText.split(/\s+/).some(tok => {
+              const stripped = tok.replace(/^[^A-Z]/, '');
+              return stripped.length >= 4 && type.endsWith(stripped) && stripped.length >= type.length - 1;
+            }));
+          if (!shipTypeRaw) continue;
+          ship.shipType = shipTypeRaw.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ');
+          ship.confidence = Math.max(72, Number(ship?.confidence || 0));
         }
       }
 

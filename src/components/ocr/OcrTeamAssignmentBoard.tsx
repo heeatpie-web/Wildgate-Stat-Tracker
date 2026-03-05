@@ -9,6 +9,11 @@ export interface OcrTeamAssignmentTeam {
     players: string[];
 }
 
+interface FriendlyFixedPlayer {
+    canonicalName: string;
+    displayLabel: '(you)';
+}
+
 interface DraggedPlayerPayload {
     teamIndex: number;
     playerIndex: number;
@@ -27,6 +32,7 @@ interface OcrTeamAssignmentBoardProps {
     fuzzyMatches?: Record<string, string>;
     pilotRegistry?: string[];
     ocrDetectedTeamIndices?: Set<number>;
+    friendlyFixedPlayer?: FriendlyFixedPlayer | null;
     onTeamNameChange?: (teamIndex: number, value: string) => void;
     onTeamColorChange?: (teamIndex: number, value: string) => void;
     onTeamShipChange: (teamIndex: number, value: string) => void;
@@ -92,6 +98,7 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
     fuzzyMatches = {},
     pilotRegistry = [],
     ocrDetectedTeamIndices,
+    friendlyFixedPlayer = null,
     onTeamNameChange,
     onTeamColorChange,
     onTeamShipChange,
@@ -205,6 +212,7 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                     const displayColor = friendlyTeam ? 'friendly' : normalizedColor;
                     const isYellowGreenTeam = !friendlyTeam && displayColor === 'yellowgreen';
                     const isOcrDetected = !friendlyTeam && ocrDetectedTeamIndices?.has(teamIndex);
+                    const visiblePlayerCount = team.players.length + (friendlyTeam && friendlyFixedPlayer ? 1 : 0);
                     return (
                         <div
                             key={`${team.key}-${teamIndex}`}
@@ -237,7 +245,7 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                             value={team.teamName}
                                             onChange={(event) => onTeamNameChange(teamIndex, event.target.value)}
                                             className="md3-textfield ocr-assignment-team-name"
-                                            placeholder={`Team ${teamIndex + 1}`}
+                                            placeholder={friendlyTeam ? 'Friendly Team' : `Team ${teamIndex + 1}`}
                                             aria-label={`Team ${teamIndex + 1} name`}
                                         />
                                     ) : (
@@ -270,7 +278,7 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                         ))}
                                     </select>
                                     <span className="ocr-assignment-team-meta">
-                                        {team.players.length} players
+                                        {visiblePlayerCount} player{visiblePlayerCount === 1 ? '' : 's'}
                                     </span>
                                 </div>
                                 {allowTeamAddRemove && onTeamRemove && !friendlyTeam && (
@@ -287,6 +295,25 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                             </div>
 
                             <div className="ocr-assignment-players">
+                                {friendlyTeam && friendlyFixedPlayer && (
+                                    <div
+                                        data-testid={`ocr-board-fixed-player-row-${teamIndex}`}
+                                        className="ocr-team-player-row ocr-team-player-row--quick bg-md-sys-primary/6 border border-md-sys-primary/15"
+                                    >
+                                        <div className="md3-icon-btn h-6 w-6 text-md-sys-primary/60 shrink-0">
+                                            <Shield size={12} />
+                                        </div>
+                                        <div className="md3-textfield ocr-assignment-player-input flex items-center font-semibold text-md-sys-primary/92">
+                                            {friendlyFixedPlayer.displayLabel}
+                                        </div>
+                                        <span
+                                            className="ocr-assignment-fuzzy-badge !border-info !text-info !bg-info-soft"
+                                            title={friendlyFixedPlayer.canonicalName}
+                                        >
+                                            Active User
+                                        </span>
+                                    </div>
+                                )}
                                 {team.players.length === 0 ? (
                                     <div className="ocr-assignment-empty">
                                         Drop players here

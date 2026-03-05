@@ -112,7 +112,7 @@ export const createDefaultOcrRegions = (): OcrRegionSettings => ({
     enemyShips2: { xMin: 0.79, xMax: 0.98, yMin: 0.22, yMax: 0.37 },
     enemyShips3: { xMin: 0.79, xMax: 0.98, yMin: 0.37, yMax: 0.52 },
     enemyShips4: { xMin: 0.79, xMax: 0.98, yMin: 0.52, yMax: 0.67 },
-    hazards: { xMin: 0.79, xMax: 0.98, yMin: 0.07, yMax: 0.76 },
+    hazards: { xMin: 0.60, xMax: 1.0, yMin: 0.28, yMax: 0.63 },
     players: { xMin: 0.0, xMax: 0.40, yMin: 0.70, yMax: 1.0 },
   },
 });

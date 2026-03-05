@@ -8,6 +8,7 @@ import { LocalImage } from './LocalImage';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useAriaLiveRegion } from '../hooks/useAriaLiveRegion';
+import { getRosterCandidatePruneIds } from '../utils/pendingReviewUtils';
 
 interface ReviewQueueModalProps {
     onClose: () => void;
@@ -54,6 +55,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
     const {
         pendingReviews,
         removePendingReview,
+        removePendingReviews,
         sessionTeams,
         setSessionTeams,
         detectedUnknowns,
@@ -95,6 +97,17 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         });
         return out;
     };
+    const pruneRelatedRosterReviews = useCallback((rawValue: string, target: string, excludeId?: string) => {
+        const ids = getRosterCandidatePruneIds({
+            pendingReviews,
+            rawName: rawValue,
+            canonicalTargetKey: target,
+            excludeIds: excludeId ? [excludeId] : [],
+        });
+        if (ids.length > 0) {
+            removePendingReviews(ids);
+        }
+    }, [pendingReviews, removePendingReviews]);
     const sessionTeamKeys = useMemo(
         () => Object.keys(sessionTeams || {}).filter((key) => key.trim().length > 0),
         [sessionTeams]
@@ -280,6 +293,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
                 replaceNameInSession(review.value, autoMergeTarget);
                 addToRegistry(autoMergeTarget);
                 removePendingReview(review.id);
+                pruneRelatedRosterReviews(review.value, autoMergeTarget, review.id);
                 notifyReviewQueue(`Auto-merged "${review.value}" into "${autoMergeTarget}" (${Math.round(autoMergeScore)}%)`, 'success');
                 announce(`Auto-merged ${review.value} into ${autoMergeTarget}.`, 'polite');
                 return;
@@ -287,6 +301,9 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             const normalized = normalizeName(review.value);
             if (normalized) addToRegistry(normalized);
             removePendingReview(review.id);
+            if (normalized) {
+                pruneRelatedRosterReviews(review.value, normalized, review.id);
+            }
             notifyReviewQueue(`Added "${normalized || review.value}" to roster`, 'success');
             announce(`Added ${normalized || review.value} to roster.`, 'polite');
             return;
@@ -355,6 +372,9 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         }
 
         removePendingReview(review.id);
+        if (review.type === 'roster_candidate') {
+            pruneRelatedRosterReviews(review.value, normalizedEditValue, review.id);
+        }
         notifyReviewQueue('Item updated', 'success');
         setEditingId(null);
         announce(`Updated item to ${normalizedEditValue}.`, 'polite');
@@ -372,6 +392,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         replaceNameInSession(review.value, target);
         addToRegistry(target);
         removePendingReview(review.id);
+        pruneRelatedRosterReviews(review.value, target, review.id);
         notifyReviewQueue(`Approved merge "${review.value}" -> "${target}"${score > 0 ? ` (${Math.round(score)}%)` : ''}`, 'success');
         announce(`Approved merge from ${review.value} to ${target}.`, 'polite');
     };
@@ -402,6 +423,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             replaceNameInSession(review.value, target);
             addToRegistry(target);
             removePendingReview(review.id);
+            pruneRelatedRosterReviews(review.value, target, review.id);
             notifyReviewQueue(`Auto-approved merge "${review.value}" -> "${target}" (${Math.round(score)}%)`, 'success');
             announce(`Auto-approved merge from ${review.value} to ${target}.`, 'polite');
         });
