@@ -254,7 +254,7 @@ const App: React.FC = () => {
     const setupWizardShownThisLaunchRef = React.useRef(false);
     const fuzzyPromptCountRef = React.useRef(0);
     const idPromptCountRef = React.useRef(0);
-    const matchNormalizationSignatureRef = React.useRef('');
+    const startupMatchNormalizationUserRef = React.useRef('');
     const setTutorialCompleted = useAppStore(s => s.setTutorialCompleted);
     const tutorialCompleted = useAppStore(s => s.tutorialCompleted);
     const tipsEnabled = useAppStore(s => s.tipsEnabled);
@@ -701,69 +701,83 @@ const App: React.FC = () => {
     useEffect(() => {
         if (isStoreLoading) return;
         if (!startupInteractionReady) return;
+        const activeUserKey = String(activeUser || '').trim().toLowerCase() || '__none__';
+        if (startupMatchNormalizationUserRef.current === activeUserKey) return;
+        startupMatchNormalizationUserRef.current = activeUserKey;
 
-        const normalizeName = (value: string) => String(value || '').trim().toLowerCase();
-        const isUnknownLabel = (value: string) => UNKNOWN_PLAYER_LABELS.has(normalizeName(value));
-        const isCanonicalOrNearActive = (candidate: string, canonical: string): boolean => {
-            const candidateClean = String(candidate || '').trim();
-            const canonicalClean = String(canonical || '').trim();
-            if (!candidateClean || !canonicalClean) return false;
-            if (normalizeName(candidateClean) === normalizeName(canonicalClean)) return true;
-            return combinedNameSimilarityScore(candidateClean, canonicalClean) >= 90;
+        let cancelled = false;
+        let timeoutId: number | null = null;
+        const idleWindow = window as WindowWithIdleCallbacks;
+        let idleId: number | null = null;
+
+        const runNormalization = () => {
+            if (cancelled) return;
+            const normalizeName = (value: string) => String(value || '').trim().toLowerCase();
+            const isUnknownLabel = (value: string) => UNKNOWN_PLAYER_LABELS.has(normalizeName(value));
+            const isCanonicalOrNearActive = (candidate: string, canonical: string): boolean => {
+                const candidateClean = String(candidate || '').trim();
+                const canonicalClean = String(canonical || '').trim();
+                if (!candidateClean || !canonicalClean) return false;
+                if (normalizeName(candidateClean) === normalizeName(canonicalClean)) return true;
+                return combinedNameSimilarityScore(candidateClean, canonicalClean) >= 90;
+            };
+
+            const normalizedMatches = matches.map((match) => {
+                const matchPlayer = String(match.player || '').trim();
+                const activePlayer = String(activeUser || '').trim();
+                const canonicalPlayer = !isUnknownLabel(matchPlayer)
+                    ? matchPlayer
+                    : (!isUnknownLabel(activePlayer) ? activePlayer : '');
+
+                const teammatesRaw = Array.isArray(match.teammates) ? [...match.teammates] : [];
+                const teammatesRawNormalized = teammatesRaw.map((name) => String(name || '').trim());
+                const teammates = teammatesRawNormalized
+                    .filter((name) => !!name && !(isUnknownLabel(matchPlayer) && isUnknownLabel(name)))
+                    .filter((name) => !isCanonicalOrNearActive(name, canonicalPlayer));
+
+                const teammatesChanged = (next: string[]) => {
+                    if (next.length !== teammatesRawNormalized.length) return true;
+                    return next.some((name, idx) => name !== teammatesRawNormalized[idx]);
+                };
+
+                const needsPlayerRepair = !matchPlayer || isUnknownLabel(matchPlayer);
+                const nextPlayer = canonicalPlayer && needsPlayerRepair ? canonicalPlayer : match.player;
+                const playerChanged = nextPlayer !== match.player;
+
+                if (!teammatesChanged(teammates) && !playerChanged) return match;
+                return {
+                    ...match,
+                    player: nextPlayer,
+                    teammates,
+                };
+            });
+
+            if (cancelled) return;
+            const changed = normalizedMatches.some((match, idx) => match !== matches[idx]);
+            if (changed) {
+                setMatches(normalizedMatches);
+            }
         };
-        const toNormalizationSignature = (inputMatches: Match[]) => (
-            inputMatches.map((match) => {
-                const teammateSignature = (Array.isArray(match.teammates) ? match.teammates : [])
-                    .map((name) => String(name || '').trim().toLowerCase())
-                    .join(',');
-                return [
-                    Number(match.id || 0),
-                    String(match.player || '').trim().toLowerCase(),
-                    teammateSignature,
-                ].join('|');
-            }).join('~')
-        );
 
-        const normalizedMatches = matches.map((match) => {
-            const matchPlayer = String(match.player || '').trim();
-            const activePlayer = String(activeUser || '').trim();
-            const canonicalPlayer = !isUnknownLabel(matchPlayer)
-                ? matchPlayer
-                : (!isUnknownLabel(activePlayer) ? activePlayer : '');
-
-            const teammatesRaw = Array.isArray(match.teammates) ? [...match.teammates] : [];
-            const teammatesRawNormalized = teammatesRaw.map((name) => String(name || '').trim());
-            const teammates = teammatesRawNormalized
-                .filter((name) => !!name && !(isUnknownLabel(matchPlayer) && isUnknownLabel(name)))
-                .filter((name) => !isCanonicalOrNearActive(name, canonicalPlayer));
-
-            const teammatesChanged = (next: string[]) => {
-                if (next.length !== teammatesRawNormalized.length) return true;
-                return next.some((name, idx) => name !== teammatesRawNormalized[idx]);
-            };
-
-            const needsPlayerRepair = !matchPlayer || isUnknownLabel(matchPlayer);
-            const nextPlayer = canonicalPlayer && needsPlayerRepair ? canonicalPlayer : match.player;
-            const playerChanged = nextPlayer !== match.player;
-
-            if (!teammatesChanged(teammates) && !playerChanged) return match;
-            return {
-                ...match,
-                player: nextPlayer,
-                teammates,
-            };
-        });
-
-        const changed = normalizedMatches.some((match, idx) => match !== matches[idx]);
-        if (changed) {
-            const nextSignature = toNormalizationSignature(normalizedMatches);
-            if (nextSignature === matchNormalizationSignatureRef.current) return;
-            matchNormalizationSignatureRef.current = nextSignature;
-            setMatches(normalizedMatches);
-            return;
+        if (typeof idleWindow.requestIdleCallback === 'function') {
+            idleId = idleWindow.requestIdleCallback(
+                () => runNormalization(),
+                { timeout: Math.max(1200, Math.floor(runtimeConfig.app.preloadIdleTimeoutMinMs || 1200)) }
+            );
+        } else {
+            timeoutId = window.setTimeout(runNormalization, 800);
         }
-        matchNormalizationSignatureRef.current = toNormalizationSignature(matches);
-    }, [activeUser, isStoreLoading, matches, setMatches, startupInteractionReady]);
+
+        return () => {
+            cancelled = true;
+            if (timeoutId !== null) {
+                window.clearTimeout(timeoutId);
+            }
+            if (idleId !== null && typeof idleWindow.cancelIdleCallback === 'function') {
+                idleWindow.cancelIdleCallback(idleId);
+            }
+        };
+    }, [activeUser, isStoreLoading, setMatches, startupInteractionReady]);
 
     const clearRestoreSessionSnapshot = useCallback(() => {
         try {
