@@ -762,6 +762,43 @@ function fuzzyTeamNameMatch(name1, name2) {
   return false;
 }
 
+function normalizeColorToken(color) {
+  return String(color || '').trim().toLowerCase();
+}
+
+function shouldMergeEnemyShipEntry(existingShip, incomingShip) {
+  const existingNameRaw = String(existingShip?.teamName || '').trim();
+  const incomingNameRaw = String(incomingShip?.teamName || '').trim();
+  const existingNameKey = normalizeTeamName(existingNameRaw);
+  const incomingNameKey = normalizeTeamName(incomingNameRaw);
+
+  if (existingNameKey && incomingNameKey && existingNameKey === incomingNameKey) {
+    return true;
+  }
+
+  const existingColor = normalizeColorToken(existingShip?.color || existingShip?.teamColor || '');
+  const incomingColor = normalizeColorToken(incomingShip?.color || incomingShip?.teamColor || '');
+  if (!existingColor || !incomingColor || existingColor === 'unknown' || incomingColor === 'unknown') {
+    return false;
+  }
+  if (existingColor !== incomingColor) return false;
+
+  const existingPlaceholder = isPlaceholderTeamName(existingNameRaw, existingColor);
+  const incomingPlaceholder = isPlaceholderTeamName(incomingNameRaw, incomingColor);
+  if (!existingPlaceholder && !incomingPlaceholder) {
+    // Two named teams sharing a color should stay separate.
+    return false;
+  }
+
+  const existingShipTypeKey = normalizeShipTypeKey(existingShip?.shipType || '');
+  const incomingShipTypeKey = normalizeShipTypeKey(incomingShip?.shipType || '');
+  if (existingShipTypeKey && incomingShipTypeKey && existingShipTypeKey !== incomingShipTypeKey) {
+    // Same color placeholder rows can still represent distinct ships.
+    return false;
+  }
+  return true;
+}
+
 /**
  * Merge enemy ships arrays
  */
@@ -772,17 +809,18 @@ function mergeEnemyShips(existing = [], newShips = []) {
   const merged = [...existing];
 
   for (const newShip of newShips) {
-    const matchIdx = merged.findIndex(s =>
-      normalizeTeamName(s.teamName) === normalizeTeamName(newShip.teamName) ||
-      (s.color !== 'unknown' && s.color === newShip.color)
-    );
+    const matchIdx = merged.findIndex((ship) => shouldMergeEnemyShipEntry(ship, newShip));
 
     if (matchIdx >= 0) {
       // Update existing ship info
       const ship = merged[matchIdx];
       if (!ship.shipType && newShip.shipType) ship.shipType = newShip.shipType;
-      if (!ship.teamName && newShip.teamName) ship.teamName = newShip.teamName;
-      if (ship.color === 'unknown' && newShip.color !== 'unknown') ship.color = newShip.color;
+      ship.teamName = pickPreferredTeamName(ship.teamName, newShip.teamName, {
+        color: ship.color || newShip.color || '',
+      });
+      if (normalizeColorToken(ship.color) === 'unknown' && normalizeColorToken(newShip.color) !== 'unknown') {
+        ship.color = newShip.color;
+      }
       ship.confidence = Math.round(((ship.confidence || 0) + (newShip.confidence || 0)) / 2);
     } else {
       merged.push({ ...newShip });
