@@ -25,10 +25,6 @@ const INVOKE_CHANNELS = [
   'clear-ocr-preprocessed', 'get-ocr-debug-dir', 'list-ocr-debug-files', 'get-ocr-cache-stats', 'benchmark-ocr-preprocessing', 'regenerate-ocr-dictionary',
   'scan-epic-ids',
   'read-file-base64', 'open-path',
-  'ocr-corpus-load', 'ocr-corpus-save', 'ocr-corpus-eval', 'ocr-corpus-threshold-recommend', 'ocr-corpus-promote-baseline',
-  'ocr-corpus-import-images', 'ocr-corpus-run-pipeline', 'ocr-corpus-sync-to-repo',
-  'ocr-corpus-import-images-from-paths',
-  'ocr-corpus-list-images', 'ocr-corpus-read-image', 'ocr-corpus-add-corrected-sample',
 ];
 
 const SEND_CHANNELS = [

@@ -2198,6 +2198,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       }
     }
 
+    extractedData = cleanupLegacyExtraction(extractedData);
+
     console.log('[OCR] Extraction complete:', {
       type: extractedData.screenshotType,
       teammates: extractedData.teammates?.length || 0,
@@ -2312,6 +2314,7 @@ function normalizePlayerShipName(rawName, shipType = '') {
     .replace(/\s*['’]s\s+crew\s*$/i, '')
     .trim();
   if (!base) return '';
+  if (isUnderCrewShipBonusText(base)) return '';
   const lowered = base.toLowerCase();
   if (lowered === 'your team' || lowered === 'friendly team' || lowered === 'my crew') return '';
   const normalizedShipType = String(shipType || '')
@@ -2320,6 +2323,160 @@ function normalizePlayerShipName(rawName, shipType = '') {
     .toLowerCase();
   if (normalizedShipType && lowered === normalizedShipType) return '';
   return base;
+}
+
+const UNDERCREW_SHIP_BONUS_PHRASES = new Set([
+  'SMALL CREW BONUS',
+  'REDUCED FIRES',
+]);
+const SHIP_CAPACITY_BY_TYPE = {
+  hunter: 4,
+  bastion: 4,
+  privateer: 4,
+  scout: 3,
+  'battle scout': 3,
+  outlaw: 2,
+  'solo outlaw': 1,
+};
+
+function isUnderCrewShipBonusText(input) {
+  const normalized = String(input || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized) return false;
+  return UNDERCREW_SHIP_BONUS_PHRASES.has(normalized);
+}
+
+function normalizeShipCapacityKey(shipType) {
+  return String(shipType || '')
+    .replace(/\s*\(\s*\d+\s*player[s]?\s*\)\s*$/i, '')
+    .trim()
+    .toLowerCase();
+}
+
+function getMaxTeammatesForShipType(shipType) {
+  const capacity = SHIP_CAPACITY_BY_TYPE[normalizeShipCapacityKey(shipType)] || 4;
+  return Math.max(0, capacity - 1);
+}
+
+function cleanupLegacyTeammates(teammates, shipType) {
+  if (!Array.isArray(teammates)) return [];
+  const maxTeammates = getMaxTeammatesForShipType(shipType);
+  const unique = [];
+  const seen = new Set();
+  for (const teammate of teammates) {
+    const rawName = typeof teammate === 'string' ? teammate : teammate?.name;
+    const cleanedName = cleanupCrewHubPlayerName(String(rawName || ''));
+    if (!cleanedName || isUnderCrewShipBonusText(cleanedName)) continue;
+    const key = normalizeNameKey(cleanedName);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push({
+      ...(teammate && typeof teammate === 'object' ? teammate : {}),
+      name: cleanedName,
+      confidence: Number.isFinite(Number(teammate?.confidence)) ? Number(teammate.confidence) : 74,
+      isTeammate: true,
+    });
+    if (unique.length >= maxTeammates) break;
+  }
+  return unique;
+}
+
+function cleanupLegacyOpponentTeams(opponentTeams) {
+  if (!Array.isArray(opponentTeams)) return [];
+  return opponentTeams
+    .map((team, index) => {
+      const nextPlayers = [];
+      const seenPlayers = new Set();
+      for (const player of (team?.players || [])) {
+        const rawName = typeof player === 'string' ? player : player?.name;
+        const cleanedName = cleanupCrewHubPlayerName(String(rawName || ''));
+        if (!cleanedName || isUnderCrewShipBonusText(cleanedName)) continue;
+        const key = normalizeNameKey(cleanedName);
+        if (!key || seenPlayers.has(key)) continue;
+        seenPlayers.add(key);
+        nextPlayers.push({
+          ...(player && typeof player === 'object' ? player : {}),
+          name: cleanedName,
+          confidence: Number.isFinite(Number(player?.confidence)) ? Number(player.confidence) : 72,
+          isTeammate: false,
+        });
+        if (nextPlayers.length >= 4) break;
+      }
+      const teamName = String(team?.teamName || '').trim();
+      const sanitizedTeamName = isUnderCrewShipBonusText(teamName) ? '' : teamName;
+      return {
+        ...team,
+        teamName: sanitizedTeamName || `Enemy Team ${index + 1}`,
+        shipType: String(team?.shipType || '').trim(),
+        color: String(team?.color || team?.teamColor || 'unknown').trim() || 'unknown',
+        players: nextPlayers,
+        confidence: Number(team?.confidence || 0) || 0,
+      };
+    })
+    .filter((team) => team.players.length > 0 || (!!team.shipType && team.color !== 'unknown') || !/^enemy team \d+$/i.test(team.teamName))
+    .slice(0, 4);
+}
+
+function cleanupLegacyEnemyShips(enemyShips) {
+  if (!Array.isArray(enemyShips)) return [];
+  const deduped = [];
+  const seen = new Set();
+  for (const ship of enemyShips) {
+    const teamName = String(ship?.teamName || '').trim();
+    if (isUnderCrewShipBonusText(teamName)) continue;
+    const color = String(ship?.color || ship?.teamColor || 'unknown').trim() || 'unknown';
+    const shipType = String(ship?.shipType || '').trim();
+    const confidence = Number(ship?.confidence || 0) || 0;
+    const key = [
+      teamName ? normalizeNameKey(teamName) : '',
+      color.toLowerCase(),
+      normalizeShipCapacityKey(shipType),
+    ].join('|');
+    if (seen.has(key)) continue;
+    const hasNamedTeam = teamName && !/^enemy team \d+$/i.test(teamName);
+    const evidenceScore = Number(Boolean(shipType)) + Number(color !== 'unknown') + Number(Boolean(hasNamedTeam));
+    if (!hasNamedTeam && evidenceScore < 2 && confidence < 80) continue;
+    seen.add(key);
+    deduped.push({
+      ...ship,
+      teamName: teamName || `Enemy Team ${deduped.length + 1}`,
+      color,
+      teamColor: color,
+      shipType,
+      confidence,
+    });
+    if (deduped.length >= 4) break;
+  }
+  return deduped;
+}
+
+function cleanupLegacyExtraction(extractedData) {
+  if (!extractedData || typeof extractedData !== 'object') return extractedData;
+  const shipTypeHint = extractedData.playerShip?.shipType || '';
+  const playerTeamName = String(extractedData.playerTeamName || '').trim();
+  const cleanedPlayerTeamName = playerTeamName && !isUnderCrewShipBonusText(playerTeamName)
+    ? playerTeamName
+    : undefined;
+  const cleanedPlayerShipName = normalizePlayerShipName(extractedData.playerShipName || '', shipTypeHint) || undefined;
+  const cleanedPlayerShip = extractedData.playerShip
+    ? {
+      ...extractedData.playerShip,
+      teamName: cleanedPlayerTeamName || undefined,
+    }
+    : extractedData.playerShip;
+
+  return {
+    ...extractedData,
+    playerTeamName: cleanedPlayerTeamName,
+    playerShipName: cleanedPlayerShipName,
+    playerShip: cleanedPlayerShip,
+    teammates: cleanupLegacyTeammates(extractedData.teammates, shipTypeHint),
+    opponentTeams: cleanupLegacyOpponentTeams(extractedData.opponentTeams),
+    enemyShips: cleanupLegacyEnemyShips(extractedData.enemyShips),
+  };
 }
 
 function convertCrewHubToLegacy(crewHubData, rawText) {
@@ -2332,11 +2489,12 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
     ? Array.from(new Set(crewHubData.hazards.map((hazard) => String(hazard || '').trim()).filter(Boolean)))
     : [];
 
+  const maxTeammates = getMaxTeammatesForShipType(crewHubData.yourTeam?.shipType || '');
   const teammates = capPlayers((crewHubData.yourTeam?.players || []).map(name => ({
     name: typeof name === 'string' ? name : name.name,
     confidence: typeof name === 'string' ? 80 : (name.confidence || 80),
     isTeammate: true,
-  })), 4);
+  })), maxTeammates);
 
   const opponentTeams = (crewHubData.enemyTeams || []).slice(0, 4).map(team => ({
     teamName: team.name || 'Unknown Team',
@@ -2372,7 +2530,7 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
     rawText: name,
   }));
 
-  return {
+  return cleanupLegacyExtraction({
     screenshotType: 'crew_hub',
     playerTeamName,
     playerShipName,
@@ -2384,7 +2542,7 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
     isPartialCapture: crewHubData.isPartialCapture || false,
     captureTimestamp: Date.now(),
     rawText: rawText || '',
-  };
+  });
 }
 
 /**
@@ -2403,7 +2561,7 @@ function convertMapScreenToLegacy(mapScreenData, rawText) {
   } : undefined;
   const mapPlayerTeamName = String(mapScreenData.yourShip?.teamName || '').trim() || undefined;
   const mapPlayerShipName = normalizePlayerShipName(
-    mapScreenData.yourShip?.shipName || mapScreenData.yourShip?.teamName || '',
+    mapScreenData.yourShip?.shipName || '',
     mapScreenData.yourShip?.shipType || ''
   ) || undefined;
 
@@ -2416,11 +2574,12 @@ function convertMapScreenToLegacy(mapScreenData, rawText) {
   }));
 
   // Convert players to teammates format
+  const maxTeammates = getMaxTeammatesForShipType(mapScreenData.yourShip?.shipType || '');
   const teammates = (mapScreenData.players || []).map(name => ({
     name: typeof name === 'string' ? name : name.name,
     confidence: 70,
     isTeammate: true,
-  }));
+  })).slice(0, maxTeammates);
 
   // Create opponent teams from enemy ships (without player info)
   const opponentTeams = enemyShips.map(ship => ({
@@ -2441,7 +2600,7 @@ function convertMapScreenToLegacy(mapScreenData, rawText) {
     ? allConfidences.reduce((a, b) => a + b, 0) / allConfidences.length
     : 0;
 
-  return {
+  return cleanupLegacyExtraction({
     screenshotType: 'tactical_map',
     playerShip,
     playerTeamName: mapPlayerTeamName,
@@ -2455,7 +2614,7 @@ function convertMapScreenToLegacy(mapScreenData, rawText) {
     overallConfidence,
     captureTimestamp: Date.now(),
     rawText: rawText || '',
-  };
+  });
 }
 
 /**

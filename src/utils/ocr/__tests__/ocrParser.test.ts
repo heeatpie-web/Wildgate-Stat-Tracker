@@ -735,4 +735,34 @@ describe('validateExtractedData', () => {
     expect(validated.opponentTeams[0].players).toHaveLength(1);
     expect(validated.opponentTeams[0].players[0].name).toBe('Enemy One');
   });
+
+  it('filters under-crewed ship bonus phrases from teammates and caps to ship capacity', () => {
+    const data = makeData({
+      playerShip: { shipType: 'Outlaw', confidence: 88, teamName: 'Crew' },
+      teammates: [
+        { name: 'Small Crew Bonus', confidence: 91, isTeammate: true },
+        { name: 'Wing One', confidence: 84, isTeammate: true },
+        { name: 'Wing Two', confidence: 82, isTeammate: true },
+      ],
+    });
+    const validated = validateExtractedData(data);
+    expect(validated.teammates.map((player) => player.name)).toEqual(['Wing One']);
+  });
+
+  it('filters under-crewed ship bonus phrases from opponent team players', () => {
+    const data = makeData({
+      opponentTeams: [{
+        teamName: 'Team',
+        shipType: 'Hunter',
+        color: 'red',
+        players: [
+          { name: 'Reduced Fires', confidence: 86, isTeammate: false },
+          { name: 'Enemy One', confidence: 80, isTeammate: false },
+        ],
+        confidence: 74,
+      }],
+    });
+    const validated = validateExtractedData(data);
+    expect(validated.opponentTeams[0].players.map((player) => player.name)).toEqual(['Enemy One']);
+  });
 });

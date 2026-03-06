@@ -144,6 +144,10 @@ const SHIP_TYPE_COMPACT_MAP = new Map(
   SHIP_TYPES.map((type) => [type.replace(/[^A-Z0-9]/g, ''), type])
 );
 const SHIP_TYPE_TEAM_WORDS = new Set(['SOLO', 'OUTLAW', 'BATTLE', 'SCOUT', 'PRIVATEER', 'BASTION', 'HUNTER']);
+const UNDERCREW_SHIP_BONUS_PHRASES = new Set([
+  'SMALL CREW BONUS',
+  'REDUCED FIRES',
+]);
 const HUD_TEAM_LABEL_NOISE_FRAGMENTS = [
   'YOURSHIP',
   'CREWSIZE',
@@ -183,9 +187,20 @@ function isShipOnlyTeamLabel(input) {
   return words.every((word) => SHIP_TYPE_TEAM_WORDS.has(word));
 }
 
+function isUnderCrewShipBonusText(input) {
+  const normalized = String(input || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized) return false;
+  return UNDERCREW_SHIP_BONUS_PHRASES.has(normalized);
+}
+
 function sanitizeExtractedTeamName(rawTeamName, shipType = '') {
   const cleaned = formatTeamName(String(rawTeamName || '')).trim();
   if (!cleaned) return '';
+  if (isUnderCrewShipBonusText(cleaned)) return '';
   const teamNameKey = normalizeShipTypeKey(cleaned);
   const shipKey = normalizeShipTypeKey(shipType);
   if (SHIP_TYPES.includes(teamNameKey)) return '';
@@ -200,6 +215,7 @@ function sanitizePlayerShipName(rawShipName, shipType = '') {
     .trim();
   const cleaned = formatTeamName(strippedCrewSuffix).trim();
   if (!cleaned) return '';
+  if (isUnderCrewShipBonusText(cleaned)) return '';
   const normalized = cleaned.toLowerCase();
   if (normalized === 'your team' || normalized === 'friendly team' || normalized === 'my crew') {
     return '';
@@ -649,6 +665,7 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
   const isNoiseTeamLabel = (input) => {
     const t = String(input || '').toUpperCase().trim();
     if (!t) return true;
+    if (isUnderCrewShipBonusText(t)) return true;
     if (hasHudStatNoiseText(t)) return true;
     const compact = t.replace(/[^A-Z]/g, '');
     if (KNOWN_HAZARD_COMPACT_KEYS.has(compact)) return true;
@@ -758,7 +775,10 @@ async function extractEnemyShips(imageBuffer, words, lines, text, imageWidth, im
     const likelyEnemySlot = Boolean(foundShip) || Boolean(teamName);
     const displayShipType = foundShip ? toTitle(foundShip) : 'Unknown';
     const sanitizedTeamName = sanitizeExtractedTeamName(teamName, displayShipType);
-    if (likelyEnemySlot && (foundShip || sanitizedTeamName) && !isNoiseTeamLabel(sanitizedTeamName)) {
+    const hasStrongAnonymousShipSignal = Boolean(foundShip)
+      && slotColor !== 'unknown'
+      && confidence >= 78;
+    if (likelyEnemySlot && (sanitizedTeamName || hasStrongAnonymousShipSignal) && !isNoiseTeamLabel(sanitizedTeamName)) {
       enemyShips.push({
         teamName: sanitizedTeamName || `Enemy Team ${enemyShips.length + 1}`,
         shipType: displayShipType,
@@ -1544,6 +1564,7 @@ function looksLikeFriendlyTeamName(text) {
   if (!text) return false;
   const cleaned = formatTeamName(text);
   if (cleaned.length < 3 || cleaned.length > 40) return false;
+  if (isUnderCrewShipBonusText(cleaned)) return false;
   if (hasHudStatNoiseText(cleaned)) return false;
   if (isShipOnlyTeamLabel(cleaned)) return false;
 
@@ -1565,6 +1586,7 @@ function looksLikeTeamName(text) {
   if (!text) return false;
   const cleaned = text.replace(/\s+/g, ' ').trim();
   if (cleaned.length < 4 || cleaned.length > 40) return false;
+  if (isUnderCrewShipBonusText(cleaned)) return false;
   if (hasHudStatNoiseText(cleaned)) return false;
   if (isShipOnlyTeamLabel(cleaned)) return false;
 

@@ -122,8 +122,68 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         : savedCaptures.filter(c => !c.ocrProcessed && String(c.matchId ?? '') === String(submissionMatchId)).length;
     const pendingDataForQueueScope = queueScopeMatchId != null ? getPendingData(queueScopeMatchId) : pendingData;
 
+    const collectCaptureArtifacts = React.useCallback((scopeMatchId?: string | number | null): string[] => {
+        const seen = new Set<string>();
+        return savedCaptures
+            .filter((capture) => (
+                scopeMatchId == null
+                    ? capture.matchId == null || capture.matchId === ''
+                    : String(capture.matchId ?? '') === String(scopeMatchId)
+            ))
+            .map((capture) => String(capture.filePath || '').trim())
+            .filter((path) => /\.(png|jpe?g|webp|bmp|gif)$/i.test(path))
+            .filter((path) => {
+                const key = path.replace(/[\\/]+/g, '\\').toLowerCase();
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+    }, [savedCaptures]);
+
+    const syncDraftArtifacts = React.useCallback((scopeMatchId?: string | number | null): string[] => {
+        const artifactPaths = collectCaptureArtifacts(scopeMatchId);
+        if (artifactPaths.length === 0) return [];
+
+        const state = useAppStore.getState();
+        const mergeArtifacts = (existing: unknown): string[] => {
+            const current = Array.isArray(existing)
+                ? existing.map((entry) => String(entry || '').trim()).filter(Boolean)
+                : [];
+            const seen = new Set<string>();
+            return [...current, ...artifactPaths].filter((entry) => {
+                const key = entry.replace(/[\\/]+/g, '\\').toLowerCase();
+                if (!entry || seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+        };
+
+        const pendingDraft = state.pendingMatchData;
+        if (pendingDraft) {
+            state.setPendingMatchData({
+                ...pendingDraft,
+                artifacts: mergeArtifacts(pendingDraft.artifacts),
+            });
+        }
+
+        const numericScope = Number(scopeMatchId);
+        if (Number.isInteger(numericScope) && numericScope > 0) {
+            const scopedMatch = (state.matches || []).find((match) => Number(match.id || 0) === numericScope);
+            if (scopedMatch) {
+                state.updateMatch({
+                    ...scopedMatch,
+                    artifacts: mergeArtifacts(scopedMatch.artifacts),
+                    ocrState: scopedMatch.ocrState || 'queued',
+                });
+            }
+        }
+
+        return artifactPaths;
+    }, [collectCaptureArtifacts]);
+
     const handleReviewBucket = () => {
         if (pendingDataForQueueScope && onSmartCaptureData) {
+            syncDraftArtifacts(queueScopeMatchId ?? null);
             onSmartCaptureData(pendingDataForQueueScope);
             dismissPendingData();
         }
@@ -308,6 +368,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             }
             if (resultOcrFlowMode === 'background') {
                 openResultWizard(result);
+                syncDraftArtifacts(submissionMatchId ?? null);
                 const scopeForSubmission = submissionMatchId ?? null;
                 if (!backgroundOcrInFlightRef.current) {
                     backgroundOcrInFlightRef.current = true;
@@ -361,6 +422,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         }
 
         openResultWizard(result);
+        syncDraftArtifacts(submissionMatchId ?? null);
     };
 
     const handleOcrPromptCancel = () => {
@@ -372,6 +434,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         const { result } = ocrDecisionPrompt;
         setOcrDecisionPrompt(null);
         openResultWizard(result);
+        syncDraftArtifacts(submissionMatchId ?? null);
     };
 
     const handleOcrPromptProcess = async () => {
@@ -381,6 +444,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         await processAllStored(activeUser || null, submissionMatchId ?? null);
         const reviewData = submissionMatchId != null ? getPendingData(submissionMatchId) : getPendingData();
         if (reviewData) {
+            syncDraftArtifacts(submissionMatchId ?? null);
             setOcrDecisionPrompt(null);
             window.dispatchEvent(new CustomEvent('submission:ocr-gate', { detail: { result, data: reviewData } }));
             return;
@@ -394,6 +458,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             deepLink: { type: 'openView', view: 'recording' },
         });
         openResultWizard(result);
+        syncDraftArtifacts(submissionMatchId ?? null);
     };
 
     React.useEffect(() => {

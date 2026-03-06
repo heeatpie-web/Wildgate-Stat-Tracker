@@ -548,7 +548,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     );
     const toDisplayPlayerName = useCallback((name: string) => {
         const key = normalizeNameKey(name);
-        if (activeUserDisplayKey && key && key === activeUserDisplayKey) return '(you)';
+        if (activeUserDisplayKey && key && key === activeUserDisplayKey) return 'YOU';
         return name;
     }, [activeUserDisplayKey]);
     const resolvePlayerSources = useCallback((playerName: string): OcrDetectedNameSource[] => {
@@ -1053,43 +1053,13 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             })),
             reachModifiers: nextReachModifiers,
             artifactSource: nextArtifactSource || '',
-            ocrState: closeAfterApply ? 'saved' : 'reviewing',
-            ocrReviewedAt: closeAfterApply ? Date.now() : pendingMatchData?.ocrReviewedAt,
+            ocrState: closeAfterApply ? 'saved' : 'ready',
+            ocrReviewedAt: Date.now(),
             ocrDebug: {
                 ...((pendingMatchData && pendingMatchData.ocrDebug) || {}),
                 hazards: nextHazardDebug,
             },
         });
-
-        if (corrected > 0 && reviewScreenshots.length > 0) {
-            try {
-                const api = getElectronAPI();
-                if (api?.invoke) {
-                    const firstScreenshot = String(reviewScreenshots[0] || '');
-                    const screenshotBase64 = firstScreenshot.replace(/^data:image\/\w+;base64,/, '');
-                    const payload = {
-                        screenshotBase64,
-                        teammates: nextTeammates,
-                        opponentTeams: resolvedTeams.map((team) => ({
-                            teamName: team.teamName || '',
-                            teamColor: team.color || '',
-                            players: team.players || [],
-                        })),
-                        modifiers: [],
-                        meta: {
-                            source: 'ocr-correction-modal',
-                            timestamp: new Date().toISOString(),
-                        },
-                    };
-                    void api.invoke('ocr-corpus-add-corrected-sample', payload).catch((error: unknown) => {
-                        Logger.warn('OcrCorrection', 'Failed to add corrected OCR sample to corpus', error);
-                        return undefined;
-                    });
-                }
-            } catch {
-                // Non-blocking: corpus auto-growth must never block review apply.
-            }
-        }
 
         announce(`Applied ${corrected + added} correction decisions.`, 'polite');
         if (closeAfterApply) {
@@ -1457,7 +1427,8 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                     friendlyTeamIndex={displayFriendlyTeamIndex}
                                     friendlyFixedPlayer={activeUserDisplayKey ? {
                                         canonicalName: activeUser || String(pendingMatchData?.player || '').trim() || 'You',
-                                        displayLabel: '(you)',
+                                        label: 'YOU',
+                                        tone: 'success',
                                     } : null}
                                     compact={embedded}
                                     allowColorEdit={true}
@@ -1560,10 +1531,9 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                         activeIndex={selectedScreenshotIdx}
                                         onActiveIndexChange={setSelectedScreenshotIdx}
                                         title="Screenshot Evidence"
-                                        subtitle="Hover for loupe, click thumbnails to switch, drag to pan when zoomed."
+                                        subtitle="Click to zoom, drag to pan while zoomed, and use thumbnails to switch."
                                         stageClassName="min-h-[340px] md:min-h-[460px]"
                                         imageAltPrefix="Reference screenshot"
-                                        enableLoupe={true}
                                         autoFocus={false}
                                     />
                                 </section>

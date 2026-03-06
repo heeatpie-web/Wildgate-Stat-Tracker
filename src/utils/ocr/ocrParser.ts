@@ -47,6 +47,20 @@ function distance(a: string, b: string): number {
 
 const MAX_OPPONENT_TEAMS = 4;
 const MAX_OPPONENT_PLAYERS_PER_TEAM = 4;
+const UNDERCREW_SHIP_BONUS_PHRASES = new Set([
+  'SMALL CREW BONUS',
+  'REDUCED FIRES',
+]);
+
+const isUnderCrewShipBonusText = (value?: string | null): boolean => {
+  const normalized = String(value || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized) return false;
+  return UNDERCREW_SHIP_BONUS_PHRASES.has(normalized);
+};
 
 const capOpponentPlayers = (players: ExtractedPlayer[] = []): ExtractedPlayer[] => {
   if (!Array.isArray(players) || players.length <= MAX_OPPONENT_PLAYERS_PER_TEAM) return players || [];
@@ -227,6 +241,7 @@ export function fuzzyMatch(
 export function isNoiseText(text: string): boolean {
   const upper = text.toUpperCase().trim();
   if (upper.length < 2) return true;
+  if (isUnderCrewShipBonusText(text)) return true;
   if (NOISE_WORDS.includes(upper)) return true;
   if (HUD_PATTERNS.some(pattern => pattern.test(upper))) return true;
   if (/^\d+$/.test(upper)) return true;
@@ -246,7 +261,7 @@ export function cleanPlayerName(rawName: string): string {
     .trim();
   cleaned = cleaned.replace(/\s+\d{2,4}$/, '');
 
-  return cleaned;
+  return isUnderCrewShipBonusText(cleaned) ? '' : cleaned;
 }
 
 /**
@@ -672,7 +687,9 @@ export function validateExtractedData(data: OCRExtractedData): OCRExtractedData 
   );
 
   const validTeammates = capTeammatePlayers(
-    data.teammates.filter(t => t.confidence >= 50),
+    data.teammates
+      .filter(t => t.confidence >= 50)
+      .filter(t => !isUnderCrewShipBonusText(t.name)),
     data.playerShip?.shipType
   );
   const validModifiers = data.reachModifiers.filter(m => m.confidence >= 60);
@@ -682,6 +699,7 @@ export function validateExtractedData(data: OCRExtractedData): OCRExtractedData 
       let inferredShipType = String(team.shipType || '').trim();
       const filteredPlayers = team.players
         .filter(p => p.confidence >= 50)
+        .filter(p => !isUnderCrewShipBonusText(p.name))
         .filter(p => {
           // Heuristic: skip players whose normalized name exactly matches a known team name label.
           // This prevents OCR misclassifying a team banner as a player entry.

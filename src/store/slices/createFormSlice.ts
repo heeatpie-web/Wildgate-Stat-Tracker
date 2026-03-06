@@ -231,10 +231,35 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
     setElims: (val) => set({ elims: val }),
     setCurrentNote: (val) => set({ currentNote: val }),
     setPendingMatchData: (data) => set({ pendingMatchData: data }),
-    setPendingSubType: (type) => set({ pendingSubType: type }),
-    setPendingPlacement: (placement) => set({ pendingPlacement: placement }),
-    setPendingArtifactType: (type) => set({ pendingArtifactType: type }),
-    setShowWizard: (result) => set({ showWizard: result }),
+    setPendingSubType: (type) => set((state) => ({
+        pendingSubType: type,
+        pendingMatchData: state.pendingMatchData
+            ? { ...state.pendingMatchData, subType: type || undefined }
+            : state.pendingMatchData,
+    })),
+    setPendingPlacement: (placement) => set((state) => ({
+        pendingPlacement: placement,
+        pendingMatchData: state.pendingMatchData
+            ? { ...state.pendingMatchData, placement: placement ?? undefined }
+            : state.pendingMatchData,
+    })),
+    setPendingArtifactType: (type) => set((state) => ({
+        pendingArtifactType: type,
+        pendingMatchData: state.pendingMatchData
+            ? { ...state.pendingMatchData, artifactSource: type || undefined }
+            : state.pendingMatchData,
+    })),
+    setShowWizard: (result) => set((state) => ({
+        showWizard: result,
+        pendingMatchData: state.pendingMatchData
+            ? {
+                ...state.pendingMatchData,
+                result: result === 'Win' || result === 'Loss' || result === 'Draw'
+                    ? result
+                    : undefined,
+              }
+            : state.pendingMatchData,
+    })),
     clearTelemetryDetected: () => set({ telemetryDetectedHero: undefined, telemetryDetectedShip: undefined }),
     resetSelectionSourcesForNewMatch: () => set({
         heroSource: undefined,

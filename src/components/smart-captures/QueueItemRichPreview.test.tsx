@@ -45,7 +45,7 @@ describe('QueueItemRichPreview', () => {
     expect(screen.getByText(/Hunter \(4 Player\)/)).toBeInTheDocument();
     expect(screen.queryByText(/ID 12345/)).toBeNull();
     expect(screen.getByText(/^Win$/)).toBeInTheDocument();
-    expect(screen.getByLabelText('Status Ready')).toBeInTheDocument();
+    expect(screen.getByLabelText('Status Ready to save')).toBeInTheDocument();
     expect(screen.queryByText('85%')).toBeNull();
     expect(screen.queryByText(/Spec:/i)).toBeNull();
     expect(screen.queryByText(/Practical:/i)).toBeNull();
@@ -65,7 +65,8 @@ describe('QueueItemRichPreview', () => {
     );
 
     expect(screen.getByRole('button', { name: /7/ })).toBeInTheDocument();
-    expect(screen.getByText('7')).toBeInTheDocument();
+    expect(screen.getByText('#7')).toBeInTheDocument();
+    expect(screen.getByText('SAVE')).toBeInTheDocument();
   });
 
   it('does not show pending label when match is saved without confidence', () => {
@@ -85,7 +86,7 @@ describe('QueueItemRichPreview', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Status Resolved')).toBeInTheDocument();
+    expect(screen.getByLabelText('Status Saved')).toBeInTheDocument();
     expect(screen.queryByText('Pending')).toBeNull();
     expect(screen.queryByText(/\b\d+\s+warnings?\b/i)).toBeNull();
   });
@@ -112,7 +113,7 @@ describe('QueueItemRichPreview', () => {
 
     expect(screen.queryByText(/Duration Off by/i)).toBeNull();
     expect(screen.queryByLabelText('Duration mismatch')).toBeNull();
-    expect(screen.getByLabelText('Status Ready')).toBeInTheDocument();
+    expect(screen.getByLabelText('Status Ready to save')).toBeInTheDocument();
     expect(screen.queryByText(/\b\d+\s+warnings?\b/i)).toBeNull();
   });
 });

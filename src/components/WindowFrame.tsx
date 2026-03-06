@@ -19,7 +19,14 @@ export const WindowFrame: React.FC = () => {
 
     const handleMinimize = () => api?.send('minimize-window');
     const handleMaximize = () => api?.send('maximize-window');
-    const handleClose = () => api?.send('close-window');
+    const handleClose = () => {
+        try {
+            window.localStorage.setItem('wg_intentional_close_v1', String(Date.now()));
+        } catch {
+            // no-op
+        }
+        api?.send('close-window');
+    };
 
     return (
         <div

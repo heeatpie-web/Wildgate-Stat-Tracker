@@ -8,8 +8,6 @@ const uiState = {
     setShowSetupWizard: vi.fn(),
     setToast: vi.fn(),
     setActiveUser: vi.fn(),
-    enableAutoLogRecording: true,
-    setEnableAutoLogRecording: vi.fn(),
 };
 
 const gameData = {
@@ -25,14 +23,6 @@ const userPrefs = {
     setCustomHue: vi.fn(),
     soundEnabled: true,
     setSoundEnabled: vi.fn(),
-    performanceMode: false,
-    setPerformanceMode: vi.fn(),
-    setDisableAnimations: vi.fn(),
-};
-
-const appStoreState = {
-    telemetryPerformanceProfile: 'balanced' as const,
-    setTelemetryPerformanceProfile: vi.fn(),
 };
 
 vi.mock('../providers/UIStateProvider', () => ({
@@ -45,10 +35,6 @@ vi.mock('../providers/GameDataProvider', () => ({
 
 vi.mock('../providers/UserPreferencesProvider', () => ({
     useUserPreferences: () => userPrefs,
-}));
-
-vi.mock('../store/useAppStore', () => ({
-    useAppStore: (selector: (s: typeof appStoreState) => unknown) => selector(appStoreState),
 }));
 
 vi.mock('../hooks/useFocusTrap', () => ({
@@ -78,11 +64,11 @@ describe('SetupWizard', () => {
         fireEvent.change(screen.getByPlaceholderText('Callsign...'), { target: { value: 'Ace' } });
         fireEvent.click(screen.getByRole('button', { name: /continue/i }));
 
-        for (let idx = 0; idx < 5; idx += 1) {
+        for (let idx = 0; idx < 3; idx += 1) {
             fireEvent.click(screen.getByRole('button', { name: /continue/i }));
         }
 
-        fireEvent.click(screen.getByRole('button', { name: /launch wildgate/i }));
+        fireEvent.click(screen.getByRole('button', { name: /start wild gate stat tracker/i }));
 
         expect(gameData.addPlayer).toHaveBeenCalledWith('Ace');
         expect(uiState.setActiveUser).toHaveBeenCalledWith('Ace');

@@ -9,9 +9,20 @@ export const WindowControls: React.FC<WindowControlsProps> = ({ className = '' }
     const api = getElectronAPI();
     if (!api) return null;
 
+    const markIntentionalClose = () => {
+        try {
+            window.localStorage.setItem('wg_intentional_close_v1', String(Date.now()));
+        } catch {
+            // no-op
+        }
+    };
+
     const handleMinimize = () => api.send('minimize-window');
     const handleMaximize = () => api.send('maximize-window');
-    const handleClose = () => api.send('close-window');
+    const handleClose = () => {
+        markIntentionalClose();
+        api.send('close-window');
+    };
 
     const btnBase = "h-6 w-9 flex items-center justify-center transition-colors text-gray-400 hover:text-on-scrim";
     const btnHover = "hover:bg-frost-10";

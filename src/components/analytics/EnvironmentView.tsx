@@ -109,7 +109,7 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
                     <div className="flex items-center justify-between gap-3">
                         <div>
                             <h3 className="text-body font-black uppercase opacity-60">Hazard Explorer</h3>
-                            <div className="text-label-sm text-md-sys-on-surface/55">Open a modifier to drill into related people, loadouts, and match context.</div>
+                            <div className="text-label-sm text-md-sys-on-surface/55">Open a modifier to see who it pairs well with, which loadouts spike or dip, and whether it is helping or hurting your results.</div>
                         </div>
                     </div>
                     <div className="mt-4 grid gap-2 md:grid-cols-2">

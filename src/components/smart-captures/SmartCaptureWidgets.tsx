@@ -11,27 +11,31 @@ export const Section: React.FC<{
     collapsible?: boolean;
     collapsed?: boolean;
     onToggle?: () => void;
-}> = ({ title, icon, children, collapsible = false, collapsed = false, onToggle }) => (
+    headerAction?: React.ReactNode;
+}> = ({ title, icon, children, collapsible = false, collapsed = false, onToggle, headerAction }) => (
     <div className="md3-surface-high rounded-2xl sc-bordered p-4 sc-editor-section">
-        <button
-            type="button"
-            onClick={collapsible ? onToggle : undefined}
-            className={`w-full flex items-center justify-between gap-2 ${collapsible ? 'cursor-pointer' : 'cursor-default'} ${collapsed ? '' : 'mb-3'}`}
-        >
-            <div className="flex items-center gap-2">
-                {icon ? (
-                    <div className="w-8 h-8 rounded-2xl bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer flex items-center justify-center sc-bordered sc-editor-section-icon">
-                        {icon}
-                    </div>
-                ) : null}
-                <span className="text-label-sm font-black text-md-sys-on-surface/65 tracking-wide-22 uppercase sc-editor-section-title">{title}</span>
-            </div>
-            {collapsible && (
-                <span className="text-md-sys-on-surface/40">
-                    {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                </span>
-            )}
-        </button>
+        <div className={`w-full flex items-center justify-between gap-3 ${collapsed ? '' : 'mb-3'}`}>
+            <button
+                type="button"
+                onClick={collapsible ? onToggle : undefined}
+                className={`min-w-0 flex flex-1 items-center justify-between gap-2 ${collapsible ? 'cursor-pointer' : 'cursor-default'}`}
+            >
+                <div className="flex items-center gap-2 min-w-0">
+                    {icon ? (
+                        <div className="w-8 h-8 rounded-2xl bg-md-sys-primaryContainer text-md-sys-onPrimaryContainer flex items-center justify-center sc-bordered sc-editor-section-icon">
+                            {icon}
+                        </div>
+                    ) : null}
+                    <span className="text-label-sm font-black text-md-sys-on-surface/65 tracking-wide-22 uppercase sc-editor-section-title">{title}</span>
+                </div>
+                {collapsible && (
+                    <span className="text-md-sys-on-surface/40 shrink-0">
+                        {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                    </span>
+                )}
+            </button>
+            {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
+        </div>
         {!collapsed && children}
     </div>
 );

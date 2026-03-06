@@ -36,11 +36,6 @@ const steps: TutorialStep[] = [
         selector: 'system-pulse',
     },
     {
-        title: 'Data Safety',
-        description: 'This badge tracks save and backup health. Hover it to see the latest save/backup info.',
-        selector: 'data-safety',
-    },
-    {
         title: 'Recording',
         description: 'This is your main workspace for session controls, mission intel, and quick match logging.',
         selector: 'view-recording',
@@ -50,12 +45,6 @@ const steps: TutorialStep[] = [
         title: 'Smart Capture',
         description: 'Use this to grab the game screen and auto-fill teammates, opponents, ship, and modifiers with OCR.',
         selector: 'smart-capture',
-        view: 'recording',
-    },
-    {
-        title: 'Quick Actions',
-        description: 'This panel is for fast win/loss logging and keeping your session timer in one place.',
-        selector: 'action-panel',
         view: 'recording',
     },
     {
@@ -78,7 +67,7 @@ const steps: TutorialStep[] = [
     },
     {
         title: 'Overlay Mode',
-        description: 'Need less screen clutter? Switch to overlay mode for a compact in-game HUD.',
+        description: 'Need less screen clutter? Switch to overlay mode for a compact in-game HUD. Press F9 while Wildgate is open to bring the tracker back to the front.',
         selector: 'overlay-button',
     },
     {

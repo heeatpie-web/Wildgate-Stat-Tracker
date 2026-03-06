@@ -79,6 +79,18 @@ const formatQueueTimestamp = (when: Date): string => {
   return `${month} ${day} ${time}`;
 };
 
+const getCompactStatusLabel = (label: string): string => {
+  const normalized = label.toLowerCase();
+  if (normalized.includes('review')) return 'REV';
+  if (normalized.includes('ocr')) return 'OCR';
+  if (normalized.includes('missing')) return 'MISS';
+  if (normalized.includes('error')) return 'ERR';
+  if (normalized.includes('save')) return 'SAVE';
+  if (normalized.includes('resolved') || normalized.includes('saved')) return 'DONE';
+  if (normalized.includes('ready')) return 'OK';
+  return label.slice(0, 4).toUpperCase();
+};
+
 export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
   match,
   displayNumber,
@@ -104,13 +116,13 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
 
   const collapsedGlyph = getCollapsedQueueGlyph(match);
   const collapsedIcon = (() => {
-    if (collapsedGlyph === 'win') return <Trophy size={12} />;
-    if (collapsedGlyph === 'loss') return <Skull size={12} />;
-    if (collapsedGlyph === 'draw') return <AlertTriangle size={12} />;
-    if (collapsedGlyph === 'saved') return <CheckCircle2 size={12} />;
-    if (collapsedGlyph === 'error') return <AlertCircle size={12} />;
-    if (collapsedGlyph === 'review') return <ShieldAlert size={12} />;
-    return <Clock3 size={12} />;
+    if (collapsedGlyph === 'win') return <Trophy size={14} />;
+    if (collapsedGlyph === 'loss') return <Skull size={14} />;
+    if (collapsedGlyph === 'draw') return <AlertTriangle size={14} />;
+    if (collapsedGlyph === 'saved') return <CheckCircle2 size={14} />;
+    if (collapsedGlyph === 'error') return <AlertCircle size={14} />;
+    if (collapsedGlyph === 'review') return <ShieldAlert size={14} />;
+    return <Clock3 size={14} />;
   })();
 
   if (compact) {
@@ -118,14 +130,22 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
       <button
         type="button"
         onClick={onClick}
-        className={`w-full h-12 rounded-control border transition-colors inline-flex items-center justify-center gap-2 ${isSelected
-          ? 'bg-md-sys-primary/14 border-md-sys-primary/38 text-md-sys-on-surface ring-1 ring-md-sys-primary/26 shadow-sm font-bold'
-          : 'border-md-sys-outline/20 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/8'
+        className={`w-full min-h-[70px] rounded-xl border transition-colors flex flex-col items-center justify-center gap-1.5 px-2 py-2.5 ${isSelected
+          ? 'bg-md-sys-surface-container-high border-md-sys-primary/26 text-md-sys-on-surface shadow-sm font-bold'
+          : 'bg-md-sys-surface-container-low/80 border-md-sys-outline/14 text-md-sys-on-surface/68 hover:bg-md-sys-surface-container hover:border-md-sys-primary/18'
           }`}
         title={tooltipLabel}
       >
-        <span className={`inline-flex items-center justify-center w-5 h-5 sc-collapsed-glyph sc-collapsed-glyph--${tone}`}>{collapsedIcon}</span>
-        <span className="text-label-sm font-black leading-none">{displayNumber}</span>
+        <div className="flex items-center justify-center gap-1.5">
+          <span className={`inline-flex items-center justify-center w-7 h-7 sc-collapsed-glyph sc-collapsed-glyph--${tone}`}>{collapsedIcon}</span>
+          <span className="text-label-sm font-black leading-none">#{displayNumber}</span>
+        </div>
+        <div className="flex items-center justify-center gap-1">
+          <OutcomePill result={match.result} compact />
+          <span className={`rounded-pill px-1.5 py-0.5 text-[10px] font-black tracking-wider ${STATUS_PILL_BY_TONE[statusMeta.tone]}`}>
+            {getCompactStatusLabel(statusMeta.label)}
+          </span>
+        </div>
       </button>
     );
   }

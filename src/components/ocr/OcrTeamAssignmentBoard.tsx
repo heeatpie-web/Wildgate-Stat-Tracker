@@ -11,7 +11,8 @@ export interface OcrTeamAssignmentTeam {
 
 interface FriendlyFixedPlayer {
     canonicalName: string;
-    displayLabel: '(you)';
+    label: string;
+    tone?: 'success' | 'info';
 }
 
 interface DraggedPlayerPayload {
@@ -304,13 +305,14 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                             <Shield size={12} />
                                         </div>
                                         <div className="md3-textfield ocr-assignment-player-input flex items-center font-semibold text-md-sys-primary/92">
-                                            {friendlyFixedPlayer.displayLabel}
+                                            {friendlyFixedPlayer.canonicalName}
                                         </div>
                                         <span
-                                            className="ocr-assignment-fuzzy-badge !border-info !text-info !bg-info-soft"
+                                            className={`ocr-active-user-pill ${friendlyFixedPlayer.tone === 'info' ? 'ocr-active-user-pill--info' : 'ocr-active-user-pill--success'}`}
                                             title={friendlyFixedPlayer.canonicalName}
                                         >
-                                            Active User
+                                            <span className="ocr-active-user-pill__dot" />
+                                            {friendlyFixedPlayer.label}
                                         </span>
                                     </div>
                                 )}

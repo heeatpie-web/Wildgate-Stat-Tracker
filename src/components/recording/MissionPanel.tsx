@@ -581,7 +581,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                             )}
                         </div>
                         {isSectionExpanded('modifiers') && (
-                            <div className={`flex flex-wrap ${accordionMode ? 'gap-1' : 'gap-2'}`}>
+                            <div className={`flex flex-wrap justify-center ${accordionMode ? 'gap-1' : 'gap-2'}`}>
                                 {showArtifactSelect ? (
                                     <div className={`flex items-center gap-2 ${isTransparent ? 'bg-scrim-50' : 'mg-surface'} p-2 rounded-control w-full`}>
                                         {['Healing', 'Ice', 'Weapon'].map(type => (
@@ -605,7 +605,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                     <>
                                         <button
                                             onClick={() => setShowArtifactSelect(true)}
-                                            className={`md3-chip ${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} text-label-sm font-semibold transition-all ${selectedReachModifiers.some((m: string) => m.startsWith("Artifact"))
+                                            className={`md3-chip ${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} text-label-sm font-semibold text-center transition-all ${selectedReachModifiers.some((m: string) => m.startsWith("Artifact"))
                                                 ? 'artifact-btn-active ring-1 ring-amber-300/60 shadow-sm'
                                                 : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
                                                 }`}
@@ -624,7 +624,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                 <button
                                                     key={mod}
                                                     onClick={() => toggleReachModifier(mod)}
-                                                    className={`md3-chip ${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} text-label-sm font-semibold transition-all ${selectedReachModifiers.includes(mod)
+                                                    className={`md3-chip ${accordionMode ? 'px-2 py-1' : 'px-3 py-2'} text-label-sm font-semibold text-center transition-all ${selectedReachModifiers.includes(mod)
                                                         ? 'md3-chip--selected'
                                                         : 'text-md-sys-on-surface/60 hover:text-md-sys-on-surface'
                                                         }`}

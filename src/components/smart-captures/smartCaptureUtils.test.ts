@@ -59,7 +59,8 @@ describe('smartCaptureUtils', () => {
   it('uses explicit OCR state when present', () => {
     expect(getQueueStatus(makeMatch({ ocrState: 'queued' })).key).toBe('Queued');
     expect(getQueueStatus(makeMatch({ ocrState: 'processing' })).key).toBe('Processing');
-    expect(getQueueStatus(makeMatch({ ocrState: 'reviewing' })).key).toBe('Reviewing');
+    expect(getQueueStatus(makeMatch({ ocrState: 'reviewing', result: 'Loss' })).key).toBe('Ready');
+    expect(getQueueStatus(makeMatch({ ocrState: 'reviewing', result: 'Ongoing', ship: '', teammates: [], opponents: [], opponentTeams: [] })).key).toBe('Reviewing');
     expect(getQueueStatus(makeMatch({ ocrState: 'ready' })).key).toBe('Ready');
     expect(getQueueStatus(makeMatch({ ocrState: 'saved' })).key).toBe('Resolved');
     expect(getQueueStatus(makeMatch({ ocrState: 'error' })).key).toBe('Error');
@@ -133,17 +134,17 @@ describe('smartCaptureUtils', () => {
 
   it('returns cohesive status metadata for queue states', () => {
     const ready = getStatusMeta('OK');
-    expect(ready.label).toBe('Ready');
+    expect(ready.label).toBe('Ready to save');
     expect(ready.tone).toBe('success');
     expect(ready.icon).toBe('spark');
 
     const resolved = getStatusMeta('Resolved');
-    expect(resolved.label).toBe('Resolved');
+    expect(resolved.label).toBe('Saved');
     expect(resolved.tone).toBe('neutral');
     expect(resolved.icon).toBe('check');
 
     const missing = getStatusMeta('MissingData');
-    expect(missing.label).toBe('Missing data');
+    expect(missing.label).toBe('Needs details');
     expect(missing.tone).toBe('danger');
     expect(missing.icon).toBe('alert');
   });

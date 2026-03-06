@@ -11,6 +11,7 @@ import { processTelemetryEvent, TelemetryActions, TelemetryContext } from '../ut
 import Logger from '../utils/logger';
 import { getElectronAPI } from '../utils/electronAPI';
 import { runtimeConfig } from '../config/runtimeConfig';
+import { buildLoadoutSignature, cloneLoadout, sanitizeLoadout } from '../utils/loadout';
 import {
     DEFAULT_DURATION_TOLERANCE_SECONDS,
     getExpectedTeammateCountFromMode,
@@ -238,18 +239,6 @@ export const useLogMonitor = (activeUser?: string) => {
         return `${mm}:${ss}`;
     };
 
-    const makeLoadoutSignature = (loadout: Loadout | null | undefined) => {
-        if (!loadout) return '';
-        return JSON.stringify({
-            hero: loadout.hero || '',
-            ship: loadout.ship || '',
-            weapons: (loadout.weapons || []).filter(Boolean),
-            equipment: (loadout.equipment || []).filter(Boolean),
-            characterWeapons: (loadout.characterWeapons || []).filter(Boolean),
-            characterEquipment: (loadout.characterEquipment || []).filter(Boolean),
-        });
-    };
-
     const hasTelemetrySelection = (value: unknown): value is string => {
         const text = String(value || '').trim();
         return !!text && !text.startsWith('Unknown');
@@ -277,13 +266,17 @@ export const useLogMonitor = (activeUser?: string) => {
         opponents: [],
         hero: (loadout?.hero && !String(loadout.hero).startsWith('Unknown')) ? String(loadout.hero) : (activeHeroRef.current || 'Unknown'),
         ship: (loadout?.ship && !String(loadout.ship).startsWith('Unknown')) ? String(loadout.ship) : (activeShipRef.current || 'Unknown'),
-        loadout: {
+        loadout: cloneLoadout(loadout) || {
             hero: loadout?.hero || null,
             ship: loadout?.ship || null,
-            weapons: (loadout?.weapons || []).filter(Boolean),
-            equipment: (loadout?.equipment || []).filter(Boolean),
-            characterWeapons: (loadout?.characterWeapons || []).filter(Boolean),
-            characterEquipment: (loadout?.characterEquipment || []).filter(Boolean),
+            perks: [],
+            shipPerks: [],
+            characterPerks: [],
+            shipWeapons: [],
+            weapons: [],
+            equipment: [],
+            characterWeapons: [],
+            characterEquipment: [],
         },
         weapons: {},
         reachModifiers: [],
@@ -328,7 +321,7 @@ export const useLogMonitor = (activeUser?: string) => {
         if (existingDraft) {
             telemetryDraftMatchIdRef.current = existingDraft.id;
             telemetryDraftStartedAtRef.current = Number(existingDraft.timestamp || gameTime) || gameTime;
-            telemetryDraftLoadoutSignatureRef.current = makeLoadoutSignature(existingDraft.loadout || loadout || currentLoadoutRef.current || null);
+            telemetryDraftLoadoutSignatureRef.current = buildLoadoutSignature(existingDraft.loadout || loadout || currentLoadoutRef.current || null);
             if (Object.keys(pendingTelemetryConsistencyRef.current || {}).length > 0) {
                 updateTelemetryDraftConsistency(pendingTelemetryConsistencyRef.current, gameTime);
             }
@@ -341,7 +334,7 @@ export const useLogMonitor = (activeUser?: string) => {
         addMatch(draft);
         telemetryDraftMatchIdRef.current = matchId;
         telemetryDraftStartedAtRef.current = gameTime;
-        telemetryDraftLoadoutSignatureRef.current = makeLoadoutSignature(draft.loadout);
+        telemetryDraftLoadoutSignatureRef.current = buildLoadoutSignature(draft.loadout);
         setToast({
             message: 'Telemetry draft match created. We will prompt for result or Smart Capture after match end.',
             type: 'info',
@@ -353,24 +346,23 @@ export const useLogMonitor = (activeUser?: string) => {
     const updateTelemetryDraftFromLoadout = (loadout: Loadout, gameTime: number) => {
         const draftId = telemetryDraftMatchIdRef.current;
         if (!draftId) return;
-        const signature = makeLoadoutSignature(loadout);
+        const signature = buildLoadoutSignature(loadout);
         if (!signature || signature === telemetryDraftLoadoutSignatureRef.current) return;
         telemetryDraftLoadoutSignatureRef.current = signature;
         const match = useAppStore.getState().matches.find((m: Match) => m.id === draftId);
         if (!match) return;
+        const nextDraftLoadout = sanitizeLoadout({
+            ...(match.loadout || {}),
+            ...(loadout || {}),
+            hero: loadout.hero || match.loadout?.hero || null,
+            ship: loadout.ship || match.loadout?.ship || null,
+        });
         updateMatch({
             ...match,
             timestamp: match.timestamp || gameTime,
             hero: loadout.hero && !String(loadout.hero).startsWith('Unknown') ? String(loadout.hero) : match.hero,
             ship: loadout.ship && !String(loadout.ship).startsWith('Unknown') ? String(loadout.ship) : match.ship,
-            loadout: {
-                hero: loadout.hero || match.loadout?.hero || null,
-                ship: loadout.ship || match.loadout?.ship || null,
-                weapons: (loadout.weapons || []).filter(Boolean),
-                equipment: (loadout.equipment || []).filter(Boolean),
-                characterWeapons: (loadout.characterWeapons || []).filter(Boolean),
-                characterEquipment: (loadout.characterEquipment || []).filter(Boolean),
-            },
+            loadout: nextDraftLoadout || undefined,
         });
     };
 

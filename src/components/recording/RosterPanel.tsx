@@ -232,8 +232,9 @@ export const RosterPanel: React.FC = () => {
                     {(normalizedActiveUser || hasTeammates) ? (
                         <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto custom-scrollbar pr-1">
                             {normalizedActiveUser && (
-                                <span className="md3-chip md3-chip--selected roster-teammate-chip px-2 py-1 text-label-xs font-semibold">
-                                    U
+                                <span className="roster-you-chip flex items-center gap-2 rounded-control px-2 py-1.5 text-label-xs font-semibold">
+                                    <span className="w-2 h-2 rounded-full bg-success" />
+                                    <span className="font-bold text-success tracking-wide">YOU</span>
                                 </span>
                             )}
                             {visibleTeammates.map((p: string) => (
@@ -249,7 +250,7 @@ export const RosterPanel: React.FC = () => {
                     ) : (
                         <div className="roster-you-chip flex items-center gap-2 rounded-control px-2 py-1.5">
                             <span className="w-2 h-2 rounded-full bg-success" />
-                            <span className="text-label-sm font-semibold text-success">(you)</span>
+                            <span className="text-label-sm font-semibold text-success">YOU</span>
                         </div>
                     )}
                 </div>

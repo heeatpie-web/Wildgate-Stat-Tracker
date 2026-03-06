@@ -51,6 +51,7 @@ export interface ExtractedShip {
  */
 export interface OCRExtractedData {
   screenshotType: ScreenshotType;
+  artifacts?: string[];
 
   // From Tactical Map
   playerShip?: ExtractedShip;

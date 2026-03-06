@@ -10,47 +10,18 @@ import { StorageService } from '../utils/storage';
 import Logger from '../utils/logger';
 import { capTeammateNames } from '../utils/teamLimits';
 import { evaluateTelemetryConsistencyChecks, formatDurationOffset } from '../utils/telemetryConsistency';
+import { sanitizeLoadout } from '../utils/loadout';
 import {
     extractArtifactSourceFromReachModifiers,
     stripArtifactSourceModifiers,
 } from '../utils/artifactSource';
 
 const DEFAULT_ARTIFACT_LOOKBACK_MS = 10 * 60 * 1000;
-const MAX_SHIP_WEAPON_SLOTS = 10;
-const MAX_PROSPECTOR_SLOTS = 3;
 const parseDurationSecs = (value: string | undefined): number => {
     if (!value) return 0;
     const parts = value.split(':').map(Number);
     if (parts.length < 2 || Number.isNaN(parts[0]) || Number.isNaN(parts[1])) return 0;
     return Math.max(0, (parts[0] * 60) + parts[1]);
-};
-
-const sanitizeLoadoutSlots = (loadout: Match['loadout'] | null) => {
-    if (!loadout) return undefined;
-    const sanitizeSlotList = (entries: string[] | undefined, maxSlots: number) => (
-        (entries || [])
-            .map((entry) => String(entry || '').trim())
-            .filter(Boolean)
-            .filter((entry) => !/tertiary\s+(weapon|equipment)/i.test(entry))
-            .slice(0, Math.max(1, maxSlots))
-    );
-    const sanitizeShipWeaponEntries = (entries: Array<{ name: string; quantity: number }> | undefined) => (
-        (entries || [])
-            .map((entry) => ({
-                name: String(entry?.name || '').trim(),
-                quantity: Math.max(0, Math.min(MAX_SHIP_WEAPON_SLOTS, Math.floor(Number(entry?.quantity || 0)))),
-            }))
-            .filter((entry) => entry.name && entry.quantity > 0)
-            .slice(0, MAX_SHIP_WEAPON_SLOTS)
-    );
-    return {
-        ...loadout,
-        shipWeapons: sanitizeShipWeaponEntries(loadout.shipWeapons),
-        weapons: sanitizeSlotList(loadout.weapons, MAX_SHIP_WEAPON_SLOTS),
-        equipment: sanitizeSlotList(loadout.equipment, MAX_PROSPECTOR_SLOTS),
-        characterWeapons: sanitizeSlotList(loadout.characterWeapons, MAX_PROSPECTOR_SLOTS),
-        characterEquipment: sanitizeSlotList(loadout.characterEquipment, MAX_PROSPECTOR_SLOTS),
-    };
 };
 
 const toArtifactKey = (value: string) => value.replace(/[\\/]+/g, '\\').toLowerCase();
@@ -194,7 +165,7 @@ export const useMatchSubmission = () => {
             opponents: resolvedOpponents,
             hero: pickFirstKnown(activeHero, currentLoadout?.hero, unresolvedDraft?.loadout?.hero, unresolvedDraft?.hero) || undefined,
             ship: pickFirstKnown(activeShip, currentLoadout?.ship, unresolvedDraft?.loadout?.ship, unresolvedDraft?.ship) || undefined,
-            loadout: sanitizeLoadoutSlots(currentLoadout || unresolvedDraft?.loadout || null),
+            loadout: sanitizeLoadout(currentLoadout || unresolvedDraft?.loadout || null) || undefined,
             weapons: activeWeapons,
             reachModifiers: resolvedModifiers,
             artifactSource: extractedArtifactSource || unresolvedDraft?.artifactSource || undefined,
@@ -205,6 +176,8 @@ export const useMatchSubmission = () => {
             poiEpic,
             damageTaken: dmg,
             notes: currentNote || unresolvedDraft?.notes || '',
+            result,
+            subType: result === 'Draw' ? 'Combat' : undefined,
             artifacts: unresolvedDraft?.artifacts ? [...unresolvedDraft.artifacts] : undefined,
             ocrState: unresolvedDraft?.ocrState
         };
@@ -285,9 +258,12 @@ export const useMatchSubmission = () => {
         } = state;
 
         if (!pendingMatchData || submitting) return;
-        const selectedResult = showWizard === 'Win' || showWizard === 'Loss' || showWizard === 'Draw'
-            ? showWizard
-            : null;
+        const draftResult = pendingMatchData?.result;
+        const selectedResult = draftResult === 'Win' || draftResult === 'Loss' || draftResult === 'Draw'
+            ? draftResult
+            : (showWizard === 'Win' || showWizard === 'Loss' || showWizard === 'Draw'
+                ? showWizard
+                : null);
         if (!selectedResult) {
             setToast({ message: "Select Win/Loss/Draw before finalizing.", type: 'warning' });
             return;
@@ -373,7 +349,7 @@ export const useMatchSubmission = () => {
             })();
             const matchId = existingMatch?.id || Date.now();
             const matchTimestamp = existingMatch?.timestamp || pendingMatchData.timestamp || Date.now();
-            const mergedLoadout = sanitizeLoadoutSlots(pendingMatchData.loadout || currentLoadout);
+            const mergedLoadout = sanitizeLoadout(pendingMatchData.loadout || currentLoadout);
             const baseTelemetryConsistency = pendingMatchData.telemetryConsistency || existingMatch?.telemetryConsistency;
             const finalTelemetryConsistency = baseTelemetryConsistency
                 ? (() => {
@@ -404,7 +380,7 @@ export const useMatchSubmission = () => {
                 opponents: finalOpponents,
                 hero: resolvedHero,
                 ship: resolvedShip,
-                loadout: mergedLoadout,
+                loadout: mergedLoadout || undefined,
                 reachModifiers: finalMods,
                 kills: Object.keys(finalKills).length > 0 ? finalKills : pendingKills,
                 result: selectedResult,
@@ -540,9 +516,194 @@ export const useMatchSubmission = () => {
         }
     }, [submitting, addMatch, setPendingMatchData, setShowWizard, setPendingPlacement, setPendingArtifactType, setPendingKilledBy, setPendingKilledByShip, setSelectedOpponents, setTimelineEvents, setIsMatchInProgress, setMatchStartTime, setPoiEasy, setPoiMedium, setPoiEpic, setKills, setTimeMin, setTimeSec, setSelectedReachModifiers, setDamageTaken, setCurrentNote, setActiveWeapons, setToast, playVictory, playDefeat, updateMatch, recordPlayerSighting, pickFirstKnown]);
 
+    const saveResultDraft = useCallback(async (subType: string) => {
+        const state = useAppStore.getState();
+        const {
+            pendingMatchData, showWizard,
+            pendingPlacement, pendingArtifactType, pendingKilledBy, pendingKilledByShip,
+            timeMin, timeSec, activeUser, activeMode,
+            currentLoadout,
+            activeHero, activeShip,
+            selectedReachModifiers,
+            selectedTeammates, selectedOpponents,
+            kills, poiEasy, poiMedium, poiEpic,
+            damageTaken, currentNote,
+            matches,
+            sessionStartTime
+        } = state;
+
+        if (!pendingMatchData || submitting) return;
+        const draftResult = pendingMatchData?.result;
+        const selectedResult = draftResult === 'Win' || draftResult === 'Loss' || draftResult === 'Draw'
+            ? draftResult
+            : (showWizard === 'Win' || showWizard === 'Loss' || showWizard === 'Draw'
+                ? showWizard
+                : null);
+        if (!selectedResult) {
+            setToast({ message: "Select Win/Loss/Draw before saving results.", type: 'warning' });
+            return;
+        }
+        if (!activeUser && !pendingMatchData.player) {
+            setToast({ message: "Select a profile before saving results.", type: 'error' });
+            return;
+        }
+        const isLossCombat = selectedResult === 'Loss' && subType === 'Combat';
+        const normalizedLossPlacement = Number.isFinite(Number(pendingPlacement))
+            ? Math.min(5, Math.max(2, Number(pendingPlacement)))
+            : null;
+        if (isLossCombat && (normalizedLossPlacement == null || !Number.isInteger(normalizedLossPlacement))) {
+            setToast({ message: "Combat losses require placement (2nd-5th).", type: 'warning' });
+            return;
+        }
+
+        try {
+            setSubmitting(true);
+            const baseMods = (selectedReachModifiers && selectedReachModifiers.length > 0)
+                ? selectedReachModifiers
+                : (pendingMatchData.reachModifiers || []);
+            let finalMods = [...baseMods];
+            if (subType === 'Artifact') finalMods.push(`Artifact: ${pendingArtifactType || 'Healing'}`);
+            const finalTime = (timeMin || timeSec) ? `${timeMin || '00'}:${timeSec || '00'}` : (pendingMatchData.time || "00:00");
+            const resolvedHero = pickFirstKnown(pendingMatchData.hero, currentLoadout?.hero, activeHero);
+            const resolvedShip = pickFirstKnown(pendingMatchData.ship, currentLoadout?.ship, activeShip);
+            const finalTeammatesRaw = (selectedTeammates && selectedTeammates.length > 0)
+                ? selectedTeammates
+                : (pendingMatchData.teammates || []);
+            const finalTeammates = ensureSelfInTeam(capTeammateNames(finalTeammatesRaw, resolvedShip), pendingMatchData.player || activeUser);
+            const finalOpponents = (selectedOpponents && selectedOpponents.length > 0)
+                ? selectedOpponents
+                : (pendingMatchData.opponents || []);
+            const pendingKills = pendingMatchData.kills || {};
+            const liveKills = kills || {};
+            const finalKills = Object.entries({ ...pendingKills, ...liveKills }).reduce<Record<string, number>>((acc, [ship, value]) => {
+                const parsed = Number(value) || 0;
+                if (parsed > 0) acc[ship] = parsed;
+                return acc;
+            }, {});
+            const finalDamageTaken = Math.max(
+                Number(pendingMatchData.damageTaken) || 0,
+                Number.parseInt(String(damageTaken || ''), 10) || 0
+            );
+            const finalPoiEasy = Math.max(Number(pendingMatchData.poiEasy) || 0, Number(poiEasy) || 0);
+            const finalPoiMedium = Math.max(Number(pendingMatchData.poiMedium) || 0, Number(poiMedium) || 0);
+            const finalPoiEpic = Math.max(Number(pendingMatchData.poiEpic) || 0, Number(poiEpic) || 0);
+            const finalNotes = currentNote || pendingMatchData.notes || '';
+            const finalPlacement = selectedResult === 'Win'
+                ? 1
+                : (selectedResult === 'Loss' && subType === 'Combat'
+                    ? (normalizedLossPlacement ?? undefined)
+                    : undefined);
+            const pendingMatchId = Number(pendingMatchData.id || 0);
+            const existingMatchByPendingId = Number.isInteger(pendingMatchId) && pendingMatchId > 0
+                ? (Array.isArray(matches) ? matches.find((m: Match) => m.id === pendingMatchId) : undefined)
+                : undefined;
+            const recentCutoff = (typeof sessionStartTime === 'number' && sessionStartTime > 0)
+                ? (sessionStartTime - 60_000)
+                : (Date.now() - (6 * 60 * 60 * 1000));
+            const fallbackTelemetryDraft = existingMatchByPendingId || !Array.isArray(matches)
+                ? undefined
+                : matches.find((m: Match) => {
+                    if (!m || m.subType !== 'Telemetry Draft') return false;
+                    if (!m.timestamp || Number(m.timestamp) < recentCutoff) return false;
+                    const expectedPlayer = pendingMatchData.player || activeUser || '';
+                    if (expectedPlayer && m.player && m.player !== expectedPlayer) return false;
+                    return true;
+                });
+            const existingMatch = existingMatchByPendingId || fallbackTelemetryDraft;
+            const finalEliminatedByTeam = (() => {
+                const stored = String(pendingMatchData?.eliminatedByTeam || existingMatch?.eliminatedByTeam || '').trim();
+                if (selectedResult !== 'Loss' || !stored) return undefined;
+                return stored;
+            })();
+            const matchId = existingMatch?.id || Date.now();
+            const matchTimestamp = existingMatch?.timestamp || pendingMatchData.timestamp || Date.now();
+            const mergedLoadout = sanitizeLoadout(pendingMatchData.loadout || currentLoadout);
+            const baseTelemetryConsistency = pendingMatchData.telemetryConsistency || existingMatch?.telemetryConsistency;
+            const finalTelemetryConsistency = baseTelemetryConsistency
+                ? (() => {
+                    const evaluated = evaluateTelemetryConsistencyChecks(baseTelemetryConsistency, {
+                        teammateCount: countComparableTeammates(finalTeammates, pendingMatchData.player || activeUser),
+                        mode: pendingMatchData.mode || activeMode,
+                        durationSeconds: parseDurationSecs(finalTime),
+                    });
+                    return {
+                        ...baseTelemetryConsistency,
+                        checks: evaluated.checks,
+                        durationDeltaSeconds: evaluated.durationDeltaSeconds,
+                        durationToleranceSeconds: evaluated.durationToleranceSeconds,
+                    };
+                })()
+                : undefined;
+
+            const savedMatch: Match = {
+                id: matchId,
+                timestamp: matchTimestamp,
+                date: new Date(matchTimestamp).toLocaleDateString(),
+                mode: pendingMatchData.mode || activeMode,
+                player: pendingMatchData.player || activeUser,
+                teammates: finalTeammates,
+                opponents: finalOpponents,
+                hero: resolvedHero,
+                ship: resolvedShip,
+                loadout: mergedLoadout || undefined,
+                reachModifiers: finalMods,
+                kills: Object.keys(finalKills).length > 0 ? finalKills : pendingKills,
+                result: selectedResult,
+                subType: subType || 'Combat',
+                placement: finalPlacement,
+                damageTaken: finalDamageTaken,
+                time: finalTime,
+                poiEasy: finalPoiEasy,
+                poiMedium: finalPoiMedium,
+                poiEpic: finalPoiEpic,
+                killedBy: pendingKilledBy || undefined,
+                killedByShip: pendingKilledByShip || undefined,
+                notes: finalNotes,
+                timelineEvents: [...(pendingMatchData.timelineEvents || [])],
+                artifacts: [...(existingMatch?.artifacts || pendingMatchData.artifacts || [])],
+                ocrDebug: pendingMatchData?.ocrDebug || undefined,
+                opponentTeams: pendingMatchData?.opponentTeams || undefined,
+                eliminatedByTeam: finalEliminatedByTeam,
+                ocrState: pendingMatchData?.ocrState || existingMatch?.ocrState,
+                telemetryConsistency: finalTelemetryConsistency,
+            };
+
+            if (existingMatch) {
+                updateMatch(savedMatch);
+            } else {
+                addMatch(savedMatch);
+            }
+            await StorageService.flush();
+
+            setShowWizard(null);
+            setPendingMatchData(null);
+            setPendingPlacement(null);
+            setPendingArtifactType("");
+            setPendingKilledBy("");
+            setPendingKilledByShip("");
+            setSelectedOpponents([]);
+            setSessionTeams({});
+            setTimelineEvents([]);
+            setIsMatchInProgress(false);
+            setMatchStartTime(null);
+            setPoiEasy(0); setPoiMedium(0); setPoiEpic(0); setKills({ "AI Legion": 0 });
+            setTimeMin(""); setTimeSec(""); setSelectedReachModifiers([]);
+            setDamageTaken(""); setCurrentNote(""); setActiveWeapons({});
+
+            window.dispatchEvent(new CustomEvent('recording:match-complete', { detail: { result: savedMatch.result } }));
+            setToast({ message: 'Results saved. You can return to OCR later.', type: 'success' });
+        } catch (e) {
+            Logger.error('Submission', 'Save results failed', e);
+            setToast({ message: "Save results error", type: 'error' });
+        } finally {
+            setSubmitting(false);
+        }
+    }, [submitting, addMatch, setPendingMatchData, setShowWizard, setPendingPlacement, setPendingArtifactType, setPendingKilledBy, setPendingKilledByShip, setSelectedOpponents, setSessionTeams, setTimelineEvents, setIsMatchInProgress, setMatchStartTime, setPoiEasy, setPoiMedium, setPoiEpic, setKills, setTimeMin, setTimeSec, setSelectedReachModifiers, setDamageTaken, setCurrentNote, setActiveWeapons, setToast, updateMatch, pickFirstKnown]);
+
     return {
         initiateSubmission,
         processFinalSubmission,
+        saveResultDraft,
         submitting
     };
 };

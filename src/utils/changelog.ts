@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.0.2": [
+    "Beta: Final pre-beta hardening pass with earlier Smart Capture artifact syncing so OCR review no longer waits on late bundling.",
+    "Beta: Simplified first-run setup, quieter startup flow, cleaner tutorial guidance, and safer restore-session behavior for intentional app closes.",
+    "Polish: Players, Smart Captures, analytics, notifications, and Mission Intel all received final layout and copy cleanup before tester handoff."
+  ],
   "v3.0.1": [
     "Polish: Rebuilt the analytics cockpit with richer drill-down entry points, scoped deep dives, and a chained explorer overlay for ships, people, hazards, and loadouts.",
     "Polish: Players and identity cleanup now surfaces former names, learned OCR variants, duplicate candidates, and safer merge-first flows instead of silent duplicate creation.",

@@ -111,6 +111,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
         <nav
             className={`${railClass} app-nav-rail premium-sidebar sc-sidebar-rail ${isMobileDrawer ? 'sc-sidebar-rail--mobile rounded-r-card' : 'sc-sidebar-rail--desktop rounded-none'} flex flex-col h-full min-h-0 py-4 px-2 gap-2 shrink-0 transition-width duration-300 ease-emphasized-enter`}
             aria-label="Main navigation"
+            style={{ WebkitAppRegion: 'no-drag' } as any}
         >
             {isMobileDrawer && (
                 <button
@@ -139,6 +140,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
                             activeView === item.id ? 'premium-nav-item--active sidebar-nav-item--active' : 'text-md-sys-on-surface/60'
                         } ${showLabels ? 'justify-start px-3 gap-2.5' : 'justify-center'}`}
                         title={item.label}
+                        style={{ WebkitAppRegion: 'no-drag' } as any}
                     >
                         <span className="sidebar-nav-accent" aria-hidden />
                         <span className="md3-nav-icon premium-nav-icon">{item.icon}</span>
@@ -157,6 +159,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
                             activeView === 'dev-ocr' ? 'premium-nav-item--active sidebar-nav-item--active' : 'text-md-sys-on-surface/60'
                         } ${showLabels ? 'justify-start px-3 gap-2.5' : 'justify-center'}`}
                         title="OCR Debug"
+                        style={{ WebkitAppRegion: 'no-drag' } as any}
                     >
                         <span className="sidebar-nav-accent" aria-hidden />
                         <span className="md3-nav-icon premium-nav-icon">
@@ -179,6 +182,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
                     aria-haspopup="menu"
                     aria-expanded={profileMenuOpen}
                     aria-controls="sidebar-profile-menu"
+                    style={{ WebkitAppRegion: 'no-drag' } as any}
                 >
                     <span className="md3-nav-icon premium-nav-icon">
                         <User size={16} />

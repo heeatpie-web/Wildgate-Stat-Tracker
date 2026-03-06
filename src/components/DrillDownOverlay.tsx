@@ -260,6 +260,13 @@ export const DrillDownOverlay: React.FC = () => {
             return right.total - left.total;
         })
         .slice(0, 6);
+    const impactfulShipWeapons = model.loadouts.shipWeapons
+        .slice()
+        .sort((left, right) => {
+            if (right.impact !== left.impact) return right.impact - left.impact;
+            return right.total - left.total;
+        })
+        .slice(0, 5);
     const impactfulEquipment = model.loadouts.equipment.slice(0, 5);
     const impactfulPerks = model.loadouts.perks.slice(0, 5);
 
@@ -432,8 +439,8 @@ export const DrillDownOverlay: React.FC = () => {
 
     const renderLoadouts = () => (
         <div className="space-y-4">
-            <div className="grid gap-4 xl:grid-cols-3">
-                <SectionShell title="Weapons" subtitle="Open a weapon to inspect people, hazards, and match context." icon={<Crosshair size={18} />}>
+            <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
+                <SectionShell title="Prospector Weapons" subtitle="Open a weapon to inspect people, hazards, and match context." icon={<Crosshair size={18} />}>
                     {impactfulWeapons.map((row) => (
                         <DrillRowButton
                             key={`weapon-${row.name}`}
@@ -442,7 +449,18 @@ export const DrillDownOverlay: React.FC = () => {
                             onClick={() => pushTarget(row.name, 'Weapon')}
                         />
                     ))}
-                    {impactfulWeapons.length === 0 ? <EmptyState label="No weapon rows for this slice." /> : null}
+                    {impactfulWeapons.length === 0 ? <EmptyState label="No prospector weapon rows for this slice." /> : null}
+                </SectionShell>
+                <SectionShell title="Ship Weapons" subtitle="Secondary armament context for this scope." icon={<Crosshair size={18} />}>
+                    {impactfulShipWeapons.map((row) => (
+                        <DrillRowButton
+                            key={`ship-weapon-${row.name}`}
+                            row={row}
+                            note={`${row.total} matches · ${row.avgDamage} avg damage`}
+                            onClick={() => pushTarget(row.name, 'Weapon')}
+                        />
+                    ))}
+                    {impactfulShipWeapons.length === 0 ? <EmptyState label="No ship weapon rows for this slice." /> : null}
                 </SectionShell>
                 <SectionShell title="Equipment" subtitle="Support tools tied to this scope." icon={<Package2 size={18} />}>
                     {impactfulEquipment.map((row) => (
@@ -551,9 +569,9 @@ export const DrillDownOverlay: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="flex-1 min-h-0 overflow-hidden">
-                    <div className="flex h-full flex-col xl:flex-row">
-                        <aside className="w-full xl:w-80 shrink-0 border-b xl:border-b-0 xl:border-r border-md-sys-outline/10 bg-md-sys-surface-container-lowest/35 p-4 md:p-5 overflow-y-auto custom-scrollbar">
+                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+                    <div className="flex min-h-full flex-col xl:flex-row">
+                        <aside className="w-full xl:w-80 shrink-0 border-b xl:border-b-0 xl:border-r border-md-sys-outline/10 bg-md-sys-surface-container-lowest/35 p-4 md:p-5 xl:sticky xl:top-0 xl:self-start">
                             <div className="space-y-3">
                                 <RailStat label="Win rate" value={`${model.summary.winRate}%`} tone={model.summary.winRate >= 50 ? 'text-md-sys-primary' : 'text-danger'} />
                                 <RailStat label="Wins / losses" value={`${model.summary.wins} / ${model.summary.losses}`} />
@@ -579,7 +597,7 @@ export const DrillDownOverlay: React.FC = () => {
                             </div>
                         </aside>
 
-                        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                        <div className="flex-1 min-h-0 flex flex-col">
                             <div className="border-b border-md-sys-outline/10 px-4 py-3 md:px-5">
                                 <div className="flex flex-wrap gap-2">
                                     {model.availableTabs.map((tab) => (
@@ -588,7 +606,7 @@ export const DrillDownOverlay: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-4 md:px-5 md:py-5">
+                            <div className="flex-1 px-4 py-4 md:px-5 md:py-5">
                                 {activeTab === 'overview' ? renderOverview() : null}
                                 {activeTab === 'people' ? renderPeople() : null}
                                 {activeTab === 'hazards' ? renderHazards() : null}

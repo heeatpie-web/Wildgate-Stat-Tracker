@@ -26,6 +26,7 @@ import {
   migrateLegacyOcrCorrections,
   recordAliasCorrection,
 } from '../utils/ocrAliasEngine';
+import { sanitizeUnknownLoadout } from '../utils/loadout';
 import { normalizeOcrBatchThreshold } from '../utils/ocrBatchActions';
 import { sanitizeCalibrationSamples } from '../utils/ocrCalibration';
 import { CHARACTERS, SHIPS, normalizeShipName, type Match } from '../types';
@@ -35,8 +36,6 @@ export type AppState = DataSlice & SettingsSlice & UISlice & SmartCapturesUIStat
 
 let _hydrated = false;
 
-const MAX_PROSPECTOR_LOADOUT_SLOTS = 3;
-
 const sanitizePersistedCounterMap = (value: unknown): Record<string, number> => {
   if (typeof value !== 'object' || value === null) return {};
   return Object.entries(value as Record<string, unknown>).reduce<Record<string, number>>((acc, [key, raw]) => {
@@ -45,35 +44,6 @@ const sanitizePersistedCounterMap = (value: unknown): Record<string, number> => 
     acc[key] = Math.max(1, Math.floor(parsed));
     return acc;
   }, {});
-};
-
-const sanitizePersistedLoadout = (value: unknown) => {
-  if (typeof value !== 'object' || value === null) return null;
-  const record = value as Record<string, unknown>;
-  const toSlotList = (entryValue: unknown, maxSlots: number) => (
-    Array.isArray(entryValue)
-      ? entryValue.map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, maxSlots)
-      : []
-  );
-  return {
-    hero: typeof record.hero === 'string' ? record.hero.trim() || null : null,
-    ship: typeof record.ship === 'string' ? record.ship.trim() || null : null,
-    perks: toSlotList(record.perks, 2),
-    characterPerks: toSlotList(record.characterPerks, 2),
-    weapons: toSlotList(record.weapons, 10),
-    equipment: toSlotList(record.equipment, MAX_PROSPECTOR_LOADOUT_SLOTS),
-    characterWeapons: toSlotList(record.characterWeapons, MAX_PROSPECTOR_LOADOUT_SLOTS),
-    characterEquipment: toSlotList(record.characterEquipment, MAX_PROSPECTOR_LOADOUT_SLOTS),
-    shipWeapons: Array.isArray(record.shipWeapons)
-      ? record.shipWeapons
-        .map((entry) => ({
-          name: String((entry as { name?: unknown })?.name || '').trim(),
-          quantity: Math.max(0, Math.min(10, Math.floor(Number((entry as { quantity?: unknown })?.quantity || 0)))),
-        }))
-        .filter((entry) => entry.name && entry.quantity > 0)
-        .slice(0, 10)
-      : [],
-  };
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -317,7 +287,7 @@ const customStorage: PersistStorage<AppState> = {
               return acc;
             }, {})
             : {},
-          currentLoadout: sanitizePersistedLoadout(liveSession.currentLoadout),
+          currentLoadout: sanitizeUnknownLoadout(liveSession.currentLoadout),
 
           // UI
           layouts: (data.layouts && Object.keys(data.layouts).length > 0) ? data.layouts : {

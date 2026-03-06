@@ -1300,6 +1300,40 @@ body[data-mode='twilight'] .ocr-assignment-team-card {
   text-overflow: ellipsis;
 }
 
+.ocr-active-user-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ocr-active-user-pill__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor, transparent 78%);
+}
+
+.ocr-active-user-pill--success {
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-success), transparent 60%);
+  background: color-mix(in srgb, var(--md-sys-color-success), transparent 86%);
+  color: var(--md-sys-color-success);
+}
+
+.ocr-active-user-pill--info {
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-info), transparent 60%);
+  background: color-mix(in srgb, var(--md-sys-color-info), transparent 86%);
+  color: var(--md-sys-color-info);
+}
+
 .ocr-assignment-add-row {
   display: flex;
   align-items: center;

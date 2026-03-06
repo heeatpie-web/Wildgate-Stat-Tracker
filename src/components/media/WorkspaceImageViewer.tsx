@@ -14,16 +14,7 @@ interface WorkspaceImageViewerProps {
     imageAltPrefix?: string;
     showThumbnails?: boolean;
     showHeader?: boolean;
-    enableLoupe?: boolean;
     autoFocus?: boolean;
-}
-
-interface ViewerLoupeState {
-    imagePath: string;
-    clientX: number;
-    clientY: number;
-    relX: number;
-    relY: number;
 }
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
@@ -40,16 +31,15 @@ export const WorkspaceImageViewer: React.FC<WorkspaceImageViewerProps> = ({
     imageAltPrefix = 'Screenshot',
     showThumbnails = true,
     showHeader = true,
-    enableLoupe = true,
     autoFocus = false,
 }) => {
     const viewerRef = useRef<HTMLDivElement | null>(null);
     const stageRef = useRef<HTMLDivElement | null>(null);
+    const dragMovedRef = useRef(false);
     const [zoom, setZoom] = useState(1);
     const [pan, setPan] = useState({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
-    const [loupeState, setLoupeState] = useState<ViewerLoupeState | null>(null);
 
     const safeImages = useMemo(
         () => (images || []).map((entry) => String(entry || '').trim()).filter(Boolean),
@@ -72,7 +62,7 @@ export const WorkspaceImageViewer: React.FC<WorkspaceImageViewerProps> = ({
         setPan({ x: 0, y: 0 });
         setIsDragging(false);
         setDragStart(null);
-        setLoupeState(null);
+        dragMovedRef.current = false;
     }, [clampedIndex, currentImage]);
 
     useEffect(() => {
@@ -85,6 +75,7 @@ export const WorkspaceImageViewer: React.FC<WorkspaceImageViewerProps> = ({
         setPan({ x: 0, y: 0 });
         setIsDragging(false);
         setDragStart(null);
+        dragMovedRef.current = false;
     }, []);
 
     const goPrev = useCallback(() => {
@@ -105,16 +96,10 @@ export const WorkspaceImageViewer: React.FC<WorkspaceImageViewerProps> = ({
         }
     }, []);
 
-    const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
-        if (!currentImage) return;
-        event.preventDefault();
-        const delta = event.deltaY < 0 ? 0.18 : -0.18;
-        adjustZoom(zoom + delta);
-    }, [adjustZoom, currentImage, zoom]);
-
     const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
         if (!canPan) return;
         event.preventDefault();
+        dragMovedRef.current = false;
         setIsDragging(true);
         setDragStart({
             x: event.clientX - pan.x,
@@ -123,48 +108,29 @@ export const WorkspaceImageViewer: React.FC<WorkspaceImageViewerProps> = ({
     }, [canPan, pan.x, pan.y]);
 
     const handlePointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-        if (!stageRef.current || !currentImage) return;
+        if (!currentImage) return;
         if (isDragging && dragStart) {
             event.preventDefault();
+            dragMovedRef.current = true;
             setPan({
                 x: event.clientX - dragStart.x,
                 y: event.clientY - dragStart.y,
             });
-            return;
         }
-        if (!enableLoupe) return;
-        const imageEl = stageRef.current.querySelector('img');
-        if (!(imageEl instanceof HTMLImageElement)) return;
-        const bounds = imageEl.getBoundingClientRect();
-        if (bounds.width <= 0 || bounds.height <= 0) return;
-        if (
-            event.clientX < bounds.left
-            || event.clientX > bounds.right
-            || event.clientY < bounds.top
-            || event.clientY > bounds.bottom
-        ) {
-            setLoupeState(null);
-            return;
-        }
-        const relX = clamp((event.clientX - bounds.left) / bounds.width, 0, 1);
-        const relY = clamp((event.clientY - bounds.top) / bounds.height, 0, 1);
-        setLoupeState({
-            imagePath: currentImage,
-            clientX: event.clientX,
-            clientY: event.clientY,
-            relX,
-            relY,
-        });
-    }, [currentImage, dragStart, enableLoupe, isDragging]);
+    }, [currentImage, dragStart, isDragging]);
 
     const stopDragging = useCallback(() => {
         setIsDragging(false);
         setDragStart(null);
     }, []);
 
-    const clearLoupe = useCallback(() => {
-        setLoupeState(null);
-    }, []);
+    const handleStageClick = useCallback(() => {
+        if (dragMovedRef.current) {
+            dragMovedRef.current = false;
+            return;
+        }
+        adjustZoom(zoom > 1.02 ? 1 : 2);
+    }, [adjustZoom, zoom]);
 
     const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
         if (!hasImages) return;
@@ -293,16 +259,13 @@ export const WorkspaceImageViewer: React.FC<WorkspaceImageViewerProps> = ({
 
             <div
                 ref={stageRef}
-                className={`relative min-h-[360px] flex-1 overflow-hidden bg-md-sys-surface-container-lowest ${canPan ? 'cursor-grab' : 'cursor-crosshair'} ${stageClassName}`.trim()}
-                onWheel={handleWheel}
+                className={`relative min-h-[360px] flex-1 overflow-hidden bg-md-sys-surface-container-lowest ${canPan ? 'cursor-grab' : 'cursor-zoom-in'} ${stageClassName}`.trim()}
+                onClick={handleStageClick}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={stopDragging}
                 onPointerCancel={stopDragging}
-                onPointerLeave={() => {
-                    setLoupeState(null);
-                    stopDragging();
-                }}
+                onPointerLeave={stopDragging}
             >
                 <div className="absolute inset-0 flex items-center justify-center p-4">
                     <LocalImage
@@ -314,7 +277,7 @@ export const WorkspaceImageViewer: React.FC<WorkspaceImageViewerProps> = ({
                             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
                             transformOrigin: 'center center',
                             transition: isDragging ? 'none' : 'transform 120ms ease-out',
-                            cursor: canPan ? (isDragging ? 'grabbing' : 'grab') : 'crosshair',
+                            cursor: canPan ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in',
                         }}
                     />
                 </div>
@@ -348,29 +311,6 @@ export const WorkspaceImageViewer: React.FC<WorkspaceImageViewerProps> = ({
                             );
                         })}
                     </div>
-                </div>
-            )}
-
-            {enableLoupe && loupeState && !isDragging && (
-                <div
-                    className="pointer-events-none fixed z-top overflow-hidden rounded-card border border-md-sys-primary/35 bg-md-sys-surface shadow-2xl"
-                    style={{
-                        width: 220,
-                        height: 220,
-                        left: clamp(loupeState.clientX + 18, 8, (typeof window !== 'undefined' ? window.innerWidth : 1920) - 228),
-                        top: clamp(loupeState.clientY + 18, 8, (typeof window !== 'undefined' ? window.innerHeight : 1080) - 228),
-                    }}
-                >
-                    <LocalImage
-                        src={loupeState.imagePath}
-                        alt="Image loupe preview"
-                        className="h-full w-full object-cover select-none"
-                        style={{
-                            transform: 'scale(2.8)',
-                            transformOrigin: `${Math.round(loupeState.relX * 100)}% ${Math.round(loupeState.relY * 100)}%`,
-                        }}
-                    />
-                    <div className="absolute inset-0 border border-white/20" />
                 </div>
             )}
         </div>

@@ -142,6 +142,28 @@ const EQUIPMENT_ID_KEYS = new Set([
   'primaryequipmentid',
   'secondaryequipmentid',
 ]);
+const PERK_ID_KEYS = new Set([
+  'guidperkprimary',
+  'guidperksecondary',
+  'perkguidprimary',
+  'perkguidsecondary',
+  'guid_perk_primary',
+  'guid_perk_secondary',
+  'perkid',
+  'perk_id',
+  'primaryperkid',
+  'secondaryperkid',
+  'guidtraitprimary',
+  'guidtraitsecondary',
+  'traitguidprimary',
+  'traitguidsecondary',
+  'guid_trait_primary',
+  'guid_trait_secondary',
+  'traitid',
+  'trait_id',
+  'primarytraitid',
+  'secondarytraitid',
+]);
 const MATCH_ID_KEYS = new Set(['matchid', 'match_id']);
 const SESSION_ID_KEYS = new Set(['sessionid', 'session_id']);
 const OUTCOME_KEYS = new Set(['result', 'matchresult', 'outcome']);
@@ -321,6 +343,7 @@ function collectUsableTelemetryFields(node, collector, depth = 0) {
       if (SHIP_ID_KEYS.has(key)) collector.shipIds.add(normalized);
       if (WEAPON_ID_KEYS.has(key)) collector.weaponIds.add(normalized);
       if (EQUIPMENT_ID_KEYS.has(key)) collector.equipmentIds.add(normalized);
+      if (PERK_ID_KEYS.has(key)) collector.perkIds.add(normalized);
       if (MATCH_ID_KEYS.has(key)) collector.matchIds.add(normalized);
       if (SESSION_ID_KEYS.has(key)) collector.sessionIds.add(normalized);
       if (OUTCOME_KEYS.has(key)) collector.outcomes.add(normalized);
@@ -350,6 +373,7 @@ function buildUsableTelemetryEvent(evt) {
     shipIds: new Set(),
     weaponIds: new Set(),
     equipmentIds: new Set(),
+    perkIds: new Set(),
     matchIds: new Set(),
     sessionIds: new Set(),
     outcomes: new Set(),
@@ -370,6 +394,7 @@ function buildUsableTelemetryEvent(evt) {
     || collector.shipIds.size
     || collector.weaponIds.size
     || collector.equipmentIds.size
+    || collector.perkIds.size
     || outcome
   );
   if (!hasAnyUsefulContent) return null;
@@ -385,6 +410,7 @@ function buildUsableTelemetryEvent(evt) {
     shipIds: Array.from(collector.shipIds),
     weaponIds: Array.from(collector.weaponIds),
     equipmentIds: Array.from(collector.equipmentIds),
+    perkIds: Array.from(collector.perkIds),
   };
 }
 
@@ -3248,11 +3274,6 @@ app.on('before-quit', () => {
     logMonitorInterval = null;
   }
   logMonitorFingerprint = '';
-  // Dev safety net: mirror latest userData corpus into repo on app shutdown.
-  if (!isDev || !AUTO_SYNC_CORPUS_TO_REPO) return;
-  syncCorpusToRepo('before-quit').catch((e) => {
-    console.warn('[OCR Corpus] before-quit sync failed:', e?.message || e);
-  });
 });
 
 autoUpdater.on('update-available', (info) => { if (win) win.webContents.send('update_available'); });

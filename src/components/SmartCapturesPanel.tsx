@@ -481,7 +481,12 @@ const SmartCapturesPanel: React.FC = () => {
 
 
     const isWorkQueueItem = useCallback((m: Match) => {
-        if (m.ocrState && m.ocrState !== 'saved') return true;
+        if (m.ocrState) {
+            return m.ocrState === 'queued'
+                || m.ocrState === 'processing'
+                || m.ocrState === 'reviewing'
+                || m.ocrState === 'error';
+        }
         const hasArtifacts = (m.artifacts?.length || 0) > 0;
         const hasOcr = !!m.ocrDebug;
         if (!hasArtifacts && !hasOcr) return false;
@@ -1190,41 +1195,46 @@ const SmartCapturesPanel: React.FC = () => {
     return (
         <>
             <SmartCapturesShell
+                topNav={(
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div className="flex items-center gap-3">
+                            {renderSectionTabs('w-auto self-start')}
+                            <span className="text-label-sm text-md-sys-on-surface/55">
+                                {activeSection === 'capture'
+                                    ? 'Queue and review capture work without moving the section toggle.'
+                                    : 'Tools stay separate while the section toggle remains anchored on the left.'}
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                dispatchSettingsFocusRequest({
+                                    tab: 'ocr-capture',
+                                    search: 'capture mode',
+                                });
+                                setShowSettings(true);
+                            }}
+                            className="shrink-0 h-9 px-3 md3-surface rounded-control inline-flex items-center justify-center gap-2 text-md-sys-on-surface/70 hover:text-md-sys-primary transition-colors"
+                            title="Open Smart Capture settings"
+                            aria-label="Open Smart Capture settings"
+                        >
+                            <Settings size={14} />
+                            <span className="text-label-sm font-semibold">Capture settings</span>
+                        </button>
+                    </div>
+                )}
                 content={activeSection === 'capture' ? (
                     <div className="h-full min-h-0 flex flex-row gap-2 overflow-x-auto">
                         <div
-                            className={`min-h-0 min-w-0 transition-[width] duration-300 ${queueCollapsed ? 'w-16 min-w-16' : 'min-w-[260px]'}`}
+                            className={`min-h-0 min-w-0 transition-[width] duration-300 ${queueCollapsed ? 'w-28 min-w-28' : 'min-w-[260px]'}`}
                             style={!queueCollapsed ? { width: `${queueWidthPct}%` } : undefined}
                         >
                             <SmartCapturesQueuePane
                                 className="h-full"
                                 header={
                                     <div className="px-3 pt-3 pb-2 space-y-2 border-b border-md-sys-outline/10">
-                                        <div className={`flex items-center gap-2 ${queueCollapsed ? 'flex-col justify-center' : 'justify-between'}`}>
+                                        <div className={`flex items-center gap-2 ${queueCollapsed ? 'flex-col justify-center' : 'justify-start'}`}>
                                             <QueueCollapseToggle collapsed={queueCollapsed} onToggle={toggleQueueCollapsed} />
-                                            {!queueCollapsed && (
-                                                <div className="sc-seg sc-bordered w-full">
-                                                    <button type="button" className="sc-seg-btn w-1/2" data-active={activeSection === 'capture'} onClick={() => setActiveSection('capture')}>Queue</button>
-                                                    <button type="button" className="sc-seg-btn w-1/2" data-active={activeSection === 'tools'} onClick={() => setActiveSection('tools')}>Tools</button>
-                                                </div>
-                                            )}
-                                            {!queueCollapsed && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        dispatchSettingsFocusRequest({
-                                                            tab: 'ocr-capture',
-                                                            search: 'capture mode',
-                                                        });
-                                                        setShowSettings(true);
-                                                    }}
-                                                    className="shrink-0 h-8 w-8 md3-surface rounded-control inline-flex items-center justify-center text-md-sys-on-surface/70 hover:text-md-sys-primary transition-colors"
-                                                    title="Open Smart Capture settings"
-                                                    aria-label="Open Smart Capture settings"
-                                                >
-                                                    <Settings size={14} />
-                                                </button>
-                                            )}
                                         </div>
                                         {!queueCollapsed && activeSection === 'capture' && (
                                             <>
@@ -1647,10 +1657,7 @@ const SmartCapturesPanel: React.FC = () => {
                     <SmartCapturesToolsView>
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-md-sys-outline/10 pb-4 mb-4">
                             <h2 className="text-label-lg font-bold text-md-sys-on-surface">Smart Captures Tools</h2>
-                            <div className="sc-seg sc-bordered w-full sm:w-auto">
-                                <button type="button" className="sc-seg-btn w-1/2 sm:w-auto px-6" data-active={activeSection === 'capture'} onClick={() => setActiveSection('capture')}>Queue</button>
-                                <button type="button" className="sc-seg-btn w-1/2 sm:w-auto px-6" data-active={activeSection === 'tools'} onClick={() => setActiveSection('tools')}>Tools</button>
-                            </div>
+                            <span className="text-label-sm text-md-sys-on-surface/55">Bulk actions and diagnostics live here.</span>
                         </div>
                         <p className="text-body text-md-sys-on-surface/60 text-label-sm">Bulk actions and automation controls.</p>
                         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
@@ -2031,7 +2038,7 @@ const SmartMatchDetail: React.FC<{
             return combinedNameSimilarityScore(candidate, activeUserReference) >= 90;
         }, [activeUserDisplayKey, activeUserReference]);
         const toDisplayPlayerName = useCallback((rawName: string) => {
-            if (isActiveUserLike(rawName)) return '(you)';
+            if (isActiveUserLike(rawName)) return 'YOU';
             return rawName;
         }, [isActiveUserLike]);
         const persistNameSourceHintsToPendingDraft = useCallback((nameSources: OcrNameSourceMap) => {
@@ -2411,6 +2418,7 @@ const SmartMatchDetail: React.FC<{
         }, [showSecondaryActions]);
 
         useEffect(() => {
+            let cancelled = false;
             setArtifacts({ images: [], imageFiles: [], telemetry: [], missingImages: [], resolvedFromDisk: false });
             setRerunResults(null);
             setOcrNameSources({});
@@ -2420,6 +2428,7 @@ const SmartMatchDetail: React.FC<{
             setActiveScreenshotIndex(null);
             getMatchArtifactsStructured(match.id, match.artifacts || [])
                 .then((nextArtifacts) => {
+                    if (cancelled) return;
                     setArtifacts(nextArtifacts);
                     if (!nextArtifacts.resolvedFromDisk || nextArtifacts.missingImages.length === 0) return;
                     const missingKeys = new Set(
@@ -2442,8 +2451,12 @@ const SmartMatchDetail: React.FC<{
                     });
                 })
                 .catch((error: unknown) => {
+                    if (cancelled) return;
                     Logger.warn('SmartCapturesPanel', `Failed to load artifacts for match ${match.id}`, error);
                 });
+            return () => {
+                cancelled = true;
+            };
         }, [match, match.artifacts, match.id, onUpdate, setToast]);
 
         const totalKills = Object.values(match.kills || {}).reduce((a, b) => a + (Number(b) || 0), 0);
@@ -2672,7 +2685,7 @@ const SmartMatchDetail: React.FC<{
                     : [];
             const orderedOpponentTeams = sortOpponentTeamsByPriority(normalizedOpponentTeams);
             const opponentBoardTeams = orderedOpponentTeams.map((team, index) => ({
-                key: `${String(team.color || `enemy-${index + 1}`).trim()}:${String(team.teamName || `Enemy Team ${index + 1}`).trim()}`,
+                key: `enemy-${index}`,
                 color: String(team.color || 'unknown').trim() || 'unknown',
                 teamName: String(team.teamName || `Enemy Team ${index + 1}`).trim() || `Enemy Team ${index + 1}`,
                 shipType: String(team.shipType || '').trim(),
@@ -2682,7 +2695,7 @@ const SmartMatchDetail: React.FC<{
                 )),
             }));
             return [{
-                key: `friendly:${friendlyTeamName || 'empty'}`,
+                key: 'friendly-0',
                 color: 'friendly',
                 teamName: friendlyTeamName,
                 shipType: String(match.ship || ''),
@@ -2785,7 +2798,13 @@ const SmartMatchDetail: React.FC<{
                                 {type === 'teammate' && (
                                     <ShieldCheck size={10} className="text-info shrink-0" />
                                 )}
-                                <span className="truncate max-w-[200px]">{toDisplayPlayerName(p)}</span>
+                                <span className="truncate max-w-[200px]">{isActiveUserLike(p) ? p : toDisplayPlayerName(p)}</span>
+                                {isActiveUserLike(p) && (
+                                    <span className="ocr-active-user-pill ocr-active-user-pill--success">
+                                        <span className="ocr-active-user-pill__dot" />
+                                        YOU
+                                    </span>
+                                )}
                                 <button
                                     onClick={e => { e.stopPropagation(); removePlayer(type, idx); }}
                                     className="opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity"
@@ -3261,9 +3280,27 @@ const SmartMatchDetail: React.FC<{
                             <div className="sc-detail-identity-block">
                                 <div className="sc-detail-identity-top">
                                     <span className="sc-detail-match-title">Match {displayNumber}</span>
-                                    <span className={`sc-detail-chip sc-status-chip sc-status-chip--${statusMeta.tone}`} title={statusMeta.description}>
+                                    {hasResult && (
+                                        <>
+                                            <span className="sc-detail-chip sc-detail-chip--neutral">Match outcome</span>
+                                            <span className={`sc-detail-chip sc-result-chip--${match.result?.toLowerCase()}`} title="Match outcome">
+                                                {match.result === 'Win' ? <Trophy size={10} /> : match.result === 'Loss' ? <Skull size={10} /> : <AlertTriangle size={10} />}
+                                                {match.result}
+                                            </span>
+                                        </>
+                                    )}
+                                    <span className="sc-detail-chip sc-detail-chip--neutral">{hasResult ? 'Next action' : 'Status'}</span>
+                                    <span className={`sc-detail-chip sc-status-chip sc-status-chip--${statusMeta.tone}`} title={`Next step: ${statusMeta.description}`}>
                                         {statusIcon}
-                                        {statusMeta.label}
+                                        {queueStatus.key === 'Reviewing'
+                                            ? 'Needs Review'
+                                            : queueStatus.key === 'Ready'
+                                                ? 'Ready to Save'
+                                                : queueStatus.key === 'Queued'
+                                                    ? 'Run OCR'
+                                                    : queueStatus.key === 'Error'
+                                                        ? 'Retry OCR'
+                                                        : statusMeta.label}
                                     </span>
                                     {match.ocrReviewedAt && queueStatus.key !== 'Resolved' && (
                                         <span
@@ -3272,12 +3309,6 @@ const SmartMatchDetail: React.FC<{
                                         >
                                             <Check size={10} />
                                             Reviewed
-                                        </span>
-                                    )}
-                                    {hasResult && (
-                                        <span className={`sc-detail-chip sc-result-chip--${match.result?.toLowerCase()}`}>
-                                            {match.result === 'Win' ? <Trophy size={10} /> : match.result === 'Loss' ? <Skull size={10} /> : <AlertTriangle size={10} />}
-                                            {match.result}
                                         </span>
                                     )}
                                 </div>
@@ -3427,83 +3458,119 @@ const SmartMatchDetail: React.FC<{
 
                 <div className="sc-detail-main-grid mt-3">
                     <div className="lg:col-span-9 lg:col-start-1 space-y-3 min-w-0 sc-detail-editor-block">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sc-detail-stats-grid">
-                            <EditableStatCard
-                                icon={<Clock size={14} className="text-md-sys-on-surface/62" />} label="Time" value={match.time || '--'}
-                                onSave={(v) => onUpdate({ ...match, time: v })}
-                                placeholder="MM:SS"
-                                accent="primary"
-                            />
-                            <EditableStatCard
-                                icon={<HeartCrack size={14} className="text-md-sys-on-surface/62" />} label="Damage" value={match.damageTaken?.toString() || '0'}
-                                onSave={(v) => onUpdate({ ...match, damageTaken: parseInt(v) || 0 })}
-                                type="number"
-                                accent="danger"
-                            />
-                            <EditableStatCard
-                                icon={<Target size={14} className="text-md-sys-on-surface/62" />} label="Kills" value={totalKills.toString()}
-                                readOnly
-                                accent="success"
-                            />
-                            <div className="sc-stat-card sc-stat-card--warning">
-                                <div className="sc-stat-card__icon">
-                                    <Trophy size={14} className="text-md-sys-on-surface/62" />
-                                </div>
-                                <div className="sc-stat-card__body">
-                                    <span className="sc-stat-card__label">Place</span>
-                                    {match.result === 'Win' ? (
-                                        <span className="sc-stat-card__value">#1</span>
-                                    ) : (
-                                        <select
-                                            className="sc-stat-card__select"
-                                            value={
-                                                match.result === 'Loss'
-                                                    ? (match.placement && match.placement >= 2 && match.placement <= 5 ? String(match.placement) : '2')
-                                                    : String(match.placement || '')
-                                            }
-                                            onChange={(e) => {
-                                                const next = Number.parseInt(e.target.value, 10);
-                                                if (!Number.isFinite(next)) {
-                                                    onUpdate({ ...match, placement: undefined });
-                                                    return;
+                        <div className={`grid gap-3 ${artifacts.images.length > 0 ? 'xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start' : ''}`}>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sc-detail-stats-grid">
+                                <EditableStatCard
+                                    icon={<Clock size={14} className="text-md-sys-on-surface/62" />} label="Time" value={match.time || '--'}
+                                    onSave={(v) => onUpdate({ ...match, time: v })}
+                                    placeholder="MM:SS"
+                                    accent="primary"
+                                />
+                                <EditableStatCard
+                                    icon={<HeartCrack size={14} className="text-md-sys-on-surface/62" />} label="Damage" value={match.damageTaken?.toString() || '0'}
+                                    onSave={(v) => onUpdate({ ...match, damageTaken: parseInt(v) || 0 })}
+                                    type="number"
+                                    accent="danger"
+                                />
+                                <EditableStatCard
+                                    icon={<Target size={14} className="text-md-sys-on-surface/62" />} label="Kills" value={totalKills.toString()}
+                                    readOnly
+                                    accent="success"
+                                />
+                                <div className="sc-stat-card sc-stat-card--warning">
+                                    <div className="sc-stat-card__icon">
+                                        <Trophy size={14} className="text-md-sys-on-surface/62" />
+                                    </div>
+                                    <div className="sc-stat-card__body">
+                                        <span className="sc-stat-card__label">Place</span>
+                                        {match.result === 'Win' ? (
+                                            <span className="sc-stat-card__value">#1</span>
+                                        ) : (
+                                            <select
+                                                className="sc-stat-card__select"
+                                                value={
+                                                    match.result === 'Loss'
+                                                        ? (match.placement && match.placement >= 2 && match.placement <= 5 ? String(match.placement) : '2')
+                                                        : String(match.placement || '')
                                                 }
-                                                if (match.result === 'Loss') {
-                                                    onUpdate({ ...match, placement: Math.min(5, Math.max(2, next)) });
-                                                    return;
-                                                }
-                                                onUpdate({ ...match, placement: next });
-                                            }}
-                                        >
-                                            {match.result === 'Loss' ? (
-                                                [2, 3, 4, 5].map((place) => (
-                                                    <option key={place} value={place}>{`#${place}`}</option>
-                                                ))
-                                            ) : (
-                                                <>
-                                                    <option value="">--</option>
-                                                    {Array.from({ length: 20 }, (_, idx) => idx + 2).map((place) => (
+                                                onChange={(e) => {
+                                                    const next = Number.parseInt(e.target.value, 10);
+                                                    if (!Number.isFinite(next)) {
+                                                        onUpdate({ ...match, placement: undefined });
+                                                        return;
+                                                    }
+                                                    if (match.result === 'Loss') {
+                                                        onUpdate({ ...match, placement: Math.min(5, Math.max(2, next)) });
+                                                        return;
+                                                    }
+                                                    onUpdate({ ...match, placement: next });
+                                                }}
+                                            >
+                                                {match.result === 'Loss' ? (
+                                                    [2, 3, 4, 5].map((place) => (
                                                         <option key={place} value={place}>{`#${place}`}</option>
-                                                    ))}
-                                                </>
-                                            )}
-                                        </select>
-                                    )}
+                                                    ))
+                                                ) : (
+                                                    <>
+                                                        <option value="">--</option>
+                                                        {Array.from({ length: 20 }, (_, idx) => idx + 2).map((place) => (
+                                                            <option key={place} value={place}>{`#${place}`}</option>
+                                                        ))}
+                                                    </>
+                                                )}
+                                            </select>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
+                            {artifacts.images.length > 0 && (
+                                <div className="rounded-card md3-surface-high p-3 border border-md-sys-outline/10 flex flex-col gap-2 xl:min-h-full">
+                                    <div className="min-w-0">
+                                        <div className="text-label-sm font-bold text-md-sys-on-surface/80">Re-run analysis</div>
+                                        <div className="text-label-xs text-md-sys-on-surface/58">
+                                            Refresh OCR against the bundled screenshots without covering your match summary.
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {showRerunStatus && (
+                                            <span className="rounded-pill bg-md-sys-secondary/16 px-2 py-0.5 text-label-xs font-semibold text-md-sys-secondary">
+                                                {RERUN_PHASE_LABELS[rerunProgress.phase]}
+                                            </span>
+                                        )}
+                                        <button
+                                            onClick={handleRerunAnalysis}
+                                            disabled={rerunning}
+                                            className="rounded-control md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled flex items-center gap-1.5 justify-center"
+                                            title="Run OCR analysis on the bundled screenshots"
+                                        >
+                                            <RefreshCw size={12} className={rerunning ? 'animate-spin' : ''} />
+                                            {rerunning ? 'Analyzing...' : `${analyzeButtonLabel} ${countImages(artifacts.images.length > 0 ? artifacts.images : (match.artifacts || []))}`}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
-                        <Section title="Players" collapsible collapsed={!!collapsedSections.players} onToggle={() => toggleSection('players')}>
+                        <Section
+                            title="Players"
+                            collapsible
+                            collapsed={!!collapsedSections.players}
+                            onToggle={() => toggleSection('players')}
+                            headerAction={(
+                                <button
+                                    type="button"
+                                    className="md3-btn-text text-label-xs font-bold text-danger"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        onUpdate(clearSmartCapturePlayerAssignments(match));
+                                    }}
+                                    title="Clear all detected players, team assignments, and reach hazards"
+                                >
+                                    Clear All
+                                </button>
+                            )}
+                        >
                             <div className="space-y-2">
-                                <div className="flex items-center justify-end gap-2">
-                                    <button
-                                        type="button"
-                                        className="md3-btn-text text-label-xs font-bold text-danger"
-                                        onClick={() => onUpdate(clearSmartCapturePlayerAssignments(match))}
-                                        title="Clear all detected players, team assignments, and reach hazards"
-                                    >
-                                        Clear All
-                                    </button>
-                                </div>
                                 <OcrTeamAssignmentBoard
                                     teams={assignmentBoardTeams}
                                     shipOptions={SHIPS}
@@ -3512,7 +3579,8 @@ const SmartMatchDetail: React.FC<{
                                     friendlyTeamIndex={0}
                                     friendlyFixedPlayer={activeUserReference ? {
                                         canonicalName: activeUserReference,
-                                        displayLabel: '(you)',
+                                        label: 'YOU',
+                                        tone: 'success',
                                     } : null}
                                     compact={true}
                                     allowColorEdit={true}
@@ -3875,24 +3943,12 @@ const SmartMatchDetail: React.FC<{
                     </div>
 
                     <div className="lg:col-span-3 lg:col-start-10 lg:self-start space-y-3 min-w-0 sc-detail-rail-block" ref={screenshotsSectionRef}>
-                        {artifacts.images.length > 0 && (
+                        {showRerunStatus && (
                             <div className="rounded-card md3-surface-high p-3 border border-md-sys-outline/10 space-y-3">
                                 <div className="flex flex-col gap-2">
-                                    <span className="text-label-sm font-bold text-md-sys-on-surface/80">Re-run analysis</span>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <button
-                                            onClick={handleRerunAnalysis}
-                                            disabled={rerunning}
-                                            className="rounded-control md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled flex items-center gap-1.5 flex-1 justify-center"
-                                            title="Run OCR analysis on the bundled screenshots"
-                                        >
-                                            <RefreshCw size={12} className={rerunning ? 'animate-spin' : ''} />
-                                            {rerunning ? 'Analyzing...' : `${analyzeButtonLabel} ${countImages(artifacts.images.length > 0 ? artifacts.images : (match.artifacts || []))}`}
-                                        </button>
-                                    </div>
+                                    <span className="text-label-sm font-bold text-md-sys-on-surface/80">Analysis Status</span>
                                 </div>
-                                {showRerunStatus && (
-                                    <div className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container/95 px-2.5 py-2 space-y-1.5">
+                                <div className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container/95 px-2.5 py-2 space-y-1.5">
                                         <div className="flex flex-wrap items-center gap-2 text-label-xs">
                                             <span className="font-semibold text-md-sys-on-surface/86">
                                                 {rerunProgress.status || (rerunning ? 'Running analysis...' : 'Ready')}
@@ -3965,7 +4021,6 @@ const SmartMatchDetail: React.FC<{
                                             </div>
                                         )}
                                     </div>
-                                )}
                             </div>
                         )}
 
@@ -3987,13 +4042,13 @@ const SmartMatchDetail: React.FC<{
                                 {artifacts.images.map((src, i) => (
                                     <div
                                         key={i}
-                                        className="relative min-h-[220px] md:min-h-[280px] md3-surface-high rounded-xl overflow-hidden group sc-shot-thumb border border-md-sys-outline/10 shadow-sm"
+                                        className="relative aspect-video md3-surface-high rounded-xl overflow-hidden group sc-shot-thumb border border-md-sys-outline/10 shadow-sm"
                                     >
                                         <button onClick={() => setActiveScreenshotIndex(i)} className="w-full h-full">
                                             <LocalImage
                                                 src={src}
                                                 alt={`Screenshot ${i + 1}`}
-                                                className="w-full h-full object-contain bg-md-sys-surface-container-lowest"
+                                                className="w-full h-full object-cover bg-md-sys-surface-container-lowest"
                                             />
                                             <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                                 <Eye size={20} />
@@ -4194,11 +4249,10 @@ const SmartMatchDetail: React.FC<{
                             onActiveIndexChange={setActiveScreenshotIndex}
                             onClose={() => setActiveScreenshotIndex(null)}
                             title="Match Screenshots"
-                            subtitle="Zoom, pan, and hover for loupe. Use the thumbnail rail to switch images."
+                            subtitle="Click to zoom, drag to pan while zoomed, and use the thumbnail rail to switch images."
                             className="h-[min(88vh,920px)] w-[min(96vw,1280px)]"
                             stageClassName="min-h-[420px]"
                             imageAltPrefix="Match screenshot"
-                            enableLoupe={true}
                             autoFocus={true}
                         />
                     </div>

@@ -162,9 +162,11 @@ describe('useMatchSubmission', () => {
     const { result } = renderHook(() => useMatchSubmission());
     expect(result.current).toHaveProperty('initiateSubmission');
     expect(result.current).toHaveProperty('processFinalSubmission');
+    expect(result.current).toHaveProperty('saveResultDraft');
     expect(result.current).toHaveProperty('submitting');
     expect(typeof result.current.initiateSubmission).toBe('function');
     expect(typeof result.current.processFinalSubmission).toBe('function');
+    expect(typeof result.current.saveResultDraft).toBe('function');
     expect(result.current.submitting).toBe(false);
   });
 
@@ -690,5 +692,57 @@ describe('useMatchSubmission', () => {
     const [submitted] = addMatch.mock.calls[0];
     expect(submitted.result).toBe('Loss');
     expect(submitted.eliminatedByTeam).toBe('red');
+  });
+
+  it('saveResultDraft uses pending draft result precedence and skips artifact bundling', async () => {
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.showWizard = 'Loss';
+    mockStoreState.pendingMatchData = {
+      id: 222,
+      timestamp: 1_700_000_000_000,
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      kills: {},
+      reachModifiers: [],
+      result: 'Win',
+      time: '06:30',
+      artifacts: ['capture.png'],
+      ocrState: 'reviewing',
+    };
+    mockStoreState.matches = [{
+      id: 222,
+      timestamp: 1_700_000_000_000,
+      date: '1/1/2024',
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      artifacts: ['capture.png'],
+      ocrState: 'reviewing',
+    }];
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    await act(async () => {
+      await result.current.saveResultDraft('Artifact');
+    });
+
+    expect(updateMatch).toHaveBeenCalled();
+    const [savedMatch] = updateMatch.mock.calls[0];
+    expect(savedMatch.result).toBe('Win');
+    expect(savedMatch.subType).toBe('Artifact');
+    expect(savedMatch.ocrState).toBe('reviewing');
+    expect(bundleMatchArtifacts).not.toHaveBeenCalled();
+    expect(setToast).toHaveBeenCalledWith({ message: 'Results saved. You can return to OCR later.', type: 'success' });
   });
 });

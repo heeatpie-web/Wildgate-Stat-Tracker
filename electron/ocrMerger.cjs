@@ -248,6 +248,9 @@ function crossMergeCrewHubAndMap(crewHub, tactMap) {
 
   // Preserve map-only ships as empty teams so later crew captures (that include those
   // teams) can merge by color/name without forcing positional mis-assignment.
+  const trustedCrewTeamCount = enrichedTeams.filter((team) => (
+    (team?.players?.length || 0) > 0 || !isPlaceholderTeamName(team?.teamName, team?.color || team?.teamColor)
+  )).length;
   const mapOnlyTeams = mapShipsByType.filter((ship) => {
     const shipColor = String(ship?.color || ship?.teamColor || '').trim().toLowerCase();
     const shipNameKey = normalizeTeamName(ship?.teamName || '');
@@ -266,15 +269,21 @@ function crossMergeCrewHubAndMap(crewHub, tactMap) {
     shipType: ship?.shipType || '',
     players: [],
     confidence: Number(ship?.confidence || 60),
-  }));
+  })).filter((team) => {
+    if (trustedCrewTeamCount < 2) return true;
+    const namedEvidence = !isPlaceholderTeamName(team.teamName, team.color) ? 1 : 0;
+    const colorEvidence = team.color && team.color !== 'unknown' ? 1 : 0;
+    const shipEvidence = team.shipType ? 1 : 0;
+    const evidenceScore = namedEvidence + colorEvidence + shipEvidence;
+    return evidenceScore >= 2 && Number(team.confidence || 0) >= 80;
+  });
 
   const combinedTeams = [...enrichedTeams, ...mapOnlyTeams];
 
   const shipTypeHint = crewHub.playerShip?.shipType || tactMap.playerShip?.shipType || '';
   const mergedPlayerShipName = normalizePlayerShipName(crewHub.playerShipName, shipTypeHint)
-    || normalizePlayerShipName(tactMap.playerShipName, shipTypeHint)
     || normalizePlayerShipName(crewHub.playerTeamName, shipTypeHint)
-    || normalizePlayerShipName(tactMap.playerTeamName, shipTypeHint)
+    || normalizePlayerShipName(tactMap.playerShipName, shipTypeHint)
     || undefined;
 
   return {
@@ -398,9 +407,17 @@ function crossMergeInternalCrewAndMap(crew, map) {
   {
     const finalMatchedColors = new Set(enrichedTeams.map(t => t.color));
     const finalMatchedNames  = new Set(enrichedTeams.map(t => normalizeTeamName(t.name || '')));
+    const crewHasStrongEvidence = enrichedTeams.filter((team) => (team?.players?.length || 0) > 0).length >= 2;
     for (const orphan of (map.enemyShips || [])) {
       if (finalMatchedColors.has(orphan.color)) continue;
       if (orphan.teamName && finalMatchedNames.has(normalizeTeamName(orphan.teamName))) continue;
+      const orphanColor = String(orphan.color || '').trim().toLowerCase();
+      const orphanName = String(orphan.teamName || '').trim();
+      const orphanConfidence = Number(orphan.confidence || 0);
+      const orphanEvidence = Number(Boolean(orphan.shipType))
+        + Number(Boolean(orphanColor && orphanColor !== 'unknown'))
+        + Number(!isPlaceholderTeamName(orphanName, orphanColor));
+      if (crewHasStrongEvidence && (orphanEvidence < 2 || orphanConfidence < 80)) continue;
       enrichedTeams.push({
         color:    orphan.color,
         name:     orphan.teamName || '',

@@ -298,6 +298,7 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
         })
         .slice(0, dense ? 4 : 6);
     const weaponRows = cockpitModel.loadouts.weapons.slice(0, dense ? 4 : 6);
+    const shipWeaponRows = cockpitModel.loadouts.shipWeapons.slice(0, dense ? 3 : 4);
     const hazardRows = cockpitModel.hazards.modifiers.slice(0, dense ? 4 : 6);
     const equipmentRows = cockpitModel.loadouts.equipment.slice(0, 3);
     const perkRows = cockpitModel.loadouts.perks.slice(0, 3);
@@ -312,10 +313,10 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
                             Analytics cockpit
                         </div>
                         <h2 className="mt-1 text-heading font-black tracking-tight text-md-sys-on-surface">
-                            Richer context, not just totals
+                            See what is actually moving the needle
                         </h2>
                         <div className="mt-2 text-body text-md-sys-on-surface/62 max-w-3xl">
-                            Start from a ship, person, weapon, or hazard, then go deeper into the surrounding performance context without losing your current filter scope.
+                            Start from a ship, person, weapon, or hazard, then drill into why it matters without losing your current filter scope.
                         </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -447,7 +448,7 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
                     subtitle="Open a weapon or hazard to see the surrounding people and loadouts."
                     icon={<Target size={18} />}
                 >
-                    <SectionBlock title="Weapons" emptyLabel="No weapon trends yet.">
+                    <SectionBlock title="Prospector weapons" emptyLabel="No prospector weapon trends yet.">
                         <>
                             {weaponRows.map((row) => (
                                 <ExplorerRow
@@ -457,7 +458,20 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
                                     onClick={() => onDrillDown(row.name, 'Weapon')}
                                 />
                             ))}
-                            {weaponRows.length === 0 ? <div className="text-label-sm text-md-sys-on-surface/45">No weapon trends yet.</div> : null}
+                            {weaponRows.length === 0 ? <div className="text-label-sm text-md-sys-on-surface/45">No prospector weapon trends yet.</div> : null}
+                        </>
+                    </SectionBlock>
+                    <SectionBlock title="Ship weapons" emptyLabel="No ship weapon trends yet.">
+                        <>
+                            {shipWeaponRows.map((row) => (
+                                <ExplorerRow
+                                    key={`ship-weapon-${row.name}`}
+                                    row={row}
+                                    note={`${row.total} matches · ${row.avgDamage} avg damage`}
+                                    onClick={() => onDrillDown(row.name, 'Weapon')}
+                                />
+                            ))}
+                            {shipWeaponRows.length === 0 ? <div className="text-label-sm text-md-sys-on-surface/45">No ship weapon trends yet.</div> : null}
                         </>
                     </SectionBlock>
                     <SectionBlock title="Hazards and artifacts" emptyLabel="No hazard trends yet.">

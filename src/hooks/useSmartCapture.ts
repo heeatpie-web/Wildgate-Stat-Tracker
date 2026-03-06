@@ -27,6 +27,8 @@ import Logger from '../utils/logger';
 import { runtimeConfig } from '../config/runtimeConfig';
 import { resolveTagShipMetadata } from '../utils/scan/localScan';
 
+const IMAGE_PATH_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
+
 export interface SavedCapture {
   filePath: string;
   filename: string;
@@ -161,6 +163,67 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     const normalized = String(matchId).trim();
     return normalized.length > 0 ? normalized : null;
   }, []);
+
+  const mergeArtifactPaths = useCallback((existing: string[] = [], incoming: string[] = []): string[] => {
+    const next: string[] = [];
+    const seen = new Set<string>();
+    [...existing, ...incoming].forEach((entry) => {
+      const normalized = String(entry || '').trim();
+      if (!normalized || !IMAGE_PATH_PATTERN.test(normalized)) return;
+      const key = normalized.replace(/[\\/]+/g, '\\').toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      next.push(normalized);
+    });
+    return next;
+  }, []);
+
+  const getScopeArtifactPaths = useCallback((matchId?: string | number | null): string[] => {
+    const scope = normalizeMatchScope(matchId);
+    return mergeArtifactPaths(
+      [],
+      savedCapturesRef.current
+        .filter((capture) => (
+          scope
+            ? normalizeMatchScope(capture.matchId) === scope
+            : normalizeMatchScope(capture.matchId) === null
+        ))
+        .map((capture) => capture.filePath)
+    );
+  }, [mergeArtifactPaths, normalizeMatchScope]);
+
+  const syncArtifactsToMatchScope = useCallback((matchId: string | number | null | undefined, artifactPaths: string[]) => {
+    const scope = normalizeMatchScope(matchId);
+    const mergedArtifacts = mergeArtifactPaths([], artifactPaths);
+    if (!scope || mergedArtifacts.length === 0) return;
+
+    const state = useAppStore.getState();
+    const pendingDraft = state.pendingMatchData;
+    if (pendingDraft && normalizeMatchScope(pendingDraft.id) === scope) {
+      state.setPendingMatchData({
+        ...pendingDraft,
+        artifacts: mergeArtifactPaths(
+          Array.isArray(pendingDraft.artifacts) ? pendingDraft.artifacts : [],
+          mergedArtifacts
+        ),
+      });
+    }
+
+    const numericScope = Number(scope);
+    if (!Number.isInteger(numericScope) || numericScope <= 0) return;
+    const scopedMatch = (state.matches || []).find((match) => Number(match.id || 0) === numericScope);
+    if (!scopedMatch) return;
+    state.updateMatch({
+      ...scopedMatch,
+      artifacts: mergeArtifactPaths(scopedMatch.artifacts || [], mergedArtifacts),
+      ocrState: scopedMatch.ocrState || 'queued',
+    });
+  }, [mergeArtifactPaths, normalizeMatchScope]);
+
+  const withScopeArtifacts = useCallback((data: OCRExtractedData, matchId?: string | number | null): OCRExtractedData => ({
+    ...data,
+    artifacts: mergeArtifactPaths(data.artifacts || [], getScopeArtifactPaths(matchId)),
+  }), [getScopeArtifactPaths, mergeArtifactPaths]);
 
   const getFileLabel = useCallback((filePath: string): string => {
     const normalized = String(filePath || '').trim();
@@ -813,7 +876,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         normalizedData.teammates || [],
         normalizedData.playerShip?.shipType
       );
-      const created = {
+      const created = withScopeArtifacts({
         screenshotType: normalizedData.screenshotType,
         playerShip: normalizedData.playerShip,
         playerTeamName: normalizedData.playerTeamName,
@@ -826,7 +889,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         overallConfidence: normalizedData.overallConfidence || 0,
         captureTimestamp: Date.now(),
         imagePreview: normalizedData.imagePreview,
-      };
+      }, matchId);
       pendingDataByScopeRef.current[scope] = created;
       setPendingData(created);
       return;
@@ -849,7 +912,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       (merged.teammates || previous.teammates) || [],
       shipForTeammateCap
     );
-    const updated = {
+    const updated = withScopeArtifacts({
       ...previous,
       screenshotType,
       playerShip: merged.playerShip || previous.playerShip,
@@ -863,10 +926,10 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       overallConfidence: calculateOverallConfidence(merged),
       captureTimestamp: Date.now(),
       imagePreview: normalizedData.imagePreview || previous.imagePreview,
-    };
+    }, matchId);
     pendingDataByScopeRef.current[scope] = updated;
     setPendingData(updated);
-  }, [applyTemporalFusion, canonicalizeOcrData, normalizeMatchScope]);
+  }, [applyTemporalFusion, canonicalizeOcrData, normalizeMatchScope, withScopeArtifacts]);
 
   const processSingleCapture = useCallback(async (activeUser?: string | null) => {
     const captureResult = await captureGameWindow();
@@ -977,6 +1040,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         savedCapturesRef.current = next;
         return next;
       });
+      syncArtifactsToMatchScope(resolvedMatchId, [saved.filePath]);
       playSuccess();
       return entry;
     } catch (err) {
@@ -988,7 +1052,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       setVisionStatus('idle');
       captureInFlightRef.current = false;
     }
-  }, [playSuccess, playSoundError, setVisionStatus, assessCaptureQuality, normalizeMatchScope]);
+  }, [playSuccess, playSoundError, setVisionStatus, assessCaptureQuality, normalizeMatchScope, syncArtifactsToMatchScope]);
 
   const processStoredImage = useCallback(async (filePath: string, activeUser?: string | null) => {
     setVisionStatus('processing');
@@ -1255,9 +1319,12 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
   const getPendingData = useCallback((matchId?: string | number | null): OCRExtractedData | null => {
     const scope = normalizeMatchScope(matchId);
-    if (scope) return pendingDataByScopeRef.current[scope] || null;
-    return pendingDataRef.current;
-  }, [normalizeMatchScope]);
+    if (scope) {
+      const scopedData = pendingDataByScopeRef.current[scope];
+      return scopedData ? withScopeArtifacts(scopedData, scope) : null;
+    }
+    return pendingDataRef.current ? withScopeArtifacts(pendingDataRef.current, matchId) : null;
+  }, [normalizeMatchScope, withScopeArtifacts]);
 
   const reanalyzeCaptures = useCallback((matchId?: string | number | null) => {
     const scope = normalizeMatchScope(matchId);
@@ -1276,14 +1343,15 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       ? buildMergedData(synthesizedScreenshots)
       : buildMergedData(capturedScreenshots);
     if (mergedResult) {
+      const mergedWithArtifacts = withScopeArtifacts(mergedResult, scope);
       if (scope) {
-        pendingDataByScopeRef.current[scope] = mergedResult;
+        pendingDataByScopeRef.current[scope] = mergedWithArtifacts;
       } else {
-        pendingDataByScopeRef.current.unscoped = mergedResult;
+        pendingDataByScopeRef.current.unscoped = mergedWithArtifacts;
       }
-      setPendingData(mergedResult);
+      setPendingData(mergedWithArtifacts);
     }
-  }, [buildMergedData, capturedScreenshots, normalizeMatchScope, savedCaptures]);
+  }, [buildMergedData, capturedScreenshots, normalizeMatchScope, savedCaptures, withScopeArtifacts]);
 
   const resetCaptureSession = useCallback(() => {
     capturedScreenshotsRef.current = [];

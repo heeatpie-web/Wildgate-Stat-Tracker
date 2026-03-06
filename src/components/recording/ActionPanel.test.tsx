@@ -69,7 +69,18 @@ const initiateSubmission = vi.fn();
 const appStoreState = {
   ocrMode: 'both',
   resultOcrFlowMode: 'prompt',
+  pendingMatchData: null as any,
+  matches: [] as any[],
+  setPendingMatchData: vi.fn(),
+  updateMatch: vi.fn(),
 };
+
+const useAppStoreMock = Object.assign(
+  (selector: any) => selector(appStoreState),
+  {
+    getState: () => appStoreState,
+  }
+);
 
 vi.mock('../../providers/GameDataProvider', () => ({
   useGameData: () => gameData,
@@ -96,7 +107,7 @@ vi.mock('../../hooks/useMatchSubmission', () => ({
 }));
 
 vi.mock('../../store/useAppStore', () => ({
-  useAppStore: (selector: any) => selector(appStoreState),
+  useAppStore: useAppStoreMock,
 }));
 
 vi.mock('../SessionTimer', () => ({
@@ -132,6 +143,8 @@ describe('ActionPanel', () => {
     });
     gameData.currentLoadout = null;
     appStoreState.resultOcrFlowMode = 'prompt';
+    appStoreState.pendingMatchData = null;
+    appStoreState.matches = [];
     smartCaptureActions.getPendingData.mockImplementation(() => smartCaptureState.pendingData);
     uiState.smartCaptureRequest = null;
 
@@ -313,6 +326,26 @@ describe('ActionPanel', () => {
 
     expect(initiateSubmission).toHaveBeenCalledWith('Loss');
     expect(smartCaptureActions.processAllStored).not.toHaveBeenCalled();
+  });
+
+  it('merges queued capture paths onto the pending draft before continuing without OCR', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    appStoreState.pendingMatchData = { artifacts: ['existing.png'] };
+    smartCaptureState.savedCaptures = [{
+      filePath: 'queued.png',
+      filename: 'queued.png',
+      timestamp: Date.now(),
+      matchId: null,
+      ocrProcessed: false,
+    }];
+
+    render(<ActionPanel onSmartCaptureData={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /loss/i }));
+    fireEvent.click(screen.getByRole('button', { name: /continue without ocr/i }));
+
+    expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
+      artifacts: ['existing.png', 'queued.png'],
+    }));
   });
 
   it('processes OCR only after explicit prompt confirmation and then opens OCR gate', async () => {

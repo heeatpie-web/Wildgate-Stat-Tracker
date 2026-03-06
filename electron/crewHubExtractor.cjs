@@ -150,6 +150,7 @@ const NOISE_WORDS = new Set([
   'WAYPOINT', 'COMPASS', 'MARKER', 'MINIMAP', 'ICON',
   'GATE', 'VAULT', 'STORM', 'SWARM', 'SWARMS',
   'RANK', 'LEVEL', 'PRESTIGE', 'PROGRESS',
+  'SMALL CREW BONUS', 'REDUCED FIRES',
 ]);
 const UI_NOISE_PHRASES = [
   'CREW HUB',
@@ -162,6 +163,8 @@ const UI_NOISE_PHRASES = [
   'SWITCH',
   'VOICE CHANNEL',
   'YOUR VOICE',
+  'SMALL CREW BONUS',
+  'REDUCED FIRES',
 ];
 function containsUiNoisePhrase(input) {
   const normalized = String(input || '')
@@ -170,6 +173,16 @@ function containsUiNoisePhrase(input) {
     .trim();
   if (!normalized) return false;
   return UI_NOISE_PHRASES.some(phrase => normalized.includes(phrase));
+}
+
+function containsUnderCrewBonusPhrase(input) {
+  const normalized = String(input || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized) return false;
+  return normalized === 'SMALL CREW BONUS' || normalized === 'REDUCED FIRES';
 }
 
 /**
@@ -547,6 +560,7 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
       playerName = sanitizeLeftPanelPlayerName(playerName);
       if (Math.abs(line.y - 1355) < 10) dlog('[LPdbg1355b] extractResult="' + playerName + '" nameColWords=' + nameColWords.length);
       if (!playerName) { dlog('[LPdbg] y=' + Math.round(line.y) + ' → no name from: ' + nameColWords.map(w=>'"'+w.text+'"(c'+Math.round(w.confidence)+')').join(' ')); continue; }
+      if (containsUnderCrewBonusPhrase(playerName)) { dlog('[LPdbg] y=' + Math.round(line.y) + ' → filtered ship-bonus phrase "' + playerName + '"'); continue; }
       if (!isValidPlayerName(playerName)) { dlog('[LPdbg] y=' + Math.round(line.y) + ' → invalid: "' + playerName + '"'); continue; }
       // Filter team name banner fragments.
       // e.g. "PEED ED RUN!s" ← "SPEED RUN!'s" — handles:
@@ -631,7 +645,7 @@ async function extractLeftPanel(imageBuffer, activeUser, words, lines, text, ima
     const teamSectionLines = groupedLines.filter((line) => (
       line.y > teamHeader.y &&
       line.y <= leftBounds.yMax &&
-      (line.y - teamHeader.y) <= imageHeight * 0.45
+      (line.y - teamHeader.y) <= imageHeight * 0.34
     ));
     const teamSectionPlayers = parsePlayersFromLines(teamSectionLines);
     for (const name of teamSectionPlayers) {
@@ -1987,6 +2001,7 @@ function getLineMinX(words) {
  */
 function scoreAsPlayerName(text) {
   if (!text || text.length < 3) return 0;
+  if (containsUnderCrewBonusPhrase(text) || containsUiNoisePhrase(text)) return 0;
 
   let score = 0;
 
@@ -2222,6 +2237,7 @@ function extractBottomLeftTeammateCandidates(words, imageWidth, imageHeight) {
     let candidate = extractPlayerNameFromLine(lineWords);
     candidate = sanitizeLeftPanelPlayerName(candidate);
     if (!candidate) continue;
+    if (containsUnderCrewBonusPhrase(candidate)) continue;
     if (!isValidPlayerName(candidate)) continue;
     if (scoreAsPlayerName(candidate) < 18) continue;
     if (/PARTY|VOICE|TEAM|CREW|HUB|CHANNEL|PUSH|TALK|MUTE|DEAFEN|TEXT|PINGS/i.test(candidate)) continue;
@@ -2266,6 +2282,7 @@ function repairKnownLeftPanelMisreads(name) {
  */
 function isValidPlayerName(name) {
   if (!name || name.length < 4 || name.length > 25) return false;
+  if (containsUnderCrewBonusPhrase(name)) return false;
 
   // Must have at least some letters (Latin, Extended Latin, Cyrillic, or CJK)
   // \u00C0-\u024F: Extended Latin (accented characters)
@@ -2312,6 +2329,7 @@ function isValidPlayerName(name) {
 
 function isValidOpponentName(name) {
   if (!name || name.length < 4 || name.length > 28) return false;
+  if (containsUnderCrewBonusPhrase(name)) return false;
   if (/^[0-9]/.test(name)) {
     // Some valid gamertags start with digits (e.g. "20Aira20", "2026Civic").
     // Keep rejecting mostly-numeric noise while allowing mixed alnum names.

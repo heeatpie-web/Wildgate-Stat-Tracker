@@ -62,8 +62,8 @@ export interface QueueStatus {
 export const OCR_STATE_META: Record<OcrState, { label: string; cls: string; description: string }> = {
     queued:     { label: 'Queued',     cls: 'bg-info-soft text-info',      description: 'Screenshots saved, awaiting OCR' },
     processing: { label: 'Processing', cls: 'bg-accent-soft text-accent',  description: 'OCR is running on screenshots' },
-    reviewing:  { label: 'Review',     cls: 'bg-warning-soft text-warning', description: 'OCR complete, needs human review' },
-    ready:      { label: 'Ready',      cls: 'bg-success-soft text-success', description: 'Reviewed, ready to save' },
+    reviewing:  { label: 'Needs review', cls: 'bg-warning-soft text-warning', description: 'OCR complete, needs human review' },
+    ready:      { label: 'Ready to save', cls: 'bg-success-soft text-success', description: 'Reviewed, ready to save' },
     saved:      { label: 'Saved',      cls: 'bg-success-soft text-success', description: 'Data applied and resolved' },
     error:      { label: 'Error',      cls: 'bg-danger-soft text-danger',   description: 'OCR processing failed' },
 };
@@ -74,6 +74,8 @@ export const getQueueStatus = (m: Match): QueueStatus => {
     const confidence = m.ocrDebug?.confidence ?? 0;
     const missingShip = !m.ship;
     const missingPlayers = (m.teammates?.length || 0) === 0 && (m.opponents?.length || 0) === 0 && (m.opponentTeams?.length || 0) === 0;
+    const hasResult = m.result === 'Win' || m.result === 'Loss' || m.result === 'Draw';
+    const isReviewComplete = hasResult && !missingShip && !missingPlayers;
     const base = { missingShip, missingPlayers, hasArtifacts, hasOcr, confidence, ocrState: m.ocrState };
 
     // Use explicit ocrState when present (new state machine)
@@ -81,7 +83,7 @@ export const getQueueStatus = (m: Match): QueueStatus => {
         switch (m.ocrState) {
             case 'queued':     return { ...base, key: 'Queued' };
             case 'processing': return { ...base, key: 'Processing' };
-            case 'reviewing':  return { ...base, key: 'Reviewing' };
+            case 'reviewing':  return { ...base, key: isReviewComplete ? 'Ready' : 'Reviewing' };
             case 'ready':      return { ...base, key: 'Ready' };
             case 'saved':      return { ...base, key: 'Resolved' };
             case 'error':      return { ...base, key: 'Error' };
@@ -169,19 +171,19 @@ export const getSemanticStatusTone = (statusKey: QueueStatusKey): QueueSemanticT
 export const getStatusMeta = (statusKey: QueueStatusKey): StatusMeta => {
     switch (statusKey) {
         case 'Resolved':
-            return { label: 'Resolved', description: 'Review completed and saved.', tone: 'neutral', icon: 'check' };
+            return { label: 'Saved', description: 'Review completed and saved.', tone: 'neutral', icon: 'check' };
         case 'Ready':
-            return { label: 'Ready', description: 'Reviewed and ready to save.', tone: 'success', icon: 'spark' };
+            return { label: 'Ready to save', description: 'Review is complete. Save or resolve this match.', tone: 'success', icon: 'spark' };
         case 'OK':
-            return { label: 'Ready', description: 'Captured with no blocking issues.', tone: 'success', icon: 'spark' };
+            return { label: 'Ready to save', description: 'Captured with no blocking issues.', tone: 'success', icon: 'spark' };
         case 'NeedsOCR':
-            return { label: 'Needs OCR', description: 'Screenshots bundled; OCR has not run yet.', tone: 'warning', icon: 'scan' };
+            return { label: 'Run OCR', description: 'Screenshots are attached, but OCR has not run yet.', tone: 'warning', icon: 'scan' };
         case 'LowConf':
-            return { label: 'Low confidence', description: 'OCR confidence is below target threshold.', tone: 'warning', icon: 'alert' };
+            return { label: 'Check OCR', description: 'OCR confidence is below the target threshold.', tone: 'warning', icon: 'alert' };
         case 'Reviewing':
-            return { label: 'Review', description: 'OCR completed and awaiting human review.', tone: 'warning', icon: 'alert' };
+            return { label: 'Needs review', description: 'OCR completed and is waiting for human review.', tone: 'warning', icon: 'alert' };
         case 'MissingData':
-            return { label: 'Missing data', description: 'Critical fields are missing.', tone: 'danger', icon: 'alert' };
+            return { label: 'Needs details', description: 'Critical fields are still missing.', tone: 'danger', icon: 'alert' };
         case 'Error':
             return { label: 'Error', description: 'OCR processing failed.', tone: 'danger', icon: 'x' };
         case 'Queued':

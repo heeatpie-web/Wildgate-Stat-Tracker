@@ -51,6 +51,7 @@ const uiState = {
 };
 
 const processFinalSubmission = vi.fn();
+const saveResultDraft = vi.fn();
 const setPendingMatchDataFromStore = vi.fn();
 const rerunOCRMulti = vi.fn();
 
@@ -65,6 +66,7 @@ vi.mock('../providers/UIStateProvider', () => ({
 vi.mock('../hooks/useMatchSubmission', () => ({
     useMatchSubmission: () => ({
         processFinalSubmission,
+        saveResultDraft,
         submitting: false,
     }),
 }));
@@ -224,6 +226,38 @@ describe('Wizard', () => {
 
         fireEvent.click(finalizeButton);
         expect(processFinalSubmission).toHaveBeenCalledWith('Combat');
+    });
+
+    it('mirrors result choices into the pending draft and supports save-results-only', async () => {
+        const { Wizard } = await import('./Wizard');
+        gameData.pendingMatchData = {
+            id: 1201,
+            loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                weapons: [],
+                equipment: [],
+            },
+            kills: { 'AI Legion': 0 },
+        };
+        uiState.showWizard = 'Match Result';
+
+        const { rerender } = render(<Wizard />);
+
+        fireEvent.click(screen.getByRole('button', { name: /^win$/i }));
+        rerender(<Wizard />);
+        expect(setPendingMatchDataFromStore).toHaveBeenCalledWith(expect.objectContaining({
+            result: 'Win',
+        }));
+
+        fireEvent.click(screen.getByRole('button', { name: /artifact win/i }));
+        expect(setPendingMatchDataFromStore).toHaveBeenCalledWith(expect.objectContaining({
+            result: 'Win',
+            subType: 'Artifact',
+        }));
+
+        fireEvent.click(screen.getByRole('button', { name: /save results only/i }));
+        expect(saveResultDraft).toHaveBeenCalledWith('Artifact');
     });
 
     it('stores eliminator selection by normalized team color in loss flow', async () => {

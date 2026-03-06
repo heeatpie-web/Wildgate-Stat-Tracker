@@ -14,10 +14,8 @@ import { Header } from './components/Header';
 import { WindowFrame } from './components/WindowFrame';
 import { OverlayView } from './components/OverlayView';
 import { DevTools } from './components/DevTools';
-import { TelemetryPanel } from './components/TelemetryPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import Tutorial from './components/Tutorial';
-import FirstRunHealthCheck from './components/FirstRunHealthCheck';
 import { WindowResizer } from './components/WindowResizer';
 import { getTipsForView } from './utils/tipsLibrary';
 const IS_DEV_BUILD = import.meta.env.DEV || process.env.NODE_ENV !== 'production';
@@ -97,6 +95,7 @@ import { buildAliasVariantMap, resolveOcrName } from './utils/ocrNameResolver';
 import { assignDeterministicTeamColors, buildPlayerColorHints, normalizeTeamColor } from './utils/ocr/teamColorAssignment';
 import { backfillOpponentTeamShipTypes } from './utils/ocr/opponentTeamShipTypes';
 import { capTeammatePlayers, getMaxTeammatesForShip } from './utils/teamLimits';
+import { cloneLoadout, sanitizeUnknownLoadout } from './utils/loadout';
 import {
     deriveCanonicalRosterCandidateTargetKey,
     getRosterCandidatePruneIds,
@@ -162,13 +161,11 @@ interface RestoreSessionSnapshot {
 
 const RESTORE_SESSION_STORAGE_KEY = 'wg_restore_session_v1';
 const RESTORE_SESSION_DISMISSED_SIGNATURE_KEY = 'wg_restore_session_dismissed_signature_v1';
+const INTENTIONAL_CLOSE_STORAGE_KEY = 'wg_intentional_close_v1';
 const RESTORE_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const SETTINGS_FOCUS_SECTION_STORAGE_KEY = 'wg_settings_focus_section_v1';
-const STARTUP_HEALTH_CHECK_SEEN_KEY_PREFIX = 'wg_startup_health_check_seen_v2';
-const STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY_PREFIX = 'wg_startup_health_check_skipped_launch_v2';
 const UNKNOWN_PLAYER_LABELS = new Set(['unknown', 'unknown player', 'n/a', 'na', '?']);
 const STARTUP_INTERACTION_GRACE_MS = 3500;
-const MAX_PROSPECTOR_LOADOUT_SLOTS = 3;
 const getOnboardingUserScope = (user: string | null | undefined): string => {
     const normalized = String(user || '').trim().toLowerCase();
     return normalized || '__global__';
@@ -238,7 +235,7 @@ const App: React.FC = () => {
     const [restoreSessionPrompt, setRestoreSessionPrompt] = useState<RestoreSessionSnapshot | null>(null);
     const [showFuzzyReviewPrompt, setShowFuzzyReviewPrompt] = useState(false);
     const [showIdInfoPrompt, setShowIdInfoPrompt] = useState(false);
-    const [showStartupHealthCheck, setShowStartupHealthCheck] = useState(false);
+    const [showStartupHealthCheck] = useState(false);
     const [startupFlowReady, setStartupFlowReady] = useState(false);
     const [startupInteractionReady, setStartupInteractionReady] = useState(false);
     const [isCompactNav, setIsCompactNav] = useState(() => window.innerWidth < 1024);
@@ -275,7 +272,6 @@ const App: React.FC = () => {
     const ocrAutoApplyMinScore = useAppStore(s => s.ocrAutoApplyMinScore);
     const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
     const telemetryPerformanceProfile = useAppStore(s => s.telemetryPerformanceProfile);
-    const setTelemetryPerformanceProfile = useAppStore(s => s.setTelemetryPerformanceProfile);
     const welcomeBackToastShownRef = React.useRef(false);
     const tutorialAutoPromptedRef = React.useRef(false);
     const [preloadedViews, setPreloadedViews] = useState<Record<LazyDashboardView, boolean>>({
@@ -307,8 +303,6 @@ const App: React.FC = () => {
         showSettings,
         setShowSettings,
         showResetConfirm,
-        enableAutoLogRecording,
-        setEnableAutoLogRecording,
         showIdMapper, setShowIdMapper,
         sidebarCollapsed, setSidebarCollapsed,
         renameModal, setRenameModal, setRenameValue,
@@ -345,12 +339,7 @@ const App: React.FC = () => {
     const {
         overlayStyle,
         soundEnabled,
-        setSoundEnabled,
         performanceMode,
-        appearanceMode,
-        setAppearanceMode,
-        colorTheme,
-        setColorTheme,
     } = useUserPreferences();
 
     const { logFeed, logStatus } = useLogMonitor();
@@ -566,6 +555,7 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (!tipsEnabled) return;
+        if (showSetupWizard || showTutorial || showStartupHealthCheck || restoreSessionPrompt) return;
         const tipPool = getTipsForView(activeView, IS_DEV_BUILD);
         if (tipPool.length === 0) return;
         const safeTipLibraryIndex = Number.isFinite(Number(tipLibraryIndex))
@@ -601,7 +591,7 @@ const App: React.FC = () => {
             },
             deepLink: { type: 'openView', view: activeView },
         });
-    }, [activeView, pushNotification, tipLibraryIndex, tipsEnabled]);
+    }, [activeView, pushNotification, restoreSessionPrompt, showSetupWizard, showStartupHealthCheck, showTutorial, tipLibraryIndex, tipsEnabled]);
 
     useEffect(() => {
         if (welcomeBackToastShownRef.current) return;
@@ -684,41 +674,15 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (startupHealthPromptedRef.current) return;
-        if (isStoreLoading) return;
-        if (showSetupWizard) return;
-        if (renameModal) return;
-        if (!String(activeUser || '').trim()) return;
-
-        try {
-            if (setupWizardShownThisLaunchRef.current) {
-                // Health checks are now part of setup wizard flow for new users.
-                startupHealthPromptedRef.current = true;
-                return;
-            }
-            const userScope = getOnboardingUserScope(activeUser);
-            const seenKey = `${STARTUP_HEALTH_CHECK_SEEN_KEY_PREFIX}:${userScope}`;
-            const skippedKey = `${STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY_PREFIX}:${userScope}`;
-            if (window.localStorage.getItem(seenKey) === '1') {
-                startupHealthPromptedRef.current = true;
-                return;
-            }
-            if (window.sessionStorage.getItem(skippedKey) === '1') {
-                startupHealthPromptedRef.current = true;
-                return;
-            }
-        } catch {
-            // Ignore storage access failures and continue with in-memory guard.
-        }
-
         startupHealthPromptedRef.current = true;
-        setShowStartupHealthCheck(true);
-    }, [activeUser, isStoreLoading, renameModal, showSetupWizard]);
+    }, []);
 
     useEffect(() => {
         if (tutorialAutoPromptedRef.current) return;
         if (isStoreLoading) return;
         if (showStartupHealthCheck) return;
         if (showTutorial) return;
+        if (restoreSessionPrompt) return;
         if (tutorialCompleted) {
             tutorialAutoPromptedRef.current = true;
             return;
@@ -728,7 +692,7 @@ const App: React.FC = () => {
         if (!String(activeUser || '').trim()) return;
         tutorialAutoPromptedRef.current = true;
         setShowTutorial(true);
-    }, [activeUser, isStoreLoading, renameModal, setShowTutorial, showSetupWizard, showStartupHealthCheck, showTutorial, tutorialCompleted]);
+    }, [activeUser, isStoreLoading, renameModal, restoreSessionPrompt, setShowTutorial, showSetupWizard, showStartupHealthCheck, showTutorial, tutorialCompleted]);
 
     useEffect(() => {
         if (isStoreLoading) return;
@@ -811,6 +775,27 @@ const App: React.FC = () => {
         };
     }, [activeUser, isStoreLoading, setMatches, startupInteractionReady]);
 
+    useEffect(() => {
+        if (isStoreLoading) return;
+        if (showSetupWizard) return;
+        const state = useAppStore.getState();
+        if (state.currentLoadout) return;
+        const latestConfirmedMatch = [...(matches || [])]
+            .filter((match) => match.subType !== 'Telemetry Draft')
+            .sort((left, right) => Number(right.timestamp || 0) - Number(left.timestamp || 0))
+            .find((match) => match.loadout || match.ship || match.hero);
+        if (!latestConfirmedMatch) return;
+        if (latestConfirmedMatch.loadout) {
+            state.setCurrentLoadout(cloneLoadout(latestConfirmedMatch.loadout));
+        }
+        if (latestConfirmedMatch.ship) {
+            state.setActiveShip(latestConfirmedMatch.ship, 'manual');
+        }
+        if (latestConfirmedMatch.hero) {
+            state.setActiveHero(latestConfirmedMatch.hero, 'manual');
+        }
+    }, [isStoreLoading, matches, showSetupWizard]);
+
     const clearRestoreSessionSnapshot = useCallback(() => {
         try {
             window.localStorage.removeItem(RESTORE_SESSION_STORAGE_KEY);
@@ -821,7 +806,12 @@ const App: React.FC = () => {
 
     const persistRestoreSessionSnapshot = useCallback(() => {
         const state = useAppStore.getState();
-        const pendingMatchData = isRecord(state.pendingMatchData) ? state.pendingMatchData as Partial<Match> : null;
+        const pendingMatchData = isRecord(state.pendingMatchData)
+            ? {
+                ...(state.pendingMatchData as Partial<Match>),
+                loadout: cloneLoadout((state.pendingMatchData as Partial<Match>).loadout) || undefined,
+            }
+            : null;
         const selectedTeammates = Array.isArray(state.selectedTeammates) ? state.selectedTeammates.filter(Boolean) : [];
         const selectedOpponents = Array.isArray(state.selectedOpponents) ? state.selectedOpponents.filter(Boolean) : [];
         const sessionTeams = isRecord(state.sessionTeams)
@@ -849,16 +839,7 @@ const App: React.FC = () => {
                 return acc;
             }, {})
             : {};
-        const currentLoadout = isRecord(state.currentLoadout)
-            ? {
-                hero: typeof state.currentLoadout.hero === 'string' ? state.currentLoadout.hero : null,
-                ship: typeof state.currentLoadout.ship === 'string' ? state.currentLoadout.ship : null,
-                weapons: Array.isArray(state.currentLoadout.weapons) ? state.currentLoadout.weapons.filter(Boolean).slice(0, 10) : [],
-                equipment: Array.isArray(state.currentLoadout.equipment) ? state.currentLoadout.equipment.filter(Boolean).slice(0, MAX_PROSPECTOR_LOADOUT_SLOTS) : [],
-                characterWeapons: Array.isArray(state.currentLoadout.characterWeapons) ? state.currentLoadout.characterWeapons.filter(Boolean).slice(0, MAX_PROSPECTOR_LOADOUT_SLOTS) : [],
-                characterEquipment: Array.isArray(state.currentLoadout.characterEquipment) ? state.currentLoadout.characterEquipment.filter(Boolean).slice(0, MAX_PROSPECTOR_LOADOUT_SLOTS) : [],
-            }
-            : null;
+        const currentLoadout = cloneLoadout(isRecord(state.currentLoadout) ? state.currentLoadout as Match['loadout'] : null);
         const kills = isRecord(state.kills)
             ? Object.entries(state.kills).reduce<Record<string, number>>((acc, [key, value]) => {
                 const parsed = Number(value);
@@ -971,8 +952,23 @@ const App: React.FC = () => {
         if (isStoreLoading) return;
         if (restorePromptCheckedRef.current) return;
         restorePromptCheckedRef.current = true;
+        const hasActiveUser = Boolean(String(activeUser || '').trim());
+        const hasProfiles = Array.isArray(players) && players.some((name) => String(name || '').trim().length > 0);
+        if (!hasActiveUser && !hasProfiles) {
+            clearRestoreSessionSnapshot();
+            return;
+        }
         let parsed: unknown = null;
         try {
+            const intentionalCloseRaw = window.localStorage.getItem(INTENTIONAL_CLOSE_STORAGE_KEY);
+            if (intentionalCloseRaw) {
+                window.localStorage.removeItem(INTENTIONAL_CLOSE_STORAGE_KEY);
+                const closedAt = Number(intentionalCloseRaw);
+                if (Number.isFinite(closedAt) && (Date.now() - closedAt) < (2 * 60 * 1000)) {
+                    clearRestoreSessionSnapshot();
+                    return;
+                }
+            }
             const raw = window.localStorage.getItem(RESTORE_SESSION_STORAGE_KEY);
             if (!raw) return;
             parsed = JSON.parse(raw);
@@ -1014,7 +1010,12 @@ const App: React.FC = () => {
                     || payloadRecord.showWizard === 'Match Result'
                     ? payloadRecord.showWizard
                     : null,
-                pendingMatchData: isRecord(payloadRecord.pendingMatchData) ? payloadRecord.pendingMatchData as Partial<Match> : null,
+                pendingMatchData: isRecord(payloadRecord.pendingMatchData)
+                    ? {
+                        ...(payloadRecord.pendingMatchData as Partial<Match>),
+                        loadout: sanitizeUnknownLoadout((payloadRecord.pendingMatchData as Partial<Match>).loadout) || undefined,
+                    }
+                    : null,
                 selectedTeammates: Array.isArray(payloadRecord.selectedTeammates) ? payloadRecord.selectedTeammates.map(v => String(v || '').trim()).filter(Boolean) : [],
                 selectedOpponents: Array.isArray(payloadRecord.selectedOpponents) ? payloadRecord.selectedOpponents.map(v => String(v || '').trim()).filter(Boolean) : [],
                 sessionTeams: isRecord(payloadRecord.sessionTeams)
@@ -1043,14 +1044,7 @@ const App: React.FC = () => {
                         return acc;
                     }, {})
                     : {},
-                currentLoadout: isRecord(payloadRecord.currentLoadout) ? {
-                    hero: String(payloadRecord.currentLoadout.hero || '').trim() || null,
-                    ship: String(payloadRecord.currentLoadout.ship || '').trim() || null,
-                    weapons: Array.isArray(payloadRecord.currentLoadout.weapons) ? payloadRecord.currentLoadout.weapons.map(v => String(v || '').trim()).filter(Boolean).slice(0, 10) : [],
-                    equipment: Array.isArray(payloadRecord.currentLoadout.equipment) ? payloadRecord.currentLoadout.equipment.map(v => String(v || '').trim()).filter(Boolean).slice(0, MAX_PROSPECTOR_LOADOUT_SLOTS) : [],
-                    characterWeapons: Array.isArray(payloadRecord.currentLoadout.characterWeapons) ? payloadRecord.currentLoadout.characterWeapons.map(v => String(v || '').trim()).filter(Boolean).slice(0, MAX_PROSPECTOR_LOADOUT_SLOTS) : [],
-                    characterEquipment: Array.isArray(payloadRecord.currentLoadout.characterEquipment) ? payloadRecord.currentLoadout.characterEquipment.map(v => String(v || '').trim()).filter(Boolean).slice(0, MAX_PROSPECTOR_LOADOUT_SLOTS) : [],
-                } : null,
+                currentLoadout: sanitizeUnknownLoadout(payloadRecord.currentLoadout),
                 selectedReachModifiers: Array.isArray(payloadRecord.selectedReachModifiers) ? payloadRecord.selectedReachModifiers.map(v => String(v || '').trim()).filter(Boolean) : [],
                 timeMin: String(payloadRecord.timeMin || ''),
                 timeSec: String(payloadRecord.timeSec || ''),
@@ -1087,7 +1081,7 @@ const App: React.FC = () => {
             // no-op
         }
         setRestoreSessionPrompt(snapshot);
-    }, [clearRestoreSessionSnapshot, isStoreLoading]);
+    }, [activeUser, clearRestoreSessionSnapshot, isStoreLoading, players]);
 
     const handleRestoreSessionNow = useCallback(() => {
         if (!restoreSessionPrompt) return;
@@ -1562,14 +1556,7 @@ const App: React.FC = () => {
             opponents: [...(draft.opponents || [])],
             hero: draft.hero,
             ship: draft.ship,
-            loadout: draft.loadout ? {
-                hero: draft.loadout.hero,
-                ship: draft.loadout.ship,
-                weapons: (draft.loadout.weapons || []).filter(Boolean),
-                equipment: (draft.loadout.equipment || []).filter(Boolean),
-                characterWeapons: (draft.loadout.characterWeapons || []).filter(Boolean),
-                characterEquipment: (draft.loadout.characterEquipment || []).filter(Boolean),
-            } : undefined,
+            loadout: cloneLoadout(draft.loadout) || undefined,
             reachModifiers: [...(draft.reachModifiers || [])],
             kills: { ...(draft.kills || {}) },
             time: draft.time || telemetryDraftPrompt.duration || '00:00',
@@ -2093,6 +2080,34 @@ const App: React.FC = () => {
         const targetMatchId = Number.isInteger(pendingMatchId) && pendingMatchId > 0
             ? pendingMatchId
             : undefined;
+        const mergedArtifactPaths = Array.from(new Set(
+            [
+                ...(Array.isArray(pendingMatch.artifacts) ? pendingMatch.artifacts : []),
+                ...(Array.isArray(data.artifacts) ? data.artifacts : []),
+            ]
+                .map((entry) => String(entry || '').trim())
+                .filter((entry) => /\.(png|jpe?g|webp|bmp|gif)$/i.test(entry))
+        ));
+        if (targetMatchId && mergedArtifactPaths.length > 0) {
+            const storeState = useAppStore.getState();
+            const existingMatch = (storeState.matches || []).find((match) => Number(match.id || 0) === targetMatchId);
+            if (existingMatch) {
+                const nextArtifacts = Array.from(new Set(
+                    [...(existingMatch.artifacts || []), ...mergedArtifactPaths]
+                        .map((entry) => String(entry || '').trim())
+                        .filter((entry) => /\.(png|jpe?g|webp|bmp|gif)$/i.test(entry))
+                ));
+                const artifactsChanged = nextArtifacts.length !== (existingMatch.artifacts || []).length
+                    || nextArtifacts.some((entry, index) => entry !== existingMatch.artifacts?.[index]);
+                if (artifactsChanged) {
+                    storeState.updateMatch({
+                        ...existingMatch,
+                        artifacts: nextArtifacts,
+                        ocrState: existingMatch.ocrState || 'queued',
+                    });
+                }
+            }
+        }
         const pendingModifierMap = new Map<string, string>();
         (pendingMatch.reachModifiers || []).forEach((name) => {
             const clean = String(name || '').trim();
@@ -2107,8 +2122,10 @@ const App: React.FC = () => {
         });
         useAppStore.getState().setPendingMatchData({
             ...pendingMatch,
+            artifacts: mergedArtifactPaths.length > 0 ? mergedArtifactPaths : pendingMatch.artifacts,
             reachModifiers: Array.from(pendingModifierMap.values()),
             opponentTeams: structuredTeams,
+            ocrState: 'reviewing',
             ocrDebug: {
                 rawText: data.rawText?.substring(0, 2000),
                 confidence: data.overallConfidence,
@@ -2275,7 +2292,8 @@ const App: React.FC = () => {
         </div>
     );
 
-    const navigationOpen = isCompactNav ? mobileNavOpen : !sidebarCollapsed;
+    const navigationOpen = isCompactNav ? mobileNavOpen : true;
+    const desktopNavigationWidthClass = sidebarCollapsed ? 'w-14' : 'w-32';
 
     if (!isStoreLoading && !startupFlowReady) {
         return (
@@ -2329,7 +2347,7 @@ const App: React.FC = () => {
                             <aside
                                 id="main-navigation"
                                 aria-label="Main navigation"
-                                className={`relative z-40 shrink-0 ${navigationOpen ? 'overflow-visible' : 'overflow-hidden'} transition-width-opacity duration-300 ease-emphasized-enter ${navigationOpen ? 'w-32 opacity-100' : 'w-0 opacity-0 pointer-events-none'}`}
+                                className={`relative z-40 shrink-0 overflow-visible opacity-100 transition-[width] duration-300 ease-emphasized-enter ${desktopNavigationWidthClass}`}
                             >
                                 <Sidebar />
                             </aside>
@@ -2399,43 +2417,6 @@ const App: React.FC = () => {
                         setShowTutorial(false);
                     }}
                     onSkip={() => setShowTutorial(false)}
-                />
-            )}
-            {showStartupHealthCheck && (
-                <FirstRunHealthCheck
-                    isOpen={showStartupHealthCheck}
-                    activeUser={activeUser}
-                    telemetryStatus={logStatus}
-                    telemetryEnabled={enableAutoLogRecording}
-                    onToggleTelemetryEnabled={setEnableAutoLogRecording}
-                    telemetryPerformanceProfile={telemetryPerformanceProfile}
-                    onSetTelemetryPerformanceProfile={setTelemetryPerformanceProfile}
-                    soundEnabled={soundEnabled}
-                    onToggleSoundEnabled={setSoundEnabled}
-                    appearanceMode={appearanceMode}
-                    onSetAppearanceMode={setAppearanceMode}
-                    colorTheme={colorTheme}
-                    onSetColorTheme={setColorTheme}
-                    onComplete={() => {
-                        try {
-                            const userScope = getOnboardingUserScope(activeUser);
-                            const seenKey = `${STARTUP_HEALTH_CHECK_SEEN_KEY_PREFIX}:${userScope}`;
-                            window.localStorage.setItem(seenKey, '1');
-                        } catch {
-                            // no-op
-                        }
-                        setShowStartupHealthCheck(false);
-                    }}
-                    onSkip={() => {
-                        try {
-                            const userScope = getOnboardingUserScope(activeUser);
-                            const skippedKey = `${STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY_PREFIX}:${userScope}`;
-                            window.sessionStorage.setItem(skippedKey, '1');
-                        } catch {
-                            // no-op
-                        }
-                        setShowStartupHealthCheck(false);
-                    }}
                 />
             )}
 

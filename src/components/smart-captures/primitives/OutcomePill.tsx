@@ -4,6 +4,7 @@ import type { MatchResult } from '../../../types';
 interface OutcomePillProps {
   result: MatchResult;
   className?: string;
+  compact?: boolean;
 }
 
 const STYLE_BY_RESULT: Record<MatchResult, React.CSSProperties> = {
@@ -29,10 +30,10 @@ const STYLE_BY_RESULT: Record<MatchResult, React.CSSProperties> = {
   },
 };
 
-export const OutcomePill: React.FC<OutcomePillProps> = ({ result, className = '' }) => {
+export const OutcomePill: React.FC<OutcomePillProps> = ({ result, className = '', compact = false }) => {
   return (
     <span
-      className={`inline-flex items-center rounded-pill border px-2 py-0.5 text-label-xs font-bold uppercase tracking-wide ${className}`.trim()}
+      className={`inline-flex items-center rounded-pill border ${compact ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-0.5 text-label-xs'} font-bold uppercase tracking-wide ${className}`.trim()}
       style={STYLE_BY_RESULT[result]}
     >
       {result}

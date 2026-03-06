@@ -81,6 +81,7 @@ export interface DrillDownModel {
     };
     loadouts: {
         weapons: DrillDownRow[];
+        shipWeapons: DrillDownRow[];
         equipment: DrillDownRow[];
         perks: DrillDownRow[];
         combos: DrillDownComboRow[];
@@ -328,7 +329,8 @@ export const buildDrillDownModel = (
         const artifact = extractArtifactName(match);
         return artifact ? [artifact] : [];
     }, target);
-    const weapons = buildRowsFromLabels(targetMatches, winRate, 'Weapon', getMatchWeaponDimensions, target);
+    const weapons = buildRowsFromLabels(targetMatches, winRate, 'Weapon', getMatchProspectorWeapons, target);
+    const shipWeapons = buildRowsFromLabels(targetMatches, winRate, 'Weapon', getMatchShipWeapons, target);
     const equipment = buildRowsFromLabels(targetMatches, winRate, 'Equipment', getMatchEquipment, target);
     const perks = buildRowsFromLabels(targetMatches, winRate, 'Perk', getMatchPerks, target);
     const combos = buildComboRows(targetMatches);
@@ -384,7 +386,7 @@ export const buildDrillDownModel = (
     const availableTabs: DrillDownModel['availableTabs'] = ['overview'];
     if (people.teammates.length > 0 || people.opponents.length > 0) availableTabs.push('people');
     if (modifiers.length > 0 || artifacts.length > 0) availableTabs.push('hazards');
-    if (weapons.length > 0 || equipment.length > 0 || perks.length > 0 || combos.length > 0) availableTabs.push('loadouts');
+    if (weapons.length > 0 || shipWeapons.length > 0 || equipment.length > 0 || perks.length > 0 || combos.length > 0) availableTabs.push('loadouts');
     availableTabs.push('matches');
 
     return {
@@ -409,6 +411,7 @@ export const buildDrillDownModel = (
         },
         loadouts: {
             weapons,
+            shipWeapons,
             equipment,
             perks,
             combos,

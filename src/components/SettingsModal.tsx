@@ -13,7 +13,6 @@ import {
     type ResultOcrFlowMode,
     type TelemetryPerformanceProfile,
     type OcrLearningReviewMode,
-    type OcrThresholdRecommendationMode,
     type OcrRegionBounds,
     type OcrRegionSettings,
     OCR_NAME_REROUTE_THRESHOLD_MAX,
@@ -64,19 +63,6 @@ const consumeSettingsFocusSectionRequest = (): SettingsFocusSectionRequest | nul
         return null;
     }
 };
-
-interface ThresholdRecommendationPayload {
-    generatedAt?: string;
-    confidenceScore?: number;
-    summary?: string;
-    reasons?: string[];
-    recommendedThresholds?: {
-        merged: { player: number; mod: number; ship: number };
-        local: { player: number; mod: number; ship: number };
-        lowConfidenceBump: number;
-    };
-}
-
 
 const SettingsModalContent: React.FC = () => {
     const {
@@ -142,11 +128,6 @@ const SettingsModalContent: React.FC = () => {
     const setAdaptivePreloadEnabled = useAppStore(s => s.setAdaptivePreloadEnabled);
     const adaptivePreloadBudgetMs = useAppStore(s => s.adaptivePreloadBudgetMs);
     const setAdaptivePreloadBudgetMs = useAppStore(s => s.setAdaptivePreloadBudgetMs);
-    const ocrThresholdRecommendationMode = useAppStore(s => s.ocrThresholdRecommendationMode);
-    const setOcrThresholdRecommendationMode = useAppStore(s => s.setOcrThresholdRecommendationMode);
-    const ocrThresholdHistory = useAppStore(s => s.ocrThresholdHistory);
-    const pushOcrThresholdHistory = useAppStore(s => s.pushOcrThresholdHistory);
-    const popOcrThresholdHistory = useAppStore(s => s.popOcrThresholdHistory);
     const ocrBestGuessThresholds = useAppStore(s => s.ocrBestGuessThresholds);
     const normalizedOcrBestGuessThresholds = {
         ...DEFAULT_OCR_BEST_GUESS_THRESHOLDS,
@@ -171,7 +152,6 @@ const SettingsModalContent: React.FC = () => {
     const resetOcrCalibration = useAppStore(s => s.resetOcrCalibration);
     const ocrRegions = useAppStore(s => s.ocrRegions);
     const setOcrRegions = useAppStore(s => s.setOcrRegions);
-    const resetOcrRegions = useAppStore(s => s.resetOcrRegions);
     const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
     const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
     const removeOcrAliasCorrection = useAppStore(s => s.removeOcrAliasCorrection);
@@ -186,8 +166,6 @@ const SettingsModalContent: React.FC = () => {
     const [showRoiEditor, setShowRoiEditor] = useState(false);
     const [showAdvancedOcrSettings, setShowAdvancedOcrSettings] = useState(false);
     const [pendingSuspiciousAliasPair, setPendingSuspiciousAliasPair] = useState<string | null>(null);
-    const [thresholdRecBusy, setThresholdRecBusy] = useState(false);
-    const [thresholdRecommendation, setThresholdRecommendation] = useState<ThresholdRecommendationPayload | null>(null);
     const getSensitivityLevel = () => detectSensitivityLevel(normalizedOcrBestGuessThresholds as any);
     const applySensitivityPreset = (level: 'strict' | 'balanced' | 'lenient') => {
         setOcrBestGuessThresholds(getPreset(level));
@@ -198,42 +176,6 @@ const SettingsModalContent: React.FC = () => {
             local: { ...DEFAULT_OCR_BEST_GUESS_THRESHOLDS.local },
             lowConfidenceBump: DEFAULT_OCR_BEST_GUESS_THRESHOLDS.lowConfidenceBump,
         });
-    };
-    const runThresholdRecommendation = async () => {
-        const api = getElectronAPI();
-        if (!api) {
-            alert('Threshold recommendation is only available in the desktop app.');
-            return;
-        }
-        try {
-            setThresholdRecBusy(true);
-            const res = await api.invoke('ocr-corpus-threshold-recommend');
-            if (!res?.success) {
-                alert(`Recommendation failed: ${res?.error || 'Unknown error'}`);
-                return;
-            }
-            setThresholdRecommendation(res.recommendation || null);
-        } finally {
-            setThresholdRecBusy(false);
-        }
-    };
-    const applyThresholdRecommendation = () => {
-        if (!thresholdRecommendation?.recommendedThresholds) return;
-        pushOcrThresholdHistory({
-            timestamp: Date.now(),
-            source: 'manual-apply-recommendation',
-            thresholds: {
-                merged: { ...normalizedOcrBestGuessThresholds.merged },
-                local: { ...normalizedOcrBestGuessThresholds.local },
-                lowConfidenceBump: normalizedOcrBestGuessThresholds.lowConfidenceBump,
-            }
-        });
-        setOcrBestGuessThresholds(thresholdRecommendation.recommendedThresholds);
-    };
-    const revertThresholdRecommendation = () => {
-        const prev = popOcrThresholdHistory();
-        if (!prev?.thresholds) return;
-        setOcrBestGuessThresholds(prev.thresholds);
     };
 
     useEffect(() => {
@@ -336,8 +278,6 @@ const SettingsModalContent: React.FC = () => {
                 adaptivePreloadEnabled: (state as any).adaptivePreloadEnabled,
                 adaptivePreloadBudgetMs: (state as any).adaptivePreloadBudgetMs,
                 dashboardPreloadStats: (state as any).dashboardPreloadStats,
-                ocrThresholdRecommendationMode: (state as any).ocrThresholdRecommendationMode,
-                ocrThresholdHistory: (state as any).ocrThresholdHistory,
                 ocrBestGuessThresholds: state.ocrBestGuessThresholds,
                 autoBackup: state.enableAutoBackup,
                 tipsEnabled: state.tipsEnabled,
@@ -1081,13 +1021,13 @@ const SettingsModalContent: React.FC = () => {
                                 onClick={() => setShowRoiEditor(true)}
                                 className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
                             >
-                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Scan regions</div>
-                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">Open Visual ROI Editor</div>
-                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">Only touch this if resolution or capture framing is off.</div>
+                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Capture framing</div>
+                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">Adjust OCR boxes</div>
+                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">Only use this when your capture framing is visibly off.</div>
                             </button>
                         </div>
                         <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-2 text-label-sm text-md-sys-on-surface/60">
-                            Advanced thresholds, learning policy, event rollback, and preload diagnostics stay below if you need to tune OCR behavior more precisely.
+                            Advanced thresholds, learning policy, event rollback, and preload tuning stay below if you need finer OCR control.
                         </div>
                         </section>
                     )}
@@ -1300,72 +1240,6 @@ const SettingsModalContent: React.FC = () => {
                         <div className="mt-3 p-3 md3-surface rounded-card border border-md-sys-outline/10 space-y-3">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <div className="text-label-sm font-semibold">Threshold Recommendation</div>
-                                    <div className="text-label-sm opacity-60">Recommend OCR confidence thresholds from corpus evaluation output</div>
-                                </div>
-                                <button
-                                    onClick={runThresholdRecommendation}
-                                    disabled={thresholdRecBusy}
-                                    className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled"
-                                >
-                                    {thresholdRecBusy ? 'Running...' : 'Run Recommender'}
-                                </button>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                {([
-                                    { id: 'assisted' as OcrThresholdRecommendationMode, label: 'Assisted' },
-                                    { id: 'manual' as OcrThresholdRecommendationMode, label: 'Manual' },
-                                ] as const).map((mode) => (
-                                    <button
-                                        key={mode.id}
-                                        onClick={() => setOcrThresholdRecommendationMode(mode.id)}
-                                        className={`p-2 rounded-control text-label-sm font-bold transition-all ${ocrThresholdRecommendationMode === mode.id ? 'md3-btn-filled ring-2 ring-md-sys-primary/40' : 'md3-btn-outlined'}`}
-                                    >
-                                        {mode.label}
-                                    </button>
-                                ))}
-                            </div>
-                            {thresholdRecommendation?.recommendedThresholds && (
-                                <div className="p-3 rounded-control md3-surface-high/50 border border-md-sys-outline/10 space-y-2">
-                                    <div className="text-label-sm opacity-60">
-                                        Suggested at {thresholdRecommendation.generatedAt || 'unknown time'} • confidence {Math.round((thresholdRecommendation.confidenceScore || 0) * 100)}%
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2 text-label-sm font-mono opacity-70">
-                                        <div>Merged p/m/s: {thresholdRecommendation.recommendedThresholds.merged.player}/{thresholdRecommendation.recommendedThresholds.merged.mod}/{thresholdRecommendation.recommendedThresholds.merged.ship}</div>
-                                        <div>Local p/m/s: {thresholdRecommendation.recommendedThresholds.local.player}/{thresholdRecommendation.recommendedThresholds.local.mod}/{thresholdRecommendation.recommendedThresholds.local.ship}</div>
-                                    </div>
-                                    <div className="text-label-sm opacity-60">
-                                        Low-confidence bump: {thresholdRecommendation.recommendedThresholds.lowConfidenceBump}
-                                    </div>
-                                    {Array.isArray(thresholdRecommendation.reasons) && thresholdRecommendation.reasons.length > 0 && (
-                                        <div className="text-label-sm opacity-60 space-y-1">
-                                            {thresholdRecommendation.reasons.slice(0, 3).map((reason, idx) => (
-                                                <div key={`thres-reason-${idx}`}>- {reason}</div>
-                                            ))}
-                                        </div>
-                                    )}
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={applyThresholdRecommendation}
-                                            className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
-                                        >
-                                            Apply Recommendation
-                                        </button>
-                                        <button
-                                            onClick={revertThresholdRecommendation}
-                                            disabled={ocrThresholdHistory.length === 0}
-                                            className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled"
-                                        >
-                                            Revert Last
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                            <div className="text-label-sm opacity-60">Threshold history depth: {ocrThresholdHistory.length}</div>
-                        </div>
-                        <div className="mt-3 p-3 md3-surface rounded-card border border-md-sys-outline/10 space-y-3">
-                            <div className="flex items-center justify-between">
-                                <div>
                                     <div className="text-label-sm font-semibold">Learning Event History</div>
                                     <div className="text-label-sm opacity-60">Rollback wrong auto-learns and clear old resolved items</div>
                                 </div>
@@ -1523,33 +1397,6 @@ const SettingsModalContent: React.FC = () => {
                                     </button>
                                 ))}
                             </div>
-                        </div>
-                        <div className="mt-4 pt-4 border-t border-md-sys-outline/10 space-y-3">
-                                <div className="flex items-center justify-between gap-3">
-                                    <div>
-                                        <h4 className="text-label-sm font-bold mb-1">ROI Diagnostics</h4>
-                                        <p className="text-label-sm opacity-60">Updates apply immediately to OCR reruns and future scans, but most users should leave ROI alone.</p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => setShowRoiEditor(true)}
-                                            className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
-                                        >
-                                            Visual Editor
-                                        </button>
-                                        <button
-                                            onClick={resetOcrRegions}
-                                            className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
-                                        >
-                                            Reset ROI
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface p-3">
-                                    <div className="text-label-sm opacity-70">
-                                        Most users should use the Visual Editor. Advanced coordinate tuning is now treated as a diagnostics workflow instead of a primary settings surface.
-                                    </div>
-                                </div>
                         </div>
                         </section>
                     )}

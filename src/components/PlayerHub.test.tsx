@@ -148,7 +148,7 @@ describe('PlayerHub', () => {
 
         render(<PlayerHub />);
 
-        fireEvent.click(screen.getByRole('button', { name: /ocr work \(1\)/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /ocr work \(1\)/i })[0]);
         fireEvent.click(screen.getAllByRole('button', { name: /merge into pilotone \(91%\)/i })[0]);
 
         expect(appStoreState.recordOcrAliasCorrection).toHaveBeenCalledWith('PliotOne', 'PilotOne', expect.any(Object));

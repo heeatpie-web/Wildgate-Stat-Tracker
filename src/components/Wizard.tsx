@@ -89,9 +89,10 @@ export const Wizard: React.FC = () => {
     } = useGameData();
 
     const { showWizard, setShowWizard, isOverlayMode, activeMode, activeUser, pushNotification, requestSmartCapture } = useUIState();
-    const { processFinalSubmission, submitting } = useMatchSubmission();
+    const { processFinalSubmission, saveResultDraft, submitting } = useMatchSubmission();
     const ocrMode = useAppStore((state) => state.ocrMode);
     const ocrRegions = useAppStore((state) => state.ocrRegions);
+    const setPendingDraftData = useAppStore((state) => state.setPendingMatchData);
     const [selectedWinType, setSelectedWinType] = useState<'Combat' | 'Artifact' | null>(null);
     const [requestedOcrReviewMatchId, setRequestedOcrReviewMatchId] = useState<number | null | undefined>(undefined);
     const [activeTab, setActiveTab] = useState<WizardTab>('result');
@@ -104,6 +105,13 @@ export const Wizard: React.FC = () => {
     const previousFocusedElementRef = React.useRef<HTMLElement | null>(null);
     const titleId = React.useId();
     const descriptionId = React.useId();
+    const selectedResultFromDraft = (
+        pendingMatchData?.result === 'Win'
+        || pendingMatchData?.result === 'Loss'
+        || pendingMatchData?.result === 'Draw'
+    )
+        ? pendingMatchData.result
+        : null;
 
     React.useEffect(() => {
         if (isWizardOpen && isOverlayMode) {
@@ -123,9 +131,11 @@ export const Wizard: React.FC = () => {
         const subType = pendingMatchData?.subType;
         if (subType === 'Combat' || subType === 'Artifact') {
             setSelectedWinType(subType as 'Combat' | 'Artifact');
+        } else {
+            setSelectedWinType(null);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isWizardOpen]);
+    }, [isWizardOpen, pendingMatchData?.subType]);
 
     React.useEffect(() => {
         if (!isWizardOpen) return;
@@ -188,10 +198,27 @@ export const Wizard: React.FC = () => {
 
     React.useEffect(() => {
         if (!showWizard) return;
-        if (showWizard !== 'Loss' || selectedWinType !== 'Combat') {
+        if (selectedResultFromDraft !== 'Loss' || selectedWinType !== 'Combat') {
             if (pendingPlacement != null) setPendingPlacement(null);
         }
-    }, [pendingPlacement, selectedWinType, setPendingPlacement, showWizard]);
+    }, [pendingPlacement, selectedResultFromDraft, selectedWinType, setPendingPlacement, showWizard]);
+
+    React.useEffect(() => {
+        if (!isWizardOpen || !pendingMatchData) return;
+        const artifactFromSource = String(pendingMatchData.artifactSource || '').trim();
+        const artifactFromModifiers = Array.isArray(pendingMatchData.reachModifiers)
+            ? pendingMatchData.reachModifiers.find((modifier) => String(modifier || '').startsWith('Artifact:'))
+            : '';
+        const nextArtifactType = artifactFromSource
+            || String(artifactFromModifiers || '').split(':').slice(1).join(':').trim();
+        if (nextArtifactType) {
+            if (pendingArtifactType !== nextArtifactType) setPendingArtifactType(nextArtifactType);
+            return;
+        }
+        if (pendingArtifactType) {
+            setPendingArtifactType('');
+        }
+    }, [isWizardOpen, pendingArtifactType, pendingMatchData, setPendingArtifactType]);
 
     React.useEffect(() => {
         if (!showWizard || !pendingMatchData) return;
@@ -328,9 +355,9 @@ export const Wizard: React.FC = () => {
 
     if (!showWizard || !pendingMatchData) return null;
 
-    const selectedResult = showWizard === 'Win' || showWizard === 'Loss' || showWizard === 'Draw'
+    const selectedResult = selectedResultFromDraft || (showWizard === 'Win' || showWizard === 'Loss' || showWizard === 'Draw'
         ? showWizard
-        : null;
+        : null);
     const hasSelectedResult = selectedResult !== null;
     const isDefeat = selectedResult === 'Loss';
     const title = !hasSelectedResult ? 'Match Result' : (isDefeat ? 'Defeat' : selectedResult);
@@ -437,6 +464,48 @@ export const Wizard: React.FC = () => {
         ? Math.abs(enteredDurationSeconds - telemetryDurationSeconds)
         : null;
     const hasDurationMismatch = telemetryDurationDelta != null && telemetryDurationDelta > telemetryDurationToleranceSeconds;
+    const syncResultDraft = (result: 'Win' | 'Loss' | 'Draw') => {
+        const nextDraft: Partial<Match> = {
+            ...pendingMatchData,
+            result,
+            subType: result === 'Draw'
+                ? 'Combat'
+                : (
+                    pendingMatchData.subType === 'Combat' || pendingMatchData.subType === 'Artifact'
+                        ? pendingMatchData.subType
+                        : undefined
+                ),
+            placement: result === 'Loss' ? pendingMatchData.placement : undefined,
+        };
+        setPendingDraftData(nextDraft);
+        setShowWizard(result);
+        if (result !== 'Loss') {
+            setPendingPlacement(null);
+        }
+        if (result === 'Draw') {
+            setSelectedWinType(null);
+            return;
+        }
+        if (pendingMatchData.subType === 'Combat' || pendingMatchData.subType === 'Artifact') {
+            setSelectedWinType(pendingMatchData.subType);
+            return;
+        }
+        setSelectedWinType(null);
+    };
+    const syncSubTypeDraft = (subType: 'Combat' | 'Artifact') => {
+        setSelectedWinType(subType);
+        if (selectedResult === 'Loss' && subType !== 'Combat') {
+            setPendingPlacement(null);
+        }
+        setPendingDraftData({
+            ...pendingMatchData,
+            result: selectedResult || pendingMatchData.result,
+            subType,
+            placement: selectedResult === 'Loss' && subType === 'Combat'
+                ? pendingMatchData.placement
+                : undefined,
+        });
+    };
 
     const updatePendingLoadout = (
         key: 'characterWeapons' | 'characterEquipment',
@@ -774,8 +843,7 @@ export const Wizard: React.FC = () => {
                                         key={result}
                                         type="button"
                                         onClick={() => {
-                                            setShowWizard(result);
-                                            setSelectedWinType(null);
+                                            syncResultDraft(result);
                                         }}
                                         className={`wizard-outcome-btn rounded-2xl py-3.5 text-label-sm font-bold uppercase tracking-widest transition-all ${selectedResult === result
                                             ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg'
@@ -794,11 +862,20 @@ export const Wizard: React.FC = () => {
                                         value={pendingPlacement && pendingPlacement >= 2 && pendingPlacement <= 5 ? pendingPlacement : ''}
                                         onChange={(e) => {
                                             const next = Number.parseInt(e.target.value, 10);
-                                            if (!Number.isFinite(next)) {
-                                                setPendingPlacement(null);
-                                                return;
-                                            }
-                                            setPendingPlacement(Math.min(5, Math.max(2, next)));
+                                                if (!Number.isFinite(next)) {
+                                                    setPendingPlacement(null);
+                                                    setPendingDraftData({
+                                                        ...pendingMatchData,
+                                                        placement: undefined,
+                                                    });
+                                                    return;
+                                                }
+                                            const placement = Math.min(5, Math.max(2, next));
+                                            setPendingPlacement(placement);
+                                            setPendingDraftData({
+                                                ...pendingMatchData,
+                                                placement,
+                                            });
                                         }}
                                     >
                                         <option value="" disabled>Select placement</option>
@@ -814,10 +891,10 @@ export const Wizard: React.FC = () => {
 
                         {(selectedResult === 'Win' || selectedResult === 'Loss') && (
                             <div className="flex gap-2 w-full">
-                                <button onClick={() => setSelectedWinType('Combat')} className={`flex-1 ${isOverlayMode ? 'py-3.5 text-label-sm' : 'py-4 text-body'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Combat' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg scale-102' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/80 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'}`}>
+                                <button onClick={() => syncSubTypeDraft('Combat')} className={`flex-1 ${isOverlayMode ? 'py-3.5 text-label-sm' : 'py-4 text-body'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Combat' ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg scale-102' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/80 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'}`}>
                                     <Sword size={16} /> {selectedResult === 'Loss' ? 'Combat Defeat' : 'Combat Win'}
                                 </button>
-                                <button onClick={() => setSelectedWinType('Artifact')} className={`flex-1 ${isOverlayMode ? 'py-3.5 text-label-sm' : 'py-4 text-body'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong shadow-lg scale-102' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/80 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'}`}>
+                                <button onClick={() => syncSubTypeDraft('Artifact')} className={`flex-1 ${isOverlayMode ? 'py-3.5 text-label-sm' : 'py-4 text-body'} font-bold uppercase tracking-widest flex items-center justify-center gap-2 rounded-2xl transition-all ${selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong shadow-lg scale-102' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/80 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'}`}>
                                     <Gem size={16} /> {selectedResult === 'Loss' ? 'Artifact Defeat' : 'Artifact Win'}
                                 </button>
                             </div>
@@ -1199,20 +1276,32 @@ export const Wizard: React.FC = () => {
                             <Scan size={14} /> Smart Capture
                         </button>
 
-                        <button
-                            onClick={() => {
-                                if (hasPendingOcrReview) {
-                                    setActiveTab('ocr');
-                                    return;
-                                }
-                                processFinalSubmission(selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat'));
-                            }}
-                            disabled={submitting || !canFinalizeResult}
-                            className={`w-full ${isOverlayMode ? 'py-4' : 'py-5'} rounded-3xl font-bold uppercase tracking-wide-30 text-label-sm transition-all shadow-xl active:scale-95 ${submitting ? 'opacity-disabled grayscale' : (!canFinalizeResult ? 'opacity-disabled grayscale' : (selectedResult === 'Draw' ? 'bg-info text-ink-strong' : (selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong' : 'bg-md-sys-primary text-md-sys-onPrimary')))}`
-                            }
-                        >
-                            {submitting ? 'Synchronizing...' : finalizeButtonLabel}
-                        </button>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!canFinalizeResult) return;
+                                    saveResultDraft(selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat'));
+                                }}
+                                disabled={submitting || !canFinalizeResult}
+                                className={`w-full ${isOverlayMode ? 'py-4' : 'py-5'} rounded-3xl font-bold uppercase tracking-wide-30 text-label-sm transition-all border border-md-sys-outline/18 ${submitting || !canFinalizeResult ? 'opacity-disabled grayscale' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/82 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'}`}
+                            >
+                                Save Results Only
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (hasPendingOcrReview) {
+                                        setActiveTab('ocr');
+                                        return;
+                                    }
+                                    processFinalSubmission(selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat'));
+                                }}
+                                disabled={submitting || !canFinalizeResult}
+                                className={`w-full ${isOverlayMode ? 'py-4' : 'py-5'} rounded-3xl font-bold uppercase tracking-wide-30 text-label-sm transition-all shadow-xl active:scale-95 ${submitting ? 'opacity-disabled grayscale' : (!canFinalizeResult ? 'opacity-disabled grayscale' : (selectedResult === 'Draw' ? 'bg-info text-ink-strong' : (selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong' : 'bg-md-sys-primary text-md-sys-onPrimary')))}`}
+                            >
+                                {submitting ? 'Synchronizing...' : finalizeButtonLabel}
+                            </button>
+                        </div>
                     </div>
                 ) : (
                         <div

@@ -13,6 +13,7 @@ import {
   extractArtifactSourceFromReachModifiers,
   stripArtifactSourceModifiers,
 } from '../../utils/artifactSource';
+import { sanitizeLoadout } from '../../utils/loadout';
 
 /**
  * Origin of a data value. Priority: manual (3) > telemetry (2) > ocr (1).
@@ -28,35 +29,6 @@ export const getPriority = (source: DataSource = 'manual'): number => {
     case 'ocr': return 1;
     default: return 0;
   }
-};
-
-const sanitizeLoadoutSlots = (loadout: Loadout | null): Loadout | null => {
-  if (!loadout) return null;
-  const MAX_PROSPECTOR_LOADOUT_SLOTS = 3;
-  const sanitizeSlotList = (entries: string[] | undefined, maxSlots: number) => (
-    (entries || [])
-      .map((entry) => String(entry || '').trim())
-      .filter(Boolean)
-      .filter((entry) => !/tertiary\s+(weapon|equipment)/i.test(entry))
-      .slice(0, Math.max(1, maxSlots))
-  );
-  const sanitizeShipWeaponEntries = (entries: Loadout['shipWeapons'] | undefined) => (
-    (entries || [])
-      .map((entry) => ({
-        name: String(entry?.name || '').trim(),
-        quantity: Math.max(0, Math.min(10, Math.floor(Number(entry?.quantity || 0)))),
-      }))
-      .filter((entry) => entry.name && entry.quantity > 0)
-      .slice(0, 10)
-  );
-  return {
-    ...loadout,
-    shipWeapons: sanitizeShipWeaponEntries(loadout.shipWeapons),
-    weapons: sanitizeSlotList(loadout.weapons, 10),
-    equipment: sanitizeSlotList(loadout.equipment, MAX_PROSPECTOR_LOADOUT_SLOTS),
-    characterWeapons: sanitizeSlotList(loadout.characterWeapons, MAX_PROSPECTOR_LOADOUT_SLOTS),
-    characterEquipment: sanitizeSlotList(loadout.characterEquipment, MAX_PROSPECTOR_LOADOUT_SLOTS),
-  };
 };
 
 const sanitizeMatchArtifactFields = (match: Match): Match => {
@@ -293,6 +265,8 @@ export interface DataSlice {
   setPendingKilledBy: (s: string) => void;
   pendingKilledByShip: string;
   setPendingKilledByShip: (s: string) => void;
+  /** Cross-slice draft match mirror used by kill/eliminator setters. Owned by FormSlice. */
+  pendingMatchData?: Partial<Match> | null;
   sessionTeams: Record<string, string[]>;
   setSessionTeams: (teams: Record<string, string[]>) => void;
 
@@ -373,9 +347,19 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
   playerIdMap: {},
   lastActivity: Date.now(),
   pendingKilledBy: "",
-  setPendingKilledBy: (s) => set({ pendingKilledBy: s }),
+  setPendingKilledBy: (s) => set((state) => ({
+    pendingKilledBy: s,
+    pendingMatchData: state.pendingMatchData
+      ? { ...state.pendingMatchData, killedBy: s || undefined }
+      : state.pendingMatchData,
+  })),
   pendingKilledByShip: "",
-  setPendingKilledByShip: (s) => set({ pendingKilledByShip: s }),
+  setPendingKilledByShip: (s) => set((state) => ({
+    pendingKilledByShip: s,
+    pendingMatchData: state.pendingMatchData
+      ? { ...state.pendingMatchData, killedByShip: s || undefined }
+      : state.pendingMatchData,
+  })),
   sessionTeams: {},
   setSessionTeams: (teams) => set({ sessionTeams: teams }),
   sessionShipTypes: {},
@@ -389,7 +373,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     return {};
   }),
   currentLoadout: null,
-  setCurrentLoadout: (l) => set({ currentLoadout: sanitizeLoadoutSlots(l) }),
+  setCurrentLoadout: (l) => set({ currentLoadout: sanitizeLoadout(l) }),
 
   isSimulation: false,
   setIsSimulation: (isSim) => set({ isSimulation: isSim }),
