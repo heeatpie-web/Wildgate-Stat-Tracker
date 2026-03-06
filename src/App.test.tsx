@@ -135,8 +135,6 @@ vi.mock('./components/Tutorial', () => ({ default: () => <div data-testid="tutor
 vi.mock('./components/WindowResizer', () => ({ WindowResizer: () => <div data-testid="window-resizer" /> }));
 vi.mock('./components/Toast', () => ({ Toast: ({ message }: { message: string }) => <div role="status">{message}</div> }));
 vi.mock('./components/IdMapper', () => ({ IdMapper: () => <div data-testid="id-mapper" /> }));
-vi.mock('./components/ocr/OCRReviewModal', () => ({ OCRReviewModal: () => <div data-testid="ocr-review-modal" /> }));
-
 describe('App', () => {
   afterEach(() => {
     cleanup();

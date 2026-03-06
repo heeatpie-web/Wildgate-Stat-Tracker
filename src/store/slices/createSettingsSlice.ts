@@ -13,7 +13,7 @@ import type { CalibrationSample } from '../../utils/ocrCalibration';
 /** Visual style variant for the in-game overlay. */
 export type OverlayStyle = 'compact' | 'transparent';
 
-/** OCR engine mode (local Tesseract only). */
+/** OCR engine mode (local OCR only). */
 export type OcrMode = 'local';
 
 /** Capture behavior: auto runs OCR immediately, deferred saves screenshot first. */

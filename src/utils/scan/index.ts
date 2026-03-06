@@ -20,7 +20,7 @@ export { processMatchScreenshot } from './matchScan';
 export { processLobbyScreenshot } from './lobbyScan';
 export { processSocialScreenshot } from './socialScan';
 export { processTacticalScreenshot } from './tacticalScan';
-export { processWithTesseractOCR } from './tesseractScan';
+export { processWithLocalOCR, resolveTagShipMetadata } from './localScan';
 
 // Orchestrator
 export { smartAnalyzeScreen, terminateOCR } from './smartAnalyze';

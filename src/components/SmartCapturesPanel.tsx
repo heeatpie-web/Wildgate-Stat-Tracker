@@ -1821,6 +1821,7 @@ type ApplyToSessionResult = Match | null;
 type OpenWizardForMatchOptions = {
     matchOverride?: Match | null;
     reusePendingDraft?: boolean;
+    openOcrReview?: boolean;
 };
 
 type PendingMatchWriter = (data: Partial<Match> | null) => void;
@@ -1960,7 +1961,15 @@ const SmartMatchDetail: React.FC<{
             details: false,
             rerun: false,
         });
-        const { setToast, setActiveView, setShowWizard, showWizard } = useUIState();
+        const {
+            setToast,
+            pushNotification,
+            setActiveView,
+            setShowWizard,
+            showWizard,
+            smartCapturesOpenOcrReviewMatchId,
+            setSmartCapturesOpenOcrReviewMatchId,
+        } = useUIState();
         const {
             setSelectedTeammates,
             setSelectedOpponents,
@@ -2047,6 +2056,7 @@ const SmartMatchDetail: React.FC<{
         const openWizardForMatch = useCallback((options?: OpenWizardForMatchOptions) => {
             const matchOverride = options?.matchOverride || null;
             const reusePendingDraft = options?.reusePendingDraft ?? true;
+            const openOcrReview = options?.openOcrReview === true;
             const storeState = useAppStore.getState();
             const liveMatch = matchOverride || storeState.matches.find((entry) => entry.id === match.id) || match;
             const pendingDraft = (storeState.pendingMatchData || null) as Partial<Match> | null;
@@ -2291,7 +2301,21 @@ const SmartMatchDetail: React.FC<{
                 ? priorResult
                 : 'Match Result';
             setShowWizard(wizardResult);
+            if (openOcrReview) {
+                window.setTimeout(() => {
+                    window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
+                        detail: { matchId: Number(liveMatch.id || 0) || null },
+                    }));
+                }, 0);
+            }
         }, [activeUser, isActiveUserLike, match, setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setShowWizard, setTimeMin, setTimeSec, setToast]);
+
+        useEffect(() => {
+            if (!smartCapturesOpenOcrReviewMatchId) return;
+            if (Number(match.id || 0) !== Number(smartCapturesOpenOcrReviewMatchId)) return;
+            openWizardForMatch({ openOcrReview: true });
+            setSmartCapturesOpenOcrReviewMatchId(null);
+        }, [match.id, openWizardForMatch, setSmartCapturesOpenOcrReviewMatchId, smartCapturesOpenOcrReviewMatchId]);
 
         useEffect(() => {
             if (showWizard !== null) return;
@@ -2954,6 +2978,13 @@ const SmartMatchDetail: React.FC<{
                 setToast({
                     message: 'Analysis complete - review detected data, then click Apply when ready.',
                     type: 'success',
+                });
+                pushNotification({
+                    message: `OCR analysis complete for Match ${displayNumber}. Click to open OCR review.`,
+                    type: 'success',
+                    source: 'smart-capture',
+                    durationMs: 12000,
+                    deepLink: { type: 'openSmartCaptureOcrReview', matchId: match.id },
                 });
             } catch (error) {
                 const reason = errorMessage(error);

@@ -421,17 +421,9 @@ async function main() {
 
   const electron = require('electron');
   const { app } = electron;
-  const { processCapture, getTesseractWorker } = require(path.resolve('electron/ocrHandler.cjs'));
+  const { processCapture } = require(path.resolve('electron/ocrHandler.cjs'));
 
   await app.whenReady();
-
-  // Warm the local Tesseract path once up-front so first sample doesn't pay setup.
-  try {
-    await getTesseractWorker();
-    console.log('[predict] Tesseract worker pre-warmed');
-  } catch (err) {
-    console.warn(`[predict] Tesseract pre-warm skipped: ${err.message}`);
-  }
 
   const predictions = [];
   let processed = 0;

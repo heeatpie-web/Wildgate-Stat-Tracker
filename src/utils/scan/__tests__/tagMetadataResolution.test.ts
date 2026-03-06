@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveTagShipMetadata } from '../tesseractScan';
+import { resolveTagShipMetadata } from '../localScan';
 
 describe('resolveTagShipMetadata', () => {
   it('prefers explicit OCR ship metadata when available', () => {

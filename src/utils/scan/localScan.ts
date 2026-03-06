@@ -46,7 +46,7 @@ export const resolveTagShipMetadata = (
     return '';
 };
 
-export const processWithTesseractOCR = async (
+export const processWithLocalOCR = async (
     imageDataUrl: string,
     activeUser: string | null,
     options: ScanOptions = {}
@@ -54,7 +54,7 @@ export const processWithTesseractOCR = async (
     const { onProgress } = options;
 
     try {
-        onProgress?.('Running Tesseract OCR (eng+chi_sim)...', 20);
+        onProgress?.('Running local OCR...', 20);
 
         const base64Data = imageDataUrl.replace(/^data:image\/\w+;base64,/, '');
 
@@ -67,7 +67,7 @@ export const processWithTesseractOCR = async (
         );
 
         if (!ocrResponse.success || !ocrResponse.data) {
-            Logger.warn('OCR', 'Tesseract OCR failed, falling back to native');
+            Logger.warn('OCR', 'Local OCR failed, falling back to native');
             return { mode: 'Unknown' };
         }
 
@@ -174,9 +174,7 @@ export const processWithTesseractOCR = async (
         return { mode: 'Unknown' };
 
     } catch (e) {
-        Logger.error('OCR', 'Tesseract OCR processing failed', e);
+        Logger.error('OCR', 'Local OCR processing failed', e);
         return { mode: 'Unknown' };
     }
 };
-
-

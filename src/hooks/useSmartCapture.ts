@@ -25,7 +25,7 @@ import { smartAnalyzeScreen } from '../utils/scanService';
 import type { LobbyScanResult, SmartScanResult } from '../utils/scanService';
 import Logger from '../utils/logger';
 import { runtimeConfig } from '../config/runtimeConfig';
-import { resolveTagShipMetadata } from '../utils/scan/tesseractScan';
+import { resolveTagShipMetadata } from '../utils/scan/localScan';
 
 export interface SavedCapture {
   filePath: string;

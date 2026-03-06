@@ -114,6 +114,8 @@ interface UIStateContextType {
     setTelemetryStatus: (status: Partial<TelemetryStatusState>) => void;
     smartCapturesFocusMatchId: number | null;
     setSmartCapturesFocusMatchId: (id: number | null) => void;
+    smartCapturesOpenOcrReviewMatchId: number | null;
+    setSmartCapturesOpenOcrReviewMatchId: (id: number | null) => void;
 }
 
 const UIStateContext = createContext<UIStateContextType | null>(null);
@@ -164,6 +166,7 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
         visionStatus: s.visionStatus, setVisionStatus: s.setVisionStatus,
         telemetryStatus: s.telemetryStatus, setTelemetryStatus: s.setTelemetryStatus,
         smartCapturesFocusMatchId: s.smartCapturesFocusMatchId, setSmartCapturesFocusMatchId: s.setSmartCapturesFocusMatchId,
+        smartCapturesOpenOcrReviewMatchId: s.smartCapturesOpenOcrReviewMatchId, setSmartCapturesOpenOcrReviewMatchId: s.setSmartCapturesOpenOcrReviewMatchId,
     })));
 
     const [renameModal, setRenameModal] = React.useState<RenameModalState | null>(null);

@@ -356,7 +356,7 @@ const DevOCRPanel: React.FC = () => {
     const runOCR = async (includeBboxes = false) => {
         if (!imageSrc) return;
         setLoading(true);
-        const modeLabel = 'Tesseract (Local)';
+        const modeLabel = 'PaddleOCR (Local)';
         const debugLabel = includeBboxes ? ' + Bounding Boxes' : '';
         setStatus(`Running OCR (${modeLabel}${debugLabel})${activeUser ? ` with anchor: ${activeUser}` : ''}...`);
         setOcrResult(null);

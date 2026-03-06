@@ -21,6 +21,7 @@ const uiState = {
   setShowReviewQueue: vi.fn(),
   setShowWizard: vi.fn(),
   setSmartCapturesFocusMatchId: vi.fn(),
+  setSmartCapturesOpenOcrReviewMatchId: vi.fn(),
 };
 
 vi.mock('../providers/UIStateProvider', () => ({
@@ -89,6 +90,32 @@ describe('NotificationCenter', () => {
 
     expect(uiState.markNotificationRead).toHaveBeenCalledWith('n1');
     expect(uiState.setShowIdMapper).toHaveBeenCalledWith(true);
+  });
+
+  it('opens smart captures OCR review deep links on the requested match', async () => {
+    uiState.notificationCenterOpen = true;
+    uiState.notifications = [
+      {
+        id: 'n_ocr',
+        message: 'OCR ready',
+        type: 'success',
+        source: 'smart-capture',
+        popup: true,
+        durationMs: 10_000,
+        createdAt: Date.now(),
+        readAt: null,
+        deepLink: { type: 'openSmartCaptureOcrReview', matchId: 119 },
+      },
+    ];
+
+    const { NotificationCenter } = await import('./NotificationCenter');
+    render(<NotificationCenter />);
+    fireEvent.click(screen.getByRole('button', { name: /ocr ready/i }));
+
+    expect(uiState.markNotificationRead).toHaveBeenCalledWith('n_ocr');
+    expect(uiState.setActiveView).toHaveBeenCalledWith('smart-captures');
+    expect(uiState.setSmartCapturesFocusMatchId).toHaveBeenCalledWith(119);
+    expect(uiState.setSmartCapturesOpenOcrReviewMatchId).toHaveBeenCalledWith(119);
   });
 
   it('anchors the inbox panel at top-right and keeps read rows fully opaque', async () => {

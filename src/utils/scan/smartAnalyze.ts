@@ -5,7 +5,7 @@ import { processLobbyScreenshot } from './lobbyScan';
 import { processMatchScreenshot } from './matchScan';
 import { processSocialScreenshot } from './socialScan';
 import { processTacticalScreenshot } from './tacticalScan';
-import { processWithTesseractOCR } from './tesseractScan';
+import { processWithLocalOCR } from './localScan';
 import { getElectronAPI } from '../electronAPI';
 
 export const smartAnalyzeScreen = async (
@@ -19,23 +19,23 @@ export const smartAnalyzeScreen = async (
 
     Logger.startTimer('smartOCR', 'OCR', 'Smart Hybrid Analysis');
 
-    onProgress?.('Analyzing with Tesseract (eng+chi_sim)...', 10);
+    onProgress?.('Analyzing with local OCR...', 10);
 
     try {
-        const tesseractResult = await processWithTesseractOCR(imageDataUrl, activeUser, options);
+        const localOcrResult = await processWithLocalOCR(imageDataUrl, activeUser, options);
 
-        if (tesseractResult.mode !== 'Unknown' &&
-            tesseractResult.lobbyData &&
-            (tesseractResult.lobbyData.players.length > 0 || tesseractResult.lobbyData.modifiers.length > 0)) {
+        if (localOcrResult.mode !== 'Unknown' &&
+            localOcrResult.lobbyData &&
+            (localOcrResult.lobbyData.players.length > 0 || localOcrResult.lobbyData.modifiers.length > 0)) {
 
-            Logger.info('OCR', `Tesseract OCR succeeded: ${tesseractResult.mode} mode, ${tesseractResult.lobbyData.players.length} players`);
+            Logger.info('OCR', `Local OCR succeeded: ${localOcrResult.mode} mode, ${localOcrResult.lobbyData.players.length} players`);
             Logger.endTimer('smartOCR');
-            return tesseractResult;
+            return localOcrResult;
         }
 
-        Logger.info('OCR', 'Tesseract found no data, falling back to ML + Native OCR');
-    } catch (tesseractError) {
-        Logger.warn('OCR', 'Tesseract OCR failed, falling back to ML + Native OCR', tesseractError);
+        Logger.info('OCR', 'Local OCR found no data, falling back to ML + Native OCR');
+    } catch (localOcrError) {
+        Logger.warn('OCR', 'Local OCR failed, falling back to ML + Native OCR', localOcrError);
     }
 
     onProgress?.('Fallback: Regional scan...', 20);

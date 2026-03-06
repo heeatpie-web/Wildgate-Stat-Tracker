@@ -52,6 +52,7 @@ export const NotificationCenter: React.FC = () => {
         setShowReviewQueue,
         setShowWizard,
         setSmartCapturesFocusMatchId,
+        setSmartCapturesOpenOcrReviewMatchId,
     } = useUIState();
     const dismissNotification = useAppStore((state) => state.dismissNotification);
     const advanceTipLibraryIndex = useAppStore((state) => state.advanceTipLibraryIndex);
@@ -126,6 +127,12 @@ export const NotificationCenter: React.FC = () => {
         if (deepLink.type === 'openWizard') {
             setActiveView('recording');
             setShowWizard(deepLink.result || 'Match Result');
+            return;
+        }
+        if (deepLink.type === 'openSmartCaptureOcrReview') {
+            setActiveView('smart-captures');
+            setSmartCapturesFocusMatchId(deepLink.matchId);
+            setSmartCapturesOpenOcrReviewMatchId(deepLink.matchId);
         }
     }, [
         setActiveView,
@@ -134,6 +141,7 @@ export const NotificationCenter: React.FC = () => {
         setShowSettings,
         setShowWizard,
         setSmartCapturesFocusMatchId,
+        setSmartCapturesOpenOcrReviewMatchId,
     ]);
 
     const onItemClick = (item: AppNotification) => {

@@ -9,5 +9,5 @@ export { processMatchScreenshot } from './scan';
 export { processLobbyScreenshot } from './scan';
 export { processSocialScreenshot } from './scan';
 export { processTacticalScreenshot } from './scan';
-export { processWithTesseractOCR } from './scan';
+export { processWithLocalOCR, resolveTagShipMetadata } from './scan';
 export { smartAnalyzeScreen, terminateOCR } from './scan';

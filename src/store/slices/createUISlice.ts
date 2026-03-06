@@ -31,7 +31,8 @@ export type NotificationDeepLink =
     | { type: 'openSettings'; tab: 'identity' | 'interface' | 'ocr-capture' | 'data'; section?: string }
     | { type: 'openIdMapper' }
     | { type: 'openReviewQueue' }
-    | { type: 'openWizard'; result?: 'Win' | 'Loss' | 'Draw' | 'Match Result' };
+    | { type: 'openWizard'; result?: 'Win' | 'Loss' | 'Draw' | 'Match Result' }
+    | { type: 'openSmartCaptureOcrReview'; matchId: number };
 
 export interface NotificationAction {
     label: string;
@@ -142,6 +143,8 @@ export interface UISlice {
     setTelemetryStatus: (status: Partial<TelemetryStatusState>) => void;
     smartCapturesFocusMatchId: number | null;
     setSmartCapturesFocusMatchId: (id: number | null) => void;
+    smartCapturesOpenOcrReviewMatchId: number | null;
+    setSmartCapturesOpenOcrReviewMatchId: (id: number | null) => void;
 }
 
 type NotificationStateShape = Pick<
@@ -447,4 +450,6 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     setTelemetryStatus: (status) => set((state) => ({ telemetryStatus: { ...state.telemetryStatus, ...status } })),
     smartCapturesFocusMatchId: null,
     setSmartCapturesFocusMatchId: (id) => set({ smartCapturesFocusMatchId: id }),
+    smartCapturesOpenOcrReviewMatchId: null,
+    setSmartCapturesOpenOcrReviewMatchId: (id) => set({ smartCapturesOpenOcrReviewMatchId: id }),
 });
