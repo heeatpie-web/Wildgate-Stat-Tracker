@@ -333,6 +333,9 @@ const SmartCapturesPanel: React.FC = () => {
         smartCapturesFocusMatchId,
         setSmartCapturesFocusMatchId,
         setActiveView,
+        showWizard,
+        pushNotification,
+        setSmartCapturesOpenOcrReviewMatchId,
     } = useUIState();
     const ocrMode = useAppStore(s => s.ocrMode);
     const ocrRegions = useAppStore(s => s.ocrRegions);
@@ -940,6 +943,7 @@ const SmartCapturesPanel: React.FC = () => {
             setToast({ message: `Rerunning OCR for ${ids.length} match${ids.length === 1 ? '' : 'es'}...`, type: 'info' });
             let successMatches = 0;
             let failedMatches = 0;
+            let autoOpenedMatchId: number | null = null;
 
             for (const match of selectedMatches) {
                 const imagePaths = (artifactPathsByMatch.get(match.id) || [])
@@ -1067,6 +1071,20 @@ const SmartCapturesPanel: React.FC = () => {
                 };
 
                 updateMatch(updated);
+                if (autoOpenedMatchId == null && showWizard == null) {
+                    autoOpenedMatchId = updated.id;
+                    setSelectedMatchId(updated.id);
+                    setQueueOnly(false);
+                    setSmartCapturesOpenOcrReviewMatchId(updated.id);
+                } else {
+                    pushNotification({
+                        message: `OCR analysis complete for Match ${getQueueDisplayNumber(updated.id, globalOrderedMatchIds)}.`,
+                        type: 'success',
+                        source: 'smart-capture',
+                        durationMs: 12000,
+                        deepLink: { type: 'openSmartCaptureOcrReview', matchId: updated.id },
+                    });
+                }
             }
 
             if (successMatches === 0) {
@@ -1084,7 +1102,7 @@ const SmartCapturesPanel: React.FC = () => {
         } finally {
             setBulkBusy(false);
         }
-    }, [activeUser, matches, normalizeModifierName, ocrMode, ocrRegions, rerunRuntimeOptions, selectedIds, sessionTeams, setToast, updateMatch]);
+    }, [activeUser, globalOrderedMatchIds, matches, normalizeModifierName, ocrMode, ocrRegions, pushNotification, rerunRuntimeOptions, selectedIds, sessionTeams, setSmartCapturesOpenOcrReviewMatchId, setToast, showWizard, updateMatch]);
 
     const handlePreviewArtifactRepair = useCallback(async () => {
         setRepairBusy(true);
