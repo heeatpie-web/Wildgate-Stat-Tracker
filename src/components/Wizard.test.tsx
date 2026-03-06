@@ -163,7 +163,6 @@ describe('Wizard', () => {
         render(<Wizard />);
 
         expect(screen.getByText('Match Result')).toBeInTheDocument();
-        expect(screen.getAllByText('Ship Eliminations').length).toBeGreaterThan(0);
         expect(screen.getByRole('button', { name: /select match result/i })).toBeDisabled();
     });
 
@@ -192,8 +191,9 @@ describe('Wizard', () => {
         fireEvent.click(screen.getByRole('button', { name: /combat defeat/i }));
         rerender(<Wizard />);
         expect(screen.getByText('Placement')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /finalize combat loss/i })).toBeEnabled();
-        expect(gameData.setPendingPlacement).toHaveBeenCalledWith(2);
+        expect(screen.getByRole('button', { name: /select placement/i })).toBeDisabled();
+        fireEvent.change(screen.getByRole('combobox'), { target: { value: '3' } });
+        expect(gameData.setPendingPlacement).toHaveBeenCalledWith(3);
 
         fireEvent.click(screen.getByRole('button', { name: /artifact defeat/i }));
         rerender(<Wizard />);
@@ -247,6 +247,7 @@ describe('Wizard', () => {
         uiState.showWizard = 'Loss';
 
         render(<Wizard />);
+        fireEvent.click(screen.getByRole('button', { name: /artifact defeat/i }));
 
         fireEvent.click(screen.getByRole('button', { name: /red team/i }));
 
@@ -278,6 +279,7 @@ describe('Wizard', () => {
         uiState.showWizard = 'Loss';
 
         render(<Wizard />);
+        fireEvent.click(screen.getByRole('button', { name: /artifact defeat/i }));
 
         fireEvent.click(screen.getByRole('button', { name: /mystery squad/i }));
 
@@ -333,6 +335,7 @@ describe('Wizard', () => {
         uiState.showWizard = 'Win';
 
         render(<Wizard />);
+        fireEvent.click(screen.getByRole('button', { name: /artifact win/i }));
 
         fireEvent.click(screen.getByRole('button', { name: /prospector loadout/i }));
 
@@ -358,6 +361,7 @@ describe('Wizard', () => {
         uiState.showWizard = 'Win';
 
         render(<Wizard />);
+        fireEvent.click(screen.getByRole('button', { name: /artifact win/i }));
 
         const timeRow = screen.getByTestId('wizard-time-row');
         expect(timeRow).toBeInTheDocument();

@@ -188,13 +188,9 @@ export const Wizard: React.FC = () => {
 
     React.useEffect(() => {
         if (!showWizard) return;
-        if (showWizard === 'Loss' && selectedWinType === 'Combat') {
-            if (!pendingPlacement || pendingPlacement < 2 || pendingPlacement > 5) {
-                setPendingPlacement(2);
-            }
-            return;
+        if (showWizard !== 'Loss' || selectedWinType !== 'Combat') {
+            if (pendingPlacement != null) setPendingPlacement(null);
         }
-        if (pendingPlacement != null) setPendingPlacement(null);
     }, [pendingPlacement, selectedWinType, setPendingPlacement, showWizard]);
 
     React.useEffect(() => {
@@ -344,6 +340,7 @@ export const Wizard: React.FC = () => {
         || selectedWinType !== 'Combat'
         || (pendingPlacement != null && pendingPlacement >= 2 && pendingPlacement <= 5)
     );
+    const showGuidedDetails = hasSelectedResult && hasSelectedOutcomeType && hasValidCombatLossPlacement;
     const canFinalizeResult = hasSelectedResult && hasSelectedOutcomeType && hasValidCombatLossPlacement;
     const normalizedPendingOcrState = String(pendingMatchData?.ocrState || '').trim().toLowerCase();
     const hasPendingOcrReview = normalizedPendingOcrState === 'reviewing';
@@ -794,16 +791,17 @@ export const Wizard: React.FC = () => {
                                     <span className="text-label-sm font-bold uppercase text-md-sys-on-surface/80 block mb-1">Placement</span>
                                     <select
                                         className={`w-full ${inputBaseClass} py-2 text-body`}
-                                        value={pendingPlacement && pendingPlacement >= 2 && pendingPlacement <= 5 ? pendingPlacement : 2}
+                                        value={pendingPlacement && pendingPlacement >= 2 && pendingPlacement <= 5 ? pendingPlacement : ''}
                                         onChange={(e) => {
                                             const next = Number.parseInt(e.target.value, 10);
                                             if (!Number.isFinite(next)) {
-                                                setPendingPlacement(2);
+                                                setPendingPlacement(null);
                                                 return;
                                             }
                                             setPendingPlacement(Math.min(5, Math.max(2, next)));
                                         }}
                                     >
+                                        <option value="" disabled>Select placement</option>
                                         {[2, 3, 4, 5].map((place) => (
                                             <option key={place} value={place}>
                                                 {place === 2 ? '2nd' : place === 3 ? '3rd' : `${place}th`}
@@ -829,7 +827,14 @@ export const Wizard: React.FC = () => {
                                 Pick whether this was a Combat or Artifact outcome.
                             </div>
                         )}
+                        {selectedResult === 'Loss' && selectedWinType === 'Combat' && !hasValidCombatLossPlacement && (
+                            <div className="text-label-sm text-md-sys-on-surface/92 -mt-2">
+                                Choose your placement to continue.
+                            </div>
+                        )}
 
+                        {showGuidedDetails && (
+                            <>
                         <div className={`grid grid-cols-1 md:grid-cols-3 ${isOverlayMode ? 'gap-2.5' : 'gap-4'}`}>
                             <div className={`${cardClass} flex flex-col items-center bg-md-sys-primary/5`}>
                                 <Clock size={16} className="text-md-sys-primary/70 mb-1" />
@@ -1186,6 +1191,8 @@ export const Wizard: React.FC = () => {
                                     <input type="text" className={`w-full ${inputBaseClass} py-2 text-body placeholder:opacity-40`} placeholder="Killer ship..." value={pendingKilledByShip || ''} onChange={e => setPendingKilledByShip(e.target.value)} />
                                 </div>
                             </div>
+                        )}
+                            </>
                         )}
 
                         <button onClick={handleWizardSmartCaptureRequest} className="w-full py-3 rounded-2xl mg-surface-high border border-md-sys-outline/15 text-label-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:border-md-sys-primary/30 hover:bg-md-sys-primary/5 transition-all">
