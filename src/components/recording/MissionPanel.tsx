@@ -10,6 +10,8 @@ import {
     getPerkCatalog,
     getProspectorEquipmentCatalog,
     getProspectorWeaponCatalog,
+    PATCH_PROSPECTOR_EQUIPMENT,
+    PATCH_PROSPECTOR_WEAPONS,
     isPerkAllowedForProspector,
     MAX_PERKS_PER_MATCH,
 } from '../patch/patchEntityCatalog';
@@ -23,6 +25,7 @@ interface MissionPanelProps {
 
 // Accordion section types
 type SectionId = 'stats' | 'poi' | 'weapons' | 'charWeapons' | 'equipment' | 'perks' | 'modifiers';
+const MAX_PROSPECTOR_LOADOUT_SLOTS = Math.max(PATCH_PROSPECTOR_WEAPONS.length, PATCH_PROSPECTOR_EQUIPMENT.length, 3);
 
 export const MissionPanel: React.FC<MissionPanelProps> = ({
     variant = 'default',
@@ -71,12 +74,12 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
     const telemetryProspectorPerks = Array.isArray(currentLoadout?.characterPerks)
         ? currentLoadout.characterPerks.filter(Boolean).slice(0, MAX_PERKS_PER_MATCH)
         : (Array.isArray(currentLoadout?.perks) ? currentLoadout.perks.filter(Boolean).slice(0, MAX_PERKS_PER_MATCH) : []);
-    const telemetrySignalsFilled = Math.min(2, telemetryProspectorWeapons.length)
-        + Math.min(2, telemetryProspectorEquipment.length)
+    const telemetrySignalsFilled = Math.min(MAX_PROSPECTOR_LOADOUT_SLOTS, telemetryProspectorWeapons.length)
+        + Math.min(MAX_PROSPECTOR_LOADOUT_SLOTS, telemetryProspectorEquipment.length)
         + Math.min(2, telemetryProspectorPerks.length);
-    const telemetrySignalsTotal = 6;
+    const telemetrySignalsTotal = (MAX_PROSPECTOR_LOADOUT_SLOTS * 2) + 2;
     const hasTelemetryLoadout = telemetrySignalsFilled > 0;
-    const telemetrySummaryTooltip = `Telemetry synced: ${telemetrySignalsFilled}/${telemetrySignalsTotal} (Weapons ${Math.min(2, telemetryProspectorWeapons.length)}/2, Equipment ${Math.min(2, telemetryProspectorEquipment.length)}/2, Perks ${Math.min(2, telemetryProspectorPerks.length)}/2)`;
+    const telemetrySummaryTooltip = `Telemetry synced: ${telemetrySignalsFilled}/${telemetrySignalsTotal} (Weapons ${Math.min(MAX_PROSPECTOR_LOADOUT_SLOTS, telemetryProspectorWeapons.length)}/${MAX_PROSPECTOR_LOADOUT_SLOTS}, Equipment ${Math.min(MAX_PROSPECTOR_LOADOUT_SLOTS, telemetryProspectorEquipment.length)}/${MAX_PROSPECTOR_LOADOUT_SLOTS}, Perks ${Math.min(2, telemetryProspectorPerks.length)}/2)`;
     const prospectorWeaponCatalog = React.useMemo(() => getProspectorWeaponCatalog(CHARACTER_WEAPONS || []), []);
     const prospectorEquipmentCatalog = React.useMemo(() => getProspectorEquipmentCatalog(CHARACTER_EQUIPMENT || []), []);
     const perkCatalog = React.useMemo(() => getPerkCatalog(), []);
@@ -368,7 +371,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                 {prospectorWeaponCatalog.length > 0 && (() => {
                     // Calculate total weapons selected
                     const totalWeapons = prospectorWeaponCatalog.reduce((sum, w) => sum + (weapons?.[w] || 0), 0);
-                    const MAX_WEAPONS = 2;
+                    const MAX_WEAPONS = MAX_PROSPECTOR_LOADOUT_SLOTS;
                     const selectedCharacterWeapons = prospectorWeaponCatalog.filter((w) => (weapons?.[w] || 0) > 0);
                     const selectedCharacterWeaponsLabel = selectedCharacterWeapons.length > 0
                         ? selectedCharacterWeapons.join(', ')
@@ -438,7 +441,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                 {prospectorEquipmentCatalog.length > 0 && (() => {
                     // Calculate total equipment selected
                     const totalEquipment = prospectorEquipmentCatalog.reduce((sum, w) => sum + (weapons?.[w] || 0), 0);
-                    const MAX_EQUIPMENT = 2;
+                    const MAX_EQUIPMENT = MAX_PROSPECTOR_LOADOUT_SLOTS;
                     const selectedCharacterEquipment = prospectorEquipmentCatalog.filter((w) => (weapons?.[w] || 0) > 0);
                     const selectedCharacterEquipmentLabel = selectedCharacterEquipment.length > 0
                         ? selectedCharacterEquipment.join(', ')

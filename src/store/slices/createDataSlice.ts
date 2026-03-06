@@ -32,6 +32,7 @@ export const getPriority = (source: DataSource = 'manual'): number => {
 
 const sanitizeLoadoutSlots = (loadout: Loadout | null): Loadout | null => {
   if (!loadout) return null;
+  const MAX_PROSPECTOR_LOADOUT_SLOTS = 3;
   const sanitizeSlotList = (entries: string[] | undefined, maxSlots: number) => (
     (entries || [])
       .map((entry) => String(entry || '').trim())
@@ -52,9 +53,9 @@ const sanitizeLoadoutSlots = (loadout: Loadout | null): Loadout | null => {
     ...loadout,
     shipWeapons: sanitizeShipWeaponEntries(loadout.shipWeapons),
     weapons: sanitizeSlotList(loadout.weapons, 10),
-    equipment: sanitizeSlotList(loadout.equipment, 2),
-    characterWeapons: sanitizeSlotList(loadout.characterWeapons, 2),
-    characterEquipment: sanitizeSlotList(loadout.characterEquipment, 2),
+    equipment: sanitizeSlotList(loadout.equipment, MAX_PROSPECTOR_LOADOUT_SLOTS),
+    characterWeapons: sanitizeSlotList(loadout.characterWeapons, MAX_PROSPECTOR_LOADOUT_SLOTS),
+    characterEquipment: sanitizeSlotList(loadout.characterEquipment, MAX_PROSPECTOR_LOADOUT_SLOTS),
   };
 };
 

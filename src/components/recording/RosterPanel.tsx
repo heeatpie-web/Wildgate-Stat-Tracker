@@ -60,14 +60,19 @@ export const RosterPanel: React.FC = () => {
         if (!normalized || !me) return name;
         return normalized === me ? `${name} (you)` : name;
     };
+    const normalizedActiveUser = normalizeOcrName(activeUser || '').toLowerCase();
+    const visibleTeammates = selectedTeammates.filter((name: string) => (
+        normalizeOcrName(name || '').toLowerCase() !== normalizedActiveUser
+    ));
+    const teammateDisplayCount = visibleTeammates.length + (normalizedActiveUser ? 1 : 0);
 
     // Manual lobby scan UI removed; Smart Capture auto-detects and applies roster/modifiers.
 
-    const hasTeammates = selectedTeammates.length > 0;
+    const hasTeammates = visibleTeammates.length > 0;
     const hasOpponents = selectedOpponents.length > 0;
     const hasRosterContext = hasTeammates || hasOpponents || selectedReachModifiers.length > 0;
     const clearTeammates = () => {
-        [...selectedTeammates].forEach((name) => toggleTeammate(name));
+        [...visibleTeammates].forEach((name) => toggleTeammate(name));
     };
     const clearHostiles = () => {
         [...selectedOpponents].forEach((name) => toggleOpponent(name));
@@ -208,12 +213,17 @@ export const RosterPanel: React.FC = () => {
                                     <X size={11} />
                                 </button>
                             )}
-                            <span className="text-label-sm px-1.5 py-0.5 rounded-full md3-surface">{selectedTeammates.length}</span>
+                            <span className="text-label-sm px-1.5 py-0.5 rounded-full md3-surface">{teammateDisplayCount}</span>
                         </div>
                     </div>
-                    {hasTeammates ? (
+                    {(normalizedActiveUser || hasTeammates) ? (
                         <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto custom-scrollbar pr-1">
-                            {selectedTeammates.map((p: string) => (
+                            {normalizedActiveUser && (
+                                <span className="md3-chip md3-chip--selected roster-teammate-chip px-2 py-1 text-label-xs font-semibold">
+                                    U
+                                </span>
+                            )}
+                            {visibleTeammates.map((p: string) => (
                                 <button
                                     key={p}
                                     onClick={() => toggleTeammate(p)}

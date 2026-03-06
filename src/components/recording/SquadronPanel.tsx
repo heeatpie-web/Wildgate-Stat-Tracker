@@ -3,6 +3,7 @@ import { CHARACTERS, SHIPS } from '../../types';
 import { Rocket } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
+import { getTelemetryActivityState } from '../../utils/telemetryActivity';
 
 export interface SquadronPanelProps {
   density?: 'standard' | 'compact';
@@ -18,6 +19,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
     heroSource,
     telemetryDetectedHero,
     setActiveHero,
+    isMatchInProgress,
   } = useGameData();
   const { telemetryStatus } = useUIState();
 
@@ -25,7 +27,8 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
   const sameShip = (a: string | null | undefined, b: string | null | undefined) => toShipKey(a) && toShipKey(a) === toShipKey(b);
   const hasShipManualOverride = Boolean(telemetryDetectedShip && activeShip && !sameShip(telemetryDetectedShip, activeShip));
   const hasHeroManualOverride = Boolean(telemetryDetectedHero && activeHero && telemetryDetectedHero !== activeHero);
-  const hasMatchTelemetry = Boolean(telemetryStatus?.exists);
+  const telemetryActivity = getTelemetryActivityState(telemetryStatus?.exists, telemetryStatus?.lastEventAt);
+  const hasMatchTelemetry = Boolean(isMatchInProgress || telemetryActivity === 'receiving');
   const telemetrySignalsFilled = (telemetryDetectedShip ? 1 : 0) + (telemetryDetectedHero ? 1 : 0) + (hasMatchTelemetry ? 1 : 0);
   const telemetrySignalsTotal = 3;
   const telemetrySummaryTooltip = `Telemetry signals: ${telemetrySignalsFilled}/${telemetrySignalsTotal} (Ship ${telemetryDetectedShip ? 'ok' : 'missing'}, Prospector ${telemetryDetectedHero ? 'ok' : 'missing'}, Match ${hasMatchTelemetry ? 'ok' : 'missing'})`;

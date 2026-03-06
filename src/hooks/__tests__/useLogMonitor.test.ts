@@ -369,6 +369,45 @@ describe('useLogMonitor', () => {
     expect(latestLoadout?.perks || []).toEqual(expect.arrayContaining(['Boarder']));
   });
 
+  it('captures tertiary telemetry weapon and equipment GUIDs in current loadout', async () => {
+    appStoreState.uidMappings.weapons = {
+      'GUID-ROCKET': 'Rocket Launcher',
+    };
+    appStoreState.uidMappings.equipment = {
+      'GUID-REPULSOR': 'Repulsor',
+    };
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadoutSaved',
+          Payload: {
+            event: {
+              isLocalPlayer: true,
+              loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                guidWeaponTertiary: 'GUID-ROCKET',
+                guidEquipmentTertiary: 'GUID-REPULSOR',
+              },
+            },
+          },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      characterWeapons?: string[];
+      characterEquipment?: string[];
+    };
+    expect(latestLoadout?.characterWeapons || []).toEqual(expect.arrayContaining(['Rocket Launcher']));
+    expect(latestLoadout?.characterEquipment || []).toEqual(expect.arrayContaining(['Repulsor']));
+  });
+
   it('registers unknown telemetry perk GUIDs for ID mapper resolution', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
     renderHook(() => useLogMonitor('Pilot'));

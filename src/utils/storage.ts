@@ -29,6 +29,14 @@ interface UidSeedState {
   seedVersionApplied: number | null;
 }
 
+interface StorageLiveSession {
+  activeHero?: string;
+  activeShip?: string;
+  activeWeapons?: Record<string, number>;
+  characterLoadouts?: Record<string, Record<string, number>>;
+  currentLoadout?: unknown;
+}
+
 export interface StorageData {
   matches: Match[];
   players: string[];
@@ -51,6 +59,7 @@ export interface StorageData {
   uidMappings?: UidMappingsContract;
   uidSeedState?: UidSeedState;
   storageMeta?: StorageMeta;
+  liveSession?: StorageLiveSession;
 }
 
 const LEGACY_KEYS = [

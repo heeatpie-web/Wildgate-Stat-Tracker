@@ -6,10 +6,11 @@ import { useSoundEffects } from '../hooks/useSoundEffects';
 import { HERO_GUIDS, SHIP_GUIDS, WEAPON_GUIDS, EQUIPMENT_GUIDS } from '../utils/guids';
 import { SHIPS, CHARACTERS, UNNAMED_PLAYER_PREFIX, Match, Loadout, TelemetryConsistency } from '../types';
 import { EQUIPMENT_DB } from '../utils/equipmentDb';
-import { getPerkCatalog, getProspectorWeaponCatalog, MAX_PERKS_PER_MATCH } from '../components/patch/patchEntityCatalog';
+import { getPerkCatalog, getProspectorEquipmentCatalog, getProspectorWeaponCatalog, MAX_PERKS_PER_MATCH } from '../components/patch/patchEntityCatalog';
 import { processTelemetryEvent, TelemetryActions, TelemetryContext } from '../utils/telemetryProcessor';
 import Logger from '../utils/logger';
 import { getElectronAPI } from '../utils/electronAPI';
+import { runtimeConfig } from '../config/runtimeConfig';
 import {
     DEFAULT_DURATION_TOLERANCE_SECONDS,
     getExpectedTeammateCountFromMode,
@@ -18,6 +19,7 @@ import {
 
 const ipcRenderer = getElectronAPI();
 const MAX_TELEMETRY_MATCH_DURATION_SECONDS = 60 * 60;
+const MAX_TELEMETRY_PROSPECTOR_SLOTS = 3;
 
 const isTrustedTelemetryDuration = (seconds: number) =>
     Number.isFinite(seconds) && seconds >= 0 && seconds <= MAX_TELEMETRY_MATCH_DURATION_SECONDS;
@@ -119,10 +121,11 @@ const RAW_CHARACTER_WEAPON_NAMES = EQUIPMENT_DB
     .map((item) => item.name)
     .filter(Boolean);
 const CHARACTER_WEAPON_NAMES = getProspectorWeaponCatalog(RAW_CHARACTER_WEAPON_NAMES).filter(Boolean);
-const CHARACTER_EQUIPMENT_NAMES = EQUIPMENT_DB
+const RAW_CHARACTER_EQUIPMENT_NAMES = EQUIPMENT_DB
     .filter((item) => item.type === 'CharacterEquipment')
     .map((item) => item.name)
     .filter(Boolean);
+const CHARACTER_EQUIPMENT_NAMES = getProspectorEquipmentCatalog(RAW_CHARACTER_EQUIPMENT_NAMES).filter(Boolean);
 const CHARACTER_PERK_NAMES = getPerkCatalog().filter(Boolean);
 const PROSPECTOR_WEAPON_NAME_MAP = buildCanonicalEntityNameMap(CHARACTER_WEAPON_NAMES);
 const PROSPECTOR_WEAPON_SET = new Set(Array.from(PROSPECTOR_WEAPON_NAME_MAP.keys()));
@@ -559,6 +562,22 @@ export const useLogMonitor = (activeUser?: string) => {
             return () => clearInterval(timer);
         }
     }, [isMatchInProgress, matchStartTime, setTimeMin, setTimeSec]);
+
+    useEffect(() => {
+        if (isMatchInProgress) return;
+        const lastEventAt = Number(telemetryStatus?.lastEventAt || 0);
+        if (!Number.isFinite(lastEventAt) || lastEventAt <= 0) return;
+        const staleAfterMs = runtimeConfig.systemPulse.telemetryReceivingWindowMs;
+        const remainingMs = staleAfterMs - (Date.now() - lastEventAt);
+        if (remainingMs <= 0) {
+            clearTelemetryDetected();
+            return;
+        }
+        const timeoutId = window.setTimeout(() => {
+            clearTelemetryDetected();
+        }, remainingMs + 50);
+        return () => window.clearTimeout(timeoutId);
+    }, [clearTelemetryDetected, isMatchInProgress, telemetryStatus?.lastEventAt]);
 
     useEffect(() => {
         if (!ipcRenderer) return;
@@ -1138,13 +1157,13 @@ export const useLogMonitor = (activeUser?: string) => {
                             return name;
                         };
                         const weaponGuidCandidates = extractByKeys(loadoutData, [
-                            'guidWeaponPrimary', 'guidWeaponSecondary',
-                            'weaponGuidPrimary', 'weaponGuidSecondary',
-                            'guidWeapon1', 'guidWeapon2',
-                            'weaponGuid1', 'weaponGuid2',
-                            'primaryWeaponGuid', 'secondaryWeaponGuid',
-                            'weapon_guid_primary', 'weapon_guid_secondary',
-                            'guid_weapon_primary', 'guid_weapon_secondary',
+                            'guidWeaponPrimary', 'guidWeaponSecondary', 'guidWeaponTertiary',
+                            'weaponGuidPrimary', 'weaponGuidSecondary', 'weaponGuidTertiary',
+                            'guidWeapon1', 'guidWeapon2', 'guidWeapon3',
+                            'weaponGuid1', 'weaponGuid2', 'weaponGuid3',
+                            'primaryWeaponGuid', 'secondaryWeaponGuid', 'tertiaryWeaponGuid',
+                            'weapon_guid_primary', 'weapon_guid_secondary', 'weapon_guid_tertiary',
+                            'guid_weapon_primary', 'guid_weapon_secondary', 'guid_weapon_tertiary',
                             'characterWeapons', 'characterWeapon', 'characterWeaponSlots', 'characterWeaponLoadout',
                             'charWeapons', 'charWeapon', 'charWeaponSlots', 'charWeaponLoadout',
                             'crewWeapons', 'crewWeaponSlots',
@@ -1152,13 +1171,13 @@ export const useLogMonitor = (activeUser?: string) => {
                             'weapons', 'weaponGuids', 'weaponIds', 'weaponSlots', 'weaponSlotData', 'weaponLoadout',
                         ]);
                         const equipmentGuidCandidates = extractByKeys(loadoutData, [
-                            'guidEquipmentPrimary', 'guidEquipmentSecondary',
-                            'equipmentGuidPrimary', 'equipmentGuidSecondary',
-                            'guidEquipment1', 'guidEquipment2',
-                            'equipmentGuid1', 'equipmentGuid2',
-                            'primaryEquipmentGuid', 'secondaryEquipmentGuid',
-                            'equipment_guid_primary', 'equipment_guid_secondary',
-                            'guid_equipment_primary', 'guid_equipment_secondary',
+                            'guidEquipmentPrimary', 'guidEquipmentSecondary', 'guidEquipmentTertiary',
+                            'equipmentGuidPrimary', 'equipmentGuidSecondary', 'equipmentGuidTertiary',
+                            'guidEquipment1', 'guidEquipment2', 'guidEquipment3',
+                            'equipmentGuid1', 'equipmentGuid2', 'equipmentGuid3',
+                            'primaryEquipmentGuid', 'secondaryEquipmentGuid', 'tertiaryEquipmentGuid',
+                            'equipment_guid_primary', 'equipment_guid_secondary', 'equipment_guid_tertiary',
+                            'guid_equipment_primary', 'guid_equipment_secondary', 'guid_equipment_tertiary',
                             'characterEquipment', 'characterEquipments', 'characterGear', 'characterEquipmentSlots', 'characterEquipmentLoadout',
                             'charEquipment', 'charEquipments', 'charGear', 'charEquipmentSlots', 'charEquipmentLoadout',
                             'crewEquipment', 'crewGear', 'loadoutCharacterEquipment', 'loadoutCharEquipment',
@@ -1178,11 +1197,11 @@ export const useLogMonitor = (activeUser?: string) => {
                         ]);
                         const weaponNameCandidates = extractByKeys(loadoutData, [
                             'weapons', 'weaponSlots', 'weaponSlotData', 'weaponLoadout',
-                            'weaponPrimary', 'weaponSecondary',
-                            'weaponOne', 'weaponTwo',
-                            'primaryWeapon', 'secondaryWeapon',
-                            'weaponNamePrimary', 'weaponNameSecondary',
-                            'weapon_name_primary', 'weapon_name_secondary',
+                            'weaponPrimary', 'weaponSecondary', 'weaponTertiary',
+                            'weaponOne', 'weaponTwo', 'weaponThree',
+                            'primaryWeapon', 'secondaryWeapon', 'tertiaryWeapon',
+                            'weaponNamePrimary', 'weaponNameSecondary', 'weaponNameTertiary',
+                            'weapon_name_primary', 'weapon_name_secondary', 'weapon_name_tertiary',
                             'weaponNames', 'weaponDisplayNames', 'loadoutWeapons', 'loadoutWeaponNames',
                         ]);
                         const characterWeaponNameCandidates = extractByKeys(loadoutData, [
@@ -1193,11 +1212,11 @@ export const useLogMonitor = (activeUser?: string) => {
                         ]);
                         const equipmentNameCandidates = extractByKeys(loadoutData, [
                             'equipment', 'equipmentSlots', 'equipmentSlotData', 'equipmentLoadout',
-                            'equipmentPrimary', 'equipmentSecondary',
-                            'equipmentOne', 'equipmentTwo',
-                            'primaryEquipment', 'secondaryEquipment',
-                            'equipmentNamePrimary', 'equipmentNameSecondary',
-                            'equipment_name_primary', 'equipment_name_secondary',
+                            'equipmentPrimary', 'equipmentSecondary', 'equipmentTertiary',
+                            'equipmentOne', 'equipmentTwo', 'equipmentThree',
+                            'primaryEquipment', 'secondaryEquipment', 'tertiaryEquipment',
+                            'equipmentNamePrimary', 'equipmentNameSecondary', 'equipmentNameTertiary',
+                            'equipment_name_primary', 'equipment_name_secondary', 'equipment_name_tertiary',
                             'equipmentNames', 'equipmentDisplayNames', 'loadoutEquipment', 'loadoutEquipmentNames',
                         ]);
                         const characterEquipmentNameCandidates = extractByKeys(loadoutData, [
@@ -1286,11 +1305,11 @@ export const useLogMonitor = (activeUser?: string) => {
                         const resolvedProspectorWeapons = Array.from(new Set([
                             ...resolvedGuidWeapons.map((name) => toCanonicalProspectorWeaponName(name)).filter(Boolean),
                             ...matchedWeaponNames.map((name) => toCanonicalProspectorWeaponName(name)).filter(Boolean),
-                        ])).slice(0, 2);
+                        ])).slice(0, MAX_TELEMETRY_PROSPECTOR_SLOTS);
                         const resolvedProspectorEquipment = Array.from(new Set([
                             ...resolvedGuidEquipment.filter((name) => PROSPECTOR_EQUIPMENT_SET.has(name)),
                             ...matchedEquipmentNames.filter((name) => PROSPECTOR_EQUIPMENT_SET.has(name)),
-                        ])).slice(0, 2);
+                        ])).slice(0, MAX_TELEMETRY_PROSPECTOR_SLOTS);
                         const resolvedProspectorPerks = Array.from(new Set([
                             ...resolvedGuidPerks.filter((name) => PROSPECTOR_PERK_SET.has(name)),
                             ...matchedPerkNames.filter((name) => PROSPECTOR_PERK_SET.has(name)),

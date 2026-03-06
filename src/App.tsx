@@ -136,6 +136,7 @@ interface RestoreSessionPayload {
     sessionShipTypes: Record<string, string>;
     activeShip: string | null;
     activeHero: string | null;
+    activeWeapons: Record<string, number>;
     currentLoadout: Match['loadout'] | null;
     selectedReachModifiers: string[];
     timeMin: string;
@@ -167,6 +168,7 @@ const STARTUP_HEALTH_CHECK_SEEN_KEY_PREFIX = 'wg_startup_health_check_seen_v2';
 const STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY_PREFIX = 'wg_startup_health_check_skipped_launch_v2';
 const UNKNOWN_PLAYER_LABELS = new Set(['unknown', 'unknown player', 'n/a', 'na', '?']);
 const STARTUP_INTERACTION_GRACE_MS = 3500;
+const MAX_PROSPECTOR_LOADOUT_SLOTS = 3;
 const getOnboardingUserScope = (user: string | null | undefined): string => {
     const normalized = String(user || '').trim().toLowerCase();
     return normalized || '__global__';
@@ -836,14 +838,22 @@ const App: React.FC = () => {
             }, {})
             : {};
         const selectedReachModifiers = Array.isArray(state.selectedReachModifiers) ? state.selectedReachModifiers.filter(Boolean) : [];
+        const activeWeapons = isRecord(state.activeWeapons)
+            ? Object.entries(state.activeWeapons).reduce<Record<string, number>>((acc, [key, value]) => {
+                const parsed = Number(value);
+                if (!Number.isFinite(parsed) || parsed <= 0) return acc;
+                acc[key] = Math.max(1, Math.floor(parsed));
+                return acc;
+            }, {})
+            : {};
         const currentLoadout = isRecord(state.currentLoadout)
             ? {
                 hero: typeof state.currentLoadout.hero === 'string' ? state.currentLoadout.hero : null,
                 ship: typeof state.currentLoadout.ship === 'string' ? state.currentLoadout.ship : null,
                 weapons: Array.isArray(state.currentLoadout.weapons) ? state.currentLoadout.weapons.filter(Boolean).slice(0, 10) : [],
-                equipment: Array.isArray(state.currentLoadout.equipment) ? state.currentLoadout.equipment.filter(Boolean).slice(0, 2) : [],
-                characterWeapons: Array.isArray(state.currentLoadout.characterWeapons) ? state.currentLoadout.characterWeapons.filter(Boolean).slice(0, 2) : [],
-                characterEquipment: Array.isArray(state.currentLoadout.characterEquipment) ? state.currentLoadout.characterEquipment.filter(Boolean).slice(0, 2) : [],
+                equipment: Array.isArray(state.currentLoadout.equipment) ? state.currentLoadout.equipment.filter(Boolean).slice(0, MAX_PROSPECTOR_LOADOUT_SLOTS) : [],
+                characterWeapons: Array.isArray(state.currentLoadout.characterWeapons) ? state.currentLoadout.characterWeapons.filter(Boolean).slice(0, MAX_PROSPECTOR_LOADOUT_SLOTS) : [],
+                characterEquipment: Array.isArray(state.currentLoadout.characterEquipment) ? state.currentLoadout.characterEquipment.filter(Boolean).slice(0, MAX_PROSPECTOR_LOADOUT_SLOTS) : [],
             }
             : null;
         const kills = isRecord(state.kills)
@@ -860,6 +870,10 @@ const App: React.FC = () => {
             || Object.keys(sessionTeams).length > 0
             || Object.keys(sessionShipTypes).length > 0;
         const hasFormProgress = Boolean(state.showWizard)
+            || Object.keys(activeWeapons).length > 0
+            || Boolean(String(state.activeHero || '').trim())
+            || Boolean(String(state.activeShip || '').trim())
+            || !!currentLoadout
             || selectedReachModifiers.length > 0
             || !!String(state.timeMin || '').trim()
             || !!String(state.timeSec || '').trim()
@@ -889,6 +903,7 @@ const App: React.FC = () => {
                 sessionShipTypes,
                 activeShip: String(state.activeShip || '').trim() || null,
                 activeHero: String(state.activeHero || '').trim() || null,
+                activeWeapons,
                 currentLoadout,
                 selectedReachModifiers,
                 timeMin: String(state.timeMin || ''),
@@ -930,6 +945,7 @@ const App: React.FC = () => {
         if (payload.activeShip) state.setActiveShip(payload.activeShip, 'manual');
         if (payload.activeHero) state.setActiveHero(payload.activeHero, 'manual');
         state.setCurrentLoadout(payload.currentLoadout || null);
+        state.setActiveWeapons(isRecord(payload.activeWeapons) ? payload.activeWeapons as Record<string, number> : {});
         state.setSelectedReachModifiers(Array.isArray(payload.selectedReachModifiers) ? payload.selectedReachModifiers : [], 'manual');
         state.setTimeMin(String(payload.timeMin || ''), 'manual');
         state.setTimeSec(String(payload.timeSec || ''), 'manual');
@@ -1016,13 +1032,21 @@ const App: React.FC = () => {
                     : {},
                 activeShip: String(payloadRecord.activeShip || '').trim() || null,
                 activeHero: String(payloadRecord.activeHero || '').trim() || null,
+                activeWeapons: isRecord(payloadRecord.activeWeapons)
+                    ? Object.entries(payloadRecord.activeWeapons).reduce<Record<string, number>>((acc, [key, value]) => {
+                        const parsedNumber = Number(value);
+                        if (!Number.isFinite(parsedNumber) || parsedNumber <= 0) return acc;
+                        acc[key] = Math.max(1, Math.floor(parsedNumber));
+                        return acc;
+                    }, {})
+                    : {},
                 currentLoadout: isRecord(payloadRecord.currentLoadout) ? {
                     hero: String(payloadRecord.currentLoadout.hero || '').trim() || null,
                     ship: String(payloadRecord.currentLoadout.ship || '').trim() || null,
                     weapons: Array.isArray(payloadRecord.currentLoadout.weapons) ? payloadRecord.currentLoadout.weapons.map(v => String(v || '').trim()).filter(Boolean).slice(0, 10) : [],
-                    equipment: Array.isArray(payloadRecord.currentLoadout.equipment) ? payloadRecord.currentLoadout.equipment.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
-                    characterWeapons: Array.isArray(payloadRecord.currentLoadout.characterWeapons) ? payloadRecord.currentLoadout.characterWeapons.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
-                    characterEquipment: Array.isArray(payloadRecord.currentLoadout.characterEquipment) ? payloadRecord.currentLoadout.characterEquipment.map(v => String(v || '').trim()).filter(Boolean).slice(0, 2) : [],
+                    equipment: Array.isArray(payloadRecord.currentLoadout.equipment) ? payloadRecord.currentLoadout.equipment.map(v => String(v || '').trim()).filter(Boolean).slice(0, MAX_PROSPECTOR_LOADOUT_SLOTS) : [],
+                    characterWeapons: Array.isArray(payloadRecord.currentLoadout.characterWeapons) ? payloadRecord.currentLoadout.characterWeapons.map(v => String(v || '').trim()).filter(Boolean).slice(0, MAX_PROSPECTOR_LOADOUT_SLOTS) : [],
+                    characterEquipment: Array.isArray(payloadRecord.currentLoadout.characterEquipment) ? payloadRecord.currentLoadout.characterEquipment.map(v => String(v || '').trim()).filter(Boolean).slice(0, MAX_PROSPECTOR_LOADOUT_SLOTS) : [],
                 } : null,
                 selectedReachModifiers: Array.isArray(payloadRecord.selectedReachModifiers) ? payloadRecord.selectedReachModifiers.map(v => String(v || '').trim()).filter(Boolean) : [],
                 timeMin: String(payloadRecord.timeMin || ''),

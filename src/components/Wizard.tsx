@@ -31,7 +31,7 @@ import {
 
 type WizardTab = 'result' | 'ocr';
 const MAX_SHIP_WEAPONS = 10;
-const MAX_PROSPECTOR_SLOTS = 2;
+const MAX_PROSPECTOR_SLOTS = 3;
 const MODAL_FOCUSABLE_SELECTOR = [
     'button:not([disabled])',
     '[href]',
@@ -1006,11 +1006,11 @@ export const Wizard: React.FC = () => {
                                     )}
                                 </span>
                                 <div className="flex gap-1.5 items-center overflow-hidden">
-                                    {displayedCharacterWeapons.length > 0 ? displayedCharacterWeapons.slice(0, 2).map((w, i) => (
+                                    {displayedCharacterWeapons.length > 0 ? displayedCharacterWeapons.slice(0, MAX_PROSPECTOR_SLOTS).map((w, i) => (
                                         <span key={`w-${i}`} className="px-1.5 py-0.5 rounded bg-md-sys-surface-container-highest text-md-sys-on-surface text-[10px] font-bold uppercase truncate max-w-[80px]">{w}</span>
                                     )) : <span className="text-label-xs opacity-40">No Weapons</span>}
                                     <span className="opacity-20 mx-1">|</span>
-                                    {displayedCharacterEquipment.length > 0 ? displayedCharacterEquipment.slice(0, 2).map((e, i) => (
+                                    {displayedCharacterEquipment.length > 0 ? displayedCharacterEquipment.slice(0, MAX_PROSPECTOR_SLOTS).map((e, i) => (
                                         <span key={`e-${i}`} className="px-1.5 py-0.5 rounded bg-md-sys-surface-container-highest text-md-sys-on-surface text-[10px] font-bold uppercase truncate max-w-[80px]">{e}</span>
                                     )) : <span className="text-label-xs opacity-40">No Equipment</span>}
                                     {(displayedCharacterWeapons.length + displayedCharacterEquipment.length + displayedPerks.length) > 4 && (

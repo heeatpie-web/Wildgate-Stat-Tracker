@@ -4,6 +4,7 @@ import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { getElectronAPI } from '../utils/electronAPI';
 import { runtimeConfig } from '../config/runtimeConfig';
+import { getTelemetryActivityState } from '../utils/telemetryActivity';
 
 /**
  * SystemPulse
@@ -19,20 +20,6 @@ import { runtimeConfig } from '../config/runtimeConfig';
  *   - Updates: Electron auto-updater status.
  *   - Telemetry: lit/blinking = receiving (recent events), with explicit receiving/connected/offline state tooltips.
  */
-const TELEMETRY_RECEIVING_MS = runtimeConfig.systemPulse.telemetryReceivingWindowMs;
-type TelemetryActivityState = 'receiving' | 'connected' | 'offline';
-
-const getTelemetryActivityState = (
-    exists: boolean | undefined,
-    lastEventAt: number | undefined,
-): TelemetryActivityState => {
-    if (!exists) return 'offline';
-    if (typeof lastEventAt === 'number' && Number.isFinite(lastEventAt) && (Date.now() - lastEventAt) <= TELEMETRY_RECEIVING_MS) {
-        return 'receiving';
-    }
-    return 'connected';
-};
-
 const SystemPulse: React.FC = () => {
     const { updateStatus, enableAutoLogRecording, telemetryStatus } = useUIState();
     const { isMatchInProgress, pendingReviews } = useGameData();

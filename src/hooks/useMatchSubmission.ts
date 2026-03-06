@@ -17,7 +17,7 @@ import {
 
 const DEFAULT_ARTIFACT_LOOKBACK_MS = 10 * 60 * 1000;
 const MAX_SHIP_WEAPON_SLOTS = 10;
-const MAX_PROSPECTOR_SLOTS = 2;
+const MAX_PROSPECTOR_SLOTS = 3;
 const parseDurationSecs = (value: string | undefined): number => {
     if (!value) return 0;
     const parts = value.split(':').map(Number);

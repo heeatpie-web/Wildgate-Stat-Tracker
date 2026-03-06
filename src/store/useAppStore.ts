@@ -28,12 +28,53 @@ import {
 } from '../utils/ocrAliasEngine';
 import { normalizeOcrBatchThreshold } from '../utils/ocrBatchActions';
 import { sanitizeCalibrationSamples } from '../utils/ocrCalibration';
-import { normalizeShipName, type Match } from '../types';
+import { CHARACTERS, SHIPS, normalizeShipName, type Match } from '../types';
 import { normalizeSharedUidMappings } from '../services/mappingContract';
 
 export type AppState = DataSlice & SettingsSlice & UISlice & SmartCapturesUIState & FormSlice & MappingSlice;
 
 let _hydrated = false;
+
+const MAX_PROSPECTOR_LOADOUT_SLOTS = 3;
+
+const sanitizePersistedCounterMap = (value: unknown): Record<string, number> => {
+  if (typeof value !== 'object' || value === null) return {};
+  return Object.entries(value as Record<string, unknown>).reduce<Record<string, number>>((acc, [key, raw]) => {
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed <= 0) return acc;
+    acc[key] = Math.max(1, Math.floor(parsed));
+    return acc;
+  }, {});
+};
+
+const sanitizePersistedLoadout = (value: unknown) => {
+  if (typeof value !== 'object' || value === null) return null;
+  const record = value as Record<string, unknown>;
+  const toSlotList = (entryValue: unknown, maxSlots: number) => (
+    Array.isArray(entryValue)
+      ? entryValue.map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, maxSlots)
+      : []
+  );
+  return {
+    hero: typeof record.hero === 'string' ? record.hero.trim() || null : null,
+    ship: typeof record.ship === 'string' ? record.ship.trim() || null : null,
+    perks: toSlotList(record.perks, 2),
+    characterPerks: toSlotList(record.characterPerks, 2),
+    weapons: toSlotList(record.weapons, 10),
+    equipment: toSlotList(record.equipment, MAX_PROSPECTOR_LOADOUT_SLOTS),
+    characterWeapons: toSlotList(record.characterWeapons, MAX_PROSPECTOR_LOADOUT_SLOTS),
+    characterEquipment: toSlotList(record.characterEquipment, MAX_PROSPECTOR_LOADOUT_SLOTS),
+    shipWeapons: Array.isArray(record.shipWeapons)
+      ? record.shipWeapons
+        .map((entry) => ({
+          name: String((entry as { name?: unknown })?.name || '').trim(),
+          quantity: Math.max(0, Math.min(10, Math.floor(Number((entry as { quantity?: unknown })?.quantity || 0)))),
+        }))
+        .filter((entry) => entry.name && entry.quantity > 0)
+        .slice(0, 10)
+      : [],
+  };
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
@@ -170,6 +211,9 @@ const customStorage: PersistStorage<AppState> = {
       const nextCanonicalMatchNumber = Number.isInteger(storedNextCanonical) && storedNextCanonical > 0
         ? Math.max(storedNextCanonical, maxCanonical + 1)
         : Math.max(1, maxCanonical + 1);
+      const liveSession = typeof data.liveSession === 'object' && data.liveSession !== null
+        ? data.liveSession as Record<string, unknown>
+        : {};
 
       return {
         state: {
@@ -264,6 +308,16 @@ const customStorage: PersistStorage<AppState> = {
 
           // LIVE SESSION (Temporary persistence allowed for refresh safety)
           timelineEvents: data.timelineEvents || [],
+          activeHero: typeof liveSession.activeHero === 'string' ? liveSession.activeHero : CHARACTERS[0],
+          activeShip: typeof liveSession.activeShip === 'string' ? liveSession.activeShip : SHIPS[0],
+          activeWeapons: sanitizePersistedCounterMap(liveSession.activeWeapons),
+          characterLoadouts: typeof liveSession.characterLoadouts === 'object' && liveSession.characterLoadouts !== null
+            ? Object.entries(liveSession.characterLoadouts as Record<string, unknown>).reduce<Record<string, Record<string, number>>>((acc, [hero, loadout]) => {
+              acc[hero] = sanitizePersistedCounterMap(loadout);
+              return acc;
+            }, {})
+            : {},
+          currentLoadout: sanitizePersistedLoadout(liveSession.currentLoadout),
 
           // UI
           layouts: (data.layouts && Object.keys(data.layouts).length > 0) ? data.layouts : {
@@ -375,7 +429,14 @@ const customStorage: PersistStorage<AppState> = {
       timelineEvents: state.timelineEvents,
       ocrCorrections: state.ocrCorrections,
       teamIdentityCorrections: state.teamIdentityCorrections,
-      ocrAliasModel: state.ocrAliasModel
+      ocrAliasModel: state.ocrAliasModel,
+      liveSession: {
+        activeHero: state.activeHero,
+        activeShip: state.activeShip,
+        activeWeapons: state.activeWeapons,
+        characterLoadouts: state.characterLoadouts,
+        currentLoadout: state.currentLoadout,
+      },
     };
     await StorageService.save(dbData);
   },
@@ -460,6 +521,11 @@ export const useAppStore = create<AppState>()(
         searchQuery: state.searchQuery,
         sortMode: state.sortMode,
         activeUser: state.activeUser,
+        activeHero: state.activeHero,
+        activeShip: state.activeShip,
+        activeWeapons: state.activeWeapons,
+        characterLoadouts: state.characterLoadouts,
+        currentLoadout: state.currentLoadout,
         layouts: state.layouts,
         timelineEvents: state.timelineEvents,
         ocrCorrections: state.ocrCorrections,

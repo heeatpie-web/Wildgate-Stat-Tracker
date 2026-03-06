@@ -27,7 +27,7 @@ vi.mock('../../providers/GameDataProvider', () => ({
 }));
 
 const uiState = {
-  telemetryStatus: { exists: true },
+  telemetryStatus: { exists: true, lastEventAt: Date.now() },
 };
 
 vi.mock('../../providers/UIStateProvider', () => ({
@@ -37,13 +37,14 @@ vi.mock('../../providers/UIStateProvider', () => ({
 describe('SquadronPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    uiState.telemetryStatus = { exists: true };
+    uiState.telemetryStatus = { exists: true, lastEventAt: Date.now() };
     gameData.activeShip = 'Hunter';
     gameData.shipSource = 'telemetry';
     gameData.telemetryDetectedShip = 'Hunter (2 Player)';
     gameData.activeHero = 'Adrian';
     gameData.heroSource = 'telemetry';
     gameData.telemetryDetectedHero = 'Adrian';
+    gameData.isMatchInProgress = true;
   });
 
   it('shows ship and prospector sections in standard mode with a single telemetry summary badge', () => {
@@ -71,5 +72,16 @@ describe('SquadronPanel', () => {
 
     const hunterButton = screen.getByRole('button', { name: 'Hunter' });
     expect(hunterButton.className).toContain('border-md-sys-primary/45');
+  });
+
+  it('does not show a match telemetry signal from stale idle status alone', () => {
+    gameData.telemetryDetectedShip = undefined as unknown as string;
+    gameData.telemetryDetectedHero = undefined as unknown as string;
+    gameData.isMatchInProgress = false;
+    uiState.telemetryStatus = { exists: true, lastEventAt: Date.now() - 120_000 };
+
+    render(<SquadronPanel />);
+
+    expect(screen.queryByTestId('recording-telemetry-summary')).not.toBeInTheDocument();
   });
 });
