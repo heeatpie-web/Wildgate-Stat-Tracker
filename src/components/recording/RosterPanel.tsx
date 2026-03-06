@@ -8,7 +8,7 @@ import { getShipColor } from '../../types';
 import { normalizeOcrName, similarityScore } from '../../utils/stringUtils';
 
 export const RosterPanel: React.FC = () => {
-    const { activeUser } = useUIState();
+    const { activeUser, setToast } = useUIState();
     const {
         pilotRegistry,
         favorites,
@@ -128,6 +128,19 @@ export const RosterPanel: React.FC = () => {
     const saveEdit = () => {
         if (!editingPilot) return;
         if (editRename.trim() && editRename !== editingPilot) {
+            const trimmedRename = editRename.trim();
+            const collision = pilotRegistry.find((entry) => (
+                entry !== editingPilot
+                && normalizeOcrName(entry || '').toLowerCase() === normalizeOcrName(trimmedRename).toLowerCase()
+            ));
+            if (collision) {
+                setShowMerge(true);
+                setMergeTarget(collision);
+                setMergeKeepName(collision);
+                setMergeSearch(collision);
+                setToast({ message: `Rename collides with "${collision}". Merge instead.`, type: 'warning' });
+                return;
+            }
             onRenamePilot(editingPilot, editRename);
             onUpdateNote(editRename, editNote);
         } else {

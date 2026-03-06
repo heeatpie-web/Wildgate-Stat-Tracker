@@ -1,4 +1,11 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.0.1": [
+    "Polish: Rebuilt the analytics cockpit with richer drill-down entry points, scoped deep dives, and a chained explorer overlay for ships, people, hazards, and loadouts.",
+    "Polish: Players and identity cleanup now surfaces former names, learned OCR variants, duplicate candidates, and safer merge-first flows instead of silent duplicate creation.",
+    "Polish: OCR roster workbench now separates 'Add as New' from 'Merge into Existing' and exposes OCR best-match suggestions directly in the review UI.",
+    "Improvement: OCR/Capture settings now highlight quick daily-use choices first and keep advanced tuning collapsed by default to reduce settings overload.",
+    "Performance: Heavy modal and utility surfaces are now lazy-loaded so the main startup bundle is smaller and the prior Vite large-chunk warning for the app shell is eliminated."
+  ],
   "v3.0.0": [
     "Release: Version 3.0 ships with the PaddleOCR runtime as a core OCR engine path for improved extraction reliability.",
     "Improvement: Analytics workflows and data quality were refined with stronger filtering and tracking improvements.",

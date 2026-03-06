@@ -52,8 +52,8 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ insights, relationsh
                     </h3>
                     <div className={`grid gap-4 ${dense ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-2'}`}>
                         {relationshipInsights.map((rel, i) => (
-                            <div key={i} onClick={() => onDrillDown(rel.playerName, rel.type === 'ally' ? 'Teammate' : 'Opponent')}
-                                className={`md3-card rounded-2xl relative overflow-hidden transition-all cursor-pointer hover:border-md-sys-primary/20 ${dense ? 'p-4' : 'p-6'}`}>
+                            <button key={i} type="button" onClick={() => onDrillDown(rel.playerName, rel.type === 'ally' ? 'Teammate' : 'Opponent')}
+                                className={`md3-card rounded-2xl relative overflow-hidden transition-all cursor-pointer hover:border-md-sys-primary/20 ${dense ? 'p-4' : 'p-6'} text-left`}>
                                 <div className={`absolute -top-4 -right-4 w-20 h-20 opacity-10 rounded-full blur-2xl ${
                                     rel.type === 'nemesis' ? 'bg-danger' : rel.type === 'ally' ? 'bg-success' : rel.type === 'stalker' ? 'bg-accent' : 'bg-warning'
                                 }`}></div>
@@ -72,7 +72,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ insights, relationsh
                                         <Rocket size={10} className="text-md-sys-primary" /> {rel.topShip}
                                     </div>
                                 )}
-                            </div>
+                            </button>
                         ))}
                     </div>
                 </div>

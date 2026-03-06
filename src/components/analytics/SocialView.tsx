@@ -74,7 +74,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ socialData, filteredMatc
                                             const profile = playerProfiles[name];
                                             const topShip = profile?.shipsObserved ? Object.entries(profile.shipsObserved).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] : null;
                                             return (
-                                                <div key={name} onClick={() => onDrillDown(name, type as any)} className="flex justify-between items-center py-3 border-b last:border-0 cursor-pointer hover:bg-md-sys-on-surface/5 p-2 rounded-xl transition-colors">
+                                                <button key={name} type="button" onClick={() => onDrillDown(name, type as any)} className="flex justify-between items-center py-3 border-b last:border-0 cursor-pointer hover:bg-md-sys-on-surface/5 p-2 rounded-xl transition-colors w-full text-left">
                                                     <div className="flex items-center gap-3">
                                                         <div className={`w-6 h-6 rounded-full flex items-center justify-center text-label-sm font-black ${i === 0 ? (isOpponent ? 'bg-danger text-on-scrim' : 'bg-success text-on-scrim') : 'md3-surface-high'}`}>{i + 1}</div>
                                                         <div className="flex flex-col">
@@ -86,7 +86,7 @@ export const SocialView: React.FC<SocialViewProps> = ({ socialData, filteredMatc
                                                         <div className="text-label-sm font-black" style={{ color: (stat.wins / stat.total) > 0.5 ? 'var(--color-win)' : 'var(--color-loss)' }}>{Math.round((stat.wins / stat.total) * 100)}% WR</div>
                                                         <div className="text-label-xs font-bold opacity-40">{stat.total} {isOpponent ? 'Enc.' : 'Missions'}</div>
                                                     </div>
-                                                </div>
+                                                </button>
                                             );
                                         })}
                                 </div>

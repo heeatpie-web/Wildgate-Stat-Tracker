@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Palette, FileJson, Save, Download, RefreshCw, X, Check, Search, Upload, Copy } from 'lucide-react';
+import { Palette, FileJson, Save, Download, RefreshCw, X, Check, Search, Upload, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
@@ -100,6 +100,7 @@ const SettingsModalContent: React.FC = () => {
         setToast,
         setShowResetConfirm,
         setShowTutorial,
+        activeUser,
         enableAutoLogRecording, setEnableAutoLogRecording,
         setShowIdMapper,
         devMode, setDevMode
@@ -183,6 +184,7 @@ const SettingsModalContent: React.FC = () => {
     const [aliasFrom, setAliasFrom] = useState('');
     const [aliasTo, setAliasTo] = useState('');
     const [showRoiEditor, setShowRoiEditor] = useState(false);
+    const [showAdvancedOcrSettings, setShowAdvancedOcrSettings] = useState(false);
     const [pendingSuspiciousAliasPair, setPendingSuspiciousAliasPair] = useState<string | null>(null);
     const [thresholdRecBusy, setThresholdRecBusy] = useState(false);
     const [thresholdRecommendation, setThresholdRecommendation] = useState<ThresholdRecommendationPayload | null>(null);
@@ -237,6 +239,7 @@ const SettingsModalContent: React.FC = () => {
     useEffect(() => {
         if (!showSettings) {
             setShowRoiEditor(false);
+            setShowAdvancedOcrSettings(false);
             setSettingsSearch('');
         }
     }, [showSettings]);
@@ -460,7 +463,7 @@ const SettingsModalContent: React.FC = () => {
         { id: 'sound-effects', tab: 'interface', label: 'Sound Effects', keywords: ['sound', 'audio', 'toggle', 'cue'] },
         { id: 'telemetry-performance', tab: 'interface', label: 'Telemetry Performance', keywords: ['telemetry', 'performance', 'polling', 'load'] },
         { id: 'header-smart-capture', tab: 'interface', label: 'Header Smart Capture', keywords: ['header', 'capture', 'quick capture'] },
-        { id: 'alias-authority', tab: 'identity', label: 'Alias & Authority', keywords: ['alias', 'authority', 'name', 'canonical'] },
+        { id: 'alias-authority', tab: 'identity', label: 'OCR Alias Learning', keywords: ['alias', 'ocr', 'name', 'canonical', 'duplicate', 'former name'] },
         { id: 'ocr-engine', tab: 'ocr-capture', label: 'OCR Engine', keywords: ['ocr', 'cloud', 'local', 'gemini', 'hybrid'] },
         { id: 'capture-flow', tab: 'ocr-capture', label: 'Capture Mode', keywords: ['capture', 'deferred', 'auto', 'workflow'] },
         { id: 'ocr-roi', tab: 'ocr-capture', label: 'OCR Scan Regions (ROI)', keywords: ['roi', 'region', 'hazard', 'players', 'map'] },
@@ -636,9 +639,11 @@ const SettingsModalContent: React.FC = () => {
                     {/* Alias & authority (primary) */}
                     {activeTab === 'identity' && (
                         <section className="md3-surface p-5 rounded-card border border-md-sys-outline/10">
-                        <h3 className="text-label-lg font-bold text-md-sys-on-surface mb-1">Alias & authority</h3>
-                        <p className="text-body text-md-sys-on-surface/60 mb-1">This identity is used for session and analytics.</p>
-                        <p className="text-label-sm text-md-sys-primary/80 mb-4">⚠ Use your exact in-game display name — OCR teammate detection relies on it matching what appears on screen.</p>
+                        <h3 className="text-label-lg font-bold text-md-sys-on-surface mb-1">OCR alias learning</h3>
+                        <p className="text-body text-md-sys-on-surface/60 mb-1">
+                            Manage how OCR variants map onto canonical player names. Your active profile is <strong>{activeUser || 'not set'}</strong>; switch that from the profile selector, not here.
+                        </p>
+                        <p className="text-label-sm text-md-sys-primary/80 mb-4">⚠ Use exact in-game display names for canonical names here — OCR teammate detection relies on those names matching what appears on screen.</p>
                         <div className="grid grid-cols-2 gap-2 mb-3">
                             <Input
                                 type="text"
@@ -1033,6 +1038,60 @@ const SettingsModalContent: React.FC = () => {
                         </section>
                     )}
 
+                    {/* OCR Quick Setup */}
+                    {activeTab === 'ocr-capture' && (
+                        <section className="md3-surface p-5 rounded-card border border-md-sys-outline/10">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 className="text-label-lg font-bold text-md-sys-on-surface mb-1">Quick setup</h3>
+                                <p className="text-label-sm text-md-sys-on-surface/60">Most users only need these four OCR and capture decisions.</p>
+                            </div>
+                            <span className="text-label-xs font-bold uppercase tracking-wide text-md-sys-primary">Recommended first</span>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                            <button
+                                type="button"
+                                onClick={() => setCaptureMode(captureMode === 'auto' ? 'deferred' : 'auto')}
+                                className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
+                            >
+                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Capture mode</div>
+                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">{captureMode === 'auto' ? 'Capture Now + Auto OCR' : 'Capture Now, OCR Later'}</div>
+                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">{captureMode === 'auto' ? 'Bundled OCR after capture pauses' : 'Saves now, review from Smart Captures later'}</div>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setResultOcrFlowMode(resultOcrFlowMode === 'prompt' ? 'background' : 'prompt')}
+                                className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
+                            >
+                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Result button</div>
+                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">{resultOcrFlowMode === 'prompt' ? 'Prompt Before OCR' : 'Background OCR'}</div>
+                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">{resultOcrFlowMode === 'prompt' ? 'Ask before processing queued captures' : 'Open wizard immediately and OCR in background'}</div>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setOcrLearningEnabled(!ocrLearningEnabled)}
+                                className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
+                            >
+                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">OCR learning</div>
+                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">{ocrLearningEnabled ? 'Enabled' : 'Disabled'}</div>
+                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">{ocrLearningEnabled ? `Review mode: ${ocrLearningReviewMode}` : 'Manual review only'}</div>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setShowRoiEditor(true)}
+                                className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
+                            >
+                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Scan regions</div>
+                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">Open Visual ROI Editor</div>
+                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">Only touch this if resolution or capture framing is off.</div>
+                            </button>
+                        </div>
+                        <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-2 text-label-sm text-md-sys-on-surface/60">
+                            Advanced thresholds, learning policy, event rollback, and preload diagnostics stay below if you need to tune OCR behavior more precisely.
+                        </div>
+                        </section>
+                    )}
+
                     {/* OCR Engine Section */}
                     {activeTab === 'ocr-capture' && (
                         <section className="md3-surface-high/50 backdrop-blur-sm p-5 rounded-card border border-md-sys-outline/10">
@@ -1040,11 +1099,24 @@ const SettingsModalContent: React.FC = () => {
                             OCR is tuned for 1920 x 1080. Using other resolutions can lower accuracy unless you adjust OCR scan regions (ROI).
                         </div>
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-label-sm font-bold uppercase tracking-wide opacity-60 flex items-center gap-2">
-                                OCR Engine
-                            </h3>
-                            <span className="text-label-sm opacity-60 font-bold uppercase">Local OCR</span>
+                            <div>
+                                <h3 className="text-label-sm font-bold uppercase tracking-wide opacity-60 flex items-center gap-2">
+                                    Advanced OCR Tuning
+                                </h3>
+                                <div className="text-label-sm opacity-60">Thresholds, learning policy, event rollback, and diagnostics.</div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowAdvancedOcrSettings((prev) => !prev)}
+                                className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold inline-flex items-center gap-1.5"
+                                aria-expanded={showAdvancedOcrSettings}
+                            >
+                                {showAdvancedOcrSettings ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                {showAdvancedOcrSettings ? 'Hide Advanced' : 'Show Advanced'}
+                            </button>
                         </div>
+                        {showAdvancedOcrSettings && (
+                            <>
                         <div className="mt-3 p-3 md3-surface rounded-card border border-md-sys-outline/10 space-y-3">
                             <div className="flex items-center justify-between">
                                 <div>
@@ -1386,13 +1458,15 @@ const SettingsModalContent: React.FC = () => {
                                 </div>
                             </div>
                         </div>
+                            </>
+                        )}
                         </section>
                     )}
 
                     {/* Capture Mode */}
                     {activeTab === 'ocr-capture' && (
                         <section className="md3-surface-high/50 backdrop-blur-sm p-4 rounded-card border border-md-sys-outline/10">
-                        <h3 className="text-body font-bold mb-3">Capture Mode</h3>
+                        <h3 className="text-body font-bold mb-3">Capture Defaults</h3>
                         <div className="grid grid-cols-2 gap-2">
                             {[
                                 { id: 'auto' as CaptureMode, label: 'Capture Now + Auto OCR', desc: 'Capture immediately, OCR runs automatically after a short pause' },
@@ -1422,7 +1496,7 @@ const SettingsModalContent: React.FC = () => {
                             </div>
                         )}
                         <div className="mt-4 pt-4 border-t border-md-sys-outline/10">
-                            <h4 className="text-label-sm font-bold mb-2">Result Button OCR Flow</h4>
+                            <h4 className="text-label-sm font-bold mb-2">Result Button Default</h4>
                             <div className="grid grid-cols-2 gap-2">
                                 {[
                                     {
@@ -1453,8 +1527,8 @@ const SettingsModalContent: React.FC = () => {
                         <div className="mt-4 pt-4 border-t border-md-sys-outline/10 space-y-3">
                                 <div className="flex items-center justify-between gap-3">
                                     <div>
-                                        <h4 className="text-label-sm font-bold mb-1">OCR Scan Regions (ROI)</h4>
-                                        <p className="text-label-sm opacity-60">Updates apply immediately to OCR reruns and future scans.</p>
+                                        <h4 className="text-label-sm font-bold mb-1">ROI Diagnostics</h4>
+                                        <p className="text-label-sm opacity-60">Updates apply immediately to OCR reruns and future scans, but most users should leave ROI alone.</p>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <button

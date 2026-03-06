@@ -128,6 +128,108 @@ const assignCanonicalMatchNumbers = (matches: Match[], nextHint: number): {
   };
 };
 
+type ProfileSnapshotMap = Record<string, Record<string, unknown>>;
+
+const normalizeNameKey = (value: string): string => normalizeOcrName(value || '').toLowerCase();
+
+const dedupeAliasList = (values: string[], canonicalName?: string): string[] => {
+  const seen = new Set<string>();
+  const canonicalKey = normalizeNameKey(String(canonicalName || ''));
+  const next: string[] = [];
+  values.forEach((value) => {
+    const cleaned = String(value || '').trim();
+    const key = normalizeNameKey(cleaned);
+    if (!cleaned || !key) return;
+    if (canonicalKey && key === canonicalKey) return;
+    if (seen.has(key)) return;
+    seen.add(key);
+    next.push(cleaned);
+  });
+  return next;
+};
+
+const clonePilotAliases = (aliases: Record<string, string[]>): Record<string, string[]> => (
+  Object.fromEntries(
+    Object.entries(aliases || {}).map(([key, values]) => [key, [...(values || [])]])
+  )
+);
+
+const cloneProfileSnapshots = (profiles?: ProfileSnapshotMap): ProfileSnapshotMap | undefined => {
+  if (!profiles || typeof profiles !== 'object') return undefined;
+  return Object.fromEntries(
+    Object.entries(profiles).map(([key, profile]) => [key, { ...(profile || {}) }])
+  );
+};
+
+const mergeProfileCountMaps = (
+  targetRaw: Record<string, unknown> | undefined,
+  sourceRaw: Record<string, unknown> | undefined
+): Record<string, number> => {
+  const merged: Record<string, number> = {};
+  [targetRaw, sourceRaw].forEach((record) => {
+    Object.entries(record || {}).forEach(([key, value]) => {
+      merged[key] = (merged[key] || 0) + (Number(value) || 0);
+    });
+  });
+  return merged;
+};
+
+const mergePlayerProfileRecords = (
+  targetProfile: Record<string, unknown> | undefined,
+  sourceProfile: Record<string, unknown> | undefined,
+  canonicalName: string
+): Record<string, unknown> | undefined => {
+  if (!targetProfile && !sourceProfile) return undefined;
+  const merged: Record<string, unknown> = {
+    ...(sourceProfile || {}),
+    ...(targetProfile || {}),
+    id: canonicalName,
+    name: canonicalName,
+  };
+
+  ['sightings', 'ocrSightings', 'manualSightings'].forEach((key) => {
+    const total = (Number(targetProfile?.[key]) || 0) + (Number(sourceProfile?.[key]) || 0);
+    if (total > 0) merged[key] = total;
+  });
+
+  const firstSeen = Math.min(
+    Number(targetProfile?.firstSeen) || Number.POSITIVE_INFINITY,
+    Number(sourceProfile?.firstSeen) || Number.POSITIVE_INFINITY
+  );
+  if (Number.isFinite(firstSeen)) merged.firstSeen = firstSeen;
+
+  const lastSeen = Math.max(
+    Number(targetProfile?.lastSeen) || 0,
+    Number(sourceProfile?.lastSeen) || 0
+  );
+  if (lastSeen > 0) merged.lastSeen = lastSeen;
+
+  const lastOcrConfidence = Math.max(
+    Number(targetProfile?.lastOcrConfidence) || 0,
+    Number(sourceProfile?.lastOcrConfidence) || 0
+  );
+  if (lastOcrConfidence > 0) merged.lastOcrConfidence = lastOcrConfidence;
+
+  merged.playedWith = mergeProfileCountMaps(
+    targetProfile?.playedWith as Record<string, unknown> | undefined,
+    sourceProfile?.playedWith as Record<string, unknown> | undefined
+  );
+  merged.playedAgainst = mergeProfileCountMaps(
+    targetProfile?.playedAgainst as Record<string, unknown> | undefined,
+    sourceProfile?.playedAgainst as Record<string, unknown> | undefined
+  );
+  merged.teamsObserved = mergeProfileCountMaps(
+    targetProfile?.teamsObserved as Record<string, unknown> | undefined,
+    sourceProfile?.teamsObserved as Record<string, unknown> | undefined
+  );
+  merged.shipsObserved = mergeProfileCountMaps(
+    targetProfile?.shipsObserved as Record<string, unknown> | undefined,
+    sourceProfile?.shipsObserved as Record<string, unknown> | undefined
+  );
+
+  return merged;
+};
+
 /** Snapshot of state before a merge, enabling undo. */
 export interface MergeHistoryEntry {
   id: string;
@@ -139,8 +241,10 @@ export interface MergeHistoryEntry {
     pilotRegistry: string[];
     favorites: string[];
     pilotNotes: Record<string, string>;
+    pilotAliases: Record<string, string[]>;
     playerIdMap: Record<string, string>;
     pendingReviews: PendingReview[];
+    playerProfiles?: ProfileSnapshotMap;
   };
 }
 
@@ -443,6 +547,13 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
   }),
 
   renamePilot: (oldName, newName) => set((state) => {
+    const oldKey = normalizeNameKey(oldName);
+    const newKey = normalizeNameKey(newName);
+    if (!newKey) return {};
+    const collision = state.pilotRegistry.some((entry) => (
+      entry !== oldName && normalizeNameKey(entry) === newKey
+    ));
+    if (collision) return {};
     const newRegistry = state.pilotRegistry.map(p => p === oldName ? newName : p);
     const newPlayers = state.players.map(p => p === oldName ? newName : p);
     const newFavorites = state.favorites.map(f => f === oldName ? newName : f);
@@ -458,10 +569,39 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
       opponents: (m.opponents || []).map(o => o === oldName ? newName : o)
     }));
 
-    const newAliases = { ...state.pilotAliases };
-    if (newAliases[oldName]) {
-      newAliases[newName] = newAliases[oldName];
-      delete newAliases[oldName];
+    const newAliases = clonePilotAliases(state.pilotAliases);
+    const mergedAliases = dedupeAliasList([
+      ...(newAliases[newName] || []),
+      ...(newAliases[oldName] || []),
+      oldKey !== newKey ? oldName : '',
+    ], newName);
+    if (mergedAliases.length > 0) newAliases[newName] = mergedAliases;
+    else delete newAliases[newName];
+    if (oldName !== newName) delete newAliases[oldName];
+
+    const newIdMap = { ...state.playerIdMap };
+    Object.entries(newIdMap).forEach(([id, name]) => {
+      if (normalizeNameKey(name) === oldKey) newIdMap[id] = newName;
+    });
+
+    const profiles = (get() as unknown as { playerProfiles?: ProfileSnapshotMap }).playerProfiles;
+    if (profiles && typeof profiles === 'object') {
+      const mergedProfile = mergePlayerProfileRecords(profiles[newName], profiles[oldName], newName);
+      const newProfiles = { ...profiles };
+      if (mergedProfile) newProfiles[newName] = mergedProfile;
+      if (oldName !== newName) delete newProfiles[oldName];
+
+      return {
+        pilotRegistry: newRegistry,
+        players: newPlayers,
+        favorites: newFavorites,
+        pilotNotes: newNotes,
+        pilotAliases: newAliases,
+        playerIdMap: newIdMap,
+        matches: newMatches,
+        playerProfiles: newProfiles,
+        lastActivity: Date.now()
+      };
     }
 
     return {
@@ -470,6 +610,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
       favorites: newFavorites,
       pilotNotes: newNotes,
       pilotAliases: newAliases,
+      playerIdMap: newIdMap,
       matches: newMatches,
       lastActivity: Date.now()
     };
@@ -487,8 +628,12 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
         pilotRegistry: [...state.pilotRegistry],
         favorites: [...state.favorites],
         pilotNotes: { ...state.pilotNotes },
+        pilotAliases: clonePilotAliases(state.pilotAliases),
         playerIdMap: { ...state.playerIdMap },
         pendingReviews: [...(state.pendingReviews || [])],
+        playerProfiles: cloneProfileSnapshots(
+          (get() as unknown as { playerProfiles?: ProfileSnapshotMap }).playerProfiles
+        ),
       },
     };
     const mergeHistory = [snapshot, ...(state.mergeHistory || [])].slice(0, 10);
@@ -518,12 +663,14 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
       newNotes[targetName] = (newNotes[targetName] ? newNotes[targetName] + "\n" : "") + newNotes[sourceName];
       delete newNotes[sourceName];
     }
-    const newAliases = { ...state.pilotAliases };
-    const srcAliases = newAliases[sourceName] || [];
-    if (srcAliases.length > 0) {
-      const tgtAliases = newAliases[targetName] || [];
-      newAliases[targetName] = Array.from(new Set([...tgtAliases, ...srcAliases]));
-    }
+    const newAliases = clonePilotAliases(state.pilotAliases);
+    const mergedAliases = dedupeAliasList([
+      ...(newAliases[targetName] || []),
+      ...(newAliases[sourceName] || []),
+      sourceName,
+    ], targetName);
+    if (mergedAliases.length > 0) newAliases[targetName] = mergedAliases;
+    else delete newAliases[targetName];
     delete newAliases[sourceName];
 
     // 4. Update ID Map (case-insensitive)
@@ -538,36 +685,9 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
     if (profiles && typeof profiles === 'object') {
       const srcProfile = profiles[sourceName];
       const tgtProfile = profiles[targetName];
-      if (srcProfile && tgtProfile) {
-        // Merge sighting counts and relationship data
-        const merged = { ...tgtProfile };
-        merged.sightings = ((tgtProfile.sightings as number) || 0) + ((srcProfile.sightings as number) || 0);
-        merged.ocrSightings = ((tgtProfile.ocrSightings as number) || 0) + ((srcProfile.ocrSightings as number) || 0);
-        merged.manualSightings = ((tgtProfile.manualSightings as number) || 0) + ((srcProfile.manualSightings as number) || 0);
-        merged.firstSeen = Math.min((tgtProfile.firstSeen as number) || Infinity, (srcProfile.firstSeen as number) || Infinity);
-        merged.lastSeen = Math.max((tgtProfile.lastSeen as number) || 0, (srcProfile.lastSeen as number) || 0);
-        // Merge playedWith/playedAgainst
-        for (const [pid, count] of Object.entries((srcProfile.playedWith as Record<string, number>) || {})) {
-          merged.playedWith = { ...(merged.playedWith as Record<string, number>), [pid]: (((merged.playedWith as Record<string, number>) || {})[pid] || 0) + (count as number) };
-        }
-        for (const [pid, count] of Object.entries((srcProfile.playedAgainst as Record<string, number>) || {})) {
-          merged.playedAgainst = { ...(merged.playedAgainst as Record<string, number>), [pid]: (((merged.playedAgainst as Record<string, number>) || {})[pid] || 0) + (count as number) };
-        }
-        // Merge observed teams/ships
-        for (const [key, count] of Object.entries((srcProfile.teamsObserved as Record<string, number>) || {})) {
-          merged.teamsObserved = { ...(merged.teamsObserved as Record<string, number>), [key]: (((merged.teamsObserved as Record<string, number>) || {})[key] || 0) + (count as number) };
-        }
-        for (const [key, count] of Object.entries((srcProfile.shipsObserved as Record<string, number>) || {})) {
-          merged.shipsObserved = { ...(merged.shipsObserved as Record<string, number>), [key]: (((merged.shipsObserved as Record<string, number>) || {})[key] || 0) + (count as number) };
-        }
+      const merged = mergePlayerProfileRecords(tgtProfile, srcProfile, targetName);
+      if (merged) {
         const newProfiles = { ...profiles, [targetName]: merged };
-        delete newProfiles[sourceName];
-        return {
-          matches: newMatches, pilotRegistry: newRegistry, favorites: newFavorites,
-          pilotNotes: newNotes, pilotAliases: newAliases, playerIdMap: newIdMap, playerProfiles: newProfiles, mergeHistory, lastActivity: Date.now()
-        };
-      } else if (srcProfile) {
-        const newProfiles = { ...profiles, [targetName]: { ...srcProfile, id: targetName, name: targetName } };
         delete newProfiles[sourceName];
         return {
           matches: newMatches, pilotRegistry: newRegistry, favorites: newFavorites,
@@ -596,11 +716,13 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
       pilotRegistry: latest.snapshot.pilotRegistry,
       favorites: latest.snapshot.favorites,
       pilotNotes: latest.snapshot.pilotNotes,
+      pilotAliases: latest.snapshot.pilotAliases,
       playerIdMap: latest.snapshot.playerIdMap,
       pendingReviews: latest.snapshot.pendingReviews,
+      playerProfiles: latest.snapshot.playerProfiles,
       mergeHistory: rest,
       lastActivity: Date.now(),
-    });
+    } as Partial<DataSlice> & { playerProfiles?: ProfileSnapshotMap });
     return true;
   },
 

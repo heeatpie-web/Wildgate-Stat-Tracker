@@ -8,7 +8,7 @@ import { TRANSLATIONS } from '../../utils/translations';
 import { useAnalyticsData } from './useAnalyticsData';
 import { InlineNarrativeToggle } from './DenseEditorialToggle';
 import { exportAnalyticsAsImage } from './analyticsExport';
-import { AnalyticsDashboard } from './AnalyticsDashboard';
+import { AnalyticsCockpit } from './AnalyticsCockpit';
 import { ControlPanelView } from './ControlPanelView';
 import { EnvironmentView } from './EnvironmentView';
 import { SynergyView } from './SynergyView';
@@ -142,6 +142,19 @@ export const AnalyticsShell: React.FC = () => {
                 return String(right.version || '').localeCompare(String(left.version || ''));
             });
     }, [selectedEraKey]);
+    const activeContextTags = useMemo(() => {
+        const timeRangeLabel = TIME_RANGE_OPTIONS.find((option) => option.value === timeRange)?.label || 'All Time';
+        const tags = [`Range: ${timeRangeLabel}`];
+        if (entityFilters.ship[0]) tags.push(`Ship: ${entityFilters.ship[0]}`);
+        if (entityFilters.prospectorWeapon[0]) tags.push(`Weapon: ${entityFilters.prospectorWeapon[0]}`);
+        if (entityFilters.equipment[0]) tags.push(`Equipment: ${entityFilters.equipment[0]}`);
+        if (entityFilters.perk[0]) tags.push(`Perk: ${entityFilters.perk[0]}`);
+        if (entityFilters.era[0]) {
+            const eraLabel = ERA_DEFINITIONS.find((era) => era.key === entityFilters.era[0])?.label || entityFilters.era[0];
+            tags.push(`Era: ${eraLabel}`);
+        }
+        return tags;
+    }, [entityFilters, timeRange]);
     const filterSelectClassName = 'px-2.5 py-1.5 rounded-control border border-md-sys-outline/20 bg-md-sys-surface text-md-sys-on-surface text-label-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary';
 
     const onDrillDown = (name: string, type: DrillDownTarget['type']) => {
@@ -243,8 +256,8 @@ export const AnalyticsShell: React.FC = () => {
             case 'placement': return <PlacementDistView data={data.placementData} visualMode={visualMode} />;
             case 'insights': return <InsightsView insights={data.insights} relationshipInsights={data.relationshipInsights} filteredMatches={data.filteredMatches} onDrillDown={onDrillDown} visualMode={visualMode} />;
             case 'social': return <SocialView socialData={data.socialData} filteredMatches={data.filteredMatches} currentUser={currentUser} playerProfiles={data.playerProfiles} onDrillDown={onDrillDown} visualMode={visualMode} />;
-            case 'pro': return <EntityAnalyticsView data={data.entityAnalytics} />;
-            case 'environment': return <EnvironmentView matches={data.filteredMatches} visualMode={visualMode} />;
+            case 'pro': return <EntityAnalyticsView data={data.entityAnalytics} onDrillDown={onDrillDown} />;
+            case 'environment': return <EnvironmentView matches={data.filteredMatches} visualMode={visualMode} onDrillDown={onDrillDown} />;
             case 'synergy': return <SynergyView synergyMatrix={data.synergyMatrix} visualMode={visualMode} />;
             case 'essay': return <VisualEssayView matches={data.filteredMatches} winRate={data.winRate} currentStreak={data.currentStreak} momentum={data.momentum} sessionSummary={data.sessionSummary} periodComparison={data.periodComparison} timePatterns={data.timePatterns} killEfficiency={data.killEfficiency} socialData={data.socialData} synergyMatrix={data.synergyMatrix} visualMode={visualMode} />;
             default: return null;
@@ -641,26 +654,16 @@ export const AnalyticsShell: React.FC = () => {
                     ) : (
                         <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar rounded-card mg-surface-high p-3">
                             {currentView === 'overview' ? (
-                                <AnalyticsDashboard
+                                <AnalyticsCockpit
                                     visualMode={visualMode}
                                     onNavigate={navigateTo}
                                     onDrillDown={onDrillDown}
                                     winRate={data.winRate}
-                                    currentStreak={data.currentStreak}
                                     totalMatches={data.filteredMatches.length}
-                                    avgSortiesPerDay={data.avgSortiesPerDay}
-                                    sessionSummary={data.sessionSummary}
                                     momentum={data.momentum}
-                                    periodComparison={data.periodComparison}
-                                    timePatterns={data.timePatterns}
-                                    streakHistory={data.streakHistory}
-                                    killEfficiency={data.killEfficiency}
                                     placementData={data.placementData}
-                                    insights={data.insights}
-                                    socialData={data.socialData}
-                                    relationshipInsights={data.relationshipInsights}
-                                    synergyMatrix={data.synergyMatrix}
                                     filteredMatches={data.filteredMatches}
+                                    contextTags={activeContextTags}
                                 />
                             ) : (
                                 <>

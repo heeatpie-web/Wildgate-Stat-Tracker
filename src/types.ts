@@ -288,7 +288,7 @@ export const normalizeShipName = (ship: string | null | undefined): string => {
 
 /** Target for the analytics drill-down overlay — clicking a chart element sets this. */
 export type DrillDownTarget = {
-  type: 'Ship' | 'Hero' | 'Teammate' | 'Opponent' | 'Artifact' | 'Modifier' | 'Date' | 'Week' | 'Month' | 'KPI';
+  type: 'Ship' | 'Hero' | 'Weapon' | 'Equipment' | 'Perk' | 'Teammate' | 'Opponent' | 'Artifact' | 'Modifier' | 'Date' | 'Week' | 'Month' | 'KPI';
   name: string;
   matchIds?: number[];
 };

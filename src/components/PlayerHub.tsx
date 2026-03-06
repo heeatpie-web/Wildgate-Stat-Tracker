@@ -6,8 +6,10 @@ import {
 } from 'lucide-react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
+import { useAppStore } from '../store/useAppStore';
 import { calculateSocialData } from '../utils/analyticsSocial';
 import { getShipColor } from '../types';
+import { normalizeOcrName, similarityScore } from '../utils/stringUtils';
 import { LocalImage } from './LocalImage';
 
 type SortMode = 'alpha' | 'favorites' | 'recent' | 'encounters';
@@ -29,11 +31,26 @@ interface PlayerDetail {
     lastOcrConfidence: number | null;
 }
 
+interface AliasInsight {
+    label: string;
+    count?: number;
+    source: 'manual' | 'learned';
+}
+
+interface DuplicateCandidate {
+    name: string;
+    score: number;
+    similarity: number;
+    reasons: string[];
+    totalEncounters: number;
+}
+
 const PlayerHub: React.FC = () => {
     const {
         pilotRegistry,
         favorites,
         pilotNotes,
+        pilotAliases,
         toggleFavorite,
         updatePilotNote,
         removeFromRegistry,
@@ -48,7 +65,9 @@ const PlayerHub: React.FC = () => {
         playerProfiles,
         setDrillDownTarget,
     } = useGameData();
-    const { setActiveView, setToast } = useUIState();
+    const { setActiveView, setToast, setShowSettings } = useUIState();
+    const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
+    const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [ocrSearchTerm, setOcrSearchTerm] = useState('');
@@ -161,6 +180,12 @@ const PlayerHub: React.FC = () => {
         });
     }, [ocrSearchTerm, pendingCandidateEdits, pendingRosterCandidates]);
 
+    const findRosterMatch = (value: string): string | null => {
+        const normalizedValue = normalizeOcrName(value || '').toLowerCase();
+        if (!normalizedValue) return null;
+        return pilotRegistry.find((entry) => normalizeOcrName(entry || '').toLowerCase() === normalizedValue) || null;
+    };
+
     useEffect(() => {
         setShowFullProfile(false);
     }, [selectedPilot]);
@@ -169,6 +194,120 @@ const PlayerHub: React.FC = () => {
         if (!selectedPilot) return null;
         return enrichedPilots.find(p => p.name === selectedPilot) || null;
     }, [selectedPilot, enrichedPilots]);
+
+    const getKnownAliasKeys = useMemo(() => {
+        const learnedByTarget = new Map<string, Set<string>>();
+        Object.values(ocrAliasModel?.entries || {}).forEach((entries) => {
+            entries.forEach((entry) => {
+                const targetKey = normalizeOcrName(entry.targetName || '').toLowerCase();
+                const rawKey = normalizeOcrName(entry.rawKey || '').toLowerCase();
+                if (!targetKey || !rawKey || rawKey === targetKey) return;
+                const current = learnedByTarget.get(targetKey) || new Set<string>();
+                current.add(rawKey);
+                learnedByTarget.set(targetKey, current);
+            });
+        });
+        return (name: string): Set<string> => {
+            const normalizedName = normalizeOcrName(name || '').toLowerCase();
+            const keys = new Set<string>();
+            if (!normalizedName) return keys;
+            keys.add(normalizedName);
+            (pilotAliases[name] || []).forEach((alias) => {
+                const aliasKey = normalizeOcrName(alias || '').toLowerCase();
+                if (aliasKey && aliasKey !== normalizedName) keys.add(aliasKey);
+            });
+            (learnedByTarget.get(normalizedName) || new Set<string>()).forEach((aliasKey) => keys.add(aliasKey));
+            return keys;
+        };
+    }, [ocrAliasModel, pilotAliases]);
+
+    const selectedAliasInsights = useMemo(() => {
+        if (!selected) return { manual: [] as AliasInsight[], learned: [] as AliasInsight[] };
+        const selectedKey = normalizeOcrName(selected.name || '').toLowerCase();
+        const manual = (pilotAliases[selected.name] || [])
+            .map((alias) => String(alias || '').trim())
+            .filter(Boolean)
+            .filter((alias, index, list) => (
+                normalizeOcrName(alias).toLowerCase() !== selectedKey
+                && list.findIndex((candidate) => normalizeOcrName(candidate).toLowerCase() === normalizeOcrName(alias).toLowerCase()) === index
+            ))
+            .map((alias) => ({ label: alias, source: 'manual' as const }));
+
+        const learnedMap = new Map<string, AliasInsight>();
+        Object.values(ocrAliasModel?.entries || {}).forEach((entries) => {
+            entries.forEach((entry) => {
+                if (normalizeOcrName(entry.targetName || '').toLowerCase() !== selectedKey) return;
+                const rawKey = normalizeOcrName(entry.rawKey || '').toLowerCase();
+                if (!rawKey || rawKey === selectedKey) return;
+                const existing = learnedMap.get(rawKey);
+                const count = Number(entry.count || 0);
+                if (!existing) {
+                    learnedMap.set(rawKey, {
+                        label: entry.rawKey,
+                        count,
+                        source: 'learned',
+                    });
+                    return;
+                }
+                existing.count = (existing.count || 0) + count;
+            });
+        });
+
+        const learned = Array.from(learnedMap.values())
+            .filter((entry) => !manual.some((alias) => normalizeOcrName(alias.label).toLowerCase() === normalizeOcrName(entry.label).toLowerCase()))
+            .sort((left, right) => (right.count || 0) - (left.count || 0) || left.label.localeCompare(right.label));
+
+        return { manual, learned };
+    }, [ocrAliasModel, pilotAliases, selected]);
+
+    const duplicateCandidates = useMemo(() => {
+        if (!selected) return [] as DuplicateCandidate[];
+        const selectedKey = normalizeOcrName(selected.name || '').toLowerCase();
+        const selectedAliasKeys = getKnownAliasKeys(selected.name);
+
+        return enrichedPilots
+            .filter((candidate) => candidate.name !== selected.name)
+            .map((candidate) => {
+                const candidateKey = normalizeOcrName(candidate.name || '').toLowerCase();
+                const candidateAliasKeys = getKnownAliasKeys(candidate.name);
+                const reasons: string[] = [];
+                const sharedAliasKeys = Array.from(selectedAliasKeys).filter((aliasKey) => (
+                    aliasKey !== selectedKey
+                    && aliasKey !== candidateKey
+                    && candidateAliasKeys.has(aliasKey)
+                ));
+                const directAliasMatch = selectedAliasKeys.has(candidateKey) || candidateAliasKeys.has(selectedKey);
+                const similarity = similarityScore(selected.name, candidate.name);
+
+                if (directAliasMatch) reasons.push('listed as a former or alias name');
+                if (sharedAliasKeys.length > 0) reasons.push(`${sharedAliasKeys.length} shared alias variant${sharedAliasKeys.length === 1 ? '' : 's'}`);
+                if (similarity >= 92) reasons.push(`very close spelling (${similarity}%)`);
+                else if (similarity >= 78) reasons.push(`similar spelling (${similarity}%)`);
+
+                if (reasons.length === 0) return null;
+
+                const score = Math.min(
+                    100,
+                    similarity
+                    + (directAliasMatch ? 25 : 0)
+                    + (sharedAliasKeys.length * 12)
+                );
+                return {
+                    name: candidate.name,
+                    score,
+                    similarity,
+                    reasons,
+                    totalEncounters: candidate.totalEncounters,
+                } satisfies DuplicateCandidate;
+            })
+            .filter((candidate): candidate is DuplicateCandidate => Boolean(candidate))
+            .sort((left, right) => {
+                if (right.score !== left.score) return right.score - left.score;
+                if (right.totalEncounters !== left.totalEncounters) return right.totalEncounters - left.totalEncounters;
+                return left.name.localeCompare(right.name);
+            })
+            .slice(0, 6);
+    }, [enrichedPilots, getKnownAliasKeys, selected]);
 
     const selectedTopShip = useMemo(() => {
         if (!selected) return null;
@@ -286,7 +425,23 @@ const PlayerHub: React.FC = () => {
 
     const handleSaveRename = () => {
         if (renaming && renameValue.trim() && renameValue !== renaming) {
-            renamePilot(renaming, renameValue.trim());
+            const trimmedValue = renameValue.trim();
+            const collision = pilotRegistry.find((entry) => (
+                entry !== renaming
+                && normalizeOcrName(entry || '').toLowerCase() === normalizeOcrName(trimmedValue).toLowerCase()
+            ));
+            if (collision) {
+                setMergeTarget(collision);
+                setMergeKeepName(collision);
+                setMergeSearch(collision);
+                setToast({
+                    message: `Rename collides with "${collision}". Review a merge instead.`,
+                    type: 'warning',
+                });
+                setRenaming(null);
+                return;
+            }
+            renamePilot(renaming, trimmedValue);
             if (selectedPilot === renaming) setSelectedPilot(renameValue.trim());
         }
         setRenaming(null);
@@ -332,6 +487,16 @@ const PlayerHub: React.FC = () => {
         setActiveView('analytics');
     };
 
+    const handleOpenIdentitySettings = (search: string) => {
+        setShowSettings(true);
+        window.dispatchEvent(new CustomEvent('settings:focus-section', {
+            detail: {
+                tab: 'identity',
+                search,
+            },
+        }));
+    };
+
     const mergeCandidates = useMemo(() => {
         if (!selectedPilot) return [];
         const q = mergeSearch.toLowerCase();
@@ -339,6 +504,61 @@ const PlayerHub: React.FC = () => {
             .filter(p => p.name !== selectedPilot && (!q || p.name.toLowerCase().includes(q)))
             .slice(0, 20);
     }, [enrichedPilots, selectedPilot, mergeSearch]);
+
+    const clearResolvedRosterCandidates = (
+        candidate: { id: string; value: string; canonicalTargetKey?: string | null | undefined },
+        resolvedValue: string,
+        action: 'approve' | 'merge' | 'dismiss'
+    ) => {
+        const candidateKey = normalizeOcrName(candidate.value || '').toLowerCase();
+        const resolvedKey = normalizeOcrName(resolvedValue || '').toLowerCase();
+        (pendingReviews || [])
+            .filter((review) => {
+                if (review.type !== 'roster_candidate') return false;
+                const reviewKey = normalizeOcrName(review.value || '').toLowerCase();
+                if (review.id === candidate.id) return true;
+                if (candidateKey && reviewKey === candidateKey) return true;
+                if (candidate.canonicalTargetKey && review.canonicalTargetKey === candidate.canonicalTargetKey) return true;
+                if (action === 'merge' && resolvedKey && reviewKey === resolvedKey) return true;
+                return false;
+            })
+            .forEach((review) => removePendingReview(review.id));
+        setPendingCandidateEdits((prev) => {
+            const next = { ...prev };
+            delete next[candidate.id];
+            return next;
+        });
+    };
+
+    const mergeRosterCandidateIntoExisting = (
+        candidate: {
+            id: string;
+            value: string;
+            canonicalTargetKey?: string | null | undefined;
+        },
+        targetName: string,
+        overrideValue?: string
+    ) => {
+        const rawValue = String(overrideValue ?? candidate.value).trim();
+        const resolvedTarget = normalizeOcrName(targetName);
+        if (!rawValue || !resolvedTarget) return;
+        const normalizedRaw = normalizeOcrName(rawValue);
+        if (normalizedRaw.toLowerCase() !== resolvedTarget.toLowerCase()) {
+            recordOcrAliasCorrection(normalizedRaw, resolvedTarget, {
+                source: 'review_modal',
+                context: 'unknown',
+                confidenceWeight: 1,
+            });
+        }
+        addToRegistry(resolvedTarget);
+        clearResolvedRosterCandidates(candidate, resolvedTarget, 'merge');
+        setSelectedPilot(resolvedTarget);
+        setPanelMode('roster');
+        setToast({
+            message: `Merged OCR candidate "${rawValue}" into "${resolvedTarget}"`,
+            type: 'success',
+        });
+    };
 
     const resolveRosterCandidate = (
         candidate: { id: string; value: string },
@@ -348,18 +568,17 @@ const PlayerHub: React.FC = () => {
         const value = String(overrideValue ?? candidate.value).trim();
         if (!value) return;
         if (action === 'approve') {
+            const existingMatch = findRosterMatch(value);
+            if (existingMatch) {
+                clearResolvedRosterCandidates(candidate, existingMatch, 'approve');
+                setSelectedPilot(existingMatch);
+                setToast({ message: `"${existingMatch}" is already in the roster. Review merge suggestions instead.`, type: 'info' });
+                return;
+            }
             addToRegistry(value);
-            setToast({ message: `Added "${value}" to roster`, type: 'success' });
+            setToast({ message: `Added "${value}" to roster as a new player`, type: 'success' });
         }
-        const key = value.toLowerCase();
-        (pendingReviews || [])
-            .filter((review) => review.type === 'roster_candidate' && review.value.trim().toLowerCase() === key)
-            .forEach((review) => removePendingReview(review.id));
-        setPendingCandidateEdits((prev) => {
-            const next = { ...prev };
-            delete next[candidate.id];
-            return next;
-        });
+        clearResolvedRosterCandidates(candidate, value, action);
         if (action === 'dismiss') {
             setToast({ message: `Dismissed pending roster candidate "${value}"`, type: 'info' });
         }
@@ -381,7 +600,7 @@ const PlayerHub: React.FC = () => {
                     </span>
                 </div>
                 <p className="text-label-xs text-md-sys-on-surface/62">
-                    Review OCR-detected roster names without hiding your roster list.
+                    Review OCR-detected roster names, add them as new pilots, or merge them into an existing identity without hiding your roster list.
                 </p>
                 <div className="relative">
                     <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-md-sys-on-surface/40 pointer-events-none" />
@@ -425,6 +644,29 @@ const PlayerHub: React.FC = () => {
                                     const sourceCapturedLabel = Number.isFinite(sourceCapturedAt) && sourceCapturedAt > 0
                                         ? new Date(sourceCapturedAt).toLocaleString()
                                         : '';
+                                    const normalizedPendingValue = normalizeOcrName(pendingValue);
+                                    const existingRosterMatch = findRosterMatch(pendingValue);
+                                    const mergeSuggestions = [
+                                        candidate.bestMatch
+                                            ? {
+                                                name: normalizeOcrName(candidate.bestMatch),
+                                                score: Number(candidate.bestScore || 0),
+                                                kind: 'best' as const,
+                                            }
+                                            : null,
+                                        ...((candidate.suggestions || []).map((suggestion) => ({
+                                            name: normalizeOcrName(suggestion.name),
+                                            score: Number(suggestion.score || 0),
+                                            kind: 'suggestion' as const,
+                                        }))),
+                                    ]
+                                        .filter((entry): entry is { name: string; score: number; kind: 'best' | 'suggestion' } => Boolean(entry?.name))
+                                        .filter((entry, index, list) => (
+                                            normalizeOcrName(entry.name).toLowerCase() !== normalizedPendingValue.toLowerCase()
+                                            && (!existingRosterMatch || normalizeOcrName(entry.name).toLowerCase() !== normalizeOcrName(existingRosterMatch).toLowerCase())
+                                            && list.findIndex((candidateEntry) => normalizeOcrName(candidateEntry.name).toLowerCase() === normalizeOcrName(entry.name).toLowerCase()) === index
+                                        ))
+                                        .slice(0, 4);
                                     return (
                                         <div key={candidate.id} className="rounded-xl border border-md-sys-outline/14 bg-md-sys-surface-container p-2.5 space-y-2">
                                             <input
@@ -466,14 +708,48 @@ const PlayerHub: React.FC = () => {
                                                     </button>
                                                 </div>
                                             )}
+                                            {(existingRosterMatch || mergeSuggestions.length > 0) && (
+                                                <div className="rounded-lg border border-warning-soft bg-warning-soft/30 px-2.5 py-2 space-y-2">
+                                                    <div className="text-label-xs font-semibold uppercase tracking-wide text-warning">
+                                                        Possible existing identity
+                                                    </div>
+                                                    {existingRosterMatch && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => mergeRosterCandidateIntoExisting(candidate, existingRosterMatch, pendingValue)}
+                                                            className="w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left bg-md-sys-surface hover:bg-md-sys-surface-container-high"
+                                                        >
+                                                            <span className="text-label-sm font-semibold text-md-sys-on-surface truncate">
+                                                                Use existing: {existingRosterMatch}
+                                                            </span>
+                                                            <span className="text-label-xs font-bold uppercase text-warning">Match</span>
+                                                        </button>
+                                                    )}
+                                                    {mergeSuggestions.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1.5">
+                                                            {mergeSuggestions.map((suggestion) => (
+                                                                <button
+                                                                    key={`${candidate.id}-${suggestion.name}-${suggestion.kind}`}
+                                                                    type="button"
+                                                                    onClick={() => mergeRosterCandidateIntoExisting(candidate, suggestion.name, pendingValue)}
+                                                                    className="px-2.5 py-1.5 rounded-md text-label-xs font-bold bg-warning text-ink-strong hover:brightness-95"
+                                                                >
+                                                                    Merge into {suggestion.name}
+                                                                    {suggestion.score > 0 ? ` (${Math.round(suggestion.score)}%)` : ''}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                             <div className="flex items-center gap-1.5 shrink-0">
                                                 <button
                                                     type="button"
                                                     onClick={() => resolveRosterCandidate(candidate, 'approve', pendingValue)}
-                                                    className="flex-1 h-8 rounded-md text-label-xs font-bold bg-success/15 text-success hover:bg-success/25"
-                                                    disabled={!pendingValue.trim()}
+                                                    className="flex-1 h-8 rounded-md text-label-xs font-bold bg-success/15 text-success hover:bg-success/25 disabled:opacity-disabled"
+                                                    disabled={!pendingValue.trim() || !!existingRosterMatch}
                                                 >
-                                                    Approve
+                                                    Add as New
                                                 </button>
                                                 <button
                                                     type="button"
@@ -811,6 +1087,14 @@ const PlayerHub: React.FC = () => {
                                         Opponent: {selectedTopOpponent ? `${selectedTopOpponent[0]} (${selectedTopOpponent[1]})` : '--'}
                                     </div>
                                 </div>
+                                <div className="rounded-lg bg-md-sys-on-surface/6 p-2.5 md:col-span-2">
+                                    <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/50">Identity Context</div>
+                                    <div className="mt-1 text-label-sm text-md-sys-on-surface/70">
+                                        Former names: {selectedAliasInsights.manual.length} {' | '}
+                                        Learned OCR variants: {selectedAliasInsights.learned.length} {' | '}
+                                        Possible duplicates: {duplicateCandidates.length}
+                                    </div>
+                                </div>
                             </div>
                             <div className="mt-3 flex flex-wrap items-center gap-2">
                                 <button
@@ -826,6 +1110,13 @@ const PlayerHub: React.FC = () => {
                                     className="px-3 py-1.5 rounded-control text-label-sm font-bold bg-md-sys-on-surface/10 text-md-sys-on-surface/70"
                                 >
                                     Back to Recording
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleOpenIdentitySettings(selected.name)}
+                                    className="px-3 py-1.5 rounded-control text-label-sm font-bold bg-info-soft text-info"
+                                >
+                                    Open Alias Settings
                                 </button>
                             </div>
                         </div>
@@ -990,6 +1281,97 @@ const PlayerHub: React.FC = () => {
                                             <div className="text-label-xs text-md-sys-on-surface/40">Last OCR Confidence</div>
                                         </div>
                                     )}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="md3-card mg-surface shadow-lg p-4">
+                            <div className="flex items-center justify-between gap-3 mb-3">
+                                <div className="flex items-center gap-2">
+                                    <ImageIcon size={14} className="text-info" />
+                                    <span className="text-label-sm font-semibold uppercase tracking-wide text-md-sys-on-surface/60">Former Names & OCR Variants</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => handleOpenIdentitySettings(selected.name)}
+                                    className="text-label-xs font-bold uppercase tracking-wide text-md-sys-primary hover:text-md-sys-primary/80"
+                                >
+                                    Manage in settings
+                                </button>
+                            </div>
+                            <div className="grid gap-3 md:grid-cols-2">
+                                <div className="rounded-lg bg-md-sys-on-surface/6 p-3">
+                                    <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/50 mb-2">Former names</div>
+                                    {selectedAliasInsights.manual.length > 0 ? (
+                                        <div className="flex flex-wrap gap-2">
+                                            {selectedAliasInsights.manual.map((alias) => (
+                                                <span
+                                                    key={`manual-alias-${alias.label}`}
+                                                    className="px-2.5 py-1 rounded-lg text-label-xs font-semibold bg-md-sys-primary/10 text-md-sys-primary border border-md-sys-primary/20"
+                                                >
+                                                    {alias.label}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-label-sm text-md-sys-on-surface/45">No former names recorded yet.</div>
+                                    )}
+                                </div>
+                                <div className="rounded-lg bg-md-sys-on-surface/6 p-3">
+                                    <div className="text-label-xs uppercase tracking-wide text-md-sys-on-surface/50 mb-2">Learned OCR variants</div>
+                                    {selectedAliasInsights.learned.length > 0 ? (
+                                        <div className="flex flex-wrap gap-2">
+                                            {selectedAliasInsights.learned.slice(0, 8).map((alias) => (
+                                                <span
+                                                    key={`learned-alias-${alias.label}`}
+                                                    className="px-2.5 py-1 rounded-lg text-label-xs font-semibold bg-info-soft text-info border border-info/15"
+                                                >
+                                                    {alias.label}
+                                                    {alias.count ? <span className="ml-1 opacity-65">x{alias.count}</span> : null}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-label-sm text-md-sys-on-surface/45">No learned OCR variants for this player yet.</div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {duplicateCandidates.length > 0 && (
+                            <div className="md3-card mg-surface shadow-lg p-4 border border-warning-soft">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <AlertTriangle size={14} className="text-warning" />
+                                    <span className="text-label-sm font-semibold uppercase tracking-wide text-warning">Possible Duplicates</span>
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    {duplicateCandidates.map((candidate) => (
+                                        <div
+                                            key={`duplicate-${candidate.name}`}
+                                            className="rounded-lg border border-warning-soft bg-warning-soft/30 px-3 py-2 flex items-start justify-between gap-3"
+                                        >
+                                            <div className="min-w-0">
+                                                <div className="text-body font-bold text-md-sys-on-surface truncate">{candidate.name}</div>
+                                                <div className="mt-1 text-label-xs text-md-sys-on-surface/55">
+                                                    Confidence {candidate.score}% · {candidate.totalEncounters} encounters
+                                                </div>
+                                                <div className="mt-1 text-label-sm text-md-sys-on-surface/70">
+                                                    {candidate.reasons.join(' · ')}
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setMergeTarget(candidate.name);
+                                                    setMergeKeepName(selected.name);
+                                                    setMergeSearch(candidate.name);
+                                                }}
+                                                className="px-3 py-1.5 rounded-control text-label-xs font-bold uppercase bg-warning text-ink-strong shrink-0"
+                                            >
+                                                Review Merge
+                                            </button>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         )}

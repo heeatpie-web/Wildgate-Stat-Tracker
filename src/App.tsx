@@ -13,15 +13,8 @@ import HistoryTable from './components/HistoryTable';
 import { Header } from './components/Header';
 import { WindowFrame } from './components/WindowFrame';
 import { OverlayView } from './components/OverlayView';
-import { Wizard } from './components/Wizard';
-import { RenameModal } from './components/RenameModal';
-import { SetupWizard } from './components/SetupWizard';
-import { DrillDownOverlay } from './components/DrillDownOverlay';
-import { SettingsModal } from './components/SettingsModal';
-import { ResetConfirmModal } from './components/ResetConfirmModal';
 import { DevTools } from './components/DevTools';
 import { TelemetryPanel } from './components/TelemetryPanel';
-import { ReviewQueueModal } from './components/ReviewQueueModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import Tutorial from './components/Tutorial';
 import FirstRunHealthCheck from './components/FirstRunHealthCheck';
@@ -74,13 +67,20 @@ const AnalyticsPanel = React.lazy(loadAnalyticsPanel);
 import { APP_VERSION, Match, MatchResult, WizardResult } from './types';
 import { CHANGELOG } from './utils/changelog';
 import { Toast } from './components/Toast';
-import { IdMapper } from './components/IdMapper';
 const loadDevOCRPanel = () => loadDashboardChunk('dev-ocr');
 const DevOCRPanel = React.lazy(loadDevOCRPanel);
 const loadSmartCapturesPanel = () => loadDashboardChunk('smart-captures');
 const SmartCapturesPanel = React.lazy(loadSmartCapturesPanel);
 const loadPlayerHub = () => loadDashboardChunk('players');
 const PlayerHub = React.lazy(loadPlayerHub);
+const IdMapper = React.lazy(() => import('./components/IdMapper').then((m) => ({ default: m.IdMapper })));
+const RenameModal = React.lazy(() => import('./components/RenameModal').then((m) => ({ default: m.RenameModal })));
+const SetupWizard = React.lazy(() => import('./components/SetupWizard').then((m) => ({ default: m.SetupWizard })));
+const DrillDownOverlay = React.lazy(() => import('./components/DrillDownOverlay').then((m) => ({ default: m.DrillDownOverlay })));
+const SettingsModal = React.lazy(() => import('./components/SettingsModal').then((m) => ({ default: m.SettingsModal })));
+const ResetConfirmModal = React.lazy(() => import('./components/ResetConfirmModal').then((m) => ({ default: m.ResetConfirmModal })));
+const Wizard = React.lazy(() => import('./components/Wizard').then((m) => ({ default: m.Wizard })));
+const ReviewQueueModal = React.lazy(() => import('./components/ReviewQueueModal').then((m) => ({ default: m.ReviewQueueModal })));
 const MatchRecordingPage = React.lazy(() => import('./components/MatchRecordingPage').then(m => ({ default: m.MatchRecordingPage })));
 import type { OCRExtractedData } from './utils/ocr/ocrTypes';
 import { useAppStore } from './store/useAppStore';
@@ -304,7 +304,9 @@ const App: React.FC = () => {
         hiddenForScan,
         showReviewQueue, setShowReviewQueue,
         requestSmartCapture,
+        showSettings,
         setShowSettings,
+        showResetConfirm,
         enableAutoLogRecording,
         setEnableAutoLogRecording,
         showIdMapper, setShowIdMapper,
@@ -334,6 +336,7 @@ const App: React.FC = () => {
         removePendingReviews,
         pendingReviews,
         detectedUnknowns,
+        drillDownTarget,
         sessionTeams, setSessionTeams,
         sessionShipTypes,
         setSessionShipTypes
@@ -2375,17 +2378,19 @@ const App: React.FC = () => {
                 />
             )}
 
-            <RenameModal />
-            <SetupWizard />
-            <DrillDownOverlay />
-            <SettingsModal />
-            <ResetConfirmModal />
-            <Wizard />
-            {showReviewQueue && (
-                <ErrorBoundary>
-                    <ReviewQueueModal onClose={() => setShowReviewQueue(false)} />
-                </ErrorBoundary>
-            )}
+            <Suspense fallback={null}>
+                {renameModal ? <RenameModal /> : null}
+                {showSetupWizard ? <SetupWizard /> : null}
+                {drillDownTarget ? <DrillDownOverlay /> : null}
+                {showSettings ? <SettingsModal /> : null}
+                {showResetConfirm ? <ResetConfirmModal /> : null}
+                {showWizard ? <Wizard /> : null}
+                {showReviewQueue && (
+                    <ErrorBoundary>
+                        <ReviewQueueModal onClose={() => setShowReviewQueue(false)} />
+                    </ErrorBoundary>
+                )}
+            </Suspense>
 
             {showTutorial && (
                 <Tutorial

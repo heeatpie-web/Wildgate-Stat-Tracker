@@ -1,5 +1,5 @@
 import React from 'react';
-import { Match, PIE_COLORS, VisualMode } from '../../types';
+import { Match, PIE_COLORS, VisualMode, DrillDownTarget } from '../../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, LabelList } from 'recharts';
 import { Zap, Trophy, TrendingUp, TrendingDown } from 'lucide-react';
 import { generateEnvironmentEditorial } from '../../utils/analyticsEditorial';
@@ -11,9 +11,13 @@ const getColor = (name: string) => {
     return PIE_COLORS[Math.abs(hash % PIE_COLORS.length)];
 };
 
-interface EnvironmentViewProps { matches: Match[]; visualMode: VisualMode; }
+interface EnvironmentViewProps {
+    matches: Match[];
+    visualMode: VisualMode;
+    onDrillDown?: (name: string, type: DrillDownTarget['type']) => void;
+}
 
-export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visualMode }) => {
+export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visualMode, onDrillDown }) => {
     const dense = visualMode === 'dense';
     const stats: Record<string, { wins: number, total: number }> = {};
     matches.forEach(m => {
@@ -45,14 +49,19 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
             {data.length > 0 && (
                 <div className={`grid gap-2 ${dense ? 'grid-cols-3 lg:grid-cols-6' : 'grid-cols-2 md:grid-cols-3'}`}>
                     {data.slice(0, 6).map(d => (
-                        <div key={d.name} className={`md3-card rounded-xl ${dense ? 'p-2' : 'p-3'} text-center`}>
+                        <button
+                            key={d.name}
+                            type="button"
+                            onClick={() => onDrillDown?.(d.name, 'Modifier')}
+                            className={`md3-card rounded-xl ${dense ? 'p-2' : 'p-3'} text-center transition-all ${onDrillDown ? 'hover:border-md-sys-primary/25 hover:bg-md-sys-surface-container-highest' : ''}`}
+                        >
                             <div className="text-label-xs font-black uppercase opacity-40 truncate mb-1">{d.name}</div>
                             <div className={`text-body font-black flex items-center justify-center gap-1 ${d.impact >= 0 ? 'text-md-sys-primary' : 'text-md-sys-on-surface/60'}`}>
                                 {d.impact >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                                 {d.impact >= 0 ? '+' : ''}{d.impact}%
                             </div>
                             <div className="text-label-xs opacity-40 font-bold">vs avg WR</div>
-                        </div>
+                        </button>
                     ))}
                 </div>
             )}
@@ -94,6 +103,36 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
                     </ResponsiveContainer>
                 </div>
             </div>
+
+            {data.length > 0 && (
+                <div className="md3-card rounded-2xl p-4 md:p-5">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <h3 className="text-body font-black uppercase opacity-60">Hazard Explorer</h3>
+                            <div className="text-label-sm text-md-sys-on-surface/55">Open a modifier to drill into related people, loadouts, and match context.</div>
+                        </div>
+                    </div>
+                    <div className="mt-4 grid gap-2 md:grid-cols-2">
+                        {data.slice(0, 8).map((row) => (
+                            <button
+                                key={`hazard-row-${row.name}`}
+                                type="button"
+                                onClick={() => onDrillDown?.(row.name, 'Modifier')}
+                                className={`flex items-center justify-between gap-3 rounded-control border border-md-sys-outline/10 px-3 py-2 text-left ${onDrillDown ? 'hover:bg-md-sys-surface-container-high' : ''}`}
+                            >
+                                <div className="min-w-0">
+                                    <div className="text-label-sm font-bold text-md-sys-on-surface truncate">{row.name}</div>
+                                    <div className="text-label-xs text-md-sys-on-surface/55">{row.total} matches</div>
+                                </div>
+                                <div className="shrink-0 text-right">
+                                    <div className={`text-label-sm font-black ${row.winRate >= overallWR ? 'text-md-sys-primary' : 'text-danger'}`}>{row.winRate}%</div>
+                                    <div className="text-label-xs text-md-sys-on-surface/45">{row.impact > 0 ? '+' : ''}{row.impact}pp</div>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

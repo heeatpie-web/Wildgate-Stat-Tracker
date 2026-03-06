@@ -219,6 +219,21 @@ describe('createDataSlice', () => {
       store.getState().addPlayer('OldName');
       store.getState().toggleFavorite('OldName');
       store.getState().updatePilotNote('OldName', 'a note');
+      store.getState().updatePlayerIdMapping('player-1', 'OldName');
+      store.getState().addPilotAlias('OldName', 'Old Name OCR');
+      store.setState({
+        playerProfiles: {
+          OldName: {
+            id: 'OldName',
+            name: 'OldName',
+            sightings: 3,
+            playedWith: { Ally: 2 },
+            playedAgainst: { Enemy: 1 },
+            teamsObserved: { TeamA: 1 },
+            shipsObserved: { Hunter: 2 },
+          },
+        },
+      } as any);
       store.getState().addMatch(createMatch({
         id: 1,
         player: 'OldName',
@@ -238,6 +253,22 @@ describe('createDataSlice', () => {
       expect(s.matches[0].player).toBe('NewName');
       expect(s.matches[0].teammates).toContain('NewName');
       expect(s.matches[0].opponents).toContain('NewName');
+      expect(s.playerIdMap['player-1']).toBe('NewName');
+      expect(s.pilotAliases['NewName']).toEqual(expect.arrayContaining(['OldName', 'Old Name OCR']));
+      expect((s as any).playerProfiles['NewName']).toBeDefined();
+      expect((s as any).playerProfiles['OldName']).toBeUndefined();
+    });
+
+    it('does not create a duplicate when renaming into an existing normalized name', () => {
+      store.getState().addToRegistry('OldName');
+      store.getState().addToRegistry('NewName');
+
+      store.getState().renamePilot('OldName', 'newname');
+
+      const s = store.getState();
+      expect(s.pilotRegistry).toContain('OldName');
+      expect(s.pilotRegistry).toContain('NewName');
+      expect(s.pilotRegistry).not.toContain('newname');
     });
   });
 
@@ -264,6 +295,12 @@ describe('createDataSlice', () => {
       store.getState().mergePilots('Dupe', 'Real');
       expect(store.getState().pilotNotes['Real']).toContain('Note A');
       expect(store.getState().pilotNotes['Real']).toContain('Note B');
+    });
+
+    it('keeps the merged source name as a former-name alias on the target', () => {
+      store.getState().addPilotAlias('Dupe', 'Dupe OCR');
+      store.getState().mergePilots('Dupe', 'Real');
+      expect(store.getState().pilotAliases['Real']).toEqual(expect.arrayContaining(['Dupe', 'Dupe OCR']));
     });
 
     it('creates merge history entry', () => {
@@ -318,6 +355,17 @@ describe('createDataSlice', () => {
       expect(result).toBe(true);
       expect(store.getState().matches[0].player).toBe('A');
       expect(store.getState().pilotRegistry).toContain('A');
+    });
+
+    it('restores aliases after undoing a merge', () => {
+      store.getState().addPilotAlias('A', 'Alias A');
+      store.getState().mergePilots('A', 'B');
+      expect(store.getState().pilotAliases['B']).toEqual(expect.arrayContaining(['A', 'Alias A']));
+
+      const result = store.getState().undoLastMerge();
+      expect(result).toBe(true);
+      expect(store.getState().pilotAliases['A']).toEqual(['Alias A']);
+      expect(store.getState().pilotAliases['B']).toBeUndefined();
     });
 
     it('returns false when no history', () => {
