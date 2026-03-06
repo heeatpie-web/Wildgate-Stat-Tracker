@@ -1,7 +1,7 @@
 import type { Loadout, ShipWeaponEntry } from '../types';
 
 const MAX_SHIP_WEAPON_SLOTS = 10;
-const MAX_PROSPECTOR_LOADOUT_SLOTS = 3;
+const MAX_PROSPECTOR_LOADOUT_SLOTS = 2;
 const MAX_PERK_SLOTS = 2;
 
 const sanitizeSlotList = (entries: unknown, maxSlots: number): string[] => (

@@ -104,7 +104,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
   const statusMeta = getStatusMeta(qs.key);
   const when = new Date(match.timestamp);
   const timestampLabel = formatQueueTimestamp(when);
-  const tooltipLabel = `Match ${displayNumber} - ${timestampLabel}`;
+  const tooltipLabel = `Match ${displayNumber} - ${timestampLabel}. ${statusMeta.label}: ${statusMeta.description}`;
   const tone = getSemanticStatusTone(qs.key);
   const resultClass = match.result === 'Win'
     ? 'sc-queue-item--result-win'
@@ -177,6 +177,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
             <OutcomePill result={match.result} />
             <span
               aria-label={`Status ${statusMeta.label}`}
+              title={statusMeta.description}
               className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${STATUS_PILL_BY_TONE[statusMeta.tone]}`}
             >
               {statusMeta.label}

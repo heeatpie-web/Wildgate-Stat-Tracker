@@ -9,6 +9,7 @@
  */
 
 const { detectBadgeColorNearText, detectColorInRegion } = require('./colorUtils.cjs');
+const HAZARD_CATALOG = require('./hazardCatalog.json');
 
 /**
  * Screen layout constants (percentage-based)
@@ -230,43 +231,19 @@ function sanitizePlayerShipName(rawShipName, shipType = '') {
 /**
  * Known hazards/modifiers
  */
-const KNOWN_HAZARDS = {
-  // Artifact modifiers
-  'HEALING ARTIFACT': 'Artifact: Healing',
-  'ARTIFACT HEALING': 'Artifact: Healing',
-  'ICE ARTIFACT': 'Artifact: Ice',
-  'CE ARTIFACT': 'Artifact: Ice',    // OCR misreads I as | → "| CE" or "CE"
-  'WEAPON ARTIFACT': 'Artifact: Weapon',
-  // Named modifiers
-  'ANCIENT VAULT': 'Ancient Vault',
-  'CRYON REACH': 'Cryon Reach',
-  'CRYON RIFT': 'Cryon Rift',
-  'DEAD SENSORS': 'Dead Sensors',
-  'DEAD WORLDS': 'Dead Worlds',
-  'DEADWORLDS': 'Dead Worlds',
-  'COSMIC STORM': 'Cosmic Storm',
-  'EASY LOOT': 'Easy Loot',
-  'EPIC LOOT': 'Epic Loot',
-  'FAST GATE': 'Fast Gate',
-  'FEW ASTEROIDS': 'Few Asteroids',
-  'FEW SHIPS': 'Few Ships',
-  'LOTS OF ASTEROIDS': 'Lots of Asteroids',
-  'GLOAMING EXPANSE': 'Gloaming Expanse',
-  'BLOOMING EXPANSE': 'Blooming Expanse',
-  'HAUNTED STORM': 'Haunted Storm',
-  'ICE STORM': 'Ice Storm',
-  'LEECH DEMONS': 'Leech Demons',
-  'LAVA EPICS': 'Lava Epics',
-  'LEECH SWARMS': 'Leech Swarms',
-  'LEGION PATROLS': 'Legion Patrols',
-  'PATROLS': 'Legion Patrols',       // OCR sometimes only reads second word
-  'LOW ALTITUDE FOG': 'Low Altitude Fog',
-  'LOW LATITUDE FOG': 'Low Altitude Fog',
-  'MANY ASTEROIDS': 'Many Asteroids',
-  'ROGUE TURRETS': 'Rogue Turrets',
-  'SANDSTORM': 'Sandstorm',
-  'SAND STORM': 'Sandstorm',         // OCR sometimes splits as two words
+const buildKnownHazardMap = () => {
+  const next = {};
+  [...(HAZARD_CATALOG.artifacts || []), ...(HAZARD_CATALOG.hazards || [])].forEach((entry) => {
+    [entry.displayName, ...(entry.aliases || [])].forEach((alias) => {
+      const key = String(alias || '').trim().toUpperCase();
+      if (!key) return;
+      next[key] = entry.displayName;
+    });
+  });
+  return next;
 };
+
+const KNOWN_HAZARDS = buildKnownHazardMap();
 const KNOWN_HAZARD_COMPACT_KEYS = new Set(
   Object.keys(KNOWN_HAZARDS)
     .map((key) => String(key || '').toUpperCase().replace(/[^A-Z]/g, ''))
@@ -1525,12 +1502,23 @@ function normalizeNameKey(input) {
   return (input || '').toLowerCase().replace(/[^a-z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/g, '');
 }
 
+function getPlayerNameVariantScore(name) {
+  const value = String(name || '').trim();
+  if (!value) return 0;
+  let score = 0;
+  if (/\s/.test(value)) score += 20;
+  if (/[._-]/.test(value)) score += 8;
+  if (/[a-z][A-Z]/.test(value) || /[A-Z]{2}[a-z]/.test(value)) score += 6;
+  if (/'/.test(value)) score += 2;
+  return score;
+}
+
 function dedupePlayerNames(players) {
   const out = [];
   for (const candidate of players) {
     const key = normalizeNameKey(candidate);
     if (!key) continue;
-    const exists = out.some(existing => {
+    const existingIdx = out.findIndex(existing => {
       const existingKey = normalizeNameKey(existing);
       if (existingKey === key) return true;
       // Keep short tags strict: don't collapse names like "Riv", "Rive", "Riv2".
@@ -1538,7 +1526,13 @@ function dedupePlayerNames(players) {
       const longer = existingKey.length <= key.length ? key : existingKey;
       return shorter.length >= 10 && longer.includes(shorter);
     });
-    if (!exists) out.push(candidate);
+    if (existingIdx === -1) {
+      out.push(candidate);
+      continue;
+    }
+    if (getPlayerNameVariantScore(candidate) > getPlayerNameVariantScore(out[existingIdx])) {
+      out[existingIdx] = candidate;
+    }
   }
   return out;
 }

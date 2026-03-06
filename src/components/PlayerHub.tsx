@@ -431,6 +431,7 @@ const PlayerHub: React.FC = () => {
                 && normalizeOcrName(entry || '').toLowerCase() === normalizeOcrName(trimmedValue).toLowerCase()
             ));
             if (collision) {
+                setShowFullProfile(true);
                 setMergeTarget(collision);
                 setMergeKeepName(collision);
                 setMergeSearch(collision);
@@ -1057,7 +1058,10 @@ const PlayerHub: React.FC = () => {
                                         <Edit2 size={14} />
                                     </button>
                                     <button
-                                        onClick={() => setMergeTarget(selected.name)}
+                                        onClick={() => {
+                                            setShowFullProfile(true);
+                                            setMergeTarget(selected.name);
+                                        }}
                                         className="md3-icon-btn w-8 h-8 text-md-sys-on-surface/40"
                                         title="Merge with another player"
                                         aria-label="Merge player"
@@ -1401,12 +1405,13 @@ const PlayerHub: React.FC = () => {
                                                     {candidate.reasons.join(' · ')}
                                                 </div>
                                             </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setMergeTarget(candidate.name);
-                                                    setMergeKeepName(selected.name);
-                                                    setMergeSearch(candidate.name);
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setShowFullProfile(true);
+                                                        setMergeTarget(candidate.name);
+                                                        setMergeKeepName(selected.name);
+                                                        setMergeSearch(candidate.name);
                                                 }}
                                                 className="px-3 py-1.5 rounded-control text-label-xs font-bold uppercase bg-warning text-ink-strong shrink-0"
                                             >

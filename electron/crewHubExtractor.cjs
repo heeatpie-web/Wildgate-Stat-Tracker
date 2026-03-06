@@ -29,6 +29,7 @@
  */
 
 const { detectTeamColorBarBelow, detectColorInRegion } = require('./colorUtils.cjs');
+const HAZARD_CATALOG = require('./hazardCatalog.json');
 const _fs = require('fs');
 const _os = require('os');
 const DLOG_PATH = require('path').join(_os.tmpdir(), 'wildgate-ocr.log');
@@ -190,36 +191,19 @@ function containsUnderCrewBonusPhrase(input) {
  * Used to extract hazard info from the crew hub "KNOWN HAZARDS" section as a
  * fallback when the tactical map extraction fails or finds no hazards.
  */
-const CREW_HUB_HAZARDS = {
-  'HEALING ARTIFACT': 'Artifact: Healing',
-  'ARTIFACT HEALING': 'Artifact: Healing',
-  'ICE ARTIFACT': 'Artifact: Ice',
-  'WEAPON ARTIFACT': 'Artifact: Weapon',
-  'ANCIENT VAULT': 'Ancient Vault',
-  'CRYON REACH': 'Cryon Reach',
-  'CRYON RIFT': 'Cryon Rift',
-  'DEAD SENSORS': 'Dead Sensors',
-  'DEAD WORLDS': 'Dead Worlds',
-  'COSMIC STORM': 'Cosmic Storm',
-  'EASY LOOT': 'Easy Loot',
-  'EPIC LOOT': 'Epic Loot',
-  'FAST GATE': 'Fast Gate',
-  'FEW ASTEROIDS': 'Few Asteroids',
-  'FEW SHIPS': 'Few Ships',
-  'LOTS OF ASTEROIDS': 'Lots of Asteroids',
-  'GLOAMING EXPANSE': 'Gloaming Expanse',
-  'BLOOMING EXPANSE': 'Blooming Expanse',
-  'HAUNTED STORM': 'Haunted Storm',
-  'ICE STORM': 'Ice Storm',
-  'LEECH DEMONS': 'Leech Demons',
-  'LAVA EPICS': 'Lava Epics',
-  'LEECH SWARMS': 'Leech Swarms',
-  'LEGION PATROLS': 'Legion Patrols',
-  'LOW ALTITUDE FOG': 'Low Altitude Fog',
-  'MANY ASTEROIDS': 'Many Asteroids',
-  'ROGUE TURRETS': 'Rogue Turrets',
-  'SANDSTORM': 'Sandstorm',
+const buildCrewHubHazardMap = () => {
+  const next = {};
+  [...(HAZARD_CATALOG.artifacts || []), ...(HAZARD_CATALOG.hazards || [])].forEach((entry) => {
+    [entry.displayName, ...(entry.aliases || [])].forEach((alias) => {
+      const key = String(alias || '').trim().toUpperCase();
+      if (!key) return;
+      next[key] = entry.displayName;
+    });
+  });
+  return next;
 };
+
+const CREW_HUB_HAZARDS = buildCrewHubHazardMap();
 
 function normalizeHazardTokenSequence(value) {
   return String(value || '')

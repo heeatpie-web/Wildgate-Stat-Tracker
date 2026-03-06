@@ -1833,12 +1833,20 @@ let logMonitorFingerprint = '';
 
 function resolveLogMonitorProfile(input) {
   const raw = String(input || '').trim().toLowerCase();
+  if (raw === 'adaptive-low' || raw === 'adaptive_low' || raw === 'adaptivelow') return 'adaptive-low';
   if (raw === 'low-power' || raw === 'low_power' || raw === 'lowpower') return 'low-power';
   if (raw === 'high-accuracy' || raw === 'high_accuracy' || raw === 'highaccuracy') return 'high-accuracy';
   return 'balanced';
 }
 
 function getLogMonitorConfig(profile) {
+  if (profile === 'adaptive-low') {
+    return {
+      pollMs: 180000,
+      minDecodeIntervalMs: 180000,
+      snapshotWriteIntervalMs: 180000,
+    };
+  }
   if (profile === 'low-power') {
     return {
       pollMs: 5000,

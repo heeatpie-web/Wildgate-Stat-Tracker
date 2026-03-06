@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { buildDrillDownModel, type DrillDownComboRow, type DrillDownRow } from '../../utils/analyticsDrilldown';
 
+const MIN_HAZARD_SAMPLE_SIZE = 3;
+
 interface AnalyticsCockpitProps {
     visualMode: VisualMode;
     onNavigate: (view: AnalyticsView) => void;
@@ -181,7 +183,7 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
         ? 'Flat vs total'
         : `${cockpitModel.summary.trendDelta > 0 ? '+' : ''}${cockpitModel.summary.trendDelta}pp vs total`;
 
-    const bestHazard = cockpitModel.hazards.best.find((row) => row.total >= 2) || cockpitModel.hazards.modifiers[0] || null;
+    const bestHazard = cockpitModel.hazards.best.find((row) => row.total >= MIN_HAZARD_SAMPLE_SIZE) || null;
     const bestWingman = cockpitModel.people.teammates
         .filter((row) => row.total >= 2)
         .sort((left, right) => {
@@ -239,7 +241,7 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
             headline: bestHazard?.name || 'No hazard signal',
             supporting: bestHazard
                 ? `${bestHazard.winRate}% win rate, ${bestHazard.impact > 0 ? '+' : ''}${bestHazard.impact}pp vs baseline`
-                : 'Hazard context appears once reach modifiers are tracked.',
+                : 'Need 3 matches on a hazard before it becomes a headline signal.',
             accent: 'bg-warning',
             icon: <AlertTriangle size={18} />,
             action: bestHazard ? () => onDrillDown(bestHazard.name, 'Modifier') : undefined,
@@ -362,6 +364,48 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
                 </div>
             </section>
 
+            <ExplorerSection
+                title="Next moves"
+                subtitle="Jump straight into the detailed views when you want a fuller chart-heavy breakdown."
+                icon={<Sparkles size={18} />}
+            >
+                <div className="grid gap-2 md:grid-cols-2">
+                    {[
+                        { label: 'Performance', view: 'momentum' as AnalyticsView, tone: 'bg-md-sys-primary' },
+                        { label: 'Team view', view: 'social' as AnalyticsView, tone: 'bg-info' },
+                        { label: 'Hazard view', view: 'environment' as AnalyticsView, tone: 'bg-warning' },
+                        { label: 'Entity view', view: 'pro' as AnalyticsView, tone: 'bg-accent' },
+                    ].map((entry) => (
+                        <button
+                            key={entry.view}
+                            type="button"
+                            onClick={() => onNavigate(entry.view)}
+                            className="rounded-control border border-md-sys-outline/12 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
+                        >
+                            <div className={`w-8 h-1 rounded-full ${entry.tone}`} />
+                            <div className="mt-3 text-label-sm font-bold uppercase tracking-wide text-md-sys-on-surface/50">
+                                {entry.label}
+                            </div>
+                            <div className="mt-1 text-body font-semibold text-md-sys-on-surface">
+                                Open detailed {entry.label.toLowerCase()}
+                            </div>
+                        </button>
+                    ))}
+                </div>
+                <div className="rounded-control border border-md-sys-outline/12 bg-md-sys-surface-container-high px-3 py-3">
+                    <div className="flex items-center gap-2 text-label-sm font-bold uppercase tracking-wide text-md-sys-on-surface/50">
+                        <ShieldPlus size={14} />
+                        Suggested next drill-down
+                    </div>
+                    <div className="mt-2 text-body font-semibold text-md-sys-on-surface">
+                        {bestHazard?.name || cockpitModel.entities.ships[0]?.name || strongestLoadoutSignal?.name || 'Capture more matches'}
+                    </div>
+                    <div className="mt-1 text-label-sm text-md-sys-on-surface/58">
+                        Use the focus cards below to keep moving through related hazards, people, and loadouts without losing your current scope.
+                    </div>
+                </div>
+            </ExplorerSection>
+
             <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
                 {focusCards.map((card) => (
                     <FocusCard
@@ -480,7 +524,9 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
                                 <ExplorerRow
                                     key={`hazard-${row.name}`}
                                     row={row}
-                                    note={`${row.total} matches · ${row.impact > 0 ? '+' : ''}${row.impact}pp impact`}
+                                    note={row.total < MIN_HAZARD_SAMPLE_SIZE
+                                        ? `${row.total} matches · low sample`
+                                        : `${row.total} matches · ${row.impact > 0 ? '+' : ''}${row.impact}pp impact`}
                                     onClick={() => onDrillDown(row.name, 'Modifier')}
                                 />
                             ))}
@@ -537,47 +583,6 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
                     </SectionBlock>
                 </ExplorerSection>
 
-                <ExplorerSection
-                    title="Next moves"
-                    subtitle="Jump straight into the detailed views when you want a fuller chart-heavy breakdown."
-                    icon={<Sparkles size={18} />}
-                >
-                    <div className="grid gap-2 md:grid-cols-2">
-                        {[
-                            { label: 'Performance', view: 'momentum' as AnalyticsView, tone: 'bg-md-sys-primary' },
-                            { label: 'Team view', view: 'social' as AnalyticsView, tone: 'bg-info' },
-                            { label: 'Hazard view', view: 'environment' as AnalyticsView, tone: 'bg-warning' },
-                            { label: 'Entity view', view: 'pro' as AnalyticsView, tone: 'bg-accent' },
-                        ].map((entry) => (
-                            <button
-                                key={entry.view}
-                                type="button"
-                                onClick={() => onNavigate(entry.view)}
-                                className="rounded-control border border-md-sys-outline/12 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
-                            >
-                                <div className={`w-8 h-1 rounded-full ${entry.tone}`} />
-                                <div className="mt-3 text-label-sm font-bold uppercase tracking-wide text-md-sys-on-surface/50">
-                                    {entry.label}
-                                </div>
-                                <div className="mt-1 text-body font-semibold text-md-sys-on-surface">
-                                    Open detailed {entry.label.toLowerCase()}
-                                </div>
-                            </button>
-                        ))}
-                    </div>
-                    <div className="rounded-control border border-md-sys-outline/12 bg-md-sys-surface-container-high px-3 py-3">
-                        <div className="flex items-center gap-2 text-label-sm font-bold uppercase tracking-wide text-md-sys-on-surface/50">
-                            <ShieldPlus size={14} />
-                            Suggested next drill-down
-                        </div>
-                        <div className="mt-2 text-body font-semibold text-md-sys-on-surface">
-                            {bestHazard?.name || cockpitModel.entities.ships[0]?.name || strongestLoadoutSignal?.name || 'Capture more matches'}
-                        </div>
-                        <div className="mt-1 text-label-sm text-md-sys-on-surface/58">
-                            Use the focus cards above to keep moving through related hazards, people, and loadouts without leaving the cockpit.
-                        </div>
-                    </div>
-                </ExplorerSection>
             </section>
         </div>
     );

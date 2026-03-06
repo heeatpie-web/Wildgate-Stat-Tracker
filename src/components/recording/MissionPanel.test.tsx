@@ -123,9 +123,9 @@ describe('MissionPanel', () => {
     render(<MissionPanel accordionMode />);
 
     const summary = screen.getByTestId('mission-telemetry-summary');
-    expect(summary).toHaveTextContent('Telemetry 3/8');
-    expect(summary).toHaveAttribute('title', expect.stringContaining('Weapons 1/3'));
-    expect(summary).toHaveAttribute('title', expect.stringContaining('Equipment 1/3'));
+    expect(summary).toHaveTextContent('Telemetry 3/6');
+    expect(summary).toHaveAttribute('title', expect.stringContaining('Weapons 1/2'));
+    expect(summary).toHaveAttribute('title', expect.stringContaining('Equipment 1/2'));
     expect(summary).toHaveAttribute('title', expect.stringContaining('Perks 1/2'));
 
     expect(screen.queryByTestId('telemetry-prospector-weapons')).not.toBeInTheDocument();

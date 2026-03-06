@@ -25,7 +25,7 @@ interface MissionPanelProps {
 
 // Accordion section types
 type SectionId = 'stats' | 'poi' | 'weapons' | 'charWeapons' | 'equipment' | 'perks' | 'modifiers';
-const MAX_PROSPECTOR_LOADOUT_SLOTS = Math.max(PATCH_PROSPECTOR_WEAPONS.length, PATCH_PROSPECTOR_EQUIPMENT.length, 3);
+const MAX_PROSPECTOR_LOADOUT_SLOTS = 2;
 
 export const MissionPanel: React.FC<MissionPanelProps> = ({
     variant = 'default',

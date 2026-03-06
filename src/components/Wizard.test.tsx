@@ -137,14 +137,16 @@ describe('Wizard', () => {
         uiState.showWizard = 'Match Result';
 
         expect(() => rerender(<Wizard />)).not.toThrow();
-        expect(screen.getByRole('button', { name: /select match result/i })).toBeDisabled();
+        expect(screen.queryByRole('button', { name: /save results only/i })).not.toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: /^win$/i }));
         rerender(<Wizard />);
-        expect(screen.getByRole('button', { name: /choose win type/i })).toBeDisabled();
+        expect(screen.queryByRole('button', { name: /save results only/i })).not.toBeInTheDocument();
         expect(screen.queryByText('Placement')).not.toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: /artifact win/i }));
+        fireEvent.click(screen.getByRole('button', { name: /continue to team review/i }));
+        fireEvent.click(screen.getByRole('button', { name: /continue to save/i }));
         expect(screen.getByRole('button', { name: /finalize artifact win/i })).toBeEnabled();
     });
 
@@ -165,7 +167,7 @@ describe('Wizard', () => {
         render(<Wizard />);
 
         expect(screen.getByText('Match Result')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /select match result/i })).toBeDisabled();
+        expect(screen.queryByRole('button', { name: /save results only/i })).not.toBeInTheDocument();
     });
 
     it('requires selecting combat or artifact for loss and only shows placement for combat loss', async () => {
@@ -187,19 +189,21 @@ describe('Wizard', () => {
         fireEvent.click(screen.getByRole('button', { name: /^loss$/i }));
         rerender(<Wizard />);
 
-        expect(screen.getByRole('button', { name: /choose loss type/i })).toBeDisabled();
+        expect(screen.queryByRole('button', { name: /continue to team review/i })).not.toBeInTheDocument();
         expect(screen.queryByText('Placement')).not.toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: /combat defeat/i }));
         rerender(<Wizard />);
         expect(screen.getByText('Placement')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /select placement/i })).toBeDisabled();
-        fireEvent.change(screen.getByRole('combobox'), { target: { value: '3' } });
+        expect(screen.queryByRole('button', { name: /continue to team review/i })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /3rd/i }));
         expect(gameData.setPendingPlacement).toHaveBeenCalledWith(3);
 
         fireEvent.click(screen.getByRole('button', { name: /artifact defeat/i }));
         rerender(<Wizard />);
         expect(screen.queryByText('Placement')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /continue to team review/i }));
+        fireEvent.click(screen.getByRole('button', { name: /continue to save/i }));
         expect(screen.getByRole('button', { name: /finalize artifact loss/i })).toBeEnabled();
     });
 
@@ -221,6 +225,8 @@ describe('Wizard', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /^draw$/i }));
         rerender(<Wizard />);
+        fireEvent.click(screen.getByRole('button', { name: /continue to team review/i }));
+        fireEvent.click(screen.getByRole('button', { name: /continue to save/i }));
         const finalizeButton = screen.getByRole('button', { name: /finalize draw/i });
         expect(finalizeButton).toBeEnabled();
 
@@ -256,6 +262,8 @@ describe('Wizard', () => {
             subType: 'Artifact',
         }));
 
+        fireEvent.click(screen.getByRole('button', { name: /continue to team review/i }));
+        fireEvent.click(screen.getByRole('button', { name: /continue to save/i }));
         fireEvent.click(screen.getByRole('button', { name: /save results only/i }));
         expect(saveResultDraft).toHaveBeenCalledWith('Artifact');
     });
@@ -370,11 +378,10 @@ describe('Wizard', () => {
 
         render(<Wizard />);
         fireEvent.click(screen.getByRole('button', { name: /artifact win/i }));
+        fireEvent.click(screen.getByRole('button', { name: /ocr review/i }));
 
-        fireEvent.click(screen.getByRole('button', { name: /prospector loadout/i }));
-
-        expect(screen.getByTestId('wizard-telemetry-prospector-weapons')).toHaveTextContent('Telemetry');
-        expect(screen.getByTestId('wizard-telemetry-prospector-equipment')).toHaveTextContent('Telemetry');
+        expect(screen.getByText('Prospector Loadout')).toBeInTheDocument();
+        expect(screen.getByText('Telemetry')).toBeInTheDocument();
         expect(screen.queryByText(/NebLoadoutSaved/i)).not.toBeInTheDocument();
     });
 

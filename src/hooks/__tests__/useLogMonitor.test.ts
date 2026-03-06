@@ -47,6 +47,7 @@ const uiState = {
 
 const appStoreState = {
   telemetryPerformanceProfile: 'balanced',
+  adaptiveTelemetryPollingEnabled: false,
   matches: [] as Array<Record<string, unknown>>,
   knownMappings: {},
   uidMappings: { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} },
@@ -127,6 +128,7 @@ describe('useLogMonitor', () => {
     gameDataState.sessionStartTime = Date.now() - 5_000;
     gameDataState.isMatchInProgress = false;
     gameDataState.currentLoadout = null;
+    appStoreState.adaptiveTelemetryPollingEnabled = false;
     appStoreState.matches = [];
     appStoreState.activeWeapons = {};
     Object.keys(ipcCallbacks).forEach((key) => {
@@ -141,6 +143,15 @@ describe('useLogMonitor', () => {
     expect(ipcMock.send).toHaveBeenCalledWith('start-log-monitoring', { performanceProfile: 'balanced' });
     expect(ipcMock.on).toHaveBeenCalledWith('log-status', expect.any(Function));
     expect(ipcMock.on).toHaveBeenCalledWith('log-data', expect.any(Function));
+  });
+
+  it('uses adaptive polling profiles when adaptive telemetry is enabled', async () => {
+    appStoreState.adaptiveTelemetryPollingEnabled = true;
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    expect(ipcMock.send).toHaveBeenCalledWith('start-log-monitoring', { performanceProfile: 'high-accuracy' });
   });
 
   it('updates telemetry status and log feed when events arrive', async () => {
@@ -369,7 +380,7 @@ describe('useLogMonitor', () => {
     expect(latestLoadout?.perks || []).toEqual(expect.arrayContaining(['Boarder']));
   });
 
-  it('captures tertiary telemetry weapon and equipment GUIDs in current loadout', async () => {
+  it('captures telemetry weapon and equipment GUIDs in current loadout using two-slot parsing', async () => {
     appStoreState.uidMappings.weapons = {
       'GUID-ROCKET': 'Rocket Launcher',
     };
@@ -390,8 +401,8 @@ describe('useLogMonitor', () => {
               loadout: {
                 hero: 'Adrian',
                 ship: 'Hunter',
-                guidWeaponTertiary: 'GUID-ROCKET',
-                guidEquipmentTertiary: 'GUID-REPULSOR',
+                guidWeaponSecondary: 'GUID-ROCKET',
+                guidEquipmentSecondary: 'GUID-REPULSOR',
               },
             },
           },

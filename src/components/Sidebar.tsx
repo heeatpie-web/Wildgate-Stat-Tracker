@@ -131,7 +131,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
                     <button
                         key={item.id}
                         onClick={() => {
-                            setActiveView(item.id);
+                            React.startTransition(() => setActiveView(item.id));
                             closeDrawerIfNeeded();
                         }}
                         data-tour={`nav-${item.id}`}
@@ -151,7 +151,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
                 {IS_DEV_BUILD && (
                     <button
                         onClick={() => {
-                            setActiveView('dev-ocr');
+                            React.startTransition(() => setActiveView('dev-ocr'));
                             closeDrawerIfNeeded();
                         }}
                         aria-current={activeView === 'dev-ocr' ? 'page' : undefined}

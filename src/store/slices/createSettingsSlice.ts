@@ -136,6 +136,7 @@ export interface SettingsSlice {
   customBgUrl: string;
   enableAutoLogRecording: boolean;
   telemetryPerformanceProfile: TelemetryPerformanceProfile;
+  adaptiveTelemetryPollingEnabled: boolean;
   enableAutoBackup: boolean;
   startupSmartPreloadEnabled: boolean;
   overlayStyle: OverlayStyle;
@@ -143,6 +144,7 @@ export interface SettingsSlice {
   ocrMode: OcrMode;
   captureMode: CaptureMode;
   resultOcrFlowMode: ResultOcrFlowMode;
+  ocrAutoOpenAfterRerun: boolean;
   lockOcrTeams: boolean;
   ocrEnhancedNameRecoveryEnabled: boolean;
   ocrNameRerouteThreshold: number;
@@ -184,6 +186,7 @@ export interface SettingsSlice {
   setCustomBgUrl: (url: string) => void;
   setEnableAutoLogRecording: (enabled: boolean) => void;
   setTelemetryPerformanceProfile: (profile: TelemetryPerformanceProfile) => void;
+  setAdaptiveTelemetryPollingEnabled: (enabled: boolean) => void;
   setEnableAutoBackup: (enabled: boolean) => void;
   setStartupSmartPreloadEnabled: (enabled: boolean) => void;
   setOverlayStyle: (style: OverlayStyle) => void;
@@ -191,6 +194,7 @@ export interface SettingsSlice {
   setOcrMode: (mode: OcrMode) => void;
   setCaptureMode: (mode: CaptureMode) => void;
   setResultOcrFlowMode: (mode: ResultOcrFlowMode) => void;
+  setOcrAutoOpenAfterRerun: (enabled: boolean) => void;
   setLockOcrTeams: (enabled: boolean) => void;
   setOcrEnhancedNameRecoveryEnabled: (enabled: boolean) => void;
   setOcrNameRerouteThreshold: (threshold: number) => void;
@@ -247,6 +251,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   customBgUrl: '',
   enableAutoLogRecording: true,
   telemetryPerformanceProfile: 'balanced',
+  adaptiveTelemetryPollingEnabled: true,
   enableAutoBackup: true,
   startupSmartPreloadEnabled: true,
   overlayStyle: 'compact',
@@ -254,6 +259,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   ocrMode: 'local',
   captureMode: 'auto',
   resultOcrFlowMode: 'prompt',
+  ocrAutoOpenAfterRerun: false,
   lockOcrTeams: false,
   ocrEnhancedNameRecoveryEnabled: true,
   ocrNameRerouteThreshold: OCR_NAME_REROUTE_THRESHOLD_DEFAULT,
@@ -308,6 +314,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   setCustomBgUrl: (url) => set({ customBgUrl: url }),
   setEnableAutoLogRecording: (enabled) => set({ enableAutoLogRecording: enabled }),
   setTelemetryPerformanceProfile: (profile) => set({ telemetryPerformanceProfile: profile }),
+  setAdaptiveTelemetryPollingEnabled: (enabled) => set({ adaptiveTelemetryPollingEnabled: enabled }),
   setEnableAutoBackup: (enabled) => set({ enableAutoBackup: enabled }),
   setStartupSmartPreloadEnabled: (enabled) => set({ startupSmartPreloadEnabled: enabled }),
   setOverlayStyle: (style) => set({ overlayStyle: style }),
@@ -317,6 +324,7 @@ export const createSettingsSlice: StateCreator<SettingsSlice> = (set, get) => ({
   setResultOcrFlowMode: (mode) => set({
     resultOcrFlowMode: mode === 'background' ? 'background' : 'prompt'
   }),
+  setOcrAutoOpenAfterRerun: (enabled) => set({ ocrAutoOpenAfterRerun: enabled }),
   setLockOcrTeams: (enabled) => set({ lockOcrTeams: enabled }),
   setOcrEnhancedNameRecoveryEnabled: (enabled) => set({ ocrEnhancedNameRecoveryEnabled: enabled }),
   setOcrNameRerouteThreshold: (threshold) => set({

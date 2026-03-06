@@ -3,6 +3,7 @@ import type { OcrRegionSettings } from '../scan/types';
 import type { OCRProcessRuntimeOptions } from '../electronBridge';
 import { calculateOverallConfidence, mergeOCRData } from './ocrParser';
 import type { ExtractedModifier, OCRExtractedData } from './ocrTypes';
+import { extractArtifactSourceFromReachModifiers } from '../artifactSource';
 
 const IMAGE_EXT_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
 
@@ -207,7 +208,7 @@ export const rerunMatchArtifacts = async ({
         hazards: dedupeStrings(successful.flatMap(({ data }) => data.hazards || [])),
         teammates: merged.teammates || [],
         opponentTeams: mergedOpponentTeams,
-        artifactType: lastData.artifactType,
+        artifactType: extractArtifactSourceFromReachModifiers(merged.reachModifiers || []) || lastData.artifactType,
         overallConfidence: calculateOverallConfidence(merged),
         captureTimestamp: Date.now(),
         rawText: lastData.rawText,

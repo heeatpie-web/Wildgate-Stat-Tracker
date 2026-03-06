@@ -15,6 +15,7 @@ const fs = require('fs');
 const fsPromises = require('fs').promises;
 const crypto = require('crypto');
 const os = require('os');
+const HAZARD_CATALOG = require('./hazardCatalog.json');
 
 // Import new extraction modules
 const { detectScreenTypeFromLines, SCREEN_TYPES } = require('./screenDetector.cjs');
@@ -1356,6 +1357,70 @@ function normalizeNameKey(value) {
     .replace(/[^a-z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/g, '');
 }
 
+const ARTIFACT_TYPE_BY_KEY = (() => {
+  const next = new Map();
+  (HAZARD_CATALOG.artifacts || []).forEach((entry) => {
+    const artifactType = String(entry?.artifactType || '').trim();
+    if (!artifactType) return;
+    [artifactType, entry.displayName, ...(entry.aliases || [])].forEach((value) => {
+      const normalized = String(value || '').trim().toLowerCase();
+      if (!normalized) return;
+      next.set(normalized, artifactType);
+    });
+  });
+  return next;
+})();
+
+function resolveArtifactTypeCandidate(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const prefixed = raw.match(/^\s*artifact\s*[:=\-]\s*(.+)\s*$/i);
+  if (prefixed?.[1]) {
+    const normalizedPrefixed = String(prefixed[1] || '').trim().toLowerCase();
+    if (ARTIFACT_TYPE_BY_KEY.has(normalizedPrefixed)) {
+      return ARTIFACT_TYPE_BY_KEY.get(normalizedPrefixed);
+    }
+  }
+  const normalized = raw.toLowerCase();
+  if (ARTIFACT_TYPE_BY_KEY.has(normalized)) {
+    return ARTIFACT_TYPE_BY_KEY.get(normalized);
+  }
+  return '';
+}
+
+function deriveArtifactTypeFromEntries(entries = []) {
+  for (const entry of entries) {
+    const texts = typeof entry === 'string'
+      ? [entry]
+      : [entry?.name, entry?.rawText];
+    for (const text of texts) {
+      const resolved = resolveArtifactTypeCandidate(text);
+      if (resolved) return resolved;
+    }
+  }
+  return '';
+}
+
+function deriveArtifactTypeFromExtraction(extractedData) {
+  if (!extractedData || typeof extractedData !== 'object') return '';
+  return (
+    deriveArtifactTypeFromEntries(extractedData.reachModifiers || [])
+    || deriveArtifactTypeFromEntries(extractedData.hazards || [])
+    || resolveArtifactTypeCandidate(extractedData.artifactType)
+  );
+}
+
+function getPlayerNameVariantScore(name) {
+  const value = String(name || '').trim();
+  if (!value) return 0;
+  let score = 0;
+  if (/\s/.test(value)) score += 20;
+  if (/[._-]/.test(value)) score += 8;
+  if (/[a-z][A-Z]/.test(value) || /[A-Z]{2}[a-z]/.test(value)) score += 6;
+  if (/'/.test(value)) score += 2;
+  return score;
+}
+
 function dedupeExtractedPlayers(players, maxCount = 4) {
   if (!Array.isArray(players)) return [];
   const byName = new Map();
@@ -1366,12 +1431,19 @@ function dedupeExtractedPlayers(players, maxCount = 4) {
     if (!key || !cleanedName) return;
     const confidence = Number(player?.confidence || 0);
     const existing = byName.get(key);
-    if (!existing || confidence > existing.confidence) {
-      byName.set(key, {
-        name: cleanedName,
-        confidence: Math.max(60, Math.min(99, confidence || 74)),
-        isTeammate: player?.isTeammate,
-      });
+    const candidateEntry = {
+      name: cleanedName,
+      confidence: Math.max(60, Math.min(99, confidence || 74)),
+      isTeammate: player?.isTeammate,
+    };
+    const shouldReplace = !existing
+      || getPlayerNameVariantScore(candidateEntry.name) > getPlayerNameVariantScore(existing.name)
+      || (
+        getPlayerNameVariantScore(candidateEntry.name) === getPlayerNameVariantScore(existing.name)
+        && candidateEntry.confidence > existing.confidence
+      );
+    if (shouldReplace) {
+      byName.set(key, candidateEntry);
     }
   });
   return [...byName.values()]
@@ -2208,9 +2280,8 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
       routed: routingDebug.applied,
     });
 
-    // Detect artifact type from raw text
-    const artifactMatch = (extractedData.rawText || '').match(/\b(Healing|Weapon|Ice)\b/i);
-    if (artifactMatch) extractedData.artifactType = artifactMatch[1].charAt(0).toUpperCase() + artifactMatch[1].slice(1).toLowerCase();
+    const derivedArtifactType = deriveArtifactTypeFromExtraction(extractedData);
+    if (derivedArtifactType) extractedData.artifactType = derivedArtifactType;
 
     extractedData.ocrSource = 'local';
     const fieldConfidence = computeFieldConfidence(extractedData);

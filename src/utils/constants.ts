@@ -5,6 +5,7 @@
  * Re-exported from types.ts for convenience.
  */
 import { EQUIPMENT_DB } from './equipmentDb';
+import HAZARD_CATALOG from '../../electron/hazardCatalog.json';
 
 export const APP_VERSION = "v3.0.2";
 
@@ -60,29 +61,58 @@ export const CHARACTER_WEAPONS = EQUIPMENT_DB.filter(i => i.type === 'CharacterW
 export const CHARACTER_EQUIPMENT = EQUIPMENT_DB.filter(i => i.type === 'CharacterEquipment').map(i => i.name);
 export const SYSTEMS = EQUIPMENT_DB.filter(i => i.type === 'System').map(i => i.name);
 
+type ReachModifierCatalogEntry = {
+  artifactType?: string;
+  displayName: string;
+  aliases: string[];
+};
+
+const HAZARD_ENTRIES = (HAZARD_CATALOG.hazards || []) as ReachModifierCatalogEntry[];
+const ARTIFACT_ENTRIES = (HAZARD_CATALOG.artifacts || []) as ReachModifierCatalogEntry[];
+
+const buildReachModifierAliasMap = (entries: ReachModifierCatalogEntry[]): Record<string, string> => {
+  const aliasMap: Record<string, string> = {};
+  entries.forEach((entry) => {
+    [entry.displayName, ...(entry.aliases || [])].forEach((alias) => {
+      const normalizedAlias = String(alias || '').trim().toUpperCase();
+      if (!normalizedAlias) return;
+      aliasMap[normalizedAlias] = entry.displayName;
+    });
+  });
+  return aliasMap;
+};
+
+const buildArtifactDisplayToTypeMap = (entries: ReachModifierCatalogEntry[]): Record<string, string> => {
+  const artifactMap: Record<string, string> = {};
+  entries.forEach((entry) => {
+    const artifactType = String(entry.artifactType || '').trim();
+    if (!artifactType) return;
+    [artifactType, entry.displayName, ...(entry.aliases || [])].forEach((value) => {
+      const normalizedValue = String(value || '').trim().toLowerCase();
+      if (!normalizedValue) return;
+      artifactMap[normalizedValue] = artifactType;
+    });
+  });
+  return artifactMap;
+};
+
+export const REACH_MODIFIER_ALIAS_MAP = buildReachModifierAliasMap([
+  ...HAZARD_ENTRIES,
+  ...ARTIFACT_ENTRIES,
+]);
+
+export const ARTIFACT_DISPLAY_TO_TYPE = buildArtifactDisplayToTypeMap(ARTIFACT_ENTRIES);
+
+export const ARTIFACT_TYPE_TO_DISPLAY = ARTIFACT_ENTRIES.reduce<Record<string, string>>((acc, entry) => {
+  const artifactType = String(entry.artifactType || '').trim();
+  if (!artifactType) return acc;
+  acc[artifactType] = entry.displayName;
+  return acc;
+}, {});
+
 export const UI_REACH_MODIFIERS = [
-  "Ancient Vault",
-  "Cryon Reach",
-  "Dead Sensors",
-  "Deadworlds",
-  "Easy Loot",
-  "Epic Loot",
-  "Fast Gate",
-  "Few asteroids",
-  "Few Ships",
-  "Gloaming Expanse",
-  "Haunted Storm",
-  "Ice Storm",
-  "Lava Epics",
-  "Leech Swarms",
-  "Legion Patrols",
-  "Low altitude fog",
-  "Many asteroids",
-  "Rogue Turrets",
-  "Sandstorm",
-  "Artifact: Healing",
-  "Artifact: Ice",
-  "Artifact: Weapon"
+  ...HAZARD_ENTRIES.map((entry) => entry.displayName),
+  ...ARTIFACT_ENTRIES.map((entry) => entry.displayName),
 ];
 
 export const KILLED_BY_OPTIONS = [

@@ -1,3 +1,5 @@
+import { ARTIFACT_DISPLAY_TO_TYPE } from './constants';
+
 const ARTIFACT_PREFIX_PATTERN = /^\s*artifact\s*[:=\-]\s*(.+)\s*$/i;
 const ARTIFACT_INLINE_PATTERN = /\bartifact\s*[:=\-]\s*([^|,;]+)/i;
 
@@ -9,16 +11,26 @@ const cleanCandidate = (value: string): string => (
         .trim()
 );
 
+const resolveArtifactType = (value: string): string => {
+    const cleaned = cleanCandidate(value);
+    if (!cleaned) return '';
+    return ARTIFACT_DISPLAY_TO_TYPE[cleaned.toLowerCase()] || cleaned;
+};
+
 const extractFromText = (value: string): string => {
     const text = String(value || '').trim();
     if (!text) return '';
 
     const prefixed = text.match(ARTIFACT_PREFIX_PATTERN);
-    if (prefixed?.[1]) return cleanCandidate(prefixed[1]);
+    if (prefixed?.[1]) return resolveArtifactType(prefixed[1]);
 
     const inline = text.match(ARTIFACT_INLINE_PATTERN);
-    if (inline?.[1]) return cleanCandidate(inline[1]);
+    if (inline?.[1]) return resolveArtifactType(inline[1]);
 
+    const normalizedText = cleanCandidate(text);
+    if (ARTIFACT_DISPLAY_TO_TYPE[normalizedText.toLowerCase()]) {
+        return resolveArtifactType(normalizedText);
+    }
     return '';
 };
 
@@ -31,7 +43,7 @@ const toModifierTexts = (entry: string | { name?: string; rawText?: string }): s
 };
 
 export const isArtifactSourceModifierValue = (value: string): boolean => (
-    ARTIFACT_PREFIX_PATTERN.test(String(value || '').trim())
+    extractFromText(value).length > 0
 );
 
 export const extractArtifactSourceFromReachModifiers = (

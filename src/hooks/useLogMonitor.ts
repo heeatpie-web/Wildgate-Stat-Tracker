@@ -20,7 +20,10 @@ import {
 
 const ipcRenderer = getElectronAPI();
 const MAX_TELEMETRY_MATCH_DURATION_SECONDS = 60 * 60;
-const MAX_TELEMETRY_PROSPECTOR_SLOTS = 3;
+const MAX_TELEMETRY_PROSPECTOR_SLOTS = 2;
+const ADAPTIVE_LOW_TELEMETRY_PROFILE = 'adaptive-low';
+const ADAPTIVE_LOW_PROFILE_DELAY_MS = 2 * 60 * 1000;
+const ADAPTIVE_MENU_PROFILE_DELAY_MS = 15 * 1000;
 
 const isTrustedTelemetryDuration = (seconds: number) =>
     Number.isFinite(seconds) && seconds >= 0 && seconds <= MAX_TELEMETRY_MATCH_DURATION_SECONDS;
@@ -157,6 +160,7 @@ const TELEMETRY_PROSPECTOR_PERK_NAMES = Array.from(new Set([
 export const useLogMonitor = (activeUser?: string) => {
     const isStoreLoading = useAppStore(s => s.isLoading);
     const telemetryPerformanceProfile = useAppStore(s => s.telemetryPerformanceProfile);
+    const adaptiveTelemetryPollingEnabled = useAppStore(s => s.adaptiveTelemetryPollingEnabled);
     const {
         addMatch, updateMatch,
         playerIdMap, updatePlayerIdMapping,
@@ -212,6 +216,10 @@ export const useLogMonitor = (activeUser?: string) => {
     const pendingTelemetryConsistencyRef = useRef<Partial<TelemetryConsistency>>({
         durationToleranceSeconds: DEFAULT_DURATION_TOLERANCE_SECONDS,
     });
+    const previousAdaptiveMatchStateRef = useRef(isMatchInProgress);
+    const [runtimeTelemetryProfile, setRuntimeTelemetryProfile] = useState<string>(
+        adaptiveTelemetryPollingEnabled ? 'high-accuracy' : telemetryPerformanceProfile
+    );
 
     const clearTelemetryDraftCapturePromptTimer = () => {
         if (telemetryDraftCapturePromptTimerRef.current) {
@@ -523,14 +531,57 @@ export const useLogMonitor = (activeUser?: string) => {
     useEffect(() => () => clearTelemetryDraftCapturePromptTimer(), []);
 
     useEffect(() => {
+        if (!adaptiveTelemetryPollingEnabled) {
+            setRuntimeTelemetryProfile(telemetryPerformanceProfile);
+            return;
+        }
+        if (isMatchInProgress) {
+            setRuntimeTelemetryProfile('balanced');
+            previousAdaptiveMatchStateRef.current = true;
+            return;
+        }
+        if (previousAdaptiveMatchStateRef.current) {
+            previousAdaptiveMatchStateRef.current = false;
+            setRuntimeTelemetryProfile('balanced');
+            const timeoutId = window.setTimeout(() => {
+                setRuntimeTelemetryProfile('high-accuracy');
+            }, ADAPTIVE_MENU_PROFILE_DELAY_MS);
+            return () => window.clearTimeout(timeoutId);
+        }
+        setRuntimeTelemetryProfile('high-accuracy');
+    }, [adaptiveTelemetryPollingEnabled, isMatchInProgress, telemetryPerformanceProfile]);
+
+    useEffect(() => {
+        if (!adaptiveTelemetryPollingEnabled || !isMatchInProgress) return;
+        const matchStartedAt = typeof matchStartTime === 'number' ? matchStartTime : 0;
+        if (matchStartedAt <= 0) {
+            setRuntimeTelemetryProfile('balanced');
+            return;
+        }
+        const elapsedMs = Date.now() - matchStartedAt;
+        if (elapsedMs >= ADAPTIVE_LOW_PROFILE_DELAY_MS) {
+            setRuntimeTelemetryProfile(ADAPTIVE_LOW_TELEMETRY_PROFILE);
+            return;
+        }
+        setRuntimeTelemetryProfile('balanced');
+        const timeoutId = window.setTimeout(() => {
+            setRuntimeTelemetryProfile(ADAPTIVE_LOW_TELEMETRY_PROFILE);
+        }, Math.max(0, ADAPTIVE_LOW_PROFILE_DELAY_MS - elapsedMs));
+        return () => window.clearTimeout(timeoutId);
+    }, [adaptiveTelemetryPollingEnabled, isMatchInProgress, matchStartTime]);
+
+    useEffect(() => {
         if (!ipcRenderer) return;
         if (isStoreLoading) return;
+        const effectiveTelemetryProfile = adaptiveTelemetryPollingEnabled
+            ? runtimeTelemetryProfile
+            : telemetryPerformanceProfile;
         if (enableAutoLogRecording) {
-            ipcRenderer.send('start-log-monitoring', { performanceProfile: telemetryPerformanceProfile });
+            ipcRenderer.send('start-log-monitoring', { performanceProfile: effectiveTelemetryProfile });
         } else {
             ipcRenderer.send('stop-log-monitoring');
         }
-    }, [enableAutoLogRecording, telemetryPerformanceProfile, isStoreLoading]);
+    }, [adaptiveTelemetryPollingEnabled, enableAutoLogRecording, isStoreLoading, runtimeTelemetryProfile, telemetryPerformanceProfile]);
 
     useEffect(() => {
         if (isMatchInProgress && !wasMatchInProgressRef.current) {
@@ -1149,13 +1200,13 @@ export const useLogMonitor = (activeUser?: string) => {
                             return name;
                         };
                         const weaponGuidCandidates = extractByKeys(loadoutData, [
-                            'guidWeaponPrimary', 'guidWeaponSecondary', 'guidWeaponTertiary',
-                            'weaponGuidPrimary', 'weaponGuidSecondary', 'weaponGuidTertiary',
-                            'guidWeapon1', 'guidWeapon2', 'guidWeapon3',
-                            'weaponGuid1', 'weaponGuid2', 'weaponGuid3',
-                            'primaryWeaponGuid', 'secondaryWeaponGuid', 'tertiaryWeaponGuid',
-                            'weapon_guid_primary', 'weapon_guid_secondary', 'weapon_guid_tertiary',
-                            'guid_weapon_primary', 'guid_weapon_secondary', 'guid_weapon_tertiary',
+                            'guidWeaponPrimary', 'guidWeaponSecondary',
+                            'weaponGuidPrimary', 'weaponGuidSecondary',
+                            'guidWeapon1', 'guidWeapon2',
+                            'weaponGuid1', 'weaponGuid2',
+                            'primaryWeaponGuid', 'secondaryWeaponGuid',
+                            'weapon_guid_primary', 'weapon_guid_secondary',
+                            'guid_weapon_primary', 'guid_weapon_secondary',
                             'characterWeapons', 'characterWeapon', 'characterWeaponSlots', 'characterWeaponLoadout',
                             'charWeapons', 'charWeapon', 'charWeaponSlots', 'charWeaponLoadout',
                             'crewWeapons', 'crewWeaponSlots',
@@ -1163,13 +1214,13 @@ export const useLogMonitor = (activeUser?: string) => {
                             'weapons', 'weaponGuids', 'weaponIds', 'weaponSlots', 'weaponSlotData', 'weaponLoadout',
                         ]);
                         const equipmentGuidCandidates = extractByKeys(loadoutData, [
-                            'guidEquipmentPrimary', 'guidEquipmentSecondary', 'guidEquipmentTertiary',
-                            'equipmentGuidPrimary', 'equipmentGuidSecondary', 'equipmentGuidTertiary',
-                            'guidEquipment1', 'guidEquipment2', 'guidEquipment3',
-                            'equipmentGuid1', 'equipmentGuid2', 'equipmentGuid3',
-                            'primaryEquipmentGuid', 'secondaryEquipmentGuid', 'tertiaryEquipmentGuid',
-                            'equipment_guid_primary', 'equipment_guid_secondary', 'equipment_guid_tertiary',
-                            'guid_equipment_primary', 'guid_equipment_secondary', 'guid_equipment_tertiary',
+                            'guidEquipmentPrimary', 'guidEquipmentSecondary',
+                            'equipmentGuidPrimary', 'equipmentGuidSecondary',
+                            'guidEquipment1', 'guidEquipment2',
+                            'equipmentGuid1', 'equipmentGuid2',
+                            'primaryEquipmentGuid', 'secondaryEquipmentGuid',
+                            'equipment_guid_primary', 'equipment_guid_secondary',
+                            'guid_equipment_primary', 'guid_equipment_secondary',
                             'characterEquipment', 'characterEquipments', 'characterGear', 'characterEquipmentSlots', 'characterEquipmentLoadout',
                             'charEquipment', 'charEquipments', 'charGear', 'charEquipmentSlots', 'charEquipmentLoadout',
                             'crewEquipment', 'crewGear', 'loadoutCharacterEquipment', 'loadoutCharEquipment',
@@ -1189,11 +1240,11 @@ export const useLogMonitor = (activeUser?: string) => {
                         ]);
                         const weaponNameCandidates = extractByKeys(loadoutData, [
                             'weapons', 'weaponSlots', 'weaponSlotData', 'weaponLoadout',
-                            'weaponPrimary', 'weaponSecondary', 'weaponTertiary',
-                            'weaponOne', 'weaponTwo', 'weaponThree',
-                            'primaryWeapon', 'secondaryWeapon', 'tertiaryWeapon',
-                            'weaponNamePrimary', 'weaponNameSecondary', 'weaponNameTertiary',
-                            'weapon_name_primary', 'weapon_name_secondary', 'weapon_name_tertiary',
+                            'weaponPrimary', 'weaponSecondary',
+                            'weaponOne', 'weaponTwo',
+                            'primaryWeapon', 'secondaryWeapon',
+                            'weaponNamePrimary', 'weaponNameSecondary',
+                            'weapon_name_primary', 'weapon_name_secondary',
                             'weaponNames', 'weaponDisplayNames', 'loadoutWeapons', 'loadoutWeaponNames',
                         ]);
                         const characterWeaponNameCandidates = extractByKeys(loadoutData, [
@@ -1204,11 +1255,11 @@ export const useLogMonitor = (activeUser?: string) => {
                         ]);
                         const equipmentNameCandidates = extractByKeys(loadoutData, [
                             'equipment', 'equipmentSlots', 'equipmentSlotData', 'equipmentLoadout',
-                            'equipmentPrimary', 'equipmentSecondary', 'equipmentTertiary',
-                            'equipmentOne', 'equipmentTwo', 'equipmentThree',
-                            'primaryEquipment', 'secondaryEquipment', 'tertiaryEquipment',
-                            'equipmentNamePrimary', 'equipmentNameSecondary', 'equipmentNameTertiary',
-                            'equipment_name_primary', 'equipment_name_secondary', 'equipment_name_tertiary',
+                            'equipmentPrimary', 'equipmentSecondary',
+                            'equipmentOne', 'equipmentTwo',
+                            'primaryEquipment', 'secondaryEquipment',
+                            'equipmentNamePrimary', 'equipmentNameSecondary',
+                            'equipment_name_primary', 'equipment_name_secondary',
                             'equipmentNames', 'equipmentDisplayNames', 'loadoutEquipment', 'loadoutEquipmentNames',
                         ]);
                         const characterEquipmentNameCandidates = extractByKeys(loadoutData, [

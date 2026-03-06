@@ -1032,6 +1032,7 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
   display: grid;
   grid-template-columns: repeat(2, minmax(220px, 1fr));
   gap: 6px;
+  align-items: start;
 }
 
 @media (max-width: 980px) {
@@ -1043,6 +1044,7 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 .ocr-assignment-team-card {
   display: flex;
   flex-direction: column;
+  align-self: start;
   gap: 6px;
   border-radius: 10px;
   padding: 0;

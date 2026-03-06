@@ -91,6 +91,7 @@ export interface DrillDownModel {
 }
 
 const normalize = (value: unknown): string => String(value || '').trim().toLowerCase();
+const MIN_HAZARD_SAMPLE_SIZE = 3;
 
 const extractArtifactName = (match: Match): string | null => {
     const fromModifiers = (match.reachModifiers || [])
@@ -325,6 +326,7 @@ export const buildDrillDownModel = (
     };
 
     const modifiers = buildRowsFromLabels(targetMatches, winRate, 'Modifier', getHazardModifiers, target);
+    const qualifiedModifiers = modifiers.filter((row) => row.total >= MIN_HAZARD_SAMPLE_SIZE);
     const artifacts = buildRowsFromLabels(targetMatches, winRate, 'Artifact', (match) => {
         const artifact = extractArtifactName(match);
         return artifact ? [artifact] : [];
@@ -368,7 +370,7 @@ export const buildDrillDownModel = (
             : null,
         topShip: entities.ships[0]?.name || null,
         topHero: entities.heroes[0]?.name || null,
-        topHazard: modifiers[0]?.name || null,
+        topHazard: qualifiedModifiers[0]?.name || null,
         topWingman: people.teammates[0]?.name || null,
         topOpponent: people.opponents[0]?.name || null,
         topWeapon: weapons[0]?.name || null,
@@ -400,11 +402,11 @@ export const buildDrillDownModel = (
         hazards: {
             modifiers,
             artifacts,
-            best: [...modifiers].sort((left, right) => {
+            best: [...qualifiedModifiers].sort((left, right) => {
                 if (right.impact !== left.impact) return right.impact - left.impact;
                 return right.total - left.total;
             }),
-            worst: [...modifiers].sort((left, right) => {
+            worst: [...qualifiedModifiers].sort((left, right) => {
                 if (left.impact !== right.impact) return left.impact - right.impact;
                 return right.total - left.total;
             }),

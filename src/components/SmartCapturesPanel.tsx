@@ -3213,6 +3213,7 @@ const SmartMatchDetail: React.FC<{
             ? '--:--'
             : matchDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const showReviewAction = !hasResult && hasArtifacts;
+        const showReadyToSaveHelper = queueStatus.key === 'Ready' || queueStatus.key === 'OK';
         const toggleSection = (key: string) => {
             setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
         };
@@ -3408,6 +3409,40 @@ const SmartMatchDetail: React.FC<{
                                                 <AlertTriangle size={14} />
                                                 Mark Draw
                                             </button>
+                                            <button
+                                                type="button"
+                                                role="menuitem"
+                                                onClick={() => {
+                                                    onUpdate({
+                                                        ...match,
+                                                        ocrState: 'saved',
+                                                        ocrReviewedAt: match.ocrReviewedAt || Date.now(),
+                                                    });
+                                                    setShowSecondaryActions(false);
+                                                }}
+                                                className={`sc-detail-action-menu-item ${match.ocrState === 'saved' ? 'is-active' : ''}`}
+                                                title="Mark this match as finished"
+                                            >
+                                                <Check size={14} />
+                                                Mark Finished
+                                            </button>
+                                            <button
+                                                type="button"
+                                                role="menuitem"
+                                                onClick={() => {
+                                                    onUpdate({
+                                                        ...match,
+                                                        ocrState: 'queued',
+                                                        ocrReviewedAt: undefined,
+                                                    });
+                                                    setShowSecondaryActions(false);
+                                                }}
+                                                className={`sc-detail-action-menu-item ${match.ocrState === 'queued' ? 'is-active' : ''}`}
+                                                title="Return this match to the queued OCR state"
+                                            >
+                                                <Clock size={14} />
+                                                Mark Queued
+                                            </button>
                                             <div className="sc-detail-action-menu-divider" />
                                             <button
                                                 type="button"
@@ -3458,7 +3493,12 @@ const SmartMatchDetail: React.FC<{
 
                 <div className="sc-detail-main-grid mt-3">
                     <div className="lg:col-span-9 lg:col-start-1 space-y-3 min-w-0 sc-detail-editor-block">
-                        <div className={`grid gap-3 ${artifacts.images.length > 0 ? 'xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start' : ''}`}>
+                        {showReadyToSaveHelper && (
+                            <div className="rounded-card border border-success/25 bg-success-soft px-3 py-2 text-label-sm text-success">
+                                Ready to Save means review is complete, but this match is not persisted to history until you save or resolve it.
+                            </div>
+                        )}
+                        <div className={`grid gap-3 ${artifacts.images.length > 0 ? 'xl:grid-cols-[minmax(0,1fr)_18rem] xl:items-start' : ''}`}>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sc-detail-stats-grid">
                                 <EditableStatCard
                                     icon={<Clock size={14} className="text-md-sys-on-surface/62" />} label="Time" value={match.time || '--'}
@@ -3524,7 +3564,7 @@ const SmartMatchDetail: React.FC<{
                                 </div>
                             </div>
                             {artifacts.images.length > 0 && (
-                                <div className="rounded-card md3-surface-high p-3 border border-md-sys-outline/10 flex flex-col gap-2 xl:min-h-full">
+                                <div className="rounded-card md3-surface-high p-3 border border-md-sys-outline/10 flex flex-col gap-2 xl:min-h-full xl:max-h-52 overflow-hidden">
                                     <div className="min-w-0">
                                         <div className="text-label-sm font-bold text-md-sys-on-surface/80">Re-run analysis</div>
                                         <div className="text-label-xs text-md-sys-on-surface/58">
@@ -3540,7 +3580,7 @@ const SmartMatchDetail: React.FC<{
                                         <button
                                             onClick={handleRerunAnalysis}
                                             disabled={rerunning}
-                                            className="rounded-control md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled flex items-center gap-1.5 justify-center"
+                                            className={`rounded-control md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled flex items-center gap-1.5 justify-center ${rerunning ? 'animate-pulse' : ''}`}
                                             title="Run OCR analysis on the bundled screenshots"
                                         >
                                             <RefreshCw size={12} className={rerunning ? 'animate-spin' : ''} />
@@ -3784,71 +3824,62 @@ const SmartMatchDetail: React.FC<{
                                     )}
                                 </div>
 
-                                <div className="rounded-lg border border-md-sys-outline/10 overflow-hidden">
-                                    <button
-                                        type="button"
-                                        onClick={() => toggleSection('loadoutShipWeapons')}
-                                        className="w-full px-2.5 py-1.5 flex items-center justify-between text-label-xs font-bold uppercase tracking-wider bg-md-sys-surface-container-high hover:bg-md-sys-on-surface/6 transition-colors"
-                                    >
-                                        <span>Ship Weapons</span>
-                                        <span>{collapsedSections.loadoutShipWeapons ? 'Show' : 'Hide'}</span>
-                                    </button>
-                                    {!collapsedSections.loadoutShipWeapons && (
-                                        <div className="p-2.5 space-y-1.5">
-                                            <div className="w-full flex items-center justify-between">
-                                                <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Ship Weapons</span>
-                                                <span className="text-label-xs font-bold bg-md-sys-surface-container-high px-2 py-0.5 rounded-pill text-md-sys-on-surface/70">
-                                                    {detailShipWeaponTotal}/10 slots
-                                                </span>
+                            </div>
+                        </Section>
+
+                        <Section title="Ship Weapons" collapsible collapsed={!!collapsedSections.loadoutShipWeapons} onToggle={() => toggleSection('loadoutShipWeapons')}>
+                            <div className="space-y-1.5">
+                                <div className="w-full flex items-center justify-between">
+                                    <span className="text-label-xs font-bold uppercase opacity-50 tracking-wider">Ship Weapons</span>
+                                    <span className="text-label-xs font-bold bg-md-sys-surface-container-high px-2 py-0.5 rounded-pill text-md-sys-on-surface/70">
+                                        {detailShipWeaponTotal}/10 slots
+                                    </span>
+                                </div>
+                                <div className="space-y-1">
+                                    {Object.entries(detailShipWeaponCounts).length === 0 ? (
+                                        <span className="text-label-xs opacity-55">No ship weapons selected.</span>
+                                    ) : (
+                                        Object.entries(detailShipWeaponCounts).map(([weaponName, qty]) => (
+                                            <div key={weaponName} className="flex items-center justify-between gap-2 rounded-md px-2 py-0.5 md3-surface-high">
+                                                <span className="text-label-xs font-bold">{weaponName}</span>
+                                                <div className="inline-flex items-center gap-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setDetailShipWeaponQuantity(weaponName, qty - 1)}
+                                                        className="w-5 h-5 rounded-control md3-surface inline-flex items-center justify-center text-label-xs text-md-sys-on-surface/70 hover:text-md-sys-on-surface"
+                                                        aria-label={`Decrease ${weaponName}`}
+                                                    >
+                                                        -
+                                                    </button>
+                                                    <span className="min-w-[1.25rem] text-center text-label-xs font-black">{qty}</span>
+                                                    <button
+                                                        type="button"
+                                                        disabled={detailShipWeaponTotal >= 10}
+                                                        onClick={() => setDetailShipWeaponQuantity(weaponName, qty + 1)}
+                                                        className="w-5 h-5 rounded-control md3-surface inline-flex items-center justify-center text-label-xs text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
+                                                        aria-label={`Increase ${weaponName}`}
+                                                    >
+                                                        +
+                                                    </button>
+                                                </div>
                                             </div>
-                                            <div className="space-y-1">
-                                                {Object.entries(detailShipWeaponCounts).length === 0 ? (
-                                                    <span className="text-label-xs opacity-55">No ship weapons selected.</span>
-                                                ) : (
-                                                    Object.entries(detailShipWeaponCounts).map(([weaponName, qty]) => (
-                                                        <div key={weaponName} className="flex items-center justify-between gap-2 rounded-md px-2 py-0.5 md3-surface-high">
-                                                            <span className="text-label-xs font-bold">{weaponName}</span>
-                                                            <div className="inline-flex items-center gap-1">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setDetailShipWeaponQuantity(weaponName, qty - 1)}
-                                                                    className="w-5 h-5 rounded-control md3-surface inline-flex items-center justify-center text-label-xs text-md-sys-on-surface/70 hover:text-md-sys-on-surface"
-                                                                    aria-label={`Decrease ${weaponName}`}
-                                                                >
-                                                                    -
-                                                                </button>
-                                                                <span className="min-w-[1.25rem] text-center text-label-xs font-black">{qty}</span>
-                                                                <button
-                                                                    type="button"
-                                                                    disabled={detailShipWeaponTotal >= 10}
-                                                                    onClick={() => setDetailShipWeaponQuantity(weaponName, qty + 1)}
-                                                                    className="w-5 h-5 rounded-control md3-surface inline-flex items-center justify-center text-label-xs text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
-                                                                    aria-label={`Increase ${weaponName}`}
-                                                                >
-                                                                    +
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    ))
-                                                )}
-                                            </div>
-                                            <div className="flex flex-wrap gap-1">
-                                                {WEAPONS
-                                                    .filter((weapon) => !detailShipWeaponCounts[weapon])
-                                                    .map((weapon) => (
-                                                        <button
-                                                            key={weapon}
-                                                            type="button"
-                                                            disabled={detailShipWeaponTotal >= 10}
-                                                            onClick={() => setDetailShipWeaponQuantity(weapon, 1)}
-                                                            className="px-1.5 py-0.5 rounded-md text-label-xs font-bold md3-surface-high text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
-                                                        >
-                                                            + {weapon}
-                                                        </button>
-                                                    ))}
-                                            </div>
-                                        </div>
+                                        ))
                                     )}
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                    {WEAPONS
+                                        .filter((weapon) => !detailShipWeaponCounts[weapon])
+                                        .map((weapon) => (
+                                            <button
+                                                key={weapon}
+                                                type="button"
+                                                disabled={detailShipWeaponTotal >= 10}
+                                                onClick={() => setDetailShipWeaponQuantity(weapon, 1)}
+                                                className="px-1.5 py-0.5 rounded-md text-label-xs font-bold md3-surface-high text-md-sys-on-surface/70 hover:text-md-sys-on-surface disabled:opacity-disabled"
+                                            >
+                                                + {weapon}
+                                            </button>
+                                        ))}
                                 </div>
                             </div>
                         </Section>

@@ -69,6 +69,7 @@ const initiateSubmission = vi.fn();
 const appStoreState = {
   ocrMode: 'both',
   resultOcrFlowMode: 'prompt',
+  ocrAutoOpenAfterRerun: false,
   pendingMatchData: null as any,
   matches: [] as any[],
   setPendingMatchData: vi.fn(),
@@ -143,6 +144,7 @@ describe('ActionPanel', () => {
     });
     gameData.currentLoadout = null;
     appStoreState.resultOcrFlowMode = 'prompt';
+    appStoreState.ocrAutoOpenAfterRerun = false;
     appStoreState.pendingMatchData = null;
     appStoreState.matches = [];
     smartCaptureActions.getPendingData.mockImplementation(() => smartCaptureState.pendingData);

@@ -98,12 +98,16 @@ const SettingsModalContent: React.FC = () => {
     const setCaptureMode = useAppStore(s => s.setCaptureMode);
     const resultOcrFlowMode = useAppStore(s => s.resultOcrFlowMode);
     const setResultOcrFlowMode = useAppStore(s => s.setResultOcrFlowMode);
+    const ocrAutoOpenAfterRerun = useAppStore(s => s.ocrAutoOpenAfterRerun);
+    const setOcrAutoOpenAfterRerun = useAppStore(s => s.setOcrAutoOpenAfterRerun);
     const showSmartCaptureInHeader = useAppStore(s => s.showSmartCaptureInHeader);
     const setShowSmartCaptureInHeader = useAppStore(s => s.setShowSmartCaptureInHeader);
     const tipsEnabled = useAppStore(s => s.tipsEnabled);
     const setTipsEnabled = useAppStore(s => s.setTipsEnabled);
     const telemetryPerformanceProfile = useAppStore(s => s.telemetryPerformanceProfile);
     const setTelemetryPerformanceProfile = useAppStore(s => s.setTelemetryPerformanceProfile);
+    const adaptiveTelemetryPollingEnabled = useAppStore(s => s.adaptiveTelemetryPollingEnabled);
+    const setAdaptiveTelemetryPollingEnabled = useAppStore(s => s.setAdaptiveTelemetryPollingEnabled);
     const startupSmartPreloadEnabled = useAppStore(s => s.startupSmartPreloadEnabled);
     const setStartupSmartPreloadEnabled = useAppStore(s => s.setStartupSmartPreloadEnabled);
     const ocrEnhancedNameRecoveryEnabled = useAppStore(s => s.ocrEnhancedNameRecoveryEnabled);
@@ -261,10 +265,12 @@ const SettingsModalContent: React.FC = () => {
                 bgUrl: state.customBgUrl,
                 autoLog: state.enableAutoLogRecording,
                 telemetryPerformanceProfile: state.telemetryPerformanceProfile,
+                adaptiveTelemetryPollingEnabled: (state as any).adaptiveTelemetryPollingEnabled,
                 alwaysOnTop: (state as any).isAlwaysOnTop,
                 overlayStyle: state.overlayStyle,
                 captureMode: state.captureMode,
                 resultOcrFlowMode: state.resultOcrFlowMode,
+                ocrAutoOpenAfterRerun: (state as any).ocrAutoOpenAfterRerun,
                 lockOcrTeams: state.lockOcrTeams,
                 ocrEnhancedNameRecoveryEnabled: (state as any).ocrEnhancedNameRecoveryEnabled,
                 ocrNameRerouteThreshold: (state as any).ocrNameRerouteThreshold,
@@ -852,6 +858,23 @@ const SettingsModalContent: React.FC = () => {
                                         <span className="text-label-sm font-medium opacity-60 block">Telemetry Performance</span>
                                         <span className="text-label-sm opacity-40 uppercase font-bold">Monitoring load profile</span>
                                     </div>
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <span className="text-label-sm font-medium opacity-60 block">Adaptive Polling</span>
+                                            <span className="text-label-sm opacity-40 uppercase font-bold">{adaptiveTelemetryPollingEnabled ? 'Enabled by default' : 'Static profile only'}</span>
+                                        </div>
+                                        <button
+                                            onClick={() => setAdaptiveTelemetryPollingEnabled(!adaptiveTelemetryPollingEnabled)}
+                                            className={`w-11 h-6 rounded-full transition-colors ${adaptiveTelemetryPollingEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
+                                        >
+                                            <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${adaptiveTelemetryPollingEnabled ? 'translate-x-5' : ''}`} />
+                                        </button>
+                                    </div>
+                                    {adaptiveTelemetryPollingEnabled && (
+                                        <div className="text-label-sm text-md-sys-on-surface/55">
+                                            Idle/menu uses high accuracy, match start and end use balanced, and active matches drop to a 3-minute poll after 2 minutes.
+                                        </div>
+                                    )}
                                     <div className="grid grid-cols-3 gap-2">
                                         {[
                                             {
@@ -873,10 +896,11 @@ const SettingsModalContent: React.FC = () => {
                                             <button
                                                 key={opt.id}
                                                 onClick={() => setTelemetryPerformanceProfile(opt.id)}
+                                                disabled={adaptiveTelemetryPollingEnabled}
                                                 className={`p-2.5 rounded-control text-center transition-all ${telemetryPerformanceProfile === opt.id
                                                     ? 'md3-btn-filled ring-2 ring-md-sys-primary/40'
                                                     : 'md3-btn-outlined'
-                                                    }`}
+                                                    } disabled:opacity-disabled`}
                                                 title={opt.desc}
                                             >
                                                 <div className="text-label-sm font-bold">{opt.label}</div>
@@ -988,7 +1012,7 @@ const SettingsModalContent: React.FC = () => {
                             </div>
                             <span className="text-label-xs font-bold uppercase tracking-wide text-md-sys-primary">Recommended first</span>
                         </div>
-                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                             <button
                                 type="button"
                                 onClick={() => setCaptureMode(captureMode === 'auto' ? 'deferred' : 'auto')}
@@ -1006,6 +1030,15 @@ const SettingsModalContent: React.FC = () => {
                                 <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">Result button</div>
                                 <div className="mt-1 text-body font-bold text-md-sys-on-surface">{resultOcrFlowMode === 'prompt' ? 'Prompt Before OCR' : 'Background OCR'}</div>
                                 <div className="mt-1 text-label-sm text-md-sys-on-surface/60">{resultOcrFlowMode === 'prompt' ? 'Ask before processing queued captures' : 'Open wizard immediately and OCR in background'}</div>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setOcrAutoOpenAfterRerun(!ocrAutoOpenAfterRerun)}
+                                className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-3 text-left hover:bg-md-sys-surface-container-highest"
+                            >
+                                <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/45">OCR rerun</div>
+                                <div className="mt-1 text-body font-bold text-md-sys-on-surface">{ocrAutoOpenAfterRerun ? 'Auto-open Review' : 'Notify Only'}</div>
+                                <div className="mt-1 text-label-sm text-md-sys-on-surface/60">{ocrAutoOpenAfterRerun ? 'Completed reruns open the review flow automatically' : 'Completed reruns stay in place and raise a notification'}</div>
                             </button>
                             <button
                                 type="button"

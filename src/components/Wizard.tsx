@@ -31,7 +31,7 @@ import {
 
 type WizardTab = 'result' | 'ocr';
 const MAX_SHIP_WEAPONS = 10;
-const MAX_PROSPECTOR_SLOTS = 3;
+const MAX_PROSPECTOR_SLOTS = 2;
 const MODAL_FOCUSABLE_SELECTOR = [
     'button:not([disabled])',
     '[href]',
@@ -96,7 +96,7 @@ export const Wizard: React.FC = () => {
     const [selectedWinType, setSelectedWinType] = useState<'Combat' | 'Artifact' | null>(null);
     const [requestedOcrReviewMatchId, setRequestedOcrReviewMatchId] = useState<number | null | undefined>(undefined);
     const [activeTab, setActiveTab] = useState<WizardTab>('result');
-    const [loadoutExpanded, setLoadoutExpanded] = useState(false);
+    const [guidedResultStep, setGuidedResultStep] = useState<'stats' | 'team-review' | 'save'>('stats');
     const [isRerunningOcr, setIsRerunningOcr] = useState(false);
     const isWizardOpen = Boolean(showWizard);
     const lastTimeSyncMatchIdRef = React.useRef<number | null>(null);
@@ -122,7 +122,7 @@ export const Wizard: React.FC = () => {
     React.useEffect(() => {
         if (!isWizardOpen) {
             setActiveTab('result');
-            setLoadoutExpanded(false);
+            setGuidedResultStep('stats');
             setSelectedWinType(null);
             lastTimeSyncMatchIdRef.current = null;
             return;
@@ -290,6 +290,7 @@ export const Wizard: React.FC = () => {
             .filter((entry) => entry.length > 0)
             .filter((entry) => entry.startsWith('data:image/') || /\.(png|jpe?g|webp|bmp|gif)$/i.test(entry));
     }, [pendingMatchData?.artifacts]);
+    const deferredWizardReviewScreenshots = React.useDeferredValue(wizardReviewScreenshots);
 
     React.useEffect(() => {
         if (!isWizardOpen || !pendingMatchData || !Array.isArray(pendingMatchData.opponentTeams)) return;
@@ -353,8 +354,6 @@ export const Wizard: React.FC = () => {
         return Array.from(deduped.values());
     }, [activeUser, pendingMatchData?.opponentTeams, pendingMatchData?.player, pendingMatchData?.teammates, sessionShipTypes, sessionTeams]);
 
-    if (!showWizard || !pendingMatchData) return null;
-
     const selectedResult = selectedResultFromDraft || (showWizard === 'Win' || showWizard === 'Loss' || showWizard === 'Draw'
         ? showWizard
         : null);
@@ -368,10 +367,25 @@ export const Wizard: React.FC = () => {
         || (pendingPlacement != null && pendingPlacement >= 2 && pendingPlacement <= 5)
     );
     const showGuidedDetails = hasSelectedResult && hasSelectedOutcomeType && hasValidCombatLossPlacement;
-    const canFinalizeResult = hasSelectedResult && hasSelectedOutcomeType && hasValidCombatLossPlacement;
+    const showTeamReviewStep = showGuidedDetails && (guidedResultStep === 'team-review' || guidedResultStep === 'save');
+    const showSaveStep = showGuidedDetails && guidedResultStep === 'save';
     const normalizedPendingOcrState = String(pendingMatchData?.ocrState || '').trim().toLowerCase();
     const hasPendingOcrReview = normalizedPendingOcrState === 'reviewing';
     const hasSavedOcrReview = normalizedPendingOcrState === 'saved' || Boolean(pendingMatchData?.ocrReviewedAt);
+
+    React.useEffect(() => {
+        if (!isWizardOpen || !showGuidedDetails) {
+            setGuidedResultStep('stats');
+            return;
+        }
+        if (hasSavedOcrReview && activeTab === 'result') {
+            setGuidedResultStep((current) => (current === 'stats' ? 'stats' : 'save'));
+        }
+    }, [activeTab, hasSavedOcrReview, isWizardOpen, showGuidedDetails]);
+
+    if (!showWizard || !pendingMatchData) return null;
+
+    const canFinalizeResult = hasSelectedResult && hasSelectedOutcomeType && hasValidCombatLossPlacement && guidedResultStep === 'save';
     const finalizeButtonLabel = (() => {
         if (!hasSelectedResult) return 'Select Match Result';
         if (selectedResult === 'Draw') return 'Finalize Draw';
@@ -400,7 +414,6 @@ export const Wizard: React.FC = () => {
         characterPerks: [],
     };
     const shipWeaponEntriesFromLegacy = (pendingLoadout.weapons || [])
-        .filter((entry) => !/tertiary\s+(weapon|equipment)/i.test(String(entry || '')))
         .slice(0, MAX_SHIP_WEAPONS)
         .reduce<Record<string, number>>((acc, weapon) => {
             const cleaned = String(weapon || '').trim();
@@ -465,6 +478,7 @@ export const Wizard: React.FC = () => {
         : null;
     const hasDurationMismatch = telemetryDurationDelta != null && telemetryDurationDelta > telemetryDurationToleranceSeconds;
     const syncResultDraft = (result: 'Win' | 'Loss' | 'Draw') => {
+        setGuidedResultStep('stats');
         const nextDraft: Partial<Match> = {
             ...pendingMatchData,
             result,
@@ -493,6 +507,7 @@ export const Wizard: React.FC = () => {
         setSelectedWinType(null);
     };
     const syncSubTypeDraft = (subType: 'Combat' | 'Artifact') => {
+        setGuidedResultStep('stats');
         setSelectedWinType(subType);
         if (selectedResult === 'Loss' && subType !== 'Combat') {
             setPendingPlacement(null);
@@ -571,7 +586,7 @@ export const Wizard: React.FC = () => {
     };
 
     const handleWizardSmartCaptureRequest = () => {
-        setActiveTab('ocr');
+        React.startTransition(() => setActiveTab('ocr'));
         const pendingMatchId = Number((pendingMatchData as Match | null)?.id || 0);
         const requestId = requestSmartCapture({
             activeUser: activeUser || null,
@@ -857,34 +872,32 @@ export const Wizard: React.FC = () => {
                             {selectedResult === 'Loss' && selectedWinType === 'Combat' && (
                                 <div className="mt-2">
                                     <span className="text-label-sm font-bold uppercase text-md-sys-on-surface/80 block mb-1">Placement</span>
-                                    <select
-                                        className={`w-full ${inputBaseClass} py-2 text-body`}
-                                        value={pendingPlacement && pendingPlacement >= 2 && pendingPlacement <= 5 ? pendingPlacement : ''}
-                                        onChange={(e) => {
-                                            const next = Number.parseInt(e.target.value, 10);
-                                                if (!Number.isFinite(next)) {
-                                                    setPendingPlacement(null);
-                                                    setPendingDraftData({
-                                                        ...pendingMatchData,
-                                                        placement: undefined,
-                                                    });
-                                                    return;
-                                                }
-                                            const placement = Math.min(5, Math.max(2, next));
-                                            setPendingPlacement(placement);
-                                            setPendingDraftData({
-                                                ...pendingMatchData,
-                                                placement,
-                                            });
-                                        }}
-                                    >
-                                        <option value="" disabled>Select placement</option>
-                                        {[2, 3, 4, 5].map((place) => (
-                                            <option key={place} value={place}>
-                                                {place === 2 ? '2nd' : place === 3 ? '3rd' : `${place}th`}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {[2, 3, 4, 5].map((place) => {
+                                            const isSelected = pendingPlacement === place;
+                                            const label = place === 2 ? '2nd' : place === 3 ? '3rd' : `${place}th`;
+                                            return (
+                                                <button
+                                                    key={place}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setPendingPlacement(place);
+                                                        setPendingDraftData({
+                                                            ...pendingMatchData,
+                                                            placement: place,
+                                                        });
+                                                    }}
+                                                    className={`rounded-2xl py-3 text-label-sm font-bold uppercase tracking-wide transition-all ${isSelected
+                                                        ? 'bg-md-sys-primary text-md-sys-onPrimary shadow-lg'
+                                                        : 'bg-md-sys-surface-container-high text-md-sys-on-surface/80 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'
+                                                        }`}
+                                                    aria-label={label}
+                                                >
+                                                    {label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -1090,141 +1103,6 @@ export const Wizard: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className={cardClass}>
-                            <button
-                                type="button"
-                                onClick={() => setLoadoutExpanded((prev) => !prev)}
-                                className="w-full flex items-center justify-between"
-                            >
-                                <span className={labelClass + ' mb-0 flex items-center gap-2'}>
-                                    <Wrench size={14} /> Prospector Loadout
-                                    {hasTelemetryProspectorLoadout && (
-                                        <span className="inline-flex items-center gap-1.5 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold" title="Detected loadout data">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                                            Telemetry
-                                        </span>
-                                    )}
-                                </span>
-                                <div className="flex gap-1.5 items-center overflow-hidden">
-                                    {displayedCharacterWeapons.length > 0 ? displayedCharacterWeapons.slice(0, MAX_PROSPECTOR_SLOTS).map((w, i) => (
-                                        <span key={`w-${i}`} className="px-1.5 py-0.5 rounded bg-md-sys-surface-container-highest text-md-sys-on-surface text-[10px] font-bold uppercase truncate max-w-[80px]">{w}</span>
-                                    )) : <span className="text-label-xs opacity-40">No Weapons</span>}
-                                    <span className="opacity-20 mx-1">|</span>
-                                    {displayedCharacterEquipment.length > 0 ? displayedCharacterEquipment.slice(0, MAX_PROSPECTOR_SLOTS).map((e, i) => (
-                                        <span key={`e-${i}`} className="px-1.5 py-0.5 rounded bg-md-sys-surface-container-highest text-md-sys-on-surface text-[10px] font-bold uppercase truncate max-w-[80px]">{e}</span>
-                                    )) : <span className="text-label-xs opacity-40">No Equipment</span>}
-                                    {(displayedCharacterWeapons.length + displayedCharacterEquipment.length + displayedPerks.length) > 4 && (
-                                        <span className="text-label-xs font-semibold opacity-50">+{(displayedCharacterWeapons.length + displayedCharacterEquipment.length + displayedPerks.length) - 4}</span>
-                                    )}
-                                </div>
-                            </button>
-                            {(loadoutExpanded || !hasTelemetryLoadout) && (
-                                <div className="mt-3 space-y-3 max-h-[20rem] overflow-y-auto custom-scrollbar pr-1">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <span className="inline-flex items-center gap-1 rounded-pill bg-md-sys-surface-container-high px-2 py-0.5 text-label-xs font-semibold text-md-sys-on-surface/80">
-                                            Ship: {String(pendingLoadout.ship || pendingMatchData.ship || '--')}
-                                        </span>
-                                        {hasTelemetryShipLoadout && (
-                                            <span className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                                                Ship Telemetry
-                                            </span>
-                                        )}
-                                        <span className="inline-flex items-center gap-1 rounded-pill bg-md-sys-surface-container-high px-2 py-0.5 text-label-xs font-semibold text-md-sys-on-surface/80">
-                                            Prospector: {String(pendingLoadout.hero || pendingMatchData.hero || '--')}
-                                        </span>
-                                        {hasTelemetryProspectorLoadout && (
-                                            <span className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                                                Prospector Telemetry
-                                            </span>
-                                        )}
-                                    </div>
-                                    {displayedPerks.length > 0 && (
-                                        <div>
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="text-label-xs font-bold uppercase opacity-50">Perks</span>
-                                            </div>
-                                            <div className="flex flex-wrap gap-1.5 mt-1">
-                                                {displayedPerks.map((perk) => (
-                                                    <span
-                                                        key={perk}
-                                                        className="px-2 py-0.5 rounded-pill bg-md-sys-surface-container-high text-md-sys-on-surface text-label-xs font-semibold"
-                                                    >
-                                                        {perk}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div>
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-label-xs font-bold uppercase opacity-50">Weapons (max {MAX_PROSPECTOR_SLOTS})</span>
-                                            {hasTelemetryLoadout && displayedCharacterWeapons.length > 0 && (
-                                                <span
-                                                    data-testid="wizard-telemetry-prospector-weapons"
-                                                    className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold"
-                                                    title="Loadout source from telemetry"
-                                                >
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                                                    {loadoutSourceBadgeLabel}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-wrap gap-1.5 mt-1">
-                                            {CHARACTER_WEAPONS.map((weapon) => {
-                                                const selected = displayedCharacterWeapons.some((entry) => entry.toLowerCase() === weapon.toLowerCase());
-                                                const disabled = !selected && displayedCharacterWeapons.length >= MAX_PROSPECTOR_SLOTS;
-                                                return (
-                                                    <button
-                                                        key={weapon}
-                                                        type="button"
-                                                        disabled={disabled}
-                                                        onClick={() => updatePendingLoadout('characterWeapons', weapon)}
-                                                        className={`px-2 py-1 rounded-md text-label-sm font-semibold transition-all ${selected ? 'bg-success-soft text-success ring-1 ring-success/40' : 'mg-surface-high opacity-70 hover:opacity-100'} disabled:opacity-40`}
-                                                    >
-                                                        {weapon}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-label-xs font-bold uppercase opacity-50">Equipment (max {MAX_PROSPECTOR_SLOTS})</span>
-                                            {hasTelemetryLoadout && displayedCharacterEquipment.length > 0 && (
-                                                <span
-                                                    data-testid="wizard-telemetry-prospector-equipment"
-                                                    className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold"
-                                                    title="Loadout source from telemetry"
-                                                >
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-success" />
-                                                    {loadoutSourceBadgeLabel}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-wrap gap-1.5 mt-1">
-                                            {CHARACTER_EQUIPMENT.map((equipment) => {
-                                                const selected = displayedCharacterEquipment.some((entry) => entry.toLowerCase() === equipment.toLowerCase());
-                                                const disabled = !selected && displayedCharacterEquipment.length >= MAX_PROSPECTOR_SLOTS;
-                                                return (
-                                                    <button
-                                                        key={equipment}
-                                                        type="button"
-                                                        disabled={disabled}
-                                                        onClick={() => updatePendingLoadout('characterEquipment', equipment)}
-                                                        className={`px-2 py-1 rounded-md text-label-sm font-semibold transition-all ${selected ? 'bg-success-soft text-success ring-1 ring-success/40' : 'mg-surface-high opacity-70 hover:opacity-100'} disabled:opacity-40`}
-                                                    >
-                                                        {equipment}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
                         {activeMode === 'Artifact Brawl' && (
                             <div className={cardClass}>
                                 <span className={labelClass}>Mission Objectives</span>
@@ -1272,36 +1150,95 @@ export const Wizard: React.FC = () => {
                             </>
                         )}
 
-                        <button onClick={handleWizardSmartCaptureRequest} className="w-full py-3 rounded-2xl mg-surface-high border border-md-sys-outline/15 text-label-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:border-md-sys-primary/30 hover:bg-md-sys-primary/5 transition-all">
-                            <Scan size={14} /> Smart Capture
-                        </button>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {showGuidedDetails && guidedResultStep === 'stats' && (
                             <button
                                 type="button"
-                                onClick={() => {
-                                    if (!canFinalizeResult) return;
-                                    saveResultDraft(selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat'));
-                                }}
-                                disabled={submitting || !canFinalizeResult}
-                                className={`w-full ${isOverlayMode ? 'py-4' : 'py-5'} rounded-3xl font-bold uppercase tracking-wide-30 text-label-sm transition-all border border-md-sys-outline/18 ${submitting || !canFinalizeResult ? 'opacity-disabled grayscale' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/82 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'}`}
+                                onClick={() => setGuidedResultStep('team-review')}
+                                className="w-full py-3 rounded-2xl bg-md-sys-primary text-md-sys-onPrimary text-label-sm font-bold uppercase tracking-widest transition-all hover:brightness-105"
                             >
-                                Save Results Only
+                                Continue to Team Review
                             </button>
-                            <button
-                                onClick={() => {
-                                    if (hasPendingOcrReview) {
-                                        setActiveTab('ocr');
-                                        return;
-                                    }
-                                    processFinalSubmission(selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat'));
-                                }}
-                                disabled={submitting || !canFinalizeResult}
-                                className={`w-full ${isOverlayMode ? 'py-4' : 'py-5'} rounded-3xl font-bold uppercase tracking-wide-30 text-label-sm transition-all shadow-xl active:scale-95 ${submitting ? 'opacity-disabled grayscale' : (!canFinalizeResult ? 'opacity-disabled grayscale' : (selectedResult === 'Draw' ? 'bg-info text-ink-strong' : (selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong' : 'bg-md-sys-primary text-md-sys-onPrimary')))}`}
-                            >
-                                {submitting ? 'Synchronizing...' : finalizeButtonLabel}
-                            </button>
-                        </div>
+                        )}
+
+                        {showTeamReviewStep && (
+                            <div className={cardClass}>
+                                <span className={labelClass}>Team Review</span>
+                                <div className="space-y-3">
+                                    <div className="text-label-sm text-md-sys-on-surface/72">
+                                        Review OCR roster alignment and prospector loadout before the final save step.
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                        <div className="rounded-2xl border border-md-sys-outline/12 px-3 py-2 mg-surface-high">
+                                            <div className="text-label-xs font-bold uppercase opacity-55">Detected Players</div>
+                                            <div className="mt-1 text-body font-black">{detectedPlayerCount}</div>
+                                        </div>
+                                        <div className="rounded-2xl border border-md-sys-outline/12 px-3 py-2 mg-surface-high">
+                                            <div className="text-label-xs font-bold uppercase opacity-55">Evidence</div>
+                                            <div className="mt-1 text-body font-black">{wizardReviewScreenshots.length}</div>
+                                        </div>
+                                        <div className="rounded-2xl border border-md-sys-outline/12 px-3 py-2 mg-surface-high">
+                                            <div className="text-label-xs font-bold uppercase opacity-55">OCR Status</div>
+                                            <div className="mt-1 text-body font-black">{hasSavedOcrReview ? 'Reviewed' : (hasPendingOcrReview ? 'Needs Review' : 'Ready')}</div>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                React.startTransition(() => setActiveTab('ocr'));
+                                                setGuidedResultStep(hasSavedOcrReview ? 'save' : 'team-review');
+                                            }}
+                                            className="flex-1 py-3 rounded-2xl mg-surface-high border border-md-sys-outline/15 text-label-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:border-md-sys-primary/30 hover:bg-md-sys-primary/5 transition-all"
+                                        >
+                                            <Users size={14} />
+                                            {hasSavedOcrReview ? 'Review Again' : 'Open OCR Review'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setGuidedResultStep('save')}
+                                            className="flex-1 py-3 rounded-2xl bg-md-sys-surface-container-high text-md-sys-on-surface text-label-sm font-bold uppercase tracking-widest transition-all hover:bg-md-sys-surface-container-highest"
+                                        >
+                                            Continue to Save
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {showSaveStep && (
+                            <>
+                                <button onClick={handleWizardSmartCaptureRequest} className="w-full py-3 rounded-2xl mg-surface-high border border-md-sys-outline/15 text-label-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:border-md-sys-primary/30 hover:bg-md-sys-primary/5 transition-all">
+                                    <Scan size={14} /> Smart Capture
+                                </button>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (!canFinalizeResult) return;
+                                            saveResultDraft(selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat'));
+                                        }}
+                                        disabled={submitting || !canFinalizeResult}
+                                        className={`w-full ${isOverlayMode ? 'py-4' : 'py-5'} rounded-3xl font-bold uppercase tracking-wide-30 text-label-sm transition-all border border-md-sys-outline/18 ${submitting || !canFinalizeResult ? 'opacity-disabled grayscale' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/82 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'}`}
+                                    >
+                                        Save Results Only
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            if (hasPendingOcrReview) {
+                                                React.startTransition(() => setActiveTab('ocr'));
+                                                return;
+                                            }
+                                            processFinalSubmission(selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat'));
+                                        }}
+                                        disabled={submitting || !canFinalizeResult}
+                                        className={`w-full ${isOverlayMode ? 'py-4' : 'py-5'} rounded-3xl font-bold uppercase tracking-wide-30 text-label-sm transition-all shadow-xl active:scale-95 ${submitting ? 'opacity-disabled grayscale' : (!canFinalizeResult ? 'opacity-disabled grayscale' : (selectedResult === 'Draw' ? 'bg-info text-ink-strong' : (selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong' : 'bg-md-sys-primary text-md-sys-onPrimary')))}`}
+                                    >
+                                        {submitting ? 'Synchronizing...' : finalizeButtonLabel}
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 ) : (
                         <div
@@ -1321,26 +1258,131 @@ export const Wizard: React.FC = () => {
                                 className="ml-auto px-3 py-1.5 rounded-lg text-label-xs font-bold md3-btn-tonal inline-flex items-center gap-1.5 shrink-0"
                                 title="Re-run OCR across bundled screenshot artifacts"
                             >
-                                <RefreshCw size={12} />
+                                <RefreshCw size={12} className={isRerunningOcr ? 'animate-spin' : ''} />
                                 {isRerunningOcr ? 'Re-running...' : 'Re-run OCR'}
                             </button>
+                        </div>
+                        <div className={cardClass}>
+                            <div className="flex items-center justify-between gap-2">
+                                <span className={labelClass + ' mb-0 flex items-center gap-2'}>
+                                    <Wrench size={14} /> Prospector Loadout
+                                </span>
+                                {hasTelemetryProspectorLoadout && (
+                                    <span className="inline-flex items-center gap-1 rounded-pill bg-success-soft text-success px-2 py-0.5 text-label-xs font-semibold">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                                        {loadoutSourceBadgeLabel}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="mt-3 space-y-3">
+                                <div>
+                                    <div className="text-label-xs font-bold uppercase opacity-55">Weapons</div>
+                                    <div className="mt-1 flex flex-wrap gap-1.5">
+                                        {displayedCharacterWeapons.length > 0 ? displayedCharacterWeapons.slice(0, MAX_PROSPECTOR_SLOTS).map((weapon) => (
+                                            <span key={weapon} className="px-2 py-0.5 rounded-pill bg-md-sys-surface-container-high text-md-sys-on-surface text-label-xs font-semibold">
+                                                {weapon}
+                                            </span>
+                                        )) : (
+                                            <span className="text-label-sm text-md-sys-on-surface/55">No weapons selected.</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="text-label-xs font-bold uppercase opacity-55">Equipment</div>
+                                    <div className="mt-1 flex flex-wrap gap-1.5">
+                                        {displayedCharacterEquipment.length > 0 ? displayedCharacterEquipment.slice(0, MAX_PROSPECTOR_SLOTS).map((equipment) => (
+                                            <span key={equipment} className="px-2 py-0.5 rounded-pill bg-md-sys-surface-container-high text-md-sys-on-surface text-label-xs font-semibold">
+                                                {equipment}
+                                            </span>
+                                        )) : (
+                                            <span className="text-label-sm text-md-sys-on-surface/55">No equipment selected.</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="text-label-xs font-bold uppercase opacity-55">Perks</div>
+                                    <div className="mt-1 flex flex-wrap gap-1.5">
+                                        {displayedPerks.length > 0 ? displayedPerks.map((perk) => (
+                                            <span key={perk} className="px-2 py-0.5 rounded-pill bg-md-sys-surface-container-high text-md-sys-on-surface text-label-xs font-semibold">
+                                                {perk}
+                                            </span>
+                                        )) : (
+                                            <span className="text-label-sm text-md-sys-on-surface/55">No perks selected.</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="space-y-3 pt-1">
+                                    <div>
+                                        <div className="text-label-xs font-bold uppercase opacity-55 mb-1">Edit Weapons</div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {CHARACTER_WEAPONS.map((weapon) => {
+                                                const selected = displayedCharacterWeapons.some((entry) => entry.toLowerCase() === weapon.toLowerCase());
+                                                const disabled = !selected && displayedCharacterWeapons.length >= MAX_PROSPECTOR_SLOTS;
+                                                return (
+                                                    <button
+                                                        key={weapon}
+                                                        type="button"
+                                                        disabled={disabled}
+                                                        onClick={() => updatePendingLoadout('characterWeapons', weapon)}
+                                                        className={`px-2 py-1 rounded-md text-label-sm font-semibold transition-all ${selected ? 'bg-success-soft text-success ring-1 ring-success/40' : 'mg-surface-high opacity-70 hover:opacity-100'} disabled:opacity-40`}
+                                                    >
+                                                        {weapon}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="text-label-xs font-bold uppercase opacity-55 mb-1">Edit Equipment</div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {CHARACTER_EQUIPMENT.map((equipment) => {
+                                                const selected = displayedCharacterEquipment.some((entry) => entry.toLowerCase() === equipment.toLowerCase());
+                                                const disabled = !selected && displayedCharacterEquipment.length >= MAX_PROSPECTOR_SLOTS;
+                                                return (
+                                                    <button
+                                                        key={equipment}
+                                                        type="button"
+                                                        disabled={disabled}
+                                                        onClick={() => updatePendingLoadout('characterEquipment', equipment)}
+                                                        className={`px-2 py-1 rounded-md text-label-sm font-semibold transition-all ${selected ? 'bg-success-soft text-success ring-1 ring-success/40' : 'mg-surface-high opacity-70 hover:opacity-100'} disabled:opacity-40`}
+                                                    >
+                                                        {equipment}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div className="flex-1 min-h-0 flex flex-col overflow-y-auto custom-scrollbar">
                             <OcrCorrectionModal
                                 isOpen={true}
                                 embedded={true}
-                                onClose={() => setActiveTab('result')}
-                                onAcceptAll={() => setShowWizard(null)}
-                                screenshots={wizardReviewScreenshots}
+                                onClose={() => React.startTransition(() => setActiveTab('result'))}
+                                onAcceptAll={() => {
+                                    setGuidedResultStep('save');
+                                    React.startTransition(() => setActiveTab('result'));
+                                }}
+                                screenshots={deferredWizardReviewScreenshots}
                             />
                         </div>
                     </div>
                 )}
 
                 <div className="p-4 flex justify-center border-t border-md-sys-outline/5">
-                    <button onClick={() => setShowWizard(null)} className="text-label-sm font-bold uppercase tracking-widest text-md-sys-on-surface/70 hover:text-md-sys-on-surface transition-colors flex items-center gap-2">
+                    <button
+                        onClick={() => {
+                            if (activeTab === 'ocr') {
+                                React.startTransition(() => setActiveTab('result'));
+                                return;
+                            }
+                            setShowWizard(null);
+                        }}
+                        className="text-label-sm font-bold uppercase tracking-widest text-md-sys-on-surface/70 hover:text-md-sys-on-surface transition-colors flex items-center gap-2"
+                    >
                         <CheckCircle2 size={14} />
-                        {activeTab === 'result' ? 'Abort Submission' : 'Close Review'}
+                        {activeTab === 'result' ? 'Abort Submission' : 'Back to Result'}
                     </button>
                 </div>
             </div>

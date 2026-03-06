@@ -72,7 +72,9 @@ export const Header: React.FC<HeaderProps> = ({
 
     const handleTopbarSmartCapture = async () => {
         try {
-            if (activeView !== 'recording') setActiveView('recording');
+            if (activeView !== 'recording') {
+                React.startTransition(() => setActiveView('recording'));
+            }
             const captureMatchId = resolveHeaderCaptureMatchId();
             const requestId = requestSmartCapture({
                 activeUser: activeUser || null,

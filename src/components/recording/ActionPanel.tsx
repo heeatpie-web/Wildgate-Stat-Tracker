@@ -60,6 +60,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const ocrMode = useAppStore(s => s.ocrMode);
     const discardMatch = useAppStore(s => s.discardMatch);
     const resultOcrFlowMode = useAppStore(s => s.resultOcrFlowMode);
+    const ocrAutoOpenAfterRerun = useAppStore(s => s.ocrAutoOpenAfterRerun);
     const selectedSmartCapturesMatchId = useAppStore(s => s.selectedMatchId);
     const ocrModeLabel = 'Local';
 
@@ -115,8 +116,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const queueScopeMatchId = selectedSmartCapturesMatchId ?? submissionMatchId;
     const pendingOcrCountGlobal = savedCaptures.filter(c => !c.ocrProcessed).length;
     const queuedCaptureCountForScope = queueScopeMatchId == null
-        ? savedCaptures.length
-        : savedCaptures.filter(c => String(c.matchId ?? '') === String(queueScopeMatchId)).length;
+        ? pendingOcrCountGlobal
+        : savedCaptures.filter(c => !c.ocrProcessed && String(c.matchId ?? '') === String(queueScopeMatchId)).length;
     const pendingOcrCountForSubmission = submissionMatchId == null
         ? pendingOcrCountGlobal
         : savedCaptures.filter(c => !c.ocrProcessed && String(c.matchId ?? '') === String(submissionMatchId)).length;
@@ -317,7 +318,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         }
     }, [isProcessing, pushNotification]);
 
-    // Auto-open the wizard OCR tab when processing completes and new pending data is available
+    // Rerun/queued OCR completion can open review automatically, but this is configurable.
     React.useEffect(() => {
         if (processingStatus?.phase !== 'completed') return;
         if (!pendingData) return;
@@ -325,8 +326,18 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         const dataKey = JSON.stringify(Object.keys(pendingData));
         if (autoOpenedForPendingRef.current === dataKey) return;
         autoOpenedForPendingRef.current = dataKey;
+        if (!ocrAutoOpenAfterRerun) {
+            pushNotification({
+                message: 'OCR completed. Review is available when you are ready.',
+                type: 'success',
+                source: 'smart-capture',
+                durationMs: 8_000,
+                deepLink: { type: 'openView', view: 'smart-captures' },
+            });
+            return;
+        }
         setShowWizard('Match Result');
-    }, [processingStatus?.phase, pendingData, setShowWizard]);
+    }, [ocrAutoOpenAfterRerun, pendingData, processingStatus?.phase, pushNotification, setShowWizard]);
 
     React.useEffect(() => {
         const onMatchComplete = (evt: Event) => {

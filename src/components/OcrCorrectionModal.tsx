@@ -1062,6 +1062,12 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         });
 
         announce(`Applied ${corrected + added} correction decisions.`, 'polite');
+        setToast({
+            message: closeAfterApply
+                ? `OCR review applied: ${corrected + added} player decisions saved.`
+                : `OCR review applied: ${corrected + added} player decisions ready to save.`,
+            type: 'success',
+        });
         if (closeAfterApply) {
             onAcceptAll();
         }

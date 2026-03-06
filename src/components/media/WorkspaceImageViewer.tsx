@@ -88,13 +88,49 @@ export const WorkspaceImageViewer: React.FC<WorkspaceImageViewerProps> = ({
         onActiveIndexChange((clampedIndex + 1) % safeImages.length);
     }, [clampedIndex, hasImages, onActiveIndexChange, safeImages.length]);
 
-    const adjustZoom = useCallback((nextZoom: number) => {
-        const bounded = clamp(nextZoom, 1, 4);
-        setZoom(bounded);
-        if (bounded <= 1.02) {
-            setPan({ x: 0, y: 0 });
+    const clampPanToStage = useCallback((
+        nextPan: { x: number; y: number },
+        nextZoom: number,
+        stageRect: DOMRect | null = stageRef.current?.getBoundingClientRect() || null
+    ) => {
+        if (!stageRect || nextZoom <= 1.02) {
+            return { x: 0, y: 0 };
         }
+        const maxOffsetX = Math.max(0, (stageRect.width * (nextZoom - 1)) / 2);
+        const maxOffsetY = Math.max(0, (stageRect.height * (nextZoom - 1)) / 2);
+        return {
+            x: clamp(nextPan.x, -maxOffsetX, maxOffsetX),
+            y: clamp(nextPan.y, -maxOffsetY, maxOffsetY),
+        };
     }, []);
+
+    const adjustZoom = useCallback((
+        nextZoom: number,
+        origin?: { x: number; y: number }
+    ) => {
+        const stageRect = stageRef.current?.getBoundingClientRect() || null;
+        setZoom((previousZoom) => {
+            const bounded = clamp(nextZoom, 1, 4);
+            setPan((previousPan) => {
+                if (bounded <= 1.02) {
+                    return { x: 0, y: 0 };
+                }
+                if (!stageRect || !origin) {
+                    return clampPanToStage(previousPan, bounded, stageRect);
+                }
+                const stageCenterX = stageRect.width / 2;
+                const stageCenterY = stageRect.height / 2;
+                const relativeX = origin.x - stageCenterX - previousPan.x;
+                const relativeY = origin.y - stageCenterY - previousPan.y;
+                const scaleRatio = bounded / previousZoom;
+                return clampPanToStage({
+                    x: previousPan.x - (relativeX * (scaleRatio - 1)),
+                    y: previousPan.y - (relativeY * (scaleRatio - 1)),
+                }, bounded, stageRect);
+            });
+            return bounded;
+        });
+    }, [clampPanToStage]);
 
     const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
         if (!canPan) return;
@@ -112,24 +148,33 @@ export const WorkspaceImageViewer: React.FC<WorkspaceImageViewerProps> = ({
         if (isDragging && dragStart) {
             event.preventDefault();
             dragMovedRef.current = true;
-            setPan({
+            setPan(clampPanToStage({
                 x: event.clientX - dragStart.x,
                 y: event.clientY - dragStart.y,
-            });
+            }, zoom));
         }
-    }, [currentImage, dragStart, isDragging]);
+    }, [clampPanToStage, currentImage, dragStart, isDragging, zoom]);
 
     const stopDragging = useCallback(() => {
         setIsDragging(false);
         setDragStart(null);
     }, []);
 
-    const handleStageClick = useCallback(() => {
+    const handleStageClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
         if (dragMovedRef.current) {
             dragMovedRef.current = false;
             return;
         }
-        adjustZoom(zoom > 1.02 ? 1 : 2);
+        const stageRect = stageRef.current?.getBoundingClientRect();
+        adjustZoom(
+            zoom > 1.02 ? 1 : 2,
+            stageRect
+                ? {
+                    x: event.clientX - stageRect.left,
+                    y: event.clientY - stageRect.top,
+                }
+                : undefined
+        );
     }, [adjustZoom, zoom]);
 
     const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {

@@ -4,6 +4,8 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Ba
 import { Zap, Trophy, TrendingUp, TrendingDown } from 'lucide-react';
 import { generateEnvironmentEditorial } from '../../utils/analyticsEditorial';
 
+const MIN_HAZARD_SAMPLE_SIZE = 3;
+
 const getColor = (name: string) => {
     if (!name) return PIE_COLORS[0];
     let hash = 0;
@@ -31,9 +33,13 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
     const overallWR = matches.length > 0 ? Math.round((matches.filter(m => m.result === 'Win').length / matches.length) * 100) : 0;
 
     const data = Object.entries(stats).map(([name, s]) => ({
-        name, total: s.total, winRate: Math.round((s.wins / s.total) * 100),
-        wins: s.wins, losses: s.total - s.wins,
-        impact: Math.round((s.wins / s.total) * 100) - overallWR
+        name,
+        total: s.total,
+        winRate: Math.round((s.wins / s.total) * 100),
+        wins: s.wins,
+        losses: s.total - s.wins,
+        impact: Math.round((s.wins / s.total) * 100) - overallWR,
+        isLowSample: s.total < MIN_HAZARD_SAMPLE_SIZE,
     })).sort((a, b) => b.total - a.total);
 
     return (
@@ -56,13 +62,28 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
                             className={`md3-card rounded-xl ${dense ? 'p-2' : 'p-3'} text-center transition-all ${onDrillDown ? 'hover:border-md-sys-primary/25 hover:bg-md-sys-surface-container-highest' : ''}`}
                         >
                             <div className="text-label-xs font-black uppercase opacity-40 truncate mb-1">{d.name}</div>
-                            <div className={`text-body font-black flex items-center justify-center gap-1 ${d.impact >= 0 ? 'text-md-sys-primary' : 'text-md-sys-on-surface/60'}`}>
-                                {d.impact >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                                {d.impact >= 0 ? '+' : ''}{d.impact}%
-                            </div>
-                            <div className="text-label-xs opacity-40 font-bold">vs avg WR</div>
+                            {d.isLowSample ? (
+                                <>
+                                    <div className="text-body font-black text-md-sys-on-surface/60">Low sample</div>
+                                    <div className="text-label-xs opacity-40 font-bold">Need 3 matches</div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className={`text-body font-black flex items-center justify-center gap-1 ${d.impact >= 0 ? 'text-md-sys-primary' : 'text-md-sys-on-surface/60'}`}>
+                                        {d.impact >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                                        {d.impact >= 0 ? '+' : ''}{d.impact}%
+                                    </div>
+                                    <div className="text-label-xs opacity-40 font-bold">vs avg WR</div>
+                                </>
+                            )}
                         </button>
                     ))}
+                </div>
+            )}
+
+            {data.some((entry) => entry.isLowSample) && (
+                <div className="rounded-control border border-warning-soft bg-warning-soft px-3 py-2 text-label-sm text-warning">
+                    Hazards with fewer than 3 matches stay visible, but their win rates are treated as low-sample signals.
                 </div>
             )}
 
@@ -83,7 +104,7 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
                             <YAxis dataKey="name" type="category" width={90} tick={{ fontSize: 9, fontWeight: 'bold', fill: 'var(--md-sys-color-on-surface-variant)' }} axisLine={false} tickLine={false} />
                             <Tooltip cursor={{ fill: 'var(--md-sys-color-surface3)', opacity: 0.4 }} contentStyle={{ backgroundColor: 'var(--md-sys-color-surface1)', borderRadius: '12px', border: 'none' }} />
                             <Bar dataKey="winRate" name="Win Rate %" radius={[0, 4, 4, 0]}>
-                                {data.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.winRate >= 50 ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-surface-variant)'} />))}
+                                {data.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.isLowSample ? 'var(--md-sys-color-surface-variant)' : (entry.winRate >= 50 ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-surface-variant)')} />))}
                                 <LabelList dataKey="winRate" position="right" formatter={(v: number) => `${v}%`} style={{ fontSize: 9, fontWeight: 'bold', fill: 'var(--md-sys-color-on-surface)' }} />
                             </Bar>
                         </BarChart>
@@ -122,11 +143,11 @@ export const EnvironmentView: React.FC<EnvironmentViewProps> = ({ matches, visua
                             >
                                 <div className="min-w-0">
                                     <div className="text-label-sm font-bold text-md-sys-on-surface truncate">{row.name}</div>
-                                    <div className="text-label-xs text-md-sys-on-surface/55">{row.total} matches</div>
+                                    <div className="text-label-xs text-md-sys-on-surface/55">{row.total} matches{row.isLowSample ? ' · low sample' : ''}</div>
                                 </div>
                                 <div className="shrink-0 text-right">
-                                    <div className={`text-label-sm font-black ${row.winRate >= overallWR ? 'text-md-sys-primary' : 'text-danger'}`}>{row.winRate}%</div>
-                                    <div className="text-label-xs text-md-sys-on-surface/45">{row.impact > 0 ? '+' : ''}{row.impact}pp</div>
+                                    <div className={`text-label-sm font-black ${row.isLowSample ? 'text-md-sys-on-surface/60' : (row.winRate >= overallWR ? 'text-md-sys-primary' : 'text-danger')}`}>{row.isLowSample ? 'Low sample' : `${row.winRate}%`}</div>
+                                    <div className="text-label-xs text-md-sys-on-surface/45">{row.isLowSample ? 'Need 3 matches' : `${row.impact > 0 ? '+' : ''}${row.impact}pp`}</div>
                                 </div>
                             </button>
                         ))}

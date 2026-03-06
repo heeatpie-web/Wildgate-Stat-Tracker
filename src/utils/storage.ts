@@ -1,6 +1,6 @@
 import { getElectronAPI } from './electronAPI';
 import type { Match, UidMappingsContract } from '../types';
-import type { TimelineEvent } from '../store/slices/createDataSlice';
+import type { PendingReview, TimelineEvent } from '../store/slices/createDataSlice';
 import type { OcrCorrection, PlayerProfile, TeamIdentityCorrection } from '../store/slices/createMappingSlice';
 import type { OcrAliasModel, OcrLearningEvent, OcrLearningQueueItem } from './ocrAliasEngine';
 import { normalizeSharedUidMappings } from '../services/mappingContract';
@@ -50,6 +50,7 @@ export interface StorageData {
   ocrAliasModel?: OcrAliasModel;
   ocrLearningEvents?: OcrLearningEvent[];
   ocrLearningQueue?: OcrLearningQueueItem[];
+  pendingReviews?: PendingReview[];
   settings: StorageSettings;
   layouts: StorageLayouts;
   lastActivity: number;
@@ -135,6 +136,9 @@ const toLayouts = (value: unknown): StorageLayouts => {
 const toTimelineEvents = (value: unknown): TimelineEvent[] =>
   Array.isArray(value) ? value.filter((item): item is TimelineEvent => isRecord(item)) : [];
 
+const toPendingReviews = (value: unknown): PendingReview[] =>
+  Array.isArray(value) ? value.filter((item): item is PendingReview => isRecord(item)) : [];
+
 const toPlayerProfiles = (value: unknown): Record<string, PlayerProfile> => {
   if (!isRecord(value)) return {};
   const profiles: Record<string, PlayerProfile> = {};
@@ -213,6 +217,7 @@ const createDefaultStorageData = (): StorageData => ({
   pilotRegistry: [],
   favorites: [],
   pilotNotes: {},
+  pendingReviews: [],
   settings: {},
   layouts: {},
   lastActivity: Date.now(),
@@ -264,6 +269,7 @@ const coerceStorageData = (value: unknown): StorageData | null => {
     ocrLearningQueue: Array.isArray(value.ocrLearningQueue)
       ? value.ocrLearningQueue.filter((item): item is OcrLearningQueueItem => isRecord(item))
       : [],
+    pendingReviews: toPendingReviews(value.pendingReviews),
     settings: isRecord(value.settings) ? { ...value.settings } : {},
     layouts: toLayouts(value.layouts),
     lastActivity: toNumberOr(value.lastActivity, Date.now()),

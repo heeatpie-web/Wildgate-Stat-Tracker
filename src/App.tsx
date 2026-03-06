@@ -457,7 +457,7 @@ const App: React.FC = () => {
             recordOcrAliasCorrection(source, target, {
                 source: 'manual_correction',
                 context: 'matchstats',
-                confidenceWeight: Math.max(1, Number(review.bestScore || 0) / 100),
+                confidenceWeight: Math.min(1, Math.max(0.6, Number(review.bestScore || 0) / 100)),
             });
             const hasTarget = pilotRegistry.some((name) => (
                 normalizeOcrName(name).toLowerCase() === target.toLowerCase()
@@ -498,7 +498,6 @@ const App: React.FC = () => {
         const minScorePct = Math.round((Number(ocrAutoApplyMinScore) || 0.83) * 100);
         const autoMergeEligible = (pendingReviews || []).filter((review) => (
             review.type === 'roster_candidate'
-            && review.source !== 'ocr'
             && Number(review.bestScore || 0) >= minScorePct
             && String(review.bestMatch || '').trim().length > 0
         ));
@@ -515,7 +514,7 @@ const App: React.FC = () => {
             recordOcrAliasCorrection(source, target, {
                 source: 'manual_correction',
                 context: 'matchstats',
-                confidenceWeight: Math.max(1, Number(review.bestScore || 0) / 100),
+                confidenceWeight: Math.min(1, Math.max(0.6, Number(review.bestScore || 0) / 100)),
             });
 
             const hasTarget = pilotRegistry.some((name) => (
@@ -2374,9 +2373,11 @@ const App: React.FC = () => {
 
                             <main className="flex-1 overflow-hidden bg-md-sys-surface rounded-card">
                                 <Suspense fallback={viewFallback}>
-                                    <div key={activeView} className="h-full app-view-transition">
-                                        {renderActiveView()}
-                                    </div>
+                                    <ErrorBoundary>
+                                        <div className="h-full app-view-transition">
+                                            {renderActiveView()}
+                                        </div>
+                                    </ErrorBoundary>
                                 </Suspense>
                             </main>
                         </div>

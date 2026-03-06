@@ -3,43 +3,13 @@
  * Maps OCR-extracted text to game constants
  */
 
-import { UI_REACH_MODIFIERS, SHIPS, CHARACTERS } from '../constants';
+import { REACH_MODIFIER_ALIAS_MAP, UI_REACH_MODIFIERS, SHIPS, CHARACTERS } from '../constants';
 
 /**
  * Maps OCR text (uppercase) to UI_REACH_MODIFIERS constants
  * Handles variations in how modifiers appear in-game
  */
-export const REACH_MODIFIER_MAP: Record<string, string> = {
-  // Artifact modifiers
-  "HEALING ARTIFACT": "Artifact: Healing",
-  "ARTIFACT HEALING": "Artifact: Healing",
-  "ICE ARTIFACT": "Artifact: Ice",
-  "ARTIFACT ICE": "Artifact: Ice",
-  "WEAPON ARTIFACT": "Artifact: Weapon",
-  "ARTIFACT WEAPON": "Artifact: Weapon",
-
-  // Standard modifiers
-  "ANCIENT VAULT": "Ancient Vault",
-  "CRYON REACH": "Cryon Reach",
-  "DEAD SENSORS": "Dead Sensors",
-  "DEADWORLDS": "Deadworlds",
-  "EASY LOOT": "Easy Loot",
-  "EPIC LOOT": "Epic Loot",
-  "FAST GATE": "Fast Gate",
-  "FEW ASTEROIDS": "Few asteroids",
-  "FEW SHIPS": "Few Ships",
-  "GLOAMING EXPANSE": "Gloaming Expanse",
-  "HAUNTED STORM": "Haunted Storm",
-  "ICE STORM": "Ice Storm",
-  "LAVA EPICS": "Lava Epics",
-  "LEECH SWARMS": "Leech Swarms",
-  "LEGION PATROLS": "Legion Patrols",
-  "LOW ALTITUDE FOG": "Low altitude fog",
-  "LOW LATITUDE FOG": "Low altitude fog",
-  "MANY ASTEROIDS": "Many asteroids",
-  "ROGUE TURRETS": "Rogue Turrets",
-  "SANDSTORM": "Sandstorm",
-};
+export const REACH_MODIFIER_MAP: Record<string, string> = REACH_MODIFIER_ALIAS_MAP;
 
 /**
  * Maps OCR ship text to SHIPS constants

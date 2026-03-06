@@ -6,6 +6,7 @@ import { useUIState } from '../../providers/UIStateProvider';
 import { useAppStore } from '../../store/useAppStore';
 import { getShipColor } from '../../types';
 import { normalizeOcrName, similarityScore } from '../../utils/stringUtils';
+import { getMaxTeammatesForShip } from '../../utils/teamLimits';
 
 export const RosterPanel: React.FC = () => {
     const { activeUser, setToast } = useUIState();
@@ -17,6 +18,7 @@ export const RosterPanel: React.FC = () => {
         toggleTeammate,
         selectedOpponents,
         toggleOpponent,
+        activeShip,
         addToRegistry: onAddPilot,
         toggleFavorite: onToggleFavorite,
         updatePilotNote: onUpdateNote,
@@ -50,6 +52,7 @@ export const RosterPanel: React.FC = () => {
     const [mergeSearch, setMergeSearch] = useState("");
     const [mergeKeepName, setMergeKeepName] = useState<string | null>(null);
     const [newAlias, setNewAlias] = useState("");
+    const [teammateLimitError, setTeammateLimitError] = useState('');
     const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
     const removeOcrAliasCorrection = useAppStore(s => s.removeOcrAliasCorrection);
     const pendingMatchData = useAppStore(s => s.pendingMatchData);
@@ -65,6 +68,8 @@ export const RosterPanel: React.FC = () => {
         normalizeOcrName(name || '').toLowerCase() !== normalizedActiveUser
     ));
     const teammateDisplayCount = visibleTeammates.length + (normalizedActiveUser ? 1 : 0);
+    const maxTeammates = getMaxTeammatesForShip(activeShip || pendingMatchData?.ship || '');
+    const activeShipLabel = String(activeShip || pendingMatchData?.ship || 'Current ship').trim() || 'Current ship';
 
     // Manual lobby scan UI removed; Smart Capture auto-detects and applies roster/modifiers.
 
@@ -113,6 +118,24 @@ export const RosterPanel: React.FC = () => {
         }
         return a.localeCompare(b);
     });
+
+    const tryToggleTeammate = (pilotName: string) => {
+        const normalizedPilot = normalizeOcrName(pilotName || '').toLowerCase();
+        const isAlreadySelected = selectedTeammates.some((entry: string) => normalizeOcrName(entry || '').toLowerCase() === normalizedPilot);
+        if (isAlreadySelected) {
+            setTeammateLimitError('');
+            toggleTeammate(pilotName);
+            return;
+        }
+        if (visibleTeammates.length >= maxTeammates) {
+            const message = `${activeShipLabel} already has the maximum of ${maxTeammates} teammate${maxTeammates === 1 ? '' : 's'}.`;
+            setTeammateLimitError(message);
+            setToast({ message, type: 'warning' });
+            return;
+        }
+        setTeammateLimitError('');
+        toggleTeammate(pilotName);
+    };
 
     const openEditModal = (pilot: string) => {
         setEditingPilot(pilot);
@@ -240,7 +263,7 @@ export const RosterPanel: React.FC = () => {
                             {visibleTeammates.map((p: string) => (
                                 <button
                                     key={p}
-                                    onClick={() => toggleTeammate(p)}
+                                    onClick={() => tryToggleTeammate(p)}
                                     className="md3-chip md3-chip--selected roster-teammate-chip px-2 py-1 text-label-xs font-semibold"
                                 >
                                     {displayName(p)}
@@ -251,6 +274,11 @@ export const RosterPanel: React.FC = () => {
                         <div className="roster-you-chip flex items-center gap-2 rounded-control px-2 py-1.5">
                             <span className="w-2 h-2 rounded-full bg-success" />
                             <span className="text-label-sm font-semibold text-success">YOU</span>
+                        </div>
+                    )}
+                    {teammateLimitError && (
+                        <div className="rounded-control border border-warning-soft bg-warning-soft px-2 py-1 text-label-xs font-semibold text-warning">
+                            {teammateLimitError}
                         </div>
                     )}
                 </div>
@@ -437,7 +465,7 @@ export const RosterPanel: React.FC = () => {
                                     <button onClick={() => openEditModal(p)} className="md3-icon-btn md3-icon-btn--small w-7 h-7 min-w-7 hover:bg-md-sys-primary hover:text-md-sys-onPrimary" title="Edit" aria-label={`Edit ${p}`}>
                                         <Edit2 size={12} />
                                     </button>
-                                    <button onClick={() => toggleTeammate(p)} className="h-7 w-8 rounded-control text-label-xs font-bold bg-success-soft text-success hover:bg-success hover:text-on-scrim transition-colors flex items-center justify-center shrink-0" title="Add as Teammate">
+                                    <button onClick={() => tryToggleTeammate(p)} className="h-7 w-8 rounded-control text-label-xs font-bold bg-success-soft text-success hover:bg-success hover:text-on-scrim transition-colors flex items-center justify-center shrink-0" title="Add as Teammate">
                                         TM
                                     </button>
                                     <button onClick={() => toggleOpponent(p)} className="h-7 w-8 rounded-control text-label-xs font-bold bg-danger-soft text-danger hover:bg-danger hover:text-on-scrim transition-colors flex items-center justify-center shrink-0" title="Add as Hostile">
@@ -471,7 +499,7 @@ export const RosterPanel: React.FC = () => {
                         onClick={() => {
                             if (newPilotName.trim()) {
                                 onAddPilot(newPilotName.trim());
-                                toggleTeammate(newPilotName.trim());
+                                tryToggleTeammate(newPilotName.trim());
                                 setNewPilotName("");
                             }
                         }}
