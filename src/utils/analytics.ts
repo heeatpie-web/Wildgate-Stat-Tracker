@@ -6,6 +6,7 @@
  * Requires >= 5 valid matches to produce results.
  */
 import { Match, CHARACTERS, SHIPS, Insight, UI_REACH_MODIFIERS, TimePatternData, StreakData, StreakPoint, SessionSummaryData, DaySummary, PeriodComparisonData, PeriodStats, KillEfficiencyData, PlacementData, MomentumData } from '../types';
+import { getMatchEquipment, getMatchPerks, getMatchProspectorWeapons, getMatchShipWeapons } from '../components/patch/patchEntityCatalog';
 
 const isCompletedMatch = (match: Match): boolean => match.result !== 'Ongoing';
 
@@ -401,10 +402,10 @@ export const calculateLoadoutAnalytics = (matches: Match[]): {
     validMatches.forEach(m => {
         const loadout = m.loadout || { weapons: [], equipment: [], characterWeapons: [], characterEquipment: [] };
         const loadoutEntries = Array.from(new Set([
-            ...(loadout.weapons || []),
-            ...(loadout.characterWeapons || []),
-            ...(loadout.equipment || []),
-            ...(loadout.characterEquipment || []),
+            ...getMatchShipWeapons(m),
+            ...getMatchProspectorWeapons(m),
+            ...getMatchEquipment(m),
+            ...getMatchPerks(m),
         ].map((entry) => String(entry || '').trim()).filter(Boolean)));
         const isWin = m.result === 'Win';
         const damage = Number(m.damageTaken) || 0;
@@ -420,8 +421,8 @@ export const calculateLoadoutAnalytics = (matches: Match[]): {
 
         const hero = String(m.hero || 'Unknown').trim() || 'Unknown';
         const ship = String((m.ship || 'Unknown')).split('(')[0].trim() || 'Unknown';
-        const comboWeapons = (loadout.characterWeapons || loadout.weapons || []).map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 2);
-        const comboEquipment = (loadout.characterEquipment || loadout.equipment || []).map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 2);
+        const comboWeapons = getMatchProspectorWeapons(m).slice(0, 2);
+        const comboEquipment = getMatchEquipment(m).slice(0, 2);
         const comboKey = `${hero}|${ship}|W:${comboWeapons.join(',') || '--'}|E:${comboEquipment.join(',') || '--'}`;
         if (!comboStatsRaw[comboKey]) {
             comboStatsRaw[comboKey] = { wins: 0, total: 0, hero, ship };

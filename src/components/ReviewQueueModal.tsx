@@ -290,6 +290,11 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             const autoMergeTarget = normalizeName(review.bestMatch || '');
             const autoMergeScore = Number(review.bestScore || 0);
             if (autoMergeTarget && autoMergeScore >= AUTO_MERGE_APPROVAL_THRESHOLD) {
+                recordOcrAliasCorrection(review.value, autoMergeTarget, {
+                    source: 'review_modal',
+                    context: 'unknown',
+                    confidenceWeight: 1,
+                });
                 replaceNameInSession(review.value, autoMergeTarget);
                 addToRegistry(autoMergeTarget);
                 removePendingReview(review.id);
@@ -366,6 +371,13 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
         if (review.type === 'player_name' || review.type === 'roster_candidate') {
             replaceNameInSession(review.value, normalizedEditValue);
         }
+        if (review.type === 'roster_candidate' && normalizeName(review.value) !== normalizedEditValue) {
+            recordOcrAliasCorrection(review.value, normalizedEditValue, {
+                source: 'review_modal',
+                context: 'unknown',
+                confidenceWeight: 1,
+            });
+        }
 
         if (review.type === 'player_name' || review.type === 'roster_candidate') {
             addToRegistry(normalizedEditValue);
@@ -389,6 +401,11 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             announce('No best match is available yet.', 'assertive');
             return;
         }
+        recordOcrAliasCorrection(review.value, target, {
+            source: 'review_modal',
+            context: 'unknown',
+            confidenceWeight: 1,
+        });
         replaceNameInSession(review.value, target);
         addToRegistry(target);
         removePendingReview(review.id);
@@ -420,6 +437,11 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             autoApprovedRosterIdsRef.current.add(review.id);
             const target = normalizeName(review.bestMatch || '');
             const score = Number(review.bestScore || 0);
+            recordOcrAliasCorrection(review.value, target, {
+                source: 'review_modal',
+                context: 'unknown',
+                confidenceWeight: 1,
+            });
             replaceNameInSession(review.value, target);
             addToRegistry(target);
             removePendingReview(review.id);

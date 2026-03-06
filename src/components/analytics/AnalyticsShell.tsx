@@ -145,7 +145,11 @@ export const AnalyticsShell: React.FC = () => {
     const filterSelectClassName = 'px-2.5 py-1.5 rounded-control border border-md-sys-outline/20 bg-md-sys-surface text-md-sys-on-surface text-label-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-md-sys-primary';
 
     const onDrillDown = (name: string, type: DrillDownTarget['type']) => {
-        setDrillDownTarget({ name, type });
+        setDrillDownTarget({
+            name,
+            type,
+            matchIds: data.filteredMatches.map((match) => Number(match.id)).filter((id) => Number.isFinite(id)),
+        });
     };
 
     const navigateTo = (view: AnalyticsView) => setCurrentView(view);

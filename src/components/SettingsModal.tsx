@@ -183,7 +183,6 @@ const SettingsModalContent: React.FC = () => {
     const [aliasFrom, setAliasFrom] = useState('');
     const [aliasTo, setAliasTo] = useState('');
     const [showRoiEditor, setShowRoiEditor] = useState(false);
-    const [showAdvancedRoiInputs, setShowAdvancedRoiInputs] = useState(false);
     const [pendingSuspiciousAliasPair, setPendingSuspiciousAliasPair] = useState<string | null>(null);
     const [thresholdRecBusy, setThresholdRecBusy] = useState(false);
     const [thresholdRecommendation, setThresholdRecommendation] = useState<ThresholdRecommendationPayload | null>(null);
@@ -238,7 +237,6 @@ const SettingsModalContent: React.FC = () => {
     useEffect(() => {
         if (!showSettings) {
             setShowRoiEditor(false);
-            setShowAdvancedRoiInputs(false);
             setSettingsSearch('');
         }
     }, [showSettings]);
@@ -535,82 +533,6 @@ const SettingsModalContent: React.FC = () => {
             };
         })
         .sort((a, b) => b.switchCount - a.switchCount);
-    type CrewRegionKey = keyof OcrRegionSettings['crewHub'];
-    type MapRegionKey = keyof OcrRegionSettings['mapScreen'];
-    const regionLabels: Record<CrewRegionKey | MapRegionKey, string> = {
-        leftPanel: 'Left Panel',
-        enemyPanel: 'Enemy Panel',
-        teamHeader: 'Team Header',
-        enemyName: 'Enemy Name Band',
-        yourShip: 'Your Ship',
-        enemyShips: 'Enemy Ships #1',
-        enemyShips2: 'Enemy Ships #2',
-        enemyShips3: 'Enemy Ships #3',
-        enemyShips4: 'Enemy Ships #4',
-        hazards: 'Hazards',
-        players: 'Players',
-    };
-    const regionFields: Array<keyof OcrRegionBounds> = ['xMin', 'xMax', 'yMin', 'yMax'];
-    const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
-    const normalizeRegionBounds = (bounds: OcrRegionBounds): OcrRegionBounds => {
-        let xMin = clamp01(bounds.xMin);
-        let xMax = clamp01(bounds.xMax);
-        let yMin = clamp01(bounds.yMin);
-        let yMax = clamp01(bounds.yMax);
-        if (xMin >= xMax) {
-            if (xMin >= 1) xMin = Math.max(0, xMax - 0.01);
-            else xMax = Math.min(1, xMin + 0.01);
-        }
-        if (yMin >= yMax) {
-            if (yMin >= 1) yMin = Math.max(0, yMax - 0.01);
-            else yMax = Math.min(1, yMin + 0.01);
-        }
-        return { xMin, xMax, yMin, yMax };
-    };
-    const toPercent = (value: number) => Math.round((value || 0) * 1000) / 10;
-    const updateCrewRegionField = (region: CrewRegionKey, field: keyof OcrRegionBounds, rawPercent: string) => {
-        const parsed = Number(rawPercent);
-        if (!Number.isFinite(parsed)) return;
-        const current = ocrRegions.crewHub[region];
-        const next = normalizeRegionBounds({
-            ...current,
-            [field]: clamp01(parsed / 100),
-        });
-        setOcrRegions({
-            crewHub: {
-                [region]: next,
-            } as Partial<OcrRegionSettings['crewHub']>,
-        });
-    };
-    const updateMapRegionField = (region: MapRegionKey, field: keyof OcrRegionBounds, rawPercent: string) => {
-        const parsed = Number(rawPercent);
-        if (!Number.isFinite(parsed)) return;
-        const current = ocrRegions.mapScreen[region];
-        const next = normalizeRegionBounds({
-            ...current,
-            [field]: clamp01(parsed / 100),
-        });
-        setOcrRegions({
-            mapScreen: {
-                [region]: next,
-            } as Partial<OcrRegionSettings['mapScreen']>,
-        });
-    };
-    const crewHubRegionKeys: CrewRegionKey[] = [
-        'leftPanel',
-        'enemyPanel',
-        'teamHeader',
-        'enemyName',
-    ];
-    const mapRegionKeys: MapRegionKey[] = [
-        'yourShip',
-        'enemyShips',
-        'enemyShips2',
-        'enemyShips3',
-        'enemyShips4',
-        'hazards',
-        'players',
-    ];
     const applyVisualRoiRegions = useCallback((nextRegions: OcrRegionSettings) => {
         setOcrRegions({
             crewHub: { ...nextRegions.crewHub },
@@ -1551,74 +1473,9 @@ const SettingsModalContent: React.FC = () => {
                                 </div>
                                 <div className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface p-3">
                                     <div className="text-label-sm opacity-70">
-                                        Most users should use the Visual Editor. Manual coordinates are optional precision controls.
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowAdvancedRoiInputs((current) => !current)}
-                                        className="mt-2 md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
-                                        aria-expanded={showAdvancedRoiInputs}
-                                        aria-controls="settings-advanced-roi-inputs"
-                                    >
-                                        {showAdvancedRoiInputs ? 'Hide Advanced ROI Coordinates' : 'Show Advanced ROI Coordinates'}
-                                    </button>
-                                </div>
-
-                            {showAdvancedRoiInputs && (
-                                <div id="settings-advanced-roi-inputs" className="space-y-3">
-                                    <div className="md3-surface rounded-card border border-md-sys-outline/10 p-3 space-y-2">
-                                        <div className="text-label-sm font-bold">Crew Hub Regions</div>
-                                        {crewHubRegionKeys.map((regionKey) => {
-                                            const bounds = ocrRegions.crewHub[regionKey];
-                                            return (
-                                                <div key={regionKey} className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
-                                                    <div className="text-label-sm font-semibold opacity-60 md:col-span-1">{regionLabels[regionKey]}</div>
-                                                    {regionFields.map((field) => (
-                                                        <label key={`${regionKey}-${field}`} className="flex flex-col gap-1">
-                                                            <span className="text-label-xs font-mono opacity-60">{field} %</span>
-                                                            <input
-                                                                type="number"
-                                                                min={0}
-                                                                max={100}
-                                                                step={0.5}
-                                                                value={toPercent(bounds[field])}
-                                                                onChange={(e) => updateCrewRegionField(regionKey, field, e.target.value)}
-                                                                className="h-9 md3-surface-low rounded-control px-2 text-label-sm outline-none border border-md-sys-outline/20"
-                                                            />
-                                                        </label>
-                                                    ))}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-
-                                    <div className="md3-surface rounded-card border border-md-sys-outline/10 p-3 space-y-2">
-                                        <div className="text-label-sm font-bold">Map Screen Regions</div>
-                                        {mapRegionKeys.map((regionKey) => {
-                                            const bounds = ocrRegions.mapScreen[regionKey];
-                                            return (
-                                                <div key={regionKey} className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
-                                                    <div className="text-label-sm font-semibold opacity-60 md:col-span-1">{regionLabels[regionKey]}</div>
-                                                    {regionFields.map((field) => (
-                                                        <label key={`${regionKey}-${field}`} className="flex flex-col gap-1">
-                                                            <span className="text-label-xs font-mono opacity-60">{field} %</span>
-                                                            <input
-                                                                type="number"
-                                                                min={0}
-                                                                max={100}
-                                                                step={0.5}
-                                                                value={toPercent(bounds[field])}
-                                                                onChange={(e) => updateMapRegionField(regionKey, field, e.target.value)}
-                                                                className="h-9 md3-surface-low rounded-control px-2 text-label-sm outline-none border border-md-sys-outline/20"
-                                                            />
-                                                        </label>
-                                                    ))}
-                                                </div>
-                                            );
-                                        })}
+                                        Most users should use the Visual Editor. Advanced coordinate tuning is now treated as a diagnostics workflow instead of a primary settings surface.
                                     </div>
                                 </div>
-                            )}
                         </div>
                         </section>
                     )}

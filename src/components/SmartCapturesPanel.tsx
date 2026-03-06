@@ -3247,7 +3247,7 @@ const SmartMatchDetail: React.FC<{
                                         {statusIcon}
                                         {statusMeta.label}
                                     </span>
-                                    {match.ocrReviewedAt && (
+                                    {match.ocrReviewedAt && queueStatus.key !== 'Resolved' && (
                                         <span
                                             className="sc-detail-chip bg-success-soft text-success"
                                             title={`Reviewed at ${new Date(match.ocrReviewedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}

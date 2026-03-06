@@ -295,6 +295,14 @@ export const Wizard: React.FC = () => {
     }, [isWizardOpen, pendingMatchData, sessionShipTypes]);
 
     const defeatedTeams = React.useMemo(() => {
+        const normalizeKey = (value: string | null | undefined) => String(value || '').trim().toLowerCase();
+        const activePlayerKey = normalizeKey(activeUser || pendingMatchData?.player || '');
+        const friendlyKeys = new Set(
+            [
+                activePlayerKey,
+                ...(Array.isArray(pendingMatchData?.teammates) ? pendingMatchData.teammates.map((name) => normalizeKey(name)) : []),
+            ].filter(Boolean)
+        );
         const fromOpponentTeams = Array.isArray(pendingMatchData?.opponentTeams)
             ? pendingMatchData.opponentTeams.map((team) => ({
                 teamName: String(team.teamName || '').trim() || 'Unknown Team',
@@ -303,14 +311,24 @@ export const Wizard: React.FC = () => {
                 color: String(team.color || '').trim(),
             }))
             : [];
-        if (fromOpponentTeams.length > 0) return fromOpponentTeams;
-        return Object.entries(sessionTeams || {}).map(([teamName, players]) => ({
+        const filteredTeams = (fromOpponentTeams.length > 0 ? fromOpponentTeams : Object.entries(sessionTeams || {}).map(([teamName, players]) => ({
             teamName,
             shipType: String(sessionShipTypes?.[teamName] || '').trim(),
             players: (players || []).map((p) => String(p || '').trim()).filter(Boolean),
             color: teamName,
-        }));
-    }, [pendingMatchData?.opponentTeams, sessionShipTypes, sessionTeams]);
+        })))
+            .filter((team) => !team.players.some((player) => friendlyKeys.has(normalizeKey(player))));
+        const deduped = new Map<string, typeof filteredTeams[number]>();
+        filteredTeams.forEach((team) => {
+            const dedupeKey = String(getPrimaryEliminatedByTeamValue(team) || getEliminatorDisplayLabel(team) || team.teamName || '').trim().toLowerCase();
+            if (!dedupeKey) return;
+            const existing = deduped.get(dedupeKey);
+            if (!existing || (!existing.shipType && team.shipType)) {
+                deduped.set(dedupeKey, team);
+            }
+        });
+        return Array.from(deduped.values());
+    }, [activeUser, pendingMatchData?.opponentTeams, pendingMatchData?.player, pendingMatchData?.teammates, sessionShipTypes, sessionTeams]);
 
     if (!showWizard || !pendingMatchData) return null;
 
@@ -1059,7 +1077,7 @@ export const Wizard: React.FC = () => {
                                     )}
                                     <div>
                                         <div className="flex items-center gap-1.5">
-                                            <span className="text-label-xs font-bold uppercase opacity-50">Weapons (max 2)</span>
+                                            <span className="text-label-xs font-bold uppercase opacity-50">Weapons (max {MAX_PROSPECTOR_SLOTS})</span>
                                             {hasTelemetryLoadout && displayedCharacterWeapons.length > 0 && (
                                                 <span
                                                     data-testid="wizard-telemetry-prospector-weapons"
@@ -1074,7 +1092,7 @@ export const Wizard: React.FC = () => {
                                         <div className="flex flex-wrap gap-1.5 mt-1">
                                             {CHARACTER_WEAPONS.map((weapon) => {
                                                 const selected = displayedCharacterWeapons.some((entry) => entry.toLowerCase() === weapon.toLowerCase());
-                                                const disabled = !selected && displayedCharacterWeapons.length >= 2;
+                                                const disabled = !selected && displayedCharacterWeapons.length >= MAX_PROSPECTOR_SLOTS;
                                                 return (
                                                     <button
                                                         key={weapon}
@@ -1091,7 +1109,7 @@ export const Wizard: React.FC = () => {
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-1.5">
-                                            <span className="text-label-xs font-bold uppercase opacity-50">Equipment (max 2)</span>
+                                            <span className="text-label-xs font-bold uppercase opacity-50">Equipment (max {MAX_PROSPECTOR_SLOTS})</span>
                                             {hasTelemetryLoadout && displayedCharacterEquipment.length > 0 && (
                                                 <span
                                                     data-testid="wizard-telemetry-prospector-equipment"
@@ -1106,7 +1124,7 @@ export const Wizard: React.FC = () => {
                                         <div className="flex flex-wrap gap-1.5 mt-1">
                                             {CHARACTER_EQUIPMENT.map((equipment) => {
                                                 const selected = displayedCharacterEquipment.some((entry) => entry.toLowerCase() === equipment.toLowerCase());
-                                                const disabled = !selected && displayedCharacterEquipment.length >= 2;
+                                                const disabled = !selected && displayedCharacterEquipment.length >= MAX_PROSPECTOR_SLOTS;
                                                 return (
                                                     <button
                                                         key={equipment}

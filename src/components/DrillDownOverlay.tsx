@@ -37,8 +37,12 @@ export const DrillDownOverlay: React.FC = () => {
     };
 
     // Filter matches based on target
+    const scopedMatchIds = Array.isArray(drillDownTarget.matchIds)
+        ? new Set(drillDownTarget.matchIds.map((id) => Number(id)).filter((id) => Number.isFinite(id)))
+        : null;
     const targetMatches = matches.filter(m => {
-        if (m.mode !== activeMode) return false;
+        if (scopedMatchIds && scopedMatchIds.size > 0 && !scopedMatchIds.has(Number(m.id))) return false;
+        if (!scopedMatchIds && m.mode !== activeMode) return false;
         if (drillDownTarget.type === 'Teammate') return (m.teammates || []).includes(drillDownTarget.name);
         if (drillDownTarget.type === 'Opponent') return (m.opponents || []).includes(drillDownTarget.name);
         if (drillDownTarget.type === 'Ship') return (m.ship || '').includes(drillDownTarget.name);
