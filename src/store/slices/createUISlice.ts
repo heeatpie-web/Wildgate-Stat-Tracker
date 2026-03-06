@@ -215,14 +215,16 @@ const pushNotificationState = (
     input: NotificationInput
 ): NotificationStateShape => {
     const normalizedMessage = String(input.message || '').trim();
-    const maybeDuplicate = state.notifications.find((item) => (
-        item.message === normalizedMessage
-        && item.type === (input.type ?? 'info')
-        && item.source === (input.source ?? 'system')
-        && (Date.now() - item.createdAt) <= DUPLICATE_NOTIFICATION_WINDOW_MS
-    ));
-    if (maybeDuplicate) {
-        return state;
+    if (input.type !== 'tip') {
+        const maybeDuplicate = state.notifications.find((item) => (
+            item.message === normalizedMessage
+            && item.type === (input.type ?? 'info')
+            && item.source === (input.source ?? 'system')
+            && (Date.now() - item.createdAt) <= DUPLICATE_NOTIFICATION_WINDOW_MS
+        ));
+        if (maybeDuplicate) {
+            return state;
+        }
     }
 
     const notification = createNotification(input);

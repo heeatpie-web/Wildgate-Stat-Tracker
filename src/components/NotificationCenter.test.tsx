@@ -4,8 +4,12 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
  
 const dismissNotification = vi.fn();
+const advanceTipLibraryIndex = vi.fn();
+const setTipsEnabled = vi.fn();
 const appStoreState = {
   dismissNotification: (id: string) => dismissNotification(id),
+  advanceTipLibraryIndex,
+  setTipsEnabled,
 };
 
 const uiState = {
@@ -168,5 +172,31 @@ describe('NotificationCenter', () => {
 
     expect(dismissNotification).toHaveBeenCalledWith('n1');
     expect(screen.queryByText('Dismiss this row')).not.toBeInTheDocument();
+  });
+
+  it('advances and can disable tips from the pinned tip controls', async () => {
+    uiState.notificationCenterOpen = true;
+    uiState.notifications = [
+      {
+        id: 'tip_1',
+        message: 'Tip: Test tip',
+        type: 'tip',
+        source: 'system',
+        popup: true,
+        durationMs: 5000,
+        createdAt: Date.now(),
+        readAt: null,
+      },
+    ];
+
+    const { NotificationCenter } = await import('./NotificationCenter');
+    render(<NotificationCenter />);
+
+    fireEvent.click(screen.getByTitle('Next tip'));
+    expect(advanceTipLibraryIndex).toHaveBeenCalledWith(1);
+
+    fireEvent.click(screen.getByTitle('Hide tips'));
+    expect(setTipsEnabled).toHaveBeenCalledWith(false);
+    expect(dismissNotification).toHaveBeenCalledWith('tip_1');
   });
 });

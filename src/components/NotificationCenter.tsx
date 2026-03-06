@@ -56,6 +56,7 @@ export const NotificationCenter: React.FC = () => {
     } = useUIState();
     const dismissNotification = useAppStore((state) => state.dismissNotification);
     const advanceTipLibraryIndex = useAppStore((state) => state.advanceTipLibraryIndex);
+    const setTipsEnabled = useAppStore((state) => state.setTipsEnabled);
     const containerRef = React.useRef<HTMLDivElement | null>(null);
     const [dismissedIds, setDismissedIds] = React.useState<Set<string>>(() => new Set());
 
@@ -252,19 +253,19 @@ export const NotificationCenter: React.FC = () => {
                                 onKeyDown={(event) => onItemKeyDown(event, pinnedTip)}
                                 role="button"
                                 tabIndex={0}
-                                className="w-full text-left rounded-lg border border-accent/30 bg-accent-soft/70 px-2.5 py-2.5 hover:bg-accent-soft transition-colors cursor-pointer"
+                                className="w-full text-left rounded-xl border border-accent/18 bg-md-sys-surface-container-high px-3 py-3 hover:bg-accent-soft/25 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/30"
                             >
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-2 min-w-0">
                                         <Sparkles size={13} className="text-accent" />
-                                        <span className="text-label-xs font-bold uppercase tracking-wide text-accent">
+                                        <span className="text-label-sm font-bold uppercase tracking-wide text-accent">
                                             Tip
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
                                         <button
                                             type="button"
-                                            className="h-6 px-2 rounded-control text-label-xs font-bold bg-md-sys-surface-container-high text-md-sys-on-surface/75 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10"
+                                            className="h-7 px-2.5 rounded-control text-label-sm font-bold bg-md-sys-surface-container-high text-md-sys-on-surface/80 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10"
                                             aria-label="Next tip"
                                             title="Next tip"
                                             onClick={(event) => {
@@ -275,7 +276,21 @@ export const NotificationCenter: React.FC = () => {
                                                 }
                                             }}
                                         >
-                                            Next tip →
+                                            Next Tip
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="h-7 px-2.5 rounded-control text-label-sm font-bold bg-md-sys-surface-container-high text-md-sys-on-surface/80 hover:text-md-sys-on-surface hover:bg-md-sys-on-surface/10"
+                                            aria-label="Hide tips"
+                                            title="Hide tips"
+                                            onClick={(event) => {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                                setTipsEnabled(false);
+                                                dismissNotification(pinnedTip.id);
+                                            }}
+                                        >
+                                            Hide Tips
                                         </button>
                                         <button
                                             type="button"
@@ -288,7 +303,7 @@ export const NotificationCenter: React.FC = () => {
                                         </button>
                                     </div>
                                 </div>
-                                <div className="mt-1 text-label-sm font-semibold leading-snug">{pinnedTip.message}</div>
+                                <div className="mt-1.5 text-body-sm font-semibold leading-snug">{pinnedTip.message}</div>
                             </div>
                         )}
 
@@ -302,7 +317,7 @@ export const NotificationCenter: React.FC = () => {
                                 onKeyDown={(event) => onItemKeyDown(event, item)}
                                 role="button"
                                 tabIndex={0}
-                                className="w-full text-left rounded-xl border border-md-sys-outline/20 bg-md-sys-surface-container px-3 py-3 hover:bg-md-sys-surface-container-high transition-colors cursor-pointer"
+                                className="w-full text-left rounded-xl border border-md-sys-outline/16 bg-md-sys-surface-container px-3 py-3 hover:bg-md-sys-surface-container-high transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-md-sys-primary/25"
                             >
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="flex items-center gap-2 min-w-0">
@@ -340,7 +355,7 @@ export const NotificationCenter: React.FC = () => {
                                 onKeyDown={(event) => onItemKeyDown(event, item)}
                                 role="button"
                                 tabIndex={0}
-                                className="w-full text-left rounded-xl border border-md-sys-outline/18 bg-md-sys-surface-container-low px-3 py-3 hover:bg-md-sys-surface-container transition-colors cursor-pointer"
+                                className="w-full text-left rounded-xl border border-md-sys-outline/14 bg-md-sys-surface-container-low px-3 py-3 hover:bg-md-sys-surface-container transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-md-sys-primary/20"
                             >
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="flex items-center gap-2 min-w-0">

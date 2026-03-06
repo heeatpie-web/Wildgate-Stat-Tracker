@@ -101,8 +101,8 @@ const ToastCard: React.FC<ToastCardProps> = ({ toast, soundEnabled, onClose }) =
     <div
       className={`pointer-events-auto flex items-start animate-slide-up w-full overflow-hidden border text-md-sys-on-surface ${
         isTip
-          ? 'rounded-xl shadow-[0_10px_28px_rgba(0,0,0,0.32)] gap-2 border-accent/30 bg-md-sys-surface-container-high'
-          : 'toast-card-standard rounded-2xl shadow-[0_24px_56px_rgba(0,0,0,0.46)] gap-3 border bg-md-sys-surface'
+          ? 'rounded-xl shadow-[0_10px_28px_rgba(0,0,0,0.32)] gap-2 border border-accent/18 bg-md-sys-surface-container-high/95 backdrop-blur-sm'
+          : 'toast-card-standard rounded-2xl shadow-[0_24px_56px_rgba(0,0,0,0.46)] gap-3 border border-md-sys-outline/18 bg-md-sys-surface-container-highest/96 backdrop-blur-sm'
       }`}
       role={toast.type === 'error' ? 'alert' : 'status'}
       aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
@@ -112,13 +112,13 @@ const ToastCard: React.FC<ToastCardProps> = ({ toast, soundEnabled, onClose }) =
       <div className={isTip ? 'pt-2.5 pb-2.5 pl-1' : 'pt-3 pb-3 pl-1'}>
         <div className={accentClass}>{icon}</div>
       </div>
-      <div className={`${isTip ? 'font-semibold text-label-sm' : 'font-semibold text-body'} leading-tight flex-1 ${isTip ? 'py-2.5' : 'py-3'} pr-1 tracking-tight`}>
+      <div className={`${isTip ? 'font-semibold text-body-sm' : 'font-semibold text-body'} leading-tight flex-1 ${isTip ? 'py-2.5' : 'py-3'} pr-1 tracking-tight`}>
         {toast.message}
       </div>
       {toast.action && (
         <button
           onClick={() => { toast.action?.onClick(); onCloseRef.current(); }}
-          className={`${isTip ? 'my-2.5 text-label-xs' : 'my-3 text-label-sm'} font-black uppercase tracking-wide underline underline-offset-2 hover:no-underline px-1 shrink-0 text-md-sys-primary`}
+          className={`${isTip ? 'my-2.5 text-label-sm' : 'my-3 text-label-sm'} font-black uppercase tracking-wide underline underline-offset-2 hover:no-underline px-1 shrink-0 text-md-sys-primary`}
         >
           {toast.action.label}
         </button>

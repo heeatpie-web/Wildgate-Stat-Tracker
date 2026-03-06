@@ -586,9 +586,9 @@ const App: React.FC = () => {
             message: `Tip: ${tip}`,
             type: 'tip',
             source: 'system',
-            durationMs: 4_500,
+            durationMs: 7_000,
             action: {
-                label: 'Next tip →',
+                label: 'Next Tip',
                 onClick: () => {
                     const advanceTip = useAppStore.getState().advanceTipLibraryIndex;
                     if (typeof advanceTip === 'function') {

@@ -71,7 +71,7 @@ describe('Toast', () => {
     expect(stack).toHaveClass('right-4');
     expect(stack).toHaveClass('bottom-auto');
     expect(stack).toHaveClass('left-auto');
-    expect(popup).toHaveClass('bg-md-sys-surface');
+    expect(popup).toHaveClass('bg-md-sys-surface-container-highest/96');
     expect(popup).toHaveClass('text-md-sys-on-surface');
 
     act(() => {
