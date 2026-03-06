@@ -768,65 +768,6 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         );
     }, [displayFriendlyTeamIndex, teamDraft]);
 
-    useEffect(() => {
-        if (!isOpen || teamDraft.length === 0) return;
-        const friendlyTeamIndex = inferredFriendlyTeamIndex >= 0 ? inferredFriendlyTeamIndex : 0;
-        const friendlyTeam = teamDraft[friendlyTeamIndex];
-        const activeUserKey = normalizeNameKey(activeUser || '');
-        const nextTeammates = dedupeNames(
-            (friendlyTeam?.players || []).filter((name) => {
-                const key = normalizeNameKey(name);
-                if (!key) return false;
-                return activeUserKey ? key !== activeUserKey : true;
-            })
-        );
-        const nextOpponentTeams = teamDraft
-            .map((team, index) => ({ team, index }))
-            .filter(({ index }) => index !== friendlyTeamIndex)
-            .map(({ team, index }) => ({
-                teamName: normalizeSubmittedName(team.teamName) || `Enemy Team ${index + 1}`,
-                shipType: normalizeSubmittedName(team.shipType),
-                color: normalizeSubmittedName(team.color) || 'unknown',
-                players: dedupeNames((team.players || []).map((name) => normalizeSubmittedName(name))),
-            }))
-            .filter((team) => team.players.length > 0 || team.shipType || team.teamName);
-        const currentSnapshot = serializeTeamDraftSnapshot(
-            Array.isArray(pendingMatchData?.teammates)
-                ? pendingMatchData.teammates.map((name) => normalizeSubmittedName(String(name || '')))
-                : [],
-            Array.isArray(pendingMatchData?.opponentTeams)
-                ? pendingMatchData.opponentTeams.map((team) => ({
-                    teamName: String(team.teamName || ''),
-                    shipType: String(team.shipType || ''),
-                    color: String(team.color || ''),
-                    players: (team.players || []).map((name) => String(name || '')),
-                }))
-                : [],
-            String(pendingMatchData?.ship || ''),
-        );
-        const nextSnapshot = serializeTeamDraftSnapshot(
-            nextTeammates,
-            nextOpponentTeams,
-            friendlyTeam?.shipType || '',
-        );
-        if (currentSnapshot === nextSnapshot) return;
-        suppressSeedSyncRef.current = true;
-        setPendingMatchData({
-            ...(pendingMatchData || {}),
-            teammates: nextTeammates,
-            opponents: dedupeNames(nextOpponentTeams.flatMap((team) => team.players)),
-            opponentTeams: nextOpponentTeams,
-            ship: friendlyTeam?.shipType || String(pendingMatchData?.ship || ''),
-        });
-    }, [activeUser, inferredFriendlyTeamIndex, isOpen, pendingMatchData, setPendingMatchData, teamDraft]);
-
-    useEffect(() => {
-        if (!isOpen || teamDraft.length === 0) return;
-        const nextSessionShipTypes = buildSessionShipTypeMapFromDraft(teamDraft, initialSessionShipTypesRef.current);
-        if (serializeShipTypeMap(sessionShipTypes) === serializeShipTypeMap(nextSessionShipTypes)) return;
-        setSessionShipTypes(nextSessionShipTypes, 'manual');
-    }, [isOpen, sessionShipTypes, setSessionShipTypes, teamDraft]);
-
     // Filter pilot registry for autocomplete
     const getFilteredRegistry = (playerName: string) => {
         const query = normalizeNameKey(searchQuery[playerName] || '');
@@ -1193,14 +1134,6 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         applyBatchAccept(ocrBatchAcceptThreshold);
     };
 
-    const handleApplyBestResults = () => {
-        const autoCorrections = applyBatchAccept(ocrBatchAcceptThreshold);
-        handleSubmitCorrections({
-            closeAfterApply: false,
-            correctionOverrides: autoCorrections,
-        });
-    };
-
     const handleIgnoreNext = () => {
         const nextUnresolved = detectedPlayers.find((player) => (
             !ignored.has(player.name) &&
@@ -1412,7 +1345,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                 <div className="flex-1 min-w-0">
                                     <p className="text-body font-medium">How this helps</p>
                                     <p id={dialogDescriptionId} className="text-label-sm opacity-60 mt-0.5">
-                                        Pick the real player name for each OCR guess, then use <span className="font-semibold">Apply and Stay</span> or <span className="font-semibold">Apply and Close</span>.
+                                        Pick the real player name for each OCR guess, then use <span className="font-semibold">Apply</span> or <span className="font-semibold">Apply and Close</span>.
                                     </p>
                                     <p className="text-label-sm opacity-60 mt-0.5">
                                         These links are remembered, so OCR gets better in future matches.
@@ -1746,7 +1679,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                                                 onClick={() => {
                                                                     if (sourceScreenshotIndex >= 0) {
                                                                         setSelectedScreenshotIdx(sourceScreenshotIndex);
-                                                                        evidenceSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                                                        evidenceSectionRef.current?.scrollIntoView({ block: 'nearest' });
                                                                     }
                                                                 }}
                                                                 disabled={sourceScreenshotIndex < 0}
@@ -1876,7 +1809,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                         <div className="px-3 py-2 text-label-sm border-t border-md-sys-outline/15 bg-md-sys-surface-container-low text-md-sys-on-surface/80 flex items-center flex-wrap gap-2">
                             <span className="inline-flex items-center gap-1">
                                 <kbd className="px-1.5 py-0.5 rounded bg-md-sys-surface3 border border-md-sys-outline/20 font-mono text-label-xs">Ctrl+Enter</kbd>
-                                Apply and Stay
+                                Apply
                             </span>
                             <span className="inline-flex items-center gap-1">
                                 <kbd className="px-1.5 py-0.5 rounded bg-md-sys-surface3 border border-md-sys-outline/20 font-mono text-label-xs">Esc</kbd>
@@ -1896,7 +1829,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                     {/* Footer */}
                     <div className="md3-dialog-actions w-full justify-between">
                         <button onClick={onClose} className="md3-btn-text">
-                            {embedded ? 'Back to Result' : 'Close for Now'}
+                            {embedded ? 'Back' : 'Close'}
                         </button>
 
                         <div className="flex items-center gap-2">
@@ -1909,19 +1842,12 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                 Discard
                             </button>
                             <button
-                                onClick={handleApplyBestResults}
-                                className="md3-btn-tonal"
-                                title="Apply high-confidence OCR links and keep this review open"
-                            >
-                                Apply Best Results
-                            </button>
-                            <button
                                 onClick={() => handleSubmitCorrections({ closeAfterApply: false })}
                                 className="md3-btn-tonal flex items-center gap-2"
                                 title="Save reviewed OCR corrections and keep this review open"
                             >
                                 <Check size={16} />
-                                Apply and Stay
+                                Apply
                             </button>
                             <button
                                 onClick={() => handleSubmitCorrections({ closeAfterApply: true })}

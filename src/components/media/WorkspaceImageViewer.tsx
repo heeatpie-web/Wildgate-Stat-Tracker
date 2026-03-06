@@ -133,8 +133,19 @@ export const WorkspaceImageViewer: React.FC<WorkspaceImageViewerProps> = ({
             return;
         }
         if (!enableLoupe) return;
-        const bounds = stageRef.current.getBoundingClientRect();
+        const imageEl = stageRef.current.querySelector('img');
+        if (!(imageEl instanceof HTMLImageElement)) return;
+        const bounds = imageEl.getBoundingClientRect();
         if (bounds.width <= 0 || bounds.height <= 0) return;
+        if (
+            event.clientX < bounds.left
+            || event.clientX > bounds.right
+            || event.clientY < bounds.top
+            || event.clientY > bounds.bottom
+        ) {
+            setLoupeState(null);
+            return;
+        }
         const relX = clamp((event.clientX - bounds.left) / bounds.width, 0, 1);
         const relY = clamp((event.clientY - bounds.top) / bounds.height, 0, 1);
         setLoupeState({
@@ -152,9 +163,8 @@ export const WorkspaceImageViewer: React.FC<WorkspaceImageViewerProps> = ({
     }, []);
 
     const clearLoupe = useCallback(() => {
-        if (isDragging) return;
         setLoupeState(null);
-    }, [isDragging]);
+    }, []);
 
     const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
         if (!hasImages) return;
@@ -290,8 +300,8 @@ export const WorkspaceImageViewer: React.FC<WorkspaceImageViewerProps> = ({
                 onPointerUp={stopDragging}
                 onPointerCancel={stopDragging}
                 onPointerLeave={() => {
+                    setLoupeState(null);
                     stopDragging();
-                    clearLoupe();
                 }}
             >
                 <div className="absolute inset-0 flex items-center justify-center p-4">

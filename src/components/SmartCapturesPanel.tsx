@@ -680,14 +680,7 @@ const SmartCapturesPanel: React.FC = () => {
 
     const selectQueueRow = useCallback((id: number) => {
         setSelectedMatchId(id);
-        if (queueCollapsed) return;
-        setSelectedIds((prev) => {
-            if (prev.has(id)) return prev;
-            const next = new Set(prev);
-            next.add(id);
-            return next;
-        });
-    }, [queueCollapsed, setSelectedMatchId]);
+    }, [setSelectedMatchId]);
 
     const selectVisible = useCallback((mode: 'all' | 'none') => {
         if (mode === 'none') {
@@ -1946,7 +1939,6 @@ const SmartMatchDetail: React.FC<{
         const [showSecondaryActions, setShowSecondaryActions] = useState(false);
         const secondaryActionsRef = useRef<HTMLDivElement | null>(null);
         const nonCurrentWizardSnapshotRef = useRef<NonCurrentWizardSnapshot | null>(null);
-        const rerunAutoOpenTimerRef = useRef<number | null>(null);
         const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
             screenshots: false,
             players: false,
@@ -2378,18 +2370,7 @@ const SmartMatchDetail: React.FC<{
         useEffect(() => {
             setShowSecondaryActions(false);
             setReviewData(null);
-            if (rerunAutoOpenTimerRef.current != null) {
-                window.clearTimeout(rerunAutoOpenTimerRef.current);
-                rerunAutoOpenTimerRef.current = null;
-            }
         }, [match.id]);
-
-        useEffect(() => () => {
-            if (rerunAutoOpenTimerRef.current != null) {
-                window.clearTimeout(rerunAutoOpenTimerRef.current);
-                rerunAutoOpenTimerRef.current = null;
-            }
-        }, []);
 
         useEffect(() => {
             if (!showSecondaryActions) return;
@@ -2971,21 +2952,18 @@ const SmartMatchDetail: React.FC<{
                 const reviewingBaseMatch = getLatestMatchSnapshot();
                 onUpdate({ ...reviewingBaseMatch, ocrState: 'reviewing' });
                 persistNameSourceHintsToPendingDraft(nextNameSources);
-                if (rerunAutoOpenTimerRef.current != null) {
-                    window.clearTimeout(rerunAutoOpenTimerRef.current);
-                    rerunAutoOpenTimerRef.current = null;
+                if (onApplyToSession) {
+                    applyReviewDataToSession(mergedData);
+                } else {
+                    openWizardForMatch({ openOcrReview: true });
+                    pushNotification({
+                        message: `OCR analysis complete for Match ${displayNumber}.`,
+                        type: 'success',
+                        source: 'smart-capture',
+                        durationMs: 12000,
+                        deepLink: { type: 'openSmartCaptureOcrReview', matchId: match.id },
+                    });
                 }
-                setToast({
-                    message: 'Analysis complete - review detected data, then click Apply when ready.',
-                    type: 'success',
-                });
-                pushNotification({
-                    message: `OCR analysis complete for Match ${displayNumber}. Click to open OCR review.`,
-                    type: 'success',
-                    source: 'smart-capture',
-                    durationMs: 12000,
-                    deepLink: { type: 'openSmartCaptureOcrReview', matchId: match.id },
-                });
             } catch (error) {
                 const reason = errorMessage(error);
                 setRerunProgress({
@@ -3307,22 +3285,22 @@ const SmartMatchDetail: React.FC<{
                                     </button>
                                 ) : null}
                                 <div className="flex items-center gap-1.5">
-                                    {onApplyToSession && reviewData && (
-                                        <button
-                                            onClick={() => applyReviewDataToSession()}
-                                            className="sc-detail-action-btn sc-detail-action-btn--tonal"
-                                            title={reviewData
-                                                ? 'Apply latest OCR extraction to the current recording session and open wizard'
-                                                : 'Run Re-analyze first, then apply OCR'}
-                                        >
-                                            <Zap size={14} />
-                                            Apply OCR
-                                        </button>
-                                    )}
                                     <button
-                                        onClick={() => openWizardForMatch()}
+                                        onClick={() => {
+                                            if (reviewData) {
+                                                applyReviewDataToSession(reviewData);
+                                                return;
+                                            }
+                                            if (normalizedOcrState === 'reviewing' || normalizedOcrState === 'ready') {
+                                                openWizardForMatch({ openOcrReview: true });
+                                                return;
+                                            }
+                                            openWizardForMatch();
+                                        }}
                                         className="sc-detail-action-btn sc-detail-action-btn--filled sc-detail-action-btn--workflow"
-                                        title="Open wizard for review and final save"
+                                        title={reviewData || normalizedOcrState === 'reviewing' || normalizedOcrState === 'ready'
+                                            ? 'Open wizard directly to OCR review'
+                                            : 'Open wizard for review and final save'}
                                     >
                                         <FlaskConical size={16} />
                                         Open Wizard
@@ -3997,7 +3975,7 @@ const SmartMatchDetail: React.FC<{
                                             <LocalImage
                                                 src={src}
                                                 alt={`Screenshot ${i + 1}`}
-                                                className="w-full h-full object-cover"
+                                                className="w-full h-full object-contain bg-md-sys-surface-container-lowest"
                                             />
                                             <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                                 <Eye size={20} />
@@ -4191,7 +4169,7 @@ const SmartMatchDetail: React.FC<{
                     </div>
                 </div>
                 {activeScreenshotIndex !== null && artifacts.images[activeScreenshotIndex] && (
-                    <div className="absolute inset-0 z-modal rounded-2xl bg-md-sys-surface/98 p-3 backdrop-blur-md">
+                    <div className="fixed inset-0 z-modal bg-md-sys-surface/96 p-4 md:p-6 backdrop-blur-md flex items-center justify-center">
                         <WorkspaceImageViewer
                             images={artifacts.images}
                             activeIndex={activeScreenshotIndex}
@@ -4199,7 +4177,7 @@ const SmartMatchDetail: React.FC<{
                             onClose={() => setActiveScreenshotIndex(null)}
                             title="Match Screenshots"
                             subtitle="Zoom, pan, and hover for loupe. Use the thumbnail rail to switch images."
-                            className="h-full"
+                            className="h-[min(88vh,920px)] w-[min(96vw,1280px)]"
                             stageClassName="min-h-[420px]"
                             imageAltPrefix="Match screenshot"
                             enableLoupe={true}

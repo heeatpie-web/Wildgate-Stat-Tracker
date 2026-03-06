@@ -1216,7 +1216,7 @@ export const Wizard: React.FC = () => {
                                 isOpen={true}
                                 embedded={true}
                                 onClose={() => setActiveTab('result')}
-                                onAcceptAll={() => setActiveTab('result')}
+                                onAcceptAll={() => setShowWizard(null)}
                                 screenshots={wizardReviewScreenshots}
                             />
                         </div>
