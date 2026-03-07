@@ -55,7 +55,10 @@ describe('SystemPulse telemetry indicator', () => {
 
     const sessionChip = screen.getByTitle('Session: receiving telemetry');
     expect(sessionChip).toHaveClass('bg-md-sys-surface-container-highest/92');
-    expect(sessionChip.querySelector('.animate-pulse')).not.toBeNull();
+    const pulseDot = sessionChip.querySelector('.system-pulse-dot');
+    expect(pulseDot).not.toBeNull();
+    expect(pulseDot).toHaveClass('inline-block');
+    expect(pulseDot).toHaveClass('animate-pulse');
   });
 
   it('shows connected idle without active lighting when telemetry is stale', () => {

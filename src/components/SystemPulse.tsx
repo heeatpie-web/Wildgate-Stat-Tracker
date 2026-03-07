@@ -168,11 +168,12 @@ const SystemPulse: React.FC = () => {
                     <span className={indicator.color}>{indicator.icon}</span>
                     {indicator.label && <span>{indicator.label}</span>}
                     <span
-                        className={`system-pulse-dot w-2.5 h-2.5 rounded-full ring-1 ring-inset ring-white/12 shadow-[0_0_0_1px_rgba(0,0,0,0.12)] ${indicator.pulse ? 'animate-pulse' : ''}`}
+                        className={`system-pulse-dot inline-block shrink-0 w-2.5 h-2.5 rounded-full ring-1 ring-inset ring-white/12 shadow-[0_0_0_1px_rgba(0,0,0,0.12)] ${indicator.pulse ? 'animate-pulse' : ''}`}
                         style={{
                             backgroundColor: `var(${indicator.dotVar})`,
                             boxShadow: indicator.active ? `0 0 6px var(${indicator.dotVar})` : 'none',
                         }}
+                        aria-hidden="true"
                     />
                 </div>
             ))}

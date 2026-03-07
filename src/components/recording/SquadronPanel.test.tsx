@@ -71,7 +71,7 @@ describe('SquadronPanel', () => {
     render(<SquadronPanel />);
 
     const hunterButton = screen.getByRole('button', { name: 'Hunter' });
-    expect(hunterButton.className).toContain('border-md-sys-primary/45');
+    expect(hunterButton.className).toContain('recording-selection-active');
   });
 
   it('does not show a match telemetry signal from stale idle status alone', () => {
