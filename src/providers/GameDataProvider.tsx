@@ -135,6 +135,8 @@ interface GameDataContextType {
     removePendingReview: (id: string) => void;
     removePendingReviews: (ids: string[]) => void;
     clearPendingReviews: () => void;
+    dismissedRosterMergePairKeys: string[];
+    dismissRosterMergeSuggestionPairs: (pairKeys: string[]) => void;
     detectedUnknowns: Record<string, DetectedUnknownMapping>;
     addMapping: (id: string, name: string) => void;
     setOverlayPhase: (phase: 'Setup' | 'Live' | 'Result') => void;
@@ -212,6 +214,7 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         activeMode: s.activeMode,
         pendingReviews: s.pendingReviews, addPendingReview: s.addPendingReview,
         removePendingReview: s.removePendingReview, removePendingReviews: s.removePendingReviews, clearPendingReviews: s.clearPendingReviews,
+        dismissedRosterMergePairKeys: s.dismissedRosterMergePairKeys, dismissRosterMergeSuggestionPairs: s.dismissRosterMergeSuggestionPairs,
         detectedUnknowns: s.detectedUnknowns, addMapping: s.addMapping,
         setOverlayPhase: s.setOverlayPhase,
         playerProfiles: s.playerProfiles,

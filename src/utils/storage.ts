@@ -51,6 +51,7 @@ export interface StorageData {
   ocrLearningEvents?: OcrLearningEvent[];
   ocrLearningQueue?: OcrLearningQueueItem[];
   pendingReviews?: PendingReview[];
+  dismissedRosterMergePairKeys?: string[];
   settings: StorageSettings;
   layouts: StorageLayouts;
   lastActivity: number;
@@ -218,6 +219,7 @@ const createDefaultStorageData = (): StorageData => ({
   favorites: [],
   pilotNotes: {},
   pendingReviews: [],
+  dismissedRosterMergePairKeys: [],
   settings: {},
   layouts: {},
   lastActivity: Date.now(),
@@ -270,6 +272,7 @@ const coerceStorageData = (value: unknown): StorageData | null => {
       ? value.ocrLearningQueue.filter((item): item is OcrLearningQueueItem => isRecord(item))
       : [],
     pendingReviews: toPendingReviews(value.pendingReviews),
+    dismissedRosterMergePairKeys: toStringArray(value.dismissedRosterMergePairKeys),
     settings: isRecord(value.settings) ? { ...value.settings } : {},
     layouts: toLayouts(value.layouts),
     lastActivity: toNumberOr(value.lastActivity, Date.now()),

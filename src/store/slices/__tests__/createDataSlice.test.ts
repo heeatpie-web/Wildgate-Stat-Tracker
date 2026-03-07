@@ -414,6 +414,17 @@ describe('createDataSlice', () => {
     });
   });
 
+  describe('dismissed roster merge suggestions', () => {
+    it('stores unique dismissed roster merge pair keys', () => {
+      store.getState().dismissRosterMergeSuggestionPairs(['pilotone::pilot0ne', 'pilotone::pilot0ne', 'pilotone::pilot one']);
+
+      expect(store.getState().dismissedRosterMergePairKeys).toEqual([
+        'pilotone::pilot0ne',
+        'pilotone::pilot one',
+      ]);
+    });
+  });
+
   // ── Timeline Events ──
 
   describe('timeline events', () => {

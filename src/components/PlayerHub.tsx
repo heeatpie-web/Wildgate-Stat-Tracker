@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
     Users, Search, Star, Edit2, Trash2, ChevronRight, Merge,
     Undo2, ScanEye, Swords, Handshake, TrendingUp, X,
@@ -10,6 +10,7 @@ import { useAppStore } from '../store/useAppStore';
 import { calculateSocialData } from '../utils/analyticsSocial';
 import { getShipColor } from '../types';
 import { normalizeOcrName, similarityScore } from '../utils/stringUtils';
+import { buildRosterMergeSuggestionGroups, type RosterMergeSuggestionGroup } from '../utils/rosterMergeSuggestions';
 import { LocalImage } from './LocalImage';
 
 type SortMode = 'alpha' | 'favorites' | 'recent' | 'encounters';
@@ -61,6 +62,8 @@ const PlayerHub: React.FC = () => {
         activeMergeNotificationId,
         dismissActiveMergeNotification,
         pendingReviews,
+        dismissedRosterMergePairKeys,
+        dismissRosterMergeSuggestionPairs,
         addToRegistry,
         removePendingReview,
         matches,
@@ -69,6 +72,7 @@ const PlayerHub: React.FC = () => {
     } = useGameData();
     const { setActiveView, setToast, setShowSettings } = useUIState();
     const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
+    const ocrAutoApplyMinScore = useAppStore(s => s.ocrAutoApplyMinScore);
     const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
 
     const [searchTerm, setSearchTerm] = useState('');
@@ -87,6 +91,8 @@ const PlayerHub: React.FC = () => {
     const [showFullProfile, setShowFullProfile] = useState(false);
     const [pendingCandidateEdits, setPendingCandidateEdits] = useState<Record<string, string>>({});
     const [sourcePreview, setSourcePreview] = useState<{ src: string; label: string } | null>(null);
+    const [possibleMergesExpanded, setPossibleMergesExpanded] = useState(false);
+    const hadPossibleMergesRef = useRef(false);
 
     const socialData = useMemo(() => calculateSocialData(matches), [matches]);
     const pendingRosterCandidates = useMemo(() => {
@@ -187,6 +193,14 @@ const PlayerHub: React.FC = () => {
         return (mergeHistory || []).find((entry) => entry.id === activeMergeNotificationId) || null;
     }, [activeMergeNotificationId, mergeHistory]);
 
+    const possibleMergeGroups = useMemo(() => buildRosterMergeSuggestionGroups({
+        pilotRegistry,
+        pilotAliases,
+        pendingReviews,
+        dismissedPairKeys: dismissedRosterMergePairKeys,
+        autoMergeThresholdPct: Math.round((Number(ocrAutoApplyMinScore) || 0.83) * 100),
+    }), [dismissedRosterMergePairKeys, ocrAutoApplyMinScore, pendingReviews, pilotAliases, pilotRegistry]);
+
     const findRosterMatch = (value: string): string | null => {
         const normalizedValue = normalizeOcrName(value || '').toLowerCase();
         if (!normalizedValue) return null;
@@ -204,6 +218,18 @@ const PlayerHub: React.FC = () => {
         }, 10_000);
         return () => window.clearTimeout(timer);
     }, [activeMergeNotification?.id, dismissActiveMergeNotification]);
+
+    useEffect(() => {
+        if (possibleMergeGroups.length === 0) {
+            hadPossibleMergesRef.current = false;
+            setPossibleMergesExpanded(false);
+            return;
+        }
+        if (!hadPossibleMergesRef.current) {
+            setPossibleMergesExpanded(true);
+        }
+        hadPossibleMergesRef.current = true;
+    }, [possibleMergeGroups.length]);
 
     const selected = useMemo(() => {
         if (!selectedPilot) return null;
@@ -600,6 +626,27 @@ const PlayerHub: React.FC = () => {
         }
     };
 
+    const handleMergeSuggestionGroup = (group: RosterMergeSuggestionGroup) => {
+        if (!group.canonicalName || group.variants.length === 0) return;
+        group.variants.forEach((variant) => {
+            mergePilots(variant.name, group.canonicalName);
+        });
+        setSelectedPilot(group.canonicalName);
+        setPanelMode('roster');
+        setToast({
+            message: `Merged ${group.variants.length} roster variant${group.variants.length === 1 ? '' : 's'} into "${group.canonicalName}"`,
+            type: 'success',
+        });
+    };
+
+    const handleDismissMergeSuggestionGroup = (group: RosterMergeSuggestionGroup) => {
+        dismissRosterMergeSuggestionPairs(group.pairKeys);
+        setToast({
+            message: `Dismissed possible merge suggestion for "${group.canonicalName}"`,
+            type: 'info',
+        });
+    };
+
     const renderOcrWorkbench = (containerClassName: string) => (
         <div className={containerClassName}>
             <div className={`md3-card mg-surface shadow-lg p-3 border flex flex-col gap-2 h-full min-h-0 ${panelMode === 'ocr-work'
@@ -618,6 +665,83 @@ const PlayerHub: React.FC = () => {
                 <p className="text-label-xs text-md-sys-on-surface/62">
                     Review OCR-detected roster names, add them as new pilots, or merge them into an existing identity without hiding your roster list.
                 </p>
+                {possibleMergeGroups.length === 0 ? (
+                    <div className="px-1 text-label-xs text-md-sys-on-surface/50">
+                        No merge candidates found
+                    </div>
+                ) : (
+                    <div className="rounded-xl border border-warning-soft bg-warning-soft/20">
+                        <button
+                            type="button"
+                            onClick={() => setPossibleMergesExpanded((prev) => !prev)}
+                            className="w-full px-3 py-2 flex items-center justify-between gap-2 text-left"
+                            aria-expanded={possibleMergesExpanded}
+                            aria-label={`${possibleMergesExpanded ? 'Collapse' : 'Expand'} possible merges`}
+                        >
+                            <div>
+                                <div className="text-label-sm font-semibold uppercase tracking-wide text-warning">Possible Merges</div>
+                                <div className="text-label-xs text-md-sys-on-surface/62">
+                                    {possibleMergeGroups.length} roster merge candidate{possibleMergeGroups.length === 1 ? '' : 's'} need review
+                                </div>
+                            </div>
+                            <div className={`transition-transform ${possibleMergesExpanded ? 'rotate-90' : ''}`}>
+                                <ChevronRight size={14} className="text-warning" />
+                            </div>
+                        </button>
+                        {possibleMergesExpanded && (
+                            <div className="px-3 pb-3 flex flex-col gap-2">
+                                {possibleMergeGroups.map((group) => (
+                                    <div key={group.pairKeys.join('|')} className="rounded-lg border border-warning-soft/80 bg-md-sys-surface px-3 py-2.5 space-y-2">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <div className="text-label-sm font-semibold text-warning truncate">
+                                                    Merge into {group.canonicalName}
+                                                </div>
+                                                <div className="text-label-xs text-md-sys-on-surface/58">
+                                                    Highest similarity: {Math.round(group.score)}%
+                                                </div>
+                                            </div>
+                                            <span className="text-label-xs font-bold px-2 py-0.5 rounded-pill bg-warning-soft text-warning shrink-0">
+                                                {group.variants.length + 1} names
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            <span className="px-2 py-1 rounded-pill bg-warning text-ink-strong text-label-xs font-bold">
+                                                Keep {group.canonicalName}
+                                            </span>
+                                            {group.variants.map((variant) => (
+                                                <span
+                                                    key={`${group.canonicalName}-${variant.name}`}
+                                                    className="px-2 py-1 rounded-pill bg-md-sys-on-surface/8 text-label-xs font-semibold text-md-sys-on-surface/72"
+                                                >
+                                                    {variant.name} ({Math.round(variant.score)}%)
+                                                </span>
+                                            ))}
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleMergeSuggestionGroup(group)}
+                                                className="flex-1 h-8 rounded-md text-label-xs font-bold bg-warning text-ink-strong hover:brightness-95"
+                                                aria-label={`Merge possible roster variants into ${group.canonicalName}`}
+                                            >
+                                                Merge
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDismissMergeSuggestionGroup(group)}
+                                                className="flex-1 h-8 rounded-md text-label-xs font-bold bg-md-sys-on-surface/10 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/15"
+                                                aria-label={`Dismiss possible merge suggestions for ${group.canonicalName}`}
+                                            >
+                                                Dismiss
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
                 <div className="relative">
                     <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-md-sys-on-surface/40 pointer-events-none" />
                     <input

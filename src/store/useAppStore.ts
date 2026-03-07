@@ -207,6 +207,7 @@ const customStorage: PersistStorage<AppState> = {
           ocrLearningEvents: Array.isArray(data.ocrLearningEvents) ? data.ocrLearningEvents : [],
           ocrLearningQueue: Array.isArray(data.ocrLearningQueue) ? data.ocrLearningQueue : [],
           pendingReviews: Array.isArray(data.pendingReviews) ? data.pendingReviews : [],
+          dismissedRosterMergePairKeys: Array.isArray(data.dismissedRosterMergePairKeys) ? data.dismissedRosterMergePairKeys : [],
 
           // Settings
           appearanceMode: settings.mode || 'twilight',
@@ -341,6 +342,7 @@ const customStorage: PersistStorage<AppState> = {
       ocrLearningEvents: state.ocrLearningEvents,
       ocrLearningQueue: state.ocrLearningQueue,
       pendingReviews: state.pendingReviews,
+      dismissedRosterMergePairKeys: state.dismissedRosterMergePairKeys,
       settings: {
         mode: state.appearanceMode,
         theme: state.colorTheme,
@@ -511,7 +513,8 @@ export const useAppStore = create<AppState>()(
         ocrAliasModel: state.ocrAliasModel,
         ocrLearningEvents: state.ocrLearningEvents,
         ocrLearningQueue: state.ocrLearningQueue,
-        pendingReviews: state.pendingReviews
+        pendingReviews: state.pendingReviews,
+        dismissedRosterMergePairKeys: state.dismissedRosterMergePairKeys
         // sessionTeams removed from persistence to prevent color sticking
       } as any),
       onRehydrateStorage: () => (state) => {

@@ -40,6 +40,8 @@ const gameDataState = {
     activeMergeNotificationId: null,
     dismissActiveMergeNotification: vi.fn(),
     pendingReviews: [],
+    dismissedRosterMergePairKeys: [],
+    dismissRosterMergeSuggestionPairs: vi.fn(),
     addToRegistry: vi.fn(),
     removePendingReview: vi.fn(),
     matches,
@@ -99,6 +101,7 @@ const appStoreState = {
         stats: { totalEntries: 1, lastCompactedAt: Date.now() },
     },
     recordOcrAliasCorrection: vi.fn(),
+    ocrAutoApplyMinScore: 0.83,
 };
 
 vi.mock('../providers/GameDataProvider', () => ({
@@ -120,9 +123,12 @@ vi.mock('./LocalImage', () => ({
 describe('PlayerHub', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        gameDataState.pilotRegistry = ['PilotOne', 'Pilot0ne'];
+        gameDataState.pilotAliases = { PilotOne: ['Pilot One Old'] };
         gameDataState.pendingReviews = [];
         gameDataState.mergeHistory = [];
         gameDataState.activeMergeNotificationId = null;
+        gameDataState.dismissedRosterMergePairKeys = [];
     });
 
     it('shows former names, learned OCR variants, and duplicate candidates for the selected player', () => {
@@ -175,5 +181,23 @@ describe('PlayerHub', () => {
         fireEvent.click(screen.getByRole('button', { name: /dismiss merge notification/i }));
 
         expect(gameDataState.dismissActiveMergeNotification).toHaveBeenCalledTimes(1);
+    });
+
+    it('surfaces possible roster merges in the OCR workbench and lets them be merged or dismissed', () => {
+        gameDataState.pilotRegistry = ['Ace Pilot', 'Ace Squad'];
+
+        render(<PlayerHub />);
+
+        fireEvent.click(screen.getAllByRole('button', { name: /^ocr work$/i })[0]);
+
+        expect(screen.getAllByRole('button', { name: /collapse possible merges/i }).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/keep ace pilot/i).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/ace squad \(82%\)/i).length).toBeGreaterThan(0);
+
+        fireEvent.click(screen.getAllByRole('button', { name: /merge possible roster variants into ace pilot/i })[0]);
+        expect(gameDataState.mergePilots).toHaveBeenCalledWith('Ace Squad', 'Ace Pilot');
+
+        fireEvent.click(screen.getAllByRole('button', { name: /dismiss possible merge suggestions for ace pilot/i })[0]);
+        expect(gameDataState.dismissRosterMergeSuggestionPairs).toHaveBeenCalledWith(['ace pilot::ace squad']);
     });
 });
