@@ -587,6 +587,60 @@ describe('useMatchSubmission', () => {
     expect(updatedMatch.subType).toBe('Combat');
   });
 
+  it('reuses the matching telemetry draft by timestamp when pendingMatchData has no id', async () => {
+    const draftId = 43210;
+    const draftTimestamp = 1_700_000_222_000;
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.matches = [{
+      id: draftId,
+      timestamp: draftTimestamp,
+      date: '1/1/2024',
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: { 'AI Legion': 0 },
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      artifacts: ['existing.png'],
+      ocrState: 'queued',
+    }];
+    mockStoreState.pendingMatchData = {
+      timestamp: draftTimestamp,
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      kills: { 'AI Legion': 1 },
+      reachModifiers: [],
+      artifacts: ['pending.png'],
+      ocrState: 'reviewing',
+      time: '11:00',
+    };
+    mockStoreState.showWizard = 'Win';
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    await act(async () => {
+      await result.current.processFinalSubmission('Combat');
+    });
+
+    expect(addMatch).not.toHaveBeenCalled();
+    expect(updateMatch).toHaveBeenCalled();
+    const [updatedMatch] = updateMatch.mock.calls[0];
+    expect(updatedMatch.id).toBe(draftId);
+    expect(updatedMatch.artifacts).toEqual(['existing.png', 'pending.png']);
+    const resolvedEvent = dispatchEventSpy.mock.calls
+      .map(([evt]) => evt as Event)
+      .find((evt) => evt.type === 'telemetry-draft:resolved') as CustomEvent | undefined;
+    expect(resolvedEvent?.detail).toEqual({ matchId: draftId });
+  });
+
   it('syncs on-disk match artifacts even when bundling finds none', async () => {
     const diskArtifact = 'C:\\Users\\Tester\\AppData\\Roaming\\wildgate\\match_artifacts\\555\\capture_1.png';
     mockStoreState.activeUser = 'Tester';
@@ -744,5 +798,60 @@ describe('useMatchSubmission', () => {
     expect(savedMatch.ocrState).toBe('reviewing');
     expect(bundleMatchArtifacts).not.toHaveBeenCalled();
     expect(setToast).toHaveBeenCalledWith({ message: 'Results saved. You can return to OCR later.', type: 'success' });
+  });
+
+  it('saveResultDraft reuses timestamp-matched telemetry draft and unions artifacts', async () => {
+    const draftId = 76543;
+    const draftTimestamp = 1_700_000_333_000;
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.showWizard = 'Loss';
+    mockStoreState.pendingMatchData = {
+      timestamp: draftTimestamp,
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      kills: {},
+      reachModifiers: [],
+      result: 'Win',
+      time: '06:30',
+      artifacts: ['pending.png'],
+      ocrState: 'reviewing',
+    };
+    mockStoreState.matches = [{
+      id: draftId,
+      timestamp: draftTimestamp,
+      date: '1/1/2024',
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      artifacts: ['existing.png'],
+      ocrState: 'queued',
+    }];
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    await act(async () => {
+      await result.current.saveResultDraft('Artifact');
+    });
+
+    expect(addMatch).not.toHaveBeenCalled();
+    expect(updateMatch).toHaveBeenCalled();
+    const [savedMatch] = updateMatch.mock.calls[0];
+    expect(savedMatch.id).toBe(draftId);
+    expect(savedMatch.artifacts).toEqual(['existing.png', 'pending.png']);
+    const resolvedEvent = dispatchEventSpy.mock.calls
+      .map(([evt]) => evt as Event)
+      .find((evt) => evt.type === 'telemetry-draft:resolved') as CustomEvent | undefined;
+    expect(resolvedEvent?.detail).toEqual({ matchId: draftId });
   });
 });

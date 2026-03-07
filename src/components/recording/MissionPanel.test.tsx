@@ -133,6 +133,26 @@ describe('MissionPanel', () => {
     expect(screen.queryByTestId('telemetry-prospector-perks')).not.toBeInTheDocument();
   });
 
+  it('shows the telemetry summary in transparent mode and ignores blank telemetry entries', async () => {
+    gameData.currentLoadout = {
+      hero: 'Adrian',
+      ship: null,
+      weapons: [],
+      equipment: [],
+      characterWeapons: ['  ', selectedCharacterWeapon],
+      characterEquipment: [''],
+      characterPerks: ['   ', selectedCharacterPerk],
+    };
+    const { MissionPanel } = await import('./MissionPanel');
+    render(<MissionPanel variant="transparent" accordionMode />);
+
+    const summary = screen.getByTestId('mission-telemetry-summary');
+    expect(summary).toHaveTextContent('Telemetry 2/6');
+    expect(summary).toHaveAttribute('title', expect.stringContaining('Weapons 1/2'));
+    expect(summary).toHaveAttribute('title', expect.stringContaining('Equipment 0/2'));
+    expect(summary).toHaveAttribute('title', expect.stringContaining('Perks 1/2'));
+  });
+
   it('includes patch-era prospector loadout options for manual entry', async () => {
     const { MissionPanel } = await import('./MissionPanel');
     render(<MissionPanel />);

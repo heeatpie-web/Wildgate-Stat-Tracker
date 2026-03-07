@@ -66,20 +66,30 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
     };
 
     const telemetryProspectorWeapons = Array.isArray(currentLoadout?.characterWeapons)
-        ? currentLoadout.characterWeapons.filter(Boolean)
+        ? currentLoadout.characterWeapons.map((entry) => String(entry || '').trim()).filter(Boolean)
         : [];
     const telemetryProspectorEquipment = Array.isArray(currentLoadout?.characterEquipment)
-        ? currentLoadout.characterEquipment.filter(Boolean)
+        ? currentLoadout.characterEquipment.map((entry) => String(entry || '').trim()).filter(Boolean)
         : [];
     const telemetryProspectorPerks = Array.isArray(currentLoadout?.characterPerks)
-        ? currentLoadout.characterPerks.filter(Boolean).slice(0, MAX_PERKS_PER_MATCH)
-        : (Array.isArray(currentLoadout?.perks) ? currentLoadout.perks.filter(Boolean).slice(0, MAX_PERKS_PER_MATCH) : []);
+        ? currentLoadout.characterPerks.map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, MAX_PERKS_PER_MATCH)
+        : (Array.isArray(currentLoadout?.perks) ? currentLoadout.perks.map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, MAX_PERKS_PER_MATCH) : []);
     const telemetrySignalsFilled = Math.min(MAX_PROSPECTOR_LOADOUT_SLOTS, telemetryProspectorWeapons.length)
         + Math.min(MAX_PROSPECTOR_LOADOUT_SLOTS, telemetryProspectorEquipment.length)
         + Math.min(2, telemetryProspectorPerks.length);
     const telemetrySignalsTotal = (MAX_PROSPECTOR_LOADOUT_SLOTS * 2) + 2;
     const hasTelemetryLoadout = telemetrySignalsFilled > 0;
     const telemetrySummaryTooltip = `Telemetry synced: ${telemetrySignalsFilled}/${telemetrySignalsTotal} (Weapons ${Math.min(MAX_PROSPECTOR_LOADOUT_SLOTS, telemetryProspectorWeapons.length)}/${MAX_PROSPECTOR_LOADOUT_SLOTS}, Equipment ${Math.min(MAX_PROSPECTOR_LOADOUT_SLOTS, telemetryProspectorEquipment.length)}/${MAX_PROSPECTOR_LOADOUT_SLOTS}, Perks ${Math.min(2, telemetryProspectorPerks.length)}/2)`;
+    const telemetrySummaryBadge = hasTelemetryLoadout ? (
+        <span
+            data-testid="mission-telemetry-summary"
+            className="recording-telemetry-indicator is-active"
+            title={telemetrySummaryTooltip}
+        >
+            <span className="recording-telemetry-dot" />
+            Telemetry {telemetrySignalsFilled}/{telemetrySignalsTotal}
+        </span>
+    ) : null;
     const prospectorWeaponCatalog = React.useMemo(() => getProspectorWeaponCatalog(CHARACTER_WEAPONS || []), []);
     const prospectorEquipmentCatalog = React.useMemo(() => getProspectorEquipmentCatalog(CHARACTER_EQUIPMENT || []), []);
     const perkCatalog = React.useMemo(() => getPerkCatalog(), []);
@@ -213,18 +223,16 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                         </span>
                         <h3 className="recording-panel-heading-title">Mission Intel</h3>
                     </div>
-                    {hasTelemetryLoadout && (
+                    {telemetrySummaryBadge && (
                         <div className="recording-panel-heading-meta">
-                            <span
-                                data-testid="mission-telemetry-summary"
-                                className="recording-telemetry-indicator is-active"
-                                title={telemetrySummaryTooltip}
-                            >
-                                <span className="recording-telemetry-dot" />
-                                Telemetry {telemetrySignalsFilled}/{telemetrySignalsTotal}
-                            </span>
+                            {telemetrySummaryBadge}
                         </div>
                     )}
+                </div>
+            )}
+            {isTransparent && telemetrySummaryBadge && (
+                <div className="flex justify-end mb-2">
+                    {telemetrySummaryBadge}
                 </div>
             )}
 

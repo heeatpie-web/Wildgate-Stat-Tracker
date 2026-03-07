@@ -97,6 +97,28 @@ describe('artifactService', () => {
       expect(result.resolvedFromDisk).toBe(true);
     });
 
+    it('retains valid fallback images returned from merged match folders with artifact tokens', async () => {
+      const mergedFallback = 'D:\\\\merged\\\\match_artifacts\\\\77\\\\shot_2.png';
+      mockInvoke.mockResolvedValue({
+        success: true,
+        data: {
+          images: [mergedFallback],
+          imageFiles: [{ artifactId: 'tok_fallback', filename: 'shot_2.png', path: mergedFallback }],
+          telemetry: [],
+        },
+      });
+      const result = await getMatchArtifactsStructured(12, [mergedFallback]);
+
+      expect(result.images).toEqual(['D:\\merged\\match_artifacts\\77\\shot_2.png']);
+      expect(result.imageFiles).toEqual([{
+        artifactId: 'tok_fallback',
+        filename: 'shot_2.png',
+        path: mergedFallback,
+      }]);
+      expect(result.missingImages).toEqual([]);
+      expect(result.resolvedFromDisk).toBe(true);
+    });
+
     it('handles legacy array result (backward compatibility)', async () => {
       mockInvoke.mockResolvedValue(['/img1.png', '/img2.png']);
       const result = await getMatchArtifactsStructured(1);

@@ -98,6 +98,7 @@ export const Wizard: React.FC = () => {
     const [activeTab, setActiveTab] = useState<WizardTab>('result');
     const [guidedResultStep, setGuidedResultStep] = useState<'stats' | 'team-review' | 'save'>('stats');
     const [isRerunningOcr, setIsRerunningOcr] = useState(false);
+    const [isProspectorLoadoutExpanded, setIsProspectorLoadoutExpanded] = useState(false);
     const isWizardOpen = Boolean(showWizard);
     const lastTimeSyncMatchIdRef = React.useRef<number | null>(null);
     const dialogRef = React.useRef<HTMLDivElement | null>(null);
@@ -124,6 +125,7 @@ export const Wizard: React.FC = () => {
             setActiveTab('result');
             setGuidedResultStep('stats');
             setSelectedWinType(null);
+            setIsProspectorLoadoutExpanded(false);
             lastTimeSyncMatchIdRef.current = null;
             return;
         }
@@ -134,8 +136,36 @@ export const Wizard: React.FC = () => {
         } else {
             setSelectedWinType(null);
         }
+        const draftResult = (
+            pendingMatchData?.result === 'Win'
+            || pendingMatchData?.result === 'Loss'
+            || pendingMatchData?.result === 'Draw'
+        )
+            ? pendingMatchData.result
+            : null;
+        const restoredPlacement = Number(pendingMatchData?.placement);
+        if (draftResult === 'Loss' && subType === 'Combat' && Number.isInteger(restoredPlacement) && restoredPlacement >= 2 && restoredPlacement <= 5) {
+            setPendingPlacement(restoredPlacement);
+        } else if (pendingPlacement != null) {
+            setPendingPlacement(null);
+        }
+        const hasOutcomeType = draftResult === 'Draw' || subType === 'Combat' || subType === 'Artifact';
+        const hasValidPlacement = draftResult !== 'Loss'
+            || subType !== 'Combat'
+            || (Number.isInteger(restoredPlacement) && restoredPlacement >= 2 && restoredPlacement <= 5);
+        const hasCompletedOcrReview = (
+            String(pendingMatchData?.ocrState || '').trim().toLowerCase() === 'saved'
+            || Boolean(pendingMatchData?.ocrReviewedAt)
+        );
+        if (!draftResult || !hasOutcomeType || !hasValidPlacement) {
+            setGuidedResultStep('stats');
+        } else if (hasCompletedOcrReview) {
+            setGuidedResultStep('save');
+        } else {
+            setGuidedResultStep('team-review');
+        }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isWizardOpen, pendingMatchData?.subType]);
+    }, [isWizardOpen, pendingMatchData?.ocrReviewedAt, pendingMatchData?.ocrState, pendingMatchData?.placement, pendingMatchData?.result, pendingMatchData?.subType]);
 
     React.useEffect(() => {
         if (!isWizardOpen) return;
@@ -198,10 +228,16 @@ export const Wizard: React.FC = () => {
 
     React.useEffect(() => {
         if (!showWizard) return;
-        if (selectedResultFromDraft !== 'Loss' || selectedWinType !== 'Combat') {
+        const effectiveResult = selectedResultFromDraft || (showWizard === 'Win' || showWizard === 'Loss' || showWizard === 'Draw'
+            ? showWizard
+            : null);
+        const effectiveSubType = selectedWinType || (pendingMatchData?.subType === 'Combat' || pendingMatchData?.subType === 'Artifact'
+            ? pendingMatchData.subType
+            : null);
+        if (effectiveResult !== 'Loss' || effectiveSubType !== 'Combat') {
             if (pendingPlacement != null) setPendingPlacement(null);
         }
-    }, [pendingPlacement, selectedResultFromDraft, selectedWinType, setPendingPlacement, showWizard]);
+    }, [pendingMatchData?.subType, pendingPlacement, selectedResultFromDraft, selectedWinType, setPendingPlacement, showWizard]);
 
     React.useEffect(() => {
         if (!isWizardOpen || !pendingMatchData) return;
@@ -379,7 +415,7 @@ export const Wizard: React.FC = () => {
             return;
         }
         if (hasSavedOcrReview && activeTab === 'result') {
-            setGuidedResultStep((current) => (current === 'stats' ? 'stats' : 'save'));
+            setGuidedResultStep('save');
         }
     }, [activeTab, hasSavedOcrReview, isWizardOpen, showGuidedDetails]);
 
@@ -1274,88 +1310,101 @@ export const Wizard: React.FC = () => {
                                     </span>
                                 )}
                             </div>
-                            <div className="mt-3 space-y-3">
-                                <div>
-                                    <div className="text-label-xs font-bold uppercase opacity-55">Weapons</div>
-                                    <div className="mt-1 flex flex-wrap gap-1.5">
-                                        {displayedCharacterWeapons.length > 0 ? displayedCharacterWeapons.slice(0, MAX_PROSPECTOR_SLOTS).map((weapon) => (
-                                            <span key={weapon} className="px-2 py-0.5 rounded-pill bg-md-sys-surface-container-high text-md-sys-on-surface text-label-xs font-semibold">
-                                                {weapon}
-                                            </span>
-                                        )) : (
-                                            <span className="text-label-sm text-md-sys-on-surface/55">No weapons selected.</span>
-                                        )}
-                                    </div>
-                                </div>
-                                <div>
-                                    <div className="text-label-xs font-bold uppercase opacity-55">Equipment</div>
-                                    <div className="mt-1 flex flex-wrap gap-1.5">
-                                        {displayedCharacterEquipment.length > 0 ? displayedCharacterEquipment.slice(0, MAX_PROSPECTOR_SLOTS).map((equipment) => (
-                                            <span key={equipment} className="px-2 py-0.5 rounded-pill bg-md-sys-surface-container-high text-md-sys-on-surface text-label-xs font-semibold">
-                                                {equipment}
-                                            </span>
-                                        )) : (
-                                            <span className="text-label-sm text-md-sys-on-surface/55">No equipment selected.</span>
-                                        )}
-                                    </div>
-                                </div>
-                                <div>
-                                    <div className="text-label-xs font-bold uppercase opacity-55">Perks</div>
-                                    <div className="mt-1 flex flex-wrap gap-1.5">
-                                        {displayedPerks.length > 0 ? displayedPerks.map((perk) => (
-                                            <span key={perk} className="px-2 py-0.5 rounded-pill bg-md-sys-surface-container-high text-md-sys-on-surface text-label-xs font-semibold">
-                                                {perk}
-                                            </span>
-                                        )) : (
-                                            <span className="text-label-sm text-md-sys-on-surface/55">No perks selected.</span>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="space-y-3 pt-1">
+                            <button
+                                type="button"
+                                data-testid="wizard-prospector-summary-toggle"
+                                onClick={() => setIsProspectorLoadoutExpanded((current) => !current)}
+                                className="mt-3 w-full rounded-2xl border border-md-sys-outline/10 px-3 py-2.5 text-left inline-flex items-center gap-3 mg-surface-high hover:bg-md-sys-surface-container-high transition-colors"
+                            >
+                                <span className="text-label-sm font-semibold text-md-sys-on-surface/80">
+                                    {`Weapons: ${displayedCharacterWeapons.length} · Equipment: ${displayedCharacterEquipment.length} · Perk: ${displayedPerks.length}`}
+                                </span>
+                                <ChevronDown size={14} className={`ml-auto transition-transform ${isProspectorLoadoutExpanded ? 'rotate-180' : ''}`} />
+                            </button>
+                            {isProspectorLoadoutExpanded && (
+                                <div className="mt-3 space-y-3">
                                     <div>
-                                        <div className="text-label-xs font-bold uppercase opacity-55 mb-1">Edit Weapons</div>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {CHARACTER_WEAPONS.map((weapon) => {
-                                                const selected = displayedCharacterWeapons.some((entry) => entry.toLowerCase() === weapon.toLowerCase());
-                                                const disabled = !selected && displayedCharacterWeapons.length >= MAX_PROSPECTOR_SLOTS;
-                                                return (
-                                                    <button
-                                                        key={weapon}
-                                                        type="button"
-                                                        disabled={disabled}
-                                                        onClick={() => updatePendingLoadout('characterWeapons', weapon)}
-                                                        className={`px-2 py-1 rounded-md text-label-sm font-semibold transition-all ${selected ? 'bg-success-soft text-success ring-1 ring-success/40' : 'mg-surface-high opacity-70 hover:opacity-100'} disabled:opacity-40`}
-                                                    >
-                                                        {weapon}
-                                                    </button>
-                                                );
-                                            })}
+                                        <div className="text-label-xs font-bold uppercase opacity-55">Weapons</div>
+                                        <div className="mt-1 flex flex-wrap gap-1.5">
+                                            {displayedCharacterWeapons.length > 0 ? displayedCharacterWeapons.slice(0, MAX_PROSPECTOR_SLOTS).map((weapon) => (
+                                                <span key={weapon} className="px-2 py-0.5 rounded-pill bg-md-sys-surface-container-high text-md-sys-on-surface text-label-xs font-semibold">
+                                                    {weapon}
+                                                </span>
+                                            )) : (
+                                                <span className="text-label-sm text-md-sys-on-surface/55">No weapons selected.</span>
+                                            )}
                                         </div>
                                     </div>
                                     <div>
-                                        <div className="text-label-xs font-bold uppercase opacity-55 mb-1">Edit Equipment</div>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {CHARACTER_EQUIPMENT.map((equipment) => {
-                                                const selected = displayedCharacterEquipment.some((entry) => entry.toLowerCase() === equipment.toLowerCase());
-                                                const disabled = !selected && displayedCharacterEquipment.length >= MAX_PROSPECTOR_SLOTS;
-                                                return (
-                                                    <button
-                                                        key={equipment}
-                                                        type="button"
-                                                        disabled={disabled}
-                                                        onClick={() => updatePendingLoadout('characterEquipment', equipment)}
-                                                        className={`px-2 py-1 rounded-md text-label-sm font-semibold transition-all ${selected ? 'bg-success-soft text-success ring-1 ring-success/40' : 'mg-surface-high opacity-70 hover:opacity-100'} disabled:opacity-40`}
-                                                    >
-                                                        {equipment}
-                                                    </button>
-                                                );
-                                            })}
+                                        <div className="text-label-xs font-bold uppercase opacity-55">Equipment</div>
+                                        <div className="mt-1 flex flex-wrap gap-1.5">
+                                            {displayedCharacterEquipment.length > 0 ? displayedCharacterEquipment.slice(0, MAX_PROSPECTOR_SLOTS).map((equipment) => (
+                                                <span key={equipment} className="px-2 py-0.5 rounded-pill bg-md-sys-surface-container-high text-md-sys-on-surface text-label-xs font-semibold">
+                                                    {equipment}
+                                                </span>
+                                            )) : (
+                                                <span className="text-label-sm text-md-sys-on-surface/55">No equipment selected.</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="text-label-xs font-bold uppercase opacity-55">Perks</div>
+                                        <div className="mt-1 flex flex-wrap gap-1.5">
+                                            {displayedPerks.length > 0 ? displayedPerks.map((perk) => (
+                                                <span key={perk} className="px-2 py-0.5 rounded-pill bg-md-sys-surface-container-high text-md-sys-on-surface text-label-xs font-semibold">
+                                                    {perk}
+                                                </span>
+                                            )) : (
+                                                <span className="text-label-sm text-md-sys-on-surface/55">No perks selected.</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="space-y-3 pt-1">
+                                        <div>
+                                            <div className="text-label-xs font-bold uppercase opacity-55 mb-1">Edit Weapons</div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {CHARACTER_WEAPONS.map((weapon) => {
+                                                    const selected = displayedCharacterWeapons.some((entry) => entry.toLowerCase() === weapon.toLowerCase());
+                                                    const disabled = !selected && displayedCharacterWeapons.length >= MAX_PROSPECTOR_SLOTS;
+                                                    return (
+                                                        <button
+                                                            key={weapon}
+                                                            type="button"
+                                                            disabled={disabled}
+                                                            onClick={() => updatePendingLoadout('characterWeapons', weapon)}
+                                                            className={`px-2 py-1 rounded-md text-label-sm font-semibold transition-all ${selected ? 'bg-success-soft text-success ring-1 ring-success/40' : 'mg-surface-high opacity-70 hover:opacity-100'} disabled:opacity-40`}
+                                                        >
+                                                            {weapon}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div className="text-label-xs font-bold uppercase opacity-55 mb-1">Edit Equipment</div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {CHARACTER_EQUIPMENT.map((equipment) => {
+                                                    const selected = displayedCharacterEquipment.some((entry) => entry.toLowerCase() === equipment.toLowerCase());
+                                                    const disabled = !selected && displayedCharacterEquipment.length >= MAX_PROSPECTOR_SLOTS;
+                                                    return (
+                                                        <button
+                                                            key={equipment}
+                                                            type="button"
+                                                            disabled={disabled}
+                                                            onClick={() => updatePendingLoadout('characterEquipment', equipment)}
+                                                            className={`px-2 py-1 rounded-md text-label-sm font-semibold transition-all ${selected ? 'bg-success-soft text-success ring-1 ring-success/40' : 'mg-surface-high opacity-70 hover:opacity-100'} disabled:opacity-40`}
+                                                        >
+                                                            {equipment}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
-                        <div className="flex-1 min-h-0 flex flex-col overflow-y-auto custom-scrollbar">
+                        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                             <OcrCorrectionModal
                                 isOpen={true}
                                 embedded={true}

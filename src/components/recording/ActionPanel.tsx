@@ -47,7 +47,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         activeUser,
         setShowReviewQueue,
         setShowIdMapper,
-        setShowWizard,
         smartCaptureRequest,
         clearSmartCaptureRequest,
         pushNotification
@@ -182,10 +181,39 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         return artifactPaths;
     }, [collectCaptureArtifacts]);
 
+    const dispatchOcrGate = React.useCallback((
+        data: OCRExtractedData,
+        options?: {
+            result?: MatchResult | null;
+            matchId?: string | number | null;
+            source?: string;
+        }
+    ) => {
+        const matchId = options?.matchId ?? null;
+        const source = options?.source || 'action-panel';
+        Logger.info('ActionPanel', 'Dispatching OCR gate', {
+            source,
+            result: options?.result ?? null,
+            matchId,
+            captureTimestamp: data.captureTimestamp,
+            artifactCount: Array.isArray(data.artifacts) ? data.artifacts.length : 0,
+        });
+        window.dispatchEvent(new CustomEvent('submission:ocr-gate', {
+            detail: {
+                result: options?.result ?? undefined,
+                data,
+                matchId,
+            },
+        }));
+    }, []);
+
     const handleReviewBucket = () => {
         if (pendingDataForQueueScope && onSmartCaptureData) {
             syncDraftArtifacts(queueScopeMatchId ?? null);
-            onSmartCaptureData(pendingDataForQueueScope);
+            dispatchOcrGate(pendingDataForQueueScope, {
+                matchId: queueScopeMatchId ?? null,
+                source: 'manual-review',
+            });
             dismissPendingData();
         }
     };
@@ -237,7 +265,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         }
     };
 
-    const logsEndRef = React.useRef<HTMLDivElement>(null);
+    const logsContainerRef = React.useRef<HTMLDivElement>(null);
     const handledCaptureRequestRef = React.useRef<string | null>(null);
     const lastCaptureRequestAtRef = React.useRef(0);
     const [lastSubmitted, setLastSubmitted] = React.useState<MatchResult | null>(null);
@@ -252,8 +280,13 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const processingToastShownRef = React.useRef(false);
     const backgroundOcrInFlightRef = React.useRef(false);
     React.useEffect(() => {
-        if (logsEndRef.current) logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }, [scanLogs]);
+        const container = logsContainerRef.current;
+        if (!container) return;
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        const shouldStickToBottom = container.scrollTop === 0 || distanceFromBottom <= 24;
+        if (!shouldStickToBottom) return;
+        container.scrollTop = container.scrollHeight;
+    }, [scanLogs.length]);
 
     React.useEffect(() => {
         const onCaptureRequest = (evt: Event) => {
@@ -321,11 +354,23 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     // Rerun/queued OCR completion can open review automatically, but this is configurable.
     React.useEffect(() => {
         if (processingStatus?.phase !== 'completed') return;
-        if (!pendingData) return;
+        const promotionMatchId = queueScopeMatchId ?? submissionMatchId ?? null;
+        const promotionData = promotionMatchId != null ? getPendingData(promotionMatchId) : pendingData;
+        if (!promotionData) return;
         // Use a key to prevent re-opening for the same data
-        const dataKey = JSON.stringify(Object.keys(pendingData));
+        const dataKey = [
+            String(promotionMatchId ?? 'unscoped'),
+            String(promotionData.captureTimestamp || 0),
+            String(Array.isArray(promotionData.artifacts) ? promotionData.artifacts.length : 0),
+        ].join(':');
         if (autoOpenedForPendingRef.current === dataKey) return;
         autoOpenedForPendingRef.current = dataKey;
+        Logger.info('ActionPanel', 'OCR completion detected', {
+            source: 'auto-open-after-rerun',
+            matchId: promotionMatchId,
+            captureTimestamp: promotionData.captureTimestamp,
+            artifactCount: Array.isArray(promotionData.artifacts) ? promotionData.artifacts.length : 0,
+        });
         if (!ocrAutoOpenAfterRerun) {
             pushNotification({
                 message: 'OCR completed. Review is available when you are ready.',
@@ -336,8 +381,23 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             });
             return;
         }
-        setShowWizard('Match Result');
-    }, [ocrAutoOpenAfterRerun, pendingData, processingStatus?.phase, pushNotification, setShowWizard]);
+        syncDraftArtifacts(promotionMatchId);
+        dispatchOcrGate(promotionData, {
+            matchId: promotionMatchId,
+            source: 'auto-open-after-rerun',
+        });
+    }, [
+        autoOpenedForPendingRef,
+        dispatchOcrGate,
+        getPendingData,
+        ocrAutoOpenAfterRerun,
+        pendingData,
+        processingStatus?.phase,
+        pushNotification,
+        queueScopeMatchId,
+        submissionMatchId,
+        syncDraftArtifacts,
+    ]);
 
     React.useEffect(() => {
         const onMatchComplete = (evt: Event) => {
@@ -374,7 +434,11 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         const scopedPendingData = submissionMatchId != null ? getPendingData(submissionMatchId) : pendingData;
         if (onSmartCaptureData && (scopedPendingData || pendingOcrCountForSubmission > 0)) {
             if (scopedPendingData) {
-                window.dispatchEvent(new CustomEvent('submission:ocr-gate', { detail: { result, data: scopedPendingData } }));
+                dispatchOcrGate(scopedPendingData, {
+                    result,
+                    matchId: submissionMatchId ?? null,
+                    source: 'result-submit',
+                });
                 return;
             }
             if (resultOcrFlowMode === 'background') {
@@ -395,7 +459,11 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                             await processAllStored(activeUser || null, scopeForSubmission);
                             const reviewData = scopeForSubmission != null ? getPendingData(scopeForSubmission) : getPendingData();
                             if (reviewData) {
-                                onSmartCaptureData(reviewData);
+                                dispatchOcrGate(reviewData, {
+                                    result,
+                                    matchId: scopeForSubmission,
+                                    source: 'background-ocr-complete',
+                                });
                                 pushNotification({
                                     message: 'Background OCR ready for review.',
                                     type: 'success',
@@ -457,7 +525,11 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         if (reviewData) {
             syncDraftArtifacts(submissionMatchId ?? null);
             setOcrDecisionPrompt(null);
-            window.dispatchEvent(new CustomEvent('submission:ocr-gate', { detail: { result, data: reviewData } }));
+            dispatchOcrGate(reviewData, {
+                result,
+                matchId: submissionMatchId ?? null,
+                source: 'prompt-process',
+            });
             return;
         }
         setOcrDecisionPrompt(null);
@@ -554,14 +626,16 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     />
                 </div>
                 {isScanning && scanLogs.length > 0 && (
-                    <div className="mt-1 max-h-24 overflow-y-auto mg-surface rounded-card p-2 border border-md-sys-outline/5 font-mono text-label-xs text-md-sys-on-surface/60 flex flex-col gap-1 custom-scrollbar">
+                    <div
+                        ref={logsContainerRef}
+                        className="mt-1 max-h-24 overflow-y-auto mg-surface rounded-card p-2 border border-md-sys-outline/5 font-mono text-label-xs text-md-sys-on-surface/60 flex flex-col gap-1 custom-scrollbar"
+                    >
                         {scanLogs.slice(-10).map((log, i) => (
                             <div key={i} className="flex gap-2 items-start opacity-60">
                                 <ChevronRight size={10} className="text-md-sys-primary shrink-0 mt-0.5" />
                                 <span className="truncate">{log}</span>
                             </div>
                         ))}
-                        <div ref={logsEndRef} />
                     </div>
                 )}
             </div>

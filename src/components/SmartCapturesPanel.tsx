@@ -1196,15 +1196,8 @@ const SmartCapturesPanel: React.FC = () => {
         <>
             <SmartCapturesShell
                 topNav={(
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <div className="flex items-center gap-3">
-                            {renderSectionTabs('w-auto self-start')}
-                            <span className="text-label-sm text-md-sys-on-surface/55">
-                                {activeSection === 'capture'
-                                    ? 'Queue and review capture work without moving the section toggle.'
-                                    : 'Tools stay separate while the section toggle remains anchored on the left.'}
-                            </span>
-                        </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        {renderSectionTabs('w-auto shrink-0')}
                         <button
                             type="button"
                             onClick={() => {
@@ -2436,11 +2429,18 @@ const SmartMatchDetail: React.FC<{
                             .map((imagePath) => toArtifactKey(imagePath))
                             .filter(Boolean)
                     );
+                    const retainedFilenameKeys = new Set(
+                        nextArtifacts.images
+                            .map((imagePath) => String(imagePath || '').trim().split(/[\\/]/).pop()?.toLowerCase() || '')
+                            .filter(Boolean)
+                    );
                     const existingArtifacts = Array.isArray(match.artifacts) ? match.artifacts : [];
                     const prunedArtifacts = existingArtifacts.filter((artifactPath) => {
                         const normalizedPath = String(artifactPath || '').trim();
                         if (!IMAGE_EXTS.some((ext) => normalizedPath.toLowerCase().endsWith(ext))) return true;
-                        return !missingKeys.has(toArtifactKey(normalizedPath));
+                        if (!missingKeys.has(toArtifactKey(normalizedPath))) return true;
+                        const filenameKey = normalizedPath.split(/[\\/]/).pop()?.toLowerCase() || '';
+                        return !!filenameKey && retainedFilenameKeys.has(filenameKey);
                     });
                     if (prunedArtifacts.length === existingArtifacts.length) return;
                     onUpdate({ ...match, artifacts: prunedArtifacts });
@@ -3353,7 +3353,7 @@ const SmartMatchDetail: React.FC<{
                                             : 'Open wizard for review and final save'}
                                     >
                                         <FlaskConical size={16} />
-                                        Open Wizard
+                                        Open
                                     </button>
                                 </div>
                                 <div className="sc-detail-action-menu" ref={secondaryActionsRef}>

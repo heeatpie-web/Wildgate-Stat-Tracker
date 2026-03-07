@@ -214,7 +214,7 @@ export const NotificationCenter: React.FC = () => {
                     id="notification-center-panel"
                     role="dialog"
                     aria-label="Notification inbox"
-                    className="fixed right-4 top-20 z-top w-[min(30rem,calc(100vw-2rem))] max-h-[calc(100vh-7rem)] rounded-2xl border border-md-sys-outline/30 bg-md-sys-surface-container-highest text-md-sys-on-surface shadow-[0_24px_56px_rgba(0,0,0,0.52)] overflow-hidden backdrop-blur-sm"
+                    className="fixed right-4 top-20 z-top w-[min(30rem,calc(100vw-2rem))] max-h-[calc(100vh-7rem)] rounded-2xl border border-md-sys-outline/30 bg-md-sys-surface-container-highest text-md-sys-on-surface shadow-[0_24px_56px_rgba(0,0,0,0.52)] overflow-hidden"
                 >
                     <div className="px-4 py-3 border-b border-md-sys-outline/14 flex items-center justify-between">
                         <div className="text-label-sm font-bold uppercase tracking-wide">Notifications</div>
@@ -240,7 +240,7 @@ export const NotificationCenter: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="max-h-[calc(100vh-11rem)] overflow-y-auto custom-scrollbar p-3 space-y-2 bg-md-sys-surface-container-highest/100">
+                    <div className="max-h-[calc(100vh-11rem)] overflow-y-auto custom-scrollbar p-3 space-y-2 bg-md-sys-surface-container-highest">
                         {visibleNotifications.length === 0 && (
                             <div className="rounded-xl border border-md-sys-outline/20 bg-md-sys-surface-container-high px-3 py-4 text-body-sm opacity-90">
                                 App updates and tips will appear here.

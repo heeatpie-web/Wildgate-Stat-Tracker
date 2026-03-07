@@ -65,9 +65,21 @@ const appStoreState = {
   isAlwaysOnTop: false,
   isOverlayMode: false,
   activeShip: 'Hunter (4 Player)',
+  selectedTeammates: [] as string[],
+  ocrLearningEnabled: false,
+  resolveOcrAlias: vi.fn(() => ({ resolvedName: null, suggestedName: null, reason: 'none' })),
+  ocrAutoApplyMinScore: 0.85,
+  ocrAutoApplyMinCount: 2,
+  ocrLearningStrictMode: false,
+  ocrLearningReviewMode: 'balanced',
+  ocrLearningAutoPromoteCount: 3,
+  ocrCorrections: {},
+  ocrAliasModel: {},
+  matches: [] as any[],
   pendingMatchData: {},
   setPendingArtifactType: vi.fn(),
   setPendingMatchData: vi.fn(),
+  updateMatch: vi.fn(),
 };
 
 vi.mock('./providers/UIStateProvider', () => ({
@@ -147,6 +159,13 @@ describe('App', () => {
     uiState.isOverlayMode = false;
     uiState.showChangelog = false;
     uiState.showIdMapper = false;
+    gameDataState.selectedOpponents = [];
+    gameDataState.selectedReachModifiers = [];
+    gameDataState.sessionTeams = {};
+    gameDataState.sessionShipTypes = {};
+    appStoreState.selectedTeammates = [];
+    appStoreState.matches = [];
+    appStoreState.pendingMatchData = {};
   });
 
   it('renders recording view in default dashboard mode', async () => {
@@ -240,5 +259,77 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByTestId('id-mapper')).toBeInTheDocument();
     });
+  });
+
+  it('reseeds OCR apply from the canonical match when gate matchId differs from pending draft', async () => {
+    const { default: App } = await import('./App');
+    appStoreState.pendingMatchData = {
+      id: 12,
+      result: 'Loss',
+      artifacts: ['wrong-row.png'],
+    };
+    appStoreState.matches = [{
+      id: 77,
+      timestamp: 1_700_000_000_000,
+      date: '1/1/2024',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: ['Wing1'],
+      opponents: ['Enemy1'],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: ['Ionized'],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      artifacts: ['canonical.png'],
+    }];
+
+    render(<App />);
+
+    const ocrPayload = {
+      screenshotType: 'crew_hub',
+      playerShip: { shipType: 'Bastion', confidence: 90 },
+      playerTeamName: 'Friendly Team',
+      reachModifiers: [{ name: 'Ionized', confidence: 80, rawText: 'Ionized' }],
+      enemyShips: [],
+      teammates: [{ name: 'Wing2', confidence: 90 }],
+      opponentTeams: [{
+        teamName: 'Enemy Team',
+        shipType: 'Scout',
+        color: 'red',
+        players: [{ name: 'Enemy2', confidence: 88 }],
+        confidence: 88,
+      }],
+      artifacts: ['ocr.png'],
+      overallConfidence: 88,
+      captureTimestamp: Date.now(),
+    } as const;
+
+    window.dispatchEvent(new CustomEvent('submission:ocr-gate', {
+      detail: {
+        result: 'Win',
+        matchId: 77,
+        data: ocrPayload,
+      },
+    }));
+
+    await waitFor(() => {
+      expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
+        id: 77,
+        ship: 'Bastion',
+        teammates: ['Wing2'],
+        opponents: ['Enemy2'],
+        reachModifiers: ['Ionized'],
+        artifacts: ['canonical.png', 'ocr.png'],
+        ocrState: 'reviewing',
+      }));
+    });
+    expect(appStoreState.updateMatch).toHaveBeenCalledWith(expect.objectContaining({
+      id: 77,
+      artifacts: ['canonical.png', 'ocr.png'],
+      ocrState: 'reviewing',
+    }));
+    expect(uiState.setShowWizard).toHaveBeenCalledWith('Win');
   });
 });

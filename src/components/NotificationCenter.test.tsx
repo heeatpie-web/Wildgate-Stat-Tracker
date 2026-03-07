@@ -145,6 +145,8 @@ describe('NotificationCenter', () => {
     expect(panel).toHaveClass('right-4');
     expect(panel).toHaveClass('top-20');
     expect(panel).toHaveClass('text-md-sys-on-surface');
+    expect(panel).toHaveClass('bg-md-sys-surface-container-highest');
+    expect(panel).not.toHaveClass('backdrop-blur-sm');
 
     const readRow = screen.getByRole('button', { name: /already read/i });
     expect(readRow).not.toHaveClass('opacity-90');

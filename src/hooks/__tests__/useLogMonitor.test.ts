@@ -31,6 +31,7 @@ const gameDataState = {
   setCurrentLoadout: vi.fn(),
   currentLoadout: null,
   sessionStartTime: Date.now() - 5_000,
+  clearTelemetryDetected: vi.fn(),
 };
 
 const uiState = {
@@ -123,6 +124,7 @@ describe('useLogMonitor', () => {
     gameDataState.setActiveWeapons.mockClear();
     gameDataState.setActiveHero.mockClear();
     gameDataState.setActiveShip.mockClear();
+    gameDataState.clearTelemetryDetected.mockClear();
     gameDataState.updatePlayerIdMapping.mockClear();
     uiState.setToast.mockClear();
     gameDataState.sessionStartTime = Date.now() - 5_000;
@@ -136,13 +138,15 @@ describe('useLogMonitor', () => {
     });
   });
 
-  it('starts telemetry monitoring with the configured performance profile', async () => {
+  it('registers listeners before starting telemetry monitoring and begins in high-accuracy mode', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
     renderHook(() => useLogMonitor('Pilot'));
 
-    expect(ipcMock.send).toHaveBeenCalledWith('start-log-monitoring', { performanceProfile: 'balanced' });
+    expect(ipcMock.send).toHaveBeenCalledWith('start-log-monitoring', { performanceProfile: 'high-accuracy' });
     expect(ipcMock.on).toHaveBeenCalledWith('log-status', expect.any(Function));
     expect(ipcMock.on).toHaveBeenCalledWith('log-data', expect.any(Function));
+    expect(ipcMock.on.mock.invocationCallOrder[0]).toBeLessThan(ipcMock.send.mock.invocationCallOrder[0]);
+    expect(ipcMock.on.mock.invocationCallOrder[1]).toBeLessThan(ipcMock.send.mock.invocationCallOrder[0]);
   });
 
   it('uses adaptive polling profiles when adaptive telemetry is enabled', async () => {
@@ -177,6 +181,43 @@ describe('useLogMonitor', () => {
     expect(result.current.logFeed[0]?.EventName).toBe('TelemetryPing');
     expect(setLastActivity).toHaveBeenCalled();
     expect(setTelemetryStatus).toHaveBeenCalledWith(expect.objectContaining({ lastEventAt: expect.any(Number) }));
+  });
+
+  it('stops telemetry monitoring on unmount', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    const { unmount } = renderHook(() => useLogMonitor('Pilot'));
+
+    unmount();
+
+    expect(ipcMock.send).toHaveBeenCalledWith('stop-log-monitoring');
+  });
+
+  it('clears telemetry-derived loadout state when the game closes', async () => {
+    const { useLogMonitor } = await import('../useLogMonitor');
+    gameDataState.currentLoadout = {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: [],
+      equipment: [],
+      characterWeapons: ['Scattergun'],
+      characterEquipment: ['Shield Matrix'],
+      characterPerks: ['Boarder'],
+      perks: ['Boarder'],
+    };
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-status']?.({ exists: false, size: 0, lastCheck: 1 });
+    });
+
+    expect(gameDataState.clearTelemetryDetected).toHaveBeenCalled();
+    expect(gameDataState.setCurrentLoadout).toHaveBeenCalledWith(expect.objectContaining({
+      characterWeapons: [],
+      characterEquipment: [],
+      characterPerks: [],
+      perks: [],
+    }));
+    expect(gameDataState.setActiveWeapons).toHaveBeenCalledWith({});
   });
 
   it('creates a telemetry draft on map-start signal', async () => {

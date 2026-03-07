@@ -355,6 +355,34 @@ describe('Wizard', () => {
         expect(gameData.setTimeSec).toHaveBeenCalledWith('34');
     });
 
+    it('rehydrates reviewed combat-loss drafts into later guided steps immediately', async () => {
+        const { Wizard } = await import('./Wizard');
+        gameData.pendingMatchData = {
+            id: 550,
+            result: 'Loss',
+            subType: 'Combat',
+            placement: 3,
+            ocrReviewedAt: 1700000000000,
+            loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                weapons: [],
+                equipment: [],
+            },
+            kills: { 'AI Legion': 0 },
+        };
+        gameData.pendingPlacement = null;
+        uiState.showWizard = 'Loss';
+
+        const { rerender } = render(<Wizard />);
+
+        await waitFor(() => {
+            expect(gameData.setPendingPlacement).toHaveBeenCalledWith(3);
+        });
+        rerender(<Wizard />);
+        expect(screen.getByRole('button', { name: /finalize combat loss/i })).toBeEnabled();
+    });
+
     it('shows friendly telemetry badges and hides raw event source names', async () => {
         const { Wizard } = await import('./Wizard');
         gameData.pendingMatchData = {
@@ -492,8 +520,40 @@ describe('Wizard', () => {
         expect(innerWrapper).toHaveClass('min-h-0');
         expect(innerWrapper).toHaveClass('flex');
         expect(innerWrapper).toHaveClass('flex-col');
-        expect(innerWrapper).toHaveClass('overflow-y-auto');
+        expect(innerWrapper).toHaveClass('overflow-hidden');
         expect(embeddedShell).toBeInTheDocument();
+    });
+
+    it('keeps prospector loadout collapsed by default in the OCR tab', async () => {
+        const { Wizard } = await import('./Wizard');
+        gameData.pendingMatchData = {
+            id: 912,
+            loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                weapons: [],
+                equipment: [],
+                characterWeapons: ['Scattergun'],
+                characterEquipment: ['Shield Matrix'],
+                characterPerks: ['Quickstep'],
+            },
+            kills: { 'AI Legion': 0 },
+        };
+        uiState.showWizard = 'Win';
+
+        render(<Wizard />);
+        fireEvent.click(screen.getByRole('button', { name: /artifact win/i }));
+        fireEvent.click(screen.getByRole('button', { name: /ocr review/i }));
+
+        expect(screen.getByRole('button', {
+            name: /weapons: 1 · equipment: 1 · perk: 1/i,
+        })).toBeInTheDocument();
+        expect(screen.queryByText('Edit Weapons')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByTestId('wizard-prospector-summary-toggle'));
+
+        expect(screen.getByText('Edit Weapons')).toBeInTheDocument();
+        expect(screen.getByText('Edit Equipment')).toBeInTheDocument();
     });
 
     it('reruns OCR from the OCR tab and updates pending data with rerun output', async () => {

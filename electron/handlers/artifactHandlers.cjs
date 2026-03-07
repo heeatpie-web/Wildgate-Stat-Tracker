@@ -95,6 +95,11 @@ const buildFallbackArtifactCandidates = ({ fallbackImages, matchArtifactsRoot, m
       }
     }
     if (mapped) return;
+
+    const validatedOriginal = validatePathInRoots(normalizedFallback, [matchArtifactsRoot]);
+    if (validatedOriginal.success && fs.existsSync(validatedOriginal.data.resolved)) {
+      addCandidate(validatedOriginal.data.resolved);
+    }
   });
 
   return candidates;
@@ -224,6 +229,11 @@ function registerArtifactHandlers(ipcMain, ctx) {
         if (imageByFilename.has(filenameKey)) continue;
         images.push(fallbackPath);
         imageByFilename.set(filenameKey, fallbackPath);
+        const artifactId = artifactTokenRegistry.issue(scope, {
+          filename: path.basename(fallbackPath),
+          fullPath: fallbackPath,
+        });
+        imageFiles.push({ artifactId, filename: path.basename(fallbackPath), path: fallbackPath });
       }
       return ok({ images, imageFiles, telemetry });
     } catch (e) {

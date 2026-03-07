@@ -191,6 +191,74 @@ const toFiniteNumber = (value: unknown, fallback = 0): number => {
 
 type FinalMatchResult = Exclude<MatchResult, 'Ongoing'>;
 
+const IMAGE_ARTIFACT_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
+
+const isImageArtifactEntry = (value: unknown): value is string => {
+    const normalized = String(value || '').trim();
+    return normalized.startsWith('data:image/') || IMAGE_ARTIFACT_PATTERN.test(normalized);
+};
+
+const mergeArtifactEntries = (...artifactSets: Array<Array<string | null | undefined> | null | undefined>): string[] => {
+    const seen = new Set<string>();
+    const merged: string[] = [];
+    artifactSets.forEach((artifactSet) => {
+        (artifactSet || []).forEach((entry) => {
+            const normalized = String(entry || '').trim();
+            if (!isImageArtifactEntry(normalized)) return;
+            const key = normalized.replace(/[\\/]+/g, '\\').toLowerCase();
+            if (seen.has(key)) return;
+            seen.add(key);
+            merged.push(normalized);
+        });
+    });
+    return merged;
+};
+
+const clonePendingMatchDraft = (value: Partial<Match> | null | undefined): Partial<Match> => ({
+    ...(value || {}),
+    teammates: Array.isArray(value?.teammates) ? [...value.teammates] : [],
+    opponents: Array.isArray(value?.opponents) ? [...value.opponents] : [],
+    opponentTeams: Array.isArray(value?.opponentTeams)
+        ? value.opponentTeams.map((team) => ({
+            teamName: String(team.teamName || ''),
+            shipType: String(team.shipType || ''),
+            color: String(team.color || ''),
+            players: Array.isArray(team.players) ? [...team.players] : [],
+        }))
+        : [],
+    reachModifiers: Array.isArray(value?.reachModifiers) ? [...value.reachModifiers] : [],
+    artifacts: Array.isArray(value?.artifacts) ? [...value.artifacts] : [],
+    kills: value?.kills ? { ...value.kills } : {},
+    loadout: cloneLoadout(value?.loadout) || undefined,
+    timelineEvents: Array.isArray(value?.timelineEvents) ? [...value.timelineEvents] : [],
+    ocrDebug: value?.ocrDebug
+        ? {
+            ...value.ocrDebug,
+            hazards: Array.isArray(value.ocrDebug.hazards) ? [...value.ocrDebug.hazards] : value.ocrDebug.hazards,
+            mergeStats: value.ocrDebug.mergeStats ? { ...value.ocrDebug.mergeStats } : value.ocrDebug.mergeStats,
+            fieldConfidence: value.ocrDebug.fieldConfidence ? { ...value.ocrDebug.fieldConfidence } : value.ocrDebug.fieldConfidence,
+            routing: value.ocrDebug.routing ? { ...value.ocrDebug.routing } : value.ocrDebug.routing,
+            nameSources: value.ocrDebug.nameSources
+                ? Object.fromEntries(
+                    Object.entries(value.ocrDebug.nameSources).map(([key, entries]) => [
+                        key,
+                        Array.isArray(entries) ? entries.map((entry) => ({ ...entry })) : entries,
+                    ])
+                )
+                : value.ocrDebug.nameSources,
+        }
+        : undefined,
+    telemetryConsistency: value?.telemetryConsistency
+        ? {
+            ...value.telemetryConsistency,
+            checks: value.telemetryConsistency.checks ? { ...value.telemetryConsistency.checks } : value.telemetryConsistency.checks,
+            loadoutSaves: Array.isArray(value.telemetryConsistency.loadoutSaves)
+                ? value.telemetryConsistency.loadoutSaves.map((entry) => ({ ...entry }))
+                : value.telemetryConsistency.loadoutSaves,
+        }
+        : undefined,
+});
+
 const formatBytes = (bytes: number): string => {
     if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
     const units = ['B', 'KB', 'MB', 'GB'];
@@ -1599,6 +1667,27 @@ const App: React.FC = () => {
     }, [activeView, telemetryDraftPendingResult]);
 
     useEffect(() => {
+        const onTelemetryDraftResolved = (evt: Event) => {
+            const customEvt = evt as CustomEvent<{ matchId?: number }>;
+            const matchId = Number(customEvt?.detail?.matchId || 0);
+            if (!Number.isInteger(matchId) || matchId <= 0) {
+                setTelemetryDraftPrompt(null);
+                setTelemetryDraftPendingResult(null);
+                return;
+            }
+            handledTelemetryDraftPostmatchPromptIdsRef.current.add(matchId);
+            dismissedTelemetryDraftMidmatchPromptIdsRef.current.add(matchId);
+            telemetryDraftCaptureClicksRef.current.delete(matchId);
+            setTelemetryDraftPrompt((current) => (
+                current?.matchId === matchId ? null : current
+            ));
+            setTelemetryDraftPendingResult(null);
+        };
+        window.addEventListener('telemetry-draft:resolved', onTelemetryDraftResolved as EventListener);
+        return () => window.removeEventListener('telemetry-draft:resolved', onTelemetryDraftResolved as EventListener);
+    }, []);
+
+    useEffect(() => {
         const onTelemetryDraftReady = (evt: Event) => {
             const customEvt = evt as CustomEvent<{ matchId?: number; duration?: string }>;
             const matchId = Number(customEvt?.detail?.matchId || 0);
@@ -1707,7 +1796,21 @@ const App: React.FC = () => {
         setToast({ message: `Queued roster candidate: ${normalized}`, type: 'info' });
     }, [addPendingReview, pendingReviews, pilotRegistry, setToast]);
 
-    const handleApplyOCRData = useCallback((data: OCRExtractedData, gateResult?: FinalMatchResult | null) => {
+    const handleApplyOCRData = useCallback((
+        data: OCRExtractedData,
+        gateResult?: FinalMatchResult | null,
+        gateMatchId?: string | number | null
+    ) => {
+        const requestedMatchId = Number(gateMatchId || 0);
+        const normalizedRequestedMatchId = Number.isInteger(requestedMatchId) && requestedMatchId > 0
+            ? requestedMatchId
+            : null;
+        Logger.info('App', 'OCR gate received', {
+            result: gateResult ?? null,
+            matchId: normalizedRequestedMatchId,
+            captureTimestamp: data.captureTimestamp,
+            artifactCount: Array.isArray(data.artifacts) ? data.artifacts.length : 0,
+        });
         const resolvePlayerName = (ocrName: string, existingList: string[]): string => {
             if (!ocrName || ocrName.length < 2) return ocrName;
             const normalized = normalizeOcrName(ocrName);
@@ -1931,6 +2034,7 @@ const App: React.FC = () => {
         const cappedTeammates = capTeammatePlayers(data.teammates, shipForCapacity);
         const autoAppliedTeammates: string[] = [];
         const teammateBaseline = [...(useAppStore.getState().selectedTeammates || [])];
+        let nextDraftTeammates = dedupeNames(teammateBaseline);
         if (cappedTeammates.length > 0) {
             const merged = [...teammateBaseline];
             const existing = new Set(merged.map((name) => normalizeOcrName(name).toLowerCase()));
@@ -1946,6 +2050,7 @@ const App: React.FC = () => {
                 existing.add(key);
                 autoAppliedTeammates.push(resolved);
             }
+            nextDraftTeammates = dedupeNames(merged);
             setSelectedTeammates(merged);
         }
 
@@ -1993,6 +2098,9 @@ const App: React.FC = () => {
         });
 
         const mergedOpponents = structuredTeams.flatMap((team) => team.players);
+        const nextDraftOpponents = mergedOpponents.length > 0
+            ? dedupeNames([...(selectedOpponents || []), ...mergedOpponents])
+            : dedupeNames(selectedOpponents || []);
         if (mergedOpponents.length > 0) {
             setSelectedOpponents((prev: string[]) => dedupeNames([...prev, ...mergedOpponents]));
         }
@@ -2074,41 +2182,39 @@ const App: React.FC = () => {
         setSessionTeams(newSessionTeams);
         setSessionShipTypes(newShipTypes, 'ocr');
 
-        const pendingMatch = useAppStore.getState().pendingMatchData || {};
-        const pendingMatchId = Number((pendingMatch as Partial<Match> | null)?.id || 0);
-        const targetMatchId = Number.isInteger(pendingMatchId) && pendingMatchId > 0
+        const storeState = useAppStore.getState();
+        const existingPendingMatch = clonePendingMatchDraft(storeState.pendingMatchData || null);
+        const pendingMatchId = Number(existingPendingMatch.id || 0);
+        const normalizedPendingMatchId = Number.isInteger(pendingMatchId) && pendingMatchId > 0
             ? pendingMatchId
-            : undefined;
-        const mergedArtifactPaths = Array.from(new Set(
-            [
-                ...(Array.isArray(pendingMatch.artifacts) ? pendingMatch.artifacts : []),
-                ...(Array.isArray(data.artifacts) ? data.artifacts : []),
-            ]
-                .map((entry) => String(entry || '').trim())
-                .filter((entry) => /\.(png|jpe?g|webp|bmp|gif)$/i.test(entry))
-        ));
-        if (targetMatchId && mergedArtifactPaths.length > 0) {
-            const storeState = useAppStore.getState();
-            const existingMatch = (storeState.matches || []).find((match) => Number(match.id || 0) === targetMatchId);
-            if (existingMatch) {
-                const nextArtifacts = Array.from(new Set(
-                    [...(existingMatch.artifacts || []), ...mergedArtifactPaths]
-                        .map((entry) => String(entry || '').trim())
-                        .filter((entry) => /\.(png|jpe?g|webp|bmp|gif)$/i.test(entry))
-                ));
-                const artifactsChanged = nextArtifacts.length !== (existingMatch.artifacts || []).length
-                    || nextArtifacts.some((entry, index) => entry !== existingMatch.artifacts?.[index]);
-                if (artifactsChanged) {
-                    storeState.updateMatch({
-                        ...existingMatch,
-                        artifacts: nextArtifacts,
-                        ocrState: existingMatch.ocrState || 'queued',
-                    });
-                }
-            }
-        }
+            : null;
+        const canonicalMatch = normalizedRequestedMatchId == null
+            ? undefined
+            : (storeState.matches || []).find((match) => Number(match.id || 0) === normalizedRequestedMatchId);
+        const shouldSeedFromCanonical = Boolean(
+            canonicalMatch
+            && (normalizedPendingMatchId == null || normalizedPendingMatchId !== normalizedRequestedMatchId)
+        );
+        Logger.info('App', 'Resolved OCR canonical match', {
+            requestedMatchId: normalizedRequestedMatchId,
+            pendingMatchId: normalizedPendingMatchId,
+            canonicalMatchId: canonicalMatch?.id ?? null,
+            seededFromCanonical: shouldSeedFromCanonical,
+        });
+        const basePendingMatch = shouldSeedFromCanonical
+            ? clonePendingMatchDraft(canonicalMatch)
+            : existingPendingMatch;
+        const targetMatchId = normalizedRequestedMatchId
+            ?? normalizedPendingMatchId
+            ?? (canonicalMatch?.id ? Number(canonicalMatch.id) : null)
+            ?? undefined;
+        const mergedArtifactPaths = mergeArtifactEntries(
+            basePendingMatch.artifacts,
+            canonicalMatch?.artifacts,
+            data.artifacts
+        );
         const pendingModifierMap = new Map<string, string>();
-        (pendingMatch.reachModifiers || []).forEach((name) => {
+        (basePendingMatch.reachModifiers || []).forEach((name) => {
             const clean = String(name || '').trim();
             const key = normalizeOcrName(clean).toLowerCase();
             if (!key || pendingModifierMap.has(key)) return;
@@ -2119,13 +2225,18 @@ const App: React.FC = () => {
             if (!key || pendingModifierMap.has(key)) return;
             pendingModifierMap.set(key, name);
         });
-        useAppStore.getState().setPendingMatchData({
-            ...pendingMatch,
-            artifacts: mergedArtifactPaths.length > 0 ? mergedArtifactPaths : pendingMatch.artifacts,
+        const nextPendingMatchData: Partial<Match> = {
+            ...basePendingMatch,
+            id: targetMatchId ?? basePendingMatch.id,
+            ship: data.playerShip?.shipType || String(basePendingMatch.ship || '').trim() || undefined,
+            teammates: nextDraftTeammates.length > 0 ? nextDraftTeammates : (basePendingMatch.teammates || []),
+            opponents: nextDraftOpponents.length > 0 ? nextDraftOpponents : (basePendingMatch.opponents || []),
+            artifacts: mergedArtifactPaths.length > 0 ? mergedArtifactPaths : basePendingMatch.artifacts,
             reachModifiers: Array.from(pendingModifierMap.values()),
-            opponentTeams: structuredTeams,
+            opponentTeams: structuredTeams.length > 0 ? structuredTeams : (basePendingMatch.opponentTeams || []),
             ocrState: 'reviewing',
             ocrDebug: {
+                ...(basePendingMatch.ocrDebug || {}),
                 rawText: data.rawText?.substring(0, 2000),
                 confidence: data.overallConfidence,
                 source: data.ocrSource,
@@ -2139,7 +2250,29 @@ const App: React.FC = () => {
                 playerShipTeamName: String(data.playerShip?.teamName || data.playerTeamName || '').trim() || undefined,
                 playerShipName: String(data.playerShipName || data.playerTeamName || data.playerShip?.teamName || '').trim() || undefined,
                 timestamp: data.captureTimestamp || Date.now(),
-            }
+            },
+        };
+        storeState.setPendingMatchData(nextPendingMatchData);
+        if (canonicalMatch && targetMatchId) {
+            const nextCanonicalMatch: Match = {
+                ...canonicalMatch,
+                ship: String(nextPendingMatchData.ship || canonicalMatch.ship || '').trim(),
+                teammates: Array.isArray(nextPendingMatchData.teammates) ? [...nextPendingMatchData.teammates] : canonicalMatch.teammates,
+                opponents: Array.isArray(nextPendingMatchData.opponents) ? [...nextPendingMatchData.opponents] : canonicalMatch.opponents,
+                reachModifiers: Array.isArray(nextPendingMatchData.reachModifiers) ? [...nextPendingMatchData.reachModifiers] : canonicalMatch.reachModifiers,
+                artifacts: mergedArtifactPaths.length > 0 ? mergedArtifactPaths : canonicalMatch.artifacts,
+                opponentTeams: Array.isArray(nextPendingMatchData.opponentTeams) ? nextPendingMatchData.opponentTeams : canonicalMatch.opponentTeams,
+                ocrState: 'reviewing',
+                ocrDebug: nextPendingMatchData.ocrDebug,
+            };
+            storeState.updateMatch(nextCanonicalMatch);
+        }
+        Logger.info('App', 'Applied OCR draft/store update', {
+            targetMatchId: targetMatchId ?? null,
+            pendingArtifacts: Array.isArray(nextPendingMatchData.artifacts) ? nextPendingMatchData.artifacts.length : 0,
+            pendingTeammates: Array.isArray(nextPendingMatchData.teammates) ? nextPendingMatchData.teammates.length : 0,
+            pendingOpponents: Array.isArray(nextPendingMatchData.opponents) ? nextPendingMatchData.opponents.length : 0,
+            storeUpdated: Boolean(canonicalMatch && targetMatchId),
         });
 
         const rawTeammateCount = Array.isArray(data.teammates) ? data.teammates.length : 0;
@@ -2150,8 +2283,8 @@ const App: React.FC = () => {
         const selectedWizardResult = showWizard === 'Win' || showWizard === 'Loss' || showWizard === 'Draw'
             ? showWizard
             : null;
-        const pendingWizardResult = pendingMatch?.result === 'Win' || pendingMatch?.result === 'Loss' || pendingMatch?.result === 'Draw'
-            ? pendingMatch.result
+        const pendingWizardResult = nextPendingMatchData?.result === 'Win' || nextPendingMatchData?.result === 'Loss' || nextPendingMatchData?.result === 'Draw'
+            ? nextPendingMatchData.result
             : null;
         const targetResult: WizardResult = gateResult || selectedWizardResult || pendingWizardResult || 'Match Result';
         if (showWizard !== targetResult) {
@@ -2165,7 +2298,7 @@ const App: React.FC = () => {
     }, [pilotRegistry, activeShip, setSelectedTeammates, selectedOpponents, setSelectedOpponents, setActiveShip, selectedReachModifiers, setSelectedReachModifiers, setToast, addPendingReview, pendingReviews, sessionTeams, sessionShipTypes, setSessionTeams, setSessionShipTypes, showWizard, setShowWizard]);
 
     const handleSmartCaptureData = useCallback((data: OCRExtractedData) => {
-        handleApplyOCRData(data, null);
+        handleApplyOCRData(data, null, null);
     }, [handleApplyOCRData]);
 
     useEffect(() => {
@@ -2225,11 +2358,12 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const onOcrGateRequest = (evt: Event) => {
-            const customEvt = evt as CustomEvent<{ result?: FinalMatchResult; data?: OCRExtractedData }>;
+            const customEvt = evt as CustomEvent<{ result?: FinalMatchResult; data?: OCRExtractedData; matchId?: string | number | null }>;
             const result = customEvt?.detail?.result;
             const data = customEvt?.detail?.data;
-            if (!result || !data) return;
-            handleApplyOCRData(data, result);
+            const matchId = customEvt?.detail?.matchId;
+            if (!data) return;
+            handleApplyOCRData(data, result ?? null, matchId ?? null);
         };
         window.addEventListener('submission:ocr-gate', onOcrGateRequest as EventListener);
         return () => window.removeEventListener('submission:ocr-gate', onOcrGateRequest as EventListener);

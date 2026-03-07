@@ -229,16 +229,22 @@ describe('ActionPanel', () => {
 
   it('sends pending smart capture payload into review callback and clears pending state', async () => {
     const { ActionPanel } = await import('./ActionPanel');
-    const onSmartCaptureData = vi.fn();
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
     const pendingPayload = { teammates: [{ name: 'Pilot' }] };
     smartCaptureState.pendingData = pendingPayload;
     smartCaptureState.savedCaptures = [{ matchId: null, ocrProcessed: false }];
 
-    render(<ActionPanel onSmartCaptureData={onSmartCaptureData} />);
+    render(<ActionPanel onSmartCaptureData={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /review/i }));
 
-    expect(onSmartCaptureData).toHaveBeenCalledWith(pendingPayload);
+    const gateEvent = dispatchSpy.mock.calls
+      .map(([evt]) => evt as Event)
+      .find((evt) => evt.type === 'submission:ocr-gate') as CustomEvent | undefined;
+    expect(gateEvent).toBeDefined();
+    expect(gateEvent?.detail?.data).toBe(pendingPayload);
+    expect(gateEvent?.detail?.matchId).toBeNull();
     expect(smartCaptureActions.dismissPendingData).toHaveBeenCalledTimes(1);
+    dispatchSpy.mockRestore();
   });
 
   it('uses unified result button styling and 3-way layout', async () => {
@@ -270,6 +276,7 @@ describe('ActionPanel', () => {
     const { ActionPanel } = await import('./ActionPanel');
     const onSmartCaptureData = vi.fn();
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    appStoreState.pendingMatchData = { id: 77 };
     smartCaptureState.pendingData = {
       screenshotType: 'tactical_map',
       playerShip: undefined,
@@ -291,6 +298,7 @@ describe('ActionPanel', () => {
       .find((evt) => evt.type === 'submission:ocr-gate') as CustomEvent | undefined;
     expect(gateEvent).toBeDefined();
     expect(gateEvent?.detail?.result).toBe('Win');
+    expect(gateEvent?.detail?.matchId).toBe(77);
     dispatchSpy.mockRestore();
   });
 
@@ -387,12 +395,13 @@ describe('ActionPanel', () => {
       .find((evt) => evt.type === 'submission:ocr-gate') as CustomEvent | undefined;
     expect(gateEvent).toBeDefined();
     expect(gateEvent?.detail?.result).toBe('Draw');
+    expect(gateEvent?.detail?.matchId).toBeNull();
     dispatchSpy.mockRestore();
   });
 
   it('opens wizard immediately and processes queued OCR in background when configured', async () => {
     const { ActionPanel } = await import('./ActionPanel');
-    const onSmartCaptureData = vi.fn();
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
     const reviewData = {
       screenshotType: 'crew_hub',
       playerShip: undefined,
@@ -415,7 +424,7 @@ describe('ActionPanel', () => {
     }];
     smartCaptureActions.getPendingData.mockReturnValue(reviewData);
 
-    render(<ActionPanel onSmartCaptureData={onSmartCaptureData} />);
+    render(<ActionPanel onSmartCaptureData={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /win/i }));
 
     expect(initiateSubmission).toHaveBeenCalledWith('Win');
@@ -423,7 +432,48 @@ describe('ActionPanel', () => {
     await waitFor(() => {
       expect(smartCaptureActions.processAllStored).toHaveBeenCalledWith('TestPilot', null);
     });
-    expect(onSmartCaptureData).toHaveBeenCalledWith(reviewData);
+    const gateEvent = dispatchSpy.mock.calls
+      .map(([evt]) => evt as Event)
+      .find((evt) => evt.type === 'submission:ocr-gate') as CustomEvent | undefined;
+    expect(gateEvent).toBeDefined();
+    expect(gateEvent?.detail?.result).toBe('Win');
+    expect(gateEvent?.detail?.matchId).toBeNull();
+    dispatchSpy.mockRestore();
+  });
+
+  it('auto-promotes completed OCR through the gate when auto-open is enabled', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    appStoreState.ocrAutoOpenAfterRerun = true;
+    appStoreState.pendingMatchData = { id: 501 };
+    smartCaptureState.pendingData = {
+      screenshotType: 'crew_hub',
+      playerShip: undefined,
+      playerTeamName: undefined,
+      reachModifiers: [],
+      enemyShips: [],
+      teammates: [],
+      opponentTeams: [],
+      artifacts: ['capture.png'],
+      overallConfidence: 84,
+      captureTimestamp: Date.now(),
+    };
+    smartCaptureState.processingStatus = {
+      phase: 'completed',
+      message: 'Completed OCR for capture.png.',
+    };
+
+    render(<ActionPanel onSmartCaptureData={vi.fn()} />);
+
+    await waitFor(() => {
+      const gateEvent = dispatchSpy.mock.calls
+        .map(([evt]) => evt as Event)
+        .find((evt) => evt.type === 'submission:ocr-gate') as CustomEvent | undefined;
+      expect(gateEvent).toBeDefined();
+      expect(gateEvent?.detail?.matchId).toBe(501);
+      expect(gateEvent?.detail?.result).toBeUndefined();
+    });
+    dispatchSpy.mockRestore();
   });
 
   it('emits processing OCR toast when smart capture enters processing', async () => {

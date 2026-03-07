@@ -17,6 +17,7 @@ import {
 } from '../utils/artifactSource';
 
 const DEFAULT_ARTIFACT_LOOKBACK_MS = 10 * 60 * 1000;
+const IMAGE_ARTIFACT_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
 const parseDurationSecs = (value: string | undefined): number => {
     if (!value) return 0;
     const parts = value.split(':').map(Number);
@@ -42,6 +43,60 @@ const countComparableTeammates = (teammates: string[] | null | undefined, player
     if (!Array.isArray(teammates)) return 0;
     if (!key) return teammates.length;
     return teammates.filter((name) => normalizeNameKey(name) !== key).length;
+};
+
+const mergeArtifactLists = (...artifactLists: Array<Array<string | null | undefined> | null | undefined>): string[] => {
+    const seen = new Set<string>();
+    const merged: string[] = [];
+    artifactLists.forEach((artifactList) => {
+        (artifactList || []).forEach((artifactPath) => {
+            const normalized = String(artifactPath || '').trim();
+            if (!normalized) return;
+            if (!normalized.startsWith('data:image/') && !IMAGE_ARTIFACT_PATTERN.test(normalized)) return;
+            const key = toArtifactKey(normalized);
+            if (seen.has(key)) return;
+            seen.add(key);
+            merged.push(normalized);
+        });
+    });
+    return merged;
+};
+
+const resolveExistingSubmissionMatch = ({
+    pendingMatchData,
+    matches,
+    activeUser,
+    sessionStartTime,
+}: {
+    pendingMatchData: Partial<Match>;
+    matches: Match[] | null | undefined;
+    activeUser: string | null | undefined;
+    sessionStartTime: number | null | undefined;
+}): Match | undefined => {
+    const pendingMatchId = Number(pendingMatchData.id || 0);
+    if (Number.isInteger(pendingMatchId) && pendingMatchId > 0) {
+        return Array.isArray(matches) ? matches.find((match) => match.id === pendingMatchId) : undefined;
+    }
+    if (!Array.isArray(matches)) return undefined;
+
+    const expectedPlayer = String(pendingMatchData.player || activeUser || '').trim();
+    const pendingTimestamp = Number(pendingMatchData.timestamp || 0);
+    const recentCutoff = (typeof sessionStartTime === 'number' && sessionStartTime > 0)
+        ? (sessionStartTime - 60_000)
+        : (Date.now() - (6 * 60 * 60 * 1000));
+
+    const telemetryDrafts = matches.filter((match) => {
+        if (!match || match.subType !== 'Telemetry Draft') return false;
+        if (!match.timestamp || Number(match.timestamp) < recentCutoff) return false;
+        if (expectedPlayer && match.player && match.player !== expectedPlayer) return false;
+        return true;
+    });
+    const timestampMatchedDrafts = pendingTimestamp > 0
+        ? telemetryDrafts.filter((match) => Number(match.timestamp || 0) === pendingTimestamp)
+        : telemetryDrafts;
+
+    return [...timestampMatchedDrafts]
+        .sort((left, right) => Number(right.timestamp || 0) - Number(left.timestamp || 0))[0];
 };
 
 export const useMatchSubmission = () => {
@@ -325,23 +380,13 @@ export const useMatchSubmission = () => {
                 : (selectedResult === 'Loss' && subType === 'Combat'
                     ? (normalizedLossPlacement ?? undefined)
                     : undefined);
-            const pendingMatchId = Number(pendingMatchData.id || 0);
-            const existingMatchByPendingId = Number.isInteger(pendingMatchId) && pendingMatchId > 0
-                ? (Array.isArray(matches) ? matches.find((m: Match) => m.id === pendingMatchId) : undefined)
-                : undefined;
-            const recentCutoff = (typeof sessionStartTime === 'number' && sessionStartTime > 0)
-                ? (sessionStartTime - 60_000)
-                : (Date.now() - (6 * 60 * 60 * 1000));
-            const fallbackTelemetryDraft = existingMatchByPendingId || !Array.isArray(matches)
-                ? undefined
-                : matches.find((m: Match) => {
-                    if (!m || m.subType !== 'Telemetry Draft') return false;
-                    if (!m.timestamp || Number(m.timestamp) < recentCutoff) return false;
-                    const expectedPlayer = pendingMatchData.player || activeUser || '';
-                    if (expectedPlayer && m.player && m.player !== expectedPlayer) return false;
-                    return true;
-                });
-            const existingMatch = existingMatchByPendingId || fallbackTelemetryDraft;
+            const existingMatch = resolveExistingSubmissionMatch({
+                pendingMatchData,
+                matches,
+                activeUser,
+                sessionStartTime,
+            });
+            const isTelemetryDraftSource = existingMatch?.subType === 'Telemetry Draft';
             const finalEliminatedByTeam = (() => {
                 const stored = String(pendingMatchData?.eliminatedByTeam || existingMatch?.eliminatedByTeam || '').trim();
                 if (selectedResult !== 'Loss' || !stored) return undefined;
@@ -366,8 +411,8 @@ export const useMatchSubmission = () => {
                     };
                 })()
                 : undefined;
-            if (!existingMatchByPendingId && fallbackTelemetryDraft) {
-                Logger.info('Submission', `Reusing telemetry draft ${fallbackTelemetryDraft.id} for final submission`);
+            if (isTelemetryDraftSource) {
+                Logger.info('Submission', `Reusing telemetry draft ${existingMatch.id} for final submission`);
             }
 
             const newMatch: Match = {
@@ -395,7 +440,7 @@ export const useMatchSubmission = () => {
                 killedByShip: pendingKilledByShip || undefined,
                 notes: finalNotes,
                 timelineEvents: [...(timelineEvents || [])],
-                artifacts: [...(existingMatch?.artifacts || pendingMatchData.artifacts || [])],
+                artifacts: mergeArtifactLists(existingMatch?.artifacts, pendingMatchData.artifacts),
                 ocrDebug: pendingMatchData?.ocrDebug || undefined,
                 opponentTeams: pendingMatchData?.opponentTeams || undefined,
                 eliminatedByTeam: finalEliminatedByTeam,
@@ -503,6 +548,11 @@ export const useMatchSubmission = () => {
             setPoiEasy(0); setPoiMedium(0); setPoiEpic(0); setKills({ "AI Legion": 0 });
             setTimeMin(""); setTimeSec(""); setSelectedReachModifiers([]);
             setDamageTaken(""); setCurrentNote(""); setActiveWeapons({});
+            if (isTelemetryDraftSource && existingMatch) {
+                window.dispatchEvent(new CustomEvent('telemetry-draft:resolved', {
+                    detail: { matchId: existingMatch.id },
+                }));
+            }
 
             window.dispatchEvent(new CustomEvent('recording:match-complete', { detail: { result: submittedResult } }));
             const artifactSuffix = mergedArtifacts.length > 0 ? ` · ${mergedArtifacts.length} screenshot${mergedArtifacts.length === 1 ? '' : 's'} bundled` : '';
@@ -593,23 +643,13 @@ export const useMatchSubmission = () => {
                 : (selectedResult === 'Loss' && subType === 'Combat'
                     ? (normalizedLossPlacement ?? undefined)
                     : undefined);
-            const pendingMatchId = Number(pendingMatchData.id || 0);
-            const existingMatchByPendingId = Number.isInteger(pendingMatchId) && pendingMatchId > 0
-                ? (Array.isArray(matches) ? matches.find((m: Match) => m.id === pendingMatchId) : undefined)
-                : undefined;
-            const recentCutoff = (typeof sessionStartTime === 'number' && sessionStartTime > 0)
-                ? (sessionStartTime - 60_000)
-                : (Date.now() - (6 * 60 * 60 * 1000));
-            const fallbackTelemetryDraft = existingMatchByPendingId || !Array.isArray(matches)
-                ? undefined
-                : matches.find((m: Match) => {
-                    if (!m || m.subType !== 'Telemetry Draft') return false;
-                    if (!m.timestamp || Number(m.timestamp) < recentCutoff) return false;
-                    const expectedPlayer = pendingMatchData.player || activeUser || '';
-                    if (expectedPlayer && m.player && m.player !== expectedPlayer) return false;
-                    return true;
-                });
-            const existingMatch = existingMatchByPendingId || fallbackTelemetryDraft;
+            const existingMatch = resolveExistingSubmissionMatch({
+                pendingMatchData,
+                matches,
+                activeUser,
+                sessionStartTime,
+            });
+            const isTelemetryDraftSource = existingMatch?.subType === 'Telemetry Draft';
             const finalEliminatedByTeam = (() => {
                 const stored = String(pendingMatchData?.eliminatedByTeam || existingMatch?.eliminatedByTeam || '').trim();
                 if (selectedResult !== 'Loss' || !stored) return undefined;
@@ -660,7 +700,7 @@ export const useMatchSubmission = () => {
                 killedByShip: pendingKilledByShip || undefined,
                 notes: finalNotes,
                 timelineEvents: [...(pendingMatchData.timelineEvents || [])],
-                artifacts: [...(existingMatch?.artifacts || pendingMatchData.artifacts || [])],
+                artifacts: mergeArtifactLists(existingMatch?.artifacts, pendingMatchData.artifacts),
                 ocrDebug: pendingMatchData?.ocrDebug || undefined,
                 opponentTeams: pendingMatchData?.opponentTeams || undefined,
                 eliminatedByTeam: finalEliminatedByTeam,
@@ -689,6 +729,11 @@ export const useMatchSubmission = () => {
             setPoiEasy(0); setPoiMedium(0); setPoiEpic(0); setKills({ "AI Legion": 0 });
             setTimeMin(""); setTimeSec(""); setSelectedReachModifiers([]);
             setDamageTaken(""); setCurrentNote(""); setActiveWeapons({});
+            if (isTelemetryDraftSource && existingMatch) {
+                window.dispatchEvent(new CustomEvent('telemetry-draft:resolved', {
+                    detail: { matchId: existingMatch.id },
+                }));
+            }
 
             window.dispatchEvent(new CustomEvent('recording:match-complete', { detail: { result: savedMatch.result } }));
             setToast({ message: 'Results saved. You can return to OCR later.', type: 'success' });

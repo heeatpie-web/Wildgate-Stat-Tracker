@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
@@ -220,6 +220,8 @@ export const useLogMonitor = (activeUser?: string) => {
     const [runtimeTelemetryProfile, setRuntimeTelemetryProfile] = useState<string>(
         adaptiveTelemetryPollingEnabled ? 'high-accuracy' : telemetryPerformanceProfile
     );
+    const [monitorListenersReady, setMonitorListenersReady] = useState(false);
+    const [startupLifecycleEstablished, setStartupLifecycleEstablished] = useState(Boolean(isMatchInProgress));
 
     const clearTelemetryDraftCapturePromptTimer = () => {
         if (telemetryDraftCapturePromptTimerRef.current) {
@@ -227,6 +229,19 @@ export const useLogMonitor = (activeUser?: string) => {
             telemetryDraftCapturePromptTimerRef.current = null;
         }
     };
+
+    const clearTelemetryDerivedLoadout = useCallback(() => {
+        if (currentLoadoutRef.current) {
+            setCurrentLoadout({
+                ...currentLoadoutRef.current,
+                characterWeapons: [],
+                characterEquipment: [],
+                characterPerks: [],
+                perks: [],
+            });
+        }
+        setActiveWeapons({});
+    }, [setActiveWeapons, setCurrentLoadout]);
 
     const scheduleTelemetryDraftCapturePrompt = (matchId: number) => {
         clearTelemetryDraftCapturePromptTimer();
@@ -573,15 +588,19 @@ export const useLogMonitor = (activeUser?: string) => {
     useEffect(() => {
         if (!ipcRenderer) return;
         if (isStoreLoading) return;
-        const effectiveTelemetryProfile = adaptiveTelemetryPollingEnabled
-            ? runtimeTelemetryProfile
-            : telemetryPerformanceProfile;
+        if (!monitorListenersReady) return;
+        const effectiveTelemetryProfile = startupLifecycleEstablished
+            ? (adaptiveTelemetryPollingEnabled ? runtimeTelemetryProfile : telemetryPerformanceProfile)
+            : 'high-accuracy';
         if (enableAutoLogRecording) {
             ipcRenderer.send('start-log-monitoring', { performanceProfile: effectiveTelemetryProfile });
         } else {
             ipcRenderer.send('stop-log-monitoring');
         }
-    }, [adaptiveTelemetryPollingEnabled, enableAutoLogRecording, isStoreLoading, runtimeTelemetryProfile, telemetryPerformanceProfile]);
+        return () => {
+            ipcRenderer.send('stop-log-monitoring');
+        };
+    }, [adaptiveTelemetryPollingEnabled, enableAutoLogRecording, isStoreLoading, monitorListenersReady, runtimeTelemetryProfile, startupLifecycleEstablished, telemetryPerformanceProfile]);
 
     useEffect(() => {
         if (isMatchInProgress && !wasMatchInProgressRef.current) {
@@ -627,14 +646,24 @@ export const useLogMonitor = (activeUser?: string) => {
 
         const onStatus = (status: unknown) => {
             if (!isRecord(status)) return;
+            if (!startupLifecycleEstablished) {
+                setStartupLifecycleEstablished(true);
+            }
             setTelemetryStatus(status as TelemetryStatusPatch);
             // When the game log file no longer exists, the game has closed — clear telemetry detected state
             if (status.exists === false) {
+                telemetryLifecycleActiveRef.current = false;
+                setIsMatchInProgress(false);
+                setMatchStartTime(null);
                 clearTelemetryDetected();
+                clearTelemetryDerivedLoadout();
             }
         };
         const onLogData = (data: unknown) => {
             if (data) {
+                if (!startupLifecycleEstablished) {
+                    setStartupLifecycleEstablished(true);
+                }
                 const now = Date.now();
                 if (now - lastActivityRef.current > 5000) {
                     lastActivityRef.current = now;
@@ -1452,11 +1481,13 @@ export const useLogMonitor = (activeUser?: string) => {
 
         const unsubStatus = ipcRenderer.on('log-status', onStatus);
         const unsubData = ipcRenderer.on('log-data', onLogData);
+        setMonitorListenersReady(true);
         return () => {
+            setMonitorListenersReady(false);
             unsubStatus();
             unsubData();
         };
-    }, [updatePlayerIdMapping, setToast, setLastActivity, setTimeMin, setTimeSec, setIsMatchInProgress, setMatchStartTime, setOverlayPhase, setShowWizard, setActiveHero, setActiveShip, setCurrentLoadout, setTelemetryStatus, clearTelemetryDetected]);
+    }, [updatePlayerIdMapping, setToast, setLastActivity, setTimeMin, setTimeSec, setIsMatchInProgress, setMatchStartTime, setOverlayPhase, setShowWizard, setActiveHero, setActiveShip, setCurrentLoadout, setTelemetryStatus, clearTelemetryDetected, clearTelemetryDerivedLoadout, startupLifecycleEstablished]);
 
     return { logFeed, logStatus: telemetryStatus };
 };
