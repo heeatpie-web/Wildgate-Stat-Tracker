@@ -168,6 +168,11 @@ const UI_NOISE_PHRASES = [
   'SMALL CREW BONUS',
   'REDUCED FIRES',
 ];
+const SAME_COLOR_BASE_GAP_MULTIPLIER = 1.35;
+const SAME_COLOR_SPECTATOR_GAP_MULTIPLIER = 0.95;
+const SAME_COLOR_MERGE_GAP_MULTIPLIER = 2.2;
+const MAX_SPECTATOR_GAP_SLOTS = 2;
+
 function containsUiNoisePhrase(input) {
   const normalized = String(input || '')
     .toUpperCase()
@@ -185,6 +190,32 @@ function containsUnderCrewBonusPhrase(input) {
     .trim();
   if (!normalized) return false;
   return normalized === 'SMALL CREW BONUS' || normalized === 'REDUCED FIRES';
+}
+
+function countAnchorsBetween(anchorYs, a, b) {
+  if (!Array.isArray(anchorYs) || anchorYs.length === 0) return 0;
+  const minY = Math.min(a, b);
+  const maxY = Math.max(a, b);
+  return anchorYs.filter((y) => Number.isFinite(y) && y > minY && y < maxY).length;
+}
+
+function getSameColorSplitGap(cardHeight, skippedAnchorCount = 0) {
+  const baseHeight = Number.isFinite(cardHeight) && cardHeight > 0 ? cardHeight : 78;
+  const extraSlots = Math.max(0, Math.min(MAX_SPECTATOR_GAP_SLOTS, Math.round(Number(skippedAnchorCount) || 0)));
+  return baseHeight * (SAME_COLOR_BASE_GAP_MULTIPLIER + (extraSlots * SAME_COLOR_SPECTATOR_GAP_MULTIPLIER));
+}
+
+function getSameColorMergeGap(cardHeight, skippedAnchorCount = 0) {
+  const baseHeight = Number.isFinite(cardHeight) && cardHeight > 0 ? cardHeight : 78;
+  const extraSlots = Math.max(0, Math.min(MAX_SPECTATOR_GAP_SLOTS, Math.round(Number(skippedAnchorCount) || 0)));
+  return baseHeight * SAME_COLOR_MERGE_GAP_MULTIPLIER + (extraSlots * baseHeight * SAME_COLOR_SPECTATOR_GAP_MULTIPLIER);
+}
+
+function isNearSkippedAnchor(anchorYs, y, cardHeight, toleranceMultiplier = 0.55) {
+  if (!Array.isArray(anchorYs) || anchorYs.length === 0 || !Number.isFinite(y)) return false;
+  const baseHeight = Number.isFinite(cardHeight) && cardHeight > 0 ? cardHeight : 78;
+  const tolerance = baseHeight * toleranceMultiplier;
+  return anchorYs.some((anchorY) => Number.isFinite(anchorY) && Math.abs(anchorY - y) <= tolerance);
 }
 
 /**
@@ -780,6 +811,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
   const cards = []; // { y, name, color, confidence, bbox }
   const capturedTeamNames = new Map(); // color → cleanest team name seen
   const spectatorCardYs = []; // Y positions of skipped spectator/black cards
+  const skippedSpectatorNameKeys = new Set();
 
   // Helper: extract the raw team name text from a line's word list
   // (used when the line is identified as a team-name bar, not a player name)
@@ -1012,6 +1044,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
           } else if (cr.color === 'spectator' || cr.color === 'black') {
             console.log('[CrewHub] Skipping spectator/black card:', playerName);
             spectatorCardYs.push(line.y);
+            skippedSpectatorNameKeys.add(normalizeNameKey(playerName));
             continue;
           }
         }
@@ -1162,10 +1195,15 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     }
   }
   const sameColorSplitBaseHeight = Number.isFinite(CARD_HEIGHT) && CARD_HEIGHT > 0 ? CARD_HEIGHT : 78;
-  // Allow up to ~3 skipped card slots (e.g. spectator cards) within a same-color
-  // team before treating the gap as a genuine team boundary. At 1080p that is
-  // 3 × 78px = 234px; use 3.5× for a small margin.
-  const SAME_COLOR_SPLIT_GAP = sameColorSplitBaseHeight * 3.5; // ~273 px at 1080p baseline
+  const getSplitGapForRange = (a, b) => getSameColorSplitGap(
+    sameColorSplitBaseHeight,
+    countAnchorsBetween(spectatorCardYs, a, b)
+  );
+  const getMergeGapForRange = (a, b) => getSameColorMergeGap(
+    sameColorSplitBaseHeight,
+    countAnchorsBetween(spectatorCardYs, a, b)
+  );
+  const isSkippedSpectatorRow = (y) => isNearSkippedAnchor(spectatorCardYs, y, sameColorSplitBaseHeight);
 
   function normalizeBadgeKey(value) {
     return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -1199,8 +1237,8 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     if (!isTeamName(rawTeamName) && !/^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(rawTeamName)) continue;
     // Skip badge lines whose Y falls within the bar zone of a skipped spectator/black card.
     const isSpectatorBadge = spectatorCardYs.some(sy => {
-      const barMin = sy + BAR_OFFSET - CARD_HEIGHT * 0.2;
-      const barMax = sy + BAR_OFFSET + BAR_HEIGHT + CARD_HEIGHT * 0.2;
+      const barMin = sy + BAR_OFFSET - sameColorSplitBaseHeight * 0.2;
+      const barMax = sy + BAR_OFFSET + BAR_HEIGHT + sameColorSplitBaseHeight * 0.2;
       return tLine.y >= barMin && tLine.y <= barMax;
     });
     if (isSpectatorBadge) continue;
@@ -1310,10 +1348,14 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
         }
       }
       // Use a wider gap tolerance for unknown-color cards to handle spectator-card
-      // gaps (up to SAME_COLOR_SPLIT_GAP), so yellow-team players whose color bar
+      // gaps (only where skipped spectator cards were actually detected), so
+      // yellow-team players whose color bar
       // detection failed don't get silently dropped and fall into a spurious "Team 1".
+      const groupEdgeY = card.y < bestGroup?.minY ? bestGroup.minY
+        : card.y > bestGroup?.maxY ? bestGroup.maxY
+          : card.y;
       const distLimit = (card.color === 'unknown')
-        ? Math.max(CARD_HEIGHT * 2.4, SAME_COLOR_SPLIT_GAP)
+        ? Math.max(CARD_HEIGHT * 2.4, getSplitGapForRange(card.y, groupEdgeY))
         : CARD_HEIGHT * 2.4;
       if (bestGroup && bestDist <= distLimit) {
         const colorMismatch = card.color && card.color !== 'unknown'
@@ -1355,12 +1397,13 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
 
     const unknownCards = uniqueCards.filter(c => c.color === 'unknown');
 
-    function subClusterByYGap(cards, gapThreshold) {
+    function subClusterByYGap(cards) {
       if (cards.length <= 1) return [cards];
       const sorted = [...cards].sort((a, b) => a.y - b.y);
       const clusters = [[sorted[0]]];
       for (let i = 1; i < sorted.length; i += 1) {
         const gap = sorted[i].y - sorted[i - 1].y;
+        const gapThreshold = getSplitGapForRange(sorted[i - 1].y, sorted[i].y);
         if (gap > gapThreshold) {
           clusters.push([sorted[i]]);
         } else {
@@ -1378,7 +1421,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
         continue;
       }
 
-      const clusters = subClusterByYGap(group.cards, SAME_COLOR_SPLIT_GAP);
+      const clusters = subClusterByYGap(group.cards);
       if (clusters.length === 1) {
         expandedGroups.set(color, group);
       } else {
@@ -1419,7 +1462,10 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
           // Prevent a distant unknown card from bridging two same-color teams.
           // If the card sits beyond the same-color split gap, start a sibling
           // cluster with the same color instead of extending the existing range.
-          if (bestDist > SAME_COLOR_SPLIT_GAP) {
+          const groupEdgeY = card.y < bestGroup.minY ? bestGroup.minY
+            : card.y > bestGroup.maxY ? bestGroup.maxY
+              : card.y;
+          if (bestDist > getSplitGapForRange(card.y, groupEdgeY)) {
             knownGroups.push({
               color: bestGroup.color,
               cards: [card],
@@ -1442,13 +1488,13 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     } else {
       // ── Step 5b: Fallback — pure Y-gap clustering when ALL colors unknown ───
       console.log('[CrewHub] No color info — falling back to Y-gap clustering');
-      const TEAM_GAP_THRESHOLD = SAME_COLOR_SPLIT_GAP;
       let currentCluster = null;
       for (const card of uniqueCards) {
         if (!currentCluster) {
           currentCluster = { color: 'unknown', cards: [card], minY: card.y, maxY: card.y, confidence: 0 };
         } else {
           const gap = card.y - currentCluster.maxY;
+          const TEAM_GAP_THRESHOLD = getSplitGapForRange(currentCluster.maxY, card.y);
           if (gap > TEAM_GAP_THRESHOLD) {
             knownGroups.push(currentCluster);
             currentCluster = { color: 'unknown', cards: [card], minY: card.y, maxY: card.y, confidence: 0 };
@@ -1480,13 +1526,9 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       const gap = b.minY > a.maxY ? b.minY - a.maxY
         : a.minY > b.maxY ? a.minY - b.maxY
           : 0;
-      // Merge if either side is small OR if the gap is consistent with skipped
-      // spectator slots (up to 3 × card height). This handles cases where
-      // spectators sit between players of the same team, creating a large gap
-      // that the split-detection above may still flag at non-1080p scales.
-      const tinySplit = aSize <= 4 || bSize <= 4 || gap <= CARD_HEIGHT * 3.5;
+      const tinySplit = aSize <= 2 || bSize <= 2;
       if (!tinySplit) continue;
-      if (gap > CARD_HEIGHT * 3.5) continue;
+      if (gap > getMergeGapForRange(a.maxY, b.minY)) continue;
 
       a.cards = [...(a.cards || []), ...(b.cards || [])];
       a.minY = Math.min(a.minY, b.minY);
@@ -1635,6 +1677,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
         if (!name) return null;
         const key = normalizeNameKey(name);
         if (!key || existingNames.has(key)) return null;
+        if (skippedSpectatorNameKeys.has(key) || isSkippedSpectatorRow(line.y)) return null;
         return { name, y: line.y };
       })
       .filter(Boolean);
@@ -2157,7 +2200,7 @@ function stripLikelyCrewHubUiDigitSuffix(name) {
 
 function stripLikelyCrewHubI9ArtifactSuffix(name) {
   const value = String(name || '').trim();
-  const m = value.match(/^([A-Za-z\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]{3,5})([Ii1l]9)$/);
+  const m = value.match(/^([A-Za-z\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]{4,5})([Ii1l]9)$/);
   if (!m) return value;
   const stem = m[1];
   if (/[0-9]/.test(stem)) return value;
@@ -2418,19 +2461,19 @@ function isTeamName(text) {
   const letters = cleaned.match(/[A-Za-z]/g) || [];
   const upperLetters = cleaned.match(/[A-Z]/g) || [];
   const upperRatio = letters.length > 0 ? upperLetters.length / letters.length : 0;
+  const hasNumbers = /[0-9]/.test(cleaned);
+  const hasUnderscore = /_/.test(cleaned);
+  const hasMixedCase = /[a-z]/.test(cleaned) && /[A-Z]/.test(cleaned);
 
   // Single all-caps word (e.g. VANGUARD, BOREALIS) counts as a team name
   if (words.length < 2) {
+    if (hasUnderscore || hasNumbers) return false;
     return upperRatio === 1 && letters.length >= 5;
   }
   // Only accept multi-word team names if ALL CAPS (no lowercase at all)
   if (words.length >= 2 && (!/[a-z]/.test(cleaned)) && upperRatio >= 0.9) {
     return true;
   }
-
-  const hasNumbers = /[0-9]/.test(cleaned);
-  const hasUnderscore = /_/.test(cleaned);
-  const hasMixedCase = /[a-z]/.test(cleaned) && /[A-Z]/.test(cleaned);
 
   // Avoid misclassifying player names
   if (hasUnderscore) return false;
@@ -2578,4 +2621,11 @@ module.exports = {
   levenshteinDistance,
   scoreAsPlayerName,
   formatTeamName,
+  __test__: {
+    countAnchorsBetween,
+    getSameColorSplitGap,
+    getSameColorMergeGap,
+    isNearSkippedAnchor,
+    isValidOpponentName,
+  },
 };
