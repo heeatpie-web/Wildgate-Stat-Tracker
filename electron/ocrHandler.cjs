@@ -2432,9 +2432,14 @@ function getMaxTeammatesForShipType(shipType) {
   return Math.max(0, capacity - 1);
 }
 
-function cleanupLegacyTeammates(teammates, shipType) {
+const LEGACY_MAX_TEAMMATES = 4;
+
+function cleanupLegacyTeammates(teammates, shipType, options = {}) {
   if (!Array.isArray(teammates)) return [];
-  const maxTeammates = getMaxTeammatesForShipType(shipType);
+  const enforceShipCapacity = options.enforceShipCapacity !== false;
+  const maxTeammates = enforceShipCapacity
+    ? getMaxTeammatesForShipType(shipType)
+    : LEGACY_MAX_TEAMMATES;
   const unique = [];
   const seen = new Set();
   for (const teammate of teammates) {
@@ -2526,6 +2531,8 @@ function cleanupLegacyEnemyShips(enemyShips) {
 
 function cleanupLegacyExtraction(extractedData) {
   if (!extractedData || typeof extractedData !== 'object') return extractedData;
+  const screenshotType = String(extractedData.screenshotType || '').trim().toLowerCase();
+  const enforceCrewCapacity = screenshotType !== 'crew_hub';
   const shipTypeHint = extractedData.playerShip?.shipType || '';
   const playerTeamName = String(extractedData.playerTeamName || '').trim();
   const cleanedPlayerTeamName = playerTeamName && !isUnderCrewShipBonusText(playerTeamName)
@@ -2544,7 +2551,9 @@ function cleanupLegacyExtraction(extractedData) {
     playerTeamName: cleanedPlayerTeamName,
     playerShipName: cleanedPlayerShipName,
     playerShip: cleanedPlayerShip,
-    teammates: cleanupLegacyTeammates(extractedData.teammates, shipTypeHint),
+    teammates: cleanupLegacyTeammates(extractedData.teammates, shipTypeHint, {
+      enforceShipCapacity: enforceCrewCapacity,
+    }),
     opponentTeams: cleanupLegacyOpponentTeams(extractedData.opponentTeams),
     enemyShips: cleanupLegacyEnemyShips(extractedData.enemyShips),
   };
@@ -2560,12 +2569,11 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
     ? Array.from(new Set(crewHubData.hazards.map((hazard) => String(hazard || '').trim()).filter(Boolean)))
     : [];
 
-  const maxTeammates = getMaxTeammatesForShipType(crewHubData.yourTeam?.shipType || '');
   const teammates = capPlayers((crewHubData.yourTeam?.players || []).map(name => ({
     name: typeof name === 'string' ? name : name.name,
     confidence: typeof name === 'string' ? 80 : (name.confidence || 80),
     isTeammate: true,
-  })), maxTeammates);
+  })), LEGACY_MAX_TEAMMATES);
 
   const opponentTeams = (crewHubData.enemyTeams || []).slice(0, 4).map(team => ({
     teamName: team.name || 'Unknown Team',
@@ -2882,4 +2890,9 @@ module.exports = {
   preprocessImage,
   runOCR,
   extractModifiers,
+  __test__: {
+    cleanupLegacyExtraction,
+    convertCrewHubToLegacy,
+    getMaxTeammatesForShipType,
+  },
 };
