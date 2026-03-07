@@ -54,6 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
         setToast,
         setShowWelcome,
         setShowTutorial,
+        setNotificationsSuspended,
         sidebarCollapsed,
     } = useUIState();
     const { players, deletePlayer } = useGameData();
@@ -109,6 +110,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
 
     return (
         <nav
+            data-tour="sidebar-navigation"
             className={`${railClass} app-nav-rail premium-sidebar sc-sidebar-rail ${isMobileDrawer ? 'sc-sidebar-rail--mobile rounded-r-card' : 'sc-sidebar-rail--desktop rounded-none'} flex flex-col h-full min-h-0 py-4 px-2 gap-2 shrink-0 transition-width duration-300 ease-emphasized-enter`}
             aria-label="Main navigation"
             style={{ WebkitAppRegion: 'no-drag' } as any}
@@ -262,6 +264,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
                             </button>
                             <button
                                 onClick={() => {
+                                    setNotificationsSuspended(true);
                                     setShowTutorial(true);
                                     setProfileMenuOpen(false);
                                     closeDrawerIfNeeded();

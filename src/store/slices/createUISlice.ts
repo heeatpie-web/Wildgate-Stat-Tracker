@@ -92,6 +92,7 @@ export interface UISlice {
     notificationQueue: string[];
     activeNotificationId: string | null;
     notificationCenterOpen: boolean;
+    notificationsSuspended: boolean;
     drillDownTarget: DrillDownTarget | null;
     showWelcomeBack: boolean;
     isLayoutReady: boolean;
@@ -124,6 +125,7 @@ export interface UISlice {
     markAllNotificationsRead: () => void;
     clearNotifications: () => void;
     setNotificationCenterOpen: (open: boolean) => void;
+    setNotificationsSuspended: (suspended: boolean) => void;
     setDrillDownTarget: (target: DrillDownTarget | null) => void;
     setShowWelcomeBack: (show: boolean) => void;
     setIsLayoutReady: (ready: boolean) => void;
@@ -184,7 +186,10 @@ const toToastState = (notification: AppNotification): ToastState => ({
     durationMs: notification.durationMs,
 });
 
-const trimNotificationState = (state: NotificationStateShape): NotificationStateShape => {
+const trimNotificationState = (
+    state: NotificationStateShape,
+    notificationsSuspended = false
+): NotificationStateShape => {
     const notifications = state.notifications.slice(0, MAX_NOTIFICATION_HISTORY);
     const notificationsById = new Map(notifications.map((item) => [item.id, item]));
     const seen = new Set<string>();
@@ -202,6 +207,14 @@ const trimNotificationState = (state: NotificationStateShape): NotificationState
     const activeNotification = activeNotificationId
         ? notificationsById.get(activeNotificationId) ?? null
         : null;
+    if (notificationsSuspended) {
+        return {
+            notifications,
+            notificationQueue,
+            activeNotificationId: null,
+            toast: null,
+        };
+    }
     return {
         notifications,
         notificationQueue,
@@ -212,7 +225,8 @@ const trimNotificationState = (state: NotificationStateShape): NotificationState
 
 const pushNotificationState = (
     state: NotificationStateShape,
-    input: NotificationInput
+    input: NotificationInput,
+    notificationsSuspended = false
 ): NotificationStateShape => {
     const normalizedMessage = String(input.message || '').trim();
     if (input.type !== 'tip') {
@@ -223,7 +237,7 @@ const pushNotificationState = (
             && (Date.now() - item.createdAt) <= DUPLICATE_NOTIFICATION_WINDOW_MS
         ));
         if (maybeDuplicate) {
-            return state;
+            return trimNotificationState(state, notificationsSuspended);
         }
     }
 
@@ -263,17 +277,18 @@ const pushNotificationState = (
         }
     }
 
-    nextState = trimNotificationState(nextState);
+    nextState = trimNotificationState(nextState, notificationsSuspended);
     return nextState;
 };
 
 const dismissNotificationState = (
     state: NotificationStateShape,
-    notificationId: string
+    notificationId: string,
+    notificationsSuspended = false
 ): NotificationStateShape => {
     const id = String(notificationId || '').trim();
     if (!id) {
-        return trimNotificationState(state);
+        return trimNotificationState(state, notificationsSuspended);
     }
     const readAt = Date.now();
     return trimNotificationState({
@@ -285,10 +300,13 @@ const dismissNotificationState = (
         notificationQueue: state.notificationQueue.filter((queuedId) => queuedId !== id),
         activeNotificationId: state.activeNotificationId === id ? null : state.activeNotificationId,
         toast: null,
-    });
+    }, notificationsSuspended);
 };
 
-const dismissActiveNotificationState = (state: NotificationStateShape): NotificationStateShape => {
+const dismissActiveNotificationState = (
+    state: NotificationStateShape,
+    notificationsSuspended = false
+): NotificationStateShape => {
     const activeId = state.activeNotificationId ?? state.notificationQueue[0] ?? null;
     if (!activeId) {
         return trimNotificationState({
@@ -296,9 +314,9 @@ const dismissActiveNotificationState = (state: NotificationStateShape): Notifica
             notificationQueue: state.notificationQueue,
             activeNotificationId: state.activeNotificationId,
             toast: state.toast,
-        });
+        }, notificationsSuspended);
     }
-    return dismissNotificationState(state, activeId);
+    return dismissNotificationState(state, activeId, notificationsSuspended);
 };
 
 export const createUISlice: StateCreator<UISlice> = (set) => ({
@@ -314,6 +332,7 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     notificationQueue: [],
     activeNotificationId: null,
     notificationCenterOpen: false,
+    notificationsSuspended: false,
     drillDownTarget: null,
     showWelcomeBack: false,
     isLayoutReady: false,
@@ -366,16 +385,16 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
     setIsRearranging: (isRearranging) => set({ isRearranging }),
     setToast: (toast) => set((state) => {
         if (!toast) {
-            return dismissActiveNotificationState(state);
+            return dismissActiveNotificationState(state, state.notificationsSuspended);
         }
         return pushNotificationState(state, {
             ...toast,
             popup: toast.popup !== false,
-        });
+        }, state.notificationsSuspended);
     }),
-    pushNotification: (notification) => set((state) => pushNotificationState(state, notification)),
-    dismissActiveNotification: () => set((state) => dismissActiveNotificationState(state)),
-    dismissNotification: (id) => set((state) => dismissNotificationState(state, id)),
+    pushNotification: (notification) => set((state) => pushNotificationState(state, notification, state.notificationsSuspended)),
+    dismissActiveNotification: () => set((state) => dismissActiveNotificationState(state, state.notificationsSuspended)),
+    dismissNotification: (id) => set((state) => dismissNotificationState(state, id, state.notificationsSuspended)),
     markNotificationRead: (id) => set((state) => trimNotificationState({
         notifications: state.notifications.map((item) =>
             item.id === id && !item.readAt
@@ -385,7 +404,7 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
         notificationQueue: state.notificationQueue.filter((queuedId) => queuedId !== id),
         activeNotificationId: state.activeNotificationId === id ? null : state.activeNotificationId,
         toast: state.toast,
-    })),
+    }, state.notificationsSuspended)),
     markAllNotificationsRead: () => set((state) => {
         const readAt = Date.now();
         return trimNotificationState({
@@ -395,7 +414,7 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
             notificationQueue: [],
             activeNotificationId: null,
             toast: null,
-        });
+        }, state.notificationsSuspended);
     }),
     clearNotifications: () => set({
         notifications: [],
@@ -405,6 +424,16 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
         notificationCenterOpen: false,
     }),
     setNotificationCenterOpen: (open) => set({ notificationCenterOpen: open }),
+    setNotificationsSuspended: (suspended) => set((state) => ({
+        notificationsSuspended: suspended,
+        notificationCenterOpen: suspended ? false : state.notificationCenterOpen,
+        ...trimNotificationState({
+            notifications: state.notifications,
+            notificationQueue: state.notificationQueue,
+            activeNotificationId: state.activeNotificationId,
+            toast: state.toast,
+        }, suspended),
+    })),
     setDrillDownTarget: (target) => set({ drillDownTarget: target }),
     setShowWelcomeBack: (show) => set({ showWelcomeBack: show }),
     setIsLayoutReady: (ready) => set({ isLayoutReady: ready }),

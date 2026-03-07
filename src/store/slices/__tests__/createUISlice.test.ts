@@ -98,6 +98,19 @@ describe('createUISlice notifications', () => {
     expect(store.getState().toast).toBeNull();
   });
 
+  it('queues popup notifications while suspended and restores the toast when resumed', () => {
+    store.getState().setNotificationsSuspended(true);
+    store.getState().pushNotification({ message: 'Queued', type: 'info' });
+
+    expect(store.getState().notificationQueue).toHaveLength(1);
+    expect(store.getState().toast).toBeNull();
+    expect(store.getState().activeNotificationId).toBeNull();
+
+    store.getState().setNotificationsSuspended(false);
+    expect(store.getState().toast?.message).toBe('Queued');
+    expect(store.getState().activeNotificationId).not.toBeNull();
+  });
+
   it('enforces a notification history cap of 200 items', () => {
     for (let i = 1; i <= 205; i += 1) {
       store.getState().pushNotification({

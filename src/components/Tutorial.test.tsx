@@ -29,9 +29,13 @@ describe('Tutorial', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     document.body.innerHTML = '';
-    const tourTarget = document.createElement('div');
-    tourTarget.setAttribute('data-tour', 'profile-selector');
-    document.body.appendChild(tourTarget);
+    const navTarget = document.createElement('div');
+    navTarget.setAttribute('data-tour', 'sidebar-navigation');
+    document.body.appendChild(navTarget);
+
+    const profileTarget = document.createElement('div');
+    profileTarget.setAttribute('data-tour', 'profile-selector');
+    document.body.appendChild(profileTarget);
   });
 
   it('renders with dialog semantics', () => {

@@ -15,6 +15,7 @@ const uiState = {
   setToast: vi.fn(),
   setShowWelcome: vi.fn(),
   setShowTutorial: vi.fn(),
+  setNotificationsSuspended: vi.fn(),
   sidebarCollapsed: false,
 };
 

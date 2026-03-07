@@ -11,7 +11,9 @@ const uiState = {
   setRenameModal: vi.fn(),
   setRenameValue: vi.fn(),
   setIsOverlayMode: vi.fn(),
+  showTutorial: false,
   setShowTutorial: vi.fn(),
+  setNotificationsSuspended: vi.fn(),
   setShowSettings: vi.fn(),
   setToast: vi.fn(),
   pushNotification: vi.fn(),
@@ -60,6 +62,7 @@ describe('Header', () => {
     Object.assign(uiState, {
       activeUser: 'TestPilot',
       activeView: 'analytics',
+      showTutorial: false,
       devMode: false,
       visionStatus: 'idle',
     });

@@ -37,7 +37,9 @@ export const Header: React.FC<HeaderProps> = ({
         activeUser,
         activeView, setActiveView,
         setIsOverlayMode,
+        showTutorial,
         setShowTutorial,
+        setNotificationsSuspended,
         pushNotification,
         requestSmartCapture,
         devMode, setDevMode,
@@ -187,7 +189,10 @@ export const Header: React.FC<HeaderProps> = ({
                     {!tutorialCompleted && (
                         <Button
                             variant="icon"
-                            onClick={() => setShowTutorial(true)}
+                            onClick={() => {
+                                setNotificationsSuspended(true);
+                                setShowTutorial(true);
+                            }}
                             className="w-8 h-8 border border-md-sys-outline/10 bg-md-sys-surface-container-high/85 hover:bg-md-sys-surface-container-highest/90 text-secondary"
                             title="Tutorial"
                             aria-label="Tutorial"
@@ -196,7 +201,7 @@ export const Header: React.FC<HeaderProps> = ({
                         </Button>
                     )}
 
-                    <NotificationCenter />
+                    {!showTutorial && <NotificationCenter />}
 
                 </div>
             </div>

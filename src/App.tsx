@@ -375,6 +375,7 @@ const App: React.FC = () => {
         sidebarCollapsed, setSidebarCollapsed,
         renameModal, setRenameModal, setRenameValue,
         showSetupWizard, setShowSetupWizard,
+        setNotificationsSuspended,
     } = useUIState();
 
     const changelogDialogTitleId = React.useId();
@@ -740,11 +741,15 @@ const App: React.FC = () => {
     }, [showSetupWizard]);
 
     useEffect(() => {
+        setNotificationsSuspended(showTutorial);
+    }, [setNotificationsSuspended, showTutorial]);
+
+    useEffect(() => {
         if (startupHealthPromptedRef.current) return;
         startupHealthPromptedRef.current = true;
     }, []);
 
-    useEffect(() => {
+    React.useLayoutEffect(() => {
         if (tutorialAutoPromptedRef.current) return;
         if (isStoreLoading) return;
         if (showStartupHealthCheck) return;
@@ -758,8 +763,9 @@ const App: React.FC = () => {
         if (showSetupWizard) return;
         if (!String(activeUser || '').trim()) return;
         tutorialAutoPromptedRef.current = true;
+        setNotificationsSuspended(true);
         setShowTutorial(true);
-    }, [activeUser, isStoreLoading, renameModal, restoreSessionPrompt, setShowTutorial, showSetupWizard, showStartupHealthCheck, showTutorial, tutorialCompleted]);
+    }, [activeUser, isStoreLoading, renameModal, restoreSessionPrompt, setNotificationsSuspended, setShowTutorial, showSetupWizard, showStartupHealthCheck, showTutorial, tutorialCompleted]);
 
     useEffect(() => {
         if (isStoreLoading) return;
@@ -2610,9 +2616,13 @@ const App: React.FC = () => {
                 <Tutorial
                     onComplete={() => {
                         setTutorialCompleted(true);
+                        setNotificationsSuspended(false);
                         setShowTutorial(false);
                     }}
-                    onSkip={() => setShowTutorial(false)}
+                    onSkip={() => {
+                        setNotificationsSuspended(false);
+                        setShowTutorial(false);
+                    }}
                 />
             )}
 

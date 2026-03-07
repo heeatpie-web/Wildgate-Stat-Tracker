@@ -86,6 +86,7 @@ const SettingsModalContent: React.FC = () => {
         setToast,
         setShowResetConfirm,
         setShowTutorial,
+        setNotificationsSuspended,
         activeUser,
         enableAutoLogRecording, setEnableAutoLogRecording,
         setShowIdMapper,
@@ -951,6 +952,7 @@ const SettingsModalContent: React.FC = () => {
                                 <button
                                     onClick={() => {
                                         setShowSettings(false);
+                                        setNotificationsSuspended(true);
                                         setShowTutorial(true);
                                     }}
                                     className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold uppercase"

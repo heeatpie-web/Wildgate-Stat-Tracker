@@ -50,6 +50,8 @@ interface UIStateContextType {
     clearNotifications: () => void;
     notificationCenterOpen: boolean;
     setNotificationCenterOpen: (open: boolean) => void;
+    notificationsSuspended: boolean;
+    setNotificationsSuspended: (suspended: boolean) => void;
     isOverlayMode: boolean;
     setIsOverlayMode: (is: boolean) => void;
     showWelcome: boolean;
@@ -144,6 +146,8 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
         clearNotifications: s.clearNotifications,
         notificationCenterOpen: s.notificationCenterOpen,
         setNotificationCenterOpen: s.setNotificationCenterOpen,
+        notificationsSuspended: s.notificationsSuspended,
+        setNotificationsSuspended: s.setNotificationsSuspended,
         isOverlayMode: s.isOverlayMode, setIsOverlayMode: s.setIsOverlayMode,
         showWelcome: s.showWelcome, setShowWelcome: s.setShowWelcome,
         showTutorial: s.showTutorial, setShowTutorial: s.setShowTutorial,

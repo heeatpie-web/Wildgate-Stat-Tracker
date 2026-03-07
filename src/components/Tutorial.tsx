@@ -3,6 +3,7 @@ import { ChevronRight, X } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { Button } from './ui';
 
 interface TutorialProps {
     onComplete: () => void;
@@ -23,11 +24,11 @@ const steps: TutorialStep[] = [
     {
         title: 'Getting Around',
         description: 'Use the left sidebar to hop between Recording, Analytics, Smart Captures, Players, and History.',
-        selector: 'nav-recording',
+        selector: 'sidebar-navigation',
     },
     {
         title: 'Your Profile',
-        description: 'Tap this profile area to switch pilots and open account options whenever you need to.',
+        description: 'Tap this profile area to switch pilots and open settings whenever you need to.',
         selector: 'profile-selector',
     },
     {
@@ -69,11 +70,6 @@ const steps: TutorialStep[] = [
         title: 'Overlay Mode',
         description: 'Need less screen clutter? Switch to overlay mode for a compact in-game HUD. Press F9 while Wildgate is open to bring the tracker back to the front.',
         selector: 'overlay-button',
-    },
-    {
-        title: 'Settings',
-        description: 'Open Settings from your profile area for OCR, backups, and UI preferences. You can always revisit this later.',
-        selector: 'profile-selector',
     },
 ];
 
@@ -261,7 +257,7 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
         <div className="fixed inset-0 z-tour">
             {targetRect ? (
                 <div
-                    className="absolute rounded-xl border-2 border-md-sys-primary shadow-tour-scrim transition-all duration-200 pointer-events-none"
+                    className="absolute rounded-xl shadow-tour-scrim transition-all duration-200 pointer-events-none"
                     style={{
                         top: Math.max(targetRect.top - highlightPadding, 0),
                         left: Math.max(targetRect.left - highlightPadding, 0),
@@ -279,7 +275,7 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
                 aria-modal="true"
                 aria-labelledby={dialogTitleId}
                 aria-describedby={dialogDescriptionId}
-                className="absolute w-320px max-w-screen-minus-32 md3-card text-md-sys-on-surface rounded-2xl border border-md-sys-outline/20 shadow-2xl p-4 pointer-events-auto"
+                className="absolute w-320px max-w-screen-minus-32 md3-card bg-md-sys-surface-container-highest text-md-sys-on-surface rounded-2xl border border-md-sys-outline/20 shadow-2xl p-4 pointer-events-auto"
                 style={tooltipInlineStyle}
             >
                 <div className="flex items-start justify-between gap-3">
@@ -318,19 +314,15 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
                             End tour
                         </button>
                     )}
-                    <button
-                        type="button"
+                    <Button
+                        variant="primary"
                         onClick={handleNext}
-                        className="md3-btn-filled flex-1 font-black uppercase tracking-widest flex items-center justify-center gap-2"
+                        icon={stepIndex === steps.length - 1 ? undefined : <ChevronRight size={16} />}
+                        iconPosition="end"
+                        className="flex-1 rounded-full font-semibold"
                     >
-                        {stepIndex === steps.length - 1 ? (
-                            <>All set</>
-                        ) : (
-                            <>
-                                Keep going <ChevronRight size={16} />
-                            </>
-                        )}
-                    </button>
+                        {stepIndex === steps.length - 1 ? 'All set' : 'Next'}
+                    </Button>
                 </div>
             </div>
         </div>

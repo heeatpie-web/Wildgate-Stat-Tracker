@@ -11,6 +11,7 @@ const uiState = {
   setIsOverlayMode: vi.fn(),
   showTutorial: false,
   setShowTutorial: vi.fn(),
+  setNotificationsSuspended: vi.fn(),
   showChangelog: false,
   setShowChangelog: vi.fn(),
   showWizard: null as 'Win' | 'Loss' | 'Draw' | 'Match Result' | null,
