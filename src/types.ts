@@ -157,6 +157,8 @@ export interface OpponentTeam {
   shipType: string;
   color: string;
   players: string[];
+  sourceRowIndex?: number;
+  sourceRowY?: number;
 }
 
 /** Primary data record for a completed match. Persisted to disk via StorageService. */

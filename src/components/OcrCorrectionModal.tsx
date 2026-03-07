@@ -1321,7 +1321,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                 <div className="flex-1 min-w-0">
                                     <p className="text-body font-medium">How this helps</p>
                                     <p id={dialogDescriptionId} className="text-label-sm opacity-60 mt-0.5">
-                                        Pick the real player name for each OCR guess, then use <span className="font-semibold">Apply</span> or <span className="font-semibold">Apply and Close</span>.
+                                        Pick the real player name for each OCR guess, then use <span className="font-semibold">Apply</span> or <span className="font-semibold">Save and Close</span>.
                                     </p>
                                     <p className="text-label-sm opacity-60 mt-0.5">
                                         These links are remembered, so OCR gets better in future matches.
@@ -1785,7 +1785,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                         <div className="px-3 py-2 text-label-sm border-t border-md-sys-outline/15 bg-md-sys-surface-container-low text-md-sys-on-surface/80 flex items-center flex-wrap gap-2">
                             <span className="inline-flex items-center gap-1">
                                 <kbd className="px-1.5 py-0.5 rounded bg-md-sys-surface3 border border-md-sys-outline/20 font-mono text-label-xs">Ctrl+Enter</kbd>
-                                Apply
+                                Save
                             </span>
                             <span className="inline-flex items-center gap-1">
                                 <kbd className="px-1.5 py-0.5 rounded bg-md-sys-surface3 border border-md-sys-outline/20 font-mono text-label-xs">Esc</kbd>
@@ -1811,19 +1811,11 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={handleDiscardReview}
-                                className="md3-btn-tonal inline-flex items-center gap-1.5 text-danger border border-danger/30"
+                                className="md3-btn-tonal inline-flex items-center gap-1.5 text-danger"
                                 title="Discard all OCR review edits and close"
                             >
                                 <Trash2 size={14} />
                                 Discard
-                            </button>
-                            <button
-                                onClick={() => handleSubmitCorrections({ closeAfterApply: false })}
-                                className="md3-btn-tonal flex items-center gap-2"
-                                title="Save reviewed OCR corrections and keep this review open"
-                            >
-                                <Check size={16} />
-                                Apply
                             </button>
                             <button
                                 onClick={() => handleSubmitCorrections({ closeAfterApply: true })}
@@ -1831,7 +1823,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                 title="Save reviewed OCR corrections and close this review"
                             >
                                 <Check size={16} />
-                                Apply and Close
+                                Save and Close
                             </button>
                         </div>
                     </div>

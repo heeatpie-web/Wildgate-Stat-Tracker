@@ -135,6 +135,33 @@ describe('backfillOpponentTeamShipTypes', () => {
     ]);
   });
 
+  it('uses crew hub source row order instead of color-sorted order for unresolved yellow teams', () => {
+    const teams = [
+      makeTeam({ teamName: 'Red Team', color: 'red', players: ['R1'], sourceRowIndex: 0 }),
+      makeTeam({ teamName: 'Orange Team', color: 'orange', players: ['O1'], sourceRowIndex: 1 }),
+      makeTeam({ teamName: 'Yellow-Green Team', color: 'yellowgreen', players: ['YG1'], sourceRowIndex: 3 }),
+      makeTeam({ teamName: 'Team 4', color: 'unknown', players: ['Y1'], sourceRowIndex: 2 }),
+    ];
+    const enemyShips: OCRExtractedData['enemyShips'] = [
+      { teamName: '', shipType: 'Hunter', color: 'unknown', sourceSlotIndex: 0 },
+      { teamName: '', shipType: 'Bastion', color: 'unknown', sourceSlotIndex: 1 },
+      { teamName: '', shipType: 'Scout', color: 'unknown', sourceSlotIndex: 2 },
+      { teamName: '', shipType: 'Privateer', color: 'unknown', sourceSlotIndex: 3 },
+    ];
+
+    const result = backfillOpponentTeamShipTypes(teams, {
+      sessionShipTypes: {},
+      enemyShips,
+    });
+
+    expect(result.map((team) => team.shipType)).toEqual([
+      'Hunter',
+      'Bastion',
+      'Privateer',
+      'Scout',
+    ]);
+  });
+
   it('uses final normalized enemy fallback for unresolved teams after positional assignment', () => {
     const teams = [
       makeTeam({ teamName: 'Team 1', color: 'unknown', players: ['A1'] }),

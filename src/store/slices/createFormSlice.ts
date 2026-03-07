@@ -48,6 +48,7 @@ export interface FormSlice {
     pendingPlacement: number | null;
     pendingArtifactType: string;
     showWizard: WizardResult | null;
+    wizardInitialTab: 'result' | 'ocr' | null;
 
     characterLoadouts: Record<string, Record<string, number>>;
 
@@ -73,6 +74,7 @@ export interface FormSlice {
     setPendingPlacement: (placement: number | null) => void;
     setPendingArtifactType: (type: string) => void;
     setShowWizard: (result: WizardResult | null) => void;
+    setWizardInitialTab: (tab: 'result' | 'ocr' | null) => void;
     clearTelemetryDetected: () => void;
     resetSelectionSourcesForNewMatch: () => void;
 
@@ -106,6 +108,7 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
     pendingPlacement: null,
     pendingArtifactType: '',
     showWizard: null,
+    wizardInitialTab: null,
 
     setSelectedTeammates: (teammates) => set((state) => {
         const nextTeammates = sanitizeTeammates(
@@ -249,6 +252,7 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
             ? { ...state.pendingMatchData, artifactSource: type || undefined }
             : state.pendingMatchData,
     })),
+    setWizardInitialTab: (tab) => set(() => ({ wizardInitialTab: tab })),
     setShowWizard: (result) => set((state) => ({
         showWizard: result,
         pendingMatchData: state.pendingMatchData

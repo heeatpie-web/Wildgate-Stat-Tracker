@@ -41,9 +41,11 @@ export const SHIP_KEYWORDS = [
  */
 export const TEAM_COLOR_RANGES = {
   red: { hueMin: 340, hueMax: 20, minSat: 50, minLum: 30 },
-  orange: { hueMin: 15, hueMax: 45, minSat: 50, minLum: 30 },
-  yellow: { hueMin: 45, hueMax: 75, minSat: 50, minLum: 30 },
-  green: { hueMin: 75, hueMax: 150, minSat: 40, minLum: 25 },
+  orange: { hueMin: 15, hueMax: 40, minSat: 50, minLum: 30 },
+  // Keep yellow narrower and brighter so the darker in-game olive badge does
+  // not leak into yellow during browser-side fallbacks.
+  yellow: { hueMin: 40, hueMax: 65, minSat: 50, minLum: 40 },
+  green: { hueMin: 66, hueMax: 150, minSat: 40, minLum: 25 },
   cyan: { hueMin: 150, hueMax: 210, minSat: 40, minLum: 30 },
   blue: { hueMin: 210, hueMax: 270, minSat: 40, minLum: 25 },
   purple: { hueMin: 270, hueMax: 340, minSat: 40, minLum: 25 },

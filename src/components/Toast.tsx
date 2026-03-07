@@ -101,8 +101,8 @@ const ToastCard: React.FC<ToastCardProps> = ({ toast, soundEnabled, onClose }) =
     <div
       className={`pointer-events-auto flex items-start animate-slide-up w-full overflow-hidden border text-md-sys-on-surface ${
         isTip
-          ? 'rounded-xl shadow-[0_10px_28px_rgba(0,0,0,0.32)] gap-2 border border-accent/18 bg-md-sys-surface-container-high/95 backdrop-blur-sm'
-          : 'toast-card-standard rounded-2xl shadow-[0_24px_56px_rgba(0,0,0,0.46)] gap-3 border border-md-sys-outline/18 bg-md-sys-surface-container-highest/96 backdrop-blur-sm'
+          ? 'rounded-xl shadow-[0_10px_28px_rgba(0,0,0,0.32)] gap-2 border border-accent/18 bg-md-sys-surface-container-high'
+          : 'toast-card-standard rounded-2xl shadow-[0_24px_56px_rgba(0,0,0,0.46)] gap-3 border border-md-sys-outline/18 bg-md-sys-surface-container-highest'
       }`}
       role={toast.type === 'error' ? 'alert' : 'status'}
       aria-live={toast.type === 'error' ? 'assertive' : 'polite'}

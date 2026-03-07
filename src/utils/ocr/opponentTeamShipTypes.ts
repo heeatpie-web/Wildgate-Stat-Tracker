@@ -7,6 +7,8 @@ type NormalizedEnemyShipEntry = {
     shipType: string;
     teamNameKey: string;
     color: ReturnType<typeof normalizeTeamColor>;
+    sourceSlotIndex: number | null;
+    sourceSlotY: number | null;
 };
 
 const POSITIONAL_COLOR_ORDER = ['red', 'orange', 'yellow', 'green', 'blue', 'cyan', 'purple'] as const;
@@ -18,6 +20,11 @@ const getColorSortIndex = (color: ReturnType<typeof normalizeTeamColor>): number
 
 const normalizeShipTypeValue = (value: string | null | undefined): string =>
     String(value || '').trim();
+
+const toFiniteNumber = (value: unknown): number | null => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+};
 
 const isPlaceholderTeamName = (value: string | null | undefined): boolean => {
     const normalized = normalizeOcrName(String(value || '')).toLowerCase();
@@ -121,46 +128,50 @@ const getEnemyShipMappedType = (
     return '';
 };
 
-const buildPositionalEnemyShipTypes = (
+const buildOrderedEnemyShips = (
     enemyShips: NormalizedEnemyShipEntry[]
-): string[] => {
-    if (enemyShips.length === 0) return [];
+): Array<NormalizedEnemyShipEntry & { orderIndex: number }> => (
+    enemyShips
+        .map((entry, orderIndex) => ({ ...entry, orderIndex }))
+        .sort((left, right) => {
+            const slotDiff = (left.sourceSlotIndex ?? Number.MAX_SAFE_INTEGER)
+                - (right.sourceSlotIndex ?? Number.MAX_SAFE_INTEGER);
+            if (slotDiff !== 0) return slotDiff;
 
-    const mappedByColor = new Map<ReturnType<typeof normalizeTeamColor>, string>();
-    const trailing: string[] = [];
+            const yDiff = (left.sourceSlotY ?? Number.MAX_SAFE_INTEGER)
+                - (right.sourceSlotY ?? Number.MAX_SAFE_INTEGER);
+            if (yDiff !== 0) return yDiff;
 
-    enemyShips.forEach((entry) => {
-        const shipType = normalizeShipTypeValue(entry.shipType);
-        if (!shipType) return;
-        if (entry.color !== 'unknown' && !mappedByColor.has(entry.color)) {
-            mappedByColor.set(entry.color, shipType);
-            return;
-        }
-        trailing.push(shipType);
-    });
+            const colorDiff = getColorSortIndex(left.color) - getColorSortIndex(right.color);
+            if (colorDiff !== 0) return colorDiff;
 
-    const ordered: string[] = [];
-    POSITIONAL_COLOR_ORDER.forEach((color) => {
-        const mapped = mappedByColor.get(color);
-        if (mapped) ordered.push(mapped);
-    });
-    ordered.push(...trailing);
-    return ordered;
-};
+            return left.orderIndex - right.orderIndex;
+        })
+);
 
 const buildPositionalAssignments = (
     teams: OpponentTeam[],
     enemyShips: NormalizedEnemyShipEntry[]
 ): Map<number, string> => {
-    const orderedShipTypes = buildPositionalEnemyShipTypes(enemyShips);
-    if (orderedShipTypes.length === 0) return new Map<number, string>();
+    const orderedShips = buildOrderedEnemyShips(enemyShips);
+    if (orderedShips.length === 0) return new Map<number, string>();
 
     const sortedTeamIndexes = teams
         .map((team, index) => ({
             index,
             color: normalizeTeamColor(team.color),
+            sourceRowIndex: toFiniteNumber(team.sourceRowIndex),
+            sourceRowY: toFiniteNumber(team.sourceRowY),
         }))
         .sort((a, b) => {
+            const rowIndexDiff = (a.sourceRowIndex ?? Number.MAX_SAFE_INTEGER)
+                - (b.sourceRowIndex ?? Number.MAX_SAFE_INTEGER);
+            if (rowIndexDiff !== 0) return rowIndexDiff;
+
+            const rowYDiff = (a.sourceRowY ?? Number.MAX_SAFE_INTEGER)
+                - (b.sourceRowY ?? Number.MAX_SAFE_INTEGER);
+            if (rowYDiff !== 0) return rowYDiff;
+
             const colorSort = getColorSortIndex(a.color) - getColorSortIndex(b.color);
             if (colorSort !== 0) return colorSort;
             return a.index - b.index;
@@ -168,7 +179,7 @@ const buildPositionalAssignments = (
 
     const assignments = new Map<number, string>();
     sortedTeamIndexes.forEach((team, orderIndex) => {
-        const shipType = orderedShipTypes[orderIndex];
+        const shipType = orderedShips[orderIndex]?.shipType;
         if (!shipType) return;
         assignments.set(team.index, shipType);
     });
@@ -224,6 +235,8 @@ export const backfillOpponentTeamShipTypes = (
             shipType: normalizeShipTypeValue(entry.shipType),
             teamNameKey: normalizeOcrName(String(entry.teamName || '')).toLowerCase(),
             color: normalizeTeamColor(entry.color),
+            sourceSlotIndex: toFiniteNumber(entry.sourceSlotIndex),
+            sourceSlotY: toFiniteNumber(entry.sourceSlotY),
         }))
         .filter((entry) => !!entry.shipType);
     const positionalAssignments = buildPositionalAssignments(teams || [], normalizedEnemyShips);

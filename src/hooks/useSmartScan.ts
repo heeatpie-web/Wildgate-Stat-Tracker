@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
@@ -84,6 +85,32 @@ export const useSmartScan = () => {
 
     const [scanProgress, setScanProgress] = useState({ status: '', pct: 0 });
     const [scanLogs, setScanLogs] = useState<string[]>([]);
+    const isScanning = visionStatus === 'scanning';
+
+    // Tick scanProgress.pct slowly while scanning to give visual feedback during the
+    // long Tesseract IPC call. Caps at 88% so real onProgress(100) always advances.
+    const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    useEffect(() => {
+        if (!isScanning) {
+            if (tickerRef.current !== null) {
+                clearInterval(tickerRef.current);
+                tickerRef.current = null;
+            }
+            return;
+        }
+        tickerRef.current = setInterval(() => {
+            setScanProgress(prev => {
+                if (prev.pct >= 88) return prev;
+                return { ...prev, pct: prev.pct + 1 };
+            });
+        }, 180);
+        return () => {
+            if (tickerRef.current !== null) {
+                clearInterval(tickerRef.current);
+                tickerRef.current = null;
+            }
+        };
+    }, [isScanning]);
 
     const playSuccessSound = () => {
         if (!soundEnabled) return;
@@ -140,7 +167,9 @@ export const useSmartScan = () => {
             if (img) {
                 const options: ScanOptions = {
                     onProgress: (status, pct) => {
-                        setScanProgress({ status, pct });
+                        // flushSync ensures each milestone is committed to the DOM before
+                        // the next await, so the progress bar updates are actually visible.
+                        flushSync(() => setScanProgress({ status, pct }));
                         setScanLogs(prev => {
                             if (prev[prev.length - 1] === status) return prev;
                             return [...prev, status];
@@ -493,7 +522,7 @@ export const useSmartScan = () => {
 
     return {
         handleSmartScan,
-        isScanning: visionStatus === 'scanning',
+        isScanning,
         scanProgress,
         scanLogs
     };

@@ -655,7 +655,7 @@ export const IdMapper: React.FC = () => {
                                     const isEditing = editingKnownKey === entry.key;
                                     const editValue = nameInputs[entry.key] ?? '';
                                     return (
-                                        <div key={entry.key} className="flex items-center justify-between gap-2 md3-surface-high/50 px-3 py-2 rounded text-label-sm group">
+                                        <div key={entry.key} className="flex items-center justify-between gap-2 md3-surface-high px-3 py-2 rounded text-label-sm group">
                                             <div className="flex items-center gap-3 overflow-hidden min-w-0">
                                                 {isEditing ? (
                                                     <input
@@ -782,7 +782,7 @@ export const IdMapper: React.FC = () => {
                                             const topShip = profile.ships ? Object.entries(profile.ships).sort((a: any, b: any) => b[1] - a[1])[0]?.[0] : null;
 
                                             return (
-                                                <div key={id} className="flex items-center gap-2 md3-surface-high/50 px-2 py-1.5 rounded text-label-sm group">
+                                                <div key={id} className="flex items-center gap-2 md3-surface-high px-2 py-1.5 rounded text-label-sm group">
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center gap-2">
                                                             <span className="font-bold truncate">{profile.name || id.slice(0, 12) + '...'}</span>

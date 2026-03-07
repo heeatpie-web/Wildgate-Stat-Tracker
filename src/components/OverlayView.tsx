@@ -417,7 +417,7 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
         <div className="h-screen w-full flex flex-col pointer-events-none relative animate-fade-in border border-transparent hover:border-md-sys-outline/20 transition-colors rounded-modal overflow-hidden">
             <div className="flex-1 flex flex-col items-center p-2 pointer-events-none relative z-10">
                 <div
-                    className="pointer-events-auto mt-2 w-full min-w-300px max-w-2xl flex flex-col mg-surface-high backdrop-blur-md border border-md-sys-outline/20 rounded-card shadow-2xl overflow-hidden"
+                    className="pointer-events-auto mt-2 w-full min-w-300px max-w-2xl flex flex-col mg-surface-high border border-md-sys-outline/20 rounded-card shadow-2xl overflow-hidden"
                     style={{ opacity: captureInProgress ? 0 : 1, transition: 'opacity 0.1s' }}
                     onMouseEnter={enableInteraction}
                     onMouseLeave={disableInteraction}

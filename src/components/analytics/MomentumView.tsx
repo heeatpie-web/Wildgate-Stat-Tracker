@@ -23,7 +23,7 @@ export const MomentumView: React.FC<MomentumViewProps> = ({ data, visualMode }) 
 
             {/* Big score display */}
             <div className={`md3-card rounded-card relative overflow-hidden ${dense ? 'p-6' : 'p-8'}`}>
-                <div className={`absolute -top-10 -right-10 w-40 h-40 rounded-full opacity-10 blur-3xl`} style={{ backgroundColor: scoreColor }}></div>
+                <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full opacity-10" style={{ backgroundColor: scoreColor }}></div>
                 <div className="flex items-center justify-between">
                     <div>
                         <div className="text-label-sm font-bold uppercase tracking-widest text-md-sys-on-surface/60 mb-2">Performance Momentum</div>

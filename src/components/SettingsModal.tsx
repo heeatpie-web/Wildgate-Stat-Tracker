@@ -491,14 +491,14 @@ const SettingsModalContent: React.FC = () => {
 
     return (
         <>
-            <div className="fixed inset-0 z-modal md3-dialog-scrim flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowSettings(false)}>
+            <div className="fixed inset-0 z-modal md3-dialog-scrim flex items-center justify-center p-4" onClick={() => setShowSettings(false)}>
                 <div
                     ref={focusTrapRef}
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby={dialogTitleId}
                     aria-describedby={dialogDescriptionId}
-                    className={`md3-dialog overflow-hidden ${isOverlayMode ? 'max-w-400px' : 'max-w-2xl'} w-full max-h-85vh flex flex-col ring-1 ring-md-sys-outline/10 bg-md-sys-surface/90 backdrop-blur-xl shadow-2xl rounded-modal`}
+                    className={`md3-dialog overflow-hidden ${isOverlayMode ? 'max-w-400px' : 'max-w-2xl'} w-full max-h-85vh flex flex-col ring-1 ring-md-sys-outline/10 shadow-2xl rounded-modal`}
                     onClick={e => e.stopPropagation()}
                 >
                 {/* Modal Header */}
@@ -697,7 +697,7 @@ const SettingsModalContent: React.FC = () => {
                         </h3>
 
                         {/* Theme Accent */}
-                        <div className="md3-surface-high/50 backdrop-blur-sm p-5 rounded-card mb-4 border border-md-sys-outline/10">
+                        <div className="md3-surface-high p-5 rounded-card mb-4 border border-md-sys-outline/10">
                             <label className="text-label-sm font-semibold opacity-60 block mb-3">Theme Accent</label>
                             <div className="grid grid-cols-4 gap-2">
                                 {[
@@ -738,7 +738,7 @@ const SettingsModalContent: React.FC = () => {
                             )}
                         </div>
 
-                        <div className="md3-surface-high/50 backdrop-blur-sm p-5 rounded-card mb-4 border border-md-sys-outline/10">
+                        <div className="md3-surface-high p-5 rounded-card mb-4 border border-md-sys-outline/10">
                             <label className="text-label-sm font-semibold opacity-60 block mb-3">Appearance Mode</label>
                             <div className="grid grid-cols-4 gap-2">
                                 {([
@@ -760,7 +760,7 @@ const SettingsModalContent: React.FC = () => {
                         </div>
 
                         {/* Background URL */}
-                        <div className="md3-surface-high/50 backdrop-blur-sm p-5 rounded-card mb-4 border border-md-sys-outline/10">
+                        <div className="md3-surface-high p-5 rounded-card mb-4 border border-md-sys-outline/10">
                             <label className="text-label-sm font-semibold opacity-60 block mb-2">Background URL</label>
                             <div className="flex gap-2">
                                 <Input
@@ -786,7 +786,7 @@ const SettingsModalContent: React.FC = () => {
                         {/* Toggles Grid */}
                         <div className="grid grid-cols-2 gap-4">
                             {/* Colorblind Mode - Temporarily Removed
-                            <div className="md3-surface-high/50 backdrop-blur-sm p-5 rounded-card border border-md-sys-outline/10">
+                            <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
                                 <label className="text-label-sm font-semibold opacity-60 block mb-2">Colorblind Mode</label>
                                 <select
                                     value={colorblindMode}
@@ -802,7 +802,7 @@ const SettingsModalContent: React.FC = () => {
                             </div>
                             */}
 
-                            <div className="md3-surface-high/50 backdrop-blur-sm p-5 rounded-card space-y-4 col-span-2 border border-md-sys-outline/10">
+                            <div className="md3-surface-high p-5 rounded-card space-y-4 col-span-2 border border-md-sys-outline/10">
                                 {/* Toggle Switch Component Inline */}
                                 {[
                                     {
@@ -928,7 +928,7 @@ const SettingsModalContent: React.FC = () => {
                                 </div>
                             </div>
                         </div>
-                        <div className="mt-4 md3-surface-high/50 backdrop-blur-sm p-5 rounded-card border border-md-sys-outline/10">
+                        <div className="mt-4 md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
                             <div className="flex justify-between items-center">
                                 <div>
                                     <span className="text-label-sm font-medium opacity-60 block">Header Smart Capture</span>
@@ -979,7 +979,7 @@ const SettingsModalContent: React.FC = () => {
 
                     {/* Overlay Style Section */}
                     {activeTab === 'interface' && (
-                        <section className="md3-surface-high/50 backdrop-blur-sm p-5 rounded-card border border-md-sys-outline/10">
+                        <section className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
                         <h3 className="text-label-sm font-bold uppercase tracking-wide opacity-60 flex items-center gap-2 mb-4">
                             Overlay Style
                         </h3>
@@ -1067,7 +1067,7 @@ const SettingsModalContent: React.FC = () => {
 
                     {/* OCR Engine Section */}
                     {activeTab === 'ocr-capture' && (
-                        <section className="md3-surface-high/50 backdrop-blur-sm p-5 rounded-card border border-md-sys-outline/10">
+                        <section className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
                         <div className="mb-4 rounded-control border border-warning/40 bg-warning-soft/35 px-3 py-2 text-label-sm text-warning">
                             OCR is tuned for 1920 x 1080. Using other resolutions can lower accuracy unless you adjust OCR scan regions (ROI).
                         </div>
@@ -1291,7 +1291,7 @@ const SettingsModalContent: React.FC = () => {
                                     const displayTarget = event.appliedName || event.suggestedName || 'n/a';
                                     const rollbackEligible = event.status === 'approved' || event.status === 'auto_applied';
                                     return (
-                                        <div key={event.id} className="p-2 rounded-control md3-surface-high/50 border border-md-sys-outline/10">
+                                        <div key={event.id} className="p-2 rounded-control md3-surface-high border border-md-sys-outline/10">
                                             <div className="flex items-center justify-between gap-2">
                                                 <div className="text-label-sm font-semibold truncate">{event.rawText} -&gt; {displayTarget}</div>
                                                 <span className="text-label-xs font-mono uppercase opacity-60">{event.status.replace('_', ' ')}</span>
@@ -1372,7 +1372,7 @@ const SettingsModalContent: React.FC = () => {
 
                     {/* Capture Mode */}
                     {activeTab === 'ocr-capture' && (
-                        <section className="md3-surface-high/50 backdrop-blur-sm p-4 rounded-card border border-md-sys-outline/10">
+                        <section className="md3-surface-high p-4 rounded-card border border-md-sys-outline/10">
                         <h3 className="text-body font-bold mb-3">Capture Defaults</h3>
                         <div className="grid grid-cols-2 gap-2">
                             {[
@@ -1440,7 +1440,7 @@ const SettingsModalContent: React.FC = () => {
                             <h3 className="text-label-sm font-bold uppercase tracking-wide opacity-60 flex items-center gap-2 mb-4 mt-6">
                                 <FileJson size={16} /> Data & Updates
                             </h3>
-                            <div className="md3-surface-high/50 backdrop-blur-sm p-4 rounded-card mb-4 flex items-center justify-between border border-md-sys-outline/10">
+                            <div className="md3-surface-high p-4 rounded-card mb-4 flex items-center justify-between border border-md-sys-outline/10">
                                 <div>
                                     <div className="text-body font-bold">Auto Backup</div>
                                     <div className="text-label-sm opacity-60 uppercase font-bold">Every 5 matches</div>
@@ -1452,56 +1452,56 @@ const SettingsModalContent: React.FC = () => {
                                     <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${enableAutoBackup ? 'translate-x-5' : ''}`} />
                                 </button>
                             </div>
-                            <div className="md3-surface-high/50 backdrop-blur-sm p-3 rounded-card mb-4 border border-warning/30 text-warning">
+                            <div className="md3-surface-high p-3 rounded-card mb-4 border border-warning/30 text-warning">
                                 <div className="text-label-sm font-bold uppercase tracking-wide">Beta Build</div>
                                 <div className="text-label-sm opacity-90 mt-1">This app is in beta. If something breaks, use Copy Logs and share them with the team.</div>
                             </div>
                             <div className="grid grid-cols-2 gap-3 mb-4">
                                 <button
                                     onClick={handleBackupDB}
-                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high/50 backdrop-blur-sm rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
+                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
                                 >
                                     <Save size={20} />
                                     <span className="text-label-sm font-bold">Backup</span>
                                 </button>
                                 <button
                                     onClick={handleRestoreBackup}
-                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high/50 backdrop-blur-sm rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
+                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
                                 >
                                     <Upload size={20} />
                                     <span className="text-label-sm font-bold">Restore</span>
                                 </button>
                                 <button
                                     onClick={() => exportToCSV(matches)}
-                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high/50 backdrop-blur-sm rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
+                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
                                 >
                                     <Download size={20} />
                                     <span className="text-label-sm font-bold">Export CSV</span>
                                 </button>
                                 <button
                                     onClick={() => exportToJSON({ matches, players, pilotRegistry })}
-                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high/50 backdrop-blur-sm rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
+                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
                                 >
                                     <FileJson size={20} />
                                     <span className="text-label-sm font-bold">Export JSON</span>
                                 </button>
                                 <button
                                     onClick={handleCopyLogs}
-                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high/50 backdrop-blur-sm rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
+                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
                                 >
                                     <Copy size={20} />
                                     <span className="text-label-sm font-bold">Copy Logs</span>
                                 </button>
                                 <button
                                     onClick={() => setShowResetConfirm(true)}
-                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high/50 backdrop-blur-sm hover:bg-md-sys-error/10 text-md-sys-error rounded-card transition-colors border border-md-sys-outline/10"
+                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high hover:bg-md-sys-error/10 text-md-sys-error rounded-card transition-colors border border-md-sys-outline/10"
                                 >
                                     <RefreshCw size={20} />
                                     <span className="text-label-sm font-bold">Reset Data</span>
                                 </button>
                                 <button
                                     onClick={() => setShowIdMapper(true)}
-                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high/50 backdrop-blur-sm hover:bg-md-sys-primary/10 text-md-sys-primary rounded-card transition-colors border border-md-sys-outline/10"
+                                    className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high hover:bg-md-sys-primary/10 text-md-sys-primary rounded-card transition-colors border border-md-sys-outline/10"
                                 >
                                     <FileJson size={20} />
                                     <span className="text-label-sm font-bold">Manage ID Mappings</span>
@@ -1516,7 +1516,7 @@ const SettingsModalContent: React.FC = () => {
                             />
 
                             {/* Update Section */}
-                            <div className="md3-surface-high/50 backdrop-blur-sm p-4 rounded-card flex items-center justify-between border border-md-sys-outline/10">
+                            <div className="md3-surface-high p-4 rounded-card flex items-center justify-between border border-md-sys-outline/10">
                                 <div>
                                     <div className="text-body font-bold">Update</div>
                                     <div className="text-label-sm font-mono opacity-60">{APP_VERSION}</div>

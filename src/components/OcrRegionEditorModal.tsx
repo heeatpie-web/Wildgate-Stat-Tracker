@@ -640,7 +640,7 @@ export const OcrRegionEditorModal: React.FC<OcrRegionEditorModalProps> = ({
     if (typeof document === 'undefined') return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-modal-top bg-scrim-70 backdrop-blur-sm flex items-stretch justify-center p-1 sm:p-2">
+        <div className="fixed inset-0 z-modal-top bg-scrim-70 flex items-stretch justify-center p-1 sm:p-2">
             <div
                 ref={focusTrapRef}
                 role="dialog"

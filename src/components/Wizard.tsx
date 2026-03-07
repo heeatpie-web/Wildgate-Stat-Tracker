@@ -86,6 +86,7 @@ export const Wizard: React.FC = () => {
         poiEasy, setPoiEasy,
         poiMedium, setPoiMedium,
         poiEpic, setPoiEpic,
+        updateMatch,
     } = useGameData();
 
     const { showWizard, setShowWizard, isOverlayMode, activeMode, activeUser, pushNotification, requestSmartCapture } = useUIState();
@@ -94,7 +95,6 @@ export const Wizard: React.FC = () => {
     const ocrRegions = useAppStore((state) => state.ocrRegions);
     const setPendingDraftData = useAppStore((state) => state.setPendingMatchData);
     const [selectedWinType, setSelectedWinType] = useState<'Combat' | 'Artifact' | null>(null);
-    const [requestedOcrReviewMatchId, setRequestedOcrReviewMatchId] = useState<number | null | undefined>(undefined);
     const [activeTab, setActiveTab] = useState<WizardTab>('result');
     const [guidedResultStep, setGuidedResultStep] = useState<'stats' | 'team-review' | 'save'>('stats');
     const [isRerunningOcr, setIsRerunningOcr] = useState(false);
@@ -127,6 +127,12 @@ export const Wizard: React.FC = () => {
             setSelectedWinType(null);
             setIsProspectorLoadoutExpanded(false);
             lastTimeSyncMatchIdRef.current = null;
+            return;
+        }
+        const initialTab = useAppStore.getState().wizardInitialTab;
+        if (initialTab === 'ocr') {
+            useAppStore.getState().setWizardInitialTab(null);
+            setActiveTab('ocr');
             return;
         }
         // Restore win type when reopening a previously submitted match (re-edit flow)
@@ -276,41 +282,6 @@ export const Wizard: React.FC = () => {
         }
     }, [pendingMatchData, setTimeMin, setTimeSec, showWizard, timeMin, timeSec]);
 
-    React.useEffect(() => {
-        const onRequestOcrReview = (evt: Event) => {
-            const customEvt = evt as CustomEvent<{ matchId?: number }>;
-            const requestedMatchId = Number(customEvt?.detail?.matchId || 0);
-            if (Number.isInteger(requestedMatchId) && requestedMatchId > 0) {
-                setRequestedOcrReviewMatchId(requestedMatchId);
-                return;
-            }
-            setRequestedOcrReviewMatchId(null);
-        };
-        window.addEventListener('wizard:request-ocr-review', onRequestOcrReview as EventListener);
-        return () => window.removeEventListener('wizard:request-ocr-review', onRequestOcrReview as EventListener);
-    }, []);
-
-    React.useEffect(() => {
-        if (requestedOcrReviewMatchId === undefined) return;
-        if (!showWizard || !pendingMatchData) return;
-        const pendingMatchId = Number((pendingMatchData as Match | null)?.id || 0);
-        if (
-            requestedOcrReviewMatchId === null
-            || !Number.isInteger(pendingMatchId)
-            || pendingMatchId <= 0
-            || pendingMatchId === requestedOcrReviewMatchId
-        ) {
-            setActiveTab('ocr');
-            setRequestedOcrReviewMatchId(undefined);
-        }
-    }, [pendingMatchData, requestedOcrReviewMatchId, showWizard]);
-
-    React.useEffect(() => {
-        if (showWizard) return;
-        if (requestedOcrReviewMatchId !== undefined) {
-            setRequestedOcrReviewMatchId(undefined);
-        }
-    }, [requestedOcrReviewMatchId, showWizard]);
 
     const detectedPlayerCount = React.useMemo(() => {
         if (!sessionTeams) return 0;
@@ -827,7 +798,7 @@ export const Wizard: React.FC = () => {
     };
 
     return (
-        <div className="wizard-scrim fixed inset-0 md3-dialog-scrim backdrop-blur-none z-top flex items-start justify-center p-4 overflow-hidden animate-fade-in" onClick={() => setShowWizard(null)}>
+        <div className="wizard-scrim fixed inset-0 md3-dialog-scrim z-top flex items-start justify-center p-4 overflow-hidden animate-fade-in" onClick={() => setShowWizard(null)}>
             <div
                 ref={dialogRef}
                 role="dialog"
@@ -1410,8 +1381,24 @@ export const Wizard: React.FC = () => {
                                 embedded={true}
                                 onClose={() => React.startTransition(() => setActiveTab('result'))}
                                 onAcceptAll={() => {
-                                    setGuidedResultStep('save');
-                                    React.startTransition(() => setActiveTab('result'));
+                                    // Persist OCR review state to the actual match record
+                                    // before closing, so the snapshot-restore effect doesn't
+                                    // overwrite the ocrState that OcrCorrectionModal set on
+                                    // pendingMatchData.
+                                    const latestPending = useAppStore.getState().pendingMatchData;
+                                    const matchId = latestPending?.id;
+                                    if (matchId) {
+                                        const existingMatch = useAppStore.getState().matches.find(m => m.id === matchId);
+                                        if (existingMatch) {
+                                            updateMatch({
+                                                ...existingMatch,
+                                                ...latestPending,
+                                                ocrReviewedAt: Date.now(),
+                                                ocrState: 'saved',
+                                            } as Match);
+                                        }
+                                    }
+                                    setShowWizard(null);
                                 }}
                                 screenshots={deferredWizardReviewScreenshots}
                             />

@@ -42,7 +42,9 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
         currentLoadout, setCurrentLoadout, activeHero
     } = useGameData();
 
-    const { showArtifactSelect, setShowArtifactSelect } = useUIState();
+    const { showArtifactSelect, setShowArtifactSelect, telemetryStatus } = useUIState();
+    const telemetryIsLive = typeof telemetryStatus.lastEventAt === 'number'
+        && (Date.now() - telemetryStatus.lastEventAt) < 5 * 60 * 1000;
 
     const isTransparent = variant === 'transparent';
     const [isScanning, setIsScanning] = useState(false);
@@ -78,7 +80,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
         + Math.min(MAX_PROSPECTOR_LOADOUT_SLOTS, telemetryProspectorEquipment.length)
         + Math.min(2, telemetryProspectorPerks.length);
     const telemetrySignalsTotal = (MAX_PROSPECTOR_LOADOUT_SLOTS * 2) + 2;
-    const hasTelemetryLoadout = telemetrySignalsFilled > 0;
+    const hasTelemetryLoadout = telemetryIsLive && telemetrySignalsFilled > 0;
     const telemetrySummaryTooltip = `Telemetry synced: ${telemetrySignalsFilled}/${telemetrySignalsTotal} (Weapons ${Math.min(MAX_PROSPECTOR_LOADOUT_SLOTS, telemetryProspectorWeapons.length)}/${MAX_PROSPECTOR_LOADOUT_SLOTS}, Equipment ${Math.min(MAX_PROSPECTOR_LOADOUT_SLOTS, telemetryProspectorEquipment.length)}/${MAX_PROSPECTOR_LOADOUT_SLOTS}, Perks ${Math.min(2, telemetryProspectorPerks.length)}/2)`;
     const telemetrySummaryBadge = hasTelemetryLoadout ? (
         <span

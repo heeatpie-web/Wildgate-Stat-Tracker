@@ -365,13 +365,13 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
             {/* ── Stats Summary Strip ── */}
             {filteredMatches.length > 0 && (
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                    <div className="relative overflow-hidden rounded-card border border-md-sys-outline/10 p-4 backdrop-blur-xl" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 25%)' }}>
-                        <div className="absolute -right-3 -top-3 w-16 h-16 rounded-full opacity-10 bg-md-sys-primary blur-xl" />
+                    <div className="relative overflow-hidden rounded-card border border-md-sys-outline/10 p-4" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+                        <div className="absolute -right-3 -top-3 w-16 h-16 rounded-full opacity-10 bg-md-sys-primary" />
                         <div className="text-label-sm font-bold uppercase tracking-wide-12 text-md-sys-on-surface/60 mb-1">Total Matches</div>
                         <div className="text-2xl font-black tracking-tight text-md-sys-on-surface">{filteredMatches.length}</div>
                     </div>
-                    <div className="relative overflow-hidden rounded-card border border-md-sys-outline/10 p-4 backdrop-blur-xl" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 25%)' }}>
-                        <div className="absolute -right-3 -top-3 w-16 h-16 rounded-full opacity-15 bg-success blur-xl" />
+                    <div className="relative overflow-hidden rounded-card border border-md-sys-outline/10 p-4" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+                        <div className="absolute -right-3 -top-3 w-16 h-16 rounded-full opacity-15 bg-success" />
                         <div className="text-label-sm font-bold uppercase tracking-wide-12 text-md-sys-on-surface/60 mb-1">Win Rate</div>
                         <div className="flex items-baseline gap-2">
                             <span className="text-2xl font-black tracking-tight text-success">{winRate}%</span>
@@ -380,8 +380,8 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                             </span>
                         </div>
                     </div>
-                    <div className="relative overflow-hidden rounded-card border border-md-sys-outline/10 p-4 backdrop-blur-xl" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 25%)' }}>
-                        <div className={`absolute -right-3 -top-3 w-16 h-16 rounded-full opacity-15 blur-xl ${currentStreak.type === 'Win' ? 'bg-success' : currentStreak.type === 'Loss' ? 'bg-danger' : 'bg-info'}`} />
+                    <div className="relative overflow-hidden rounded-card border border-md-sys-outline/10 p-4" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
+                        <div className={`absolute -right-3 -top-3 w-16 h-16 rounded-full opacity-15 ${currentStreak.type === 'Win' ? 'bg-success' : currentStreak.type === 'Loss' ? 'bg-danger' : 'bg-info'}`} />
                         <div className="text-label-sm font-bold uppercase tracking-wide-12 text-md-sys-on-surface/60 mb-1">Current Streak</div>
                         <div className="flex items-center gap-2">
                             <Flame size={18} className={currentStreak.type === 'Win' ? 'text-success' : currentStreak.type === 'Loss' ? 'text-danger' : 'text-md-sys-on-surface/40'} />
@@ -399,7 +399,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                 <div className="p-5 flex flex-col gap-4 border-b border-md-sys-outline/[0.06]">
                     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                         <div className="flex items-center gap-3">
-                            <div className="h-11 w-11 rounded-card bg-gradient-to-br from-md-sys-primary/20 to-md-sys-tertiary/20 border border-md-sys-outline/10 backdrop-blur-sm flex items-center justify-center shadow-lg shadow-md-sys-primary/5">
+                            <div className="h-11 w-11 rounded-card bg-gradient-to-br from-md-sys-primary/20 to-md-sys-tertiary/20 border border-md-sys-outline/10 flex items-center justify-center shadow-lg shadow-md-sys-primary/5">
                                 <Clock size={18} className="text-md-sys-primary" />
                             </div>
                             <div>
@@ -417,8 +417,8 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                     placeholder="Search matches..."
                                     value={searchInput}
                                     onChange={(e) => setSearchInput(e.target.value)}
-                                    className="pl-9 pr-4 py-2.5 text-body font-medium outline-none text-md-sys-on-surface w-full sm:w-64 transition-all rounded-control border border-md-sys-outline/10 focus:border-md-sys-primary/40 focus:ring-2 focus:ring-md-sys-primary/10 backdrop-blur-sm"
-                                    style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 40%)' }}
+                                    className="pl-9 pr-4 py-2.5 text-body font-medium outline-none text-md-sys-on-surface w-full sm:w-64 transition-all rounded-control border border-md-sys-outline/10 focus:border-md-sys-primary/40 focus:ring-2 focus:ring-md-sys-primary/10"
+                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
                                 />
                             </div>
                             <button
@@ -428,7 +428,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                         ? 'border-md-sys-primary/30 bg-md-sys-primary/10 text-md-sys-primary'
                                         : 'border-md-sys-outline/10 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/[0.06]'
                                 }`}
-                                style={!(filtersOpen || activeFilterCount > 0) ? { background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 40%)' } : undefined}
+                                style={!(filtersOpen || activeFilterCount > 0) ? { background: 'var(--md-sys-color-surface-container-high)' } : undefined}
                             >
                                 <Filter size={14} />
                                 Filters
@@ -470,7 +470,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                     value={filterShip}
                                     onChange={e => setFilterShip(e.target.value)}
                                     className="px-2.5 py-1.5 rounded-lg text-label-sm font-semibold outline-none cursor-pointer border border-md-sys-outline/10 text-md-sys-on-surface"
-                                    style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 30%)' }}
+                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
                                 >
                                     <option value="all">All Ships</option>
                                     {uniqueShips.map(s => <option key={s} value={s}>{s.replace(/ \(\d Player\)/, '')}</option>)}
@@ -482,7 +482,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                     value={filterModifier}
                                     onChange={e => setFilterModifier(e.target.value)}
                                     className="px-2.5 py-1.5 rounded-lg text-label-sm font-semibold outline-none cursor-pointer border border-md-sys-outline/10 text-md-sys-on-surface"
-                                    style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 30%)' }}
+                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
                                 >
                                     <option value="all">All Hazards</option>
                                     {uniqueModifiers.map(m => <option key={m} value={m}>{m}</option>)}
@@ -495,7 +495,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                     value={filterDateFrom}
                                     onChange={e => setFilterDateFrom(e.target.value)}
                                     className="px-2.5 py-1.5 rounded-lg text-label-sm font-semibold outline-none border border-md-sys-outline/10 text-md-sys-on-surface"
-                                    style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 30%)' }}
+                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
                                 />
                             </div>
                             <div className="flex flex-col gap-1">
@@ -505,7 +505,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                     value={filterDateTo}
                                     onChange={e => setFilterDateTo(e.target.value)}
                                     className="px-2.5 py-1.5 rounded-lg text-label-sm font-semibold outline-none border border-md-sys-outline/10 text-md-sys-on-surface"
-                                    style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 30%)' }}
+                                    style={{ background: 'var(--md-sys-color-surface-container-high)' }}
                                 />
                             </div>
                             {activeFilterCount > 0 && (
@@ -548,7 +548,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                 value={itemsPerPage}
                                 onChange={(e) => setItemsPerPage(e.target.value === 'Infinity' ? 'Infinity' : Number(e.target.value))}
                                 className="px-2.5 py-1.5 outline-none transition-all cursor-pointer rounded-lg text-body font-semibold border border-md-sys-outline/10 focus:border-md-sys-primary/40 text-md-sys-on-surface"
-                                style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 40%)' }}
+                                style={{ background: 'var(--md-sys-color-surface-container-high)' }}
                             >
                                 <option value={10}>10</option>
                                 <option value={20}>20</option>
@@ -619,7 +619,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse history-table">
                         <thead className="sticky top-0 z-10">
-                            <tr className="text-label-sm font-bold uppercase tracking-wide-10 text-md-sys-on-surface/60 border-b border-md-sys-outline/10 bg-md-sys-surface-container/90 backdrop-blur-md">
+                            <tr className="text-label-sm font-bold uppercase tracking-wide-10 text-md-sys-on-surface/60 border-b border-md-sys-outline/10 bg-md-sys-surface-container">
                                 <th className="w-1 p-0"></th>
                                 <th className="px-3 py-3.5 cursor-pointer hover:text-md-sys-primary transition-colors select-none" onClick={() => handleSort('result')}>
                                     <span className="inline-flex items-center gap-1.5">Outcome <ArrowUpDown size={10} className="opacity-40" /></span>
@@ -652,7 +652,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                 <tr>
                                     <td colSpan={11}>
                                         <div className="flex flex-col items-center justify-center py-28 gap-4">
-                                            <div className="w-20 h-20 rounded-card bg-gradient-to-br from-md-sys-primary/15 to-md-sys-tertiary/15 border border-md-sys-outline/10 flex items-center justify-center backdrop-blur-sm">
+                                            <div className="w-20 h-20 rounded-card bg-gradient-to-br from-md-sys-primary/15 to-md-sys-tertiary/15 border border-md-sys-outline/10 flex items-center justify-center">
                                                 <Ghost size={36} className="text-md-sys-primary/60" />
                                             </div>
                                             <div className="text-center">
@@ -866,8 +866,8 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
 
             {/* ── Bulk Delete Confirmation Dialog ── */}
             {bulkDeleteConfirm && createPortal(
-                <div className="fixed inset-0 z-modal-plus flex items-center justify-center p-4 animate-fade-in" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setBulkDeleteConfirm(false)}>
-                    <div className="w-full max-w-sm rounded-modal border border-md-sys-outline/10 p-6 flex flex-col gap-4 animate-scale-in shadow-2xl" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 10%)', backdropFilter: 'blur(40px)' }} onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-modal-plus flex items-center justify-center p-4 animate-fade-in" style={{ background: 'rgba(8, 12, 20, 0.68)' }} onClick={() => setBulkDeleteConfirm(false)}>
+                    <div className="w-full max-w-sm rounded-modal border border-md-sys-outline/10 p-6 flex flex-col gap-4 animate-scale-in shadow-2xl" style={{ background: 'var(--md-sys-color-surface-container-highest)' }} onClick={e => e.stopPropagation()}>
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-control bg-danger/15 flex items-center justify-center">
                                 <AlertTriangle size={20} className="text-danger" />
@@ -889,13 +889,13 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
 
             {/* ── Notes Modal ── */}
             {editingNoteMatch && createPortal(
-                <div className="fixed inset-0 z-modal flex items-center justify-center p-4 animate-fade-in" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setEditingNoteMatch(null)}>
-                    <div className="w-full max-w-md rounded-modal border border-md-sys-outline/10 p-6 flex flex-col gap-4 animate-scale-in shadow-2xl" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 10%)', backdropFilter: 'blur(40px)' }} onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-modal flex items-center justify-center p-4 animate-fade-in" style={{ background: 'rgba(8, 12, 20, 0.68)' }} onClick={() => setEditingNoteMatch(null)}>
+                    <div className="w-full max-w-md rounded-modal border border-md-sys-outline/10 p-6 flex flex-col gap-4 animate-scale-in shadow-2xl" style={{ background: 'var(--md-sys-color-surface-container-highest)' }} onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center">
                             <h3 className="text-lg font-bold tracking-tight text-md-sys-on-surface">Mission Notes</h3>
                             <button onClick={() => setEditingNoteMatch(null)} className="w-8 h-8 rounded-control flex items-center justify-center hover:bg-md-sys-on-surface/[0.08] transition-colors text-md-sys-on-surface/60"><X size={18} /></button>
                         </div>
-                        <div className="p-4 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 40%)' }}>
+                        <div className="p-4 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
                             <div className="text-label-sm font-bold uppercase tracking-wide-10 text-md-sys-on-surface/40 mb-1.5">Match Details</div>
                             <div className="text-body font-bold text-md-sys-on-surface">{editingNoteMatch.result} | {(editingNoteMatch.ship || '').split('(')[0]} | {editingNoteMatch.hero}</div>
                             <div className="text-label-sm text-md-sys-on-surface/40 mt-1">{new Date(editingNoteMatch.timestamp).toLocaleString()}</div>
@@ -905,7 +905,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                             onChange={(e) => setNoteText(e.target.value)}
                             placeholder="Add notes about strategy, mistakes, or key moments..."
                             className="w-full h-32 rounded-control p-4 text-body font-medium outline-none resize-none transition-all border border-md-sys-outline/10 focus:border-md-sys-primary/40 focus:ring-2 focus:ring-md-sys-primary/10 text-md-sys-on-surface placeholder:text-md-sys-on-surface/40"
-                            style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 40%)' }}
+                            style={{ background: 'var(--md-sys-color-surface-container-high)' }}
                         />
                         <div className="flex gap-2.5">
                             <button onClick={() => setEditingNoteMatch(null)} className="flex-1 py-2.5 rounded-control font-semibold text-body border border-md-sys-outline/10 text-md-sys-on-surface/60 hover:bg-md-sys-on-surface/[0.06] transition-colors">Cancel</button>
@@ -917,8 +917,8 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
 
             {/* ── Match Details Modal ── */}
             {selectedMatchForDetails && createPortal(
-                <div className="fixed inset-0 z-overlay flex items-center justify-center p-4 animate-fade-in" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }} onClick={() => setSelectedMatchForDetails(null)}>
-                    <div className="w-full max-w-4xl rounded-modal border border-md-sys-outline/10 p-6 flex flex-col gap-5 animate-scale-in max-h-90vh overflow-y-auto custom-scrollbar shadow-2xl" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 8%)', backdropFilter: 'blur(40px)' }} onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-overlay flex items-center justify-center p-4 animate-fade-in" style={{ background: 'rgba(8, 12, 20, 0.68)' }} onClick={() => setSelectedMatchForDetails(null)}>
+                    <div className="w-full max-w-4xl rounded-modal border border-md-sys-outline/10 p-6 flex flex-col gap-5 animate-scale-in max-h-90vh overflow-y-auto custom-scrollbar shadow-2xl" style={{ background: 'var(--md-sys-color-surface-container-highest)' }} onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-start border-b border-md-sys-outline/[0.06] pb-5">
                             <div>
                                 <div className="text-label-sm font-semibold uppercase text-md-sys-on-surface/40 tracking-wide-14 mb-1.5">Mission Report</div>
@@ -953,7 +953,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                         )}
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 35%)' }}>
+                            <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
                                 <div className="text-label-sm font-semibold uppercase tracking-wide-08 text-md-sys-on-surface/40 mb-3">Pilot Loadout</div>
                                 <div className="text-xl font-bold mb-1">{(selectedMatchForDetails.ship || 'Unknown').split('(')[0]}</div>
                                 <div className="text-body opacity-60 mb-2">{selectedMatchForDetails.hero}</div>
@@ -997,7 +997,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                                     </div>
                                 )}
                             </div>
-                            <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 35%)' }}>
+                            <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
                                 <div className="text-label-sm font-semibold uppercase tracking-wide-08 text-md-sys-on-surface/40 mb-3">Performance</div>
                                 <div className="flex justify-between items-end">
                                     <div>
@@ -1014,7 +1014,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
 
                         {/* ── Hazards in detail modal ── */}
                         {selectedMatchForDetails.reachModifiers && selectedMatchForDetails.reachModifiers.length > 0 && (
-                            <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 35%)' }}>
+                            <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
                                 <div className="text-label-sm font-semibold uppercase text-md-sys-on-surface/40 mb-3 flex items-center gap-2"><Zap size={12} /> Hazards & Modifiers</div>
                                 <div className="flex flex-wrap gap-2">
                                     {selectedMatchForDetails.reachModifiers.map(m => (
@@ -1027,7 +1027,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                         )}
 
                         {selectedMatchForDetails.kills && Object.values(selectedMatchForDetails.kills).some(v => v > 0) && (
-                            <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 35%)' }}>
+                            <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
                                 <div className="text-label-sm font-semibold uppercase text-md-sys-on-surface/40 mb-4 flex items-center gap-2"><Swords size={12} /> Combat Record</div>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                     {Object.entries(selectedMatchForDetails.kills).filter(([_, count]) => count > 0).map(([ship, count]) => (
@@ -1040,7 +1040,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                             </div>
                         )}
 
-                        <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 35%)' }}>
+                        <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
                             <div className="flex justify-between mb-4">
                                 <div>
                                     <div className="text-label-sm font-semibold uppercase tracking-wide-08 text-md-sys-on-surface/40 mb-2">Squadron</div>
@@ -1075,7 +1075,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
                         </div>
 
                         {selectedMatchForDetails.artifacts && selectedMatchForDetails.artifacts.length > 0 && (
-                            <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 35%)' }}>
+                            <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
                                 <div className="text-label-sm font-semibold uppercase text-md-sys-on-surface/40 mb-4 flex items-center gap-2"><ImageIcon size={12} /> Visual Intel</div>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                     {selectedMatchForDetails.artifacts.map((src, i) => (
@@ -1094,7 +1094,7 @@ const HistoryTable: React.FC<HistoryTableProps> = () => {
 
                         {/* Match Chronology (Timeline) */}
                         {selectedMatchForDetails.timelineEvents && selectedMatchForDetails.timelineEvents.length > 0 && (
-                            <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'color-mix(in srgb, var(--md-sys-color-surface), transparent 35%)' }}>
+                            <div className="p-5 rounded-card border border-md-sys-outline/[0.06]" style={{ background: 'var(--md-sys-color-surface-container-high)' }}>
                                 <div className="text-label-sm font-semibold uppercase text-md-sys-on-surface/40 mb-4 flex items-center gap-2"><Clock size={12} /> Tactical Chronology</div>
                                 <div className="space-y-3">
                                     {/* Mini Graph */}

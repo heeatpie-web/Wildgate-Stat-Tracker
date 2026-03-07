@@ -150,12 +150,13 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as any}>
                     {showSmartCaptureInHeader && (
                         <Button
+                            variant="secondary"
                             onClick={handleTopbarSmartCapture}
                             disabled={smartCaptureBusy}
                             loading={smartCaptureBusy}
                             icon={!smartCaptureBusy ? <Scan size={14} /> : undefined}
                             data-recording-panel="topbar-smart-capture"
-                            className="header-action-btn header-action-btn--primary whitespace-nowrap min-w-138px px-3.5 text-label-sm font-bold uppercase tracking-wide-12"
+                            className="header-action-btn header-action-btn--primary whitespace-nowrap min-w-138px px-3.5 text-label-sm font-bold uppercase tracking-wide"
                             title="Smart Capture (screenshots + OCR)"
                         >
                             Smart Capture

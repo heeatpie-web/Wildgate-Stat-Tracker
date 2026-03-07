@@ -516,7 +516,7 @@ export const DrillDownOverlay: React.FC = () => {
     );
 
     return (
-        <div className="fixed inset-0 z-overlay flex items-center justify-center p-4 md:p-6 md3-dialog-scrim backdrop-blur-md animate-fade-in" onClick={() => setDrillDownTarget(null)}>
+        <div className="fixed inset-0 z-overlay flex items-center justify-center p-4 md:p-6 md3-dialog-scrim animate-fade-in" onClick={() => setDrillDownTarget(null)}>
             <div
                 ref={focusTrapRef}
                 role="dialog"

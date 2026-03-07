@@ -59,6 +59,13 @@ const TEAM_COLORS = {
 const HUE_TOLERANCE = 12;
 const SAT_TOLERANCE = 65;
 const LIGHT_TOLERANCE = 50;
+const YELLOW_HUE_RANGE = { min: 45, max: 65 };
+const YELLOW_GREEN_HUE_RANGE = { min: 66, max: 90 };
+const LEGACY_DARK_YELLOW_GREEN = {
+  hueMin: 56,
+  hueMax: 65,
+  maxLight: 42,
+};
 
 /**
  * Convert RGB to HSL
@@ -125,15 +132,15 @@ function classifyTeamColorHSL(r, g, b) {
   const hsl = rgbToHsl(r, g, b);
 
   // Very-dark near-black badges are likely spectator cards.
-  if (hsl.l < 8 && hsl.s < 20) {
+  if (hsl.l < 12 && hsl.s < 30) {
     return { color: 'spectator', confidence: 70 };
   }
 
   // Ground truth includes Black teams. Match black directly by lightness/saturation
   // so hue wrapping does not misclassify it as unknown.
-  if (hsl.s < 20 && hsl.l < 35) {
-    const darknessScore = 1 - (Math.min(hsl.l, 35) / 35);
-    const satScore = 1 - (Math.min(hsl.s, 20) / 20);
+  if (hsl.s < 30 && hsl.l < 40) {
+    const darknessScore = 1 - (Math.min(hsl.l, 40) / 40);
+    const satScore = 1 - (Math.min(hsl.s, 30) / 30);
     const confidence = Math.round((darknessScore * 0.65 + satScore * 0.35) * 100);
     return { color: 'black', confidence: Math.max(40, confidence) };
   }
@@ -172,6 +179,22 @@ function classifyTeamColorHSL(r, g, b) {
         bestScore = score;
         bestMatch = colorName;
       }
+    }
+  }
+
+  if (bestMatch === 'yellow' || bestMatch === 'yellowGreen') {
+    const isLegacyDarkYellowGreen =
+      hsl.h >= LEGACY_DARK_YELLOW_GREEN.hueMin &&
+      hsl.h <= LEGACY_DARK_YELLOW_GREEN.hueMax &&
+      hsl.l <= LEGACY_DARK_YELLOW_GREEN.maxLight;
+    if (isLegacyDarkYellowGreen) {
+      return { color: 'yellowGreen', confidence: Math.max(70, Math.round(bestScore)) };
+    }
+    if (hsl.h >= YELLOW_HUE_RANGE.min && hsl.h <= YELLOW_HUE_RANGE.max) {
+      return { color: 'yellow', confidence: Math.max(70, Math.round(bestScore)) };
+    }
+    if (hsl.h >= YELLOW_GREEN_HUE_RANGE.min && hsl.h <= YELLOW_GREEN_HUE_RANGE.max) {
+      return { color: 'yellowGreen', confidence: Math.max(70, Math.round(bestScore)) };
     }
   }
 

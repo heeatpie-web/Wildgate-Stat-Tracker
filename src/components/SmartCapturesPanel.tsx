@@ -284,14 +284,53 @@ const applyPositionalTeamColorFallback = (
     });
     const fallbackQueue = POSITIONAL_TEAM_COLOR_ORDER.filter((color) => !claimed.has(color));
     let fallbackCursor = 0;
+    const rowOrderedUnknowns = teams
+        .map((team, index) => ({
+            index,
+            team,
+            sourceRowIndex: Number.isInteger(team.sourceRowIndex)
+                ? Number(team.sourceRowIndex)
+                : Number.MAX_SAFE_INTEGER,
+            sourceRowY: Number.isFinite(team.sourceRowY)
+                ? Number(team.sourceRowY)
+                : Number.MAX_SAFE_INTEGER,
+        }))
+        .filter(({ team }) => normalizeOpponentColorToken(team.color) === 'unknown')
+        .sort((left, right) => {
+            if (left.sourceRowIndex !== right.sourceRowIndex) {
+                return left.sourceRowIndex - right.sourceRowIndex;
+            }
+            if (left.sourceRowY !== right.sourceRowY) {
+                return left.sourceRowY - right.sourceRowY;
+            }
+            return left.index - right.index;
+        });
+
+    const assignedFallbacks = new Map<number, string>();
+    rowOrderedUnknowns.forEach(({ index, sourceRowIndex }) => {
+        const positional = Number.isInteger(sourceRowIndex)
+            ? POSITIONAL_TEAM_COLOR_ORDER[sourceRowIndex]
+            : undefined;
+        if (positional && !claimed.has(positional)) {
+            claimed.add(positional);
+            assignedFallbacks.set(index, positional);
+            return;
+        }
+        const queued = fallbackQueue[fallbackCursor];
+        if (queued) {
+            fallbackCursor += 1;
+            claimed.add(queued);
+            assignedFallbacks.set(index, queued);
+        }
+    });
+
     return teams.map((team, index) => {
         const parsed = normalizeOpponentColorToken(team.color);
         if (parsed !== 'unknown') {
             return { ...team, color: parsed };
         }
-        const positional = fallbackQueue[fallbackCursor];
+        const positional = assignedFallbacks.get(index);
         if (positional) {
-            fallbackCursor += 1;
             return {
                 ...team,
                 color: positional,
@@ -992,6 +1031,8 @@ const SmartCapturesPanel: React.FC = () => {
                     shipType: t.shipType || '',
                     color: t.color || 'unknown',
                     players: Array.from(new Set((t.players || []).map(p => p.name).filter(Boolean) as string[])),
+                    sourceRowIndex: typeof t.sourceRowIndex === 'number' ? t.sourceRowIndex : undefined,
+                    sourceRowY: typeof t.sourceRowY === 'number' ? t.sourceRowY : undefined,
                 }));
                 const mergedHints = {
                     ...buildPlayerColorHintsFromOpponentTeams(match.opponentTeams || []),
@@ -1195,27 +1236,6 @@ const SmartCapturesPanel: React.FC = () => {
     return (
         <>
             <SmartCapturesShell
-                topNav={(
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        {renderSectionTabs('w-auto shrink-0')}
-                        <button
-                            type="button"
-                            onClick={() => {
-                                dispatchSettingsFocusRequest({
-                                    tab: 'ocr-capture',
-                                    search: 'capture mode',
-                                });
-                                setShowSettings(true);
-                            }}
-                            className="shrink-0 h-9 px-3 md3-surface rounded-control inline-flex items-center justify-center gap-2 text-md-sys-on-surface/70 hover:text-md-sys-primary transition-colors"
-                            title="Open Smart Capture settings"
-                            aria-label="Open Smart Capture settings"
-                        >
-                            <Settings size={14} />
-                            <span className="text-label-sm font-semibold">Capture settings</span>
-                        </button>
-                    </div>
-                )}
                 content={activeSection === 'capture' ? (
                     <div className="h-full min-h-0 flex flex-row gap-2 overflow-x-auto">
                         <div
@@ -1226,8 +1246,29 @@ const SmartCapturesPanel: React.FC = () => {
                                 className="h-full"
                                 header={
                                     <div className="px-3 pt-3 pb-2 space-y-2 border-b border-md-sys-outline/10">
-                                        <div className={`flex items-center gap-2 ${queueCollapsed ? 'flex-col justify-center' : 'justify-start'}`}>
-                                            <QueueCollapseToggle collapsed={queueCollapsed} onToggle={toggleQueueCollapsed} />
+                                        <div className={`flex items-center gap-2 ${queueCollapsed ? 'flex-col justify-center' : 'justify-between'}`}>
+                                            <div className="flex items-center gap-2">
+                                                <QueueCollapseToggle collapsed={queueCollapsed} onToggle={toggleQueueCollapsed} />
+                                                {!queueCollapsed && renderSectionTabs('w-auto shrink-0')}
+                                            </div>
+                                            {!queueCollapsed && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        dispatchSettingsFocusRequest({
+                                                            tab: 'ocr-capture',
+                                                            search: 'capture mode',
+                                                        });
+                                                        setShowSettings(true);
+                                                    }}
+                                                    className="shrink-0 h-7 px-2 md3-surface rounded-control inline-flex items-center justify-center gap-1.5 text-md-sys-on-surface/60 hover:text-md-sys-primary transition-colors"
+                                                    title="Open Smart Capture settings"
+                                                    aria-label="Open Smart Capture settings"
+                                                >
+                                                    <Settings size={13} />
+                                                    <span className="text-label-xs font-semibold">Settings</span>
+                                                </button>
+                                            )}
                                         </div>
                                         {!queueCollapsed && activeSection === 'capture' && (
                                             <>
@@ -1448,6 +1489,8 @@ const SmartCapturesPanel: React.FC = () => {
                                                                 .map((name) => [normalizeOcrName(name).toLowerCase(), name])
                                                         ).values()
                                                     ),
+                                                    sourceRowIndex: typeof team.sourceRowIndex === 'number' ? team.sourceRowIndex : undefined,
+                                                    sourceRowY: typeof team.sourceRowY === 'number' ? team.sourceRowY : undefined,
                                                 }));
                                                 const assignedOpponentColors = assignDeterministicTeamColors(unresolvedOpponentTeams, {
                                                     playerColorHints: buildPlayerColorHints(sessionTeams),
@@ -1649,7 +1692,7 @@ const SmartCapturesPanel: React.FC = () => {
                 ) : (
                     <SmartCapturesToolsView>
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-md-sys-outline/10 pb-4 mb-4">
-                            <h2 className="text-label-lg font-bold text-md-sys-on-surface">Smart Captures Tools</h2>
+                            {renderSectionTabs('w-auto shrink-0')}
                             <span className="text-label-sm text-md-sys-on-surface/55">Bulk actions and diagnostics live here.</span>
                         </div>
                         <p className="text-body text-md-sys-on-surface/60 text-label-sm">Bulk actions and automation controls.</p>
@@ -2295,6 +2338,7 @@ const SmartMatchDetail: React.FC<{
                 // Restore previously saved result so Wizard pre-selects it
                 result: latestMatch.result,
                 subType: latestMatch.subType || undefined,
+                placement: latestMatch.placement,
             };
             const didCommitPending = commitPendingMatchDataForWizard(
                 pendingMatchData,
@@ -2310,14 +2354,10 @@ const SmartMatchDetail: React.FC<{
             const wizardResult = (priorResult === 'Win' || priorResult === 'Loss' || priorResult === 'Draw')
                 ? priorResult
                 : 'Match Result';
-            setShowWizard(wizardResult);
             if (openOcrReview) {
-                window.setTimeout(() => {
-                    window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
-                        detail: { matchId: Number(liveMatch.id || 0) || null },
-                    }));
-                }, 0);
+                useAppStore.getState().setWizardInitialTab('ocr');
             }
+            setShowWizard(wizardResult);
         }, [activeUser, isActiveUserLike, match, setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setShowWizard, setTimeMin, setTimeSec, setToast]);
 
         useEffect(() => {
@@ -2376,13 +2416,13 @@ const SmartMatchDetail: React.FC<{
                 });
             }
             persistNameSourceHintsToPendingDraft(ocrNameSources);
+            window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
+                detail: { matchId: Number(appliedMatch?.id || match.id || 0) || null },
+            }));
             openWizardForMatch({
                 matchOverride: appliedMatch,
                 reusePendingDraft: false,
             });
-            window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
-                detail: { matchId: Number(appliedMatch?.id || match.id || 0) || null },
-            }));
         }, [onApplyToSession, openWizardForMatch, reviewData, setToast, match.artifacts, match.id, ocrNameSources, persistNameSourceHintsToPendingDraft]);
 
         useEffect(() => {
@@ -2864,11 +2904,12 @@ const SmartMatchDetail: React.FC<{
             }
             const result = await removeMatchArtifact(match.id, file.artifactId);
             if (result.success) {
-                const fallbackArtifacts = (match.artifacts || []).filter((path) => path !== file.path);
+                const normFilePath = String(file.path || '').replace(/[\\/]+/g, '/').toLowerCase();
+                const fallbackArtifacts = (match.artifacts || []).filter((p) => String(p || '').replace(/[\\/]+/g, '/').toLowerCase() !== normFilePath);
                 const updated = await getMatchArtifactsStructured(match.id, fallbackArtifacts);
                 setArtifacts(updated);
                 if (match.artifacts) {
-                    const newArtifacts = match.artifacts.filter(p => p !== file.path);
+                    const newArtifacts = match.artifacts.filter(p => String(p || '').replace(/[\\/]+/g, '/').toLowerCase() !== normFilePath);
                     onUpdate({ ...match, artifacts: newArtifacts });
                 }
             } else if (result.error) {
@@ -3213,7 +3254,6 @@ const SmartMatchDetail: React.FC<{
             ? '--:--'
             : matchDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const showReviewAction = !hasResult && hasArtifacts;
-        const showReadyToSaveHelper = queueStatus.key === 'Ready' || queueStatus.key === 'OK';
         const toggleSection = (key: string) => {
             setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
         };
@@ -3282,16 +3322,19 @@ const SmartMatchDetail: React.FC<{
                                 <div className="sc-detail-identity-top">
                                     <span className="sc-detail-match-title">Match {displayNumber}</span>
                                     {hasResult && (
-                                        <>
-                                            <span className="sc-detail-chip sc-detail-chip--neutral">Match outcome</span>
-                                            <span className={`sc-detail-chip sc-result-chip--${match.result?.toLowerCase()}`} title="Match outcome">
-                                                {match.result === 'Win' ? <Trophy size={10} /> : match.result === 'Loss' ? <Skull size={10} /> : <AlertTriangle size={10} />}
-                                                {match.result}
-                                            </span>
-                                        </>
+                                        <span className={`sc-detail-chip sc-result-chip--${match.result?.toLowerCase()}`} title="Match outcome">
+                                            {match.result === 'Win' ? <Trophy size={10} /> : match.result === 'Loss' ? <Skull size={10} /> : <AlertTriangle size={10} />}
+                                            {match.result}
+                                        </span>
                                     )}
-                                    <span className="sc-detail-chip sc-detail-chip--neutral">{hasResult ? 'Next action' : 'Status'}</span>
-                                    <span className={`sc-detail-chip sc-status-chip sc-status-chip--${statusMeta.tone}`} title={`Next step: ${statusMeta.description}`}>
+                                    <span
+                                        className={`sc-detail-chip sc-status-chip sc-status-chip--${statusMeta.tone}`}
+                                        title={`${statusMeta.description}${
+                                            queueStatus.key === 'Ready' || queueStatus.key === 'OK'
+                                                ? ' · Review is complete — this match won\'t appear in history until you save or resolve it.'
+                                                : ''
+                                        }`}
+                                    >
                                         {statusIcon}
                                         {queueStatus.key === 'Reviewing'
                                             ? 'Needs Review'
@@ -3305,12 +3348,10 @@ const SmartMatchDetail: React.FC<{
                                     </span>
                                     {match.ocrReviewedAt && queueStatus.key !== 'Resolved' && (
                                         <span
-                                            className="sc-detail-chip bg-success-soft text-success"
+                                            className="sc-detail-reviewed-dot"
                                             title={`Reviewed at ${new Date(match.ocrReviewedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
-                                        >
-                                            <Check size={10} />
-                                            Reviewed
-                                        </span>
+                                            aria-label="Reviewed"
+                                        />
                                     )}
                                 </div>
                                 <div className="sc-detail-identity-sub">
@@ -3491,14 +3532,9 @@ const SmartMatchDetail: React.FC<{
                 </div>
 
 
-                <div className="sc-detail-main-grid mt-3">
-                    <div className="lg:col-span-9 lg:col-start-1 space-y-3 min-w-0 sc-detail-editor-block">
-                        {showReadyToSaveHelper && (
-                            <div className="rounded-card border border-success/25 bg-success-soft px-3 py-2 text-label-sm text-success">
-                                Ready to Save means review is complete, but this match is not persisted to history until you save or resolve it.
-                            </div>
-                        )}
-                        <div className={`grid gap-3 ${artifacts.images.length > 0 ? 'xl:grid-cols-[minmax(0,1fr)_18rem] xl:items-start' : ''}`}>
+                <div className="mt-3">
+                    <div className="space-y-3 min-w-0 sc-detail-editor-block">
+                        <div className="grid gap-3">
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sc-detail-stats-grid">
                                 <EditableStatCard
                                     icon={<Clock size={14} className="text-md-sys-on-surface/62" />} label="Time" value={match.time || '--'}
@@ -3563,33 +3599,85 @@ const SmartMatchDetail: React.FC<{
                                     </div>
                                 </div>
                             </div>
-                            {artifacts.images.length > 0 && (
-                                <div className="rounded-card md3-surface-high p-3 border border-md-sys-outline/10 flex flex-col gap-2 xl:min-h-full xl:max-h-52 overflow-hidden">
-                                    <div className="min-w-0">
-                                        <div className="text-label-sm font-bold text-md-sys-on-surface/80">Re-run analysis</div>
-                                        <div className="text-label-xs text-md-sys-on-surface/58">
-                                            Refresh OCR against the bundled screenshots without covering your match summary.
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        {showRerunStatus && (
-                                            <span className="rounded-pill bg-md-sys-secondary/16 px-2 py-0.5 text-label-xs font-semibold text-md-sys-secondary">
-                                                {RERUN_PHASE_LABELS[rerunProgress.phase]}
-                                            </span>
-                                        )}
-                                        <button
-                                            onClick={handleRerunAnalysis}
-                                            disabled={rerunning}
-                                            className={`rounded-control md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled flex items-center gap-1.5 justify-center ${rerunning ? 'animate-pulse' : ''}`}
-                                            title="Run OCR analysis on the bundled screenshots"
-                                        >
-                                            <RefreshCw size={12} className={rerunning ? 'animate-spin' : ''} />
-                                            {rerunning ? 'Analyzing...' : `${analyzeButtonLabel} ${countImages(artifacts.images.length > 0 ? artifacts.images : (match.artifacts || []))}`}
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
                         </div>
+
+                        <Section
+                            title={`Screenshots (${artifacts.images.length})`}
+                            collapsible
+                            collapsed={!!collapsedSections.screenshots}
+                            onToggle={() => toggleSection('screenshots')}
+                            headerAction={
+                                <div className="flex items-center gap-2">
+                                    {showRerunStatus && (
+                                        <span className="rounded-pill bg-md-sys-secondary/16 px-2 py-0.5 text-label-xs font-semibold text-md-sys-secondary">
+                                            {RERUN_PHASE_LABELS[rerunProgress.phase]}
+                                        </span>
+                                    )}
+                                    {artifacts.images.length > 0 && (
+                                        <>
+                                            <button
+                                                onClick={handleRerunAnalysis}
+                                                disabled={rerunning}
+                                                className={`sc-detail-action-btn sc-detail-action-btn--tonal flex items-center gap-1 text-label-xs disabled:opacity-disabled ${rerunning ? 'opacity-80' : ''}`}
+                                                title="Re-run OCR analysis on the bundled screenshots"
+                                            >
+                                                <RefreshCw size={11} className={rerunning ? 'animate-spin' : ''} />
+                                                {rerunning ? <span className="wg-analyzing-dots">Analyzing</span> : analyzeButtonLabel}
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const dir = artifacts.images[0]?.replace(/[/][^/]+$/, '');
+                                                    if (dir) getElectronAPI()?.invoke('open-path', dir);
+                                                }}
+                                                className="flex items-center gap-1 text-label-xs font-semibold text-md-sys-on-surface/50 hover:text-md-sys-primary transition-colors"
+                                            >
+                                                <FolderOpen size={11} /> Folder
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            }
+                        >
+                            <div className="sc-screenshots-rail">
+                                {artifacts.images.map((src, i) => (
+                                    <div
+                                        key={i}
+                                        className="relative shrink-0 w-40 aspect-video md3-surface-high rounded-xl overflow-hidden group sc-shot-thumb border border-md-sys-outline/10 shadow-sm"
+                                    >
+                                        <button onClick={() => setActiveScreenshotIndex(i)} className="w-full h-full">
+                                            <LocalImage
+                                                src={src}
+                                                alt={`Screenshot ${i + 1}`}
+                                                className="w-full h-full object-cover bg-md-sys-surface-container-lowest"
+                                            />
+                                            <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                <Eye size={16} />
+                                            </div>
+                                        </button>
+                                        {artifacts.imageFiles[i] && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleRemoveScreenshot(i); }}
+                                                onMouseLeave={() => { if (confirmDeleteIdx === i) setConfirmDeleteIdx(null); }}
+                                                className={`absolute bottom-1 right-1 rounded-full flex items-center justify-center transition-all ${confirmDeleteIdx === i
+                                                    ? 'w-auto h-5 px-1.5 gap-1 bg-danger text-on-scrim opacity-100 text-label-xs font-bold'
+                                                    : 'w-4 h-4 bg-danger-soft-strong text-danger opacity-0 group-hover:opacity-100'
+                                                    }`}
+                                                title={confirmDeleteIdx === i ? 'Click again to confirm' : 'Remove screenshot'}
+                                            >
+                                                {confirmDeleteIdx === i ? <><Trash2 size={9} /> Delete?</> : <X size={9} />}
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                                <button
+                                    onClick={handleAddScreenshot}
+                                    className="shrink-0 w-40 aspect-video md3-surface-high rounded-xl border-2 border-dashed border-md-sys-outline/30 hover:border-md-sys-primary/50 hover:bg-md-sys-primary/5 transition-all flex flex-col items-center justify-center gap-1 opacity-60 hover:opacity-100 hover:text-md-sys-primary sc-shot-thumb"
+                                >
+                                    <Upload size={14} />
+                                    <span className="text-label-xs font-bold uppercase">Add</span>
+                                </button>
+                            </div>
+                        </Section>
 
                         <Section
                             title="Players"
@@ -3971,9 +4059,8 @@ const SmartMatchDetail: React.FC<{
                                 {renderEditableField('notes', match.notes || '', 'Notes')}
                             </div>
                         </Section>
-                    </div>
 
-                    <div className="lg:col-span-3 lg:col-start-10 lg:self-start space-y-3 min-w-0 sc-detail-rail-block" ref={screenshotsSectionRef}>
+                        <div ref={screenshotsSectionRef} className="space-y-3">
                         {showRerunStatus && (
                             <div className="rounded-card md3-surface-high p-3 border border-md-sys-outline/10 space-y-3">
                                 <div className="flex flex-col gap-2">
@@ -4055,61 +4142,6 @@ const SmartMatchDetail: React.FC<{
                             </div>
                         )}
 
-                        <Section title={`Screenshots (${artifacts.images.length})`} collapsible collapsed={!!collapsedSections.screenshots} onToggle={() => toggleSection('screenshots')}>
-                            {artifacts.images.length > 0 && (
-                                <div className="mb-2 flex flex-wrap items-center gap-2">
-                                    <button
-                                        onClick={() => {
-                                            const dir = artifacts.images[0]?.replace(/[\/][^\/]+$/, '');
-                                            if (dir) getElectronAPI()?.invoke('open-path', dir);
-                                        }}
-                                        className="flex items-center gap-1.5 text-label-sm font-semibold text-md-sys-on-surface/60 hover:text-md-sys-primary transition-colors"
-                                    >
-                                        <FolderOpen size={12} /> Open Folder in Explorer
-                                    </button>
-                                </div>
-                            )}
-                            <div className="grid grid-cols-1 gap-3">
-                                {artifacts.images.map((src, i) => (
-                                    <div
-                                        key={i}
-                                        className="relative aspect-video md3-surface-high rounded-xl overflow-hidden group sc-shot-thumb border border-md-sys-outline/10 shadow-sm"
-                                    >
-                                        <button onClick={() => setActiveScreenshotIndex(i)} className="w-full h-full">
-                                            <LocalImage
-                                                src={src}
-                                                alt={`Screenshot ${i + 1}`}
-                                                className="w-full h-full object-cover bg-md-sys-surface-container-lowest"
-                                            />
-                                            <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                <Eye size={20} />
-                                            </div>
-                                        </button>
-                                        {artifacts.imageFiles[i] && (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleRemoveScreenshot(i); }}
-                                                onMouseLeave={() => { if (confirmDeleteIdx === i) setConfirmDeleteIdx(null); }}
-                                                className={`absolute bottom-1 right-1 rounded-full flex items-center justify-center transition-all ${confirmDeleteIdx === i
-                                                    ? 'w-auto h-6 px-2 gap-1 bg-danger text-on-scrim opacity-100 text-label-xs font-bold'
-                                                    : 'w-5 h-5 bg-danger-soft-strong text-danger opacity-0 group-hover:opacity-100'
-                                                    }`}
-                                                title={confirmDeleteIdx === i ? 'Click again to confirm' : 'Remove screenshot'}
-                                            >
-                                                {confirmDeleteIdx === i ? <><Trash2 size={10} /> Delete?</> : <X size={10} />}
-                                            </button>
-                                        )}
-                                    </div>
-                                ))}
-
-                                <button
-                                    onClick={handleAddScreenshot}
-                                    className="aspect-video md3-surface-high rounded-xl border-2 border-dashed border-md-sys-outline/30 hover:border-md-sys-primary/50 hover:bg-md-sys-primary/5 transition-all flex flex-col items-center justify-center gap-1 opacity-60 hover:opacity-100 hover:text-md-sys-primary sc-shot-thumb"
-                                >
-                                    <Upload size={16} />
-                                    <span className="text-label-xs font-bold uppercase">Add</span>
-                                </button>
-                            </div>
-                        </Section>
 
                         {devMode && match.ocrDebug && (
                             <Section title="OCR Metadata" collapsible collapsed={!!collapsedSections.ocrMeta} onToggle={() => toggleSection('ocrMeta')}>
@@ -4270,10 +4302,11 @@ const SmartMatchDetail: React.FC<{
                                 </div>
                             </Section>
                         )}
+                        </div>
                     </div>
                 </div>
                 {activeScreenshotIndex !== null && artifacts.images[activeScreenshotIndex] && (
-                    <div className="fixed inset-0 z-modal bg-md-sys-surface/96 p-4 md:p-6 backdrop-blur-md flex items-center justify-center">
+                    <div className="fixed inset-0 z-modal bg-md-sys-surface/96 p-4 md:p-6 flex items-center justify-center">
                         <WorkspaceImageViewer
                             images={artifacts.images}
                             activeIndex={activeScreenshotIndex}

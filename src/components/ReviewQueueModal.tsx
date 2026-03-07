@@ -743,7 +743,7 @@ export const ReviewQueueModal: React.FC<ReviewQueueModalProps> = ({ onClose }) =
             </div>
             {sourcePreview && (
                 <div
-                    className="fixed inset-0 z-modal-top bg-scrim-90 backdrop-blur-sm flex items-center justify-center p-4"
+                    className="fixed inset-0 z-modal-top bg-scrim-90 flex items-center justify-center p-4"
                     onClick={(event) => {
                         event.stopPropagation();
                         setSourcePreview(null);

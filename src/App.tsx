@@ -2081,14 +2081,75 @@ const App: React.FC = () => {
                 shipType: team.shipType || '',
                 color: team.color || 'unknown',
                 players: uniquePlayers,
+                sourceRowIndex: typeof team.sourceRowIndex === 'number' ? team.sourceRowIndex : undefined,
+                sourceRowY: typeof team.sourceRowY === 'number' ? team.sourceRowY : undefined,
             };
         });
+        const normalizeOpponentFallbackColor = (rawColor: string | null | undefined): string => {
+            const raw = String(rawColor || '').trim().toLowerCase();
+            if (!raw) return 'unknown';
+            const compact = raw.replace(/[\s_-]+/g, '');
+            if (compact.includes('yellowgreen') || compact.includes('chartreuse') || compact.includes('lime')) {
+                return 'yellowgreen';
+            }
+            return normalizeTeamColor(raw);
+        };
         const preferredFallbackOrder = ['red', 'orange', 'yellow', 'yellowgreen'];
+        const claimedFallbackColors = new Set<string>();
+        unresolvedTeams.forEach((team) => {
+            const parsed = normalizeOpponentFallbackColor(team.color);
+            if (parsed !== 'unknown') {
+                claimedFallbackColors.add(parsed);
+            }
+        });
+        const fallbackQueue = preferredFallbackOrder.filter((color) => !claimedFallbackColors.has(color));
+        let fallbackCursor = 0;
+        const rowOrderedUnknownTeams = unresolvedTeams
+            .map((team, index) => ({
+                index,
+                team,
+                sourceRowIndex: Number.isInteger(team.sourceRowIndex)
+                    ? Number(team.sourceRowIndex)
+                    : Number.MAX_SAFE_INTEGER,
+                sourceRowY: Number.isFinite(team.sourceRowY)
+                    ? Number(team.sourceRowY)
+                    : Number.MAX_SAFE_INTEGER,
+            }))
+            .filter(({ team }) => normalizeOpponentFallbackColor(team.color) === 'unknown')
+            .sort((left, right) => {
+                if (left.sourceRowIndex !== right.sourceRowIndex) {
+                    return left.sourceRowIndex - right.sourceRowIndex;
+                }
+                if (left.sourceRowY !== right.sourceRowY) {
+                    return left.sourceRowY - right.sourceRowY;
+                }
+                return left.index - right.index;
+            });
+        const assignedFallbackColors = new Map<number, string>();
+        rowOrderedUnknownTeams.forEach(({ index, sourceRowIndex }) => {
+            const positional = Number.isInteger(sourceRowIndex)
+                ? preferredFallbackOrder[sourceRowIndex]
+                : undefined;
+            if (positional && !claimedFallbackColors.has(positional)) {
+                claimedFallbackColors.add(positional);
+                assignedFallbackColors.set(index, positional);
+                return;
+            }
+            const queued = fallbackQueue[fallbackCursor];
+            if (queued) {
+                fallbackCursor += 1;
+                claimedFallbackColors.add(queued);
+                assignedFallbackColors.set(index, queued);
+            }
+        });
         const colorAssignedTeams = unresolvedTeams
             .map((team, index) => {
+                const existingColor = normalizeOpponentFallbackColor(team.color);
                 return {
                     ...team,
-                    color: preferredFallbackOrder[index] || 'unknown',
+                    color: existingColor && existingColor.toLowerCase() !== 'unknown'
+                        ? existingColor
+                        : assignedFallbackColors.get(index) || 'unknown',
                 };
             })
             .filter((team) => team.players.length > 0 || team.teamName || team.shipType);
@@ -2437,7 +2498,7 @@ const App: React.FC = () => {
     }
 
     return (
-        <div ref={appRef} className={`app-container h-screen w-screen flex flex-col text-md-sys-onSurface ${!isOverlayMode ? 'bg-md-sys-background' : ''} font-sans transition-colors duration-300`} style={{ opacity: hiddenForScan ? 0 : 1 }}>
+        <div ref={appRef} className={`app-container h-screen w-screen flex flex-col text-md-sys-onSurface ${!isOverlayMode ? 'bg-md-sys-background' : ''} ${hiddenForScan ? 'invisible' : ''} font-sans transition-colors duration-300`}>
 
             {isOverlayMode ? (
                 /* Compact Overlay Mode */
@@ -2453,7 +2514,7 @@ const App: React.FC = () => {
                                 {navigationOpen && (
                                     <button
                                         type="button"
-                                        className="absolute inset-0 z-20 bg-scrim-35 backdrop-blur-1"
+                                        className="absolute inset-0 z-20 bg-scrim-50"
                                         onClick={() => {
                                             setMobileNavOpen(false);
                                             requestAnimationFrame(() => navToggleRef.current?.focus());
@@ -2556,7 +2617,7 @@ const App: React.FC = () => {
             )}
 
             {showChangelog && (
-                <div className="fixed inset-0 z-modal flex items-center justify-center p-4 bg-scrim-60 backdrop-blur-sm" onClick={closeChangelog}>
+                <div className="fixed inset-0 z-modal flex items-center justify-center p-4 bg-scrim-60" onClick={closeChangelog}>
                     <div
                         ref={changelogFocusTrapRef}
                         role="dialog"
@@ -2589,7 +2650,7 @@ const App: React.FC = () => {
             <DevTools logFeed={logFeed} logStatus={logStatus} />
 
             {restoreSessionPrompt && (
-                <div className="fixed inset-0 z-popover bg-scrim-60 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-popover bg-scrim-60 flex items-center justify-center p-4">
                     <div className="w-full max-w-md rounded-2xl border border-md-sys-outline/20 bg-md-sys-surface1 shadow-2xl p-5 space-y-3">
                         <div className="text-title font-bold">Restore Session</div>
                         <div className="text-label-sm opacity-70">

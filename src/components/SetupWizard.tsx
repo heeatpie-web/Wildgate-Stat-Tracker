@@ -251,7 +251,7 @@ export const SetupWizard: React.FC = () => {
     if (!showSetupWizard) return null;
 
     return (
-        <div className="fixed inset-0 z-modal flex items-center justify-center bg-scrim-60 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-modal flex items-center justify-center bg-scrim-60 animate-fade-in">
             <div
                 ref={focusTrapRef}
                 role="dialog"

@@ -204,6 +204,11 @@ describe('detectTeamColor', () => {
     expect(detectTeamColor(240, 240, 30)).toBe('yellow');
   });
 
+  it('keeps the darker olive badge on the green side of the browser fallback boundary', () => {
+    expect(detectTeamColor(184, 184, 0)).toBe('green');
+    expect(detectTeamColor(255, 178, 0)).toBe('yellow');
+  });
+
   it('detects purple', () => {
     expect(detectTeamColor(180, 30, 200)).toBe('purple');
   });
@@ -449,6 +454,59 @@ describe('mergeOCRData (parser)', () => {
     const newData: Partial<OCRExtractedData> = {
       opponentTeams: [{
         teamName: 'Ruby Wolves',
+        shipType: 'Scout',
+        color: 'red' as const,
+        players: [{ name: 'E9', confidence: 85, isTeammate: false }],
+        confidence: 80,
+      }],
+    };
+    const merged = mergeOCRData(existing, newData);
+    expect(merged.opponentTeams).toHaveLength(2);
+  });
+
+  it('merges named team with no players (tactical-map) into named team with players (crew-hub) when names are close', () => {
+    const existing: Partial<OCRExtractedData> = {
+      opponentTeams: [{
+        teamName: 'SSBadDecision',
+        shipType: 'Hunter',
+        color: 'unknown' as const,
+        players: [],
+        confidence: 70,
+      }],
+    };
+    const newData: Partial<OCRExtractedData> = {
+      opponentTeams: [{
+        teamName: 'SSBadDecisions',
+        shipType: '',
+        color: 'red' as const,
+        players: [
+          { name: 'P1', confidence: 80, isTeammate: false },
+          { name: 'P2', confidence: 80, isTeammate: false },
+          { name: 'P3', confidence: 80, isTeammate: false },
+          { name: 'P4', confidence: 80, isTeammate: false },
+        ],
+        confidence: 80,
+      }],
+    };
+    const merged = mergeOCRData(existing, newData);
+    expect(merged.opponentTeams).toHaveLength(1);
+    expect(merged.opponentTeams![0].players).toHaveLength(4);
+    expect(merged.opponentTeams![0].shipType).toBe('Hunter');
+  });
+
+  it('does not merge two fully-populated named teams with different names and no roster overlap', () => {
+    const existing: Partial<OCRExtractedData> = {
+      opponentTeams: [{
+        teamName: 'SSBadDecisions',
+        shipType: 'Hunter',
+        color: 'red' as const,
+        players: [{ name: 'E1', confidence: 80, isTeammate: false }],
+        confidence: 70,
+      }],
+    };
+    const newData: Partial<OCRExtractedData> = {
+      opponentTeams: [{
+        teamName: 'CrimsonWolves',
         shipType: 'Scout',
         color: 'red' as const,
         players: [{ name: 'E9', confidence: 85, isTeammate: false }],

@@ -51,6 +51,52 @@ function sortTeamsByColor(teams = [], getColor) {
   });
 }
 
+function toFiniteNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function pickDefinedNumber(primary, fallback) {
+  const primaryValue = toFiniteNumber(primary);
+  if (primaryValue !== null) return primaryValue;
+  const fallbackValue = toFiniteNumber(fallback);
+  return fallbackValue !== null ? fallbackValue : undefined;
+}
+
+function sortTeamsByPosition(teams = [], options = {}) {
+  if (!Array.isArray(teams) || teams.length <= 1) return teams || [];
+  const {
+    getPositionIndex = () => null,
+    getPositionY = () => null,
+    getColor = () => 'unknown',
+  } = options;
+
+  return [...teams]
+    .map((team, arrayIndex) => ({ team, arrayIndex }))
+    .sort((left, right) => {
+      const leftIndex = toFiniteNumber(getPositionIndex(left.team));
+      const rightIndex = toFiniteNumber(getPositionIndex(right.team));
+      if (leftIndex !== null || rightIndex !== null) {
+        if (leftIndex === null) return 1;
+        if (rightIndex === null) return -1;
+        if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+      }
+
+      const leftY = toFiniteNumber(getPositionY(left.team));
+      const rightY = toFiniteNumber(getPositionY(right.team));
+      if (leftY !== null || rightY !== null) {
+        if (leftY === null) return 1;
+        if (rightY === null) return -1;
+        if (leftY !== rightY) return leftY - rightY;
+      }
+
+      const colorDiff = colorSortRank(getColor(left.team)) - colorSortRank(getColor(right.team));
+      if (colorDiff !== 0) return colorDiff;
+      return left.arrayIndex - right.arrayIndex;
+    })
+    .map(({ team }) => team);
+}
+
 /**
  * Merge new capture data with existing data
  * @param {Object} existing - Existing accumulated data
@@ -128,6 +174,8 @@ function mergeLegacyCrewHub(existing, newData) {
         teamName: (nt.teamName?.length || 0) > (et.teamName?.length || 0) ? nt.teamName : et.teamName,
         shipType: et.shipType || nt.shipType,
         color: et.color === 'unknown' ? nt.color : et.color,
+        sourceRowIndex: pickDefinedNumber(et.sourceRowIndex, nt.sourceRowIndex),
+        sourceRowY: pickDefinedNumber(et.sourceRowY, nt.sourceRowY),
         players: capPlayerEntries(mergePlayers(et.players || [], nt.players || [])),
         confidence: Math.round(((et.confidence || 0) + (nt.confidence || 0)) / 2),
       };
@@ -241,6 +289,8 @@ function crossMergeCrewHubAndMap(crewHub, tactMap) {
         ...team,
         teamName: resolvedTeamName,
         shipType,
+        sourceSlotIndex: pickDefinedNumber(team.sourceSlotIndex, mapShip?.sourceSlotIndex),
+        sourceSlotY: pickDefinedNumber(team.sourceSlotY, mapShip?.sourceSlotY),
       };
     }
     return team;
@@ -258,7 +308,9 @@ function crossMergeCrewHubAndMap(crewHub, tactMap) {
       const teamColor = String(team?.color || team?.teamColor || '').trim().toLowerCase();
       const teamNameKey = normalizeTeamName(team?.teamName || '');
       if (shipColor && shipColor !== 'unknown' && teamColor && teamColor !== 'unknown' && shipColor === teamColor) {
-        return true;
+        const teamHasResolvedName = !isPlaceholderTeamName(team?.teamName, teamColor);
+        const teamHasShipType = Boolean(String(team?.shipType || '').trim());
+        return teamHasResolvedName && teamHasShipType;
       }
       return Boolean(shipNameKey && teamNameKey && shipNameKey === teamNameKey);
     });
@@ -269,6 +321,8 @@ function crossMergeCrewHubAndMap(crewHub, tactMap) {
     shipType: ship?.shipType || '',
     players: [],
     confidence: Number(ship?.confidence || 60),
+    sourceSlotIndex: Number.isInteger(ship?.sourceSlotIndex) ? ship.sourceSlotIndex : undefined,
+    sourceSlotY: Number.isFinite(ship?.sourceSlotY) ? ship.sourceSlotY : undefined,
   })).filter((team) => {
     if (trustedCrewTeamCount < 2) return true;
     const namedEvidence = !isPlaceholderTeamName(team.teamName, team.color) ? 1 : 0;
@@ -278,7 +332,47 @@ function crossMergeCrewHubAndMap(crewHub, tactMap) {
     return evidenceScore >= 2 && Number(team.confidence || 0) >= 80;
   });
 
-  const combinedTeams = [...enrichedTeams, ...mapOnlyTeams];
+  // Position-based fallback: when name/color matching fails (e.g. yellow vs yellow-green
+  // after spectator filtering), pair map-only entries against the subset of crew teams
+  // that still need metadata, ordered by their original row/slot position.
+  const backfillCandidates = enrichedTeams.filter((team) => {
+    const hasPlayers = (team?.players?.length || 0) > 0;
+    if (!hasPlayers) return false;
+    return isPlaceholderTeamName(team?.teamName, team?.color || team?.teamColor) || !team?.shipType;
+  });
+  const sortedBackfillCandidates = sortTeamsByPosition([...backfillCandidates], {
+    getPositionIndex: (team) => team?.sourceRowIndex,
+    getPositionY: (team) => team?.sourceRowY,
+    getColor: (team) => team?.color || team?.teamColor || '',
+  });
+  const sortedMapOnly = sortTeamsByPosition([...mapOnlyTeams], {
+    getPositionIndex: (team) => team?.sourceSlotIndex,
+    getPositionY: (team) => team?.sourceSlotY,
+    getColor: (team) => team?.color || team?.teamColor || '',
+  });
+  const usedMapOnlyIndices = new Set();
+  for (let i = 0; i < sortedMapOnly.length && i < sortedBackfillCandidates.length; i++) {
+    const enriched = sortedBackfillCandidates[i];
+    const mapTeam = sortedMapOnly[i];
+    const hasPlayers = (enriched?.players?.length || 0) > 0;
+    const needsNameOrShip = !enriched || isPlaceholderTeamName(enriched.teamName, enriched.color || enriched.teamColor) || !enriched.shipType;
+    const mapHasMetadata = (mapTeam?.teamName && !isPlaceholderTeamName(mapTeam.teamName, mapTeam.color)) || (mapTeam?.shipType && String(mapTeam.shipType).trim());
+    const mapEmptyPlayers = (mapTeam?.players?.length || 0) === 0;
+    if (hasPlayers && needsNameOrShip && mapHasMetadata && mapEmptyPlayers) {
+      enriched.teamName = pickPreferredTeamName(enriched.teamName, mapTeam.teamName || '', { color: enriched.color || mapTeam.color || '' });
+      enriched.shipType = enriched.shipType || mapTeam.shipType || '';
+      enriched.sourceSlotIndex = pickDefinedNumber(enriched.sourceSlotIndex, mapTeam.sourceSlotIndex);
+      enriched.sourceSlotY = pickDefinedNumber(enriched.sourceSlotY, mapTeam.sourceSlotY);
+      if (String(enriched.color || '').toLowerCase() === 'unknown' && mapTeam.color && String(mapTeam.color).toLowerCase() !== 'unknown') {
+        enriched.color = mapTeam.color;
+        enriched.teamColor = mapTeam.teamColor || mapTeam.color;
+      }
+      usedMapOnlyIndices.add(i);
+    }
+  }
+  const remainingMapOnly = sortedMapOnly.filter((_, idx) => !usedMapOnlyIndices.has(idx));
+
+  const combinedTeams = [...enrichedTeams, ...remainingMapOnly];
 
   const shipTypeHint = crewHub.playerShip?.shipType || tactMap.playerShip?.shipType || '';
   const mergedPlayerShipName = normalizePlayerShipName(crewHub.playerShipName, shipTypeHint)
@@ -369,6 +463,8 @@ function crossMergeInternalCrewAndMap(crew, map) {
     return mapShip ? {
       ...team,
       shipType: mapShip.shipType,
+      sourceSlotIndex: pickDefinedNumber(team.sourceSlotIndex, mapShip.sourceSlotIndex),
+      sourceSlotY: pickDefinedNumber(team.sourceSlotY, mapShip.sourceSlotY),
       name: (() => {
         if (isColorLabel) {
           return pickPreferredTeamName(team.name, mapShip.teamName, { color: team.color, preferCandidate: true });
@@ -392,13 +488,49 @@ function crossMergeInternalCrewAndMap(crew, map) {
     } : team;
   });
 
-  // Positional fallback: if exactly one crew team unmatched & one map ship unmatched
+  // Positional fallback: pair unmatched crew teams (have players, missing name/ship) with
+  // unused map ships by color-sorted index so the fourth team etc. get correct name/ship
+  // instead of ending up as two separate teams.
   const unmatched = enrichedTeams.filter(t => !t.shipType);
   const matchedColors = new Set(enrichedTeams.filter(t => t.shipType).map(t => t.color));
   const unusedMapShips = (map.enemyShips || []).filter(s => !matchedColors.has(s.color));
-  if (unmatched.length === 1 && unusedMapShips.length === 1) {
-    const idx = enrichedTeams.findIndex(t => !t.shipType);
-    enrichedTeams[idx] = { ...enrichedTeams[idx], shipType: unusedMapShips[0].shipType };
+  if (unmatched.length >= 1 && unusedMapShips.length >= 1) {
+    const sortedUnmatched = sortTeamsByPosition([...unmatched], {
+      getPositionIndex: (team) => team?.sourceRowIndex,
+      getPositionY: (team) => team?.sourceRowY,
+      getColor: (team) => team?.color || team?.teamColor || '',
+    });
+    const sortedUnused = sortTeamsByPosition(
+      [...unusedMapShips].map((ship) => ({
+        ...ship,
+        color: ship.color || ship.teamColor,
+      })),
+      {
+        getPositionIndex: (ship) => ship?.sourceSlotIndex,
+        getPositionY: (ship) => ship?.sourceSlotY,
+        getColor: (ship) => ship?.color || '',
+      }
+    );
+    const maxPair = Math.min(sortedUnmatched.length, sortedUnused.length);
+    for (let i = 0; i < maxPair; i++) {
+      const crewTeam = sortedUnmatched[i];
+      const mapShip = sortedUnused[i];
+      const idx = enrichedTeams.findIndex((t) => t === crewTeam);
+      if (idx >= 0 && mapShip) {
+        const hasPlayers = (crewTeam?.players?.length || 0) > 0;
+        const mapHasName = mapShip.teamName && !isPlaceholderTeamName(mapShip.teamName, mapShip.color);
+        if (hasPlayers && (mapShip.shipType || mapHasName)) {
+          enrichedTeams[idx] = {
+            ...enrichedTeams[idx],
+            shipType: enrichedTeams[idx].shipType || mapShip.shipType || '',
+            sourceSlotIndex: pickDefinedNumber(enrichedTeams[idx].sourceSlotIndex, mapShip.sourceSlotIndex),
+            sourceSlotY: pickDefinedNumber(enrichedTeams[idx].sourceSlotY, mapShip.sourceSlotY),
+            name: pickPreferredTeamName(crewTeam.name, mapShip.teamName || '', { color: crewTeam.color, preferCandidate: true }),
+          };
+          matchedColors.add(mapShip.color);
+        }
+      }
+    }
   }
 
   // Map-only teams: include any map ship not matched by any crew team (ship type known,
@@ -423,6 +555,8 @@ function crossMergeInternalCrewAndMap(crew, map) {
         name:     orphan.teamName || '',
         shipType: orphan.shipType || '',
         players:  [],
+        sourceSlotIndex: Number.isInteger(orphan?.sourceSlotIndex) ? orphan.sourceSlotIndex : undefined,
+        sourceSlotY: Number.isFinite(orphan?.sourceSlotY) ? orphan.sourceSlotY : undefined,
       });
     }
   }
@@ -603,6 +737,12 @@ function mergeEnemyTeams(existingTeams = [], newTeams = []) {
       // Update color if we didn't have one
       if (existingTeam.color === 'unknown' && newTeam.color !== 'unknown') {
         existingTeam.color = newTeam.color;
+      }
+      if (existingTeam.sourceRowIndex == null && newTeam.sourceRowIndex != null) {
+        existingTeam.sourceRowIndex = newTeam.sourceRowIndex;
+      }
+      if (existingTeam.sourceRowY == null && newTeam.sourceRowY != null) {
+        existingTeam.sourceRowY = newTeam.sourceRowY;
       }
 
       // Fill in ship type if missing
@@ -847,6 +987,8 @@ function mergeEnemyShips(existing = [], newShips = []) {
       if (normalizeColorToken(ship.color) === 'unknown' && normalizeColorToken(newShip.color) !== 'unknown') {
         ship.color = newShip.color;
       }
+      ship.sourceSlotIndex = pickDefinedNumber(ship.sourceSlotIndex, newShip.sourceSlotIndex);
+      ship.sourceSlotY = pickDefinedNumber(ship.sourceSlotY, newShip.sourceSlotY);
       ship.confidence = Math.round(((ship.confidence || 0) + (newShip.confidence || 0)) / 2);
     } else {
       merged.push({ ...newShip });

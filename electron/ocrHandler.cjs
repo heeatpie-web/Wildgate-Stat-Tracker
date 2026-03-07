@@ -2572,6 +2572,8 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
     teamNameSource: team.nameSource || 'fallback',
     shipType: team.shipType || '',
     color: team.color || 'unknown',
+    sourceRowIndex: Number.isInteger(team.sourceRowIndex) ? team.sourceRowIndex : undefined,
+    sourceRowY: Number.isFinite(team.sourceRowY) ? team.sourceRowY : undefined,
     players: capPlayers((team.players || []).map(p => ({
       name: typeof p === 'string' ? p : p.name,
       confidence: typeof p === 'string' ? 75 : (p.confidence || 75),
@@ -2642,6 +2644,8 @@ function convertMapScreenToLegacy(mapScreenData, rawText) {
     teamColor: ship.teamColor || ship.color || 'unknown',
     color: ship.teamColor || ship.color || 'unknown',
     confidence: ship.confidence || 70,
+    sourceSlotIndex: Number.isInteger(ship._slotIndex) ? ship._slotIndex : undefined,
+    sourceSlotY: Number.isFinite(ship._slotCenterY) ? ship._slotCenterY : undefined,
   }));
 
   // Convert players to teammates format
@@ -2660,6 +2664,8 @@ function convertMapScreenToLegacy(mapScreenData, rawText) {
     color: ship.color,
     players: [],
     confidence: ship.confidence,
+    sourceSlotIndex: Number.isInteger(ship.sourceSlotIndex) ? ship.sourceSlotIndex : undefined,
+    sourceSlotY: Number.isFinite(ship.sourceSlotY) ? ship.sourceSlotY : undefined,
   }));
 
   // Calculate confidence

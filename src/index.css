@@ -3,6 +3,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Animated ellipsis for loading states (e.g. "Analyzing") */
+@keyframes wg-ellipsis-dots {
+  0%   { content: ''; }
+  25%  { content: '.'; }
+  50%  { content: '..'; }
+  75%  { content: '...'; }
+  100% { content: ''; }
+}
+
+.wg-analyzing-dots::after {
+  content: '';
+  display: inline-block;
+  animation: wg-ellipsis-dots 1.4s steps(1, end) infinite;
+  min-width: 1.5ch;
+  text-align: left;
+}
+
 /* Window restore/maximize animation */
 @keyframes window-restore {
   from {
@@ -108,11 +125,8 @@
   --md-sys-typescale-label-small-line-height: 16px;
   --md-sys-typescale-label-small-weight: 600;
 
-  /* --- Material Glass Tokens --- */
-  --mg-blur: 20px;
-  --mg-opacity-light: 0.8;
-  --mg-opacity-dark: 0.7;
-  --mg-surface: color-mix(in srgb, var(--md-sys-color-surface), transparent calc(100% - (var(--mg-opacity-light) * 100%)));
+  /* --- Material Surface Tokens --- */
+  --mg-surface: var(--md-sys-color-surface-container-high);
 
   /* Header indicator tokens (theme-accent driven) */
   --indicator-idle: color-mix(in srgb, var(--md-sys-color-outline), transparent 15%);
@@ -143,17 +157,13 @@ body {
 }
 
 .premium-titlebar {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 8%);
+  background: var(--md-sys-color-surface-container-high);
   border-bottom: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 72%);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
 }
 
 .premium-sidebar {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 8%);
+  background: var(--md-sys-color-surface-container-high);
   border-right: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 72%);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
 }
 
 /* Canonical nav rail surface: consistently darker than main app background across themes. */
@@ -165,7 +175,7 @@ body {
 
 /* Keep nav rail in lockstep with header shade in Twilight. */
 body[data-mode='twilight'] .premium-sidebar {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 8%);
+  background: var(--md-sys-color-surface-container-high);
   border-right: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 72%);
 }
 
@@ -178,7 +188,7 @@ body[data-mode='twilight'] .recording-left-shell {
 
 /* Twilight: give Roster + Mission inner surfaces the same denser panel feel as Actions. */
 body[data-mode='twilight'] .recording-inside-panel {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container) 78%, transparent) !important;
+  background: var(--md-sys-color-surface-container) !important;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 58%);
 }
 
@@ -293,25 +303,21 @@ body[data-mode='twilight'] .toast-card-standard {
   background:
     radial-gradient(circle at top right, rgba(56, 189, 248, 0.08), transparent 35%),
     radial-gradient(circle at top left, rgba(251, 146, 60, 0.06), transparent 40%),
-    color-mix(in srgb, var(--md-sys-color-surface-container-high) 82%, transparent) !important;
+    color-mix(in srgb, var(--md-sys-color-surface-container-high), var(--md-sys-color-surface) 12%) !important;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 70%);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
 }
 
 .players-shell-gradient {
   background:
     radial-gradient(circle at top left, rgba(56, 189, 248, 0.07), transparent 42%),
     radial-gradient(circle at bottom right, rgba(251, 146, 60, 0.06), transparent 45%),
-    color-mix(in srgb, var(--md-sys-color-surface-container) 78%, transparent) !important;
+    color-mix(in srgb, var(--md-sys-color-surface-container), var(--md-sys-color-surface) 18%) !important;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 72%);
 }
 
 .recording-panel-shell {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 84%, transparent) !important;
+  background: var(--md-sys-color-surface-container-low) !important;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 70%);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
 }
 
 .premium-nav-item {
@@ -322,10 +328,8 @@ body[data-mode='twilight'] .toast-card-standard {
 .sc-sidebar-rail {
   background:
     radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--md-sys-color-primary), transparent 94%), transparent 40%),
-    color-mix(in srgb, var(--md-sys-color-surface), black 14%) !important;
+    color-mix(in srgb, var(--md-sys-color-surface-container-high), black 12%) !important;
   border-right: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 76%) !important;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   height: 100%;
   min-height: 0;
   padding-top: 12px;
@@ -503,39 +507,27 @@ body[data-mode='light'] {
   --elevation-3: 0px 4px 8px 3px rgba(0, 0, 0, 0.08), 0px 1px 3px rgba(0, 0, 0, 0.12);
   --elevation-4: 0px 6px 10px 4px rgba(0, 0, 0, 0.08), 0px 2px 3px rgba(0, 0, 0, 0.12);
   --elevation-5: 0px 8px 12px 6px rgba(0, 0, 0, 0.08), 0px 4px 4px rgba(0, 0, 0, 0.12);
-  --mg-surface: color-mix(in srgb, var(--md-sys-color-surface) 80%, transparent);
+  --mg-surface: var(--md-sys-color-surface-container-high);
 }
 
-/* --- DARK MODE GLASS OVERRIDE --- */
-body[data-mode='dark'],
-body[data-mode='twilight'] {
-  --mg-surface: color-mix(in srgb, var(--md-sys-color-surface) 70%, transparent);
-}
-
-/* --- MATERIAL GLASS UTILITIES --- */
+/* --- MATERIAL SURFACE UTILITIES --- */
 .mg-blur {
-  backdrop-filter: blur(var(--mg-blur));
-  -webkit-backdrop-filter: blur(var(--mg-blur));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .mg-surface {
   background: var(--mg-surface) !important;
-  backdrop-filter: blur(var(--mg-blur));
-  -webkit-backdrop-filter: blur(var(--mg-blur));
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 80%);
 }
 
 .mg-surface-high {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 80%, transparent) !important;
-  backdrop-filter: blur(var(--mg-blur));
-  -webkit-backdrop-filter: blur(var(--mg-blur));
+  background: var(--md-sys-color-surface-container-highest) !important;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 80%);
 }
 
 .mg-surface-low {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-low) 80%, transparent) !important;
-  backdrop-filter: blur(var(--mg-blur));
-  -webkit-backdrop-filter: blur(var(--mg-blur));
+  background: var(--md-sys-color-surface-container-low) !important;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 80%);
 }
 
@@ -549,9 +541,7 @@ body[data-mode='twilight'] .system-pulse-chip {
 }
 
 .mg-surface-primary {
-  background: color-mix(in srgb, var(--md-sys-color-primary), transparent 85%) !important;
-  backdrop-filter: blur(var(--mg-blur));
-  -webkit-backdrop-filter: blur(var(--mg-blur));
+  background: var(--md-sys-color-primary-container) !important;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-primary), transparent 70%);
 }
 
@@ -598,8 +588,6 @@ body[data-mode='twilight'] .md3-surface-high,
 body[data-mode='twilight'] .md3-surface-low {
   background: color-mix(in srgb, var(--md-sys-color-surface-container) 78%, transparent);
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 58%);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
 }
 
 body[data-mode='twilight'] .md3-surface-high {
@@ -707,11 +695,9 @@ body[data-mode='twilight'] .sc-bordered {
 
 .sc-top-tabs {
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 74%);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   background:
     radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--md-sys-color-primary), transparent 86%), transparent 42%),
-    color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 4%);
+    color-mix(in srgb, var(--md-sys-color-surface-container-high), var(--md-sys-color-surface) 8%);
 }
 
 .sc-seg-btn {
@@ -1049,9 +1035,7 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
   border-radius: 10px;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 72%);
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 30%);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: var(--md-sys-color-surface-container-high);
   overflow: hidden;
   border-left: 3px solid var(--team-accent-color, color-mix(in srgb, var(--md-sys-color-outline), transparent 50%));
 }
@@ -1284,6 +1268,69 @@ body[data-mode='twilight'] .ocr-assignment-team-card {
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
+}
+
+.ocr-assignment-player-actions {
+  margin-left: auto;
+  min-width: 0;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.ocr-assignment-player-actions > * {
+  flex-shrink: 0;
+}
+
+.ocr-assignment-remove-player-slot {
+  width: 28px;
+  margin-left: 4px;
+  flex: 0 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  overflow: visible;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(4px);
+  transition:
+    opacity 0.12s ease,
+    transform 0.16s ease;
+}
+
+.ocr-team-player-row--quick:hover .ocr-assignment-remove-player-slot,
+.ocr-team-player-row--quick:focus-within .ocr-assignment-remove-player-slot,
+.ocr-assignment-remove-player-btn:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.ocr-assignment-remove-player-btn {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(6px);
+  transition:
+    opacity 0.12s ease,
+    transform 0.16s ease;
+}
+
+.ocr-team-player-row--quick:hover .ocr-assignment-remove-player-btn,
+.ocr-team-player-row--quick:focus-within .ocr-assignment-remove-player-btn,
+.ocr-assignment-remove-player-btn:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.ocr-assignment-remove-player-btn:hover,
+.ocr-assignment-remove-player-btn:active {
+  transform: translateX(0);
 }
 
 .ocr-assignment-fuzzy-badge {
@@ -1689,10 +1736,8 @@ select option {
 
 body[data-mode='twilight'] .sc-detail-sticky-header {
   overflow: visible;
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 80%, transparent);
+  background: var(--md-sys-color-surface-container-high);
   border-bottom-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 42%);
-  backdrop-filter: blur(20px) saturate(1.6);
-  -webkit-backdrop-filter: blur(20px) saturate(1.6);
 }
 
 .sc-queue-selection-bar {
@@ -1743,6 +1788,40 @@ body[data-mode='twilight'] .sc-detail-sticky-header {
   gap: 8px;
   padding-top: 0;
   border-top: none;
+}
+
+.sc-detail-reviewed-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--md-sys-color-success, #4caf50);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--md-sys-color-success), transparent 60%);
+  flex-shrink: 0;
+}
+
+.sc-screenshots-rail {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  /* hide scrollbar on webkit */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 62%) transparent;
+}
+
+.sc-screenshots-rail::-webkit-scrollbar {
+  height: 4px;
+}
+
+.sc-screenshots-rail::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sc-screenshots-rail::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--md-sys-color-outline), transparent 62%);
+  border-radius: 4px;
 }
 
 .sc-detail-nav-strip {
@@ -1886,7 +1965,12 @@ body[data-mode='twilight'] .sc-detail-sticky-header {
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
-  transition: all var(--md-motion-duration-short3) var(--md-motion-easing-standard);
+  transition:
+    background-color var(--md-motion-duration-short3) var(--md-motion-easing-standard),
+    color var(--md-motion-duration-short3) var(--md-motion-easing-standard),
+    border-color var(--md-motion-duration-short3) var(--md-motion-easing-standard),
+    box-shadow var(--md-motion-duration-short3) var(--md-motion-easing-standard),
+    transform var(--md-motion-duration-short3) var(--md-motion-easing-standard);
   border: 1px solid transparent;
 }
 
@@ -1945,8 +2029,6 @@ body[data-mode='twilight'] .sc-detail-sticky-header {
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 68%);
   background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 2%);
   box-shadow: var(--elevation-2);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 .sc-detail-action-menu-item {
@@ -2023,7 +2105,11 @@ body[data-mode='twilight'] .sc-detail-sticky-header {
   color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 26%);
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 74%);
   background: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 96%);
-  transition: all var(--md-motion-duration-short3) var(--md-motion-easing-standard);
+  transition:
+    background-color var(--md-motion-duration-short3) var(--md-motion-easing-standard),
+    color var(--md-motion-duration-short3) var(--md-motion-easing-standard),
+    border-color var(--md-motion-duration-short3) var(--md-motion-easing-standard),
+    box-shadow var(--md-motion-duration-short3) var(--md-motion-easing-standard);
 }
 
 .sc-detail-result-btn:hover {
@@ -2134,8 +2220,6 @@ body[data-mode='twilight'] .sc-detail-sticky-header {
   border-radius: var(--md-sys-shape-corner-large);
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 60%);
   background: color-mix(in srgb, var(--md-sys-color-surface-container), transparent 10%);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   overflow: hidden;
   transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
 }
@@ -3026,25 +3110,19 @@ body[data-mode='twilight'] .sc-stat-card {
 .md3-dialog-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.32);
-  backdrop-filter: blur(2px);
+  background: rgba(8, 12, 20, 0.56);
   z-index: 100;
 }
 
 /* Wizard-specific readability tuning */
 .wizard-scrim.md3-dialog-scrim {
-  background: rgba(8, 12, 20, 0.54);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(8, 12, 20, 0.72);
 }
 
 .wizard-shell {
-  isolation: isolate;
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), black 4%);
+  background: var(--md-sys-color-surface-container-highest);
   border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 50%);
   box-shadow: 0 22px 48px rgba(0, 0, 0, 0.3), 0 8px 20px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
 
 .wizard-header {
@@ -3078,10 +3156,8 @@ body[data-mode='twilight'] .sc-stat-card {
 }
 
 .wizard-shell .mg-surface-high {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 14%) !important;
+  background: var(--md-sys-color-surface-container-high) !important;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 62%);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
 }
 
 .wizard-time-row {
@@ -3154,9 +3230,7 @@ body[data-mode='twilight'] .sc-stat-card {
 }
 
 body[data-mode='twilight'] .wizard-scrim.md3-dialog-scrim {
-  background: rgba(6, 10, 18, 0.8);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(6, 10, 18, 0.88);
 }
 
 body[data-mode='twilight'] .wizard-shell {
@@ -3177,10 +3251,8 @@ body[data-mode='twilight'] .wizard-card {
 }
 
 body[data-mode='twilight'] .wizard-shell .mg-surface-high {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 90%, black 10%) !important;
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), black 10%) !important;
   border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 34%);
-  backdrop-filter: blur(9px);
-  -webkit-backdrop-filter: blur(9px);
 }
 
 body[data-mode='twilight'] .wizard-input {
@@ -4217,22 +4289,20 @@ body[data-mode='light'] select.md3-textfield--outlined {
 }
 
 .btn-win:hover {
-  filter: brightness(1.1);
+  background-color: color-mix(in srgb, var(--color-win), white 10%);
 }
 
 .btn-loss:hover {
-  filter: brightness(1.1);
+  background-color: color-mix(in srgb, var(--color-loss), white 10%);
 }
 
 .btn-draw:hover {
-  filter: brightness(1.1);
+  background-color: color-mix(in srgb, var(--color-draw), white 10%);
 }
 
 .custom-scrollbar {
-  scrollbar-width: auto;
-  scrollbar-color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 55%) color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 28%);
-  scrollbar-gutter: stable;
-  contain: layout style;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 55%) transparent;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -4316,16 +4386,16 @@ body[data-mode='dark'] .custom-scrollbar::-webkit-scrollbar-thumb {
   height: 40px;
   border-radius: var(--md-sys-shape-corner-full);
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 80%);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--md-sys-color-surface-container-high);
 }
 
 .header-action-btn--primary {
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--md-sys-color-primary), transparent 86%);
+  height: 40px;
+  box-shadow: none;
 }
 
 .header-action-btn--secondary {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 12%);
+  background: var(--md-sys-color-surface-container-highest);
 }
 
 .shadow-tour-scrim {
@@ -4333,18 +4403,18 @@ body[data-mode='dark'] .custom-scrollbar::-webkit-scrollbar-thumb {
 }
 
 .sc-detail-workspace,
-.sc-detail-pane,
 .sc-queue-item--rich,
 .sc-editor-section {
   contain: layout style;
 }
 
+.sc-detail-pane {
+  contain: style;
+}
+
 .sc-detail-sticky-header {
-  will-change: transform;
   contain: layout style;
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest) 88%, transparent);
-  backdrop-filter: blur(16px) saturate(1.4);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  background: var(--md-sys-color-surface-container-highest);
   border-bottom: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 44%);
   box-shadow:
     0 1px 0 0 color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 72%),
@@ -4354,6 +4424,5 @@ body[data-mode='dark'] .custom-scrollbar::-webkit-scrollbar-thumb {
 .sc-stat-card,
 .sc-detail-action-btn,
 .sc-seg-btn {
-  will-change: auto;
   backface-visibility: hidden;
 }

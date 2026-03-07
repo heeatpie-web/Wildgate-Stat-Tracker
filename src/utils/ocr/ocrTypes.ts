@@ -26,6 +26,8 @@ export interface ExtractedOpponentTeam {
   color: TeamColor;
   players: ExtractedPlayer[];
   confidence: number;
+  sourceRowIndex?: number;
+  sourceRowY?: number;
 }
 
 /**
@@ -58,7 +60,13 @@ export interface OCRExtractedData {
   playerTeamName?: string;
   playerShipName?: string;
   reachModifiers: ExtractedModifier[];
-  enemyShips: Array<{ teamName: string; shipType: string; color: TeamColor }>;
+  enemyShips: Array<{
+    teamName: string;
+    shipType: string;
+    color: TeamColor;
+    sourceSlotIndex?: number;
+    sourceSlotY?: number;
+  }>;
   hazards?: string[];
 
   // From Crew Hub

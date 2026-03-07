@@ -100,6 +100,8 @@ interface UIStateContextType {
     setEnableAutoLogRecording: (enabled: boolean) => void;
     showWizard: WizardResult | null;
     setShowWizard: (result: WizardResult | null) => void;
+    wizardInitialTab: 'result' | 'ocr' | null;
+    setWizardInitialTab: (tab: 'result' | 'ocr' | null) => void;
     devMode: boolean;
     setDevMode: (enabled: boolean) => void;
     activeView: 'recording' | 'analytics' | 'smart-captures' | 'players' | 'id-mapper' | 'history' | 'dev-ocr';
@@ -160,6 +162,7 @@ export const UIStateProvider: React.FC<{ children: React.ReactNode }> = ({ child
         sidebarCollapsed: s.sidebarCollapsed, setSidebarCollapsed: s.setSidebarCollapsed,
         enableAutoLogRecording: s.enableAutoLogRecording, setEnableAutoLogRecording: s.setEnableAutoLogRecording,
         showWizard: s.showWizard, setShowWizard: s.setShowWizard,
+        wizardInitialTab: s.wizardInitialTab, setWizardInitialTab: s.setWizardInitialTab,
         devMode: s.devMode, setDevMode: s.setDevMode,
         activeView: s.activeView, setActiveView: s.setActiveView,
         showIdMapper: s.showIdMapper, setShowIdMapper: s.setShowIdMapper,

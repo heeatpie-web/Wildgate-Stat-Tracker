@@ -257,7 +257,7 @@ export const FirstRunHealthCheck: React.FC<FirstRunHealthCheckProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-modal flex items-center justify-center bg-scrim-70 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-modal flex items-center justify-center bg-scrim-70 p-4">
       <div className="w-full max-w-1040px rounded-modal md3-card border border-md-sys-outline/15 shadow-2xl p-6">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -278,14 +278,14 @@ export const FirstRunHealthCheck: React.FC<FirstRunHealthCheckProps> = ({
 
         {stepIndex === 0 && (
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high/50 md:col-span-2">
+            <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high md:col-span-2">
               <div className="text-label-sm font-bold uppercase">How Telemetry Works</div>
               <p className="text-label-sm opacity-70 mt-2">
                 The app reads Wildgate telemetry logs in the background to auto-fill match and session data.
                 Turn this off if you want fully manual tracking.
               </p>
             </div>
-            <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high/50">
+            <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Activity size={14} className={telemetryEnabled ? 'text-success' : 'text-md-sys-on-surface/55'} />
@@ -318,7 +318,7 @@ export const FirstRunHealthCheck: React.FC<FirstRunHealthCheckProps> = ({
               )}
             </div>
             {telemetryRevealStage >= 2 && (
-              <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high/50">
+              <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high">
                 <div className="text-label-sm font-semibold mb-2">Telemetry Update Rate</div>
                 <div className="grid grid-cols-3 gap-2">
                   {([
@@ -351,7 +351,7 @@ export const FirstRunHealthCheck: React.FC<FirstRunHealthCheckProps> = ({
               </div>
             )}
             {telemetryRevealStage >= 3 && (
-              <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high/50 md:col-span-2">
+              <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high md:col-span-2">
                 <div className="flex items-center gap-2 font-bold text-label-sm uppercase">
                   <StatusIcon status={telemetryResult.status} />
                   Live Telemetry Status
@@ -370,7 +370,7 @@ export const FirstRunHealthCheck: React.FC<FirstRunHealthCheckProps> = ({
                 OCR is tuned for 1920 x 1080. Other resolutions can lower accuracy until OCR regions are tuned.
               </p>
             </div>
-            <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high/50">
+            <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high">
               <div className="text-label-sm font-semibold">Sound Cues</div>
               <p className="text-label-sm opacity-70 mt-1">Toggle app audio prompts for scan and workflow events.</p>
               <div className="flex items-center justify-between mt-3">
@@ -389,7 +389,7 @@ export const FirstRunHealthCheck: React.FC<FirstRunHealthCheckProps> = ({
                 </button>
               </div>
             </div>
-            <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high/50">
+            <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high">
               <div className="text-label-sm font-semibold">Capture Test</div>
               <p className={`text-label-sm mt-1 ${statusToneClass(captureStatus)}`}>{captureDetail}</p>
               <button
@@ -403,7 +403,7 @@ export const FirstRunHealthCheck: React.FC<FirstRunHealthCheckProps> = ({
               </button>
             </div>
             {capturePreview && (
-              <div className="rounded-card border border-md-sys-outline/10 p-3 md3-surface-high/50 md:col-span-2">
+              <div className="rounded-card border border-md-sys-outline/10 p-3 md3-surface-high md:col-span-2">
                 <img
                   src={capturePreview}
                   alt="Capture test preview"
@@ -416,7 +416,7 @@ export const FirstRunHealthCheck: React.FC<FirstRunHealthCheckProps> = ({
 
         {stepIndex === 2 && (
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high/50 md:col-span-2">
+            <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high md:col-span-2">
               <div className="flex items-center gap-2 text-label-sm font-bold uppercase">
                 <Palette size={14} />
                 Appearance Mode
@@ -439,7 +439,7 @@ export const FirstRunHealthCheck: React.FC<FirstRunHealthCheckProps> = ({
                 ))}
               </div>
             </div>
-            <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high/50 md:col-span-2">
+            <div className="rounded-card border border-md-sys-outline/10 p-4 md3-surface-high md:col-span-2">
               <div className="text-label-sm font-bold uppercase">Theme Accent</div>
               <div className="grid grid-cols-4 md:grid-cols-7 gap-2 mt-3">
                 {[
@@ -467,28 +467,28 @@ export const FirstRunHealthCheck: React.FC<FirstRunHealthCheckProps> = ({
 
         {stepIndex === 3 && (
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="rounded-card border border-md-sys-outline/10 p-3 md3-surface-high/50">
+            <div className="rounded-card border border-md-sys-outline/10 p-3 md3-surface-high">
               <div className="flex items-center gap-2 font-bold text-label-sm uppercase">
                 <StatusIcon status={profileStatus} />
                 Profile
               </div>
               <p className={`text-label-sm mt-1 ${statusToneClass(profileStatus)}`}>{profileDetail}</p>
             </div>
-            <div className="rounded-card border border-md-sys-outline/10 p-3 md3-surface-high/50">
+            <div className="rounded-card border border-md-sys-outline/10 p-3 md3-surface-high">
               <div className="flex items-center gap-2 font-bold text-label-sm uppercase">
                 <StatusIcon status={storageStatus} spinning={storageStatus === 'running'} />
                 Data Storage
               </div>
               <p className={`text-label-sm mt-1 ${statusToneClass(storageStatus)}`}>{storageDetail}</p>
             </div>
-            <div className="rounded-card border border-md-sys-outline/10 p-3 md3-surface-high/50">
+            <div className="rounded-card border border-md-sys-outline/10 p-3 md3-surface-high">
               <div className="flex items-center gap-2 font-bold text-label-sm uppercase">
                 <StatusIcon status={backupStatus} spinning={backupStatus === 'running'} />
                 Backups
               </div>
               <p className={`text-label-sm mt-1 ${statusToneClass(backupStatus)}`}>{backupDetail}</p>
             </div>
-            <div className="rounded-card border border-md-sys-outline/10 p-3 md3-surface-high/50">
+            <div className="rounded-card border border-md-sys-outline/10 p-3 md3-surface-high">
               <div className="flex items-center gap-2 font-bold text-label-sm uppercase">
                 <StatusIcon status={captureStatus} spinning={captureStatus === 'running'} />
                 Screen Capture

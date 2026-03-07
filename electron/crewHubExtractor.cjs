@@ -125,6 +125,7 @@ const NOISE_WORDS = new Set([
   'OF', 'IN', 'AT', 'IS', 'BY', 'OR', 'AN',
   'INVITE', 'KICK', 'SPECTATE', 'REPORT',  // Phase 3: additional UI false-positive blockers
   'CHANGE VOICE', 'THEIR PLAYERS',
+  'UNKNOWN USER', 'UNKNOWN',  // Game placeholder for players whose profiles haven't loaded
   // Crew-hub section headers / UI labels — never player or team names
   'KNOWN', 'HAZARDS', 'HAZARD', 'WILDGATE', 'HEALTH', 'FASTER', 'SHIELDS',
   'DOWN', 'ARTIFACT', 'ASTEROIDS', 'ALTITUDE', 'FOG', 'PATROLS', 'LEGION',
@@ -778,6 +779,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
 
   const cards = []; // { y, name, color, confidence, bbox }
   const capturedTeamNames = new Map(); // color → cleanest team name seen
+  const spectatorCardYs = []; // Y positions of skipped spectator/black cards
 
   // Helper: extract the raw team name text from a line's word list
   // (used when the line is identified as a team-name bar, not a player name)
@@ -924,7 +926,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
           try {
             const barColorDetectBbox = buildTightColorDetectBbox(line.words, rawName, lineBbox);
             const cr = await detectTeamColorBarBelow(colorImageBuffer, barColorDetectBbox, scale);
-            if (cr.color !== 'unknown' && cr.color !== 'spectator') {
+            if (cr.color !== 'unknown' && cr.color !== 'spectator' && cr.color !== 'black') {
               // Prefer the LONGEST captured name for each color (most complete read)
               const existing = capturedTeamNames.get(cr.color);
               // Don't register the same team name under two different colors
@@ -1004,11 +1006,12 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
           dlog('[CrewHub] SKIP color detect: tiny bbox w=' + Math.round(colorDetectWidth) + ' h=' + Math.round(colorDetectHeight) + ' for "' + playerName + '"');
         } else {
           const cr = await detectTeamColorBarBelow(colorImageBuffer, colorDetectBbox, scale);
-          if (cr.color !== 'unknown' && cr.color !== 'spectator' && cr.confidence > 30) {
+          if (cr.color !== 'unknown' && cr.color !== 'spectator' && cr.color !== 'black' && cr.confidence > 30) {
             detectedColor = cr.color;
             colorConfidence = cr.confidence;
-          } else if (cr.color === 'spectator') {
-            console.log('[CrewHub] Skipping spectator card:', playerName);
+          } else if (cr.color === 'spectator' || cr.color === 'black') {
+            console.log('[CrewHub] Skipping spectator/black card:', playerName);
+            spectatorCardYs.push(line.y);
             continue;
           }
         }
@@ -1159,7 +1162,10 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     }
   }
   const sameColorSplitBaseHeight = Number.isFinite(CARD_HEIGHT) && CARD_HEIGHT > 0 ? CARD_HEIGHT : 78;
-  const SAME_COLOR_SPLIT_GAP = sameColorSplitBaseHeight * 1.35; // ~105 px at 1080p baseline
+  // Allow up to ~3 skipped card slots (e.g. spectator cards) within a same-color
+  // team before treating the gap as a genuine team boundary. At 1080p that is
+  // 3 × 78px = 234px; use 3.5× for a small margin.
+  const SAME_COLOR_SPLIT_GAP = sameColorSplitBaseHeight * 3.5; // ~273 px at 1080p baseline
 
   function normalizeBadgeKey(value) {
     return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -1191,6 +1197,13 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     const rawTeamName = extractRawTeamNameFromLine(tLine.words);
     if (!rawTeamName) continue;
     if (!isTeamName(rawTeamName) && !/^[A-Z0-9]+(-[A-Z0-9]+)+$/.test(rawTeamName)) continue;
+    // Skip badge lines whose Y falls within the bar zone of a skipped spectator/black card.
+    const isSpectatorBadge = spectatorCardYs.some(sy => {
+      const barMin = sy + BAR_OFFSET - CARD_HEIGHT * 0.2;
+      const barMax = sy + BAR_OFFSET + BAR_HEIGHT + CARD_HEIGHT * 0.2;
+      return tLine.y >= barMin && tLine.y <= barMax;
+    });
+    if (isSpectatorBadge) continue;
     const rawKey = normalizeBadgeKey(rawTeamName);
     if (!rawKey || rawKey.length < 4) continue;
     const key = canonicalizeBadgeKey(rawKey, badgeFreq.keys());
@@ -1296,7 +1309,13 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
           bestGroup = g;
         }
       }
-      if (bestGroup && bestDist <= CARD_HEIGHT * 2.4) {
+      // Use a wider gap tolerance for unknown-color cards to handle spectator-card
+      // gaps (up to SAME_COLOR_SPLIT_GAP), so yellow-team players whose color bar
+      // detection failed don't get silently dropped and fall into a spurious "Team 1".
+      const distLimit = (card.color === 'unknown')
+        ? Math.max(CARD_HEIGHT * 2.4, SAME_COLOR_SPLIT_GAP)
+        : CARD_HEIGHT * 2.4;
+      if (bestGroup && bestDist <= distLimit) {
         const colorMismatch = card.color && card.color !== 'unknown'
           && bestGroup.color && bestGroup.color !== card.color;
         if (colorMismatch && bestDist > CARD_HEIGHT * 0.9) {
@@ -1458,13 +1477,16 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
 
       const aSize = (a.cards || []).length;
       const bSize = (b.cards || []).length;
-      const tinySplit = aSize <= 2 || bSize <= 2;
-      if (!tinySplit) continue;
-
       const gap = b.minY > a.maxY ? b.minY - a.maxY
         : a.minY > b.maxY ? a.minY - b.maxY
           : 0;
-      if (gap > CARD_HEIGHT * 2.2) continue;
+      // Merge if either side is small OR if the gap is consistent with skipped
+      // spectator slots (up to 3 × card height). This handles cases where
+      // spectators sit between players of the same team, creating a large gap
+      // that the split-detection above may still flag at non-1080p scales.
+      const tinySplit = aSize <= 4 || bSize <= 4 || gap <= CARD_HEIGHT * 3.5;
+      if (!tinySplit) continue;
+      if (gap > CARD_HEIGHT * 3.5) continue;
 
       a.cards = [...(a.cards || []), ...(b.cards || [])];
       a.minY = Math.min(a.minY, b.minY);
@@ -1510,6 +1532,12 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
   const enemyTeams = [];
   const hasKnownColorGroups = knownGroups.some(g => g.color && g.color !== 'unknown');
   const knownColorGroups = knownGroups.filter(g => g.color && g.color !== 'unknown');
+  const clustersBySourceRow = [...knownGroups].sort((a, b) => {
+    const aY = Number(a?.minY ?? a?.maxY ?? 0);
+    const bY = Number(b?.minY ?? b?.maxY ?? 0);
+    return aY - bY;
+  });
+  const clusterRowIndexMap = new Map(clustersBySourceRow.map((cluster, index) => [cluster, index]));
   const isColorWordOnlyName = (name, color) => {
     if (!name || !color) return false;
     const n = String(name).trim().toLowerCase();
@@ -1566,6 +1594,8 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       shipType: '',
       players: filteredPlayers,
       confidence: cluster.confidence || 50,
+      sourceRowIndex: clusterRowIndexMap.get(cluster),
+      sourceRowY: Number.isFinite(cluster.minY) ? cluster.minY : cluster.maxY,
     });
   }
 

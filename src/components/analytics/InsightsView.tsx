@@ -54,7 +54,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ insights, relationsh
                         {relationshipInsights.map((rel, i) => (
                             <button key={i} type="button" onClick={() => onDrillDown(rel.playerName, rel.type === 'ally' ? 'Teammate' : 'Opponent')}
                                 className={`md3-card rounded-2xl relative overflow-hidden transition-all cursor-pointer hover:border-md-sys-primary/20 ${dense ? 'p-4' : 'p-6'} text-left`}>
-                                <div className={`absolute -top-4 -right-4 w-20 h-20 opacity-10 rounded-full blur-2xl ${
+                                <div className={`absolute -top-4 -right-4 w-20 h-20 opacity-10 rounded-full ${
                                     rel.type === 'nemesis' ? 'bg-danger' : rel.type === 'ally' ? 'bg-success' : rel.type === 'stalker' ? 'bg-accent' : 'bg-warning'
                                 }`}></div>
                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-on-scrim mb-3 ${
@@ -82,7 +82,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({ insights, relationsh
                     const toneClasses = getInsightToneClasses(stat.tone);
                     return (
                         <div key={i} className={`md3-card relative overflow-hidden transition-all cursor-pointer group rounded-2xl hover:border-md-sys-primary/20 ${dense ? '!p-6' : '!p-8'}`}>
-                            <div className={`absolute -top-6 -right-6 w-32 h-32 opacity-10 rounded-full ${toneClasses.glowBg} blur-2xl`}></div>
+                            <div className={`absolute -top-6 -right-6 w-32 h-32 opacity-10 rounded-full ${toneClasses.glowBg}`}></div>
                             <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${toneClasses.badgeBg} ${toneClasses.badgeText}`}>{stat.icon}</div>
                         <div className="text-label-sm font-black uppercase tracking-widest opacity-60 mb-1">{stat.title}</div>
                         <div className="text-label-sm font-bold uppercase opacity-40 mb-4">{stat.subtitle}</div>

@@ -165,8 +165,10 @@ const findBestOpponentTeamMatchIndex = (
     const colorMatch = !isUnknownTeamColor(existing.color) && existing.color === newTeam.color;
     const rosterOverlap = teamRosterOverlapRatio(existing, newTeam);
 
-    // Guardrail: if both teams have strong, different names and no roster/color evidence, do not merge.
-    if (bothHaveNamedTeam && !hasStrongNameMatch && rosterOverlap <= 0 && !colorMatch) {
+    const oneHasNoPlayers = (newTeam.players?.length ?? 0) === 0 || (existing.players?.length ?? 0) === 0;
+
+    // Guardrail: if both teams have strong, different names and no roster/color/player evidence, do not merge.
+    if (bothHaveNamedTeam && !hasStrongNameMatch && rosterOverlap <= 0 && !colorMatch && !oneHasNoPlayers) {
       continue;
     }
 
@@ -179,7 +181,6 @@ const findBestOpponentTeamMatchIndex = (
     // Allow color-only match when one side has no players — this happens when merging
     // tactical-map OCR (which reads ship/color but has no player lists) with crew-hub OCR.
     // In Wildgate each team has a unique color per match, so color alone disambiguates.
-    const oneHasNoPlayers = (newTeam.players?.length ?? 0) === 0 || (existing.players?.length ?? 0) === 0;
     const fallbackAcceptable = hasStrongNameMatch
       || (colorMatch && rosterOverlap > 0)
       || (colorMatch && oneHasNoPlayers)
@@ -404,9 +405,11 @@ export function detectTeamColor(r: number, g: number, b: number): TeamColor {
     return 'unknown';
   }
   if ((h >= 340 || h < 20) && s > 40) return 'red';
-  if (h >= 15 && h < 45 && s > 40) return 'orange';
-  if (h >= 45 && h < 75 && s > 40) return 'yellow';
-  if (h >= 75 && h < 150 && s > 30) return 'green';
+  if (h >= 15 && h < 40 && s > 40) return 'orange';
+  const isDarkOliveGreen = h >= 56 && h < 66 && s > 40 && l <= 42;
+  if (isDarkOliveGreen) return 'green';
+  if (h >= 40 && h < 66 && s > 40 && l >= 40) return 'yellow';
+  if (h >= 66 && h < 150 && s > 30) return 'green';
   if (h >= 150 && h < 210 && s > 30) return 'cyan';
   if (h >= 210 && h < 270 && s > 30) return 'blue';
   if (h >= 270 && h < 340 && s > 30) return 'purple';

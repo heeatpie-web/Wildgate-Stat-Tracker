@@ -363,44 +363,48 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                                     className="md3-textfield ocr-assignment-player-input"
                                                     aria-label={`${team.teamName || `team ${teamIndex + 1}`} player ${playerIndex + 1} name`}
                                                 />
-                                                {isRosterMatch && !showFuzzyBadge && (
-                                                    <span
-                                                        className="ocr-assignment-fuzzy-badge !border-success !text-success !bg-success-soft"
-                                                        title="Matched to roster"
-                                                    >
-                                                        Roster
-                                                    </span>
-                                                )}
-                                                {showFuzzyBadge && (
+                                                <div className="ocr-assignment-player-actions">
+                                                    {isRosterMatch && !showFuzzyBadge && (
+                                                        <span
+                                                            className="ocr-assignment-fuzzy-badge ocr-assignment-fuzzy-badge--roster !border-success !text-success !bg-success-soft"
+                                                            title="Matched to roster"
+                                                        >
+                                                            Roster
+                                                        </span>
+                                                    )}
+                                                    {showFuzzyBadge && (
+                                                        <button
+                                                            type="button"
+                                                            className="ocr-assignment-fuzzy-badge ocr-assignment-fuzzy-badge--apply"
+                                                            title={`Click to apply fuzzy match: ${fuzzyMatch}`}
+                                                            onClick={() => onPlayerChange(teamIndex, playerIndex, fuzzyMatch)}
+                                                        >
+                                                            ~ {fuzzyMatch}
+                                                        </button>
+                                                    )}
+                                                    {!isRosterMatch && !showFuzzyBadge && onAddToRoster && displayName.trim().length >= 2 && (
+                                                        <button
+                                                            type="button"
+                                                            className="md3-icon-btn text-success shrink-0"
+                                                            title={`Add "${displayName}" to roster`}
+                                                            aria-label={`Add ${displayName} to roster`}
+                                                            onClick={() => onAddToRoster(displayName.trim())}
+                                                        >
+                                                            <UserPlus size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <div className="ocr-assignment-remove-player-slot">
                                                     <button
                                                         type="button"
-                                                        className="ocr-assignment-fuzzy-badge ocr-assignment-fuzzy-badge--apply"
-                                                        title={`Click to apply fuzzy match: ${fuzzyMatch}`}
-                                                        onClick={() => onPlayerChange(teamIndex, playerIndex, fuzzyMatch)}
+                                                        onClick={() => onPlayerRemove(teamIndex, playerIndex)}
+                                                        className="md3-icon-btn text-danger ocr-assignment-remove-player-btn"
+                                                        aria-label={`Remove ${displayName || `player ${playerIndex + 1}`} from ${team.teamName || `team ${teamIndex + 1}`}`}
+                                                        title="Remove player"
                                                     >
-                                                        ~ {fuzzyMatch}
+                                                        <X size={12} />
                                                     </button>
-                                                )}
-                                                {!isRosterMatch && !showFuzzyBadge && onAddToRoster && displayName.trim().length >= 2 && (
-                                                    <button
-                                                        type="button"
-                                                        className="md3-icon-btn text-success shrink-0"
-                                                        title={`Add "${displayName}" to roster`}
-                                                        aria-label={`Add ${displayName} to roster`}
-                                                        onClick={() => onAddToRoster(displayName.trim())}
-                                                    >
-                                                        <UserPlus size={12} />
-                                                    </button>
-                                                )}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => onPlayerRemove(teamIndex, playerIndex)}
-                                                    className="md3-icon-btn text-danger"
-                                                    aria-label={`Remove ${displayName || `player ${playerIndex + 1}`} from ${team.teamName || `team ${teamIndex + 1}`}`}
-                                                    title="Remove player"
-                                                >
-                                                    <X size={12} />
-                                                </button>
+                                                </div>
                                             </div>
                                         );
                                     })
