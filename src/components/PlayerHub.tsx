@@ -58,6 +58,8 @@ const PlayerHub: React.FC = () => {
         mergePilots,
         undoLastMerge,
         mergeHistory,
+        activeMergeNotificationId,
+        dismissActiveMergeNotification,
         pendingReviews,
         addToRegistry,
         removePendingReview,
@@ -180,6 +182,11 @@ const PlayerHub: React.FC = () => {
         });
     }, [ocrSearchTerm, pendingCandidateEdits, pendingRosterCandidates]);
 
+    const activeMergeNotification = useMemo(() => {
+        if (!activeMergeNotificationId) return null;
+        return (mergeHistory || []).find((entry) => entry.id === activeMergeNotificationId) || null;
+    }, [activeMergeNotificationId, mergeHistory]);
+
     const findRosterMatch = (value: string): string | null => {
         const normalizedValue = normalizeOcrName(value || '').toLowerCase();
         if (!normalizedValue) return null;
@@ -189,6 +196,14 @@ const PlayerHub: React.FC = () => {
     useEffect(() => {
         setShowFullProfile(false);
     }, [selectedPilot]);
+
+    useEffect(() => {
+        if (!activeMergeNotification?.id) return undefined;
+        const timer = window.setTimeout(() => {
+            dismissActiveMergeNotification();
+        }, 10_000);
+        return () => window.clearTimeout(timer);
+    }, [activeMergeNotification?.id, dismissActiveMergeNotification]);
 
     const selected = useMemo(() => {
         if (!selectedPilot) return null;
@@ -849,21 +864,33 @@ const PlayerHub: React.FC = () => {
                     </div>
                 </div>
 
-                {mergeHistory && mergeHistory.length > 0 && (() => {
-                    const last = mergeHistory[0];
-                    const ago = Math.round((Date.now() - last.timestamp) / 1000);
+                {activeMergeNotification && (() => {
+                    const ago = Math.round((Date.now() - activeMergeNotification.timestamp) / 1000);
                     const agoLabel = ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`;
                     return (
-                        <div className="flex items-center justify-between bg-warning-soft border border-warning-soft rounded-xl px-3 py-2 shrink-0">
+                        <div className="flex items-center justify-between gap-2 bg-warning-soft border border-warning-soft rounded-xl px-3 py-2 shrink-0">
                             <span className="text-label-xs text-warning truncate">
-                                Merged <strong>{last.sourceName}</strong> → <strong>{last.targetName}</strong> ({agoLabel})
+                                Merged <strong>{activeMergeNotification.sourceName}</strong> → <strong>{activeMergeNotification.targetName}</strong> ({agoLabel})
                             </span>
-                            <button
-                                onClick={() => undoLastMerge()}
-                                className="flex items-center gap-1 px-2 py-1 bg-warning-soft hover:bg-warning hover:text-ink-strong text-warning rounded text-label-xs font-bold transition-colors shrink-0"
-                            >
-                                <Undo2 size={10} /> Undo
-                            </button>
+                            <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={() => undoLastMerge()}
+                                    className="flex items-center gap-1 px-2 py-1 bg-warning-soft hover:bg-warning hover:text-ink-strong text-warning rounded text-label-xs font-bold transition-colors shrink-0"
+                                >
+                                    <Undo2 size={10} /> Undo
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => dismissActiveMergeNotification()}
+                                    className="flex items-center gap-1 px-2 py-1 bg-md-sys-on-surface/10 hover:bg-md-sys-on-surface/15 text-warning rounded text-label-xs font-bold transition-colors shrink-0"
+                                    aria-label="Dismiss merge notification"
+                                    title="Dismiss merge notification"
+                                >
+                                    <X size={10} />
+                                    Dismiss
+                                </button>
+                            </div>
                         </div>
                     );
                 })()}

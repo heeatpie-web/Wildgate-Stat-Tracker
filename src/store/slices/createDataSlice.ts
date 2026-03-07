@@ -322,6 +322,8 @@ export interface DataSlice {
   updatePlayerIdMapping: (id: string, name: string) => void;
   mergePilots: (sourceName: string, targetName: string) => void;
   mergeHistory: MergeHistoryEntry[];
+  activeMergeNotificationId: string | null;
+  dismissActiveMergeNotification: () => void;
   undoLastMerge: () => boolean;
   timelineEvents: TimelineEvent[];
   setTimelineEvents: (events: TimelineEvent[]) => void;
@@ -428,6 +430,8 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
   clearPendingReviews: () => set({ pendingReviews: [] }),
 
   mergeHistory: [],
+  activeMergeNotificationId: null,
+  dismissActiveMergeNotification: () => set({ activeMergeNotificationId: null }),
 
   setMatches: (matches) => set((state) => {
     const sanitized = (matches || []).map((entry) => sanitizeMatchArtifactFields({ ...entry }));
@@ -675,7 +679,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
         delete newProfiles[sourceName];
         return {
           matches: newMatches, pilotRegistry: newRegistry, favorites: newFavorites,
-          pilotNotes: newNotes, pilotAliases: newAliases, playerIdMap: newIdMap, playerProfiles: newProfiles, mergeHistory, lastActivity: Date.now()
+          pilotNotes: newNotes, pilotAliases: newAliases, playerIdMap: newIdMap, playerProfiles: newProfiles, mergeHistory, activeMergeNotificationId: snapshot.id, lastActivity: Date.now()
         };
       }
     }
@@ -686,7 +690,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
 
     return {
       matches: newMatches, pilotRegistry: newRegistry, favorites: newFavorites,
-      pilotNotes: newNotes, pilotAliases: newAliases, playerIdMap: newIdMap, pendingReviews: newPending, mergeHistory, lastActivity: Date.now()
+      pilotNotes: newNotes, pilotAliases: newAliases, playerIdMap: newIdMap, pendingReviews: newPending, mergeHistory, activeMergeNotificationId: snapshot.id, lastActivity: Date.now()
     };
   }),
 
@@ -705,6 +709,7 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
       pendingReviews: latest.snapshot.pendingReviews,
       playerProfiles: latest.snapshot.playerProfiles,
       mergeHistory: rest,
+      activeMergeNotificationId: null,
       lastActivity: Date.now(),
     } as Partial<DataSlice> & { playerProfiles?: ProfileSnapshotMap });
     return true;

@@ -37,6 +37,8 @@ const gameDataState = {
     mergePilots: vi.fn(),
     undoLastMerge: vi.fn(),
     mergeHistory: [],
+    activeMergeNotificationId: null,
+    dismissActiveMergeNotification: vi.fn(),
     pendingReviews: [],
     addToRegistry: vi.fn(),
     removePendingReview: vi.fn(),
@@ -119,6 +121,8 @@ describe('PlayerHub', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         gameDataState.pendingReviews = [];
+        gameDataState.mergeHistory = [];
+        gameDataState.activeMergeNotificationId = null;
     });
 
     it('shows former names, learned OCR variants, and duplicate candidates for the selected player', () => {
@@ -154,5 +158,22 @@ describe('PlayerHub', () => {
         expect(appStoreState.recordOcrAliasCorrection).toHaveBeenCalledWith('PliotOne', 'PilotOne', expect.any(Object));
         expect(gameDataState.removePendingReview).toHaveBeenCalledWith('candidate-1');
         expect(gameDataState.addToRegistry).toHaveBeenCalledWith('PilotOne');
+    });
+
+    it('shows a dismissible merge notification banner for the active merge', () => {
+        gameDataState.mergeHistory = [{
+            id: 'merge-1',
+            timestamp: Date.now(),
+            sourceName: 'Pilot0ne',
+            targetName: 'PilotOne',
+        }];
+        gameDataState.activeMergeNotificationId = 'merge-1';
+
+        render(<PlayerHub />);
+
+        expect(screen.getByText(/merged/i)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /dismiss merge notification/i }));
+
+        expect(gameDataState.dismissActiveMergeNotification).toHaveBeenCalledTimes(1);
     });
 });

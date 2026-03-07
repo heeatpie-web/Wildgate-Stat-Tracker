@@ -310,6 +310,18 @@ describe('createDataSlice', () => {
       expect(store.getState().mergeHistory).toHaveLength(1);
       expect(store.getState().mergeHistory[0].sourceName).toBe('A');
       expect(store.getState().mergeHistory[0].targetName).toBe('B');
+      expect(store.getState().activeMergeNotificationId).toBe(store.getState().mergeHistory[0].id);
+    });
+
+    it('dismisses the active merge notification without clearing merge history', () => {
+      store.getState().addToRegistry('A');
+      store.getState().addToRegistry('B');
+      store.getState().mergePilots('A', 'B');
+
+      store.getState().dismissActiveMergeNotification();
+
+      expect(store.getState().activeMergeNotificationId).toBeNull();
+      expect(store.getState().mergeHistory).toHaveLength(1);
     });
 
     it('limits merge history to 10 entries', () => {
@@ -355,6 +367,7 @@ describe('createDataSlice', () => {
       expect(result).toBe(true);
       expect(store.getState().matches[0].player).toBe('A');
       expect(store.getState().pilotRegistry).toContain('A');
+      expect(store.getState().activeMergeNotificationId).toBeNull();
     });
 
     it('restores aliases after undoing a merge', () => {

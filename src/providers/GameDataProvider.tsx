@@ -43,6 +43,8 @@ interface GameDataContextType {
     mergePilots: (target: string, source: string) => void;
     undoLastMerge: () => boolean;
     mergeHistory: Array<{ id: string; timestamp: number; sourceName: string; targetName: string }>;
+    activeMergeNotificationId: string | null;
+    dismissActiveMergeNotification: () => void;
     renamePilot: (oldName: string, newName: string) => void;
     lastActivity: number;
     setLastActivity: (ts: number) => void;
@@ -168,6 +170,7 @@ export const GameDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         playerIdMap: s.playerIdMap, setPlayerIdMap: s.setPlayerIdMap,
         updatePlayerIdMapping: s.updatePlayerIdMapping,
         mergePilots: s.mergePilots, undoLastMerge: s.undoLastMerge, mergeHistory: s.mergeHistory,
+        activeMergeNotificationId: s.activeMergeNotificationId, dismissActiveMergeNotification: s.dismissActiveMergeNotification,
         renamePilot: s.renamePilot,
         lastActivity: s.lastActivity, setLastActivity: s.setLastActivity,
         isLoading: s.isLoading, setIsLoading: s.setIsLoading,
