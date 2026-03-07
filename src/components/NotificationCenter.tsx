@@ -169,6 +169,16 @@ export const NotificationCenter: React.FC = () => {
         dismissNotification(id);
     };
 
+    const handleMarkAllRead = () => {
+        markAllNotificationsRead();
+        setNotificationCenterOpen(false);
+    };
+
+    const handleClearAll = () => {
+        clearNotifications();
+        setNotificationCenterOpen(false);
+    };
+
     React.useEffect(() => {
         if (!notificationCenterOpen) return;
         const onPointerDown = (event: MouseEvent) => {
@@ -222,7 +232,7 @@ export const NotificationCenter: React.FC = () => {
                             <button
                                 type="button"
                                 className="h-7 px-2 rounded-control md3-btn-tonal text-label-xs font-bold"
-                                onClick={() => markAllNotificationsRead()}
+                                onClick={handleMarkAllRead}
                                 disabled={visibleNotifications.length === 0}
                                 title="Mark all read"
                             >
@@ -231,7 +241,7 @@ export const NotificationCenter: React.FC = () => {
                             <button
                                 type="button"
                                 className="h-7 px-2 rounded-control md3-btn-tonal text-label-xs font-bold"
-                                onClick={() => clearNotifications()}
+                                onClick={handleClearAll}
                                 disabled={visibleNotifications.length === 0}
                                 title="Clear all"
                             >

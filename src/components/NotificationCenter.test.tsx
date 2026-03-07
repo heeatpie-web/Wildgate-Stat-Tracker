@@ -176,6 +176,33 @@ describe('NotificationCenter', () => {
     expect(screen.queryByText('Dismiss this row')).not.toBeInTheDocument();
   });
 
+  it('closes the inbox after bulk mark-read and clear actions', async () => {
+    uiState.notificationCenterOpen = true;
+    uiState.notifications = [
+      {
+        id: 'n1',
+        message: 'Bulk action target',
+        type: 'info',
+        source: 'system',
+        popup: true,
+        durationMs: 5000,
+        createdAt: Date.now(),
+        readAt: null,
+      },
+    ];
+
+    const { NotificationCenter } = await import('./NotificationCenter');
+    render(<NotificationCenter />);
+
+    fireEvent.click(screen.getByTitle('Mark all read'));
+    expect(uiState.markAllNotificationsRead).toHaveBeenCalledTimes(1);
+    expect(uiState.setNotificationCenterOpen).toHaveBeenCalledWith(false);
+
+    fireEvent.click(screen.getByTitle('Clear all'));
+    expect(uiState.clearNotifications).toHaveBeenCalledTimes(1);
+    expect(uiState.setNotificationCenterOpen).toHaveBeenCalledTimes(2);
+  });
+
   it('advances and can disable tips from the pinned tip controls', async () => {
     uiState.notificationCenterOpen = true;
     uiState.notifications = [

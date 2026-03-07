@@ -166,6 +166,8 @@ const RESTORE_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const SETTINGS_FOCUS_SECTION_STORAGE_KEY = 'wg_settings_focus_section_v1';
 const UNKNOWN_PLAYER_LABELS = new Set(['unknown', 'unknown player', 'n/a', 'na', '?']);
 const STARTUP_INTERACTION_GRACE_MS = 3500;
+const HAS_LAUNCHED_BEFORE_STORAGE_KEY = 'wg_has_launched_before_v1';
+const WELCOME_MESSAGE_SHOWN_THIS_LAUNCH_KEY = 'wg_welcome_message_shown_this_launch_v1';
 const getOnboardingUserScope = (user: string | null | undefined): string => {
     const normalized = String(user || '').trim().toLowerCase();
     return normalized || '__global__';
@@ -669,18 +671,34 @@ const App: React.FC = () => {
 
         // Guard for StrictMode/double-effect to avoid duplicate toasts per app launch.
         try {
-            const launchKey = 'wg_welcome_back_shown_this_launch';
-            if (window.sessionStorage.getItem(launchKey) === '1') {
+            if (window.sessionStorage.getItem(WELCOME_MESSAGE_SHOWN_THIS_LAUNCH_KEY) === '1') {
                 welcomeBackToastShownRef.current = true;
                 return;
             }
-            window.sessionStorage.setItem(launchKey, '1');
+            window.sessionStorage.setItem(WELCOME_MESSAGE_SHOWN_THIS_LAUNCH_KEY, '1');
         } catch {
             // If sessionStorage is unavailable, keep going with ref-only guard.
         }
 
         welcomeBackToastShownRef.current = true;
-        setToast({ message: `Welcome back ${name}`, type: 'success' });
+        let hasLaunchedBefore = false;
+        try {
+            hasLaunchedBefore = window.localStorage.getItem(HAS_LAUNCHED_BEFORE_STORAGE_KEY) === '1';
+            window.localStorage.setItem(HAS_LAUNCHED_BEFORE_STORAGE_KEY, '1');
+        } catch {
+            // localStorage is optional; default to first-launch copy if unavailable.
+        }
+
+        if (!hasLaunchedBefore && setupWizardShownThisLaunchRef.current) {
+            return;
+        }
+
+        setToast({
+            message: hasLaunchedBefore
+                ? `Welcome back ${name}`
+                : `Welcome, ${name}! Tracking is ready.`,
+            type: 'success',
+        });
     }, [activeUser, isStoreLoading, setToast]);
 
     useEffect(() => {

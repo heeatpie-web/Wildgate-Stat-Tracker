@@ -155,6 +155,8 @@ describe('App', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
     getElectronAPIMock.mockReturnValue(null);
     uiState.activeView = 'recording';
     uiState.isOverlayMode = false;
@@ -167,6 +169,31 @@ describe('App', () => {
     appStoreState.selectedTeammates = [];
     appStoreState.matches = [];
     appStoreState.pendingMatchData = {};
+  });
+
+  it('uses first-launch welcome copy before the app has ever been opened', async () => {
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await waitFor(() => {
+      expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Welcome, Pilot! Tracking is ready.',
+        type: 'success',
+      }));
+    });
+  });
+
+  it('uses welcome-back copy after the first recorded launch', async () => {
+    window.localStorage.setItem('wg_has_launched_before_v1', '1');
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await waitFor(() => {
+      expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Welcome back Pilot',
+        type: 'success',
+      }));
+    });
   });
 
   it('renders recording view in default dashboard mode', async () => {
