@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
-import { Activity, ChevronLeft, ChevronRight, Moon, Palette, User, Volume2 } from 'lucide-react';
+import { Activity, ChevronLeft, ChevronRight, Moon, Palette, User } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
@@ -24,32 +24,16 @@ const APPEARANCE_MODES = [
     { id: 'system' as const, label: 'System' },
 ];
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 4;
 const STARTUP_HEALTH_CHECK_SEEN_KEY_PREFIX = 'wg_startup_health_check_seen_v2';
 const STARTUP_HEALTH_CHECK_SKIPPED_LAUNCH_KEY_PREFIX = 'wg_startup_health_check_skipped_launch_v2';
+const SETUP_EXIT_DURATION_MS = 360;
 
-type SetupStep = 1 | 2 | 3 | 4 | 5;
-type HealthStatus = 'idle' | 'running' | 'pass' | 'warn' | 'fail';
+type SetupStep = 1 | 2 | 3 | 4;
 
 const getOnboardingUserScope = (user: string | null | undefined): string => {
     const normalized = String(user || '').trim().toLowerCase();
     return normalized || '__global__';
-};
-
-const toTimeLabel = (value: number | null | undefined) => {
-    if (!Number.isFinite(Number(value)) || Number(value) <= 0) return 'Never';
-    try {
-        return new Date(Number(value)).toLocaleString();
-    } catch {
-        return 'Unknown';
-    }
-};
-
-const statusToneClass = (status: HealthStatus) => {
-    if (status === 'pass') return 'text-success';
-    if (status === 'warn') return 'text-warning';
-    if (status === 'fail') return 'text-md-sys-error';
-    return 'opacity-70';
 };
 
 export const SetupWizard: React.FC = () => {
@@ -58,6 +42,7 @@ export const SetupWizard: React.FC = () => {
         setShowSetupWizard,
         setToast,
         setActiveUser,
+        pushNotification,
     } = useUIState();
     const { addPlayer } = useGameData();
     const {
@@ -67,8 +52,6 @@ export const SetupWizard: React.FC = () => {
         setColorTheme,
         customHue,
         setCustomHue,
-        soundEnabled,
-        setSoundEnabled,
     } = useUserPreferences();
 
     const [step, setStep] = useState<SetupStep>(1);
@@ -78,14 +61,8 @@ export const SetupWizard: React.FC = () => {
         if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
         return window.matchMedia('(prefers-color-scheme: dark)').matches;
     });
-    const [storageStatus, setStorageStatus] = useState<HealthStatus>('idle');
-    const [storageDetail, setStorageDetail] = useState('Waiting to run startup test.');
-    const [backupStatus, setBackupStatus] = useState<HealthStatus>('idle');
-    const [backupDetail, setBackupDetail] = useState('Waiting to run startup test.');
-    const [captureStatus, setCaptureStatus] = useState<HealthStatus>('idle');
-    const [captureDetail, setCaptureDetail] = useState('Waiting to run startup test.');
+    const [isExiting, setIsExiting] = useState(false);
     const [startupTestRunning, setStartupTestRunning] = useState(false);
-    const [startupTestRunAt, setStartupTestRunAt] = useState<number | null>(null);
 
     const focusTrapRef = useFocusTrap<HTMLDivElement>(showSetupWizard);
     const dialogTitleId = useId();
@@ -116,11 +93,12 @@ export const SetupWizard: React.FC = () => {
         setStep(2);
     };
 
-    const runStorageCheck = useCallback(async () => {
+    const runStartupChecksSilently = useCallback(async () => {
         const api = getElectronAPI();
         if (!api) return;
-        setStorageStatus('running');
-        setBackupStatus('running');
+
+        const failures: string[] = [];
+
         try {
             const status = await api.invoke('db-status') as {
                 ok?: boolean;
@@ -129,90 +107,52 @@ export const SetupWizard: React.FC = () => {
                 lastBackupMtime?: number | null;
                 error?: string;
             } | null;
-            if (status?.ok) {
-                if (status.walExists) {
-                    setStorageStatus('warn');
-                    setStorageDetail('Storage is writable, but a recovery WAL exists and will be replayed automatically.');
-                } else {
-                    setStorageStatus('pass');
-                    setStorageDetail(`Storage healthy. Last DB write: ${toTimeLabel(status.dbMtime)}`);
-                }
-                if (Number(status.lastBackupMtime || 0) > 0) {
-                    setBackupStatus('pass');
-                    setBackupDetail(`Latest backup: ${toTimeLabel(status.lastBackupMtime || 0)}`);
-                } else {
-                    setBackupStatus('warn');
-                    setBackupDetail('No backup file found yet. A fresh backup will be created during startup test.');
-                }
-            } else {
-                setStorageStatus('fail');
-                setStorageDetail(`Storage check failed: ${status?.error || 'Unknown error'}`);
-                setBackupStatus('warn');
-                setBackupDetail('Backup status is unavailable until storage succeeds.');
+            if (!status?.ok) {
+                failures.push(`Data storage check failed: ${status?.error || 'Unknown error'}`);
             }
         } catch (error) {
-            setStorageStatus('fail');
-            setStorageDetail(`Storage check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            setBackupStatus('warn');
-            setBackupDetail('Backup status is unavailable until storage succeeds.');
+            failures.push(`Data storage check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
-    }, []);
 
-    const createBackupNow = useCallback(async () => {
-        const api = getElectronAPI();
-        if (!api) return;
-        setBackupStatus('running');
-        setBackupDetail('Creating startup backup...');
         try {
             const result = await api.invoke('db-backup') as { success?: boolean; path?: string; error?: string } | null;
-            if (result?.success) {
-                setBackupStatus('pass');
-                setBackupDetail(`Backup created: ${result.path || 'Documents/Wildgate Stat Tracker/Backups'}`);
-            } else {
-                setBackupStatus('fail');
-                setBackupDetail(`Backup failed: ${result?.error || 'Unknown error'}`);
+            if (!result?.success) {
+                failures.push(`Backup check failed: ${result?.error || 'Unknown error'}`);
             }
         } catch (error) {
-            setBackupStatus('fail');
-            setBackupDetail(`Backup failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            failures.push(`Backup check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
-    }, []);
 
-    const runCaptureTest = useCallback(async () => {
-        const api = getElectronAPI();
-        if (!api) return;
-        setCaptureStatus('running');
-        setCaptureDetail('Capturing game window...');
         try {
             const dataUrl = await api.invoke('capture-screen');
-            if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
-                setCaptureStatus('pass');
-                setCaptureDetail('Capture test passed. Screenshot access is working.');
-            } else {
-                setCaptureStatus('fail');
-                setCaptureDetail('Capture test failed. Keep the game window visible and try again.');
+            if (!(typeof dataUrl === 'string' && dataUrl.startsWith('data:image/'))) {
+                failures.push('Screen capture check failed: Keep the game window visible and try again.');
             }
         } catch (error) {
-            setCaptureStatus('fail');
-            setCaptureDetail(`Capture test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            failures.push(`Screen capture check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
-    }, []);
 
-    const runStartupTest = useCallback(async () => {
-        if (startupTestRunning) return;
-        setStartupTestRunning(true);
-        setStartupTestRunAt(Date.now());
-        try {
-            await runStorageCheck();
-            await createBackupNow();
-            await runCaptureTest();
-        } finally {
-            setStartupTestRunning(false);
-        }
-    }, [createBackupNow, runCaptureTest, runStorageCheck, startupTestRunning]);
+        failures.forEach((message) => {
+            pushNotification({
+                message,
+                type: 'warning',
+                source: 'wizard',
+                popup: true,
+            });
+        });
+    }, [pushNotification]);
 
     const handleFinish = () => {
+        if (startupTestRunning || isExiting) return;
         const normalized = callsign.trim();
+        if (!normalized) {
+            setCallsignError('A callsign is required and must match your in-game name.');
+            setStep(1);
+            return;
+        }
+
+        setStartupTestRunning(true);
+        setIsExiting(true);
         addPlayer(normalized);
         setActiveUser(normalized);
         try {
@@ -225,7 +165,11 @@ export const SetupWizard: React.FC = () => {
             // no-op
         }
         setToast({ message: `Welcome, ${normalized}! Tracking is ready.`, type: 'success' });
-        setShowSetupWizard(false);
+        window.setTimeout(() => {
+            setShowSetupWizard(false);
+            setStartupTestRunning(false);
+        }, SETUP_EXIT_DURATION_MS);
+        void runStartupChecksSilently();
     };
 
     const goNextStep = () => setStep((current) => Math.min(TOTAL_STEPS, current + 1) as SetupStep);
@@ -246,18 +190,21 @@ export const SetupWizard: React.FC = () => {
                 if (step > 1) goPrevStep();
             },
         },
-    ], showSetupWizard);
+    ], showSetupWizard && !isExiting);
 
     if (!showSetupWizard) return null;
 
     return (
-        <div className="fixed inset-0 z-modal flex items-center justify-center bg-scrim-60 animate-fade-in">
+        <div
+            className={`fixed inset-0 z-modal flex items-center justify-center p-6 transition-opacity duration-300 ${isExiting ? 'opacity-0 pointer-events-none' : 'opacity-100 animate-fade-in'}`}
+        >
+            <div className="setup-wizard-backdrop absolute inset-0" aria-hidden="true" />
             <div
                 ref={focusTrapRef}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={dialogTitleId}
-                className={`wizard-shell relative w-full max-w-2xl rounded-modal border shadow-2xl animate-scale-in flex flex-col overflow-hidden ${resolvedAppearanceMode !== 'light' ? 'md3-surface-high' : ''}`}
+                className={`wizard-shell setup-wizard-card relative z-10 w-full max-w-[50rem] rounded-modal border shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ${resolvedAppearanceMode !== 'light' ? 'md3-surface-high' : ''} ${isExiting ? 'translate-y-2 scale-[0.985] opacity-0' : 'animate-scale-in opacity-100'}`}
                 data-mode={resolvedAppearanceMode}
                 onClick={(event) => event.stopPropagation()}
             >
@@ -279,7 +226,7 @@ export const SetupWizard: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-1.5" aria-hidden="true">
-                        {[1, 2, 3, 4, 5].map((item) => (
+                        {[1, 2, 3, 4].map((item) => (
                             <div
                                 key={item}
                                 className={`h-1.5 rounded-full transition-all duration-300 ${
@@ -363,13 +310,13 @@ export const SetupWizard: React.FC = () => {
                         <div className="animate-fade-in">
                             <div className="flex items-center gap-2 mb-1">
                                 <Palette size={18} className="text-md-sys-primary" />
-                                <h2 className="text-title font-bold uppercase">Color Theme</h2>
+                                <h2 className="text-title font-bold">What's your favorite color?</h2>
                             </div>
-                            <p className="text-label-sm opacity-60 uppercase tracking-widest mb-5">
-                                Pick your accent color
+                            <p className="text-label-sm opacity-60 uppercase tracking-widest mb-4">
+                                Pick the accent that should drive your workspace
                             </p>
 
-                            <div className="grid grid-cols-4 gap-2 mb-3">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 auto-rows-fr">
                                 {THEMES.map((theme) => (
                                     <button
                                         key={theme.id}
@@ -378,27 +325,40 @@ export const SetupWizard: React.FC = () => {
                                         title={theme.label}
                                         aria-label={theme.label}
                                         aria-pressed={colorTheme === theme.id}
-                                        className={`h-10 rounded-control transition-all ${
+                                        className={`setup-wizard-theme-option min-h-[4.25rem] rounded-2xl transition-all ${
                                             colorTheme === theme.id
-                                                ? 'ring-2 ring-md-sys-primary/60 scale-105'
-                                                : 'opacity-60 hover:opacity-100'
+                                                ? 'is-selected'
+                                                : ''
                                         }`}
-                                        style={{ backgroundColor: theme.color }}
-                                    />
+                                    >
+                                        <span
+                                            className="setup-wizard-theme-swatch"
+                                            style={{ backgroundColor: theme.color }}
+                                            aria-hidden="true"
+                                        />
+                                        <span className="text-label-sm font-semibold">{theme.label}</span>
+                                    </button>
                                 ))}
                                 <button
                                     type="button"
                                     onClick={() => setColorTheme('custom')}
-                                    className={`h-10 rounded-control text-label-sm font-bold transition-all ${
-                                        colorTheme === 'custom' ? 'md3-btn-filled' : 'md3-btn-tonal'
+                                    className={`setup-wizard-theme-option min-h-[4.25rem] rounded-2xl text-label-sm font-bold transition-all ${
+                                        colorTheme === 'custom' ? 'is-selected' : ''
                                     }`}
                                 >
-                                    Custom
+                                    <span
+                                        className="setup-wizard-theme-swatch"
+                                        style={{
+                                            background: 'linear-gradient(135deg, hsl(0,60%,50%) 0%, hsl(120,60%,50%) 50%, hsl(240,60%,50%) 100%)',
+                                        }}
+                                        aria-hidden="true"
+                                    />
+                                    <span>Custom</span>
                                 </button>
                             </div>
 
                             {colorTheme === 'custom' && (
-                                <div className="mt-2 flex items-center gap-3">
+                                <div className="mt-3 flex items-center gap-3 rounded-2xl border border-md-sys-outline/12 bg-md-sys-surface-container/60 px-4 py-3">
                                     <input
                                         type="range"
                                         min="0"
@@ -427,75 +387,19 @@ export const SetupWizard: React.FC = () => {
                     {step === 4 && (
                         <div className="animate-fade-in">
                             <div className="flex items-center gap-2 mb-1">
-                                <Volume2 size={18} className="text-md-sys-primary" />
-                                <h2 className="text-title font-bold uppercase">Audio</h2>
-                            </div>
-                            <p className="text-label-sm opacity-60 uppercase tracking-widest mb-5">
-                                Enable or disable sound cues
-                            </p>
-
-                            <div className="md3-surface-high/60 border border-md-sys-outline/10 rounded-card p-4 flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <Volume2 size={14} className={soundEnabled ? 'text-success' : 'opacity-50'} />
-                                    <div>
-                                        <div className="text-label-sm font-bold">Sound Effects</div>
-                                        <div className="text-label-sm opacity-60">{soundEnabled ? 'On' : 'Off'}</div>
-                                    </div>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setSoundEnabled(!soundEnabled)}
-                                    className={`w-11 h-6 rounded-full transition-colors ${soundEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
-                                >
-                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${soundEnabled ? 'translate-x-5' : ''}`} />
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {step === 5 && (
-                        <div className="animate-fade-in">
-                            <div className="flex items-center gap-2 mb-1">
                                 <Activity size={18} className="text-md-sys-primary" />
-                                <h2 className="text-title font-bold uppercase">System Startup Test</h2>
+                                <h2 className="text-title font-bold uppercase">Ready to Launch</h2>
                             </div>
                             <p className="text-label-sm opacity-60 uppercase tracking-widest mb-5">
-                                Run the health check once, then start tracking
+                                We&apos;ll verify storage, backups, and capture in the background while you enter the app
                             </p>
 
-                            <div className="rounded-control bg-warning-soft border border-warning-soft-strong px-3 py-2 text-label-sm text-warning mb-4">
+                            <div className="rounded-2xl bg-warning-soft border border-warning-soft-strong px-4 py-3 text-label-sm text-warning mb-5">
                                 OCR performs best at 1920 × 1080. If capture framing looks off later, adjust OCR capture settings from Settings.
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div className="md3-surface-high/60 border border-md-sys-outline/10 rounded-card p-3">
-                                    <div className="text-label-sm font-bold uppercase">Data Storage</div>
-                                    <p className={`text-label-sm mt-1 ${statusToneClass(storageStatus)}`}>{storageDetail}</p>
-                                </div>
-                                <div className="md3-surface-high/60 border border-md-sys-outline/10 rounded-card p-3">
-                                    <div className="text-label-sm font-bold uppercase">Backups</div>
-                                    <p className={`text-label-sm mt-1 ${statusToneClass(backupStatus)}`}>{backupDetail}</p>
-                                </div>
-                                <div className="md3-surface-high/60 border border-md-sys-outline/10 rounded-card p-3 md:col-span-2">
-                                    <div className="text-label-sm font-bold uppercase">Screen Capture</div>
-                                    <p className={`text-label-sm mt-1 ${statusToneClass(captureStatus)}`}>{captureDetail}</p>
-                                </div>
-                            </div>
-
-                            <div className="mt-4 flex flex-col gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => void runStartupTest()}
-                                    disabled={startupTestRunning}
-                                    className="w-full md3-btn-tonal py-3 rounded-card font-bold uppercase tracking-widest disabled:opacity-disabled"
-                                >
-                                    {startupTestRunning ? 'Running System Startup Test...' : 'Begin System Startup Test'}
-                                </button>
-                                <div className="text-label-sm text-md-sys-on-surface/58">
-                                    {startupTestRunAt
-                                        ? `Last run: ${toTimeLabel(startupTestRunAt)}`
-                                        : 'Run this once to verify storage, backup, and capture before you start tracking.'}
-                                </div>
+                            <div className="md3-surface-high/60 border border-md-sys-outline/10 rounded-2xl px-4 py-3 text-label-sm text-md-sys-on-surface/70">
+                                Startup checks run silently after you click below. If anything needs attention, you&apos;ll see a notification after launch.
                             </div>
                         </div>
                     )}
@@ -515,9 +419,10 @@ export const SetupWizard: React.FC = () => {
                         <button
                             type="button"
                             onClick={handleFinish}
-                            className="w-full md3-btn-filled py-4 rounded-card font-bold uppercase tracking-widest shadow-lg"
+                            disabled={startupTestRunning}
+                            className="w-full md3-btn-filled py-4 rounded-card font-bold uppercase tracking-widest shadow-lg disabled:opacity-disabled"
                         >
-                            Start Wild Gate Stat Tracker
+                            {startupTestRunning ? 'Starting Wildgate Stat Tracker...' : 'Start Wildgate Stat Tracker'}
                         </button>
                     )}
                 </div>

@@ -3119,6 +3119,21 @@ body[data-mode='twilight'] .sc-stat-card {
   background: rgba(8, 12, 20, 0.72);
 }
 
+.setup-wizard-backdrop {
+  background:
+    radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--md-sys-color-primary), transparent 80%), transparent 45%),
+    radial-gradient(circle at 70% 10%, color-mix(in srgb, var(--md-sys-color-tertiary), transparent 84%), transparent 55%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--md-sys-color-surface-container-highest), black 68%) 0%,
+      color-mix(in srgb, var(--md-sys-color-background), black 82%) 100%
+    );
+}
+
+.setup-wizard-card {
+  min-height: min(40rem, calc(100vh - 3rem));
+}
+
 .wizard-shell {
   background: var(--md-sys-color-surface-container-highest);
   border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 50%);
@@ -3158,6 +3173,42 @@ body[data-mode='twilight'] .sc-stat-card {
 .wizard-shell .mg-surface-high {
   background: var(--md-sys-color-surface-container-high) !important;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 62%);
+}
+
+.setup-wizard-theme-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 54%);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), transparent 10%);
+  color: var(--md-sys-color-on-surface);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--md-sys-color-on-surface), transparent 96%);
+}
+
+.setup-wizard-theme-option:hover {
+  border-color: color-mix(in srgb, var(--md-sys-color-primary), transparent 54%);
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), transparent 6%);
+}
+
+.setup-wizard-theme-option.is-selected {
+  border-color: color-mix(in srgb, var(--md-sys-color-primary), transparent 38%);
+  background: color-mix(in srgb, var(--md-sys-color-primary), transparent 90%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 54%),
+    0 10px 24px color-mix(in srgb, var(--md-sys-color-primary), transparent 92%);
+}
+
+.setup-wizard-theme-swatch {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, white, transparent 30%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 6px 12px rgba(0, 0, 0, 0.18);
 }
 
 .wizard-time-row {
@@ -3233,6 +3284,17 @@ body[data-mode='twilight'] .wizard-scrim.md3-dialog-scrim {
   background: rgba(6, 10, 18, 0.88);
 }
 
+body[data-mode='light'] .setup-wizard-backdrop {
+  background:
+    radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--md-sys-color-primary), transparent 86%), transparent 45%),
+    radial-gradient(circle at 70% 10%, color-mix(in srgb, var(--md-sys-color-tertiary), transparent 88%), transparent 55%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, white, var(--md-sys-color-background) 78%) 0%,
+      color-mix(in srgb, var(--md-sys-color-background), #d7dce5 16%) 100%
+    );
+}
+
 body[data-mode='twilight'] .wizard-shell {
   background: color-mix(in srgb, var(--md-sys-color-surface-container-highest) 92%, black 8%) !important;
   border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 34%);
@@ -3253,6 +3315,25 @@ body[data-mode='twilight'] .wizard-card {
 body[data-mode='twilight'] .wizard-shell .mg-surface-high {
   background: color-mix(in srgb, var(--md-sys-color-surface-container-high), black 10%) !important;
   border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 34%);
+}
+
+body[data-mode='dark'] .setup-wizard-theme-option,
+body[data-mode='twilight'] .setup-wizard-theme-option {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), black 6%);
+  border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 38%);
+}
+
+body[data-mode='dark'] .setup-wizard-theme-option:hover,
+body[data-mode='twilight'] .setup-wizard-theme-option:hover {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), black 8%);
+}
+
+body[data-mode='twilight'] .setup-wizard-theme-option.is-selected,
+body[data-mode='dark'] .setup-wizard-theme-option.is-selected {
+  background: color-mix(in srgb, var(--md-sys-color-primary), transparent 88%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 48%),
+    0 14px 28px rgba(0, 0, 0, 0.24);
 }
 
 body[data-mode='twilight'] .wizard-input {

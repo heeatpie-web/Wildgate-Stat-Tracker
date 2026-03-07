@@ -1,6 +1,6 @@
 import React from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 const uiState = {
@@ -8,6 +8,7 @@ const uiState = {
     setShowSetupWizard: vi.fn(),
     setToast: vi.fn(),
     setActiveUser: vi.fn(),
+    pushNotification: vi.fn(),
 };
 
 const gameData = {
@@ -52,9 +53,14 @@ vi.mock('../utils/electronAPI', () => ({
 describe('SetupWizard', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.useFakeTimers();
         window.localStorage.clear();
         window.sessionStorage.clear();
         uiState.showSetupWizard = true;
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
     it('marks startup health check as seen when setup is completed', async () => {
@@ -64,11 +70,14 @@ describe('SetupWizard', () => {
         fireEvent.change(screen.getByPlaceholderText('Callsign...'), { target: { value: 'Ace' } });
         fireEvent.click(screen.getByRole('button', { name: /continue/i }));
 
-        for (let idx = 0; idx < 3; idx += 1) {
+        for (let idx = 0; idx < 2; idx += 1) {
             fireEvent.click(screen.getByRole('button', { name: /continue/i }));
         }
 
-        fireEvent.click(screen.getByRole('button', { name: /start wild gate stat tracker/i }));
+        fireEvent.click(screen.getByRole('button', { name: /start wildgate stat tracker/i }));
+        await act(async () => {
+            vi.advanceTimersByTime(360);
+        });
 
         expect(gameData.addPlayer).toHaveBeenCalledWith('Ace');
         expect(uiState.setActiveUser).toHaveBeenCalledWith('Ace');
