@@ -317,12 +317,32 @@ body[data-mode='twilight'] .toast-card-standard {
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 70%);
 }
 
-.players-shell-gradient {
-  background:
-    radial-gradient(circle at top left, rgba(56, 189, 248, 0.07), transparent 42%),
-    radial-gradient(circle at bottom right, rgba(251, 146, 60, 0.06), transparent 45%),
-    color-mix(in srgb, var(--md-sys-color-surface-container), var(--md-sys-color-surface) 18%) !important;
+.players-shell-surface {
+  background: var(--md-sys-color-surface-container-low) !important;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 72%);
+}
+
+.players-solid-scope .md3-card,
+.players-solid-scope .md3-surface,
+.players-solid-scope .mg-surface {
+  background: var(--md-sys-color-surface-container) !important;
+  border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 48%);
+}
+
+.players-solid-scope .md3-surface-high,
+.players-solid-scope .mg-surface-high {
+  background: var(--md-sys-color-surface-container-high) !important;
+  border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 44%);
+}
+
+.players-solid-scope .md3-surface-low,
+.players-solid-scope .mg-surface-low {
+  background: var(--md-sys-color-surface-container-low) !important;
+  border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 52%);
+}
+
+.players-solid-scope .md3-card {
+  box-shadow: var(--elevation-1);
 }
 
 .recording-panel-shell {
