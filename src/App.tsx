@@ -320,6 +320,9 @@ const App: React.FC = () => {
     const idPromptNotificationCountRef = React.useRef(0);
     const tipLastSentAtRef = React.useRef(0);
     const tipByViewSentAtRef = React.useRef<Record<string, number>>({});
+    /** Tracks when the changelog was last dismissed. Tips are suppressed for 10 s after this. */
+    const changelogDismissedAtRef = React.useRef<number>(0);
+
     const previousTipLibraryIndexRef = React.useRef<number | null>(null);
     const restorePromptCheckedRef = React.useRef(false);
     const onboardingPromptedRef = React.useRef(false);
@@ -622,6 +625,13 @@ const App: React.FC = () => {
         setToast,
     ]);
 
+    // Track changelog dismiss events so tip suppression can use the timestamp.
+    useEffect(() => {
+        if (showChangelog) return;
+        // showChangelog transitioned to false — record the dismiss time.
+        changelogDismissedAtRef.current = Date.now();
+    }, [showChangelog]);
+
     useEffect(() => {
         if (!tipsEnabled) return;
         if (showSetupWizard || showTutorial || showStartupHealthCheck || restoreSessionPrompt) return;
@@ -637,6 +647,14 @@ const App: React.FC = () => {
         previousTipLibraryIndexRef.current = safeTipLibraryIndex;
         const now = Date.now();
         const tenMinutesMs = 10 * 60 * 1000;
+        /**
+         * Suppress tips for 10 s after the changelog is dismissed (or after app boot
+         * if no changelog was shown). This prevents tips from firing before the user
+         * has had a chance to orient themselves on startup.
+         */
+        const POST_CHANGELOG_QUIET_MS = 10_000;
+        const suppressedUntil = (changelogDismissedAtRef.current || Date.now()) + POST_CHANGELOG_QUIET_MS;
+        if (now < suppressedUntil) return;
         if (!tipIndexChanged) {
             if (now - tipLastSentAtRef.current < tenMinutesMs) return;
             const lastForView = tipByViewSentAtRef.current[activeView] || 0;
@@ -660,7 +678,7 @@ const App: React.FC = () => {
             },
             deepLink: { type: 'openView', view: activeView },
         });
-    }, [activeView, pushNotification, restoreSessionPrompt, showSetupWizard, showStartupHealthCheck, showTutorial, tipLibraryIndex, tipsEnabled]);
+    }, [activeView, pushNotification, restoreSessionPrompt, showChangelog, showSetupWizard, showStartupHealthCheck, showTutorial, tipLibraryIndex, tipsEnabled]);
 
     useEffect(() => {
         if (welcomeBackToastShownRef.current) return;

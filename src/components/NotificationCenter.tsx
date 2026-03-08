@@ -263,7 +263,7 @@ export const NotificationCenter: React.FC = () => {
                                 onKeyDown={(event) => onItemKeyDown(event, pinnedTip)}
                                 role="button"
                                 tabIndex={0}
-                                className="w-full text-left rounded-xl border border-accent/18 bg-md-sys-surface-container-high px-3 py-3 hover:bg-accent-soft/25 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/30"
+                                className="w-full text-left rounded-xl border border-md-sys-outline/25 bg-md-sys-surface-container-high px-3 py-3 hover:bg-accent-soft/25 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/30"
                             >
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-2 min-w-0">
