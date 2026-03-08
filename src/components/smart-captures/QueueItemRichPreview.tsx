@@ -38,24 +38,17 @@ const STATUS_PILL_BY_TONE: Record<'success' | 'warning' | 'danger' | 'info' | 'n
 };
 
 const ROW_TONE_BY_RESULT: Record<Match['result'], string> = {
-  Win: 'border-md-sys-outline/10',
-  Loss: 'border-md-sys-outline/10',
-  Draw: 'border-md-sys-outline/10',
-  Ongoing: 'border-md-sys-outline/10',
+  Win: 'border-b-md-sys-outline/8',
+  Loss: 'border-b-md-sys-outline/8',
+  Draw: 'border-b-md-sys-outline/8',
+  Ongoing: 'border-b-md-sys-outline/8',
 };
 
 const SELECTED_ROW_TONE_BY_RESULT: Record<Match['result'], string> = {
-  Win: 'bg-md-sys-on-surface/8 border-success/30 ring-success/12',
-  Loss: 'bg-md-sys-on-surface/8 border-danger/30 ring-danger/12',
-  Draw: 'bg-md-sys-on-surface/8 border-info/30 ring-info/12',
-  Ongoing: 'bg-md-sys-on-surface/8 border-md-sys-primary/20 ring-md-sys-primary/12',
-};
-
-const SELECTED_BORDER_BY_RESULT: Record<Match['result'], string> = {
-  Win: 'var(--md-sys-color-success)',
-  Loss: 'var(--md-sys-color-danger)',
-  Draw: 'var(--md-sys-color-info)',
-  Ongoing: 'var(--md-sys-color-primary)',
+  Win: 'bg-md-sys-primary/10 border-b-md-sys-outline/10',
+  Loss: 'bg-md-sys-primary/10 border-b-md-sys-outline/10',
+  Draw: 'bg-md-sys-primary/10 border-b-md-sys-outline/10',
+  Ongoing: 'bg-md-sys-primary/10 border-b-md-sys-outline/10',
 };
 
 const getDayOrdinal = (day: number): string => {
@@ -154,18 +147,29 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
     <button
       type="button"
       onClick={onClick}
-      className={`group sc-queue-item sc-queue-item--rich ${resultClass} w-full text-left rounded-r-card border-l-[11px] transition-all relative min-h-[64px] overflow-visible ${isSelected
-        ? `text-md-sys-on-surface border p-3 ring-1 shadow-sm font-semibold ${SELECTED_ROW_TONE_BY_RESULT[match.result]}`
-        : `border border-l-md-sys-outline/30 hover:bg-md-sys-on-surface/8 p-3 ${ROW_TONE_BY_RESULT[match.result]}`
+      className={`group sc-queue-item sc-queue-item--rich ${resultClass} w-full text-left border-0 border-b transition-colors relative min-h-[64px] overflow-visible ${isSelected
+        ? `text-md-sys-on-surface font-semibold ${SELECTED_ROW_TONE_BY_RESULT[match.result]}`
+        : `hover:bg-md-sys-on-surface/[0.06] ${ROW_TONE_BY_RESULT[match.result]}`
         }`}
-      style={{ borderLeftColor: SELECTED_BORDER_BY_RESULT[match.result] }}
       title={tooltipLabel}
     >
+      <span
+        aria-hidden="true"
+        className={`absolute inset-y-0 left-0 w-3px rounded-r-full transition-all ${
+          match.result === 'Win'
+            ? 'bg-success'
+            : match.result === 'Loss'
+              ? 'bg-danger'
+              : match.result === 'Draw'
+                ? 'bg-info'
+                : 'bg-md-sys-primary'
+        } ${isSelected ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`}
+      />
       <div className="flex items-start gap-2.5">
-        <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+        <div className="flex-1 min-w-0 flex flex-col gap-1.5 pl-4 pr-3 py-3">
           <div className="flex items-center justify-between min-w-0">
             <div className="flex items-center gap-2 min-w-0">
-              <span className={`sc-queue-item__title text-label-md font-black ${isSelected ? '' : 'opacity-65'}`}>#{displayNumber}</span>
+              <span className={`sc-queue-item__title text-label-md font-black ${isSelected ? '' : 'opacity-70'}`}>#{displayNumber}</span>
               <span className="text-label-sm font-bold truncate">
                 {match.ship || 'Unknown'} <span className="opacity-40 font-normal">|</span> {match.hero || 'Unknown'}
               </span>
@@ -205,7 +209,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
             title={isMultiSelected ? 'Deselect match' : 'Select match'}
             className={`mt-0.5 h-7 w-7 rounded-md border inline-flex items-center justify-center shrink-0 transition-all ${isMultiSelected
               ? 'opacity-100 border-md-sys-primary/55 bg-md-sys-primary/14 text-md-sys-primary'
-              : 'invisible opacity-0 pointer-events-none group-hover:visible group-hover:opacity-100 group-hover:pointer-events-auto border-md-sys-outline/30 bg-transparent text-md-sys-on-surface/60 hover:text-md-sys-primary hover:border-md-sys-primary/45'
+              : 'invisible opacity-0 pointer-events-none group-hover:visible group-hover:opacity-100 group-hover:pointer-events-auto border-md-sys-outline/24 bg-transparent text-md-sys-on-surface/60 hover:text-md-sys-primary hover:border-md-sys-primary/45'
               }`}
           >
             {isMultiSelected ? <Check size={12} /> : null}

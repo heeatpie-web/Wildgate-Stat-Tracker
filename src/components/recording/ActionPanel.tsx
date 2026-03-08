@@ -21,6 +21,7 @@ import { useSmartCapture } from '../../hooks/useSmartCapture';
 import { useMatchSubmission } from '../../hooks/useMatchSubmission';
 import { useAppStore } from '../../store/useAppStore';
 import type { OCRExtractedData } from '../../utils/ocr/ocrTypes';
+import type { Match } from '../../types';
 import { runtimeConfig } from '../../config/runtimeConfig';
 
 interface ActionPanelProps {

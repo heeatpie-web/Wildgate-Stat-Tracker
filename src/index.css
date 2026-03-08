@@ -823,30 +823,39 @@ body[data-mode='twilight'] .sc-bordered {
   overflow: visible;
   content-visibility: auto;
   contain-intrinsic-size: 0 72px;
+  background: transparent;
 }
 
 .sc-queue-item--rich.sc-queue-item--result-win {
-  border-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 72%);
+  border-bottom-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 80%);
 }
 
 .sc-queue-item--rich.sc-queue-item--result-loss {
-  border-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 72%);
+  border-bottom-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 80%);
 }
 
 .sc-queue-item--rich.sc-queue-item--result-draw {
-  border-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 72%);
+  border-bottom-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 80%);
+}
+
+.sc-queue-item--rich.sc-queue-item--result-ongoing {
+  border-bottom-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 80%);
 }
 
 body[data-mode='twilight'] .sc-queue-item--rich.sc-queue-item--result-win {
-  border-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 54%);
+  border-bottom-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 56%);
 }
 
 body[data-mode='twilight'] .sc-queue-item--rich.sc-queue-item--result-loss {
-  border-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 54%);
+  border-bottom-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 56%);
 }
 
 body[data-mode='twilight'] .sc-queue-item--rich.sc-queue-item--result-draw {
-  border-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 54%);
+  border-bottom-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 56%);
+}
+
+body[data-mode='twilight'] .sc-queue-item--rich.sc-queue-item--result-ongoing {
+  border-bottom-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 56%);
 }
 
 .sc-queue-item__title-wrap {

@@ -1323,7 +1323,7 @@ const SmartCapturesPanel: React.FC = () => {
                                     </div>
                                 }
                                 body={
-                                    <div className="flex-1 overflow-y-auto custom-scrollbar overscroll-contain pl-0 pr-1.5 py-1.5 flex flex-col gap-1 min-h-0 sc-queue-list-body">
+                                    <div className="flex-1 overflow-y-auto custom-scrollbar overscroll-contain pl-0 pr-1.5 py-0 flex flex-col gap-0 min-h-0 sc-queue-list-body">
                                         {selectedIds.size > 0 && !queueCollapsed && (
                                             <div className="sticky top-0 z-20 mb-2 rounded-card p-2.5 flex items-center justify-between gap-2 sc-queue-selection-bar">
                                                 <span className="text-label-sm font-bold text-md-sys-primary inline-flex items-center gap-1.5">
