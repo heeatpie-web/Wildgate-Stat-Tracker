@@ -398,7 +398,8 @@ body[data-mode='twilight'] .toast-card-standard {
 }
 
 .sidebar-nav-item {
-  overflow: hidden;
+  /* overflow: visible allows absolute-positioned badge to render outside the button bounds */
+  overflow: visible;
   border-radius: 999px !important;
   min-height: 44px;
 }
