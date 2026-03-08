@@ -164,6 +164,55 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     return normalized.length > 0 ? normalized : null;
   }, []);
 
+  const toArtifactKey = useCallback((artifactPath: string): string =>
+    String(artifactPath || '').trim().replace(/[\\/]+/g, '\\').toLowerCase(), []);
+
+  useEffect(() => {
+    const onArtifactsConsumed = (evt: Event) => {
+      const customEvt = evt as CustomEvent<{ matchId?: string | number | null; artifactPaths?: string[] }>;
+      const scope = normalizeMatchScope(customEvt.detail?.matchId);
+      const consumedKeys = new Set(
+        (Array.isArray(customEvt.detail?.artifactPaths) ? customEvt.detail.artifactPaths : [])
+          .map((artifactPath) => toArtifactKey(artifactPath))
+          .filter(Boolean)
+      );
+      if (!scope && consumedKeys.size === 0) return;
+
+      setSavedCaptures((prev) => {
+        const next = prev.filter((capture) => {
+          const captureKey = toArtifactKey(capture.filePath);
+          if (consumedKeys.has(captureKey)) return false;
+          if (!scope) return true;
+          return normalizeMatchScope(capture.matchId) !== scope;
+        });
+        savedCapturesRef.current = next;
+        return next;
+      });
+
+      if (scope) {
+        delete pendingDataByScopeRef.current[scope];
+        delete nameEvidenceByScopeRef.current[scope];
+      } else if (consumedKeys.size > 0) {
+        delete pendingDataByScopeRef.current.unscoped;
+        delete nameEvidenceByScopeRef.current.unscoped;
+      }
+
+      setPendingData((current) => {
+        if (!current) return null;
+        if (scope) return null;
+        const currentArtifacts = Array.isArray(current.artifacts) ? current.artifacts : [];
+        return currentArtifacts.some((artifactPath) => consumedKeys.has(toArtifactKey(artifactPath))) ? null : current;
+      });
+
+      capturedScreenshotsRef.current = [];
+      setCapturedScreenshots([]);
+      setProcessingStatus((current) => (current?.phase === 'completed' ? null : current));
+    };
+
+    window.addEventListener('smart-capture:artifacts-consumed', onArtifactsConsumed as EventListener);
+    return () => window.removeEventListener('smart-capture:artifacts-consumed', onArtifactsConsumed as EventListener);
+  }, [normalizeMatchScope, toArtifactKey]);
+
   const mergeArtifactPaths = useCallback((existing: string[] = [], incoming: string[] = []): string[] => {
     const next: string[] = [];
     const seen = new Set<string>();
@@ -1402,3 +1451,4 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
 
   return [state, actions];
 }
+

@@ -5,6 +5,7 @@ import {
   getArtifactsForMatch,
   removeMatchArtifact,
   addMatchArtifact,
+  reassignMatchArtifact,
   rerunOCROnArtifact,
 } from '../artifactService';
 import { getElectronAPI } from '../electronAPI';
@@ -176,6 +177,38 @@ describe('artifactService', () => {
     });
   });
 
+  describe('reassignMatchArtifact', () => {
+    it('returns error when Electron API is not available', async () => {
+      vi.mocked(getElectronAPI).mockReturnValue(null);
+      const result = await reassignMatchArtifact(1, 2, 'artifact-token');
+      expect(result).toEqual({ success: false, error: 'Electron API not available' });
+    });
+
+    it('invokes reassign-match-artifact and returns moved payload', async () => {
+      mockInvoke.mockResolvedValue({
+        success: true,
+        data: {
+          sourceMatchId: 1,
+          targetMatchId: 2,
+          sourcePath: 'C:\\match_artifacts\\1\\capture.png',
+          targetPath: 'C:\\match_artifacts\\2\\capture.png',
+          filename: 'capture.png',
+        },
+      });
+      const result = await reassignMatchArtifact(1, 2, 'artifact-token');
+      expect(mockInvoke).toHaveBeenCalledWith('reassign-match-artifact', { sourceMatchId: 1, targetMatchId: 2, artifactId: 'artifact-token' });
+      expect(result).toEqual({
+        success: true,
+        moved: {
+          sourceMatchId: 1,
+          targetMatchId: 2,
+          sourcePath: 'C:\\match_artifacts\\1\\capture.png',
+          targetPath: 'C:\\match_artifacts\\2\\capture.png',
+          filename: 'capture.png',
+        },
+      });
+    });
+  });
   describe('rerunOCROnArtifact', () => {
     it('throws when Electron API is not available', async () => {
       vi.mocked(getElectronAPI).mockReturnValue(null);
@@ -243,4 +276,5 @@ describe('artifactService', () => {
     });
   });
 });
+
 

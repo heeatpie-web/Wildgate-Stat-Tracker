@@ -238,6 +238,52 @@ describe('useSmartCapture', () => {
     expect(result.current[0].savedCaptures[0]?.ocrProcessed).toBe(true);
     expect(actions.getPendingData('match-42')).not.toBeNull();
   });
+  it('removes consumed screenshots from the saved capture queue after submission finalizes', async () => {
+    vi.mocked(isElectron).mockReturnValue(true);
+    vi.mocked(captureGameWindow).mockResolvedValue({
+      success: true,
+      imageBase64: 'ZmFrZQ==',
+    });
+    vi.mocked(saveScreenshot).mockResolvedValue({
+      success: true,
+      filePath: 'C:\\captures\\consumed.png',
+      filename: 'consumed.png',
+    });
+    vi.mocked(rerunOCROnArtifact).mockResolvedValue({
+      success: true,
+      data: {
+        screenshotType: 'crew_hub',
+        playerShip: { shipType: 'Hunter (4 Player)', confidence: 90, rawText: 'Hunter' },
+        playerTeamName: '',
+        reachModifiers: [],
+        enemyShips: [],
+        teammates: [{ name: 'Wingman', confidence: 88, isTeammate: true, rawText: 'Wingman' }],
+        opponentTeams: [],
+        overallConfidence: 88,
+        captureTimestamp: Date.now(),
+      },
+    });
+
+    const { result } = renderHook(() => useSmartCapture());
+    const [, actions] = result.current;
+
+    await act(async () => {
+      await actions.captureOnly('match-consumed');
+      await actions.processStoredImage('C:\\captures\\consumed.png', 'Pilot');
+    });
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('smart-capture:artifacts-consumed', {
+        detail: {
+          matchId: 'match-consumed',
+          artifactPaths: ['C:\\captures\\consumed.png'],
+        },
+      }));
+    });
+
+    expect(result.current[0].savedCaptures).toEqual([]);
+    expect(actions.getPendingData('match-consumed')).toBeNull();
+  });
 
   it('preserves hazards in pending OCR data and merged results', async () => {
     vi.mocked(isElectron).mockReturnValue(true);
@@ -594,3 +640,4 @@ describe('useSmartCapture', () => {
     expect(Number(teammate?.confidence || 0)).toBeLessThan(88);
   });
 });
+

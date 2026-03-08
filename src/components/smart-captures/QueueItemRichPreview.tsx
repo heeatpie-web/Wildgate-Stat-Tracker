@@ -25,8 +25,12 @@ interface QueueItemRichPreviewProps {
   compact?: boolean;
   isSelected: boolean;
   isMultiSelected?: boolean;
+  isDropTarget?: boolean;
   onClick: () => void;
   onToggleSelect?: () => void;
+  onDragOver?: React.DragEventHandler<HTMLButtonElement>;
+  onDragLeave?: React.DragEventHandler<HTMLButtonElement>;
+  onDrop?: React.DragEventHandler<HTMLButtonElement>;
 }
 
 const STATUS_PILL_BY_TONE: Record<'success' | 'warning' | 'danger' | 'info' | 'neutral', string> = {
@@ -90,8 +94,12 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
   compact = false,
   isSelected,
   isMultiSelected = false,
+  isDropTarget = false,
   onClick,
   onToggleSelect,
+  onDragOver,
+  onDragLeave,
+  onDrop,
 }) => {
   const qs = getQueueStatus(match);
   const statusMeta = getStatusMeta(qs.key);
@@ -106,6 +114,7 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
       : match.result === 'Draw'
         ? 'sc-queue-item--result-draw'
         : 'sc-queue-item--result-ongoing';
+  const dropTargetClass = isDropTarget ? 'ring-2 ring-md-sys-primary/55 bg-md-sys-primary/12' : '';
 
   const collapsedGlyph = getCollapsedQueueGlyph(match);
   const collapsedIcon = (() => {
@@ -123,7 +132,10 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
       <button
         type="button"
         onClick={onClick}
-        className={`w-full min-h-[70px] rounded-xl border transition-colors flex flex-col items-center justify-center gap-1.5 px-2 py-2.5 ${isSelected
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        className={`w-full min-h-[70px] rounded-xl border transition-colors flex flex-col items-center justify-center gap-1.5 px-2 py-2.5 ${dropTargetClass} ${isSelected
           ? 'bg-md-sys-surface-container-high border-md-sys-primary/26 text-md-sys-on-surface shadow-sm font-bold'
           : 'bg-md-sys-surface-container-low/80 border-md-sys-outline/14 text-md-sys-on-surface/68 hover:bg-md-sys-surface-container hover:border-md-sys-primary/18'
           }`}
@@ -147,7 +159,10 @@ export const QueueItemRichPreview: React.FC<QueueItemRichPreviewProps> = ({
     <button
       type="button"
       onClick={onClick}
-      className={`group sc-queue-item sc-queue-item--rich ${resultClass} w-full text-left border-0 border-b transition-colors relative min-h-[64px] overflow-visible ${isSelected
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      className={`group sc-queue-item sc-queue-item--rich ${resultClass} w-full text-left border-0 border-b transition-colors relative min-h-[64px] overflow-visible ${dropTargetClass} ${isSelected
         ? `text-md-sys-on-surface font-semibold ${SELECTED_ROW_TONE_BY_RESULT[match.result]}`
         : `hover:bg-md-sys-on-surface/[0.06] ${ROW_TONE_BY_RESULT[match.result]}`
         }`}

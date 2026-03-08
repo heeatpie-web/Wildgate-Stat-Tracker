@@ -95,7 +95,11 @@ export interface ArtifactRepairSummary {
     candidatesScanned: number;
     candidatesEligible: number;
     plannedLinks: number;
+    plannedAdds?: number;
+    plannedRemovals?: number;
     appliedLinks?: number;
+    removedLinks?: number;
+    deletedFiles?: number;
     updatedMatches?: number;
     backupPath?: string;
 }
@@ -103,7 +107,7 @@ export interface ArtifactRepairSummary {
 export interface ArtifactRepairResult {
     summary: ArtifactRepairSummary;
     candidates: ArtifactRepairCandidate[];
-    applied?: Array<{ matchId: number; addedPaths: string[] }>;
+    applied?: Array<{ matchId: number; addedPaths: string[]; removedPaths?: string[] }>;
 }
 
 export interface ArtifactRepairScope {
@@ -370,6 +374,18 @@ export const addMatchArtifact = async (matchId: number): Promise<{ success: bool
         : { success: true, added: result.data?.added || [] };
 };
 
+export const reassignMatchArtifact = async (
+    sourceMatchId: number,
+    targetMatchId: number,
+    artifactId: string
+): Promise<{ success: boolean; moved?: { sourceMatchId: number; targetMatchId: number; sourcePath: string; targetPath: string; filename: string }; error?: string; code?: IpcErrorCode }> => {
+    const api = getElectronAPI();
+    if (!api) return { success: false, error: 'Electron API not available' };
+    const raw = await api.invoke('reassign-match-artifact', { sourceMatchId, targetMatchId, artifactId });
+    const result = unwrapIpcResult<{ sourceMatchId: number; targetMatchId: number; sourcePath: string; targetPath: string; filename: string }>(raw);
+    if (!result.ok) return { success: false, error: result.message, code: result.code };
+    return { success: true, moved: result.data };
+};
 const normalizeArtifactRepairScope = (scope?: ArtifactRepairScope | null): ArtifactRepairScope | undefined => {
     if (!scope) return undefined;
     const normalized: ArtifactRepairScope = {};
@@ -396,3 +412,4 @@ export const applyArtifactRepair = async (scope?: ArtifactRepairScope | null): P
     const payload = normalizeArtifactRepairScope(scope);
     return await api.invoke('artifact-repair-apply', payload);
 };
+

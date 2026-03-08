@@ -473,6 +473,7 @@ export const useMatchSubmission = () => {
 
             const bundledArtifacts = await bundleMatchArtifacts(newMatch.id, matchStart, matchEnd);
             let scopedRepairAppliedLinks = 0;
+            let scopedRepairRemovedLinks = 0;
             try {
                 const repairResult = await applyArtifactRepair({
                     matchId: newMatch.id,
@@ -480,8 +481,9 @@ export const useMatchSubmission = () => {
                     endTime: matchEnd,
                 });
                 scopedRepairAppliedLinks = Number(repairResult?.summary?.appliedLinks || 0);
-                if (scopedRepairAppliedLinks > 0) {
-                    Logger.info('Submission', `Scoped artifact repair linked ${scopedRepairAppliedLinks} artifact(s) for match ${newMatch.id}`);
+                scopedRepairRemovedLinks = Number(repairResult?.summary?.removedLinks || 0);
+                if (scopedRepairAppliedLinks > 0 || scopedRepairRemovedLinks > 0) {
+                    Logger.info('Submission', `Scoped artifact repair updated match ${newMatch.id} (linked=${scopedRepairAppliedLinks}, removed=${scopedRepairRemovedLinks})`);
                 }
             } catch (repairError) {
                 Logger.warn('Submission', `Scoped artifact repair failed for match ${newMatch.id}`, repairError);
@@ -554,9 +556,26 @@ export const useMatchSubmission = () => {
                 }));
             }
 
-            window.dispatchEvent(new CustomEvent('recording:match-complete', { detail: { result: submittedResult } }));
-            const artifactSuffix = mergedArtifacts.length > 0 ? ` · ${mergedArtifacts.length} screenshot${mergedArtifacts.length === 1 ? '' : 's'} bundled` : '';
-            setToast({ message: `Match recorded: ${submittedResult}${artifactSuffix}`, type: 'success' });
+
+            const consumedArtifactPaths = mergeArtifactLists(existingMatch?.artifacts, pendingMatchData.artifacts, bundledArtifacts);
+            window.dispatchEvent(new CustomEvent('smart-capture:artifacts-consumed', {
+                detail: {
+                    matchId: newMatch.id,
+                    artifactPaths: consumedArtifactPaths,
+                },
+            }));
+            window.dispatchEvent(new CustomEvent('recording:match-complete', { detail: { result: submittedResult, matchId: newMatch.id } }));
+            if (scopedRepairRemovedLinks > 0) {
+                setToast({
+                    message: `Match recorded: ${submittedResult} · removed ${scopedRepairRemovedLinks} stale screenshot link${scopedRepairRemovedLinks === 1 ? '' : 's'}`,
+                    type: 'success',
+                });
+            } else if (scopedRepairAppliedLinks > 0) {
+                setToast({ message: `Match recorded: ${submittedResult} · screenshot links repaired`, type: 'success' });
+            } else {
+                const artifactSuffix = mergedArtifacts.length > 0 ? ` · ${mergedArtifacts.length} screenshot${mergedArtifacts.length === 1 ? '' : 's'} bundled` : '';
+                setToast({ message: `Match recorded: ${submittedResult}${artifactSuffix}`, type: 'success' });
+            }
 
         } catch (e) {
             Logger.error('Submission', 'Process failed', e);
@@ -752,5 +771,6 @@ export const useMatchSubmission = () => {
         submitting
     };
 };
+
 
 

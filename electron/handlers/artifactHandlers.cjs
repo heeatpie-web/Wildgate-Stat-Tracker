@@ -105,6 +105,86 @@ const buildFallbackArtifactCandidates = ({ fallbackImages, matchArtifactsRoot, m
   return candidates;
 };
 
+const AUTO_CAPTURE_FILENAME_PATTERN = /^capture_/i;
+
+function isAutoCaptureFilename(value) {
+  return AUTO_CAPTURE_FILENAME_PATTERN.test(String(value || '').trim());
+}
+
+function toPathKey(value) {
+  return path.resolve(String(value || '')).replace(/[\\/]+/g, '\\').toLowerCase();
+}
+
+function collectAssignedAutoCaptureNames(matchArtifactsRoot, excludeDir) {
+  const assigned = new Set();
+  if (!matchArtifactsRoot || !fs.existsSync(matchArtifactsRoot)) return assigned;
+  const excludeKey = excludeDir ? toPathKey(excludeDir) : '';
+  let entries = [];
+  try {
+    entries = fs.readdirSync(matchArtifactsRoot, { withFileTypes: true });
+  } catch {
+    return assigned;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const dirPath = path.join(matchArtifactsRoot, entry.name);
+    if (excludeKey && toPathKey(dirPath) === excludeKey) continue;
+    let files = [];
+    try {
+      files = fs.readdirSync(dirPath);
+    } catch {
+      continue;
+    }
+    for (const file of files) {
+      const ext = path.extname(file).toLowerCase();
+      if (!IMAGE_EXTENSIONS.has(ext)) continue;
+      if (!isAutoCaptureFilename(file)) continue;
+      assigned.add(file.toLowerCase());
+    }
+  }
+  return assigned;
+}
+
+async function filesAreIdentical(sourcePath, targetPath) {
+  try {
+    const [sourceStat, targetStat] = await Promise.all([fsPromises.stat(sourcePath), fsPromises.stat(targetPath)]);
+    if (!sourceStat.isFile() || !targetStat.isFile()) return false;
+    if (sourceStat.size !== targetStat.size) return false;
+    const [sourceBuffer, targetBuffer] = await Promise.all([fsPromises.readFile(sourcePath), fsPromises.readFile(targetPath)]);
+    return sourceBuffer.equals(targetBuffer);
+  } catch {
+    return false;
+  }
+}
+
+function getUniqueArtifactDestination(targetDir, preferredFilename) {
+  const parsed = path.parse(preferredFilename);
+  for (let idx = 1; idx <= 1000; idx += 1) {
+    const candidate = path.join(targetDir, `${parsed.name}__moved_${idx}${parsed.ext}`);
+    if (!fs.existsSync(candidate)) return candidate;
+  }
+  return path.join(targetDir, `${Date.now()}_${preferredFilename}`);
+}
+async function moveArtifactBetweenMatches(sourcePath, targetDir, preferredFilename) {
+  const initialTarget = path.join(targetDir, preferredFilename);
+  let targetPath = initialTarget;
+  if (fs.existsSync(targetPath)) {
+    const same = await filesAreIdentical(sourcePath, targetPath);
+    if (same) {
+      await fsPromises.unlink(sourcePath).catch(() => {});
+      return targetPath;
+    }
+    targetPath = getUniqueArtifactDestination(targetDir, preferredFilename);
+  }
+  try {
+    await fsPromises.rename(sourcePath, targetPath);
+  } catch {
+    await fsPromises.copyFile(sourcePath, targetPath);
+    await fsPromises.unlink(sourcePath).catch(() => {});
+  }
+  return targetPath;
+}
+
 function sanitizeRepairScope(scopePayload) {
   if (!scopePayload || typeof scopePayload !== 'object') return undefined;
   const normalized = {};
@@ -157,13 +237,18 @@ function registerArtifactHandlers(ipcMain, ctx) {
 
       const bundledNames = new Set();
       const bundledSizes = new Set();
+      const assignedCaptureNames = collectAssignedAutoCaptureNames(paths.matchArtifactsRoot, matchDir);
       const state = {
         bundledNames,
         bundledSizes,
+        assignedCaptureNames,
         onCopy: () => {},
       };
 
-      const fromScreenshots = await artifactHelpers.scanDirForImagesInWindow(paths.screenshotsDir, matchDir, startTime, endTime, state);
+      const fromScreenshots = await artifactHelpers.scanDirForImagesInWindow(paths.screenshotsDir, matchDir, startTime, endTime, {
+        ...state,
+        consumeSource: true,
+      });
       const fromOcrDebug = await artifactHelpers.scanDirForImagesInWindow(paths.ocrDebugDir, matchDir, startTime, endTime, state);
       const bundledImages = [...fromScreenshots, ...fromOcrDebug];
 
@@ -381,6 +466,59 @@ function registerArtifactHandlers(ipcMain, ctx) {
     }
   });
 
+    ipcMain.handle('reassign-match-artifact', async (event, { sourceMatchId, targetMatchId, artifactId }) => {
+    try {
+      const sourceValidated = getValidatedMatchDir(app, artifactHelpers, sourceMatchId, { mode: 'read' });
+      if (!sourceValidated.success) {
+        recordSecurityBlock('reassign-match-artifact', sourceValidated.code, sourceValidated.message);
+        return sourceValidated;
+      }
+      const targetValidated = getValidatedMatchDir(app, artifactHelpers, targetMatchId, { mode: 'write' });
+      if (!targetValidated.success) {
+        recordSecurityBlock('reassign-match-artifact', targetValidated.code, targetValidated.message);
+        return targetValidated;
+      }
+      const sourceId = sourceValidated.data.matchId;
+      const targetId = targetValidated.data.matchId;
+      if (sourceId === targetId) {
+        return fail(IpcErrorCode.INVALID_INPUT, 'Source and target matches must differ');
+      }
+      if (typeof artifactId !== 'string' || !artifactId.trim()) {
+        recordSecurityBlock('reassign-match-artifact', IpcErrorCode.INVALID_INPUT, 'artifactId required');
+        return fail(IpcErrorCode.INVALID_INPUT, 'artifactId required');
+      }
+      const scope = getArtifactScope(event.sender.id, sourceId);
+      const resolved = artifactTokenRegistry.resolve(scope, artifactId);
+      if (!resolved || typeof resolved.filename !== 'string') {
+        recordSecurityBlock('reassign-match-artifact', IpcErrorCode.INVALID_INPUT, 'Invalid or expired artifactId');
+        return fail(IpcErrorCode.INVALID_INPUT, 'Invalid or expired artifactId');
+      }
+      const sourcePath = path.join(sourceValidated.data.matchDir, resolved.filename);
+      const pathCheck = validatePathInRoots(sourcePath, [sourceValidated.data.matchDir], { isDev: !app.isPackaged });
+      if (!pathCheck.success) {
+        recordSecurityBlock('reassign-match-artifact', pathCheck.code, pathCheck.message);
+        return pathCheck;
+      }
+      if (!fs.existsSync(sourcePath)) {
+        return fail(IpcErrorCode.NOT_FOUND, 'File not found');
+      }
+      const { matchDir: targetDir } = targetValidated.data;
+      if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+      const targetPath = await moveArtifactBetweenMatches(sourcePath, targetDir, resolved.filename);
+      console.log(`[Artifacts] Reassigned ${resolved.filename} from match ${sourceId} to match ${targetId}`);
+      return ok({
+        sourceMatchId: sourceId,
+        targetMatchId: targetId,
+        sourcePath,
+        targetPath,
+        filename: path.basename(targetPath),
+      });
+    } catch (e) {
+      console.error('[Artifacts] Reassign error:', e.message);
+      return internal('Failed to reassign artifact');
+    }
+  });
+
   ipcMain.handle('save-screenshot', async (event, { imageBase64, matchId }) => {
     try {
       if (!imageBase64 || imageBase64.length < 100) {
@@ -421,3 +559,8 @@ function registerArtifactHandlers(ipcMain, ctx) {
 }
 
 module.exports = { registerArtifactHandlers };
+
+
+
+
+

@@ -18,7 +18,7 @@ const INVOKE_CHANNELS = [
   'bundle-artifacts', 'get-match-artifacts', 'rerun-ocr-on-artifact', 'rerun-ocr-multi',
   'list-match-artifacts',
   'artifact-repair-preview', 'artifact-repair-apply',
-  'remove-match-artifact', 'add-match-artifact',
+  'remove-match-artifact', 'add-match-artifact', 'reassign-match-artifact',
   'load-archived-telemetry', 'list-telemetry-archives', 'load-telemetry-archive-file',
   'telemetry-retention-status', 'telemetry-prune-preview', 'telemetry-prune-apply',
   'decode-telemetry-cache', 'clear-telemetry-archives',
@@ -99,4 +99,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
 });
+
 

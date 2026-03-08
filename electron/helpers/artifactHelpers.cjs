@@ -10,6 +10,11 @@ const { normalizeEvents } = require('./telemetryArchiveHelpers.cjs');
 
 const IMAGE_EXTS = ['.png', '.jpg', '.jpeg', '.bmp', '.webp'];
 const TIME_MARGIN_MS = { before: 5000, after: 30000 };
+const AUTO_CAPTURE_FILENAME_PATTERN = /^capture_/i;
+
+function isAutoCaptureImage(fileName) {
+  return AUTO_CAPTURE_FILENAME_PATTERN.test(String(fileName || '').trim());
+}
 
 /**
  * Get artifact-related paths under userData.
@@ -34,11 +39,17 @@ function getArtifactPaths(app) {
  * @param {string} matchDir - Destination directory for copied files
  * @param {number} startTime - Window start (ms)
  * @param {number} endTime - Window end (ms)
- * @param {{ bundledNames: Set<string>, bundledSizes: Set<string>, onCopy?: (srcPath: string, destPath: string) => Promise<void> }} state - Mutable state for deduplication and optional post-copy (e.g. GCloud upload)
+ * @param {{ bundledNames: Set<string>, bundledSizes: Set<string>, assignedCaptureNames?: Set<string>, consumeSource?: boolean, onCopy?: (srcPath: string, destPath: string) => Promise<void> }} state
  * @returns {Promise<string[]>} - Paths of copied files (destPath)
  */
 async function scanDirForImagesInWindow(dir, matchDir, startTime, endTime, state) {
-  const { bundledNames, bundledSizes, onCopy } = state;
+  const {
+    bundledNames,
+    bundledSizes,
+    assignedCaptureNames,
+    consumeSource = false,
+    onCopy,
+  } = state;
   const copied = [];
   if (!fs.existsSync(dir)) return copied;
 
@@ -47,6 +58,9 @@ async function scanDirForImagesInWindow(dir, matchDir, startTime, endTime, state
     if (bundledNames.has(file)) continue;
     const ext = path.extname(file).toLowerCase();
     if (!IMAGE_EXTS.includes(ext)) continue;
+
+    const fileKey = file.toLowerCase();
+    if (assignedCaptureNames && isAutoCaptureImage(file) && assignedCaptureNames.has(fileKey)) continue;
 
     const srcPath = path.join(dir, file);
     const stat = await fsPromises.stat(srcPath);
@@ -61,9 +75,16 @@ async function scanDirForImagesInWindow(dir, matchDir, startTime, endTime, state
     copied.push(destPath);
     bundledNames.add(file);
     bundledSizes.add(sizeKey);
+    if (assignedCaptureNames && isAutoCaptureImage(file)) {
+      assignedCaptureNames.add(fileKey);
+    }
 
     if (typeof onCopy === 'function') {
       await Promise.resolve(onCopy(srcPath, destPath, file)).catch(() => {});
+    }
+
+    if (consumeSource) {
+      await fsPromises.unlink(srcPath).catch(() => {});
     }
   }
   return copied;
@@ -105,6 +126,7 @@ module.exports = {
   getArtifactPaths,
   scanDirForImagesInWindow,
   copyTelemetryInWindow,
+  isAutoCaptureImage,
   IMAGE_EXTS,
   TIME_MARGIN_MS,
 };

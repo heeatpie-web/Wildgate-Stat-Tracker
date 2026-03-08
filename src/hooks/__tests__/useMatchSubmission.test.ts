@@ -531,7 +531,7 @@ describe('useMatchSubmission', () => {
       .map(([evt]) => evt as Event)
       .find((evt) => evt.type === 'recording:match-complete') as CustomEvent | undefined;
     expect(matchCompleteEvent).toBeDefined();
-    expect(matchCompleteEvent?.detail).toEqual({ result: 'Win' });
+    expect(matchCompleteEvent?.detail).toEqual(expect.objectContaining({ result: 'Win' }));
   });
 
   it('updates an existing telemetry draft match instead of adding a duplicate', async () => {
@@ -696,6 +696,64 @@ describe('useMatchSubmission', () => {
     expect(getMatchArtifactsStructured).toHaveBeenCalledWith(555, expect.any(Array));
   });
 
+
+  it('dispatches artifact consumption after final submission saves the match', async () => {
+    const rawCapture = 'C:\\screenshots\\capture_2026-03-08T10-00-00-000Z.png';
+    const bundledCapture = 'C:\\match_artifacts\\555\\capture_2026-03-08T10-00-00-000Z.png';
+    mockStoreState.activeUser = 'Tester';
+    mockStoreState.pendingMatchData = {
+      id: 555,
+      timestamp: 1_700_000_000_000,
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: [],
+      opponents: [],
+      kills: {},
+      reachModifiers: [],
+      artifacts: [rawCapture],
+      time: '10:00',
+    };
+    mockStoreState.showWizard = 'Win';
+    mockStoreState.matches = [{
+      id: 555,
+      timestamp: 1_700_000_000_000,
+      date: '1/1/2024',
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: { 'AI Legion': 0 },
+      result: 'Draw',
+      subType: 'Telemetry Draft',
+      artifacts: [],
+      ocrState: 'queued',
+    }];
+    vi.mocked(bundleMatchArtifacts).mockResolvedValue([bundledCapture]);
+    vi.mocked(getMatchArtifactsStructured).mockResolvedValue({
+      images: [bundledCapture],
+      imageFiles: [],
+      telemetry: [],
+      missingImages: [rawCapture],
+      resolvedFromDisk: true,
+    } as any);
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    await act(async () => {
+      await result.current.processFinalSubmission('Combat');
+    });
+
+    const consumedEvent = dispatchEventSpy.mock.calls
+      .map(([evt]) => evt as Event)
+      .find((evt) => evt.type === 'smart-capture:artifacts-consumed') as CustomEvent | undefined;
+    expect(consumedEvent?.detail).toEqual({
+      matchId: 555,
+      artifactPaths: [rawCapture, bundledCapture],
+    });
+  });
   it('defaults placement to first when submitting a win without explicit placement', async () => {
     mockStoreState.activeUser = 'Tester';
     mockStoreState.pendingPlacement = null;
@@ -855,3 +913,4 @@ describe('useMatchSubmission', () => {
     expect(resolvedEvent?.detail).toEqual({ matchId: draftId });
   });
 });
+

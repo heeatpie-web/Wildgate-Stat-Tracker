@@ -15,6 +15,7 @@ import {
     rerunOCRMulti,
     removeMatchArtifact,
     addMatchArtifact,
+    reassignMatchArtifact,
     previewArtifactRepair,
     applyArtifactRepair,
     type ArtifactRepairResult,
@@ -406,6 +407,8 @@ const SmartCapturesPanel: React.FC = () => {
     const [repairBusy, setRepairBusy] = useState(false);
     const [repairResult, setRepairResult] = useState<ArtifactRepairResult | null>(null);
     const [showRoiEditor, setShowRoiEditor] = useState(false);
+    const [draggingArtifact, setDraggingArtifact] = useState<{ sourceMatchId: number; artifactId: string; imagePath: string; filename: string } | null>(null);
+    const [artifactDropMatchId, setArtifactDropMatchId] = useState<number | null>(null);
     const autoRepairAttemptSignaturesRef = useRef<Set<string>>(new Set());
     const normalizeModifierName = useCallback((name: string) => {
         const match = UI_REACH_MODIFIERS.find(m => m.toLowerCase() === name.toLowerCase());
@@ -709,6 +712,53 @@ const SmartCapturesPanel: React.FC = () => {
         setSelectedMatchId(id);
     }, [setSelectedMatchId]);
 
+    const handleArtifactDragStart = useCallback((payload: { sourceMatchId: number; artifactId: string; imagePath: string; filename: string }) => {
+        setDraggingArtifact(payload);
+        setArtifactDropMatchId(null);
+    }, []);
+
+    const clearArtifactDrag = useCallback(() => {
+        setDraggingArtifact(null);
+        setArtifactDropMatchId(null);
+    }, []);
+
+    const handleArtifactDrop = useCallback(async (targetMatchId: number) => {
+        if (!draggingArtifact) return;
+        if (draggingArtifact.sourceMatchId === targetMatchId) {
+            clearArtifactDrag();
+            return;
+        }
+        const result = await reassignMatchArtifact(draggingArtifact.sourceMatchId, targetMatchId, draggingArtifact.artifactId);
+        if (!result.success || !result.moved) {
+            setToast({ message: `Failed to move screenshot: ${result.error || 'Unknown error'}`, type: 'error' });
+            clearArtifactDrag();
+            return;
+        }
+        const { sourcePath, targetPath } = result.moved;
+        const sourceKey = toArtifactKey(sourcePath);
+        const byId = new Map(matches.map((entry) => [entry.id, entry]));
+        const sourceMatch = byId.get(draggingArtifact.sourceMatchId);
+        if (sourceMatch) {
+            const nextSourceArtifacts = (sourceMatch.artifacts || []).filter((artifactPath) => toArtifactKey(String(artifactPath || '')) !== sourceKey);
+            updateMatch({ ...sourceMatch, artifacts: nextSourceArtifacts });
+        }
+        const targetMatch = byId.get(targetMatchId);
+        if (targetMatch) {
+            const seen = new Set<string>();
+            const nextTargetArtifacts: string[] = [];
+            [...(targetMatch.artifacts || []), targetPath].forEach((artifactPath) => {
+                const trimmed = String(artifactPath || '').trim();
+                if (!trimmed) return;
+                const key = toArtifactKey(trimmed);
+                if (seen.has(key)) return;
+                seen.add(key);
+                nextTargetArtifacts.push(trimmed);
+            });
+            updateMatch({ ...targetMatch, artifacts: nextTargetArtifacts, ocrState: targetMatch.ocrState || 'queued' });
+        }
+        setToast({ message: `Moved screenshot to Match ${getQueueDisplayNumber(targetMatchId, globalOrderedMatchIds)}.`, type: 'success' });
+        clearArtifactDrag();
+    }, [clearArtifactDrag, draggingArtifact, globalOrderedMatchIds, matches, setToast, updateMatch]);
     const selectVisible = useCallback((mode: 'all' | 'none') => {
         if (mode === 'none') {
             setSelectedIds(new Set());
@@ -1136,7 +1186,10 @@ const SmartCapturesPanel: React.FC = () => {
             const result = await previewArtifactRepair();
             setRepairResult(result);
             const planned = result.summary?.plannedLinks || 0;
-            setToast({ message: planned > 0 ? `Artifact repair preview: ${planned} links found` : 'Artifact repair preview: no missing links found', type: planned > 0 ? 'info' : 'success' });
+            setToast({
+                message: planned > 0 ? `Artifact repair preview: ${planned} change${planned === 1 ? '' : 's'} found` : 'Artifact repair preview: no screenshot issues found',
+                type: planned > 0 ? 'info' : 'success',
+            });
         } catch (error) {
             setToast({ message: `Artifact repair preview failed: ${errorMessage(error)}`, type: 'error' });
         } finally {
@@ -1154,13 +1207,14 @@ const SmartCapturesPanel: React.FC = () => {
             setRepairResult(result);
             const applied = result.applied || [];
             const byId = new Map(matches.map(m => [m.id, m]));
-            applied.forEach(({ matchId, addedPaths }) => {
+            applied.forEach(({ matchId, addedPaths, removedPaths }) => {
                 const current = byId.get(matchId);
                 if (!current) return;
                 const artifacts = Array.isArray(current.artifacts) ? current.artifacts : [];
+                const removedKeys = new Set((removedPaths || []).map((artifactPath) => toArtifactKey(String(artifactPath || '').trim())).filter(Boolean));
                 const merged: string[] = [];
                 const seen = new Set<string>();
-                [...artifacts, ...addedPaths].forEach((artifactPath) => {
+                [...artifacts.filter((artifactPath) => !removedKeys.has(toArtifactKey(String(artifactPath || '').trim()))), ...addedPaths].forEach((artifactPath) => {
                     if (typeof artifactPath !== 'string' || !artifactPath.trim()) return;
                     const trimmed = artifactPath.trim();
                     const key = toArtifactKey(trimmed);
@@ -1171,14 +1225,20 @@ const SmartCapturesPanel: React.FC = () => {
                 updateMatch({ ...current, artifacts: merged });
             });
             const updatedMatches = result.summary?.updatedMatches || 0;
-            setToast({ message: updatedMatches > 0 ? `Artifact repair applied to ${updatedMatches} match${updatedMatches === 1 ? '' : 'es'}` : 'Artifact repair applied: nothing changed', type: 'success' });
+            const removedLinks = result.summary?.removedLinks || 0;
+            const appliedLinks = result.summary?.appliedLinks || 0;
+            setToast({
+                message: updatedMatches > 0
+                    ? `Artifact repair applied to ${updatedMatches} match${updatedMatches === 1 ? '' : 'es'} (added ${appliedLinks}, removed ${removedLinks}).`
+                    : 'Artifact repair applied: nothing changed',
+                type: 'success',
+            });
         } catch (error) {
             setToast({ message: `Artifact repair apply failed: ${errorMessage(error)}`, type: 'error' });
         } finally {
             setRepairBusy(false);
         }
     }, [matches, repairBusy, setToast, updateMatch]);
-
     const applyVisualRoiRegions = useCallback((nextRegions: OcrRegionSettings) => {
         setOcrRegions({
             crewHub: { ...nextRegions.crewHub },
@@ -1352,8 +1412,20 @@ const SmartCapturesPanel: React.FC = () => {
                                                         match={match}
                                                         isSelected={match.id === selectedMatchId}
                                                         isMultiSelected={selectedIds.has(match.id)}
+                                                        isDropTarget={artifactDropMatchId === match.id}
                                                         onClick={() => selectQueueRow(match.id)}
                                                         onToggleSelect={queueCollapsed ? undefined : () => toggleSelected(match.id)}
+                                                        onDragOver={draggingArtifact && draggingArtifact.sourceMatchId !== match.id ? (event) => {
+                                                            event.preventDefault();
+                                                            setArtifactDropMatchId(match.id);
+                                                        } : undefined}
+                                                        onDragLeave={draggingArtifact ? () => {
+                                                            setArtifactDropMatchId((current) => (current === match.id ? null : current));
+                                                        } : undefined}
+                                                        onDrop={draggingArtifact && draggingArtifact.sourceMatchId !== match.id ? (event) => {
+                                                            event.preventDefault();
+                                                            void handleArtifactDrop(match.id);
+                                                        } : undefined}
                                                     />
                                                 );
                                             })
@@ -1933,6 +2005,8 @@ const SmartMatchDetail: React.FC<{
     onQueueRosterCandidate?: (name: string) => void;
     onAddPilotToRoster?: (name: string) => void;
     onDeleteMatch?: (match: Match) => void;
+    onBeginArtifactDrag?: (payload: { sourceMatchId: number; artifactId: string; imagePath: string; filename: string }) => void;
+    onEndArtifactDrag?: () => void;
     devMode?: boolean;
 }> = ({
     match: matchSnapshot,
@@ -1951,6 +2025,8 @@ const SmartMatchDetail: React.FC<{
     onQueueRosterCandidate,
     onAddPilotToRoster,
     onDeleteMatch,
+    onBeginArtifactDrag,
+    onEndArtifactDrag,
     devMode = false,
 }) => {
         const liveMatch = useAppStore(useCallback(
@@ -3630,36 +3706,52 @@ const SmartMatchDetail: React.FC<{
                             }
                         >
                             <div className="sc-screenshots-rail">
-                                {artifacts.images.map((src, i) => (
-                                    <div
-                                        key={i}
-                                        className="relative shrink-0 w-40 aspect-video md3-surface-high rounded-xl overflow-hidden group sc-shot-thumb border border-md-sys-outline/10 shadow-sm"
-                                    >
-                                        <button onClick={() => setActiveScreenshotIndex(i)} className="w-full h-full">
-                                            <LocalImage
-                                                src={src}
-                                                alt={`Screenshot ${i + 1}`}
-                                                className="w-full h-full object-cover bg-md-sys-surface-container-lowest"
-                                            />
-                                            <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                <Eye size={16} />
-                                            </div>
-                                        </button>
-                                        {artifacts.imageFiles[i] && (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleRemoveScreenshot(i); }}
-                                                onMouseLeave={() => { if (confirmDeleteIdx === i) setConfirmDeleteIdx(null); }}
-                                                className={`absolute bottom-1 right-1 rounded-full flex items-center justify-center transition-all ${confirmDeleteIdx === i
-                                                    ? 'w-auto h-5 px-1.5 gap-1 bg-danger text-on-scrim opacity-100 text-label-xs font-bold'
-                                                    : 'w-4 h-4 bg-danger-soft-strong text-danger opacity-0 group-hover:opacity-100'
-                                                    }`}
-                                                title={confirmDeleteIdx === i ? 'Click again to confirm' : 'Remove screenshot'}
-                                            >
-                                                {confirmDeleteIdx === i ? <><Trash2 size={9} /> Delete?</> : <X size={9} />}
+                                {artifacts.images.map((src, i) => {
+                                    const artifactFile = artifacts.imageFiles[i];
+                                    return (
+                                        <div
+                                            key={i}
+                                            className="relative shrink-0 w-40 aspect-video md3-surface-high rounded-xl overflow-hidden group sc-shot-thumb border border-md-sys-outline/10 shadow-sm"
+                                            draggable={!!artifactFile?.artifactId}
+                                            onDragStart={(event) => {
+                                                if (!artifactFile?.artifactId || !onBeginArtifactDrag) return;
+                                                event.dataTransfer.effectAllowed = 'move';
+                                                event.dataTransfer.setData('text/plain', artifactFile.artifactId);
+                                                onBeginArtifactDrag({
+                                                    sourceMatchId: match.id,
+                                                    artifactId: artifactFile.artifactId,
+                                                    imagePath: src,
+                                                    filename: artifactFile.filename,
+                                                });
+                                            }}
+                                            onDragEnd={() => onEndArtifactDrag?.()}
+                                        >
+                                            <button onClick={() => setActiveScreenshotIndex(i)} className="w-full h-full cursor-pointer">
+                                                <LocalImage
+                                                    src={src}
+                                                    alt={`Screenshot ${i + 1}`}
+                                                    className="w-full h-full object-cover bg-md-sys-surface-container-lowest"
+                                                />
+                                                <div className="absolute inset-0 bg-scrim-40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                    <Eye size={16} />
+                                                </div>
                                             </button>
-                                        )}
-                                    </div>
-                                ))}
+                                            {artifactFile && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleRemoveScreenshot(i); }}
+                                                    onMouseLeave={() => { if (confirmDeleteIdx === i) setConfirmDeleteIdx(null); }}
+                                                    className={`absolute bottom-1 right-1 rounded-full flex items-center justify-center transition-all ${confirmDeleteIdx === i
+                                                        ? 'w-auto h-5 px-1.5 gap-1 bg-danger text-on-scrim opacity-100 text-label-xs font-bold'
+                                                        : 'w-4 h-4 bg-danger-soft-strong text-danger opacity-0 group-hover:opacity-100'
+                                                        }`}
+                                                    title={confirmDeleteIdx === i ? 'Click again to confirm' : 'Remove screenshot'}
+                                                >
+                                                    {confirmDeleteIdx === i ? <><Trash2 size={9} /> Delete?</> : <X size={9} />}
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                                 <button
                                     onClick={handleAddScreenshot}
                                     className="shrink-0 w-40 aspect-video md3-surface-high rounded-xl border-2 border-dashed border-md-sys-outline/30 hover:border-md-sys-primary/50 hover:bg-md-sys-primary/5 transition-all flex flex-col items-center justify-center gap-1 opacity-60 hover:opacity-100 hover:text-md-sys-primary sc-shot-thumb"
@@ -4317,3 +4409,9 @@ const SmartMatchDetail: React.FC<{
     };
 
 export default SmartCapturesPanel;
+
+
+
+
+
+
