@@ -149,7 +149,7 @@ const MatchListItem: React.FC<{
     onClick: () => void;
 }> = ({ match, isSelected, onClick }) => {
     const totalKills = Object.values(match.kills || {}).reduce((a, b) => a + (Number(b) || 0), 0);
-    const hasArtifact = match.reachModifiers?.some(m => m.startsWith('Artifact:'));
+    const hasArtifact = !!match.artifactSource;
 
     return (
         <button

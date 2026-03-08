@@ -7,7 +7,7 @@ import {
     FlaskConical, MoreHorizontal, Settings,
 } from 'lucide-react';
 import { Match, SHIPS, getShipColor, OpponentTeam, Loadout, getTelemetryLoadoutSourceLabel } from '../types';
-import { UI_REACH_MODIFIERS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT, SYSTEMS } from '../utils/constants';
+import { UI_REACH_MODIFIERS, CHARACTERS, WEAPONS, CHARACTER_WEAPONS, CHARACTER_EQUIPMENT, SYSTEMS, ARTIFACT_TYPE_TO_DISPLAY } from '../utils/constants';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import {
@@ -2071,6 +2071,7 @@ const SmartMatchDetail: React.FC<{
             screenshots: false,
             players: false,
             modifiers: false,
+            artifact: false,
             loadout: false,
             loadoutDetails: false,
             loadoutShipWeapons: false,
@@ -3900,6 +3901,31 @@ const SmartMatchDetail: React.FC<{
                                     existing={match.reachModifiers || []}
                                     onAdd={(mod) => onUpdate({ ...match, reachModifiers: [...(match.reachModifiers || []), mod] })}
                                 />
+                            </div>
+                        </Section>
+
+                        <Section title="Artifact" collapsible collapsed={!!collapsedSections.artifact} onToggle={() => toggleSection('artifact')}>
+                            <div className="flex items-center gap-2">
+                                <select
+                                    value={match.artifactSource || ''}
+                                    onChange={(e) => onUpdate({ ...match, artifactSource: e.target.value || undefined })}
+                                    className="flex-1 h-8 md3-surface-high rounded-lg px-2.5 text-label-xs font-bold outline-none border border-md-sys-outline/10 focus:border-md-sys-primary/40 focus:ring-1 focus:ring-md-sys-primary/40 transition-all"
+                                >
+                                    <option value="">— None —</option>
+                                    {Object.entries(ARTIFACT_TYPE_TO_DISPLAY).map(([typeKey, displayName]) => (
+                                        <option key={typeKey} value={typeKey}>{displayName}</option>
+                                    ))}
+                                </select>
+                                {match.artifactSource && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onUpdate({ ...match, artifactSource: undefined })}
+                                        className="p-1 opacity-40 hover:opacity-80 transition-opacity"
+                                        title="Clear artifact"
+                                    >
+                                        <X size={12} />
+                                    </button>
+                                )}
                             </div>
                         </Section>
 
