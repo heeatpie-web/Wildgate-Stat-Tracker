@@ -124,7 +124,8 @@ export const useMatchSubmission = () => {
         updateMatch,
         recordPlayerSighting,
         setTimelineEvents,
-        setSessionTeams
+        setSessionTeams,
+        setCurrentLoadout,
     } = useGameData();
 
     const {
@@ -550,6 +551,7 @@ export const useMatchSubmission = () => {
             setPoiEasy(0); setPoiMedium(0); setPoiEpic(0); setKills({ "AI Legion": 0 });
             setTimeMin(""); setTimeSec(""); setSelectedReachModifiers([]);
             setDamageTaken(""); setCurrentNote(""); setActiveWeapons({});
+            setCurrentLoadout(null);
             if (isTelemetryDraftSource && existingMatch) {
                 window.dispatchEvent(new CustomEvent('telemetry-draft:resolved', {
                     detail: { matchId: existingMatch.id },
@@ -583,7 +585,7 @@ export const useMatchSubmission = () => {
         } finally {
             setSubmitting(false);
         }
-    }, [submitting, addMatch, setPendingMatchData, setShowWizard, setPendingPlacement, setPendingArtifactType, setPendingKilledBy, setPendingKilledByShip, setSelectedOpponents, setTimelineEvents, setIsMatchInProgress, setMatchStartTime, setPoiEasy, setPoiMedium, setPoiEpic, setKills, setTimeMin, setTimeSec, setSelectedReachModifiers, setDamageTaken, setCurrentNote, setActiveWeapons, setToast, playVictory, playDefeat, updateMatch, recordPlayerSighting, pickFirstKnown]);
+    }, [submitting, addMatch, setPendingMatchData, setShowWizard, setPendingPlacement, setPendingArtifactType, setPendingKilledBy, setPendingKilledByShip, setSelectedOpponents, setTimelineEvents, setIsMatchInProgress, setMatchStartTime, setPoiEasy, setPoiMedium, setPoiEpic, setKills, setTimeMin, setTimeSec, setSelectedReachModifiers, setDamageTaken, setCurrentNote, setActiveWeapons, setCurrentLoadout, setToast, playVictory, playDefeat, updateMatch, recordPlayerSighting, pickFirstKnown]);
 
     const saveResultDraft = useCallback(async (subType: string) => {
         const state = useAppStore.getState();
@@ -748,6 +750,7 @@ export const useMatchSubmission = () => {
             setPoiEasy(0); setPoiMedium(0); setPoiEpic(0); setKills({ "AI Legion": 0 });
             setTimeMin(""); setTimeSec(""); setSelectedReachModifiers([]);
             setDamageTaken(""); setCurrentNote(""); setActiveWeapons({});
+            setCurrentLoadout(null);
             if (isTelemetryDraftSource && existingMatch) {
                 window.dispatchEvent(new CustomEvent('telemetry-draft:resolved', {
                     detail: { matchId: existingMatch.id },
@@ -762,7 +765,7 @@ export const useMatchSubmission = () => {
         } finally {
             setSubmitting(false);
         }
-    }, [submitting, addMatch, setPendingMatchData, setShowWizard, setPendingPlacement, setPendingArtifactType, setPendingKilledBy, setPendingKilledByShip, setSelectedOpponents, setSessionTeams, setTimelineEvents, setIsMatchInProgress, setMatchStartTime, setPoiEasy, setPoiMedium, setPoiEpic, setKills, setTimeMin, setTimeSec, setSelectedReachModifiers, setDamageTaken, setCurrentNote, setActiveWeapons, setToast, updateMatch, pickFirstKnown]);
+    }, [submitting, addMatch, setPendingMatchData, setShowWizard, setPendingPlacement, setPendingArtifactType, setPendingKilledBy, setPendingKilledByShip, setSelectedOpponents, setSessionTeams, setTimelineEvents, setIsMatchInProgress, setMatchStartTime, setPoiEasy, setPoiMedium, setPoiEpic, setKills, setTimeMin, setTimeSec, setSelectedReachModifiers, setDamageTaken, setCurrentNote, setActiveWeapons, setCurrentLoadout, setToast, updateMatch, pickFirstKnown]);
 
     return {
         initiateSubmission,
