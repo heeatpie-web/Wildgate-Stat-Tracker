@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Palette, FileJson, Save, Download, RefreshCw, X, Check, Search, Upload, Copy, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileJson, Save, Download, RefreshCw, X, Check, Search, Upload, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
@@ -33,6 +33,15 @@ interface SettingsFocusSectionRequest {
     search?: string;
 }
 const SETTINGS_FOCUS_SECTION_STORAGE_KEY = 'wg_settings_focus_section_v1';
+
+const SettingsSectionHeader: React.FC<{ title: string; description?: string }> = ({ title, description }) => (
+    <div className="mb-3">
+        <h3 className="text-title font-bold tracking-tight text-md-sys-on-surface">{title}</h3>
+        {description ? (
+            <p className="mt-1 text-label-sm text-md-sys-on-surface/60">{description}</p>
+        ) : null}
+    </div>
+);
 
 const parseSettingsFocusSectionRequest = (raw: unknown): SettingsFocusSectionRequest | null => {
     if (!raw || typeof raw !== 'object') return null;
@@ -69,14 +78,12 @@ const SettingsModalContent: React.FC = () => {
         appearanceMode, setAppearanceMode,
         colorTheme, setColorTheme,
         customHue, setCustomHue,
-        colorblindMode, setColorblindMode,
         disableAnimations, setDisableAnimations,
         performanceMode, setPerformanceMode,
         soundEnabled, setSoundEnabled,
         showSessionTimer, setShowSessionTimer,
         customBgUrl, setCustomBgUrl,
         overlayStyle, setOverlayStyle,
-        language, // unused in modal for now
     } = useUserPreferences();
 
     const {
@@ -408,7 +415,7 @@ const SettingsModalContent: React.FC = () => {
         { id: 'theme-accent', tab: 'interface', label: 'Theme Accent', keywords: ['theme', 'accent', 'color', 'appearance', 'hue'] },
         { id: 'appearance-mode', tab: 'interface', label: 'Appearance Mode', keywords: ['dark', 'light', 'twilight', 'system'] },
         { id: 'sound-effects', tab: 'interface', label: 'Sound Effects', keywords: ['sound', 'audio', 'toggle', 'cue'] },
-        { id: 'telemetry-performance', tab: 'interface', label: 'Telemetry Performance', keywords: ['telemetry', 'performance', 'polling', 'load'] },
+        { id: 'telemetry-performance', tab: 'data', label: 'Telemetry Performance', keywords: ['telemetry', 'performance', 'polling', 'load', 'high accuracy', 'low power'] },
         { id: 'header-smart-capture', tab: 'interface', label: 'Header Smart Capture', keywords: ['header', 'capture', 'quick capture'] },
         { id: 'alias-authority', tab: 'identity', label: 'OCR Alias Learning', keywords: ['alias', 'ocr', 'name', 'canonical', 'duplicate', 'former name'] },
         { id: 'ocr-engine', tab: 'ocr-capture', label: 'OCR Engine', keywords: ['ocr', 'cloud', 'local', 'gemini', 'hybrid'] },
@@ -499,7 +506,7 @@ const SettingsModalContent: React.FC = () => {
                     aria-modal="true"
                     aria-labelledby={dialogTitleId}
                     aria-describedby={dialogDescriptionId}
-                    className={`md3-dialog overflow-hidden ${isOverlayMode ? 'max-w-400px' : 'max-w-2xl'} w-full max-h-85vh flex flex-col ring-1 ring-md-sys-outline/10 shadow-2xl rounded-modal`}
+                    className={`md3-dialog overflow-hidden ${isOverlayMode ? 'max-w-400px' : 'max-w-5xl'} w-full max-h-85vh flex flex-col ring-1 ring-md-sys-outline/10 shadow-2xl rounded-modal`}
                     onClick={e => e.stopPropagation()}
                 >
                 {/* Modal Header */}
@@ -692,10 +699,11 @@ const SettingsModalContent: React.FC = () => {
 
                     {/* Appearance Section */}
                     {activeTab === 'interface' && (
-                        <section>
-                        <h3 className="text-label-sm font-bold uppercase tracking-wide opacity-60 flex items-center gap-2 mb-4">
-                            <Palette size={16} /> Appearance
-                        </h3>
+                        <section className="space-y-6">
+                        <SettingsSectionHeader
+                            title="Appearance"
+                            description="Set the accent and mode used across the app."
+                        />
 
                         {/* Theme Accent */}
                         <div className="md3-surface-high p-5 rounded-card mb-4 border border-md-sys-outline/10">
@@ -760,29 +768,10 @@ const SettingsModalContent: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Background URL */}
-                        <div className="md3-surface-high p-5 rounded-card mb-4 border border-md-sys-outline/10">
-                            <label className="text-label-sm font-semibold opacity-60 block mb-2">Background URL</label>
-                            <div className="flex gap-2">
-                                <Input
-                                    type="text"
-                                    value={customBgUrl}
-                                    onChange={(e) => setCustomBgUrl(e.target.value)}
-                                    placeholder="https://..."
-                                    className="flex-1 px-4 text-body"
-                                />
-                                {customBgUrl && (
-                                    <Button
-                                        variant="icon"
-                                        onClick={() => setCustomBgUrl('')}
-                                        className="w-10 h-10 text-danger"
-                                        aria-label="Clear background URL"
-                                    >
-                                        <X size={16} />
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
+                        <SettingsSectionHeader
+                            title="Interface"
+                            description="High-priority controls for the everyday desktop experience."
+                        />
 
                         {/* Toggles Grid */}
                         <div className="grid grid-cols-2 gap-4">
@@ -825,111 +814,13 @@ const SettingsModalContent: React.FC = () => {
                                         </button>
                                     </div>
                                 ))}
-                                <div className="flex justify-between items-center">
-                                    <div>
-                                        <span className="text-label-sm font-medium opacity-60 block">Telemetry Monitoring</span>
-                                        <span className="text-label-sm opacity-40 uppercase font-bold">
-                                            {enableAutoLogRecording ? 'Enabled' : 'Disabled'}
-                                        </span>
-                                    </div>
-                                    <button
-                                        onClick={() => setEnableAutoLogRecording(!enableAutoLogRecording)}
-                                        className={`w-11 h-6 rounded-full transition-colors ${enableAutoLogRecording ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
-                                    >
-                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${enableAutoLogRecording ? 'translate-x-5' : ''}`} />
-                                    </button>
-                                </div>
-                                <div className="text-label-sm text-md-sys-on-surface/55 -mt-2">
-                                    Reads Wildgate telemetry logs in the background to auto-fill match/session data.
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <div>
-                                        <span className="text-label-sm font-medium opacity-60 block">Startup Smart Preload</span>
-                                        <span className="text-label-sm opacity-40 uppercase font-bold">Avoid first-switch loading flashes</span>
-                                    </div>
-                                    <button
-                                        onClick={() => setStartupSmartPreloadEnabled(!startupSmartPreloadEnabled)}
-                                        className={`w-11 h-6 rounded-full transition-colors ${startupSmartPreloadEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
-                                    >
-                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${startupSmartPreloadEnabled ? 'translate-x-5' : ''}`} />
-                                    </button>
-                                </div>
-                                <div className="pt-2 border-t border-md-sys-outline/10 space-y-2">
-                                    <div>
-                                        <span className="text-label-sm font-medium opacity-60 block">Telemetry Performance</span>
-                                        <span className="text-label-sm opacity-40 uppercase font-bold">Monitoring load profile</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <span className="text-label-sm font-medium opacity-60 block">Adaptive Polling</span>
-                                            <span className="text-label-sm opacity-40 uppercase font-bold">{adaptiveTelemetryPollingEnabled ? 'Enabled by default' : 'Static profile only'}</span>
-                                        </div>
-                                        <button
-                                            onClick={() => setAdaptiveTelemetryPollingEnabled(!adaptiveTelemetryPollingEnabled)}
-                                            className={`w-11 h-6 rounded-full transition-colors ${adaptiveTelemetryPollingEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
-                                        >
-                                            <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${adaptiveTelemetryPollingEnabled ? 'translate-x-5' : ''}`} />
-                                        </button>
-                                    </div>
-                                    {adaptiveTelemetryPollingEnabled && (
-                                        <div className="text-label-sm text-md-sys-on-surface/55">
-                                            Idle/menu uses high accuracy, match start and end use balanced, and active matches drop to a 3-minute poll after 2 minutes.
-                                        </div>
-                                    )}
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {[
-                                            {
-                                                id: 'low-power' as TelemetryPerformanceProfile,
-                                                label: 'Low Power',
-                                                desc: 'Cooler, slower updates'
-                                            },
-                                            {
-                                                id: 'balanced' as TelemetryPerformanceProfile,
-                                                label: 'Balanced',
-                                                desc: 'Recommended default'
-                                            },
-                                            {
-                                                id: 'high-accuracy' as TelemetryPerformanceProfile,
-                                                label: 'High Accuracy',
-                                                desc: 'Faster, heavier polling'
-                                            },
-                                        ].map(opt => (
-                                            <button
-                                                key={opt.id}
-                                                onClick={() => setTelemetryPerformanceProfile(opt.id)}
-                                                disabled={adaptiveTelemetryPollingEnabled}
-                                                className={`p-2.5 rounded-control text-center transition-all ${telemetryPerformanceProfile === opt.id
-                                                    ? 'md3-btn-filled ring-2 ring-md-sys-primary/40'
-                                                    : 'md3-btn-outlined'
-                                                    } disabled:opacity-disabled`}
-                                                title={opt.desc}
-                                            >
-                                                <div className="text-label-sm font-bold">{opt.label}</div>
-                                                <div className="text-label-sm opacity-60">{opt.desc}</div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                    {!enableAutoLogRecording && (
-                                        <div className="text-label-sm text-md-sys-on-surface/55">
-                                            Auto Log Recording is currently off. The selected profile will apply when telemetry monitoring is enabled.
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex justify-between items-center pt-2 border-t border-md-sys-outline/10">
-                                    <div>
-                                        <span className="text-label-sm font-medium opacity-60 block">Developer Mode</span>
-                                        <span className="text-label-sm opacity-40 uppercase font-bold text-md-sys-error">Advanced</span>
-                                    </div>
-                                    <button
-                                        onClick={() => setDevMode(!devMode)}
-                                        className={`w-11 h-6 rounded-full transition-colors ${devMode ? 'bg-md-sys-error' : 'md3-surface-high'} relative`}
-                                    >
-                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${devMode ? 'translate-x-5' : ''}`} />
-                                    </button>
-                                </div>
                             </div>
                         </div>
-                        <div className="mt-4 md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
+                        <SettingsSectionHeader
+                            title="Interface Tools"
+                            description="Frequently used controls that stay near the top of the desktop workflow."
+                        />
+                        <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
                             <div className="flex justify-between items-center">
                                 <div>
                                     <span className="text-label-sm font-medium opacity-60 block">Header Smart Capture</span>
@@ -976,45 +867,116 @@ const SettingsModalContent: React.FC = () => {
                                 </button>
                             </div>
                         </div>
+                        <div>
+                            <SettingsSectionHeader
+                                title="Workspace Background"
+                                description="Optional background media for the standard desktop workspace."
+                            />
+                            <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
+                                <label className="text-label-sm font-semibold opacity-60 block mb-2">Background URL</label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        type="text"
+                                        value={customBgUrl}
+                                        onChange={(e) => setCustomBgUrl(e.target.value)}
+                                        placeholder="https://..."
+                                        className="flex-1 px-4 text-body"
+                                    />
+                                    {customBgUrl && (
+                                        <Button
+                                            variant="icon"
+                                            onClick={() => setCustomBgUrl('')}
+                                            className="w-10 h-10 text-danger"
+                                            aria-label="Clear background URL"
+                                        >
+                                            <X size={16} />
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                         </section>
                     )}
 
                     {/* Overlay Style Section */}
                     {activeTab === 'interface' && (
-                        <section className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
-                        <h3 className="text-label-sm font-bold uppercase tracking-wide opacity-60 flex items-center gap-2 mb-4">
-                            Overlay Style
-                        </h3>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button
-                                onClick={() => setOverlayStyle('compact')}
-                                className={`p-4 rounded-control text-center transition-all ${overlayStyle === 'compact' ? 'md3-btn-filled ring-2 ring-md-sys-primary/50' : 'md3-btn-outlined'}`}
-                            >
-                                <div className="text-body font-bold">Compact</div>
-                                <div className="text-label-sm opacity-60">Small opaque popup</div>
-                            </button>
-                            <button
-                                onClick={() => setOverlayStyle('transparent')}
-                                className={`p-4 rounded-control text-center transition-all ${overlayStyle === 'transparent' ? 'md3-btn-filled ring-2 ring-md-sys-primary/50' : 'md3-btn-outlined'}`}
-                            >
-                                <div className="text-body font-bold">Transparent</div>
-                                <div className="text-label-sm opacity-60">Float over game</div>
-                            </button>
+                        <section className="space-y-6">
+                        <div>
+                            <SettingsSectionHeader
+                                title="Overlay"
+                                description="Choose how the compact overlay sits over the game."
+                            />
+                            <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        onClick={() => setOverlayStyle('compact')}
+                                        className={`p-4 rounded-control text-center transition-all ${overlayStyle === 'compact' ? 'md3-btn-filled ring-2 ring-md-sys-primary/50' : 'md3-btn-outlined'}`}
+                                    >
+                                        <div className="text-body font-bold">Compact</div>
+                                        <div className="text-label-sm opacity-60">Small opaque popup</div>
+                                    </button>
+                                    <button
+                                        onClick={() => setOverlayStyle('transparent')}
+                                        className={`p-4 rounded-control text-center transition-all ${overlayStyle === 'transparent' ? 'md3-btn-filled ring-2 ring-md-sys-primary/50' : 'md3-btn-outlined'}`}
+                                    >
+                                        <div className="text-body font-bold">Transparent</div>
+                                        <div className="text-label-sm opacity-60">Float over game</div>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <SettingsSectionHeader
+                                title="Advanced Interface"
+                                description="Controls that affect startup responsiveness and developer workflows."
+                            />
+                            <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10 space-y-4">
+                                <div className="flex justify-between items-start gap-3">
+                                    <div className="min-w-0">
+                                        <span className="text-label-sm font-medium opacity-60 block">Startup Smart Preload</span>
+                                        <span className="text-label-sm text-md-sys-on-surface/55 block mt-1">Avoid first-switch loading flashes on heavy views.</span>
+                                    </div>
+                                    <button
+                                        onClick={() => setStartupSmartPreloadEnabled(!startupSmartPreloadEnabled)}
+                                        className={`w-11 h-6 rounded-full transition-colors shrink-0 ${startupSmartPreloadEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
+                                    >
+                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${startupSmartPreloadEnabled ? 'translate-x-5' : ''}`} />
+                                    </button>
+                                </div>
+                                <div className="pt-3 border-t border-md-sys-outline/10 flex justify-between items-start gap-3">
+                                    <div className="min-w-0">
+                                        <span className="text-label-sm font-medium opacity-60 block">Developer Mode</span>
+                                        <span className="text-label-sm opacity-40 uppercase font-bold text-md-sys-error">Advanced</span>
+                                    </div>
+                                    <button
+                                        onClick={() => setDevMode(!devMode)}
+                                        className={`w-11 h-6 rounded-full transition-colors shrink-0 ${devMode ? 'bg-md-sys-error' : 'md3-surface-high'} relative`}
+                                    >
+                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${devMode ? 'translate-x-5' : ''}`} />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         </section>
                     )}
 
                     {/* OCR Quick Setup */}
                     {activeTab === 'ocr-capture' && (
-                        <section className="md3-surface p-5 rounded-card border border-md-sys-outline/10">
-                        <div className="flex items-center justify-between mb-4">
-                            <div>
-                                <h3 className="text-label-lg font-bold text-md-sys-on-surface mb-1">Quick setup</h3>
-                                <p className="text-label-sm text-md-sys-on-surface/60">Most users only need these four OCR and capture decisions.</p>
-                            </div>
-                            <span className="text-label-xs font-bold uppercase tracking-wide text-md-sys-primary">Recommended first</span>
+                        <section className="space-y-3">
+                        <SettingsSectionHeader
+                            title="Capture"
+                            description="Most users only need these OCR and capture defaults."
+                        />
+                        <div className="md3-surface p-5 rounded-card border border-md-sys-outline/10">
+                        <div className="flex items-center justify-between gap-3 mb-4">
+                            <p className="text-label-sm text-md-sys-on-surface/60">Recommended defaults live here so you can tune OCR flow quickly without digging into advanced controls.</p>
+                            <span className="text-label-xs font-bold uppercase tracking-wide text-md-sys-primary shrink-0">Recommended first</span>
                         </div>
-                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                        <div
+                            data-testid="settings-quick-setup-grid"
+                            className="grid gap-3"
+                            style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(16rem, 1fr))' }}
+                        >
                             <button
                                 type="button"
                                 onClick={() => setCaptureMode(captureMode === 'auto' ? 'deferred' : 'auto')}
@@ -1061,24 +1023,28 @@ const SettingsModalContent: React.FC = () => {
                                 <div className="mt-1 text-label-sm text-md-sys-on-surface/60">Only use this when your capture framing is visibly off.</div>
                             </button>
                         </div>
-                        <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-3 py-2 text-label-sm text-md-sys-on-surface/60">
+                        <div className="mt-4 rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-3 text-left text-label-sm leading-relaxed text-md-sys-on-surface/60">
                             Advanced thresholds, learning policy, event rollback, and preload tuning stay below if you need finer OCR control.
+                        </div>
                         </div>
                         </section>
                     )}
 
                     {/* OCR Engine Section */}
                     {activeTab === 'ocr-capture' && (
-                        <section className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
-                        <div className="mb-4 rounded-control border border-warning/40 bg-warning-soft/35 px-3 py-2 text-label-sm text-warning">
+                        <section className="space-y-3">
+                        <SettingsSectionHeader
+                            title="Advanced OCR Tuning"
+                            description="Thresholds, learning policy, event rollback, and diagnostics."
+                        />
+                        <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
+                        <div className="mb-4 rounded-control border border-warning/40 bg-warning-soft/35 px-4 py-3 text-left text-label-sm leading-relaxed text-warning">
                             OCR is tuned for 1920 x 1080. Using other resolutions can lower accuracy unless you adjust OCR scan regions (ROI).
                         </div>
                         <div className="flex items-center justify-between mb-4">
                             <div>
-                                <h3 className="text-label-sm font-bold uppercase tracking-wide opacity-60 flex items-center gap-2">
-                                    Advanced OCR Tuning
-                                </h3>
-                                <div className="text-label-sm opacity-60">Thresholds, learning policy, event rollback, and diagnostics.</div>
+                                <div className="text-label-sm font-semibold text-md-sys-on-surface/70">Advanced controls</div>
+                                <div className="text-label-sm opacity-60">Expand only when you need deeper OCR behavior changes.</div>
                             </div>
                             <button
                                 type="button"
@@ -1369,13 +1335,18 @@ const SettingsModalContent: React.FC = () => {
                         </div>
                             </>
                         )}
+                        </div>
                         </section>
                     )}
 
                     {/* Capture Mode */}
                     {activeTab === 'ocr-capture' && (
-                        <section className="md3-surface-high p-4 rounded-card border border-md-sys-outline/10">
-                        <h3 className="text-body font-bold mb-3">Capture Defaults</h3>
+                        <section className="space-y-3">
+                        <SettingsSectionHeader
+                            title="Capture Defaults"
+                            description="Choose how screenshots and result-button OCR should behave by default."
+                        />
+                        <div className="md3-surface-high p-4 rounded-card border border-md-sys-outline/10">
                         <div className="grid grid-cols-2 gap-2">
                             {[
                                 { id: 'auto' as CaptureMode, label: 'Capture Now + Auto OCR', desc: 'Capture immediately, OCR runs automatically after a short pause' },
@@ -1433,15 +1404,99 @@ const SettingsModalContent: React.FC = () => {
                                 ))}
                             </div>
                         </div>
+                        </div>
                         </section>
                     )}
 
                     {/* Data & Updates Section - Full Mode Only */}
                     {activeTab === 'data' && !isOverlayMode && (
-                        <section>
-                            <h3 className="text-label-sm font-bold uppercase tracking-wide opacity-60 flex items-center gap-2 mb-4 mt-6">
-                                <FileJson size={16} /> Data & Updates
-                            </h3>
+                        <section className="space-y-6">
+                            <div>
+                                <SettingsSectionHeader
+                                    title="Telemetry & Monitoring"
+                                    description="Manage how Wildgate telemetry is monitored and how aggressively it polls."
+                                />
+                                <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10 space-y-4">
+                                    <div className="flex justify-between items-start gap-3">
+                                        <div className="min-w-0">
+                                            <span className="text-label-sm font-medium opacity-60 block">Telemetry Monitoring</span>
+                                            <span className="text-label-sm text-md-sys-on-surface/55 block mt-1">Reads Wildgate telemetry logs in the background to auto-fill match and session data.</span>
+                                        </div>
+                                        <button
+                                            onClick={() => setEnableAutoLogRecording(!enableAutoLogRecording)}
+                                            className={`w-11 h-6 rounded-full transition-colors shrink-0 ${enableAutoLogRecording ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
+                                        >
+                                            <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${enableAutoLogRecording ? 'translate-x-5' : ''}`} />
+                                        </button>
+                                    </div>
+                                    <div className="pt-3 border-t border-md-sys-outline/10 space-y-4">
+                                        <div className="flex justify-between items-start gap-3">
+                                            <div className="min-w-0">
+                                                <span className="text-label-sm font-medium opacity-60 block">Adaptive Polling</span>
+                                                <span className="text-label-sm text-md-sys-on-surface/55 block mt-1">{adaptiveTelemetryPollingEnabled ? 'Enabled by default' : 'Static profile only'}</span>
+                                            </div>
+                                            <button
+                                                onClick={() => setAdaptiveTelemetryPollingEnabled(!adaptiveTelemetryPollingEnabled)}
+                                                className={`w-11 h-6 rounded-full transition-colors shrink-0 ${adaptiveTelemetryPollingEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
+                                            >
+                                                <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${adaptiveTelemetryPollingEnabled ? 'translate-x-5' : ''}`} />
+                                            </button>
+                                        </div>
+                                        {adaptiveTelemetryPollingEnabled && (
+                                            <div className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-3 text-left text-label-sm leading-relaxed text-md-sys-on-surface/60">
+                                                Idle and menu states use high accuracy, match start and end use balanced, and active matches drop to a 3-minute poll after 2 minutes.
+                                            </div>
+                                        )}
+                                        <div>
+                                            <span className="text-label-sm font-medium opacity-60 block">Telemetry Performance</span>
+                                            <span className="text-label-sm text-md-sys-on-surface/55 block mt-1">Choose the monitoring load profile when adaptive polling is off.</span>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {[
+                                                {
+                                                    id: 'low-power' as TelemetryPerformanceProfile,
+                                                    label: 'Low Power',
+                                                    desc: 'Cooler, slower updates'
+                                                },
+                                                {
+                                                    id: 'balanced' as TelemetryPerformanceProfile,
+                                                    label: 'Balanced',
+                                                    desc: 'Recommended default'
+                                                },
+                                                {
+                                                    id: 'high-accuracy' as TelemetryPerformanceProfile,
+                                                    label: 'High Accuracy',
+                                                    desc: 'Faster, heavier polling'
+                                                },
+                                            ].map(opt => (
+                                                <button
+                                                    key={opt.id}
+                                                    onClick={() => setTelemetryPerformanceProfile(opt.id)}
+                                                    disabled={adaptiveTelemetryPollingEnabled}
+                                                    className={`p-2.5 rounded-control text-center transition-all ${telemetryPerformanceProfile === opt.id
+                                                        ? 'md3-btn-filled ring-2 ring-md-sys-primary/40'
+                                                        : 'md3-btn-outlined'
+                                                        } disabled:opacity-disabled`}
+                                                    title={opt.desc}
+                                                >
+                                                    <div className="text-label-sm font-bold">{opt.label}</div>
+                                                    <div className="text-label-sm opacity-60">{opt.desc}</div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                        {!enableAutoLogRecording && (
+                                            <div className="text-label-sm text-md-sys-on-surface/55">
+                                                Telemetry monitoring is currently off. The selected profile will apply when it is enabled again.
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <SettingsSectionHeader
+                                    title="Data & Updates"
+                                    description="Backups, exports, diagnostics, and app maintenance tools."
+                                />
                             <div className="md3-surface-high p-4 rounded-card mb-4 flex items-center justify-between border border-md-sys-outline/10">
                                 <div>
                                     <div className="text-body font-bold">Auto Backup</div>
@@ -1540,6 +1595,7 @@ const SettingsModalContent: React.FC = () => {
                                         Check for Updates
                                     </button>
                                 )}
+                            </div>
                             </div>
                         </section>
                     )}
