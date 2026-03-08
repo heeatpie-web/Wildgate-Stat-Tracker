@@ -1274,7 +1274,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                     aria-describedby={isHelpBannerDismissed ? undefined : dialogDescriptionId}
                     className={embedded
                         ? 'ocr-correction-dialog ocr-correction-dialog--embedded w-full h-full min-h-0 flex flex-col overflow-hidden'
-                        : 'ocr-correction-dialog md3-dialog rounded-modal w-full max-w-2xl h-[85vh] max-h-85vh my-2 flex flex-col animate-scale-in overflow-hidden'}
+                        : 'ocr-correction-dialog md3-dialog rounded-modal w-full max-w-7xl h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] my-2 flex flex-col animate-scale-in overflow-hidden'}
                     onClick={e => e.stopPropagation()}
                 >
                     {/* Header */}

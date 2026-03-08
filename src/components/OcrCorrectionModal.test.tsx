@@ -98,6 +98,18 @@ describe('OcrCorrectionModal', () => {
         expect(screen.getByText(/ocr review/i)).toBeInTheDocument();
     });
 
+    it('uses the widened standalone OCR review dialog shell', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        const dialog = document.querySelector('.ocr-correction-dialog');
+        expect(dialog).not.toBeNull();
+        expect(dialog).toHaveClass('max-w-7xl');
+    });
+
     it('supports ignore and undo-ignore actions for detected players', async () => {
         const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
         const onClose = vi.fn();

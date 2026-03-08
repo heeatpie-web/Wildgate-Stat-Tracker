@@ -807,7 +807,7 @@ export const Wizard: React.FC = () => {
                 aria-labelledby={titleId}
                 aria-describedby={descriptionId}
                 tabIndex={-1}
-                className={`wizard-shell overflow-hidden rounded-2_5rem w-full my-2 shadow-2xl flex flex-col animate-scale-in border border-md-sys-outline/24 bg-md-sys-surface-container-highest text-md-sys-on-surface ${isOverlayMode ? 'max-w-2xl h-[calc(100vh-2rem)] max-h-90vh' : 'max-w-3xl h-[calc(100vh-2rem)] max-h-95vh'}`}
+                className={`wizard-shell overflow-hidden rounded-2_5rem w-full my-2 shadow-2xl flex flex-col animate-scale-in border border-md-sys-outline/24 bg-md-sys-surface-container-highest text-md-sys-on-surface ${isOverlayMode ? 'max-w-7xl h-[calc(100vh-2rem)] max-h-90vh' : 'max-w-7xl h-[calc(100vh-2rem)] max-h-95vh'}`}
                 onClick={e => e.stopPropagation()}
             >
                 <span id={descriptionId} className="sr-only">

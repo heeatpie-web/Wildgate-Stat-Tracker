@@ -469,7 +469,7 @@ describe('Wizard', () => {
         expect(dialog).toHaveAttribute('aria-describedby');
     });
 
-    it('closes the wizard on Escape key', async () => {
+  it('closes the wizard on Escape key', async () => {
         const { Wizard } = await import('./Wizard');
         gameData.pendingMatchData = {
             id: 909,
@@ -488,6 +488,27 @@ describe('Wizard', () => {
         fireEvent.keyDown(document, { key: 'Escape' });
 
         expect(uiState.setShowWizard).toHaveBeenCalledWith(null);
+    });
+
+  it('renders the widened wizard shell', async () => {
+        const { Wizard } = await import('./Wizard');
+        gameData.pendingMatchData = {
+            id: 908,
+            loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                weapons: [],
+                equipment: [],
+            },
+            kills: { 'AI Legion': 0 },
+        };
+        uiState.showWizard = 'Match Result';
+
+        const { container } = render(<Wizard />);
+        const shell = container.querySelector('.wizard-shell');
+
+        expect(shell).not.toBeNull();
+        expect(shell).toHaveClass('max-w-7xl');
     });
 
   it('keeps OCR review tab in a non-clipping flex layout chain', async () => {
