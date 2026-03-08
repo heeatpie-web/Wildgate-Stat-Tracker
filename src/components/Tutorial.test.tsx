@@ -42,6 +42,7 @@ describe('Tutorial', () => {
     render(<Tutorial onComplete={vi.fn()} onSkip={vi.fn()} />);
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveClass('tutorial-tooltip');
   });
 
   it('closes tutorial via Escape', () => {

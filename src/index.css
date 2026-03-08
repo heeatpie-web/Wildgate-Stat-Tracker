@@ -968,13 +968,13 @@ body[data-mode='twilight'] .sc-queue-item__title {
 }
 
 body[data-mode='twilight'] .sc-queue-item--rich {
-  background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), transparent 12%);
-  border-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 54%);
+  background: transparent;
+  border-bottom-color: color-mix(in srgb, var(--md-sys-color-outline), transparent 56%);
   /* No backdrop-filter on individual items — causes scroll jank */
 }
 
 body[data-mode='twilight'] .sc-queue-item--rich:hover {
-  background: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 92%);
+  background: color-mix(in srgb, var(--md-sys-color-on-surface), transparent 94%);
 }
 
 .sc-player-chip {

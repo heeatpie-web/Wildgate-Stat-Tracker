@@ -309,7 +309,7 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
     if (!isTransparent) {
         return (
             <>
-                <div className="h-screen w-full flex flex-col overflow-hidden animate-fade-in md3-card border border-md-sys-outline/20 rounded-modal shadow-2xl">
+                <div className="twilight-solid-scope twilight-soft-shadows h-screen w-full flex flex-col overflow-hidden animate-fade-in md3-card border border-md-sys-outline/20 rounded-modal shadow-2xl">
                     <div
                         className="h-10 flex items-center justify-between px-3 shrink-0 select-none bg-md-sys-surface-container-high/80 border-b border-md-sys-outline/10"
                         style={{ WebkitAppRegion: 'drag' } as any}
@@ -414,7 +414,7 @@ export const OverlayView: React.FC<OverlayViewProps> = ({ onSmartCaptureData }) 
     };
 
     return (
-        <div className="h-screen w-full flex flex-col pointer-events-none relative animate-fade-in border border-transparent hover:border-md-sys-outline/20 transition-colors rounded-modal overflow-hidden">
+        <div className="twilight-solid-scope twilight-soft-shadows h-screen w-full flex flex-col pointer-events-none relative animate-fade-in border border-transparent hover:border-md-sys-outline/20 transition-colors rounded-modal overflow-hidden">
             <div className="flex-1 flex flex-col items-center p-2 pointer-events-none relative z-10">
                 <div
                     className="pointer-events-auto mt-2 w-full min-w-300px max-w-2xl flex flex-col mg-surface-high border border-md-sys-outline/20 rounded-card shadow-2xl overflow-hidden"

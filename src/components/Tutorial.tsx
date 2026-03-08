@@ -275,7 +275,7 @@ const Tutorial: React.FC<TutorialProps> = ({ onComplete, onSkip }) => {
                 aria-modal="true"
                 aria-labelledby={dialogTitleId}
                 aria-describedby={dialogDescriptionId}
-                className="absolute w-320px max-w-screen-minus-32 md3-card bg-md-sys-surface-container-highest text-md-sys-on-surface rounded-2xl border border-md-sys-outline/20 shadow-2xl p-4 pointer-events-auto"
+                className="tutorial-tooltip absolute w-320px max-w-screen-minus-32 md3-card bg-md-sys-surface-container-highest text-md-sys-on-surface rounded-2xl border border-md-sys-outline/20 shadow-2xl p-4 pointer-events-auto"
                 style={tooltipInlineStyle}
             >
                 <div className="flex items-start justify-between gap-3">
