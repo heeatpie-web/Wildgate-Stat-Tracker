@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { FileJson, Save, Download, RefreshCw, X, Check, Search, Upload, Copy, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, FileJson, Save, Download, RefreshCw, X, Check, Search, Upload, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 import { useUserPreferences } from '../providers/UserPreferencesProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
@@ -27,12 +27,74 @@ import OcrRegionEditorModal from './OcrRegionEditorModal';
 
 
 type SettingsTabId = 'identity' | 'interface' | 'ocr-capture' | 'data';
+type SettingsSectionId =
+    | 'appearance'
+    | 'interface'
+    | 'interface-tools'
+    | 'workspace-background'
+    | 'overlay'
+    | 'advanced-interface'
+    | 'ocr-alias-learning'
+    | 'capture'
+    | 'advanced-ocr-tuning'
+    | 'capture-defaults'
+    | 'telemetry-monitoring'
+    | 'data-updates';
 type DashboardStatView = 'analytics' | 'history' | 'smart-captures' | 'players' | 'dev-ocr';
 interface SettingsFocusSectionRequest {
     tab?: SettingsTabId;
     search?: string;
 }
 const SETTINGS_FOCUS_SECTION_STORAGE_KEY = 'wg_settings_focus_section_v1';
+const SETTINGS_EXIT_TRANSITION_MS = 220;
+const DEFAULT_SECTION_BY_TAB: Record<SettingsTabId, SettingsSectionId> = {
+    interface: 'appearance',
+    identity: 'ocr-alias-learning',
+    'ocr-capture': 'capture',
+    data: 'telemetry-monitoring',
+};
+const SETTINGS_SECTION_GROUPS: Array<{
+    id: string;
+    label: string;
+    items: Array<{ id: SettingsSectionId; label: string; description: string }>;
+}> = [
+    {
+        id: 'interface',
+        label: 'Interface',
+        items: [
+            { id: 'appearance', label: 'Appearance', description: 'Theme accent, mode, and visual tone.' },
+            { id: 'interface', label: 'Interface', description: 'Everyday desktop toggles and high-traffic controls.' },
+            { id: 'interface-tools', label: 'Interface Tools', description: 'Header capture access, tips, and tutorial controls.' },
+            { id: 'workspace-background', label: 'Workspace Background', description: 'Optional background media for the desktop workspace.' },
+            { id: 'overlay', label: 'Overlay', description: 'Compact overlay presentation while in game.' },
+            { id: 'advanced-interface', label: 'Advanced Interface', description: 'Startup preload and developer-facing interface options.' },
+        ],
+    },
+    {
+        id: 'identity',
+        label: 'Identity',
+        items: [
+            { id: 'ocr-alias-learning', label: 'OCR Alias Learning', description: 'Canonical player-name mappings and learned OCR variants.' },
+        ],
+    },
+    {
+        id: 'ocr-capture',
+        label: 'OCR / Capture',
+        items: [
+            { id: 'capture', label: 'Capture', description: 'Recommended smart-capture and OCR setup controls.' },
+            { id: 'advanced-ocr-tuning', label: 'Advanced OCR Tuning', description: 'Thresholds, learning policy, preload tuning, and history.' },
+            { id: 'capture-defaults', label: 'Capture Defaults', description: 'Default behavior for screenshots and result-button OCR.' },
+        ],
+    },
+    {
+        id: 'data',
+        label: 'Data',
+        items: [
+            { id: 'telemetry-monitoring', label: 'Telemetry & Monitoring', description: 'Telemetry polling, monitoring, and performance behavior.' },
+            { id: 'data-updates', label: 'Data & Updates', description: 'Backups, exports, diagnostics, and app maintenance tools.' },
+        ],
+    },
+];
 
 const SettingsSectionHeader: React.FC<{ title: string; description?: string }> = ({ title, description }) => (
     <div className="mb-3">
@@ -190,6 +252,17 @@ const SettingsModalContent: React.FC = () => {
         });
     };
 
+    const [saved, setSaved] = useState(false);
+    const [activeSection, setActiveSection] = useState<SettingsSectionId>('appearance');
+    const [settingsSearch, setSettingsSearch] = useState('');
+    const [isPresent, setIsPresent] = useState(showSettings && !isOverlayMode);
+    const dialogTitleId = useId();
+    const dialogDescriptionId = useId();
+    const focusTrapRef = useFocusTrap<HTMLDivElement>(showSettings && !isOverlayMode);
+    useKeyboardShortcuts([
+        { key: 'Escape', handler: () => setShowSettings(false) },
+    ], showSettings && !isOverlayMode);
+
     useEffect(() => {
         if (!showSettings) {
             setShowRoiEditor(false);
@@ -198,25 +271,33 @@ const SettingsModalContent: React.FC = () => {
         }
     }, [showSettings]);
 
-    const [saved, setSaved] = useState(false);
-    const [activeTab, setActiveTab] = useState<SettingsTabId>('interface');
-    const [settingsSearch, setSettingsSearch] = useState('');
-    const dialogTitleId = useId();
-    const dialogDescriptionId = useId();
-    const focusTrapRef = useFocusTrap<HTMLDivElement>(showSettings);
-    useKeyboardShortcuts([
-        { key: 'Escape', handler: () => setShowSettings(false) },
-    ], showSettings);
     useEffect(() => {
-        if (isOverlayMode && activeTab === 'data') {
-            setActiveTab('interface');
+        if (!isOverlayMode) return;
+        if (showSettings) {
+            setShowSettings(false);
         }
-    }, [activeTab, isOverlayMode]);
+    }, [isOverlayMode, setShowSettings, showSettings]);
+
+    useEffect(() => {
+        if (showSettings && !isOverlayMode) {
+            setIsPresent(true);
+            return;
+        }
+        if (!isPresent) return;
+        const timeoutId = window.setTimeout(() => setIsPresent(false), SETTINGS_EXIT_TRANSITION_MS);
+        return () => window.clearTimeout(timeoutId);
+    }, [isOverlayMode, isPresent, showSettings]);
+
+    useEffect(() => {
+        if (activeSection === 'advanced-ocr-tuning') {
+            setShowAdvancedOcrSettings(true);
+        }
+    }, [activeSection]);
 
     const applyFocusSectionRequest = useCallback((request: SettingsFocusSectionRequest | null) => {
         if (!request) return;
         if (request.tab) {
-            setActiveTab(request.tab);
+            setActiveSection(DEFAULT_SECTION_BY_TAB[request.tab]);
         }
         if (typeof request.search === 'string') {
             setSettingsSearch(request.search);
@@ -399,31 +480,26 @@ const SettingsModalContent: React.FC = () => {
         }
     };
 
-    const settingsTabs: Array<{ id: SettingsTabId; label: string }> = isOverlayMode
-        ? [
-            { id: 'interface', label: 'Interface' },
-            { id: 'identity', label: 'Identity' },
-            { id: 'ocr-capture', label: 'OCR/Capture' },
-        ]
-        : [
-            { id: 'interface', label: 'Interface' },
-            { id: 'identity', label: 'Identity' },
-            { id: 'ocr-capture', label: 'OCR/Capture' },
-            { id: 'data', label: 'Data' },
-        ];
-    const settingsSearchEntries: Array<{ id: string; tab: SettingsTabId; label: string; keywords: string[] }> = [
-        { id: 'theme-accent', tab: 'interface', label: 'Theme Accent', keywords: ['theme', 'accent', 'color', 'appearance', 'hue'] },
-        { id: 'appearance-mode', tab: 'interface', label: 'Appearance Mode', keywords: ['dark', 'light', 'twilight', 'system'] },
-        { id: 'sound-effects', tab: 'interface', label: 'Sound Effects', keywords: ['sound', 'audio', 'toggle', 'cue'] },
-        { id: 'telemetry-performance', tab: 'data', label: 'Telemetry Performance', keywords: ['telemetry', 'performance', 'polling', 'load', 'high accuracy', 'low power'] },
-        { id: 'header-smart-capture', tab: 'interface', label: 'Header Smart Capture', keywords: ['header', 'capture', 'quick capture'] },
-        { id: 'alias-authority', tab: 'identity', label: 'OCR Alias Learning', keywords: ['alias', 'ocr', 'name', 'canonical', 'duplicate', 'former name'] },
-        { id: 'ocr-engine', tab: 'ocr-capture', label: 'OCR Engine', keywords: ['ocr', 'cloud', 'local', 'gemini', 'hybrid'] },
-        { id: 'capture-flow', tab: 'ocr-capture', label: 'Capture Mode', keywords: ['capture', 'deferred', 'auto', 'workflow'] },
-        { id: 'ocr-roi', tab: 'ocr-capture', label: 'OCR Scan Regions (ROI)', keywords: ['roi', 'region', 'hazard', 'players', 'map'] },
-        { id: 'backup-db', tab: 'data', label: 'Backup Database', keywords: ['backup', 'db', 'export'] },
-        { id: 'copy-logs', tab: 'data', label: 'Copy Logs', keywords: ['logs', 'errors', 'diagnostics', 'support'] },
-        { id: 'updates', tab: 'data', label: 'App Updates', keywords: ['update', 'version', 'download', 'restart'] },
+    const settingsSections = SETTINGS_SECTION_GROUPS.flatMap((group) =>
+        group.items.map((item) => ({
+            ...item,
+            groupLabel: group.label,
+        }))
+    );
+    const activeSectionMeta = settingsSections.find((section) => section.id === activeSection) || settingsSections[0];
+    const settingsSearchEntries: Array<{ id: string; section: SettingsSectionId; label: string; keywords: string[] }> = [
+        { id: 'theme-accent', section: 'appearance', label: 'Theme Accent', keywords: ['theme', 'accent', 'color', 'appearance', 'hue'] },
+        { id: 'appearance-mode', section: 'appearance', label: 'Appearance Mode', keywords: ['dark', 'light', 'twilight', 'system'] },
+        { id: 'sound-effects', section: 'interface', label: 'Sound Effects', keywords: ['sound', 'audio', 'toggle', 'cue'] },
+        { id: 'telemetry-performance', section: 'telemetry-monitoring', label: 'Telemetry Performance', keywords: ['telemetry', 'performance', 'polling', 'load', 'high accuracy', 'low power'] },
+        { id: 'header-smart-capture', section: 'interface-tools', label: 'Header Smart Capture', keywords: ['header', 'capture', 'quick capture'] },
+        { id: 'alias-authority', section: 'ocr-alias-learning', label: 'OCR Alias Learning', keywords: ['alias', 'ocr', 'name', 'canonical', 'duplicate', 'former name'] },
+        { id: 'ocr-engine', section: 'advanced-ocr-tuning', label: 'Advanced OCR Tuning', keywords: ['ocr', 'cloud', 'local', 'gemini', 'hybrid'] },
+        { id: 'capture-flow', section: 'capture-defaults', label: 'Capture Mode', keywords: ['capture', 'deferred', 'auto', 'workflow'] },
+        { id: 'ocr-roi', section: 'capture', label: 'OCR Scan Regions (ROI)', keywords: ['roi', 'region', 'hazard', 'players', 'map'] },
+        { id: 'backup-db', section: 'data-updates', label: 'Backup Database', keywords: ['backup', 'db', 'export'] },
+        { id: 'copy-logs', section: 'data-updates', label: 'Copy Logs', keywords: ['logs', 'errors', 'diagnostics', 'support'] },
+        { id: 'updates', section: 'data-updates', label: 'App Updates', keywords: ['update', 'version', 'download', 'restart'] },
     ];
     const normalizedSettingsSearch = settingsSearch.trim().toLowerCase();
     const settingsSearchResults = normalizedSettingsSearch.length === 0
@@ -433,7 +509,6 @@ const SettingsModalContent: React.FC = () => {
                 entry.label.toLowerCase().includes(normalizedSettingsSearch) ||
                 entry.keywords.some((keyword) => keyword.includes(normalizedSettingsSearch))
             ))
-            .filter((entry) => !isOverlayMode || entry.tab !== 'data')
             .slice(0, 8);
 
     const rawLearnedAliases = Object.values(ocrAliasModel.entries || {}).flat();
@@ -497,101 +572,148 @@ const SettingsModalContent: React.FC = () => {
         });
     }, [setOcrRegions]);
 
+    if (!isPresent) return null;
+
     return (
         <>
-            <div className="fixed inset-0 z-modal md3-dialog-scrim flex items-center justify-center p-4" onClick={() => setShowSettings(false)}>
+            <div className="fixed inset-0 z-modal overflow-hidden">
+                <div className={`absolute inset-0 bg-md-sys-background/88 backdrop-blur-sm transition-opacity duration-200 ${showSettings && !isOverlayMode ? 'opacity-100' : 'opacity-0'}`} />
                 <div
                     ref={focusTrapRef}
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby={dialogTitleId}
                     aria-describedby={dialogDescriptionId}
-                    className="md3-dialog overflow-hidden max-w-7xl w-full max-h-85vh flex flex-col ring-1 ring-md-sys-outline/10 shadow-2xl rounded-modal"
-                    onClick={e => e.stopPropagation()}
+                    className={`relative h-full w-full transition-all duration-200 ${showSettings && !isOverlayMode ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-3 scale-[0.985] pointer-events-none'}`}
                 >
-                {/* Modal Header */}
-                <div className="flex justify-between items-center p-5 border-b border-md-sys-outline/10">
-                    <h2 id={dialogTitleId} className="text-title font-bold">Settings</h2>
-                    <button
-                        onClick={() => setShowSettings(false)}
-                        className="md3-icon-btn w-10 h-10"
-                        aria-label="Close settings"
-                    >
-                        <X size={18} />
-                    </button>
-                </div>
-                <p id={dialogDescriptionId} className="a11y-sr-only">
-                    App settings dialog. Use Tab to navigate sections and Escape to close.
-                </p>
-
-                <div className="px-5 py-3 border-b border-md-sys-outline/10">
-                    <div className={`grid gap-2 ${settingsTabs.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
-                        {settingsTabs.map(tab => (
-                            <button
-                                key={tab.id}
-                                type="button"
-                                onClick={() => setActiveTab(tab.id)}
-                                aria-pressed={activeTab === tab.id}
-                                className={`h-9 rounded-control text-label-sm font-bold uppercase tracking-wide transition-all ${activeTab === tab.id
-                                    ? 'md3-btn-filled ring-2 ring-md-sys-primary/40'
-                                    : 'md3-btn-tonal opacity-70 hover:opacity-100'
-                                    }`}
-                            >
-                                {tab.label}
-                            </button>
-                        ))}
-                    </div>
-                    <div className="mt-3">
-                        <div className="md3-surface-high rounded-control border border-md-sys-outline/10 h-10 px-3 flex items-center gap-2">
-                            <Search size={14} className="opacity-50" />
-                            <input
-                                type="text"
-                                value={settingsSearch}
-                                onChange={(event) => setSettingsSearch(event.target.value)}
-                                placeholder="Search settings..."
-                                className="flex-1 bg-transparent text-label-sm outline-none placeholder:opacity-40"
-                            />
-                            {settingsSearch && (
+                    <div className="flex h-full flex-col bg-md-sys-background/98">
+                        <div className="border-b border-md-sys-outline/10 px-6 py-5">
+                            <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-4 min-w-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowSettings(false)}
+                                        className="md3-btn-outlined h-10 px-4 text-label-sm font-bold uppercase tracking-wide inline-flex items-center gap-2 shrink-0"
+                                        aria-label="Back to app"
+                                    >
+                                        <ArrowLeft size={16} />
+                                        Back
+                                    </button>
+                                    <div className="min-w-0">
+                                        <div className="text-label-xs font-bold uppercase tracking-widest text-md-sys-primary/80">{activeSectionMeta?.groupLabel || 'Settings'}</div>
+                                        <h2 id={dialogTitleId} className="text-title font-bold text-md-sys-on-surface">Settings</h2>
+                                    </div>
+                                </div>
                                 <button
-                                    type="button"
-                                    onClick={() => setSettingsSearch('')}
-                                    className="opacity-60 hover:opacity-100"
-                                    aria-label="Clear settings search"
+                                    onClick={handleSaveAndClose}
+                                    disabled={saved}
+                                    className={`h-10 px-4 rounded-card font-bold uppercase tracking-wide transition-all inline-flex items-center justify-center gap-2 shrink-0 ${saved
+                                        ? 'md3-btn-filled bg-success text-on-scrim'
+                                        : 'md3-btn-filled'
+                                        }`}
                                 >
-                                    <X size={12} />
+                                    {saved ? (
+                                        <><Check size={16} /> Saved!</>
+                                    ) : (
+                                        <><Save size={16} /> Save &amp; Apply</>
+                                    )}
                                 </button>
-                            )}
-                        </div>
-                        {normalizedSettingsSearch && (
-                            <div className="mt-2 md3-surface rounded-control border border-md-sys-outline/10 p-2 max-h-28 overflow-y-auto custom-scrollbar space-y-1">
-                                {settingsSearchResults.length > 0 ? (
-                                    settingsSearchResults.map((entry) => (
-                                        <button
-                                            key={entry.id}
-                                            type="button"
-                                            onClick={() => {
-                                                setActiveTab(entry.tab);
-                                                setSettingsSearch('');
-                                            }}
-                                            className="w-full text-left px-2 py-1.5 rounded-control text-label-sm hover:bg-md-sys-on-surface/10 transition-colors"
-                                        >
-                                            <span className="font-semibold">{entry.label}</span>
-                                            <span className="ml-2 opacity-55 uppercase text-label-xs">{entry.tab}</span>
-                                        </button>
-                                    ))
-                                ) : (
-                                    <div className="px-2 py-1.5 text-label-sm opacity-60">No matching setting sections.</div>
-                                )}
                             </div>
-                        )}
-                    </div>
-                </div>
+                            <p id={dialogDescriptionId} className="a11y-sr-only">
+                                App settings screen. Use Tab to navigate sections and Escape to return to the app.
+                            </p>
+                        </div>
 
-                {/* Modal Content - Scrollable */}
-                <div className="flex-1 overflow-y-auto p-5 space-y-6 custom-scrollbar">
+                        <div className="flex-1 min-h-0 p-5">
+                            <div className="grid h-full grid-cols-[240px_minmax(0,1fr)] gap-5 xl:grid-cols-[260px_minmax(0,1fr)]">
+                                <aside className="min-h-0 rounded-card border border-md-sys-outline/10 bg-md-sys-surface-container-low px-4 py-4 flex flex-col">
+                                    <div className="md3-surface-high rounded-control border border-md-sys-outline/10 h-10 px-3 flex items-center gap-2 shrink-0">
+                                        <Search size={14} className="opacity-50" />
+                                        <input
+                                            type="text"
+                                            value={settingsSearch}
+                                            onChange={(event) => setSettingsSearch(event.target.value)}
+                                            placeholder="Search settings..."
+                                            className="flex-1 bg-transparent text-label-sm outline-none placeholder:opacity-40"
+                                        />
+                                        {settingsSearch && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setSettingsSearch('')}
+                                                className="opacity-60 hover:opacity-100"
+                                                aria-label="Clear settings search"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        )}
+                                    </div>
+                                    {normalizedSettingsSearch && (
+                                        <div className="mt-3 md3-surface rounded-control border border-md-sys-outline/10 p-2 max-h-32 overflow-y-auto custom-scrollbar space-y-1 shrink-0">
+                                            {settingsSearchResults.length > 0 ? (
+                                                settingsSearchResults.map((entry) => (
+                                                    <button
+                                                        key={entry.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setActiveSection(entry.section);
+                                                            setSettingsSearch('');
+                                                        }}
+                                                        className="w-full text-left px-2 py-1.5 rounded-control text-label-sm hover:bg-md-sys-on-surface/10 transition-colors"
+                                                    >
+                                                        <span className="font-semibold">{entry.label}</span>
+                                                        <span className="ml-2 opacity-55 uppercase text-label-xs">{entry.section}</span>
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <div className="px-2 py-1.5 text-label-sm opacity-60">No matching setting sections.</div>
+                                            )}
+                                        </div>
+                                    )}
+                                    <div className="mt-4 min-h-0 overflow-y-auto custom-scrollbar pr-1 space-y-4">
+                                        {SETTINGS_SECTION_GROUPS.map((group) => (
+                                            <div key={group.id}>
+                                                <div className="px-2 text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/45 mb-2">{group.label}</div>
+                                                <div className="space-y-1">
+                                                    {group.items.map((section) => {
+                                                        const active = activeSection === section.id;
+                                                        return (
+                                                            <button
+                                                                key={section.id}
+                                                                type="button"
+                                                                onClick={() => setActiveSection(section.id)}
+                                                                aria-current={active ? 'page' : undefined}
+                                                                className={`w-full rounded-card px-3 py-3 text-left transition-all ${active
+                                                                    ? 'bg-md-sys-primary text-md-sys-on-primary shadow-md'
+                                                                    : 'md3-surface-high text-md-sys-on-surface hover:bg-md-sys-on-surface/8'
+                                                                    }`}
+                                                            >
+                                                                <div className="text-label-sm font-bold">{section.label}</div>
+                                                                <div className={`mt-1 text-label-xs leading-relaxed ${active ? 'text-md-sys-on-primary/80' : 'text-md-sys-on-surface/55'}`}>{section.description}</div>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </aside>
+
+                                <div className="min-h-0 rounded-card border border-md-sys-outline/10 bg-md-sys-surface p-5 overflow-hidden">
+                                    <div className="flex items-start justify-between gap-4 border-b border-md-sys-outline/10 pb-4 mb-5">
+                                        <div className="min-w-0">
+                                            <div className="text-label-xs font-bold uppercase tracking-widest text-md-sys-primary/80">{activeSectionMeta?.groupLabel || 'Settings'}</div>
+                                            <h3 className="text-title font-bold tracking-tight text-md-sys-on-surface mt-1">{activeSectionMeta?.label || 'Settings'}</h3>
+                                            <p className="mt-1 text-label-sm text-md-sys-on-surface/60">{activeSectionMeta?.description || 'Adjust how the app looks, captures, and stores match data.'}</p>
+                                        </div>
+                                        <div className="text-right text-label-xs font-semibold uppercase tracking-wide text-md-sys-on-surface/45 shrink-0">
+                                            Back returns to the current app state
+                                        </div>
+                                    </div>
+
+                                    <div className="h-full overflow-y-auto pr-1 custom-scrollbar">
 
                     {/* Alias & authority (primary) */}
-                    {activeTab === 'identity' && (
+                    {activeSection === 'ocr-alias-learning' && (
                         <section className="md3-surface p-5 rounded-card border border-md-sys-outline/10">
                         <h3 className="text-label-lg font-bold text-md-sys-on-surface mb-1">OCR alias learning</h3>
                         <p className="text-body text-md-sys-on-surface/60 mb-1">
@@ -695,179 +817,180 @@ const SettingsModalContent: React.FC = () => {
                             )}
                         </div>
                         </section>
-                    )}
-
-                    {/* Appearance Section */}
-                    {activeTab === 'interface' && (
+                    )}                    {/* Appearance Section */}
+                    {activeSection === 'appearance' && (
                         <section className="space-y-6">
-                        <SettingsSectionHeader
-                            title="Appearance"
-                            description="Set the accent and mode used across the app."
-                        />
+                            <SettingsSectionHeader
+                                title="Appearance"
+                                description="Set the accent and mode used across the app."
+                            />
 
-                        {/* Theme Accent */}
-                        <div className="md3-surface-high p-5 rounded-card mb-4 border border-md-sys-outline/10">
-                            <label className="text-label-sm font-semibold opacity-60 block mb-3">Theme Accent</label>
-                            <div className="grid grid-cols-4 gap-2">
-                                {[
-                                    { id: 'ocean', c: 'var(--theme-ocean)' }, { id: 'emerald', c: 'var(--theme-emerald)' },
-                                    { id: 'terracotta', c: 'var(--theme-terracotta)' }, { id: 'amber', c: 'var(--theme-amber)' },
-                                    { id: 'amethyst', c: 'var(--theme-amethyst)' }, { id: 'cyan', c: 'var(--theme-cyan)' },
-                                    { id: 'grayscale', c: 'var(--theme-grayscale)' }
-                                ].map(th => (
-                                    <button
-                                        key={th.id}
-                                        onClick={() => setColorTheme(th.id)}
-                                        className={`h-10 rounded-control transition-all ${colorTheme === th.id ? 'ring-2 ring-md-sys-primary/60' : 'opacity-60 hover:opacity-100'}`}
-                                        style={{ backgroundColor: th.c }}
-                                    />
-                                ))}
-                                <button
-                                    onClick={() => setColorTheme('custom')}
-                                    className={`h-10 rounded-control text-label-sm font-bold transition-all ${colorTheme === 'custom' ? 'md3-btn-filled' : 'md3-btn-tonal'}`}
-                                >
-                                    Custom
-                                </button>
-                            </div>
-                            {colorTheme === 'custom' && (
-                                <div className="mt-4 flex items-center gap-3">
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="360"
-                                        value={customHue}
-                                        onChange={(e) => { setCustomHue(e.target.value); localStorage.setItem('wg_custom_hue', e.target.value); }}
-                                        className="flex-1 h-2 bg-gradient-to-r from-red-500 via-green-500 to-blue-500 rounded-full appearance-none cursor-pointer"
-                                    />
-                                    <div
-                                        className="w-8 h-8 rounded-full border-2 border-frost-050 shadow-lg"
-                                        style={{ backgroundColor: `hsl(${customHue}, 50%, 50%)` }}
-                                    />
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="md3-surface-high p-5 rounded-card mb-4 border border-md-sys-outline/10">
-                            <label className="text-label-sm font-semibold opacity-60 block mb-3">Appearance Mode</label>
-                            <div className="grid grid-cols-4 gap-2">
-                                {([
-                                    { id: 'light', label: 'Light' },
-                                    { id: 'dark', label: 'Dark' },
-                                    { id: 'twilight', label: 'Twilight' },
-                                    { id: 'system', label: 'System' },
-                                ] as const).map(opt => (
-                                    <Button
-                                        key={opt.id}
-                                        onClick={() => setAppearanceMode(opt.id)}
-                                        variant={appearanceMode === opt.id ? 'primary' : 'secondary'}
-                                        className={`h-10 text-label-sm font-bold uppercase tracking-wide ${appearanceMode === opt.id ? '' : 'opacity-60 hover:opacity-100'}`}
-                                    >
-                                        {opt.label}
-                                    </Button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <SettingsSectionHeader
-                            title="Interface"
-                            description="High-priority controls for the everyday desktop experience."
-                        />
-
-                        {/* Toggles Grid */}
-                        <div className="grid grid-cols-2 gap-4">
-                            {/* Colorblind Mode - Temporarily Removed
-                            <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
-                                <label className="text-label-sm font-semibold opacity-60 block mb-2">Colorblind Mode</label>
-                                <select
-                                    value={colorblindMode}
-                                    onChange={(e) => setColorblindMode(e.target.value as any)}
-                                    className="w-full md3-textfield--outlined p-2.5 rounded-control text-body font-medium outline-none"
-                                >
-                                    <option value="none">None</option>
-                                    <option value="protanopia">Protanopia</option>
-                                    <option value="deuteranopia">Deuteranopia</option>
-                                    <option value="tritanopia">Tritanopia</option>
-                                </select>
-                                </select>
-                            </div>
-                            */}
-
-                            <div className="md3-surface-high p-5 rounded-card space-y-4 col-span-2 border border-md-sys-outline/10">
-                                {/* Toggle Switch Component Inline */}
-                                {[
-                                    {
-                                        label: 'Performance Mode',
-                                        value: performanceMode,
-                                        setter: (v: boolean) => { setPerformanceMode(v); setDisableAnimations(v); },
-                                        color: 'bg-md-sys-primary'
-                                    },
-                                    { label: 'Session Timer', value: showSessionTimer, setter: setShowSessionTimer, color: 'bg-md-sys-primary' },
-                                    { label: 'Sound Effects', value: soundEnabled, setter: setSoundEnabled, color: 'bg-md-sys-primary' },
-                                ].map((toggle, i) => (
-                                    <div key={i} className="flex justify-between items-center">
-                                        <span className="text-label-sm font-medium opacity-60">{toggle.label}</span>
+                            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+                                <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
+                                    <label className="text-label-sm font-semibold opacity-60 block mb-3">Theme Accent</label>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {[
+                                            { id: 'ocean', c: 'var(--theme-ocean)' }, { id: 'emerald', c: 'var(--theme-emerald)' },
+                                            { id: 'terracotta', c: 'var(--theme-terracotta)' }, { id: 'amber', c: 'var(--theme-amber)' },
+                                            { id: 'amethyst', c: 'var(--theme-amethyst)' }, { id: 'cyan', c: 'var(--theme-cyan)' },
+                                            { id: 'grayscale', c: 'var(--theme-grayscale)' }
+                                        ].map(th => (
+                                            <button
+                                                key={th.id}
+                                                onClick={() => setColorTheme(th.id)}
+                                                className={`h-10 rounded-control transition-all ${colorTheme === th.id ? 'ring-2 ring-md-sys-primary/60' : 'opacity-60 hover:opacity-100'}`}
+                                                style={{ backgroundColor: th.c }}
+                                            />
+                                        ))}
                                         <button
-                                            onClick={() => toggle.setter(!toggle.value)}
-                                            className={`w-11 h-6 rounded-full transition-colors ${toggle.value ? toggle.color : 'md3-surface-high'} relative`}
+                                            onClick={() => setColorTheme('custom')}
+                                            className={`h-10 rounded-control text-label-sm font-bold transition-all ${colorTheme === 'custom' ? 'md3-btn-filled' : 'md3-btn-tonal'}`}
                                         >
-                                            <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${toggle.value ? 'translate-x-5' : ''}`} />
+                                            Custom
                                         </button>
                                     </div>
-                                ))}
-                            </div>
-                        </div>
-                        <SettingsSectionHeader
-                            title="Interface Tools"
-                            description="Frequently used controls that stay near the top of the desktop workflow."
-                        />
-                        <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
-                            <div className="flex justify-between items-center">
-                                <div>
-                                    <span className="text-label-sm font-medium opacity-60 block">Header Smart Capture</span>
-                                    <span className="text-label-sm opacity-40 uppercase font-bold">Recording tab always has access</span>
+                                    {colorTheme === 'custom' && (
+                                        <div className="mt-4 flex items-center gap-3">
+                                            <input
+                                                type="range"
+                                                min="0"
+                                                max="360"
+                                                value={customHue}
+                                                onChange={(e) => { setCustomHue(e.target.value); localStorage.setItem('wg_custom_hue', e.target.value); }}
+                                                className="flex-1 h-2 bg-gradient-to-r from-red-500 via-green-500 to-blue-500 rounded-full appearance-none cursor-pointer"
+                                            />
+                                            <div
+                                                className="w-8 h-8 rounded-full border-2 border-frost-050 shadow-lg"
+                                                style={{ backgroundColor: `hsl(${customHue}, 50%, 50%)` }}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
-                                <button
-                                    onClick={() => setShowSmartCaptureInHeader(!showSmartCaptureInHeader)}
-                                    className={`w-11 h-6 rounded-full transition-colors ${showSmartCaptureInHeader ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
-                                >
-                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${showSmartCaptureInHeader ? 'translate-x-5' : ''}`} />
-                                </button>
-                            </div>
-                            <div className="flex justify-between items-center pt-3 mt-3 border-t border-md-sys-outline/10">
-                                <div>
-                                    <span className="text-label-sm font-medium opacity-60 block">Tutorial</span>
-                                    <span className="text-label-sm opacity-40 uppercase font-bold">
-                                        {tutorialCompleted ? 'Completed once' : 'Not completed yet'}
-                                    </span>
+
+                                <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
+                                    <label className="text-label-sm font-semibold opacity-60 block mb-3">Appearance Mode</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {([
+                                            { id: 'light', label: 'Light' },
+                                            { id: 'dark', label: 'Dark' },
+                                            { id: 'twilight', label: 'Twilight' },
+                                            { id: 'system', label: 'System' },
+                                        ] as const).map(opt => (
+                                            <Button
+                                                key={opt.id}
+                                                onClick={() => setAppearanceMode(opt.id)}
+                                                variant={appearanceMode === opt.id ? 'primary' : 'secondary'}
+                                                className={`h-12 text-label-sm font-bold uppercase tracking-wide ${appearanceMode === opt.id ? '' : 'opacity-60 hover:opacity-100'}`}
+                                            >
+                                                {opt.label}
+                                            </Button>
+                                        ))}
+                                    </div>
                                 </div>
-                                <button
-                                    onClick={() => {
-                                        setShowSettings(false);
-                                        setNotificationsSuspended(true);
-                                        setShowTutorial(true);
-                                    }}
-                                    className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold uppercase"
-                                >
-                                    Open
-                                </button>
                             </div>
-                            <div className="flex justify-between items-center pt-3 mt-3 border-t border-md-sys-outline/10">
-                                <div>
-                                    <span className="text-label-sm font-medium opacity-60 block">Tips</span>
-                                    <span className="text-label-sm opacity-40 uppercase font-bold">
-                                        {tipsEnabled ? 'Enabled' : 'Disabled'}
-                                    </span>
+                        </section>
+                    )}
+
+                    {activeSection === 'interface' && (
+                        <section className="space-y-6">
+                            <SettingsSectionHeader
+                                title="Interface"
+                                description="High-priority controls for the everyday desktop experience."
+                            />
+                            <div className="grid gap-4 xl:grid-cols-2">
+                                <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10 space-y-4">
+                                    {[
+                                        {
+                                            label: 'Performance Mode',
+                                            value: performanceMode,
+                                            setter: (v: boolean) => { setPerformanceMode(v); setDisableAnimations(v); },
+                                            color: 'bg-md-sys-primary'
+                                        },
+                                        { label: 'Session Timer', value: showSessionTimer, setter: setShowSessionTimer, color: 'bg-md-sys-primary' },
+                                        { label: 'Sound Effects', value: soundEnabled, setter: setSoundEnabled, color: 'bg-md-sys-primary' },
+                                    ].map((toggle, i) => (
+                                        <div key={i} className="flex justify-between items-center">
+                                            <span className="text-label-sm font-medium opacity-60">{toggle.label}</span>
+                                            <button
+                                                onClick={() => toggle.setter(!toggle.value)}
+                                                className={`w-11 h-6 rounded-full transition-colors ${toggle.value ? toggle.color : 'md3-surface-high'} relative`}
+                                            >
+                                                <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${toggle.value ? 'translate-x-5' : ''}`} />
+                                            </button>
+                                        </div>
+                                    ))}
                                 </div>
-                                <button
-                                    onClick={() => setTipsEnabled(!tipsEnabled)}
-                                    className={`w-11 h-6 rounded-full transition-colors ${tipsEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
-                                    aria-label="Toggle tips"
-                                >
-                                    <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${tipsEnabled ? 'translate-x-5' : ''}`} />
-                                </button>
+                                <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10 flex flex-col justify-between gap-3">
+                                    <div>
+                                        <div className="text-label-sm font-semibold opacity-60">Desktop feel</div>
+                                        <div className="text-label-sm text-md-sys-on-surface/55 mt-1">Performance Mode also disables interface animation so dense sessions stay responsive.</div>
+                                    </div>
+                                    <div className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-3 text-label-sm text-md-sys-on-surface/60 leading-relaxed">
+                                        Sound, session timer, and performance toggles remain live immediately. Save &amp; Apply still forces an immediate flush to disk before returning.
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div>
+                        </section>
+                    )}
+
+                    {activeSection === 'interface-tools' && (
+                        <section className="space-y-6">
+                            <SettingsSectionHeader
+                                title="Interface Tools"
+                                description="Frequently used controls that stay near the top of the desktop workflow."
+                            />
+                            <div className="grid gap-4 xl:grid-cols-3">
+                                <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10 flex flex-col justify-between gap-4">
+                                    <div>
+                                        <span className="text-label-sm font-medium opacity-60 block">Header Smart Capture</span>
+                                        <span className="text-label-sm opacity-40 uppercase font-bold block mt-1">Recording tab always has access</span>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowSmartCaptureInHeader(!showSmartCaptureInHeader)}
+                                        className={`w-11 h-6 rounded-full transition-colors ${showSmartCaptureInHeader ? 'bg-md-sys-primary' : 'md3-surface-high'} relative self-end`}
+                                    >
+                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${showSmartCaptureInHeader ? 'translate-x-5' : ''}`} />
+                                    </button>
+                                </div>
+                                <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10 flex flex-col justify-between gap-4">
+                                    <div>
+                                        <span className="text-label-sm font-medium opacity-60 block">Tutorial</span>
+                                        <span className="text-label-sm opacity-40 uppercase font-bold block mt-1">
+                                            {tutorialCompleted ? 'Completed once' : 'Not completed yet'}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setShowSettings(false);
+                                            setNotificationsSuspended(true);
+                                            setShowTutorial(true);
+                                        }}
+                                        className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold uppercase self-start"
+                                    >
+                                        Open
+                                    </button>
+                                </div>
+                                <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10 flex flex-col justify-between gap-4">
+                                    <div>
+                                        <span className="text-label-sm font-medium opacity-60 block">Tips</span>
+                                        <span className="text-label-sm opacity-40 uppercase font-bold block mt-1">
+                                            {tipsEnabled ? 'Enabled' : 'Disabled'}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={() => setTipsEnabled(!tipsEnabled)}
+                                        className={`w-11 h-6 rounded-full transition-colors ${tipsEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative self-end`}
+                                        aria-label="Toggle tips"
+                                    >
+                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${tipsEnabled ? 'translate-x-5' : ''}`} />
+                                    </button>
+                                </div>
+                            </div>
+                        </section>
+                    )}
+
+                    {activeSection === 'workspace-background' && (
+                        <section className="space-y-6">
                             <SettingsSectionHeader
                                 title="Workspace Background"
                                 description="Optional background media for the standard desktop workspace."
@@ -894,14 +1017,10 @@ const SettingsModalContent: React.FC = () => {
                                     )}
                                 </div>
                             </div>
-                        </div>
                         </section>
-                    )}
-
-                    {/* Overlay Style Section */}
-                    {activeTab === 'interface' && (
+                    )}                    {/* Overlay Style Section */}
+                    {activeSection === 'overlay' && (
                         <section className="space-y-6">
-                        <div>
                             <SettingsSectionHeader
                                 title="Overlay"
                                 description="Choose how the compact overlay sits over the game."
@@ -924,8 +1043,11 @@ const SettingsModalContent: React.FC = () => {
                                     </button>
                                 </div>
                             </div>
-                        </div>
-                        <div>
+                        </section>
+                    )}
+
+                    {activeSection === 'advanced-interface' && (
+                        <section className="space-y-6">
                             <SettingsSectionHeader
                                 title="Advanced Interface"
                                 description="Controls that affect startup responsiveness and developer workflows."
@@ -956,12 +1078,11 @@ const SettingsModalContent: React.FC = () => {
                                     </button>
                                 </div>
                             </div>
-                        </div>
                         </section>
                     )}
 
                     {/* OCR Quick Setup */}
-                    {activeTab === 'ocr-capture' && (
+                    {activeSection === 'capture' && (
                         <section className="space-y-3">
                         <SettingsSectionHeader
                             title="Capture"
@@ -1031,7 +1152,7 @@ const SettingsModalContent: React.FC = () => {
                     )}
 
                     {/* OCR Engine Section */}
-                    {activeTab === 'ocr-capture' && (
+                    {activeSection === 'advanced-ocr-tuning' && (
                         <section className="space-y-3">
                         <SettingsSectionHeader
                             title="Advanced OCR Tuning"
@@ -1340,7 +1461,7 @@ const SettingsModalContent: React.FC = () => {
                     )}
 
                     {/* Capture Mode */}
-                    {activeTab === 'ocr-capture' && (
+                    {activeSection === 'capture-defaults' && (
                         <section className="space-y-3">
                         <SettingsSectionHeader
                             title="Capture Defaults"
@@ -1409,95 +1530,97 @@ const SettingsModalContent: React.FC = () => {
                     )}
 
                     {/* Data & Updates Section - Full Mode Only */}
-                    {activeTab === 'data' && !isOverlayMode && (
+                    {activeSection === 'telemetry-monitoring' && (
                         <section className="space-y-6">
-                            <div>
-                                <SettingsSectionHeader
-                                    title="Telemetry & Monitoring"
-                                    description="Manage how Wildgate telemetry is monitored and how aggressively it polls."
-                                />
-                                <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10 space-y-4">
+                            <SettingsSectionHeader
+                                title="Telemetry & Monitoring"
+                                description="Manage how Wildgate telemetry is monitored and how aggressively it polls."
+                            />
+                            <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10 space-y-4">
+                                <div className="flex justify-between items-start gap-3">
+                                    <div className="min-w-0">
+                                        <span className="text-label-sm font-medium opacity-60 block">Telemetry Monitoring</span>
+                                        <span className="text-label-sm text-md-sys-on-surface/55 block mt-1">Reads Wildgate telemetry logs in the background to auto-fill match and session data.</span>
+                                    </div>
+                                    <button
+                                        onClick={() => setEnableAutoLogRecording(!enableAutoLogRecording)}
+                                        className={`w-11 h-6 rounded-full transition-colors shrink-0 ${enableAutoLogRecording ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
+                                    >
+                                        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${enableAutoLogRecording ? 'translate-x-5' : ''}`} />
+                                    </button>
+                                </div>
+                                <div className="pt-3 border-t border-md-sys-outline/10 space-y-4">
                                     <div className="flex justify-between items-start gap-3">
                                         <div className="min-w-0">
-                                            <span className="text-label-sm font-medium opacity-60 block">Telemetry Monitoring</span>
-                                            <span className="text-label-sm text-md-sys-on-surface/55 block mt-1">Reads Wildgate telemetry logs in the background to auto-fill match and session data.</span>
+                                            <span className="text-label-sm font-medium opacity-60 block">Adaptive Polling</span>
+                                            <span className="text-label-sm text-md-sys-on-surface/55 block mt-1">{adaptiveTelemetryPollingEnabled ? 'Enabled by default' : 'Static profile only'}</span>
                                         </div>
                                         <button
-                                            onClick={() => setEnableAutoLogRecording(!enableAutoLogRecording)}
-                                            className={`w-11 h-6 rounded-full transition-colors shrink-0 ${enableAutoLogRecording ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
+                                            onClick={() => setAdaptiveTelemetryPollingEnabled(!adaptiveTelemetryPollingEnabled)}
+                                            className={`w-11 h-6 rounded-full transition-colors shrink-0 ${adaptiveTelemetryPollingEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
                                         >
-                                            <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${enableAutoLogRecording ? 'translate-x-5' : ''}`} />
+                                            <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${adaptiveTelemetryPollingEnabled ? 'translate-x-5' : ''}`} />
                                         </button>
                                     </div>
-                                    <div className="pt-3 border-t border-md-sys-outline/10 space-y-4">
-                                        <div className="flex justify-between items-start gap-3">
-                                            <div className="min-w-0">
-                                                <span className="text-label-sm font-medium opacity-60 block">Adaptive Polling</span>
-                                                <span className="text-label-sm text-md-sys-on-surface/55 block mt-1">{adaptiveTelemetryPollingEnabled ? 'Enabled by default' : 'Static profile only'}</span>
-                                            </div>
-                                            <button
-                                                onClick={() => setAdaptiveTelemetryPollingEnabled(!adaptiveTelemetryPollingEnabled)}
-                                                className={`w-11 h-6 rounded-full transition-colors shrink-0 ${adaptiveTelemetryPollingEnabled ? 'bg-md-sys-primary' : 'md3-surface-high'} relative`}
-                                            >
-                                                <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${adaptiveTelemetryPollingEnabled ? 'translate-x-5' : ''}`} />
-                                            </button>
+                                    {adaptiveTelemetryPollingEnabled && (
+                                        <div className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-3 text-left text-label-sm leading-relaxed text-md-sys-on-surface/60">
+                                            Idle and menu states use high accuracy, match start and end use balanced, and active matches drop to a 3-minute poll after 2 minutes.
                                         </div>
-                                        {adaptiveTelemetryPollingEnabled && (
-                                            <div className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-high px-4 py-3 text-left text-label-sm leading-relaxed text-md-sys-on-surface/60">
-                                                Idle and menu states use high accuracy, match start and end use balanced, and active matches drop to a 3-minute poll after 2 minutes.
-                                            </div>
-                                        )}
-                                        <div>
-                                            <span className="text-label-sm font-medium opacity-60 block">Telemetry Performance</span>
-                                            <span className="text-label-sm text-md-sys-on-surface/55 block mt-1">Choose the monitoring load profile when adaptive polling is off.</span>
-                                        </div>
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {[
-                                                {
-                                                    id: 'low-power' as TelemetryPerformanceProfile,
-                                                    label: 'Low Power',
-                                                    desc: 'Cooler, slower updates'
-                                                },
-                                                {
-                                                    id: 'balanced' as TelemetryPerformanceProfile,
-                                                    label: 'Balanced',
-                                                    desc: 'Recommended default'
-                                                },
-                                                {
-                                                    id: 'high-accuracy' as TelemetryPerformanceProfile,
-                                                    label: 'High Accuracy',
-                                                    desc: 'Faster, heavier polling'
-                                                },
-                                            ].map(opt => (
-                                                <button
-                                                    key={opt.id}
-                                                    onClick={() => setTelemetryPerformanceProfile(opt.id)}
-                                                    disabled={adaptiveTelemetryPollingEnabled}
-                                                    className={`p-2.5 rounded-control text-center transition-all ${telemetryPerformanceProfile === opt.id
-                                                        ? 'md3-btn-filled ring-2 ring-md-sys-primary/40'
-                                                        : 'md3-btn-outlined'
-                                                        } disabled:opacity-disabled`}
-                                                    title={opt.desc}
-                                                >
-                                                    <div className="text-label-sm font-bold">{opt.label}</div>
-                                                    <div className="text-label-sm opacity-60">{opt.desc}</div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                        {!enableAutoLogRecording && (
-                                            <div className="text-label-sm text-md-sys-on-surface/55">
-                                                Telemetry monitoring is currently off. The selected profile will apply when it is enabled again.
-                                            </div>
-                                        )}
+                                    )}
+                                    <div>
+                                        <span className="text-label-sm font-medium opacity-60 block">Telemetry Performance</span>
+                                        <span className="text-label-sm text-md-sys-on-surface/55 block mt-1">Choose the monitoring load profile when adaptive polling is off.</span>
                                     </div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {[
+                                            {
+                                                id: 'low-power' as TelemetryPerformanceProfile,
+                                                label: 'Low Power',
+                                                desc: 'Cooler, slower updates'
+                                            },
+                                            {
+                                                id: 'balanced' as TelemetryPerformanceProfile,
+                                                label: 'Balanced',
+                                                desc: 'Recommended default'
+                                            },
+                                            {
+                                                id: 'high-accuracy' as TelemetryPerformanceProfile,
+                                                label: 'High Accuracy',
+                                                desc: 'Faster, heavier polling'
+                                            },
+                                        ].map(opt => (
+                                            <button
+                                                key={opt.id}
+                                                onClick={() => setTelemetryPerformanceProfile(opt.id)}
+                                                disabled={adaptiveTelemetryPollingEnabled}
+                                                className={`p-2.5 rounded-control text-center transition-all ${telemetryPerformanceProfile === opt.id
+                                                    ? 'md3-btn-filled ring-2 ring-md-sys-primary/40'
+                                                    : 'md3-btn-outlined'
+                                                    } disabled:opacity-disabled`}
+                                                title={opt.desc}
+                                            >
+                                                <div className="text-label-sm font-bold">{opt.label}</div>
+                                                <div className="text-label-sm opacity-60">{opt.desc}</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {!enableAutoLogRecording && (
+                                        <div className="text-label-sm text-md-sys-on-surface/55">
+                                            Telemetry monitoring is currently off. The selected profile will apply when it is enabled again.
+                                        </div>
+                                    )}
                                 </div>
                             </div>
-                            <div>
-                                <SettingsSectionHeader
-                                    title="Data & Updates"
-                                    description="Backups, exports, diagnostics, and app maintenance tools."
-                                />
-                            <div className="md3-surface-high p-4 rounded-card mb-4 flex items-center justify-between border border-md-sys-outline/10">
+                        </section>
+                    )}
+
+                    {activeSection === 'data-updates' && (
+                        <section className="space-y-6">
+                            <SettingsSectionHeader
+                                title="Data & Updates"
+                                description="Backups, exports, diagnostics, and app maintenance tools."
+                            />
+                            <div className="md3-surface-high p-4 rounded-card flex items-center justify-between border border-md-sys-outline/10">
                                 <div>
                                     <div className="text-body font-bold">Auto Backup</div>
                                     <div className="text-label-sm opacity-60 uppercase font-bold">Every 5 matches</div>
@@ -1509,11 +1632,11 @@ const SettingsModalContent: React.FC = () => {
                                     <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-frost-solid shadow-sm transition-transform ${enableAutoBackup ? 'translate-x-5' : ''}`} />
                                 </button>
                             </div>
-                            <div className="md3-surface-high p-3 rounded-card mb-4 border border-warning/30 text-warning">
+                            <div className="md3-surface-high p-3 rounded-card border border-warning/30 text-warning">
                                 <div className="text-label-sm font-bold uppercase tracking-wide">Beta Build</div>
                                 <div className="text-label-sm opacity-90 mt-1">This app is in beta. If something breaks, use Copy Logs and share them with the team.</div>
                             </div>
-                            <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="grid grid-cols-2 gap-3">
                                 <button
                                     onClick={handleBackupDB}
                                     className="flex flex-col items-center justify-center gap-2 p-4 md3-surface-high rounded-card hover:bg-md-sys-on-surface/5 transition-colors border border-md-sys-outline/10"
@@ -1571,8 +1694,6 @@ const SettingsModalContent: React.FC = () => {
                                 className="hidden"
                                 onChange={handleRestoreFileChange}
                             />
-
-                            {/* Update Section */}
                             <div className="md3-surface-high p-4 rounded-card flex items-center justify-between border border-md-sys-outline/10">
                                 <div>
                                     <div className="text-body font-bold">Update</div>
@@ -1596,30 +1717,16 @@ const SettingsModalContent: React.FC = () => {
                                     </button>
                                 )}
                             </div>
-                            </div>
                         </section>
                     )}
-                    {/* Save & Apply Footer */}
-                    <div className="pt-6 border-t border-md-sys-outline/10">
-                        <button
-                            onClick={handleSaveAndClose}
-                            disabled={saved}
-                            className={`w-full py-4 rounded-card font-bold uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2 ${saved
-                                ? 'md3-btn-filled bg-success text-on-scrim'
-                                : 'md3-btn-filled'
-                                }`}
-                        >
-                            {saved ? (
-                                <><Check size={18} /> Saved!</>
-                            ) : (
-                                <><Save size={18} /> Save &amp; Apply</>
-                            )}
-                        </button>
-                    </div>
 
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                </div >
-            </div >
+            </div>
             <OcrRegionEditorModal
                 isOpen={showRoiEditor}
                 initialRegions={ocrRegions}
@@ -1630,11 +1737,5 @@ const SettingsModalContent: React.FC = () => {
     );
 };
 
-export const SettingsModal: React.FC = () => {
-    const { showSettings } = useUIState();
-    if (!showSettings) return null;
-    return <SettingsModalContent />;
-};
-
-
+export const SettingsModal: React.FC = () => <SettingsModalContent />;
 

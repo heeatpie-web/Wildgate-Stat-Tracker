@@ -182,24 +182,24 @@ describe('SettingsModal', () => {
     storeState.resultOcrFlowMode = 'prompt';
   });
 
-  it('renders the widened desktop dialog and keeps interface controls above background url', async () => {
+  it('renders a full-screen settings screen with per-section navigation', async () => {
     const { SettingsModal } = await import('./SettingsModal');
-    const { container } = render(<SettingsModal />);
+    render(<SettingsModal />);
 
     const dialog = screen.getByRole('dialog');
-    expect(dialog.className).toContain('max-w-7xl');
+    expect(dialog.className).toContain('h-full');
+    expect(screen.getByRole('button', { name: /back to app/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save & apply/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /workspace background/i })).toBeInTheDocument();
+    expect(screen.getByText('Theme Accent')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('https://...')).not.toBeInTheDocument();
 
-    expect(screen.getByRole('heading', { name: 'Appearance' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Interface' })).toBeInTheDocument();
-    expect(screen.getByText('Workspace Background')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /workspace background/i }));
 
-    const textContent = container.textContent || '';
-    expect(textContent.indexOf('Performance Mode')).toBeLessThan(textContent.indexOf('Background URL'));
-    expect(textContent.indexOf('Session Timer')).toBeLessThan(textContent.indexOf('Background URL'));
-    expect(textContent.indexOf('Sound Effects')).toBeLessThan(textContent.indexOf('Background URL'));
+    expect(screen.getByPlaceholderText('https://...')).toBeInTheDocument();
   });
 
-  it('routes telemetry search results to the data tab', async () => {
+  it('routes telemetry search results to the telemetry section', async () => {
     const { SettingsModal } = await import('./SettingsModal');
     render(<SettingsModal />);
 
@@ -208,19 +208,19 @@ describe('SettingsModal', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /telemetry performance/i }));
 
-    expect(screen.getByText('Telemetry & Monitoring')).toBeInTheDocument();
+    expect(screen.getAllByText('Telemetry & Monitoring').length).toBeGreaterThan(0);
     expect(screen.getByText('Telemetry Monitoring')).toBeInTheDocument();
   });
 
-  it('uses a wrapping quick setup grid on the OCR tab', async () => {
+  it('uses a dedicated capture section with the wrapping quick setup grid', async () => {
     const { SettingsModal } = await import('./SettingsModal');
     render(<SettingsModal />);
 
-    fireEvent.click(screen.getByRole('button', { name: /ocr\/capture/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Capture Recommended smart-capture and OCR setup controls\./i }));
 
     const grid = screen.getByTestId('settings-quick-setup-grid');
     expect(grid).toHaveStyle({ gridTemplateColumns: 'repeat(auto-fit, minmax(16rem, 1fr))' });
-    expect(screen.getByText('Capture')).toBeInTheDocument();
     expect(screen.getByText('Capture Defaults')).toBeInTheDocument();
   });
 });
+

@@ -2620,7 +2620,7 @@ const App: React.FC = () => {
                 {renameModal ? <RenameModal /> : null}
                 {showSetupWizard ? <SetupWizard /> : null}
                 {drillDownTarget ? <DrillDownOverlay /> : null}
-                {showSettings ? <SettingsModal /> : null}
+                <SettingsModal />
                 {showResetConfirm ? <ResetConfirmModal /> : null}
                 {showWizard ? <Wizard /> : null}
                 {showReviewQueue && (
@@ -2892,3 +2892,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+

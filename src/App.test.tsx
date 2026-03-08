@@ -139,7 +139,7 @@ vi.mock('./components/OverlayView', () => ({ OverlayView: () => <div data-testid
 vi.mock('./components/Wizard', () => ({ Wizard: () => <div data-testid="wizard" /> }));
 vi.mock('./components/RenameModal', () => ({ RenameModal: () => <div data-testid="rename-modal" /> }));
 vi.mock('./components/DrillDownOverlay', () => ({ DrillDownOverlay: () => <div data-testid="drilldown" /> }));
-vi.mock('./components/SettingsModal', () => ({ SettingsModal: () => <div data-testid="settings-modal" /> }));
+vi.mock('./components/SettingsModal', () => ({ SettingsModal: () => (uiState.showSettings ? <div data-testid="settings-modal" /> : null) }));
 vi.mock('./components/ResetConfirmModal', () => ({ ResetConfirmModal: () => <div data-testid="reset-confirm-modal" /> }));
 vi.mock('./components/DevTools', () => ({ DevTools: () => <div data-testid="dev-tools" /> }));
 vi.mock('./components/TelemetryPanel', () => ({ TelemetryPanel: () => <div data-testid="telemetry-panel" /> }));
@@ -361,3 +361,4 @@ describe('App', () => {
     expect(uiState.setShowWizard).toHaveBeenCalledWith('Win');
   });
 });
+
