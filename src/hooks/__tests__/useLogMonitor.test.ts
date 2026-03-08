@@ -243,6 +243,26 @@ describe('useLogMonitor', () => {
     });
   });
 
+  it('clears a stale active-match flag when the next mission start is detected', async () => {
+    gameDataState.isMatchInProgress = true;
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebLoadingScreen',
+          Payload: { loadingMap: 'DesolationReach' },
+          ClientTimestamp: Math.floor(Date.now() / 1000),
+        },
+      ]);
+    });
+
+    expect(gameDataState.setIsMatchInProgress).toHaveBeenCalledWith(false);
+    expect(gameDataState.setMatchStartTime).toHaveBeenCalledWith(null);
+    expect(addMatch).toHaveBeenCalledTimes(1);
+  });
+
   it('resets selection source gates and seeds hero/ship from latest telemetry loadout on match start', async () => {
     gameDataState.currentLoadout = {
       hero: 'Venture',

@@ -696,6 +696,12 @@ export const useLogMonitor = (activeUser?: string) => {
                     // Keep start strict to map transitions. Session ID clear remains an emergency end signal.
                     const startLifecycleSignal = mapStartSignal;
                     const endLifecycleSignal = mapEndSignal || sessionEndSignal;
+                    if (startLifecycleSignal && telemetryLifecycleActiveRef.current && !telemetryDraftMatchIdRef.current) {
+                        telemetryLifecycleActiveRef.current = false;
+                        setIsMatchInProgress(false);
+                        setMatchStartTime(null);
+                        Logger.warn('LogMonitor', 'Cleared stale active-match flag on next mission start.');
+                    }
                     if (startLifecycleSignal && !telemetryLifecycleActiveRef.current) {
                         resetSelectionDefaultsForNewMatch();
                     }

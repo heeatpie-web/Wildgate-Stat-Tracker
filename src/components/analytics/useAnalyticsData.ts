@@ -289,7 +289,7 @@ export const useAnalyticsData = (
     view?: AnalyticsView,
     entityFilters: EntityAnalyticsFilters = EMPTY_ENTITY_FILTERS
 ) => {
-    const { matches, playerProfiles } = useGameData();
+    const { matches, playerProfiles, isMatchInProgress, matchStartTime } = useGameData();
     const { activeMode } = useUIState();
 
     const rangeStart = useMemo(() => {
@@ -321,14 +321,20 @@ export const useAnalyticsData = (
         () => modeMatches.filter((m) => m.result !== 'Ongoing'),
         [modeMatches]
     );
+    const stableCompletedModeMatches = useMemo(() => {
+        if (!isMatchInProgress) return completedModeMatches;
+        const activeWindowStart = typeof matchStartTime === 'number' ? matchStartTime : 0;
+        if (!Number.isFinite(activeWindowStart) || activeWindowStart <= 0) return completedModeMatches;
+        return completedModeMatches.filter((match) => Number(match.timestamp || 0) < activeWindowStart);
+    }, [completedModeMatches, isMatchInProgress, matchStartTime]);
 
     const filteredMatches = useMemo(() => {
-        if (timeRange === 'lastN') return completedModeMatches.slice(-lastN);
+        if (timeRange === 'lastN') return stableCompletedModeMatches.slice(-lastN);
         if (timeRange === 'today' || timeRange === 'week' || timeRange === 'month') {
-            return completedModeMatches.filter(m => m.timestamp >= rangeStart);
+            return stableCompletedModeMatches.filter(m => m.timestamp >= rangeStart);
         }
-        return completedModeMatches;
-    }, [completedModeMatches, timeRange, lastN, rangeStart]);
+        return stableCompletedModeMatches;
+    }, [stableCompletedModeMatches, timeRange, lastN, rangeStart]);
 
     const wantOverview = view === 'overview' || view === 'reactor' || view === 'essay' || !view;
     const wantSession = wantOverview || view === 'session';
