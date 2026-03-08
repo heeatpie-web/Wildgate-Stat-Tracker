@@ -347,7 +347,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                         return (
                                             <div
                                                 key={w}
-                                                className={`relative ${accordionMode ? 'h-9' : 'h-11'} rounded-control transition-all select-none overflow-hidden ${isActive
+                                                className={`recording-click-target relative ${accordionMode ? 'h-9' : 'h-11'} rounded-control transition-all select-none overflow-hidden ${isActive
                                                     ? 'mg-surface ring-1 ring-md-sys-primary/30'
                                                     : (isTransparent ? 'mg-surface border border-md-sys-outline/10 text-on-scrim' : 'mg-surface')
                                                     } cursor-pointer`}
@@ -420,7 +420,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                             setWeapons({ ...weapons, [w]: 1 });
                                                         }
                                                     }}
-                                                    className={`relative ${accordionMode ? 'h-8' : 'h-10'} rounded-control transition-all select-none overflow-hidden
+                                                    className={`recording-click-target relative ${accordionMode ? 'h-8' : 'h-10'} rounded-control transition-all select-none overflow-hidden
                                                         ${isActive
                                                             ? 'bg-weapon-soft ring-1 ring-weapon'
                                                             : canAdd
@@ -491,7 +491,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                             setWeapons({ ...weapons, [w]: 1 });
                                                         }
                                                     }}
-                                                    className={`relative ${accordionMode ? 'h-8' : 'h-10'} rounded-control transition-all select-none overflow-hidden
+                                                    className={`recording-click-target relative ${accordionMode ? 'h-8' : 'h-10'} rounded-control transition-all select-none overflow-hidden
                                                         ${isActive
                                                             ? 'bg-equipment-soft ring-1 ring-equipment'
                                                             : canAdd
@@ -550,7 +550,7 @@ export const MissionPanel: React.FC<MissionPanelProps> = ({
                                                         : [...selectedCharacterPerks, perk];
                                                     setManualPerkSelection(next.slice(0, MAX_PERKS_PER_MATCH));
                                                 }}
-                                                className={`relative ${accordionMode ? 'h-8' : 'h-10'} rounded-control transition-all select-none overflow-hidden
+                                                className={`recording-click-target relative ${accordionMode ? 'h-8' : 'h-10'} rounded-control transition-all select-none overflow-hidden
                                                     ${selected
                                                         ? 'bg-warning-soft ring-1 ring-warning'
                                                         : disabled

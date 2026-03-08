@@ -100,7 +100,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
               <button
                 key={s}
                 onClick={() => setActiveShip(s)}
-                className={`relative min-h-32px py-1.5 px-1.5 text-label-sm leading-tight text-center font-semibold transition-all whitespace-normal rounded-xl border ${sameShip(activeShip, s)
+                className={`recording-click-target relative min-h-32px py-1.5 px-1.5 text-label-sm leading-tight text-center font-semibold transition-all whitespace-normal rounded-xl border ${sameShip(activeShip, s)
                   ? 'recording-selection-active'
                   : 'md3-surface border-md-sys-outline/20 text-md-sys-on-surface/78 hover:border-md-sys-primary/35 hover:bg-md-sys-on-surface/5'
                   }`}
@@ -121,7 +121,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
               <button
                 key={c}
                 onClick={() => setActiveHero(c)}
-                className={`relative min-h-28px py-1 px-1 text-label-sm leading-tight text-center font-semibold transition-all whitespace-normal rounded-xl border ${activeHero === c
+                className={`recording-click-target relative min-h-28px py-1 px-1 text-label-sm leading-tight text-center font-semibold transition-all whitespace-normal rounded-xl border ${activeHero === c
                   ? 'recording-selection-active'
                   : 'md3-surface border-md-sys-outline/20 text-md-sys-on-surface/78 hover:border-md-sys-primary/35 hover:bg-md-sys-on-surface/5'
                   }`}
@@ -176,7 +176,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
           <button
             key={s}
             onClick={() => setActiveShip(s)}
-            className={`relative min-h-40px py-2 px-2 md3-label leading-tight text-center font-semibold transition-all whitespace-normal justify-center rounded-control border ${sameShip(activeShip, s)
+            className={`recording-click-target relative min-h-40px py-2 px-2 md3-label leading-tight text-center font-semibold transition-all whitespace-normal justify-center rounded-control border ${sameShip(activeShip, s)
               ? 'recording-selection-active'
               : 'md3-surface border-md-sys-outline/20 text-md-sys-on-surface/78 hover:border-md-sys-primary/35 hover:bg-md-sys-on-surface/5'
               }`}
@@ -197,7 +197,7 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
             <button
               key={c}
               onClick={() => setActiveHero(c)}
-              className={`relative min-h-36px py-1.5 px-1 md3-label leading-tight text-center font-semibold transition-all whitespace-normal justify-center rounded-control border ${activeHero === c
+              className={`recording-click-target relative min-h-36px py-1.5 px-1 md3-label leading-tight text-center font-semibold transition-all whitespace-normal justify-center rounded-control border ${activeHero === c
                 ? 'recording-selection-active'
                 : 'md3-surface border-md-sys-outline/20 text-md-sys-on-surface/78 hover:border-md-sys-primary/35 hover:bg-md-sys-on-surface/5'
                 }`}

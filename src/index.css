@@ -253,6 +253,28 @@ body[data-mode='twilight'] [data-recording-panel='ship-loadout'] .recording-sele
     0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 70%);
 }
 
+.recording-click-target {
+  border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 72%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--md-sys-color-on-surface), transparent 94%);
+}
+
+.recording-click-target:hover {
+  border-color: color-mix(in srgb, var(--md-sys-color-primary), transparent 58%);
+}
+
+body[data-mode='dark'] .recording-click-target,
+body[data-mode='twilight'] .recording-click-target {
+  border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 52%);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #000, transparent 48%),
+    inset 0 1px 0 color-mix(in srgb, #fff, transparent 96%);
+}
+
+body[data-mode='dark'] .recording-click-target:hover,
+body[data-mode='twilight'] .recording-click-target:hover {
+  border-color: color-mix(in srgb, var(--md-sys-color-primary), transparent 56%);
+}
+
 /* Twilight click-target clarity improvements for dense list/action UIs. */
 body[data-mode='twilight'] .idmapper-click-target,
 body[data-mode='twilight'] .player-list-item {
