@@ -221,7 +221,13 @@ export const useMatchSubmission = () => {
             opponents: resolvedOpponents,
             hero: pickFirstKnown(activeHero, currentLoadout?.hero, unresolvedDraft?.loadout?.hero, unresolvedDraft?.hero) || undefined,
             ship: pickFirstKnown(activeShip, currentLoadout?.ship, unresolvedDraft?.loadout?.ship, unresolvedDraft?.ship) || undefined,
-            loadout: sanitizeLoadout(currentLoadout || unresolvedDraft?.loadout || null) || undefined,
+            loadout: (() => {
+                const resolvedShipForLoadout = pickFirstKnown(activeShip, currentLoadout?.ship, unresolvedDraft?.loadout?.ship, unresolvedDraft?.ship);
+                const rawLoadout = sanitizeLoadout(currentLoadout || unresolvedDraft?.loadout || null);
+                return (rawLoadout && resolvedShipForLoadout)
+                    ? sanitizeLoadout({ ...rawLoadout, ship: resolvedShipForLoadout }) || undefined
+                    : rawLoadout || undefined;
+            })(),
             weapons: activeWeapons,
             reachModifiers: resolvedModifiers,
             artifactSource: extractedArtifactSource || unresolvedDraft?.artifactSource || undefined,
@@ -395,7 +401,11 @@ export const useMatchSubmission = () => {
             })();
             const matchId = existingMatch?.id || Date.now();
             const matchTimestamp = existingMatch?.timestamp || pendingMatchData.timestamp || Date.now();
-            const mergedLoadout = sanitizeLoadout(pendingMatchData.loadout || currentLoadout);
+            const rawMergedLoadout = sanitizeLoadout(pendingMatchData.loadout || currentLoadout);
+            // Keep loadout.ship in sync with the resolved top-level ship so they never diverge.
+            const mergedLoadout = (rawMergedLoadout && resolvedShip)
+                ? sanitizeLoadout({ ...rawMergedLoadout, ship: resolvedShip })
+                : rawMergedLoadout;
             const baseTelemetryConsistency = pendingMatchData.telemetryConsistency || existingMatch?.telemetryConsistency;
             const finalTelemetryConsistency = baseTelemetryConsistency
                 ? (() => {
@@ -678,7 +688,11 @@ export const useMatchSubmission = () => {
             })();
             const matchId = existingMatch?.id || Date.now();
             const matchTimestamp = existingMatch?.timestamp || pendingMatchData.timestamp || Date.now();
-            const mergedLoadout = sanitizeLoadout(pendingMatchData.loadout || currentLoadout);
+            const rawMergedLoadout = sanitizeLoadout(pendingMatchData.loadout || currentLoadout);
+            // Keep loadout.ship in sync with the resolved top-level ship so they never diverge.
+            const mergedLoadout = (rawMergedLoadout && resolvedShip)
+                ? sanitizeLoadout({ ...rawMergedLoadout, ship: resolvedShip })
+                : rawMergedLoadout;
             const baseTelemetryConsistency = pendingMatchData.telemetryConsistency || existingMatch?.telemetryConsistency;
             const finalTelemetryConsistency = baseTelemetryConsistency
                 ? (() => {
