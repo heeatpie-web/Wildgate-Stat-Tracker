@@ -123,7 +123,7 @@ interface GameDataContextType {
     sessionShipTypes: Record<string, string>;
     setSessionShipTypes: (types: Record<string, string>, source?: 'manual' | 'telemetry' | 'ocr') => void;
     sessionStartTime: number;
-    recordPlayerSighting: (playerId: string, teamColor: string, allTeamPlayers: string[], allOpponentPlayers: string[], shipType?: string, source?: 'ocr' | 'manual') => void;
+    recordPlayerSighting: (playerId: string, teamColor: string, allTeamPlayers: string[], allOpponentPlayers: string[], shipType?: string, source?: 'ocr' | 'manual', ocrOnly?: boolean) => void;
     currentLoadout: Loadout | null; // Added
     setCurrentLoadout: (l: Loadout | null) => void; // Added
     timelineEvents: TimelineEvent[];

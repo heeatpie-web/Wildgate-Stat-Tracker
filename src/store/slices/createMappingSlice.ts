@@ -111,7 +111,7 @@ export interface MappingSlice {
     teamIdentityCorrections: Record<string, TeamIdentityCorrection>;
 
     // Profile management
-    recordPlayerSighting: (playerId: string, teamColor: string, allTeamPlayers: string[], allOpponentPlayers: string[], shipType?: string, source?: 'ocr' | 'manual') => void;
+    recordPlayerSighting: (playerId: string, teamColor: string, allTeamPlayers: string[], allOpponentPlayers: string[], shipType?: string, source?: 'ocr' | 'manual', ocrOnly?: boolean) => void;
     setPlayerName: (playerId: string, name: string) => void;
     getPlayerRole: (playerId: string) => PlayerRole;
     getMostFrequentOpponents: (limit?: number) => PlayerProfile[];
@@ -316,36 +316,41 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
     ocrLearningQueue: [],
     teamIdentityCorrections: {},
 
-    recordPlayerSighting: (playerId, teamColor, allTeamPlayers, allOpponentPlayers, shipType, source = 'manual') => {
+    recordPlayerSighting: (playerId, teamColor, allTeamPlayers, allOpponentPlayers, shipType, source = 'manual', ocrOnly = false) => {
         set((state) => {
             const existing = state.playerProfiles[playerId] || createEmptyProfile(playerId);
             const now = Date.now();
 
-            // Update team observations
+            // When ocrOnly=true (mid-match OCR scans) only track detection frequency,
+            // not encounter/relationship data — those are recorded once at match submission.
             const teamsObserved = { ...existing.teamsObserved };
-            if (teamColor && teamColor !== 'Unknown' && teamColor !== 'unknown') {
-                teamsObserved[teamColor] = (teamsObserved[teamColor] || 0) + 1;
-            }
-
-            // Update ship observations
             const shipsObserved = { ...existing.shipsObserved };
-            if (shipType) {
-                shipsObserved[shipType] = (shipsObserved[shipType] || 0) + 1;
-            }
-
-            // Update playedWith (teammates)
             const playedWith = { ...existing.playedWith };
-            allTeamPlayers.forEach(id => {
-                if (id !== playerId) {
-                    playedWith[id] = (playedWith[id] || 0) + 1;
-                }
-            });
-
-            // Update playedAgainst (opponents)
             const playedAgainst = { ...existing.playedAgainst };
-            allOpponentPlayers.forEach(id => {
-                playedAgainst[id] = (playedAgainst[id] || 0) + 1;
-            });
+
+            if (!ocrOnly) {
+                // Update team observations
+                if (teamColor && teamColor !== 'Unknown' && teamColor !== 'unknown') {
+                    teamsObserved[teamColor] = (teamsObserved[teamColor] || 0) + 1;
+                }
+
+                // Update ship observations
+                if (shipType) {
+                    shipsObserved[shipType] = (shipsObserved[shipType] || 0) + 1;
+                }
+
+                // Update playedWith (teammates)
+                allTeamPlayers.forEach(id => {
+                    if (id !== playerId) {
+                        playedWith[id] = (playedWith[id] || 0) + 1;
+                    }
+                });
+
+                // Update playedAgainst (opponents)
+                allOpponentPlayers.forEach(id => {
+                    playedAgainst[id] = (playedAgainst[id] || 0) + 1;
+                });
+            }
 
             // Track source of sighting (OCR vs manual)
             const ocrSightings = source === 'ocr' ? (existing.ocrSightings || 0) + 1 : (existing.ocrSightings || 0);
@@ -353,7 +358,8 @@ export const createMappingSlice: StateCreator<MappingSlice> = (set, get) => ({
 
             const updated: PlayerProfile = {
                 ...existing,
-                sightings: existing.sightings + 1,
+                // ocrOnly=true: only track detection frequency, not encounter count
+                sightings: ocrOnly ? existing.sightings : existing.sightings + 1,
                 lastSeen: now,
                 teamsObserved,
                 playedWith,

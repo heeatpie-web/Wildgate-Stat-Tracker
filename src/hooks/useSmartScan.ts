@@ -412,13 +412,16 @@ export const useSmartScan = () => {
 
                             for (const r of players) {
                                 if (r.confidence < OCR_THRESHOLDS.REJECT) continue;
+                                // ocrOnly=true: only increments ocrSightings (detection frequency);
+                                // encounter/relationship counts are recorded once at match submission.
                                 recordPlayerSighting(
                                     normalizeOcrName(r.name),
                                     r.teamColor || 'unknown',
                                     myTeamPlayers,
                                     opponentPlayers,
                                     r.shipType || undefined,
-                                    'ocr'
+                                    'ocr',
+                                    true
                                 );
                                 Logger.debug('SmartScan', `Recorded sighting for ${r.name} (${r.teamColor}, ship: ${r.shipType || 'unknown'}, source: ocr)`);
                             }
