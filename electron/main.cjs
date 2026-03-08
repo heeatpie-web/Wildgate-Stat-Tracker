@@ -74,25 +74,12 @@ const ROI_MIME_BY_EXT = Object.freeze({
   '.gif': 'image/gif',
 });
 const ALLOWED_HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
-const DEFAULT_EPIC_REQUEST_HOSTS = [
-  'api.accelbyte.io',
-  'services.accelbyte.io',
-  'epicgames.com',
-  'www.epicgames.com',
-];
-const EPIC_REQUEST_ALLOWED_HOSTS = new Set(
-  (process.env.WILDGATE_ALLOWED_API_HOSTS || DEFAULT_EPIC_REQUEST_HOSTS.join(','))
-    .split(',')
-    .map(v => v.trim().toLowerCase())
-    .filter(Boolean)
-);
 const EXTERNAL_ALLOWED_HOSTS = new Set(
   (process.env.WILDGATE_ALLOWED_EXTERNAL_HOSTS || '')
     .split(',')
     .map(v => v.trim().toLowerCase())
     .filter(Boolean)
 );
-const MAX_EPIC_REQUEST_BODY_BYTES = Number(process.env.WILDGATE_MAX_EPIC_BODY_BYTES || (2 * 1024 * 1024));
 const telemetryArchiveTokenRegistry = createScopedTokenRegistry({
   ttlMs: Number(process.env.WILDGATE_ARCHIVE_TOKEN_TTL_MS || (5 * 60 * 1000)),
   maxEntriesPerScope: Number(process.env.WILDGATE_ARCHIVE_TOKEN_MAX || 5000),
