@@ -342,7 +342,7 @@ export const useMatchSubmission = () => {
                 ? selectedReachModifiers
                 : (pendingMatchData.reachModifiers || []);
             let finalMods = [...baseMods];
-            if (subType === 'Artifact') finalMods.push(`Artifact: ${pendingArtifactType || 'Healing'}`);
+            if (subType === 'Artifact') finalMods.push(`Artifact: ${pendingArtifactType || 'healing'}`);
 
             if (selectedResult === 'Win') {
                 confetti({ particleCount: 100, spread: 70 });
@@ -631,7 +631,7 @@ export const useMatchSubmission = () => {
                 ? selectedReachModifiers
                 : (pendingMatchData.reachModifiers || []);
             let finalMods = [...baseMods];
-            if (subType === 'Artifact') finalMods.push(`Artifact: ${pendingArtifactType || 'Healing'}`);
+            if (subType === 'Artifact') finalMods.push(`Artifact: ${pendingArtifactType || 'healing'}`);
             const finalTime = (timeMin || timeSec) ? `${timeMin || '00'}:${timeSec || '00'}` : (pendingMatchData.time || "00:00");
             const resolvedHero = pickFirstKnown(pendingMatchData.hero, currentLoadout?.hero, activeHero);
             const resolvedShip = pickFirstKnown(pendingMatchData.ship, currentLoadout?.ship, activeShip);

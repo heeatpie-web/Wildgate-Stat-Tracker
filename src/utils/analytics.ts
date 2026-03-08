@@ -211,7 +211,7 @@ export const calculateInsights = (matches: Match[]): Insight[] => {
             opponentStats[o].total++;
             if (m.result === 'Win') opponentStats[o].wins++;
         });
-        const art = (m.reachModifiers || []).find(r => r.startsWith('Artifact:'))?.split(': ')[1];
+        const art = (m.reachModifiers || []).find(r => r.startsWith('Artifact:'))?.split(': ')[1]?.toLowerCase();
         if (art) {
             if (!artifactStats[art]) artifactStats[art] = { wins: 0, total: 0 };
             artifactStats[art].total++;
@@ -223,7 +223,7 @@ export const calculateInsights = (matches: Match[]): Insight[] => {
     if (nemesis) res.push({ title: "Nemesis Detected", subtitle: "Tough Opponent", value: nemesis[0], subValue: `0% Win Rate (${nemesis[1].total} Enc.)`, tone: "danger", iconType: 'Skull', priority: 45 });
 
     const bestArt = Object.entries(artifactStats).filter(([_, s]) => s.total >= 2).sort((a, b) => (b[1].wins / b[1].total) - (a[1].wins / a[1].total))[0];
-    if (bestArt && (bestArt[1].wins / bestArt[1].total) > 0.7) res.push({ title: "Artifact Specialist", subtitle: "Highest Win Affinity", value: bestArt[0], subValue: `${Math.round((bestArt[1].wins / bestArt[1].total) * 100)}% Win Rate`, tone: "warning", iconType: 'Zap', priority: 35 });
+    if (bestArt && (bestArt[1].wins / bestArt[1].total) > 0.7) res.push({ title: "Artifact Specialist", subtitle: "Highest Win Affinity", value: bestArt[0].charAt(0).toUpperCase() + bestArt[0].slice(1), subValue: `${Math.round((bestArt[1].wins / bestArt[1].total) * 100)}% Win Rate`, tone: "warning", iconType: 'Zap', priority: 35 });
 
     // Phase 3.3: Add death cause insights
     const deathInsights = calculateDeathCauseAnalytics(validMatches);

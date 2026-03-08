@@ -232,7 +232,7 @@ describe('OcrCorrectionModal', () => {
         );
         expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
             reachModifiers: ['Artifact: Ice', 'Ancient Vault'],
-            artifactSource: 'Ice',
+            artifactSource: 'ice',
             ocrDebug: expect.objectContaining({
                 hazards: ['Ancient Vault'],
             }),

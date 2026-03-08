@@ -1,7 +1,7 @@
 {
   "artifacts": [
     {
-      "artifactType": "Healing",
+      "artifactType": "healing",
       "displayName": "Artifact: Healing",
       "aliases": [
         "HEALING ARTIFACT",
@@ -11,7 +11,7 @@
       ]
     },
     {
-      "artifactType": "Ice",
+      "artifactType": "ice",
       "displayName": "Artifact: Ice",
       "aliases": [
         "ICE ARTIFACT",
@@ -22,7 +22,7 @@
       ]
     },
     {
-      "artifactType": "Weapon",
+      "artifactType": "weapon",
       "displayName": "Artifact: Weapon",
       "aliases": [
         "WEAPON ARTIFACT",

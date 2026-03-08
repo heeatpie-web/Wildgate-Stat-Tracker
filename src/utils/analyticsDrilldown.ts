@@ -98,10 +98,10 @@ const extractArtifactName = (match: Match): string | null => {
         .find((modifier) => modifier.startsWith('Artifact:'));
     if (fromModifiers) {
         const [, artifactName = ''] = fromModifiers.split(':');
-        const cleaned = artifactName.trim();
+        const cleaned = artifactName.trim().toLowerCase();
         if (cleaned) return cleaned;
     }
-    const fromSource = String(match.artifactSource || '').trim();
+    const fromSource = String(match.artifactSource || '').trim().toLowerCase();
     return fromSource || null;
 };
 
