@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
-    Users, Search, Star, Edit2, Trash2, ChevronRight, Merge,
+    Users, Search, Star, Edit2, Trash2, ChevronRight, ChevronDown, Merge,
     Undo2, ScanEye, Swords, Handshake, TrendingUp, X,
     Check, AlertTriangle, Image as ImageIcon
 } from 'lucide-react';
@@ -66,11 +66,12 @@ const PlayerHub: React.FC = () => {
         dismissRosterMergeSuggestionPairs,
         addToRegistry,
         removePendingReview,
+        removePilotAlias,
         matches,
         playerProfiles,
         setDrillDownTarget,
     } = useGameData();
-    const { setActiveView, setToast, setShowSettings } = useUIState();
+    const { setActiveView, setToast } = useUIState();
     const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
     const ocrAutoApplyMinScore = useAppStore(s => s.ocrAutoApplyMinScore);
     const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
@@ -89,10 +90,12 @@ const PlayerHub: React.FC = () => {
     const [mergeKeepName, setMergeKeepName] = useState<string | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
     const [showFullProfile, setShowFullProfile] = useState(false);
+    const [showAliases, setShowAliases] = useState(false);
     const [pendingCandidateEdits, setPendingCandidateEdits] = useState<Record<string, string>>({});
     const [sourcePreview, setSourcePreview] = useState<{ src: string; label: string } | null>(null);
     const [possibleMergesExpanded, setPossibleMergesExpanded] = useState(false);
     const hadPossibleMergesRef = useRef(false);
+    const mergeKeepNameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const socialData = useMemo(() => calculateSocialData(matches), [matches]);
     const pendingRosterCandidates = useMemo(() => {
@@ -209,6 +212,7 @@ const PlayerHub: React.FC = () => {
 
     useEffect(() => {
         setShowFullProfile(false);
+        setShowAliases(false);
     }, [selectedPilot]);
 
     useEffect(() => {
@@ -218,6 +222,12 @@ const PlayerHub: React.FC = () => {
         }, 10_000);
         return () => window.clearTimeout(timer);
     }, [activeMergeNotification?.id, dismissActiveMergeNotification]);
+
+    useEffect(() => {
+        return () => {
+            if (mergeKeepNameTimerRef.current !== null) clearTimeout(mergeKeepNameTimerRef.current);
+        };
+    }, []);
 
     useEffect(() => {
         if (possibleMergeGroups.length === 0) {
@@ -495,7 +505,8 @@ const PlayerHub: React.FC = () => {
         mergePilots(removeName, mergeKeepName);
         setSelectedPilot(mergeKeepName);
         setMergeTarget(null);
-        setMergeKeepName(null);
+        if (mergeKeepNameTimerRef.current !== null) clearTimeout(mergeKeepNameTimerRef.current);
+        mergeKeepNameTimerRef.current = setTimeout(() => setMergeKeepName(null), 3000);
         setMergeSearch('');
     };
 
@@ -527,16 +538,6 @@ const PlayerHub: React.FC = () => {
         const drillType = teammateTotal >= opponentTotal ? 'Teammate' : 'Opponent';
         setDrillDownTarget({ name: player.name, type: drillType });
         setActiveView('analytics');
-    };
-
-    const handleOpenIdentitySettings = (search: string) => {
-        setShowSettings(true);
-        window.dispatchEvent(new CustomEvent('settings:focus-section', {
-            detail: {
-                tab: 'identity',
-                search,
-            },
-        }));
     };
 
     const mergeCandidates = useMemo(() => {
@@ -1308,13 +1309,38 @@ const PlayerHub: React.FC = () => {
                                 >
                                     Back to Recording
                                 </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleOpenIdentitySettings(selected.name)}
-                                    className="px-3 py-1.5 rounded-control text-label-sm font-bold bg-info-soft text-info"
-                                >
-                                    Open Alias Settings
-                                </button>
+                                <div className="mt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAliases(prev => !prev)}
+                                        className="flex items-center gap-1 text-label-xs font-bold uppercase tracking-wide text-md-sys-primary hover:text-md-sys-primary/80"
+                                    >
+                                        <ChevronDown size={12} className={`transition-transform ${showAliases ? 'rotate-180' : ''}`} />
+                                        OCR Aliases
+                                    </button>
+                                    {showAliases && (
+                                        <div className="mt-2 flex flex-wrap gap-1 min-h-[24px]">
+                                            {(pilotAliases[selected.name] || []).length === 0 ? (
+                                                <span className="text-label-xs text-md-sys-on-surface/40">No aliases yet.</span>
+                                            ) : (pilotAliases[selected.name] || []).map(alias => (
+                                                <span
+                                                    key={alias}
+                                                    className="flex items-center gap-1 px-2 py-0.5 rounded-control bg-md-sys-primary/10 text-md-sys-primary text-label-xs font-semibold"
+                                                >
+                                                    {alias}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removePilotAlias(selected.name, alias)}
+                                                        className="hover:text-danger"
+                                                        aria-label={`Remove alias ${alias}`}
+                                                    >
+                                                        <X size={10} />
+                                                    </button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
@@ -1488,13 +1514,6 @@ const PlayerHub: React.FC = () => {
                                     <ImageIcon size={14} className="text-info" />
                                     <span className="text-label-sm font-semibold uppercase tracking-wide text-md-sys-on-surface/60">Former Names & OCR Variants</span>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => handleOpenIdentitySettings(selected.name)}
-                                    className="text-label-xs font-bold uppercase tracking-wide text-md-sys-primary hover:text-md-sys-primary/80"
-                                >
-                                    Manage in settings
-                                </button>
                             </div>
                             <div className="grid gap-3 md:grid-cols-2">
                                 <div className="rounded-lg bg-md-sys-on-surface/6 p-3">
