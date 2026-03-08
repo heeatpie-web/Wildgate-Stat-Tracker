@@ -57,6 +57,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const discardMatch = useAppStore(s => s.discardMatch);
     const resultOcrFlowMode = useAppStore(s => s.resultOcrFlowMode);
     const ocrAutoOpenAfterRerun = useAppStore(s => s.ocrAutoOpenAfterRerun);
+    const showSmartCaptureInHeader = useAppStore(s => s.showSmartCaptureInHeader);
     const selectedSmartCapturesMatchId = useAppStore(s => s.selectedMatchId);
     const ocrModeLabel = 'Local';
 
@@ -710,15 +711,17 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     if (isTransparent) {
         return (
             <div className="flex flex-col gap-3 p-1">
-                <button
-                    onClick={handleNewSmartCapture}
-                    disabled={isBusy}
-                    data-tour="smart-capture"
-                    className="relative z-50 w-full bg-md-sys-primary text-md-sys-onPrimary py-4 font-bold text-body uppercase tracking-wide flex items-center justify-center gap-3 shadow-xl ring-2 ring-md-sys-primary/30 active:scale-98 transition-all disabled:opacity-disabled disabled:cursor-not-allowed group rounded-card"
-                >
-                    {isBusy ? <Loader2 size={18} className="animate-spin" /> : <Scan size={18} className="group-hover:scale-110 transition-transform" />}
-                    <span>Smart Capture</span>
-                </button>
+                {!showSmartCaptureInHeader && (
+                    <button
+                        onClick={handleNewSmartCapture}
+                        disabled={isBusy}
+                        data-tour="smart-capture"
+                        className="relative z-50 w-full bg-md-sys-primary text-md-sys-onPrimary py-4 font-bold text-body uppercase tracking-wide flex items-center justify-center gap-3 shadow-xl ring-2 ring-md-sys-primary/30 active:scale-98 transition-all disabled:opacity-disabled disabled:cursor-not-allowed group rounded-card"
+                    >
+                        {isBusy ? <Loader2 size={18} className="animate-spin" /> : <Scan size={18} className="group-hover:scale-110 transition-transform" />}
+                        <span>Smart Capture</span>
+                    </button>
+                )}
 
                 {captureError && (
                     <div className="bg-md-sys-errorContainer/20 border border-md-sys-error/20 rounded-control px-3 py-2 text-label-sm text-md-sys-error flex justify-between items-center mg-blur">
@@ -870,21 +873,23 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
 
                 <ResultButtons compact={isCompact} />
 
-                <button
-                    onClick={handleNewSmartCapture}
-                    disabled={isBusy}
-                    data-tour="smart-capture"
-                    className="w-full bg-md-sys-primary text-md-sys-onPrimary py-3 rounded-control font-bold text-label-sm uppercase tracking-wide flex items-center justify-center gap-2 transition-all hover:brightness-110 active:scale-98 disabled:opacity-disabled disabled:cursor-not-allowed"
-                    title="Capture screenshot and queue OCR"
-                >
-                    {isBusy ? <Loader2 size={14} className="animate-spin" /> : <Scan size={14} />}
-                    <span>Smart Capture</span>
-                    {pendingOcrCountForSubmission > 0 && (
-                        <span className="px-1.5 py-0.5 rounded-pill bg-md-sys-onPrimary/20 text-label-xs font-black">
-                            {pendingOcrCountForSubmission}
-                        </span>
-                    )}
-                </button>
+                {!showSmartCaptureInHeader && (
+                    <button
+                        onClick={handleNewSmartCapture}
+                        disabled={isBusy}
+                        data-tour="smart-capture"
+                        className="w-full bg-md-sys-primary text-md-sys-onPrimary py-3 rounded-control font-bold text-label-sm uppercase tracking-wide flex items-center justify-center gap-2 transition-all hover:brightness-110 active:scale-98 disabled:opacity-disabled disabled:cursor-not-allowed"
+                        title="Capture screenshot and queue OCR"
+                    >
+                        {isBusy ? <Loader2 size={14} className="animate-spin" /> : <Scan size={14} />}
+                        <span>Smart Capture</span>
+                        {pendingOcrCountForSubmission > 0 && (
+                            <span className="px-1.5 py-0.5 rounded-pill bg-md-sys-onPrimary/20 text-label-xs font-black">
+                                {pendingOcrCountForSubmission}
+                            </span>
+                        )}
+                    </button>
+                )}
 
                 {isMatchInProgress ? (
                     <div className="bg-success-soft border border-success-soft-strong rounded-control px-3 py-2 flex items-center justify-between">

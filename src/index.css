@@ -4541,6 +4541,12 @@ body[data-mode='dark'] .custom-scrollbar::-webkit-scrollbar-thumb {
   box-shadow: none;
 }
 
+.header-action-btn--smart-capture {
+  background: color-mix(in srgb, var(--md-sys-color-primary), var(--md-sys-color-surface-container-high) 90%);
+  border-color: color-mix(in srgb, var(--md-sys-color-primary), transparent 76%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 88%);
+}
+
 .header-action-btn--secondary {
   background: var(--md-sys-color-surface-container-highest);
 }

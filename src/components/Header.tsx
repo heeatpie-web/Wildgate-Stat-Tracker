@@ -158,7 +158,7 @@ export const Header: React.FC<HeaderProps> = ({
                             loading={smartCaptureBusy}
                             icon={!smartCaptureBusy ? <Scan size={14} /> : undefined}
                             data-recording-panel="topbar-smart-capture"
-                            className="header-action-btn header-action-btn--primary whitespace-nowrap min-w-138px px-3.5 text-label-sm font-bold uppercase tracking-wide"
+                            className="header-action-btn header-action-btn--primary header-action-btn--smart-capture whitespace-nowrap min-w-138px px-3.5 text-label-sm font-bold uppercase tracking-wide"
                             title="Smart Capture (screenshots + OCR)"
                         >
                             Smart Capture

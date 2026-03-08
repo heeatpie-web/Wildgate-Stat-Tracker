@@ -70,6 +70,7 @@ const appStoreState = {
   ocrMode: 'both',
   resultOcrFlowMode: 'prompt',
   ocrAutoOpenAfterRerun: false,
+  showSmartCaptureInHeader: false,
   pendingMatchData: null as any,
   matches: [] as any[],
   setPendingMatchData: vi.fn(),
@@ -145,6 +146,7 @@ describe('ActionPanel', () => {
     gameData.currentLoadout = null;
     appStoreState.resultOcrFlowMode = 'prompt';
     appStoreState.ocrAutoOpenAfterRerun = false;
+    appStoreState.showSmartCaptureInHeader = false;
     appStoreState.pendingMatchData = null;
     appStoreState.matches = [];
     smartCaptureActions.getPendingData.mockImplementation(() => smartCaptureState.pendingData);
@@ -191,6 +193,15 @@ describe('ActionPanel', () => {
     render(<ActionPanel />);
 
     expect(screen.queryByRole('button', { name: /intelligence review required/i })).toBeNull();
+  });
+
+  it('hides the in-panel Smart Capture button when header Smart Capture is enabled', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    appStoreState.showSmartCaptureInHeader = true;
+
+    const { container } = render(<ActionPanel />);
+
+    expect(container.querySelector('[data-tour="smart-capture"]')).toBeNull();
   });
 
   it('falls back to smart scan when smart capture callback is not provided', async () => {
