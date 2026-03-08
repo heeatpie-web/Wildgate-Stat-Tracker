@@ -342,6 +342,7 @@ const App: React.FC = () => {
     const dashboardPreloadStats = useAppStore(s => s.dashboardPreloadStats);
     const recordDashboardPreloadVisit = useAppStore(s => s.recordDashboardPreloadVisit);
     const ocrAutoApplyMinScore = useAppStore(s => s.ocrAutoApplyMinScore);
+    const dismissedRosterCandidateKeys = useAppStore(s => s.dismissedRosterCandidateKeys);
     const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
     const telemetryPerformanceProfile = useAppStore(s => s.telemetryPerformanceProfile);
     const welcomeBackToastShownRef = React.useRef(false);
@@ -1819,6 +1820,7 @@ const App: React.FC = () => {
             pendingReviews,
             pilotRegistry,
             canonicalTargetKey,
+            dismissedCandidateKeys: dismissedRosterCandidateKeys,
         })) return;
         addPendingReview({
             id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
@@ -2242,6 +2244,7 @@ const App: React.FC = () => {
                 pendingReviews,
                 pilotRegistry,
                 canonicalTargetKey,
+                dismissedCandidateKeys: dismissedRosterCandidateKeys,
             })) return;
             addPendingReview({
                 id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,

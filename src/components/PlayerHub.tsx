@@ -64,6 +64,8 @@ const PlayerHub: React.FC = () => {
         pendingReviews,
         dismissedRosterMergePairKeys,
         dismissRosterMergeSuggestionPairs,
+        dismissedRosterCandidateKeys,
+        dismissRosterCandidateKeys,
         addToRegistry,
         removePendingReview,
         removePilotAlias,
@@ -596,7 +598,6 @@ const PlayerHub: React.FC = () => {
         addToRegistry(resolvedTarget);
         clearResolvedRosterCandidates(candidate, resolvedTarget, 'merge');
         setSelectedPilot(resolvedTarget);
-        setPanelMode('roster');
         setToast({
             message: `Merged OCR candidate "${rawValue}" into "${resolvedTarget}"`,
             type: 'success',
@@ -621,6 +622,10 @@ const PlayerHub: React.FC = () => {
             addToRegistry(value);
             setToast({ message: `Added "${value}" to roster as a new player`, type: 'success' });
         }
+        if (action === 'dismiss') {
+            const dismissKey = normalizeOcrName(candidate.value || '').toLowerCase();
+            if (dismissKey) dismissRosterCandidateKeys([dismissKey]);
+        }
         clearResolvedRosterCandidates(candidate, value, action);
         if (action === 'dismiss') {
             setToast({ message: `Dismissed pending roster candidate "${value}"`, type: 'info' });
@@ -633,7 +638,6 @@ const PlayerHub: React.FC = () => {
             mergePilots(variant.name, group.canonicalName);
         });
         setSelectedPilot(group.canonicalName);
-        setPanelMode('roster');
         setToast({
             message: `Merged ${group.variants.length} roster variant${group.variants.length === 1 ? '' : 's'} into "${group.canonicalName}"`,
             type: 'success',

@@ -336,6 +336,8 @@ export interface DataSlice {
   clearPendingReviews: () => void;
   dismissedRosterMergePairKeys: string[];
   dismissRosterMergeSuggestionPairs: (pairKeys: string[]) => void;
+  dismissedRosterCandidateKeys: string[];
+  dismissRosterCandidateKeys: (keys: string[]) => void;
 
   setLastActivity: (timestamp: number) => void;
 }
@@ -438,6 +440,15 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
         .filter(Boolean)
     ));
     return { dismissedRosterMergePairKeys: nextKeys };
+  }),
+  dismissedRosterCandidateKeys: [],
+  dismissRosterCandidateKeys: (keys) => set((state) => {
+    const nextKeys = Array.from(new Set(
+      [...(state.dismissedRosterCandidateKeys || []), ...(keys || [])]
+        .map((value) => String(value || '').trim().toLowerCase())
+        .filter(Boolean)
+    ));
+    return { dismissedRosterCandidateKeys: nextKeys };
   }),
 
   mergeHistory: [],

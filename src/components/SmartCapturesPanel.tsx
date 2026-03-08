@@ -447,11 +447,13 @@ const SmartCapturesPanel: React.FC = () => {
             aliasResolvedName: aliasResolution?.suggestedName,
             pilotRegistry,
         });
+        const dismissedRosterCandidateKeys = useAppStore.getState().dismissedRosterCandidateKeys;
         if (!shouldQueueCanonicalRosterCandidate({
             rawName: normalized,
             pendingReviews,
             pilotRegistry,
             canonicalTargetKey,
+            dismissedCandidateKeys: dismissedRosterCandidateKeys,
         })) return;
         addPendingReview({
             id: `sc_roster_${Date.now()}_${Math.random().toString(36).slice(2)}`,

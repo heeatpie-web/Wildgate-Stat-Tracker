@@ -38,6 +38,7 @@ interface QueueCheckOptions {
     pendingReviews: PendingReview[];
     pilotRegistry?: string[];
     canonicalTargetKey?: string;
+    dismissedCandidateKeys?: string[];
 }
 
 export const shouldQueueCanonicalRosterCandidate = ({
@@ -45,12 +46,15 @@ export const shouldQueueCanonicalRosterCandidate = ({
     pendingReviews,
     pilotRegistry = [],
     canonicalTargetKey = '',
+    dismissedCandidateKeys = [],
 }: QueueCheckOptions): boolean => {
     const rawKey = normalizePendingReviewKey(rawName);
     if (!rawKey || rawKey.length < 2) return false;
 
     const hasExact = (pilotRegistry || []).some((entry) => normalizePendingReviewKey(entry) === rawKey);
     if (hasExact) return false;
+
+    if ((dismissedCandidateKeys || []).includes(rawKey)) return false;
 
     const reviewCandidates = (pendingReviews || []).filter((review) => review.type === 'roster_candidate');
     const hasRawDuplicate = reviewCandidates.some((review) => normalizePendingReviewKey(review.value) === rawKey);

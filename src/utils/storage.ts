@@ -52,6 +52,7 @@ export interface StorageData {
   ocrLearningQueue?: OcrLearningQueueItem[];
   pendingReviews?: PendingReview[];
   dismissedRosterMergePairKeys?: string[];
+  dismissedRosterCandidateKeys?: string[];
   settings: StorageSettings;
   layouts: StorageLayouts;
   lastActivity: number;

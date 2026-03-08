@@ -74,6 +74,7 @@ export const useSmartScan = () => {
     const resolveOcrAlias = useAppStore(state => state.resolveOcrAlias);
     const ocrLearningEnabled = useAppStore(state => state.ocrLearningEnabled);
     const ocrAutoApplyMinScore = useAppStore(state => state.ocrAutoApplyMinScore);
+    const dismissedRosterCandidateKeys = useAppStore(state => state.dismissedRosterCandidateKeys);
     const ocrAutoApplyMinCount = useAppStore(state => state.ocrAutoApplyMinCount);
     const ocrLearningStrictMode = useAppStore(state => state.ocrLearningStrictMode);
     const ocrLearningQueueEnabled = useAppStore(state => state.ocrLearningQueueEnabled);
@@ -356,6 +357,7 @@ export const useSmartScan = () => {
                                                 pendingReviews,
                                                 pilotRegistry,
                                                 canonicalTargetKey,
+                                                dismissedCandidateKeys: dismissedRosterCandidateKeys,
                                             })) {
                                                 continue;
                                             }
