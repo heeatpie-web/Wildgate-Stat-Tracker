@@ -53,10 +53,31 @@ export const RosterPanel: React.FC = () => {
     const [mergeKeepName, setMergeKeepName] = useState<string | null>(null);
     const [newAlias, setNewAlias] = useState("");
     const [teammateLimitError, setTeammateLimitError] = useState('');
+    /**
+     * Tracks the timestamp of a dismissed merge notification banner.
+     * When this equals the last mergeHistory[0].timestamp the banner is hidden
+     * without undoing the merge. Resets whenever a new merge is recorded.
+     */
+    const [dismissedMergeTimestamp, setDismissedMergeTimestamp] = useState<number | null>(null);
+
     const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
     const removeOcrAliasCorrection = useAppStore(s => s.removeOcrAliasCorrection);
     const pendingMatchData = useAppStore(s => s.pendingMatchData);
     const setPendingMatchData = useAppStore(s => s.setPendingMatchData);
+
+    // Auto-dismiss the merge notification banner after 8 seconds.
+    const lastMergeTimestamp = mergeHistory?.[0]?.timestamp ?? null;
+    React.useEffect(() => {
+        if (lastMergeTimestamp === null) return;
+        if (dismissedMergeTimestamp === lastMergeTimestamp) return;
+        const timerId = window.setTimeout(() => {
+            setDismissedMergeTimestamp(lastMergeTimestamp);
+        }, 8_000);
+        return () => window.clearTimeout(timerId);
+    // Only re-run when a new merge occurs; intentionally exclude dismissedMergeTimestamp.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [lastMergeTimestamp]);
+
     const displayName = (name: string) => {
         const normalized = normalizeOcrName(name || '').toLowerCase();
         const me = normalizeOcrName(activeUser || '').toLowerCase();
@@ -214,21 +235,34 @@ export const RosterPanel: React.FC = () => {
                 )}
             </div>
 
-            {mergeHistory && mergeHistory.length > 0 && (() => {
+            {mergeHistory && mergeHistory.length > 0 && dismissedMergeTimestamp !== mergeHistory[0].timestamp && (() => {
                 const last = mergeHistory[0];
                 const ago = Math.round((Date.now() - last.timestamp) / 1000);
                 const agoLabel = ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`;
                 return (
-                    <div className="flex items-center justify-between bg-warning-soft border border-warning-soft rounded-control px-3 py-2">
-                        <span className="text-label-sm text-warning">
-                            Merged <strong>{last.sourceName}</strong> -&gt; <strong>{last.targetName}</strong> ({agoLabel})
+                    <div className="flex items-center justify-between bg-warning-soft border border-warning-soft rounded-control px-3 py-2 gap-2">
+                        <span className="text-label-sm text-warning min-w-0 truncate">
+                            Merged <strong>{last.sourceName}</strong> → <strong>{last.targetName}</strong> ({agoLabel})
                         </span>
-                        <button
-                            onClick={() => undoLastMerge()}
-                            className="flex items-center gap-1 px-2 py-1 bg-warning-soft hover:bg-warning hover:text-ink-strong text-warning rounded text-label-sm font-bold transition-colors"
-                        >
-                            <Undo2 size={10} /> Undo
-                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => undoLastMerge()}
+                                className="flex items-center gap-1 px-2 py-1 bg-warning-soft hover:bg-warning hover:text-ink-strong text-warning rounded text-label-sm font-bold transition-colors"
+                                aria-label="Undo last merge"
+                            >
+                                <Undo2 size={10} /> Undo
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setDismissedMergeTimestamp(last.timestamp)}
+                                className="w-6 h-6 rounded-full inline-flex items-center justify-center text-warning/70 hover:text-warning hover:bg-md-sys-on-surface/10 transition-colors"
+                                aria-label="Dismiss merge notification"
+                                title="Dismiss"
+                            >
+                                <X size={12} />
+                            </button>
+                        </div>
                     </div>
                 );
             })()}
