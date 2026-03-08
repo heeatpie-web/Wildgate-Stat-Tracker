@@ -1257,7 +1257,7 @@ export const Wizard: React.FC = () => {
                 ) : (
                         <div
                         data-testid="wizard-ocr-tab-panel"
-                        className={`flex-1 min-h-0 flex flex-col ${isOverlayMode ? 'px-4 py-4 gap-3' : 'px-8 py-6 gap-4'}`}
+                        className={`flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col ${isOverlayMode ? 'px-4 py-4 gap-3' : 'px-8 py-6 gap-4'}`}
                     >
                         <div className="flex items-center gap-3 rounded-xl mg-surface border border-md-sys-outline/10 px-4 py-2.5">
                             <span className="text-label-sm font-bold text-md-sys-on-surface/70 whitespace-nowrap">Review Panel</span>
@@ -1382,7 +1382,7 @@ export const Wizard: React.FC = () => {
                                 </div>
                             )}
                         </div>
-                        <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
+                        <div className="h-[420px] flex flex-col overflow-hidden relative">
                             <div className={`flex-1 min-h-0 ${isPendingOcrProcessing ? 'pointer-events-none opacity-60' : ''}`}>
                                 <OcrCorrectionModal
                                     isOpen={true}
