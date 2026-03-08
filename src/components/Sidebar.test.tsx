@@ -24,6 +24,11 @@ const gameData = {
   deletePlayer: vi.fn(),
 };
 
+const appStoreState = {
+  detectedUnknowns: {} as Record<string, { type: string; lastSeen: number }>,
+  matches: [] as Array<Record<string, unknown>>,
+};
+
 vi.mock('../providers/UIStateProvider', () => ({
   useUIState: () => uiState,
 }));
@@ -32,11 +37,17 @@ vi.mock('../providers/GameDataProvider', () => ({
   useGameData: () => gameData,
 }));
 
+vi.mock('../store/useAppStore', () => ({
+  useAppStore: (selector: (state: typeof appStoreState) => unknown) => selector(appStoreState),
+}));
+
 describe('Sidebar', () => {
   beforeEach(() => {
     uiState.activeView = 'recording';
     uiState.sidebarCollapsed = false;
     uiState.activeUser = 'TestPilot';
+    appStoreState.detectedUnknowns = {};
+    appStoreState.matches = [];
     vi.clearAllMocks();
   });
 
@@ -61,6 +72,34 @@ describe('Sidebar', () => {
     fireEvent.click(screen.getByRole('button', { name: /analytics/i }));
 
     expect(uiState.setActiveView).toHaveBeenCalledWith('analytics');
+  });
+
+  it('renders badges for pending Smart Capture work and unmapped IDs', async () => {
+    const { Sidebar } = await import('./Sidebar');
+    appStoreState.detectedUnknowns = {
+      SHIP001: { type: 'Ship', lastSeen: Date.now() },
+    };
+    appStoreState.matches = [{
+      id: 44,
+      timestamp: Date.now(),
+      date: '2026-03-07',
+      mode: 'Fleet Battle',
+      player: 'TestPilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      ocrState: 'processing',
+    }];
+
+    render(<Sidebar />);
+
+    expect(screen.getByRole('button', { name: /smart captures \(1 pending\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /id mapper \(1 pending\)/i })).toBeInTheDocument();
   });
 });
 

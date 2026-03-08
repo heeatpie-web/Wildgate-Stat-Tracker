@@ -44,6 +44,7 @@ import {
     getComparableTeammateCount,
     getQueueDisplayNumber,
     getQueueStatus,
+    isMatchInSmartCaptureWorkQueue,
     getStatusMeta,
     getTelemetryConsistencyWarningChips,
 } from './smart-captures/smartCaptureUtils';
@@ -519,27 +520,6 @@ const SmartCapturesPanel: React.FC = () => {
     }, [matches]);
 
 
-    const isWorkQueueItem = useCallback((m: Match) => {
-        if (m.ocrState) {
-            return m.ocrState === 'queued'
-                || m.ocrState === 'processing'
-                || m.ocrState === 'reviewing'
-                || m.ocrState === 'error';
-        }
-        const hasArtifacts = (m.artifacts?.length || 0) > 0;
-        const hasOcr = !!m.ocrDebug;
-        if (!hasArtifacts && !hasOcr) return false;
-
-        const conf = m.ocrDebug?.confidence ?? 0;
-        const lowConf = hasOcr && conf > 0 && conf < 80;
-        const missingShip = !m.ship;
-        const missingPlayers = (m.teammates?.length || 0) === 0 && (m.opponents?.length || 0) === 0;
-
-        // If you have artifacts but no OCR metadata, it's still a queue item.
-        if (hasArtifacts && !hasOcr) return true;
-        return lowConf || missingShip || missingPlayers;
-    }, []);
-
     useEffect(() => {
         if (smartCapturesFocusMatchId && matches.some(m => m.id === smartCapturesFocusMatchId)) {
             setSelectedMatchId(smartCapturesFocusMatchId);
@@ -621,8 +601,8 @@ const SmartCapturesPanel: React.FC = () => {
     }, [matches, modeFilter, queueDayFilter, searchQuery]);
 
     const allWorkQueueMatches = useMemo(
-        () => filteredMatches.filter(isWorkQueueItem),
-        [filteredMatches, isWorkQueueItem]
+        () => filteredMatches.filter(isMatchInSmartCaptureWorkQueue),
+        [filteredMatches]
     );
 
     const workQueueOpenCount = useMemo(

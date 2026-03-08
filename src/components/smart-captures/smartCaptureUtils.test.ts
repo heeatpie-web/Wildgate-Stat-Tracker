@@ -3,12 +3,14 @@ import type { Match, OcrState } from '../../types';
 import {
   classifyPracticalConfidence,
   classifySpecConfidence,
+  countOpenSmartCaptureWorkQueueMatches,
   countImages,
   formatDualConfidence,
   getComparableTeammateCount,
   getCollapsedQueueGlyph,
   getQueueDisplayNumber,
   getQueueStatus,
+  isMatchInSmartCaptureWorkQueue,
   getStatusMeta,
   getTelemetryConsistencyWarningChips,
   getSemanticStatusTone,
@@ -96,6 +98,22 @@ describe('smartCaptureUtils', () => {
     expect(status.key).toBe('OK');
     expect(status.missingShip).toBe(false);
     expect(status.missingPlayers).toBe(false);
+  });
+
+  it('identifies Smart Capture work-queue matches from explicit and legacy OCR states', () => {
+    expect(isMatchInSmartCaptureWorkQueue(makeMatch({ ocrState: 'processing' }))).toBe(true);
+    expect(isMatchInSmartCaptureWorkQueue(makeMatch({ artifacts: ['capture_1.png'], ocrDebug: undefined }))).toBe(true);
+    expect(isMatchInSmartCaptureWorkQueue(makeMatch({ ocrDebug: { confidence: 90 } }))).toBe(false);
+  });
+
+  it('counts only open Smart Capture work-queue matches', () => {
+    const matches = [
+      makeMatch({ id: 1, ocrState: 'queued' }),
+      makeMatch({ id: 2, artifacts: ['capture_1.png'], ocrDebug: undefined }),
+      makeMatch({ id: 3, ocrState: 'reviewing', ocrReviewedAt: Date.now() }),
+      makeMatch({ id: 4, ocrDebug: { confidence: 90 } }),
+    ];
+    expect(countOpenSmartCaptureWorkQueueMatches(matches)).toBe(2);
   });
 
   it('classifies spec confidence by strict UI thresholds', () => {

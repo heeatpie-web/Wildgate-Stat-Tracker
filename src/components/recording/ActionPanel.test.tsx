@@ -183,6 +183,16 @@ describe('ActionPanel', () => {
     expect(screen.queryByRole('button', { name: /id mapper/i })).toBeNull();
   });
 
+  it('does not render the legacy combined review button even when review work exists', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+    gameData.pendingReviews = [{ id: 'review-1' } as any];
+    gameData.detectedUnknowns = { UNKNOWN1: { type: 'Ship', lastSeen: Date.now() } };
+
+    render(<ActionPanel />);
+
+    expect(screen.queryByRole('button', { name: /intelligence review required/i })).toBeNull();
+  });
+
   it('falls back to smart scan when smart capture callback is not provided', async () => {
     const { ActionPanel } = await import('./ActionPanel');
 

@@ -98,6 +98,24 @@ export const getQueueStatus = (m: Match): QueueStatus => {
     return { ...base, key: 'OK' };
 };
 
+export const isMatchInSmartCaptureWorkQueue = (match: Match): boolean => {
+    if (match.ocrState) {
+        return match.ocrState === 'queued'
+            || match.ocrState === 'processing'
+            || match.ocrState === 'reviewing'
+            || match.ocrState === 'error';
+    }
+
+    const status = getQueueStatus(match);
+    return status.key === 'NeedsOCR'
+        || status.key === 'LowConf'
+        || status.key === 'MissingData';
+};
+
+export const countOpenSmartCaptureWorkQueueMatches = (matches: Match[]): number => (
+    (matches || []).filter((match) => isMatchInSmartCaptureWorkQueue(match) && !match.ocrReviewedAt).length
+);
+
 export type QueueSemanticTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 export type CollapsedQueueGlyph = 'win' | 'loss' | 'draw' | 'saved' | 'review' | 'error' | 'queued';
 export type StatusIconKey = 'clock' | 'scan' | 'alert' | 'check' | 'x' | 'spark';

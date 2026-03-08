@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { useUIState } from '../providers/UIStateProvider';
 import { useGameData } from '../providers/GameDataProvider';
+import { useAppStore } from '../store/useAppStore';
+import { countOpenSmartCaptureWorkQueueMatches } from './smart-captures/smartCaptureUtils';
 
 const IS_DEV_BUILD = import.meta.env.DEV || process.env.NODE_ENV !== 'production';
 
@@ -58,6 +60,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
         sidebarCollapsed,
     } = useUIState();
     const { players, deletePlayer } = useGameData();
+    const matches = useAppStore((state) => state.matches);
+    const unknownIdCount = useAppStore((state) => Object.keys(state.detectedUnknowns || {}).length);
 
     const [profileMenuOpen, setProfileMenuOpen] = useState(false);
     const profileMenuRef = useRef<HTMLDivElement | null>(null);
@@ -102,6 +106,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
 
     const railClass = isMobileDrawer ? 'w-220px' : (sidebarCollapsed ? 'w-14' : 'w-32');
     const showLabels = isMobileDrawer || !sidebarCollapsed;
+    const smartCaptureQueueCount = React.useMemo(
+        () => countOpenSmartCaptureWorkQueueMatches(matches || []),
+        [matches]
+    );
+    const badgeCountByView: Partial<Record<AppView, number>> = {
+        'smart-captures': smartCaptureQueueCount,
+        'id-mapper': unknownIdCount,
+    };
+    const formatBadgeCount = (count: number): string => (count > 99 ? '99+' : String(count));
     const closeDrawerIfNeeded = () => {
         if (isMobileDrawer) {
             onRequestClose?.();
@@ -130,24 +143,36 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
 
             <div className="flex flex-col gap-1 flex-1">
                 {navItems.map((item) => (
-                    <button
-                        key={item.id}
-                        onClick={() => {
-                            React.startTransition(() => setActiveView(item.id));
-                            closeDrawerIfNeeded();
-                        }}
-                        data-tour={`nav-${item.id}`}
-                        aria-current={activeView === item.id ? 'page' : undefined}
-                        className={`relative w-full py-2.5 premium-nav-item md3-nav-item sidebar-nav-item flex items-center transition-all duration-150 group ${
-                            activeView === item.id ? 'premium-nav-item--active sidebar-nav-item--active' : 'text-md-sys-on-surface/60'
-                        } ${showLabels ? 'justify-start px-3 gap-2.5' : 'justify-center'}`}
-                        title={item.label}
-                        style={{ WebkitAppRegion: 'no-drag' } as any}
-                    >
-                        <span className="sidebar-nav-accent" aria-hidden />
-                        <span className="md3-nav-icon premium-nav-icon">{item.icon}</span>
-                        {showLabels && <span className="text-label-xs font-semibold tracking-wide-02 leading-tight truncate">{item.label}</span>}
-                    </button>
+                    (() => {
+                        const badgeCount = Number(badgeCountByView[item.id] || 0);
+                        const buttonLabel = badgeCount > 0 ? `${item.label} (${badgeCount} pending)` : item.label;
+                        return (
+                            <button
+                                key={item.id}
+                                onClick={() => {
+                                    React.startTransition(() => setActiveView(item.id));
+                                    closeDrawerIfNeeded();
+                                }}
+                                data-tour={`nav-${item.id}`}
+                                aria-label={buttonLabel}
+                                aria-current={activeView === item.id ? 'page' : undefined}
+                                className={`relative w-full py-2.5 premium-nav-item md3-nav-item sidebar-nav-item flex items-center transition-all duration-150 group ${
+                                    activeView === item.id ? 'premium-nav-item--active sidebar-nav-item--active' : 'text-md-sys-on-surface/60'
+                                } ${showLabels ? 'justify-start px-3 gap-2.5' : 'justify-center'}`}
+                                title={buttonLabel}
+                                style={{ WebkitAppRegion: 'no-drag' } as any}
+                            >
+                                <span className="sidebar-nav-accent" aria-hidden />
+                                <span className="md3-nav-icon premium-nav-icon">{item.icon}</span>
+                                {showLabels && <span className="text-label-xs font-semibold tracking-wide-02 leading-tight truncate">{item.label}</span>}
+                                {badgeCount > 0 && (
+                                    <span className={`absolute min-w-5 h-5 px-1 rounded-full bg-md-sys-error text-md-sys-onError text-label-xs font-bold flex items-center justify-center ${showLabels ? 'top-2 right-2' : '-top-1 -right-1'}`}>
+                                        {formatBadgeCount(badgeCount)}
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })()
                 ))}
 
                 {IS_DEV_BUILD && (

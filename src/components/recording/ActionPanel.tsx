@@ -39,15 +39,11 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         lastActivity, setLastActivity,
         matchStartTime, isMatchInProgress,
         setMatchStartTime, setIsMatchInProgress,
-        pendingReviews,
-        detectedUnknowns,
         setSessionTeams
     } = useGameData();
 
     const {
         activeUser,
-        setShowReviewQueue,
-        setShowIdMapper,
         smartCaptureRequest,
         clearSmartCaptureRequest,
         pushNotification
@@ -964,22 +960,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                 )}
 
                 <StatusOverlay />
-            </div>
-
-            {/* Support Systems */}
-            <div className="flex flex-col gap-2">
-                {(pendingReviews.length > 0 || Object.keys(detectedUnknowns).length > 0) && (
-                    <button
-                        className="w-full bg-warning-soft hover:bg-warning/20 text-warning border border-warning-soft py-3 text-label-sm font-bold uppercase tracking-widest rounded-card flex items-center justify-center gap-2 transition-all"
-                        onClick={() => {
-                            setShowReviewQueue(true);
-                            if (Object.keys(detectedUnknowns).length > 0) setShowIdMapper(true);
-                        }}
-                    >
-                        <ScanEye size={14} className="animate-pulse" />
-                        Intelligence Review Required ({pendingReviews.length + Object.keys(detectedUnknowns).length})
-                    </button>
-                )}
             </div>
             <OcrDecisionPrompt />
         </div>
