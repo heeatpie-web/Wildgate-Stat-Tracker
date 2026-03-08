@@ -490,7 +490,7 @@ describe('Wizard', () => {
         expect(uiState.setShowWizard).toHaveBeenCalledWith(null);
     });
 
-    it('keeps OCR review tab in a non-clipping flex layout chain', async () => {
+  it('keeps OCR review tab in a non-clipping flex layout chain', async () => {
         const { Wizard } = await import('./Wizard');
         gameData.pendingMatchData = {
             id: 910,
@@ -522,6 +522,36 @@ describe('Wizard', () => {
         expect(innerWrapper).toHaveClass('flex-col');
         expect(innerWrapper).toHaveClass('overflow-hidden');
         expect(embeddedShell).toBeInTheDocument();
+    });
+
+    it('dims the OCR review content while background processing is still running', async () => {
+        const { Wizard } = await import('./Wizard');
+        gameData.pendingMatchData = {
+            id: 913,
+            ocrState: 'processing',
+            loadout: {
+                hero: 'Adrian',
+                ship: 'Hunter',
+                weapons: [],
+                equipment: [],
+            },
+            kills: { 'AI Legion': 0 },
+        };
+        uiState.showWizard = 'Win';
+
+        const { rerender } = render(<Wizard />);
+        fireEvent.click(screen.getByRole('button', { name: /ocr review/i }));
+
+        expect(screen.getByTestId('wizard-ocr-processing-overlay')).toBeInTheDocument();
+        expect(screen.getByText(/processing ocr/i)).toBeInTheDocument();
+
+        gameData.pendingMatchData = {
+            ...gameData.pendingMatchData,
+            ocrState: 'reviewing',
+        };
+        rerender(<Wizard />);
+
+        expect(screen.queryByTestId('wizard-ocr-processing-overlay')).toBeNull();
     });
 
     it('keeps prospector loadout collapsed by default in the OCR tab', async () => {

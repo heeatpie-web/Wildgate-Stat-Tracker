@@ -24,4 +24,16 @@ describe('SmartCapturesDetailPane', () => {
     const scroller = screen.getByText('Detail Body').parentElement;
     expect(scroller).toHaveClass('flex-1', 'min-h-0', 'overflow-y-auto', 'overflow-x-hidden');
   });
+
+  it('renders an overlay inside the scrollable content region when provided', () => {
+    render(
+      <SmartCapturesDetailPane
+        content={<div>Detail Body</div>}
+        contentOverlay={<div>Processing overlay</div>}
+      />,
+    );
+
+    expect(screen.getByTestId('smart-captures-detail-overlay')).toBeInTheDocument();
+    expect(screen.getByText('Processing overlay')).toBeInTheDocument();
+  });
 });

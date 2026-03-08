@@ -377,6 +377,7 @@ export const Wizard: React.FC = () => {
     const showTeamReviewStep = showGuidedDetails && (guidedResultStep === 'team-review' || guidedResultStep === 'save');
     const showSaveStep = showGuidedDetails && guidedResultStep === 'save';
     const normalizedPendingOcrState = String(pendingMatchData?.ocrState || '').trim().toLowerCase();
+    const isPendingOcrProcessing = normalizedPendingOcrState === 'processing';
     const hasPendingOcrReview = normalizedPendingOcrState === 'reviewing';
     const hasSavedOcrReview = normalizedPendingOcrState === 'saved' || Boolean(pendingMatchData?.ocrReviewedAt);
 
@@ -1185,7 +1186,7 @@ export const Wizard: React.FC = () => {
                                         </div>
                                         <div className="rounded-2xl border border-md-sys-outline/12 px-3 py-2 mg-surface-high">
                                             <div className="text-label-xs font-bold uppercase opacity-55">OCR Status</div>
-                                            <div className="mt-1 text-body font-black">{hasSavedOcrReview ? 'Reviewed' : (hasPendingOcrReview ? 'Needs Review' : 'Ready')}</div>
+                                            <div className="mt-1 text-body font-black">{isPendingOcrProcessing ? 'Processing' : (hasSavedOcrReview ? 'Reviewed' : (hasPendingOcrReview ? 'Needs Review' : 'Ready'))}</div>
                                         </div>
                                     </div>
                                     <div className="flex flex-col sm:flex-row gap-2">
@@ -1261,7 +1262,7 @@ export const Wizard: React.FC = () => {
                                 onClick={() => {
                                     void handleWizardRerunOcr();
                                 }}
-                                disabled={isRerunningOcr}
+                                disabled={isRerunningOcr || isPendingOcrProcessing}
                                 className="ml-auto px-3 py-1.5 rounded-lg text-label-xs font-bold md3-btn-tonal inline-flex items-center gap-1.5 shrink-0"
                                 title="Re-run OCR across bundled screenshot artifacts"
                             >
@@ -1375,33 +1376,51 @@ export const Wizard: React.FC = () => {
                                 </div>
                             )}
                         </div>
-                        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                            <OcrCorrectionModal
-                                isOpen={true}
-                                embedded={true}
-                                onClose={() => React.startTransition(() => setActiveTab('result'))}
-                                onAcceptAll={() => {
-                                    // Persist OCR review state to the actual match record
-                                    // before closing, so the snapshot-restore effect doesn't
-                                    // overwrite the ocrState that OcrCorrectionModal set on
-                                    // pendingMatchData.
-                                    const latestPending = useAppStore.getState().pendingMatchData;
-                                    const matchId = latestPending?.id;
-                                    if (matchId) {
-                                        const existingMatch = useAppStore.getState().matches.find(m => m.id === matchId);
-                                        if (existingMatch) {
-                                            updateMatch({
-                                                ...existingMatch,
-                                                ...latestPending,
-                                                ocrReviewedAt: Date.now(),
-                                                ocrState: 'saved',
-                                            } as Match);
+                        <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
+                            <div className={`flex-1 min-h-0 ${isPendingOcrProcessing ? 'pointer-events-none opacity-60' : ''}`}>
+                                <OcrCorrectionModal
+                                    isOpen={true}
+                                    embedded={true}
+                                    onClose={() => React.startTransition(() => setActiveTab('result'))}
+                                    onAcceptAll={() => {
+                                        // Persist OCR review state to the actual match record
+                                        // before closing, so the snapshot-restore effect doesn't
+                                        // overwrite the ocrState that OcrCorrectionModal set on
+                                        // pendingMatchData.
+                                        const latestPending = useAppStore.getState().pendingMatchData;
+                                        const matchId = latestPending?.id;
+                                        if (matchId) {
+                                            const existingMatch = useAppStore.getState().matches.find(m => m.id === matchId);
+                                            if (existingMatch) {
+                                                updateMatch({
+                                                    ...existingMatch,
+                                                    ...latestPending,
+                                                    ocrReviewedAt: Date.now(),
+                                                    ocrState: 'saved',
+                                                } as Match);
+                                            }
                                         }
-                                    }
-                                    setShowWizard(null);
-                                }}
-                                screenshots={deferredWizardReviewScreenshots}
-                            />
+                                        setShowWizard(null);
+                                    }}
+                                    screenshots={deferredWizardReviewScreenshots}
+                                />
+                            </div>
+                            {isPendingOcrProcessing && (
+                                <div
+                                    data-testid="wizard-ocr-processing-overlay"
+                                    className="absolute inset-0 z-10 flex items-center justify-center bg-md-sys-surface/78"
+                                >
+                                    <div className="pointer-events-none rounded-2xl border border-md-sys-outline/12 bg-md-sys-surface-container-high px-5 py-4 text-center shadow-lg">
+                                        <div className="flex items-center justify-center gap-2 text-label-sm font-bold uppercase tracking-wide text-md-sys-primary">
+                                            <RefreshCw size={14} className="animate-spin" />
+                                            Processing OCR
+                                        </div>
+                                        <div className="mt-2 text-label-sm text-md-sys-on-surface/65">
+                                            OCR is still running in the background. Review fields will unlock automatically when processing completes.
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

@@ -338,26 +338,6 @@ describe('ActionPanel', () => {
     expect(smartCaptureActions.processAllStored).not.toHaveBeenCalled();
   });
 
-  it('merges queued capture paths onto the pending draft before continuing without OCR', async () => {
-    const { ActionPanel } = await import('./ActionPanel');
-    appStoreState.pendingMatchData = { artifacts: ['existing.png'] };
-    smartCaptureState.savedCaptures = [{
-      filePath: 'queued.png',
-      filename: 'queued.png',
-      timestamp: Date.now(),
-      matchId: null,
-      ocrProcessed: false,
-    }];
-
-    render(<ActionPanel onSmartCaptureData={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /loss/i }));
-    fireEvent.click(screen.getByRole('button', { name: /continue without ocr/i }));
-
-    expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
-      artifacts: ['existing.png', 'queued.png'],
-    }));
-  });
-
   it('processes OCR only after explicit prompt confirmation and then opens OCR gate', async () => {
     const { ActionPanel } = await import('./ActionPanel');
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
@@ -415,29 +395,47 @@ describe('ActionPanel', () => {
     };
 
     appStoreState.resultOcrFlowMode = 'background';
+    appStoreState.pendingMatchData = { id: 901, ocrState: 'queued', artifacts: [] };
+    appStoreState.matches = [{ id: 901, ocrState: 'queued' }];
+    let backgroundProcessed = false;
     smartCaptureState.savedCaptures = [{
       filePath: 'queued.png',
       filename: 'queued.png',
       timestamp: Date.now(),
-      matchId: null,
+      matchId: 901,
       ocrProcessed: false,
     }];
-    smartCaptureActions.getPendingData.mockReturnValue(reviewData);
+    smartCaptureActions.processAllStored.mockImplementation(async () => {
+      backgroundProcessed = true;
+    });
+    smartCaptureActions.getPendingData.mockImplementation(() => (
+      backgroundProcessed ? reviewData : null
+    ));
 
     render(<ActionPanel onSmartCaptureData={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /win/i }));
+    fireEvent.pointerDown(screen.getByRole('button', { name: /win/i }), { button: 0 });
 
     expect(initiateSubmission).toHaveBeenCalledWith('Win');
     expect(screen.queryByText(/queued smart captures detected/i)).not.toBeInTheDocument();
+    expect(uiState.pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'OCR is processing in the background. Results will be available shortly.',
+      type: 'info',
+      source: 'smart-capture',
+      deepLink: expect.objectContaining({
+        type: 'openView',
+        view: 'smart-captures',
+        focusMatchId: 901,
+      }),
+    }));
     await waitFor(() => {
-      expect(smartCaptureActions.processAllStored).toHaveBeenCalledWith('TestPilot', null);
+      expect(smartCaptureActions.processAllStored).toHaveBeenCalledWith('TestPilot', 901);
     });
     const gateEvent = dispatchSpy.mock.calls
       .map(([evt]) => evt as Event)
       .find((evt) => evt.type === 'submission:ocr-gate') as CustomEvent | undefined;
     expect(gateEvent).toBeDefined();
     expect(gateEvent?.detail?.result).toBe('Win');
-    expect(gateEvent?.detail?.matchId).toBeNull();
+    expect(gateEvent?.detail?.matchId).toBe(901);
     dispatchSpy.mockRestore();
   });
 

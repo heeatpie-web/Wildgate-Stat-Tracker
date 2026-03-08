@@ -11,6 +11,11 @@ describe('createSettingsSlice OCR policy', () => {
     store = makeStore();
   });
 
+  it('defaults new users to deferred capture and background result OCR', () => {
+    expect(store.getState().captureMode).toBe('deferred');
+    expect(store.getState().resultOcrFlowMode).toBe('background');
+  });
+
   it('clamps OCR name reroute threshold to integer percent bounds', () => {
     store.getState().setOcrNameRerouteThreshold(84.6);
     expect(store.getState().ocrNameRerouteThreshold).toBe(85);

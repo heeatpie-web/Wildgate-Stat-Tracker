@@ -181,6 +181,31 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
         return artifactPaths;
     }, [collectCaptureArtifacts]);
 
+    const setBackgroundOcrState = React.useCallback((nextState: 'processing' | 'error') => {
+        const state = useAppStore.getState();
+        const pendingDraft = state.pendingMatchData;
+        if (pendingDraft) {
+            state.setPendingMatchData({
+                ...pendingDraft,
+                ocrState: nextState,
+            });
+        }
+
+        const fallbackId = Number(pendingDraft?.id || 0);
+        const scopedId = Number(submissionMatchId || 0);
+        const targetMatchId = Number.isInteger(scopedId) && scopedId > 0
+            ? scopedId
+            : (Number.isInteger(fallbackId) && fallbackId > 0 ? fallbackId : null);
+        if (targetMatchId == null) return;
+
+        const existingMatch = (state.matches || []).find((match: Match) => Number(match.id || 0) === targetMatchId);
+        if (!existingMatch) return;
+        state.updateMatch({
+            ...existingMatch,
+            ocrState: nextState,
+        });
+    }, [submissionMatchId]);
+
     const dispatchOcrGate = React.useCallback((
         data: OCRExtractedData,
         options?: {
@@ -444,15 +469,17 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             if (resultOcrFlowMode === 'background') {
                 openResultWizard(result);
                 syncDraftArtifacts(submissionMatchId ?? null);
+                setBackgroundOcrState('processing');
                 const scopeForSubmission = submissionMatchId ?? null;
+                const focusMatchId = Number(scopeForSubmission || 0) || undefined;
                 if (!backgroundOcrInFlightRef.current) {
                     backgroundOcrInFlightRef.current = true;
                     pushNotification({
-                        message: 'Processing queued OCR in background...',
+                        message: 'OCR is processing in the background. Results will be available shortly.',
                         type: 'info',
                         source: 'smart-capture',
                         durationMs: 10_000,
-                        deepLink: { type: 'openView', view: 'smart-captures' },
+                        deepLink: { type: 'openView', view: 'smart-captures', focusMatchId },
                     });
                     void (async () => {
                         try {
@@ -472,22 +499,24 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                                     deepLink: { type: 'openView', view: 'smart-captures', focusMatchId: Number(scopeForSubmission || 0) || null },
                                 });
                             } else {
+                                setBackgroundOcrState('error');
                                 pushNotification({
                                     message: 'Background OCR finished without review data.',
                                     type: 'warning',
                                     source: 'smart-capture',
                                     durationMs: 10_000,
-                                    deepLink: { type: 'openView', view: 'recording' },
+                                    deepLink: { type: 'openView', view: 'smart-captures', focusMatchId },
                                 });
                             }
                         } catch (error) {
                             Logger.warn('ActionPanel', 'Background OCR processing failed', { error });
+                            setBackgroundOcrState('error');
                             pushNotification({
                                 message: 'Background OCR failed. Review queued captures manually.',
                                 type: 'error',
                                 source: 'smart-capture',
                                 durationMs: 10_000,
-                                deepLink: { type: 'openView', view: 'smart-captures' },
+                                deepLink: { type: 'openView', view: 'smart-captures', focusMatchId },
                             });
                         } finally {
                             backgroundOcrInFlightRef.current = false;

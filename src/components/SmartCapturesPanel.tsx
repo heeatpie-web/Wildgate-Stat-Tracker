@@ -1401,6 +1401,17 @@ const SmartCapturesPanel: React.FC = () => {
                         <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
                             <SmartCapturesDetailPane
                                 className="h-full"
+                                contentOverlay={selectedMatch && String(selectedMatch.ocrState || '').trim().toLowerCase() === 'processing' ? (
+                                    <div className="pointer-events-none rounded-2xl border border-md-sys-outline/12 bg-md-sys-surface-container-high px-5 py-4 text-center shadow-lg">
+                                        <div className="flex items-center justify-center gap-2 text-label-sm font-bold uppercase tracking-wide text-md-sys-primary">
+                                            <RefreshCw size={14} className="animate-spin" />
+                                            Processing OCR
+                                        </div>
+                                        <div className="mt-2 text-label-sm text-md-sys-on-surface/65">
+                                            Results are still being prepared in the background. This review view will unlock automatically when processing completes.
+                                        </div>
+                                    </div>
+                                ) : undefined}
                                 content={selectedMatch ? (
                                     <SmartMatchDetail
                                         match={selectedMatch}
