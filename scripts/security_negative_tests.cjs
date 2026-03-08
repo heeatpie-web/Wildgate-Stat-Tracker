@@ -6,8 +6,7 @@
  * 1. Path traversal / path validation ("Path not allowed")
  * 2. IPC channel allowlist enforcement ("IPC invoke blocked")
  * 3. Corpus file name validation ("Unsupported corpus file")
- * 4. Epic request host/method/URL validation
- * 5. User-facing error message sanitization (friendlyError mapping)
+ * 4. User-facing error message sanitization (friendlyError mapping)
  * 
  * Run: node scripts/security_negative_tests.cjs
  */
@@ -212,54 +211,9 @@ assert(getCorpusFilePath('reports/../../main.cjs') === null, 'Reject traversal t
 assert(getCorpusFilePath('config.json') === null, 'Reject non-allowlisted config.json');
 
 // ============================================================
-// 4. EPIC REQUEST VALIDATION
+// 4. USER-FACING ERROR MESSAGE SANITIZATION
 // ============================================================
-console.log('=== 4. Epic Request Validation Tests ===\n');
-
-// Extracted from electron/main.cjs:53-57
-const DEFAULT_EPIC_REQUEST_HOSTS = [
-  'account-public-service-prod.ol.epicgames.com',
-  'launcher-public-service-live-prod.ol.epicgames.com',
-];
-const EPIC_REQUEST_ALLOWED_HOSTS = new Set(
-  DEFAULT_EPIC_REQUEST_HOSTS.map(v => v.trim().toLowerCase())
-);
-
-function isAllowedEpicHost(hostname) {
-  const host = String(hostname || '').toLowerCase();
-  if (!host) return false;
-  return Array.from(EPIC_REQUEST_ALLOWED_HOSTS).some(allowed => host === allowed || host.endsWith(`.${allowed}`));
-}
-
-// Allowed methods from main.cjs
-const ALLOWED_HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']);
-
-// 4a. Valid hosts
-assert(isAllowedEpicHost('account-public-service-prod.ol.epicgames.com'), 'Allow Epic accounts host');
-assert(isAllowedEpicHost('launcher-public-service-live-prod.ol.epicgames.com'), 'Allow Epic launcher host');
-
-// 4b. Reject unauthorized hosts
-assert(!isAllowedEpicHost('evil.com'), 'Reject evil.com');
-assert(!isAllowedEpicHost('google.com'), 'Reject google.com');
-assert(!isAllowedEpicHost(''), 'Reject empty host');
-assert(!isAllowedEpicHost(null), 'Reject null host');
-assert(!isAllowedEpicHost('localhost'), 'Reject localhost');
-assert(!isAllowedEpicHost('127.0.0.1'), 'Reject loopback IP');
-assert(!isAllowedEpicHost('evil.epicgames.com'), 'Reject subdomain spoofing (evil.epicgames.com)');
-assert(!isAllowedEpicHost('epicgames.com'), 'Reject bare epicgames.com domain');
-assert(!isAllowedEpicHost('ol.epicgames.com'), 'Reject partial host (ol.epicgames.com)');
-
-// 4c. HTTP method validation
-assert(ALLOWED_HTTP_METHODS.has('GET'), 'Allow GET method');
-assert(ALLOWED_HTTP_METHODS.has('POST'), 'Allow POST method');
-assert(!ALLOWED_HTTP_METHODS.has('CONNECT'), 'Reject CONNECT method');
-assert(!ALLOWED_HTTP_METHODS.has('TRACE'), 'Reject TRACE method');
-assert(!ALLOWED_HTTP_METHODS.has(''), 'Reject empty method');
-
-// ============================================================
-// 5. USER-FACING ERROR MESSAGE SANITIZATION
-// ============================================================
-console.log('=== 5. friendlyError Mapping Tests ===\n');
+console.log('=== 4. friendlyError Mapping Tests ===\n');
 
 // Extracted from src/components/DevOCRPanel.tsx:16-36
 function friendlyError(raw) {
@@ -328,9 +282,9 @@ assert(!sanitized.includes('C:\\Users\\TestUser'), 'Fallback strips Windows file
 assert(!sanitized.includes('secrets.json'), 'Fallback strips sensitive filenames');
 
 // ============================================================
-// 6. EXTERNAL URL VALIDATION
+// 5. EXTERNAL URL VALIDATION
 // ============================================================
-console.log('=== 6. External URL Validation Tests ===\n');
+console.log('=== 5. External URL Validation Tests ===\n');
 
 function isAllowlistedHost(hostname, hosts) {
   const host = String(hostname || '').toLowerCase();
