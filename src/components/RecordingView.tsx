@@ -142,7 +142,7 @@ export const RecordingView: React.FC<RecordingViewProps> = ({ onSmartCaptureData
                         <RosterPanel />
                     </div>
 
-                    <div className="min-h-0 overflow-hidden">
+                    <div className="min-h-0 overflow-hidden pl-1">
                         <MissionPanel accordionMode />
                     </div>
                 </div>

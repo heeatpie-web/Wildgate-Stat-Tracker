@@ -58,6 +58,9 @@ describe('RecordingView', () => {
     const actionProps = screen.getByTestId('ActionPanel').getAttribute('data-props') || '';
     expect(squadProps).toContain('"density":"compact"');
     expect(actionProps).toContain('"density":"compact"');
+
+    const root = document.querySelector('[data-tour="view-recording"]');
+    expect(root?.children[2]?.className).toContain('pl-1');
   }, 10000);
 
   it('renders compact left panel tabs on short heights and swaps Actions vs Loadout without scrolling the panel', async () => {
