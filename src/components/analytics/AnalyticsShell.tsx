@@ -523,11 +523,11 @@ export const AnalyticsShell: React.FC = () => {
                         <button
                             type="button"
                             onClick={() => setShowPatchHistory((prev) => !prev)}
-                            className="w-full flex items-center justify-between text-left"
+                            className="inline-flex items-center gap-2 text-left"
                             aria-expanded={showPatchHistory}
                         >
-                            <span className="text-label-sm font-bold uppercase tracking-wide text-md-sys-on-surface/70">
-                                Game Patch History
+                            <span className="text-label-xs font-semibold tracking-wide text-md-sys-on-surface/60">
+                                All Updates
                             </span>
                             {showPatchHistory ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </button>
@@ -535,7 +535,7 @@ export const AnalyticsShell: React.FC = () => {
                             <div className="mt-2 space-y-2">
                                 {!selectedEraKey ? (
                                     <div className="text-label-xs text-md-sys-on-surface/60">
-                                        Select an era filter to view game patch history.
+                                        Select an era filter to view updates.
                                     </div>
                                 ) : (
                                     <div className="rounded-control border border-md-sys-outline/12 bg-md-sys-surface p-2.5">
