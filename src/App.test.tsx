@@ -103,10 +103,6 @@ vi.mock('./hooks/useLogMonitor', () => ({
   useLogMonitor: () => ({ logFeed: [], logStatus: {} }),
 }));
 
-vi.mock('./hooks/useDiscordRPC', () => ({
-  useDiscordRPC: vi.fn(),
-}));
-
 vi.mock('./hooks/useKeyboardShortcuts', () => ({
   useKeyboardShortcuts: vi.fn(),
 }));

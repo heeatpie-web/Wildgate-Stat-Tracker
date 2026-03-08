@@ -4,7 +4,6 @@ import { useUIState } from './providers/UIStateProvider';
 import { useGameData } from './providers/GameDataProvider';
 import { useUserPreferences } from './providers/UserPreferencesProvider';
 import { useLogMonitor } from './hooks/useLogMonitor';
-import { useDiscordRPC } from './hooks/useDiscordRPC';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useFocusTrap } from './hooks/useFocusTrap';
 import { Sidebar } from './components/Sidebar';
@@ -1767,9 +1766,7 @@ const App: React.FC = () => {
         return unsub;
     }, []);
 
-    const sessionMatches = matches.filter(m => m.timestamp >= sessionStartTime);
-    const sessionWins = sessionMatches.filter(m => m.result === 'Win').length;
-    useDiscordRPC(sessionWins, sessionMatches.length, activeMode, sessionStartTime);
+
 
     useKeyboardShortcuts({
         onWin: () => { setPendingMatchData({}); setShowWizard('Win'); },

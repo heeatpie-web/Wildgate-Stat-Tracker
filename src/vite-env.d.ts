@@ -9,7 +9,6 @@ interface ImportMetaEnv {
   readonly VITE_PRELOAD_IDLE_TIMEOUT_MAX_MS?: string;
   readonly VITE_PRELOAD_FALLBACK_DELAY_MIN_MS?: string;
   readonly VITE_PRELOAD_PROGRESS_POLL_MS?: string;
-  readonly VITE_DISCORD_PRESENCE_INTERVAL_MS?: string;
   readonly VITE_SYSTEM_PULSE_STATUS_POLL_MS?: string;
   readonly VITE_SYSTEM_PULSE_RECEIVING_WINDOW_MS?: string;
   readonly VITE_HISTORY_SEARCH_DEBOUNCE_MS?: string;

@@ -48,9 +48,6 @@ export const runtimeConfig = {
     preloadFallbackDelayMinMs: readEnvNumber('VITE_PRELOAD_FALLBACK_DELAY_MIN_MS', 40, 0, 2_000),
     preloadProgressPollMs: readEnvNumber('VITE_PRELOAD_PROGRESS_POLL_MS', 160, 50, 5_000),
   },
-  discord: {
-    presenceUpdateIntervalMs: readEnvNumber('VITE_DISCORD_PRESENCE_INTERVAL_MS', 15_000, 5_000, 120_000),
-  },
   systemPulse: {
     statusPollIntervalMs: readEnvNumber('VITE_SYSTEM_PULSE_STATUS_POLL_MS', 20_000, 5_000, 120_000),
     telemetryReceivingWindowMs: readEnvNumber('VITE_SYSTEM_PULSE_RECEIVING_WINDOW_MS', 45_000, 5_000, 300_000),

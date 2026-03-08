@@ -1,6 +1,6 @@
 const { app, BrowserWindow, shell, ipcMain, globalShortcut, Menu, Tray, screen } = require('electron');
 const { autoUpdater } = require('electron-updater');
-const DiscordRPC = require('discord-rpc');
+
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -2176,40 +2176,7 @@ ipcMain.handle('scan-epic-ids', async () => {
   };
 });
 
-// Discord RPC Setup
-const clientId = '1331154341514117120';
-DiscordRPC.register(clientId);
-const rpc = new DiscordRPC.Client({ transport: 'ipc' });
 
-function logDiscordRpcIssue(err, phase) {
-  const message = err && err.message ? err.message : String(err || 'Unknown RPC error');
-  const isBenign = /connection closed|could not connect|ENOENT|ECONNREFUSED/i.test(message);
-  if (isBenign) {
-    if (isDev) console.warn(`[DiscordRPC] ${phase}: ${message}`);
-    return;
-  }
-  console.error(`[DiscordRPC] ${phase}: ${message}`);
-}
-
-rpc.on('error', (err) => {
-  logDiscordRpcIssue(err, 'client-error');
-});
-
-async function setActivity(stats) {
-  if (!rpc || !win) return;
-  try {
-    const { sessionWins, sessionTotal, activeMode } = stats;
-    const winRate = sessionTotal > 0 ? Math.round((sessionWins / sessionTotal) * 100) : 0;
-    rpc.setActivity({
-      details: `${activeMode}`,
-      state: `Session: ${sessionWins}W - ${sessionTotal - sessionWins}L (${winRate}%)`,
-      startTimestamp: stats.startTime || Date.now(),
-      largeImageKey: 'logo',
-      largeImageText: 'Wildgate Stat Tracker',
-      instance: false,
-    }).catch(() => { });
-  } catch (e) { }
-}
 
 function createWindow() {
   const iconPath = resolveAppIconPath();
@@ -2385,7 +2352,7 @@ function createWindow() {
   ipcMain.on('set-window-bounds', (event, bounds) => { if (win && !win.isMaximized()) win.setBounds(bounds); });
   ipcMain.on('maximize-window', () => { if (win) { if (win.isMaximized()) win.unmaximize(); else win.maximize(); } });
   ipcMain.on('close-window', () => { if (win) win.close(); });
-  ipcMain.on('update-presence', (event, stats) => setActivity(stats));
+
   ipcMain.on('check-for-updates', () => { if (!isDev) autoUpdater.checkForUpdates(); else if (win) win.webContents.send('update_not_available'); });
 }
 
@@ -2442,10 +2409,7 @@ app.whenReady().then(async () => {
   if (isDev) setSplashProgress(win, 35, 'Preparing OCR...', 'Registering OCR handlers');
   registerOCRHandlers(win);  // Register new OCR IPC handlers (pass win for hide-during-capture)
   if (!isDev) autoUpdater.checkForUpdates();
-  if (isDev) setSplashProgress(win, 84, 'Initializing presence...', 'Connecting Discord RPC');
-  rpc.login({ clientId }).catch((err) => {
-    logDiscordRpcIssue(err, 'login');
-  });
+
 
   if (isDev) setSplashProgress(win, 90, 'Registering hotkeys...', 'Almost there');
   globalShortcut.register('F9', () => {
