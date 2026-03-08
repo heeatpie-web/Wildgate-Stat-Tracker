@@ -68,6 +68,7 @@ const PlayerHub: React.FC = () => {
         dismissRosterCandidateKeys,
         addToRegistry,
         removePendingReview,
+        addPilotAlias,
         removePilotAlias,
         matches,
         playerProfiles,
@@ -859,29 +860,48 @@ const PlayerHub: React.FC = () => {
                                                         Possible existing identity
                                                     </div>
                                                     {existingRosterMatch && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => mergeRosterCandidateIntoExisting(candidate, existingRosterMatch, pendingValue)}
-                                                            className="w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left bg-md-sys-surface hover:bg-md-sys-surface-container-high"
-                                                        >
-                                                            <span className="text-label-sm font-semibold text-md-sys-on-surface truncate">
-                                                                Use existing: {existingRosterMatch}
-                                                            </span>
-                                                            <span className="text-label-xs font-bold uppercase text-warning">Match</span>
-                                                        </button>
+                                                        <div className="flex gap-1.5">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => mergeRosterCandidateIntoExisting(candidate, existingRosterMatch, pendingValue)}
+                                                                className="flex-1 flex items-center justify-between gap-2 rounded-md px-2.5 py-2 text-left bg-md-sys-surface hover:bg-md-sys-surface-container-high"
+                                                            >
+                                                                <span className="text-label-sm font-semibold text-md-sys-on-surface truncate">
+                                                                    Use existing: {existingRosterMatch}
+                                                                </span>
+                                                                <span className="text-label-xs font-bold uppercase text-warning">Match</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => { addPilotAlias(existingRosterMatch, pendingValue); resolveRosterCandidate(candidate, 'dismiss', pendingValue); }}
+                                                                className="px-2.5 py-1.5 rounded-md text-label-xs font-bold bg-md-sys-primary/15 text-md-sys-primary hover:bg-md-sys-primary/25 shrink-0"
+                                                                title={`Add "${pendingValue}" as alias of ${existingRosterMatch}`}
+                                                            >
+                                                                As alias
+                                                            </button>
+                                                        </div>
                                                     )}
                                                     {mergeSuggestions.length > 0 && (
                                                         <div className="flex flex-wrap gap-1.5">
                                                             {mergeSuggestions.map((suggestion) => (
-                                                                <button
-                                                                    key={`${candidate.id}-${suggestion.name}-${suggestion.kind}`}
-                                                                    type="button"
-                                                                    onClick={() => mergeRosterCandidateIntoExisting(candidate, suggestion.name, pendingValue)}
-                                                                    className="px-2.5 py-1.5 rounded-md text-label-xs font-bold bg-warning text-ink-strong hover:brightness-95"
-                                                                >
-                                                                    Merge into {suggestion.name}
-                                                                    {suggestion.score > 0 ? ` (${Math.round(suggestion.score)}%)` : ''}
-                                                                </button>
+                                                                <div key={`${candidate.id}-${suggestion.name}-${suggestion.kind}`} className="flex rounded-md overflow-hidden">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => mergeRosterCandidateIntoExisting(candidate, suggestion.name, pendingValue)}
+                                                                        className="px-2.5 py-1.5 text-label-xs font-bold bg-warning text-ink-strong hover:brightness-95"
+                                                                    >
+                                                                        Merge into {suggestion.name}
+                                                                        {suggestion.score > 0 ? ` (${Math.round(suggestion.score)}%)` : ''}
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => { addPilotAlias(suggestion.name, pendingValue); resolveRosterCandidate(candidate, 'dismiss', pendingValue); }}
+                                                                        className="px-2 py-1.5 text-label-xs font-bold bg-md-sys-primary/20 text-md-sys-primary hover:bg-md-sys-primary/30 border-l border-ink-strong/10"
+                                                                        title={`Add "${pendingValue}" as alias of ${suggestion.name}`}
+                                                                    >
+                                                                        as alias
+                                                                    </button>
+                                                                </div>
                                                             ))}
                                                         </div>
                                                     )}
