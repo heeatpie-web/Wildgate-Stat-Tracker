@@ -225,7 +225,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileDrawer = false, onRequ
                     <div
                         id="sidebar-profile-menu"
                         role="menu"
-                        className={`absolute z-50 bottom-12 ${showLabels ? 'left-0 w-290px' : 'left-full ml-2 w-290px'} md3-card rounded-2xl border border-md-sys-outline/15 shadow-2xl p-4 max-h-70vh overflow-y-auto custom-scrollbar`}
+                        className={`profile-hub-popup absolute z-50 bottom-12 ${showLabels ? 'left-0 w-290px' : 'left-full ml-2 w-290px'} md3-card rounded-2xl border border-md-sys-outline/15 shadow-2xl p-4 max-h-70vh overflow-y-auto custom-scrollbar`}
                     >
                         <div className="text-label-sm font-bold uppercase tracking-wide-14 text-md-sys-on-surface/60 mb-3">Profile Hub</div>
 

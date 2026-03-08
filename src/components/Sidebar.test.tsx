@@ -101,5 +101,14 @@ describe('Sidebar', () => {
     expect(screen.getByRole('button', { name: /smart captures \(1 pending\)/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /id mapper \(1 pending\)/i })).toBeInTheDocument();
   });
+
+  it('applies the profile hub popup class used for the Twilight solid surface override', async () => {
+    const { Sidebar } = await import('./Sidebar');
+
+    render(<Sidebar />);
+    fireEvent.click(screen.getByRole('button', { name: /^testpilot$/i }));
+
+    expect(document.getElementById('sidebar-profile-menu')).toHaveClass('profile-hub-popup');
+  });
 });
 

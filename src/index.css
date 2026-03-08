@@ -661,6 +661,11 @@ body[data-mode='twilight'] .tutorial-tooltip {
   background: var(--md-sys-color-surface-container-highest);
 }
 
+body[data-mode='twilight'] .profile-hub-popup {
+  background: var(--md-sys-color-surface-container-highest) !important;
+  border-color: color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 34%);
+}
+
 /* Dense scroll views perform better with solid surfaces and calmer elevation in Twilight. */
 body[data-mode='twilight'] .twilight-solid-scope .md3-card,
 body[data-mode='twilight'] .twilight-solid-scope .md3-surface {
