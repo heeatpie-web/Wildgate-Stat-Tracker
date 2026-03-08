@@ -3,7 +3,7 @@ import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
 import { useSoundEffects } from '../hooks/useSoundEffects';
-import { HERO_GUIDS, SHIP_GUIDS, WEAPON_GUIDS, EQUIPMENT_GUIDS } from '../utils/guids';
+import { HERO_GUIDS, SHIP_GUIDS, WEAPON_GUIDS, EQUIPMENT_GUIDS, PERK_GUIDS } from '../utils/guids';
 import { SHIPS, CHARACTERS, UNNAMED_PLAYER_PREFIX, Match, Loadout, TelemetryConsistency } from '../types';
 import { EQUIPMENT_DB } from '../utils/equipmentDb';
 import { getPerkCatalog, getProspectorEquipmentCatalog, getProspectorWeaponCatalog, MAX_PERKS_PER_MATCH } from '../components/patch/patchEntityCatalog';
@@ -1037,6 +1037,7 @@ export const useLogMonitor = (activeUser?: string) => {
                         const canonicalUidPerkMappings = buildCanonicalGuidLookup(uidMappings.perks);
                         const canonicalWeaponDb = buildCanonicalGuidLookup(WEAPON_GUIDS);
                         const canonicalEquipmentDb = buildCanonicalGuidLookup(EQUIPMENT_GUIDS);
+                        const canonicalPerkDb = buildCanonicalGuidLookup(PERK_GUIDS);
 
                         const rawHeroGuid = getLoadoutField(loadoutData, ['guidhero', 'heroguid', 'guid_hero', 'heroid', 'hero_id']);
                         const rawHero = getLoadoutField(loadoutData, ['hero', 'heroname', 'hero_name']);
@@ -1200,7 +1201,7 @@ export const useLogMonitor = (activeUser?: string) => {
                                 : (type === 'Equipment' ? canonicalUidEquipmentMappings : canonicalUidPerkMappings);
                             const canonicalDb = type === 'Weapon'
                                 ? canonicalWeaponDb
-                                : (type === 'Equipment' ? canonicalEquipmentDb : {});
+                                : (type === 'Equipment' ? canonicalEquipmentDb : canonicalPerkDb);
                             const cleanUpper = clean.toUpperCase();
                             const cleanLower = clean.toLowerCase();
                             const name =

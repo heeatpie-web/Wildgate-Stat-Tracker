@@ -1,5 +1,10 @@
 {
-  "version": 1,
+  "version": 2,
+  "players": {
+    "C0C3960248AD43D20AA6DDA8AEB81424": "Sal",
+    "E7539B7C4483C338E55B15B102E2F006": "Adrian",
+    "E305EC254F7CD5BA4107A381E9BEA287": "Venture"
+  },
   "ships": {
     "0BFFF89B44027290DC6348B95A6B0F11": "Hunter",
     "238FE96442789BC0C2E416BBDFDBCC52": "Scout",
@@ -23,5 +28,5 @@
     "58C97F0F43E24F47057BE7AE9321AC7D": "Healing Drone",
     "5D1B66E148D64162F74218B269E68016": "Foam Can"
   },
-  "players": {}
+  "perks": {}
 }
