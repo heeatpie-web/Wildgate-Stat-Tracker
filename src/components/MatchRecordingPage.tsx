@@ -204,9 +204,9 @@ const MatchDetail: React.FC<{
         { key: 'Escape', handler: () => setLightboxSrc(null) },
     ], Boolean(lightboxSrc));
 
-    // Load artifacts when match changes
+    // Load artifacts when match changes.
+    // Don't clear before loading to avoid flash when unrelated fields are edited.
     useEffect(() => {
-        setArtifacts([]);
         if (match.artifacts && match.artifacts.length > 0) {
             setArtifacts(match.artifacts);
         } else {
@@ -337,7 +337,7 @@ const MatchDetail: React.FC<{
                     <div className="grid grid-cols-3 gap-2">
                         {artifacts.map((src, i) => (
                             <button
-                                key={i}
+                                key={src || i}
                                 type="button"
                                 onClick={() => setLightboxSrc(src)}
                                 aria-label={`Open screenshot ${i + 1} preview`}

@@ -3713,7 +3713,7 @@ const SmartMatchDetail: React.FC<{
                                     const artifactFile = artifacts.imageFiles[i];
                                     return (
                                         <div
-                                            key={i}
+                                            key={artifactFile?.artifactId || src || i}
                                             className="relative shrink-0 w-40 aspect-video md3-surface-high rounded-xl overflow-hidden group sc-shot-thumb border border-md-sys-outline/10 shadow-sm"
                                             draggable={!!artifactFile?.artifactId}
                                             onDragStart={(event) => {
