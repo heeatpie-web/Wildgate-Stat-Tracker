@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { AnalyticsView, AnalyticsTimeRange, DrillDownTarget, EntityAnalyticsFilters } from '../../types';
-import { Activity, ArrowLeft, ChevronDown, ChevronUp, Download, LayoutGrid, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Activity, ArrowLeft, Download, LayoutGrid, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useGameData } from '../../providers/GameDataProvider';
 import { useUIState } from '../../providers/UIStateProvider';
 import { useUserPreferences } from '../../providers/UserPreferencesProvider';
@@ -26,7 +26,6 @@ import { AnalyticsNavigation, AnalyticsCategory } from './AnalyticsNavigation';
 import { EntityAnalyticsView } from './EntityAnalyticsView';
 import { ERA_DEFINITIONS } from './eraConfig';
 import { getMatchEra, getMatchEquipment, getMatchPerks, getMatchProspectorWeapons, getMatchShip } from '../patch/patchEntityCatalog';
-import { GAME_PATCHES } from '../../data/gamePatches';
 
 const VIEW_LABELS: Record<AnalyticsView, string> = {
     overview: 'Overview',
@@ -85,7 +84,6 @@ export const AnalyticsShell: React.FC = () => {
     const [exporting, setExporting] = useState(false);
     const [isProMode, setIsProMode] = useState(false);
     const [proCategory, setProCategory] = useState<ProCategory>('core');
-    const [showPatchHistory, setShowPatchHistory] = useState(false);
     const [entityFilters, setEntityFilters] = useState<EntityAnalyticsFilters>({
         ship: [],
         prospectorWeapon: [],
@@ -120,28 +118,6 @@ export const AnalyticsShell: React.FC = () => {
         () => collectSortedUnique(data.filteredMatches.map((match) => getMatchEra(match))),
         [data.filteredMatches]
     );
-    const selectedEraKey = String(entityFilters.era[0] || '').trim();
-    const selectedEraDefinition = useMemo(
-        () => ERA_DEFINITIONS.find((era) => era.key === selectedEraKey) || null,
-        [selectedEraKey]
-    );
-    const selectedEraPatches = useMemo(() => {
-        if (!selectedEraKey) return [];
-        const selectedKey = selectedEraKey.toLowerCase();
-        return GAME_PATCHES
-            .filter((patch) => String(patch.era || '').trim().toLowerCase() === selectedKey)
-            .slice()
-            .sort((left, right) => {
-                const leftTime = Date.parse(String(left.date || ''));
-                const rightTime = Date.parse(String(right.date || ''));
-                const leftValid = Number.isFinite(leftTime);
-                const rightValid = Number.isFinite(rightTime);
-                if (leftValid && rightValid && leftTime !== rightTime) return rightTime - leftTime;
-                if (leftValid && !rightValid) return -1;
-                if (!leftValid && rightValid) return 1;
-                return String(right.version || '').localeCompare(String(left.version || ''));
-            });
-    }, [selectedEraKey]);
     const activeContextTags = useMemo(() => {
         const timeRangeLabel = TIME_RANGE_OPTIONS.find((option) => option.value === timeRange)?.label || 'All Time';
         const tags = [`Range: ${timeRangeLabel}`];
@@ -392,9 +368,10 @@ export const AnalyticsShell: React.FC = () => {
         if (proCategory === 'all') return proTiles;
         return proTiles.filter((tile) => tile.category === proCategory);
     }, [proCategory, proTiles]);
+    const isCockpitView = !isProMode && currentView === 'overview';
 
     return (
-        <div className="h-full flex flex-col gap-3 overflow-hidden rounded-modal analytics-shell-gradient shadow-lg">
+        <div className={`twilight-solid-scope twilight-soft-shadows h-full flex flex-col gap-3 overflow-hidden rounded-modal shadow-lg ${isCockpitView ? 'analytics-shell-surface' : 'analytics-shell-gradient'}`}>
             {/* Header */}
             <div className="flex-shrink-0 rounded-card mg-surface-high p-3 md:p-4">
                 <div className="flex flex-col gap-3">
@@ -518,79 +495,6 @@ export const AnalyticsShell: React.FC = () => {
                                 <option key={era.key} value={era.key}>{era.label}</option>
                             ))}
                         </select>
-                    </div>
-                    <div className="rounded-control border border-md-sys-outline/15 bg-md-sys-surface-container-high p-2.5">
-                        <button
-                            type="button"
-                            onClick={() => setShowPatchHistory((prev) => !prev)}
-                            className="inline-flex items-center gap-2 text-left"
-                            aria-expanded={showPatchHistory}
-                        >
-                            <span className="text-label-xs font-semibold tracking-wide text-md-sys-on-surface/60">
-                                All Updates
-                            </span>
-                            {showPatchHistory ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                        </button>
-                        {showPatchHistory && (
-                            <div className="mt-2 space-y-2">
-                                {!selectedEraKey ? (
-                                    <div className="text-label-xs text-md-sys-on-surface/60">
-                                        Select an era filter to view updates.
-                                    </div>
-                                ) : (
-                                    <div className="rounded-control border border-md-sys-outline/12 bg-md-sys-surface p-2.5">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <div>
-                                                <div className="text-label-sm font-bold text-md-sys-on-surface">
-                                                    {selectedEraDefinition?.label || selectedEraKey}
-                                                </div>
-                                                {selectedEraDefinition?.description && (
-                                                    <div className="text-label-xs text-md-sys-on-surface/60">
-                                                        {selectedEraDefinition.description}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <span className="text-label-xs font-bold uppercase tracking-wide text-md-sys-primary">
-                                                Active Filter
-                                            </span>
-                                        </div>
-                                        {selectedEraPatches.length > 0 ? (
-                                            <ol className="mt-2 space-y-2 border-l border-md-sys-outline/18 pl-3">
-                                                {selectedEraPatches.map((patch) => (
-                                                    <li key={`${patch.era || selectedEraKey}-${patch.version}-${patch.date}`} className="relative">
-                                                        <span
-                                                            className="absolute -left-[0.95rem] top-1.5 h-2 w-2 rounded-pill bg-md-sys-primary/70"
-                                                            aria-hidden="true"
-                                                        />
-                                                        <div className="rounded-control border border-md-sys-outline/10 bg-md-sys-surface-container-highest/70 px-2.5 py-2">
-                                                            <div className="flex flex-wrap items-center gap-2">
-                                                                <span className="rounded-pill bg-md-sys-primary/14 px-2 py-0.5 text-label-xs font-bold uppercase tracking-wide text-md-sys-primary">
-                                                                    {patch.version}
-                                                                </span>
-                                                                <span className="text-label-xs text-md-sys-on-surface/60">{patch.date}</span>
-                                                            </div>
-                                                            <div className="mt-1 text-label-sm font-bold text-md-sys-on-surface">{patch.title}</div>
-                                                            <div className="mt-0.5 text-label-sm text-md-sys-on-surface/72">{patch.description}</div>
-                                                            {patch.highlights && patch.highlights.length > 0 && (
-                                                                <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-label-xs text-md-sys-on-surface/60">
-                                                                    {patch.highlights.map((highlight, index) => (
-                                                                        <li key={`${patch.version}-highlight-${index}`}>{highlight}</li>
-                                                                    ))}
-                                                                </ul>
-                                                            )}
-                                                        </div>
-                                                    </li>
-                                                ))}
-                                            </ol>
-                                        ) : (
-                                            <div className="mt-2 text-label-xs text-md-sys-on-surface/60">
-                                                No game patch notes defined for this era yet.
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>

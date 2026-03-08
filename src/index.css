@@ -339,6 +339,11 @@ body[data-mode='twilight'] .toast-card-standard {
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 70%);
 }
 
+.analytics-shell-surface {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), var(--md-sys-color-surface) 12%) !important;
+  border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 70%);
+}
+
 .players-shell-surface {
   background: var(--md-sys-color-surface-container-low) !important;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline-variant), transparent 72%);
@@ -649,6 +654,40 @@ body[data-mode='twilight'] .md3-surface-low {
 
 body[data-mode='twilight'] .md3-surface-high {
   background: color-mix(in srgb, var(--md-sys-color-surface-container-high) 82%, transparent);
+}
+
+/* Keep tutorial overlays solid so the scrim does not bleed through in twilight mode. */
+body[data-mode='twilight'] .tutorial-tooltip {
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+/* Dense scroll views perform better with solid surfaces and calmer elevation in Twilight. */
+body[data-mode='twilight'] .twilight-solid-scope .md3-card,
+body[data-mode='twilight'] .twilight-solid-scope .md3-surface {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container), black 8%);
+}
+
+body[data-mode='twilight'] .twilight-solid-scope .md3-surface-high {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-high), black 8%);
+}
+
+body[data-mode='twilight'] .twilight-solid-scope .md3-surface-low {
+  background: color-mix(in srgb, var(--md-sys-color-surface-container-low), black 8%);
+}
+
+body[data-mode='twilight'] .twilight-soft-shadows .shadow,
+body[data-mode='twilight'] .twilight-soft-shadows .shadow-sm {
+  box-shadow: var(--elevation-1) !important;
+}
+
+body[data-mode='twilight'] .twilight-soft-shadows .shadow-md,
+body[data-mode='twilight'] .twilight-soft-shadows .shadow-lg {
+  box-shadow: var(--elevation-2) !important;
+}
+
+body[data-mode='twilight'] .twilight-soft-shadows .shadow-xl,
+body[data-mode='twilight'] .twilight-soft-shadows .shadow-2xl {
+  box-shadow: var(--elevation-3) !important;
 }
 
 .md3-surface-low {

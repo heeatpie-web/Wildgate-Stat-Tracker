@@ -157,15 +157,12 @@ describe('AnalyticsShell', () => {
     vi.clearAllMocks();
   });
 
-  it('uses the inline All Updates label instead of the old Game Patch History heading', async () => {
+  it('keeps the cockpit shell scoped and removes the old All Updates control', async () => {
     const { AnalyticsShell } = await import('./AnalyticsShell');
     render(<AnalyticsShell />);
 
+    expect(screen.getByRole('heading', { name: /analytics cockpit/i }).closest('.twilight-solid-scope')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: /all updates/i })).toBeNull();
     expect(screen.queryByText(/game patch history/i)).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: /all updates/i }));
-
-    expect(screen.getByText('All Updates')).toBeInTheDocument();
-    expect(screen.getByText(/select an era filter to view updates/i)).toBeInTheDocument();
   });
 });

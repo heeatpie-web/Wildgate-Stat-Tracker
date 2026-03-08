@@ -35,7 +35,7 @@ const SummaryTile: React.FC<{
     helper?: string;
     className?: string;
 }> = ({ label, value, tone = 'text-md-sys-on-surface', helper, className = '' }) => (
-    <div className={`rounded-card border border-md-sys-outline/12 bg-md-sys-surface-container-high px-4 py-3 ${className}`}>
+    <div className={`rounded-card border border-md-sys-outline/10 bg-md-sys-surface-container px-4 py-3 ${className}`}>
         <div className="text-label-xs font-bold uppercase tracking-widest text-md-sys-on-surface/45">{label}</div>
         <div className={`mt-1 text-2xl font-black tracking-tight ${tone}`}>{value}</div>
         {helper ? <div className="mt-1 text-label-sm text-md-sys-on-surface/60">{helper}</div> : null}
@@ -133,7 +133,7 @@ const ExplorerSection: React.FC<{
     icon: React.ReactNode;
     children: React.ReactNode;
 }> = ({ title, subtitle, icon, children }) => (
-    <section className="rounded-card border border-md-sys-outline/12 bg-md-sys-surface p-4">
+    <section className="rounded-card bg-md-sys-surface-container-low p-4">
         <div className="flex items-start gap-3">
             <div className="w-9 h-9 rounded-xl bg-md-sys-surface-container-high flex items-center justify-center text-md-sys-primary">
                 {icon}
@@ -392,7 +392,7 @@ export const AnalyticsCockpit: React.FC<AnalyticsCockpitProps> = ({
                         </button>
                     ))}
                 </div>
-                <div className="rounded-control border border-md-sys-outline/12 bg-md-sys-surface-container-high px-3 py-3">
+                <div className="px-1 py-1">
                     <div className="flex items-center gap-2 text-label-sm font-bold uppercase tracking-wide text-md-sys-on-surface/50">
                         <ShieldPlus size={14} />
                         Suggested next drill-down
