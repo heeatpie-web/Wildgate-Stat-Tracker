@@ -2905,7 +2905,7 @@ const SmartMatchDetail: React.FC<{
                                 {type === 'teammate' && (
                                     <ShieldCheck size={10} className="text-info shrink-0" />
                                 )}
-                                <span className="truncate max-w-[200px]">{isActiveUserLike(p) ? p : toDisplayPlayerName(p)}</span>
+                                <span className="truncate max-w-[280px]">{isActiveUserLike(p) ? p : toDisplayPlayerName(p)}</span>
                                 {isActiveUserLike(p) && (
                                     <span className="ocr-active-user-pill ocr-active-user-pill--success">
                                         <span className="ocr-active-user-pill__dot" />
