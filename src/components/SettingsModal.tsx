@@ -586,7 +586,7 @@ const SettingsModalContent: React.FC = () => {
                     aria-describedby={dialogDescriptionId}
                     className={`relative h-full w-full transition-all duration-200 ${showSettings && !isOverlayMode ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-3 scale-[0.985] pointer-events-none'}`}
                 >
-                    <div className="flex h-full flex-col bg-md-sys-background/98">
+                    <div className="flex h-full flex-col bg-md-sys-background">
                         <div className="border-b border-md-sys-outline/10 px-6 py-5">
                             <div className="flex items-center justify-between gap-4">
                                 <div className="flex items-center gap-4 min-w-0">
@@ -604,21 +604,8 @@ const SettingsModalContent: React.FC = () => {
                                         <h2 id={dialogTitleId} className="text-title font-bold text-md-sys-on-surface">Settings</h2>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={handleSaveAndClose}
-                                    disabled={saved}
-                                    className={`h-10 px-4 rounded-card font-bold uppercase tracking-wide transition-all inline-flex items-center justify-center gap-2 shrink-0 ${saved
-                                        ? 'md3-btn-filled bg-success text-on-scrim'
-                                        : 'md3-btn-filled'
-                                        }`}
-                                >
-                                    {saved ? (
-                                        <><Check size={16} /> Saved!</>
-                                    ) : (
-                                        <><Save size={16} /> Save &amp; Apply</>
-                                    )}
-                                </button>
                             </div>
+
                             <p id={dialogDescriptionId} className="a11y-sr-only">
                                 App settings screen. Use Tab to navigate sections and Escape to return to the app.
                             </p>
@@ -698,8 +685,8 @@ const SettingsModalContent: React.FC = () => {
                                     </div>
                                 </aside>
 
-                                <div className="min-h-0 rounded-card border border-md-sys-outline/10 bg-md-sys-surface p-5 overflow-hidden">
-                                    <div className="flex items-start justify-between gap-4 border-b border-md-sys-outline/10 pb-4 mb-5">
+                                <div className="min-h-0 rounded-card border border-md-sys-outline/10 bg-md-sys-surface flex flex-col overflow-hidden">
+                                    <div className="flex items-start justify-between gap-4 border-b border-md-sys-outline/10 pb-4 mb-5 px-5 pt-5 shrink-0">
                                         <div className="min-w-0">
                                             <div className="text-label-xs font-bold uppercase tracking-widest text-md-sys-primary/80">{activeSectionMeta?.groupLabel || 'Settings'}</div>
                                             <h3 className="text-title font-bold tracking-tight text-md-sys-on-surface mt-1">{activeSectionMeta?.label || 'Settings'}</h3>
@@ -710,7 +697,7 @@ const SettingsModalContent: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    <div className="h-full overflow-y-auto pr-1 custom-scrollbar">
+                                    <div className="flex-1 min-h-0 overflow-y-auto px-5 pr-4 custom-scrollbar">
 
                     {/* Alias & authority (primary) */}
                     {activeSection === 'ocr-alias-learning' && (
@@ -1720,6 +1707,24 @@ const SettingsModalContent: React.FC = () => {
                         </section>
                     )}
 
+                                    </div>
+                                    {/* Sticky Save & Apply footer */}
+                                    <div className="shrink-0 flex justify-end px-5 py-4 border-t border-md-sys-outline/10 bg-md-sys-surface">
+                                        <button
+                                            onClick={handleSaveAndClose}
+                                            disabled={saved}
+                                            className={`h-10 px-5 rounded-card font-bold uppercase tracking-wide transition-all inline-flex items-center justify-center gap-2 ${
+                                                saved
+                                                    ? 'md3-btn-filled bg-success text-on-scrim'
+                                                    : 'md3-btn-filled'
+                                            }`}
+                                        >
+                                            {saved ? (
+                                                <><Check size={16} /> Saved!</>
+                                            ) : (
+                                                <><Save size={16} /> Save &amp; Apply</>
+                                            )}
+                                        </button>
                                     </div>
                                 </div>
                             </div>
