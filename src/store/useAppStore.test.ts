@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { waitFor } from '@testing-library/react';
 
-const createPersistedData = (settings: Record<string, unknown>) => ({
+const createPersistedData = (
+  settings: Record<string, unknown>,
+  overrides: Record<string, unknown> = {},
+) => ({
   matches: [],
   players: [],
   pilotRegistry: [],
@@ -16,13 +19,14 @@ const createPersistedData = (settings: Record<string, unknown>) => ({
   uidMappings: { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} },
   uidSeedState: { seedVersionApplied: null },
   storageMeta: {},
+  ...overrides,
 });
 
-const loadStore = async (settings: Record<string, unknown>) => {
+const loadStore = async (settings: Record<string, unknown>, overrides: Record<string, unknown> = {}) => {
   vi.resetModules();
   vi.doMock('../utils/storage', () => ({
     StorageService: {
-      init: vi.fn().mockResolvedValue(createPersistedData(settings)),
+      init: vi.fn().mockResolvedValue(createPersistedData(settings, overrides)),
       save: vi.fn().mockResolvedValue(true),
     },
   }));
@@ -54,5 +58,19 @@ describe('useAppStore OCR preference hydration', () => {
 
     expect(store.getState().captureMode).toBe('auto');
     expect(store.getState().resultOcrFlowMode).toBe('prompt');
+  });
+
+  it('hydrates persisted perk mappings from uidMappings', async () => {
+    const store = await loadStore({}, {
+      uidMappings: {
+        players: {},
+        ships: {},
+        weapons: {},
+        equipment: {},
+        perks: { PERK_VOIDWEAVE: 'Afterburn' },
+      },
+    });
+
+    expect(store.getState().uidMappings.perks).toEqual({ PERK_VOIDWEAVE: 'Afterburn' });
   });
 });

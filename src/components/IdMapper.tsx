@@ -203,6 +203,17 @@ export const IdMapper: React.FC = () => {
         return 'players';
     };
 
+    const resolvePersistedDomain = (
+        domain: MappingDomain,
+        id: string,
+        candidateName: string,
+        rawType?: MappingEntityType
+    ): MappingDomain => {
+        if (domain !== 'players') return domain;
+        const inferred = resolveUnknownDomain(id, rawType, candidateName);
+        return inferred === 'players' ? domain : inferred;
+    };
+
     const applyMappingByDomain = (domain: MappingDomain, id: string, name: string) => {
         if (domain === 'players') {
             addMapping(id, name);
@@ -410,7 +421,12 @@ export const IdMapper: React.FC = () => {
         const name = nameInputs[id];
         if (name && name.trim()) {
             const trimmed = name.trim();
-            const domain = resolveUnknownDomain(id, normalizedUnknowns[id]?.type, trimmed);
+            const domain = resolvePersistedDomain(
+                resolveUnknownDomain(id, normalizedUnknowns[id]?.type, trimmed),
+                id,
+                trimmed,
+                normalizedUnknowns[id]?.type
+            );
             applyMappingByDomain(domain, id, trimmed);
             const newInputs = { ...nameInputs };
             delete newInputs[id];
@@ -423,7 +439,11 @@ export const IdMapper: React.FC = () => {
     const handleKnownSave = (entry: { key: string; id: string; name: string; domain: MappingDomain }) => {
         const nextName = (nameInputs[entry.key] || '').trim();
         if (!nextName) return;
-        applyMappingByDomain(entry.domain, entry.id, nextName);
+        applyMappingByDomain(
+            resolvePersistedDomain(entry.domain, entry.id, nextName, normalizedUnknowns[entry.id]?.type),
+            entry.id,
+            nextName
+        );
         setNameInputs((prev) => {
             const updated = { ...prev };
             delete updated[entry.key];

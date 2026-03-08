@@ -89,4 +89,36 @@ describe('IdMapper ship mapping behavior', () => {
             enemy: 'Scout (3 Player)',
         }), 'manual');
     });
+
+    it('saves perk mappings into the perks bucket and shows them after reopen', async () => {
+        const { IdMapper } = await import('./IdMapper');
+        storeState.detectedUnknowns = {
+            PERK_VOIDWEAVE: { type: 'Perk', lastSeen: Date.now() },
+        };
+        storeState.uidMappings = { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} };
+
+        const { rerender } = render(<IdMapper />);
+
+        fireEvent.change(screen.getByPlaceholderText('Name...'), { target: { value: 'Afterburn' } });
+        fireEvent.click(screen.getByRole('button', { name: /save mapping for perk_voidweave/i }));
+
+        expect(setUidMapping).toHaveBeenCalledWith('perks', 'PERK_VOIDWEAVE', 'Afterburn');
+
+        storeState.detectedUnknowns = {};
+        storeState.uidMappings = {
+            players: {},
+            ships: {},
+            weapons: {},
+            equipment: {},
+            perks: { PERK_VOIDWEAVE: 'Afterburn' },
+        };
+
+        rerender(<IdMapper />);
+        const knownTab = screen.getAllByRole('button').find((button) => button.textContent?.startsWith('Known'));
+        expect(knownTab).toBeDefined();
+        fireEvent.click(knownTab!);
+
+        expect(screen.getByText('Afterburn')).toBeInTheDocument();
+        expect(screen.getByText('PERK')).toBeInTheDocument();
+    });
 });
