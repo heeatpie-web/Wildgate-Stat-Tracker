@@ -466,21 +466,25 @@ export const useMatchSubmission = () => {
             }
             await StorageService.flush();
             const totalDurationSecs = parseDurationSecs(finalTime);
-            const matchEnd = Date.now();
-            const fallbackWindowMs = totalDurationSecs > 0
-                ? totalDurationSecs * 1000
-                : DEFAULT_ARTIFACT_LOOKBACK_MS;
+            const totalDurationMs = totalDurationSecs > 0 ? totalDurationSecs * 1000 : 0;
+            const submissionTime = Date.now();
+            const fallbackWindowMs = totalDurationMs > 0 ? totalDurationMs : DEFAULT_ARTIFACT_LOOKBACK_MS;
             const telemetryDraftStart = existingMatch?.subType === 'Telemetry Draft'
                 ? Number(matchTimestamp || 0)
                 : 0;
             // Use the actual telemetry/manual match start when available.
             // When duration/timer context is unavailable, use a bounded lookback window.
-            let matchStart = matchEnd - fallbackWindowMs;
+            let matchStart = submissionTime - fallbackWindowMs;
             if (typeof matchStartTime === 'number' && matchStartTime > 0) {
                 matchStart = matchStartTime;
-            } else if (telemetryDraftStart > 0 && telemetryDraftStart <= matchEnd) {
+            } else if (telemetryDraftStart > 0 && telemetryDraftStart <= submissionTime) {
                 matchStart = telemetryDraftStart;
             }
+            // Cap matchEnd to matchStart + duration + 90s buffer to prevent the artifact window
+            // from extending into a subsequent match's screenshots when submission is delayed.
+            const matchEnd = (totalDurationMs > 0 && matchStart > 0)
+                ? Math.min(submissionTime, matchStart + totalDurationMs + 90_000)
+                : submissionTime;
 
             const bundledArtifacts = await bundleMatchArtifacts(newMatch.id, matchStart, matchEnd);
             let scopedRepairAppliedLinks = 0;
