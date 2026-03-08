@@ -152,7 +152,7 @@ const NOISE_WORDS = new Set([
   'WAYPOINT', 'COMPASS', 'MARKER', 'MINIMAP', 'ICON',
   'GATE', 'VAULT', 'STORM', 'SWARM', 'SWARMS',
   'RANK', 'LEVEL', 'PRESTIGE', 'PROGRESS',
-  'SMALL CREW BONUS', 'REDUCED FIRES',
+  'SMALL CREW BONUS', 'REDUCED FIRES', 'REDUCEDFIRES', 'SMALLCREWBONUS',
 ]);
 const UI_NOISE_PHRASES = [
   'CREW HUB',
@@ -189,7 +189,8 @@ function containsUnderCrewBonusPhrase(input) {
     .replace(/\s+/g, ' ')
     .trim();
   if (!normalized) return false;
-  return normalized === 'SMALL CREW BONUS' || normalized === 'REDUCED FIRES';
+  return normalized === 'SMALL CREW BONUS' || normalized === 'REDUCED FIRES'
+    || normalized === 'SMALLCREWBONUS' || normalized === 'REDUCEDFIRES';
 }
 
 function countAnchorsBetween(anchorYs, a, b) {

@@ -2399,6 +2399,8 @@ function normalizePlayerShipName(rawName, shipType = '') {
 const UNDERCREW_SHIP_BONUS_PHRASES = new Set([
   'SMALL CREW BONUS',
   'REDUCED FIRES',
+  'SMALLCREWBONUS',
+  'REDUCEDFIRES',
 ]);
 const SHIP_CAPACITY_BY_TYPE = {
   hunter: 4,
