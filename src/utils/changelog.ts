@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.1.2": [
+    "Release: Version 3.1.2 rolls in the recording, sidebar, analytics, and modal polish pass, including new Smart Captures and ID Mapper sidebar badges.",
+    "Polish: Smart Capture queue rows, Players surfaces, recording affordances, Profile Hub, Settings, Wizard, and OCR review shells now use the current solid design language with cleaner spacing and less transparency.",
+    "Reliability: Analytics now waits for the active-match flag to clear before recalculating saved results, and bundled repo-local ID mappings now seed known prospectors, ships, weapons, and equipment for first-run defaults."
+  ],
   "v3.0.2": [
     "Beta: Final pre-beta hardening pass with earlier Smart Capture artifact syncing so OCR review no longer waits on late bundling.",
     "Beta: Simplified first-run setup, quieter startup flow, cleaner tutorial guidance, and safer restore-session behavior for intentional app closes.",
