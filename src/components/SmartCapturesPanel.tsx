@@ -2056,6 +2056,8 @@ const SmartMatchDetail: React.FC<{
             playerIndex: number;
         } | null>(null);
         const [dragHoverTeamIndex, setDragHoverTeamIndex] = useState<number | null>(null);
+        const [dragSrcImgIdx, setDragSrcImgIdx] = useState<number | null>(null);
+        const [dragOverImgIdx, setDragOverImgIdx] = useState<number | null>(null);
         const [editingTeamOpponentPlayer, setEditingTeamOpponentPlayer] = useState<{
             teamIndex: number;
             playerIndex: number;
@@ -2998,6 +3000,24 @@ const SmartMatchDetail: React.FC<{
                 onUpdate({ ...match, artifacts: [...currentArtifacts, ...result.added], ocrState: match.ocrState || 'queued' });
             }
         };
+
+        const handleReorderImages = (fromIdx: number, toIdx: number) => {
+            if (fromIdx === toIdx) return;
+            const newImages = [...artifacts.images];
+            const newImageFiles = [...artifacts.imageFiles];
+            const [removedImg] = newImages.splice(fromIdx, 1);
+            const [removedFile] = newImageFiles.splice(fromIdx, 1);
+            newImages.splice(toIdx, 0, removedImg);
+            newImageFiles.splice(toIdx, 0, removedFile);
+            setArtifacts({ ...artifacts, images: newImages, imageFiles: newImageFiles });
+            const existingArtifacts = match.artifacts || [];
+            if (existingArtifacts.length > 0) {
+                const reordered = [...existingArtifacts];
+                const [removedArtifact] = reordered.splice(fromIdx, 1);
+                reordered.splice(toIdx, 0, removedArtifact);
+                onUpdate({ ...match, artifacts: reordered });
+            }
+        };
         const handleRerunAnalysis = async () => {
             const artifactCandidates = artifacts.images.length > 0 ? artifacts.images : (match.artifacts || []);
             if (!artifactCandidates || artifactCandidates.length === 0) return;
@@ -3714,9 +3734,10 @@ const SmartMatchDetail: React.FC<{
                                     return (
                                         <div
                                             key={artifactFile?.artifactId || src || i}
-                                            className="relative shrink-0 w-40 aspect-video md3-surface-high rounded-xl overflow-hidden group sc-shot-thumb border border-md-sys-outline/10 shadow-sm"
+                                            className={`relative shrink-0 w-40 aspect-video md3-surface-high rounded-xl overflow-hidden group sc-shot-thumb border shadow-sm transition-[border-color,box-shadow] ${dragOverImgIdx === i && dragSrcImgIdx !== null && dragSrcImgIdx !== i ? 'border-md-sys-primary ring-2 ring-md-sys-primary/50' : 'border-md-sys-outline/10'}`}
                                             draggable={!!artifactFile?.artifactId}
                                             onDragStart={(event) => {
+                                                setDragSrcImgIdx(i);
                                                 if (!artifactFile?.artifactId || !onBeginArtifactDrag) return;
                                                 event.dataTransfer.effectAllowed = 'move';
                                                 event.dataTransfer.setData('text/plain', artifactFile.artifactId);
@@ -3727,7 +3748,25 @@ const SmartMatchDetail: React.FC<{
                                                     filename: artifactFile.filename,
                                                 });
                                             }}
-                                            onDragEnd={() => onEndArtifactDrag?.()}
+                                            onDragOver={(event) => {
+                                                if (dragSrcImgIdx === null || dragSrcImgIdx === i) return;
+                                                event.preventDefault();
+                                                setDragOverImgIdx(i);
+                                            }}
+                                            onDragLeave={() => setDragOverImgIdx(null)}
+                                            onDrop={(event) => {
+                                                if (dragSrcImgIdx === null || dragSrcImgIdx === i) return;
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                                handleReorderImages(dragSrcImgIdx, i);
+                                                setDragSrcImgIdx(null);
+                                                setDragOverImgIdx(null);
+                                            }}
+                                            onDragEnd={() => {
+                                                setDragSrcImgIdx(null);
+                                                setDragOverImgIdx(null);
+                                                onEndArtifactDrag?.();
+                                            }}
                                         >
                                             <button onClick={() => setActiveScreenshotIndex(i)} className="w-full h-full cursor-pointer">
                                                 <LocalImage
