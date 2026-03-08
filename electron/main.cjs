@@ -245,26 +245,6 @@ function buildRendererReadCandidates(inputPath) {
   return candidates;
 }
 
-function isAllowedEpicHost(hostname) {
-  const host = String(hostname || '').toLowerCase();
-  if (!host) return false;
-  return Array.from(EPIC_REQUEST_ALLOWED_HOSTS).some(allowed => host === allowed || host.endsWith(`.${allowed}`));
-}
-
-function sanitizeForwardHeaders(headers) {
-  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) return {};
-  const safe = {};
-  for (const [key, value] of Object.entries(headers)) {
-    if (typeof key !== 'string' || typeof value !== 'string') continue;
-    const cleanKey = key.trim();
-    if (!cleanKey) continue;
-    if (/[\r\n]/.test(cleanKey) || /[\r\n]/.test(value)) continue;
-    if (cleanKey.toLowerCase() === 'host') continue;
-    safe[cleanKey] = value;
-  }
-  return safe;
-}
-
 function telemetryEventSignature(evt) {
   if (!evt || typeof evt !== 'object') return '';
   const ts = evt.ClientTimestamp ?? evt.timestamp ?? evt.ts ?? '';
@@ -1726,87 +1706,6 @@ ipcMain.handle('db-backup', () => {
     includeArtifacts: true,
     userDataDir: app.getPath('userData'),
   });
-});
-
-ipcMain.handle('epic-request', async (event, payload = {}) => {
-  try {
-    const {
-      url,
-      method = 'GET',
-      headers = {},
-      body = undefined,
-    } = payload || {};
-
-    if (typeof url !== 'string' || !url.trim()) {
-      return { ok: false, status: 400, statusText: 'Bad Request', error: 'Invalid URL' };
-    }
-
-    const urlCheck = validateHttpsUrlAllowlist(url, EPIC_REQUEST_ALLOWED_HOSTS);
-    if (!urlCheck.success) {
-      recordSecurityBlock('epic-request', urlCheck.code || IpcErrorCode.URL_NOT_ALLOWED, urlCheck.message || 'URL not allowed');
-      return {
-        ok: false,
-        status: urlCheck.code === IpcErrorCode.INVALID_INPUT ? 400 : 403,
-        statusText: urlCheck.code === IpcErrorCode.INVALID_INPUT ? 'Bad Request' : 'Forbidden',
-        error: urlCheck.message || 'URL not allowed',
-        code: urlCheck.code || IpcErrorCode.URL_NOT_ALLOWED,
-      };
-    }
-
-    const parsed = urlCheck.data;
-    if (!URL_ALLOWLIST_DISABLED && !isAllowedEpicHost(parsed.hostname)) {
-      recordSecurityBlock('epic-request', IpcErrorCode.URL_NOT_ALLOWED, `Host not allowed: ${parsed.hostname}`);
-      return { ok: false, status: 403, statusText: 'Forbidden', error: `Host not allowed: ${parsed.hostname}`, code: IpcErrorCode.URL_NOT_ALLOWED };
-    }
-
-    const normalizedMethod = String(method || 'GET').toUpperCase();
-    if (!ALLOWED_HTTP_METHODS.has(normalizedMethod)) {
-      recordSecurityBlock('epic-request', IpcErrorCode.METHOD_NOT_ALLOWED, `Method not allowed: ${normalizedMethod}`);
-      return { ok: false, status: 405, statusText: 'Method Not Allowed', error: `Method not allowed: ${normalizedMethod}`, code: IpcErrorCode.METHOD_NOT_ALLOWED };
-    }
-
-    let requestBody = undefined;
-    if (body !== undefined && body !== null) {
-      const bodyCheck = validateBodySize(body, MAX_EPIC_REQUEST_BODY_BYTES);
-      if (!bodyCheck.success) {
-        recordSecurityBlock('epic-request', bodyCheck.code, bodyCheck.message);
-        return { ok: false, status: bodyCheck.code === IpcErrorCode.PAYLOAD_TOO_LARGE ? 413 : 400, statusText: 'Bad Request', error: bodyCheck.message, code: bodyCheck.code };
-      }
-      if (typeof body === 'string') requestBody = body;
-      else if (typeof body === 'object') requestBody = JSON.stringify(body);
-      else return { ok: false, status: 400, statusText: 'Bad Request', error: 'Invalid request body type', code: IpcErrorCode.INVALID_INPUT };
-    }
-
-    const safeHeaders = sanitizeForwardHeaders(headers);
-    const fetchOptions = {
-      method: normalizedMethod,
-      headers: {
-        'User-Agent': 'AccelByte-SDK',
-        ...safeHeaders
-      },
-      body: requestBody
-    };
-
-    const response = await fetch(parsed.toString(), fetchOptions);
-    const text = await response.text();
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = text;
-    }
-
-    return {
-      ok: response.ok,
-      status: response.status,
-      data,
-      statusText: response.statusText
-    };
-  } catch (error) {
-    console.error("IPC Request Error:", error);
-    return { ok: false, status: 0, statusText: 'Network Error', error: error.message };
-  }
 });
 
 // Log Monitoring Logic
