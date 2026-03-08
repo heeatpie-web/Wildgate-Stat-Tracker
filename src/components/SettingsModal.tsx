@@ -506,7 +506,7 @@ const SettingsModalContent: React.FC = () => {
                     aria-modal="true"
                     aria-labelledby={dialogTitleId}
                     aria-describedby={dialogDescriptionId}
-                    className={`md3-dialog overflow-hidden ${isOverlayMode ? 'max-w-400px' : 'max-w-5xl'} w-full max-h-85vh flex flex-col ring-1 ring-md-sys-outline/10 shadow-2xl rounded-modal`}
+                    className="md3-dialog overflow-hidden max-w-7xl w-full max-h-85vh flex flex-col ring-1 ring-md-sys-outline/10 shadow-2xl rounded-modal"
                     onClick={e => e.stopPropagation()}
                 >
                 {/* Modal Header */}

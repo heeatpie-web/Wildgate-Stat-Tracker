@@ -187,7 +187,7 @@ describe('SettingsModal', () => {
     const { container } = render(<SettingsModal />);
 
     const dialog = screen.getByRole('dialog');
-    expect(dialog.className).toContain('max-w-5xl');
+    expect(dialog.className).toContain('max-w-7xl');
 
     expect(screen.getByRole('heading', { name: 'Appearance' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Interface' })).toBeInTheDocument();
