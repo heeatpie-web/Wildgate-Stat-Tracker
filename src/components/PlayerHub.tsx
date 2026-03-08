@@ -792,7 +792,7 @@ const PlayerHub: React.FC = () => {
                                     const normalizedPendingValue = normalizeOcrName(pendingValue);
                                     const existingRosterMatch = findRosterMatch(pendingValue);
                                     const mergeSuggestions = [
-                                        candidate.bestMatch
+                                        candidate.bestMatch && normalizeOcrName(candidate.bestMatch).toLowerCase() !== normalizeOcrName(candidate.value).toLowerCase()
                                             ? {
                                                 name: normalizeOcrName(candidate.bestMatch),
                                                 score: Number(candidate.bestScore || 0),
