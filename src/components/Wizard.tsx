@@ -28,6 +28,7 @@ import {
     getPrimaryEliminatedByTeamValue,
     isEliminatedByTeamMatch,
 } from '../utils/eliminatorTeam';
+import { UNKNOWN_PLAYER_LABELS } from '../utils/constants';
 
 type WizardTab = 'result' | 'ocr';
 const MAX_SHIP_WEAPONS = 10;
@@ -680,7 +681,12 @@ export const Wizard: React.FC = () => {
             ));
             const safePlayerName = (entry: unknown): string =>
                 typeof entry === 'string' ? entry : (entry as { name?: string })?.name || '';
-            const nextTeammates = dedupeNames((mergedData.teammates || []).map(safePlayerName));
+            const nextTeammates = dedupeNames(
+                (mergedData.teammates || []).map(safePlayerName).filter((name) => {
+                    const n = String(name || '').toLowerCase().trim();
+                    return n && !UNKNOWN_PLAYER_LABELS.has(n);
+                })
+            );
             const nextOpponentTeams = (mergedData.opponentTeams || []).map((team: any, index: number) => ({
                 teamName: String(team.teamName || `Enemy Team ${index + 1}`).trim() || `Enemy Team ${index + 1}`,
                 shipType: String(team.shipType || '').trim(),

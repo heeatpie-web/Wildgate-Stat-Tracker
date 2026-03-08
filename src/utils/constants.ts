@@ -12,6 +12,9 @@ export const APP_VERSION = "v3.1.2";
 /** Prefix used for unnamed players discovered via telemetry (e.g. "Member 1"). */
 export const UNNAMED_PLAYER_PREFIX = 'Member ';
 
+/** Player name labels that represent a missing or placeholder entry (case-insensitive). */
+export const UNKNOWN_PLAYER_LABELS = new Set(['unknown', 'unknown player', 'n/a', 'na', '?']);
+
 export const CHARACTERS = [
   "Adrian",
   "Venture",

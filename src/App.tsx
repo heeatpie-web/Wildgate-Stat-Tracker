@@ -63,6 +63,7 @@ const loadAnalyticsPanel = () => loadDashboardChunk('analytics');
 const AnalyticsPanel = React.lazy(loadAnalyticsPanel);
 import { APP_VERSION, Match, MatchResult, WizardResult } from './types';
 import { CHANGELOG } from './utils/changelog';
+import { UNKNOWN_PLAYER_LABELS } from './utils/constants';
 import { Toast } from './components/Toast';
 const loadDevOCRPanel = () => loadDashboardChunk('dev-ocr');
 const DevOCRPanel = React.lazy(loadDevOCRPanel);
@@ -163,7 +164,6 @@ const RESTORE_SESSION_DISMISSED_SIGNATURE_KEY = 'wg_restore_session_dismissed_si
 const INTENTIONAL_CLOSE_STORAGE_KEY = 'wg_intentional_close_v1';
 const RESTORE_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const SETTINGS_FOCUS_SECTION_STORAGE_KEY = 'wg_settings_focus_section_v1';
-const UNKNOWN_PLAYER_LABELS = new Set(['unknown', 'unknown player', 'n/a', 'na', '?']);
 const STARTUP_INTERACTION_GRACE_MS = 3500;
 const HAS_LAUNCHED_BEFORE_STORAGE_KEY = 'wg_has_launched_before_v1';
 const WELCOME_MESSAGE_SHOWN_THIS_LAUNCH_KEY = 'wg_welcome_message_shown_this_launch_v1';
