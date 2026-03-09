@@ -7,7 +7,10 @@ import { OutcomePill } from './OutcomePill';
 describe('OutcomePill', () => {
   it('renders match outcome label', () => {
     render(<OutcomePill result="Win" />);
-    expect(screen.getByText('Win')).toBeInTheDocument();
+    const outcome = screen.getByText('Win');
+    expect(outcome).toBeInTheDocument();
+    expect(outcome).not.toHaveClass('border');
+    expect(outcome).not.toHaveClass('rounded-pill');
   });
 
   it('renders ongoing label', () => {

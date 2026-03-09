@@ -53,6 +53,8 @@ const appStoreState = {
   knownMappings: {},
   uidMappings: { players: {}, ships: {}, weapons: {}, equipment: {}, perks: {} },
   resetSelectionSourcesForNewMatch: vi.fn(),
+  resetMatchTrackingForNewMatch: vi.fn(),
+  resetMatchMetricsForNewMatch: vi.fn(),
   registerUnknownId: vi.fn(),
   setPlayerName: vi.fn(),
   activeWeapons: {},
@@ -117,6 +119,8 @@ describe('useLogMonitor', () => {
     processTelemetryEvent.mockClear();
     appStoreState.setPlayerName.mockClear();
     appStoreState.resetSelectionSourcesForNewMatch.mockClear();
+    appStoreState.resetMatchTrackingForNewMatch.mockClear();
+    appStoreState.resetMatchMetricsForNewMatch.mockClear();
     appStoreState.registerUnknownId.mockClear();
     ipcMock.send.mockClear();
     ipcMock.on.mockClear();
@@ -217,7 +221,7 @@ describe('useLogMonitor', () => {
       characterPerks: [],
       perks: [],
     }));
-    expect(gameDataState.setActiveWeapons).toHaveBeenCalledWith({});
+    expect(gameDataState.setActiveWeapons).toHaveBeenCalledWith({}, false);
   });
 
   it('creates a telemetry draft on map-start signal', async () => {
@@ -287,6 +291,8 @@ describe('useLogMonitor', () => {
     });
 
     expect(appStoreState.resetSelectionSourcesForNewMatch).toHaveBeenCalledTimes(1);
+    expect(appStoreState.resetMatchTrackingForNewMatch).toHaveBeenCalledTimes(1);
+    expect(appStoreState.resetMatchMetricsForNewMatch).toHaveBeenCalledTimes(1);
     expect(gameDataState.setActiveHero).toHaveBeenCalledWith('Venture', 'telemetry');
     expect(gameDataState.setActiveShip).toHaveBeenCalledWith('Scout (3 Player)', 'telemetry');
   });

@@ -71,6 +71,8 @@ const appStoreState = {
   resultOcrFlowMode: 'prompt',
   ocrAutoOpenAfterRerun: false,
   showSmartCaptureInHeader: false,
+  resetMatchTrackingForNewMatch: vi.fn(),
+  resetMatchMetricsForNewMatch: vi.fn(),
   pendingMatchData: null as any,
   matches: [] as any[],
   setPendingMatchData: vi.fn(),
@@ -149,6 +151,8 @@ describe('ActionPanel', () => {
     appStoreState.showSmartCaptureInHeader = false;
     appStoreState.pendingMatchData = null;
     appStoreState.matches = [];
+    appStoreState.resetMatchTrackingForNewMatch.mockClear();
+    appStoreState.resetMatchMetricsForNewMatch.mockClear();
     smartCaptureActions.getPendingData.mockImplementation(() => smartCaptureState.pendingData);
     uiState.smartCaptureRequest = null;
 
@@ -172,6 +176,18 @@ describe('ActionPanel', () => {
     render(<ActionPanel />);
 
     expect(screen.getByRole('button', { name: /stop match timer/i })).toBeInTheDocument();
+  });
+
+  it('resets match-scoped recording fields before starting a fresh timer', async () => {
+    const { ActionPanel } = await import('./ActionPanel');
+
+    render(<ActionPanel />);
+    fireEvent.click(screen.getByRole('button', { name: /start match timer/i }));
+
+    expect(appStoreState.resetMatchTrackingForNewMatch).toHaveBeenCalledTimes(1);
+    expect(appStoreState.resetMatchMetricsForNewMatch).toHaveBeenCalledTimes(1);
+    expect(gameData.setIsMatchInProgress).toHaveBeenCalledWith(true);
+    expect(gameData.setMatchStartTime).toHaveBeenCalledWith(expect.any(Number));
   });
 
   it('does not render legacy ID Mapper buttons in recording layouts', async () => {

@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { GripVertical, Plus, Shield, Trash2, UserPlus, Wand2, X } from 'lucide-react';
+import { normalizeOcrName } from '../../utils/stringUtils';
 
 export interface OcrTeamAssignmentTeam {
     key: string;
@@ -77,7 +78,7 @@ const parseDragPayload = (raw: string): DraggedPlayerPayload | null => {
 };
 
 const buildDragPayload = (payload: DraggedPlayerPayload): string => JSON.stringify(payload);
-const normalizePlayerKey = (value: string): string => String(value || '').trim().toLowerCase();
+const normalizePlayerKey = (value: string): string => normalizeOcrName(value || '').toLowerCase();
 const nextTeamColor = (current: string): string => {
     const normalized = normalizeColorToken(current);
     const currentIndex = TEAM_COLOR_OPTION_LIST.indexOf(normalized as typeof TEAM_COLOR_OPTION_LIST[number]);
@@ -325,9 +326,10 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                         const isDragged = draggedPlayer?.teamIndex === teamIndex
                                             && draggedPlayer?.playerIndex === playerIndex;
                                         const displayName = String(playerName || '');
+                                        const rawDisplayKey = displayName.trim().toLowerCase();
                                         const fuzzyMatch = fuzzyMatches[normalizePlayerKey(displayName)] || '';
                                         const showFuzzyBadge = fuzzyMatch
-                                            && normalizePlayerKey(fuzzyMatch) !== normalizePlayerKey(displayName);
+                                            && fuzzyMatch.trim().toLowerCase() !== rawDisplayKey;
                                         const isRosterMatch = pilotRegistry.length > 0 && pilotRegistry.some(p => normalizePlayerKey(p) === normalizePlayerKey(displayName));
                                         return (
                                             <div

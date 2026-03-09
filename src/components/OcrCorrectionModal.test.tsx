@@ -68,6 +68,7 @@ describe('OcrCorrectionModal', () => {
         gameData.selectedReachModifiers = [];
         gameData.selectedTeammates = [];
         appStoreState.ocrCorrections = {};
+        appStoreState.ocrBatchAcceptThreshold = 85;
         appStoreState.pendingMatchData = null;
         appStoreState.resolveTeamIdentity.mockImplementation((teamName: string, color?: string) => ({
             teamName,
@@ -127,6 +128,58 @@ describe('OcrCorrectionModal', () => {
 
         fireEvent.click(screen.getAllByRole('button', { name: /undo ignore/i })[0]);
         expect(screen.getAllByRole('button', { name: /^ignore$/i }).length).toBeGreaterThan(0);
+    });
+
+    it('uses stored OCR name confidence for detected player rows', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        appStoreState.pendingMatchData = {
+            player: 'ActivePilot',
+            ship: 'Hunter (2 Player)',
+            teammates: ['PilotOne'],
+            opponents: [],
+            opponentTeams: [],
+            ocrDebug: {
+                nameConfidence: {
+                    pilotone: 96,
+                },
+            },
+        };
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        expect(screen.getByRole('progressbar', { name: /ocr confidence 96%/i })).toBeInTheDocument();
+        expect(screen.getByText('96%')).toBeInTheDocument();
+    });
+
+    it('does not invent a player confidence when no per-name confidence was captured', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        appStoreState.pendingMatchData = {
+            player: 'ActivePilot',
+            ship: 'Hunter (2 Player)',
+            teammates: ['PilotOne'],
+            opponents: [],
+            opponentTeams: [],
+            ocrDebug: {
+                confidence: 88,
+                fieldConfidence: {
+                    teammateNames: 83,
+                    opponentNames: 67,
+                    ship: 91,
+                    modifiers: 74,
+                },
+            },
+        };
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        expect(screen.queryByText('83%')).not.toBeInTheDocument();
+        expect(screen.getByText(/no direct ocr confidence/i)).toBeInTheDocument();
     });
 
     it('surfaces fuzzy roster suggestions for OCR-like name variants', async () => {
@@ -235,6 +288,47 @@ describe('OcrCorrectionModal', () => {
             artifactSource: 'ice',
             ocrDebug: expect.objectContaining({
                 hazards: ['Ancient Vault'],
+            }),
+        }));
+    });
+
+    it('shows OCR-resolved game artifact types in the reach hazards and modifiers list', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['PilotOne'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['PilotOne'];
+        appStoreState.pendingMatchData = {
+            player: 'ActivePilot',
+            ship: 'Hunter (2 Player)',
+            teammates: ['PilotOne'],
+            opponents: [],
+            opponentTeams: [],
+            reachModifiers: [],
+            artifactSource: 'ice',
+            ocrDebug: {
+                hazards: ['Sandstorm'],
+            },
+        };
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        expect(screen.getByText('Sandstorm')).toBeInTheDocument();
+        expect(screen.getByText('Artifact: Ice')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /save and close/i }));
+
+        expect(gameData.setSelectedReachModifiers).toHaveBeenCalledWith(
+            ['Sandstorm', 'Artifact: Ice'],
+            'manual'
+        );
+        expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
+            reachModifiers: ['Sandstorm', 'Artifact: Ice'],
+            artifactSource: 'ice',
+            ocrDebug: expect.objectContaining({
+                hazards: ['Sandstorm'],
             }),
         }));
     });
@@ -379,7 +473,7 @@ describe('OcrCorrectionModal', () => {
         expect(screen.getByAltText(/reference screenshot 1/i)).toBeInTheDocument();
     });
 
-    it('uses a back control in embedded mode instead of a close X action', async () => {
+    it('removes the embedded OCR review header row and header navigation buttons', async () => {
         const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
         const onClose = vi.fn();
         const onAcceptAll = vi.fn();
@@ -397,15 +491,43 @@ describe('OcrCorrectionModal', () => {
             />
         );
 
-        const backButton = screen.getByRole('button', { name: /back to result tab/i });
-        expect(backButton).toBeInTheDocument();
+        expect(screen.queryByText(/review player names, team grouping, and ship assignment/i)).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /back to result tab/i })).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /close ocr correction dialog/i })).not.toBeInTheDocument();
-
-        fireEvent.click(backButton);
-        expect(onClose).toHaveBeenCalledTimes(1);
     });
 
-    it('keeps embedded modal sizing pinned to full-height and body-owned scrolling', async () => {
+    it('surfaces the wizard rerun action inside the batch operations header and uses a 50-100 slider range', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+        const onRequestRerunOcr = vi.fn();
+
+        gameData.sessionTeams = { red: ['PilotOne'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['PilotOne'];
+
+        render(
+            <OcrCorrectionModal
+                isOpen
+                embedded
+                onClose={onClose}
+                onAcceptAll={onAcceptAll}
+                onRequestRerunOcr={onRequestRerunOcr}
+            />
+        );
+
+        const rerunButton = screen.getByRole('button', { name: /re-run ocr/i });
+        const thresholdSlider = screen.getByRole('slider', { name: /batch confidence threshold/i });
+
+        expect(rerunButton).toBeInTheDocument();
+        expect(thresholdSlider).toHaveAttribute('min', '50');
+        expect(thresholdSlider).toHaveAttribute('max', '100');
+
+        fireEvent.click(rerunButton);
+        expect(onRequestRerunOcr).toHaveBeenCalledTimes(1);
+    });
+
+    it('lets embedded mode grow with the page instead of forcing an inner scroll body', async () => {
         const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
         const onClose = vi.fn();
         const onAcceptAll = vi.fn();
@@ -423,20 +545,27 @@ describe('OcrCorrectionModal', () => {
             />
         );
 
-        const embeddedRoot = container.querySelector('.w-full.h-full.min-h-0.flex.flex-col.overflow-hidden');
-        const embeddedDialog = container.querySelector('.ocr-correction-dialog--embedded');
+        const embeddedRoot = container.firstElementChild as HTMLDivElement | null;
+        const embeddedDialog = screen.getByRole('dialog');
         const body = container.querySelector('.ocr-correction-body');
 
         expect(embeddedRoot).not.toBeNull();
-        expect(embeddedDialog).not.toBeNull();
-        expect(embeddedDialog).toHaveClass('h-full');
-        expect(embeddedDialog).toHaveClass('min-h-0');
+        expect(embeddedRoot).toHaveClass('w-full');
+        expect(embeddedRoot).toHaveClass('flex');
+        expect(embeddedRoot).toHaveClass('flex-col');
+        expect(embeddedRoot).not.toHaveClass('h-full');
+        expect(embeddedRoot).not.toHaveClass('overflow-hidden');
+        expect(embeddedDialog).toHaveClass('ocr-correction-dialog--embedded');
+        expect(embeddedDialog).toHaveClass('w-full');
         expect(embeddedDialog).toHaveClass('flex');
         expect(embeddedDialog).toHaveClass('flex-col');
+        expect(embeddedDialog).not.toHaveClass('h-full');
+        expect(embeddedDialog).not.toHaveClass('overflow-hidden');
         expect(body).not.toBeNull();
-        expect(body).toHaveClass('flex-1');
-        expect(body).toHaveClass('min-h-0');
-        expect(body).toHaveClass('overflow-y-auto');
+        expect(body).toHaveClass('md3-dialog-content');
+        expect(body).not.toHaveClass('flex-1');
+        expect(body).not.toHaveClass('min-h-0');
+        expect(body).not.toHaveClass('overflow-y-auto');
     });
 
     it('dismisses the help banner and persists dismissal in localStorage', async () => {

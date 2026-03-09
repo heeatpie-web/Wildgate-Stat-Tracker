@@ -6,11 +6,11 @@ import {
 } from '../ocrBatchActions';
 
 describe('ocrBatchActions', () => {
-  it('normalizes threshold to 70-95 range with 5-point steps', () => {
-    expect(normalizeOcrBatchThreshold(69)).toBe(70);
-    expect(normalizeOcrBatchThreshold(72)).toBe(70);
-    expect(normalizeOcrBatchThreshold(73)).toBe(75);
-    expect(normalizeOcrBatchThreshold(96)).toBe(95);
+  it('normalizes threshold to 50-100 range with 5-point steps', () => {
+    expect(normalizeOcrBatchThreshold(49)).toBe(50);
+    expect(normalizeOcrBatchThreshold(52)).toBe(50);
+    expect(normalizeOcrBatchThreshold(53)).toBe(55);
+    expect(normalizeOcrBatchThreshold(101)).toBe(100);
     expect(normalizeOcrBatchThreshold(undefined)).toBe(85);
   });
 
@@ -38,5 +38,16 @@ describe('ocrBatchActions', () => {
     const ignored = new Set<string>(['B']);
     const eligible = getLowConfidenceEligible(candidates, corrections, ignored, 85);
     expect(eligible.map(candidate => candidate.name)).toEqual(['D']);
+  });
+
+  it('skips candidates with unknown confidence in both batch lists', () => {
+    const candidates = [
+      { name: 'KnownHigh', confidence: 92 },
+      { name: 'KnownLow', confidence: 62 },
+      { name: 'Unknown' },
+    ];
+
+    expect(getHighConfidenceEligible(candidates, {}, new Set<string>(), 85).map(candidate => candidate.name)).toEqual(['KnownHigh']);
+    expect(getLowConfidenceEligible(candidates, {}, new Set<string>(), 85).map(candidate => candidate.name)).toEqual(['KnownLow']);
   });
 });

@@ -31,7 +31,12 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
   const hasMatchTelemetry = Boolean(isMatchInProgress || telemetryActivity === 'receiving');
   const telemetrySignalsFilled = (telemetryDetectedShip ? 1 : 0) + (telemetryDetectedHero ? 1 : 0) + (hasMatchTelemetry ? 1 : 0);
   const telemetrySignalsTotal = 3;
-  const telemetrySummaryTooltip = `Telemetry signals: ${telemetrySignalsFilled}/${telemetrySignalsTotal} (Ship ${telemetryDetectedShip ? 'ok' : 'missing'}, Prospector ${telemetryDetectedHero ? 'ok' : 'missing'}, Match ${hasMatchTelemetry ? 'ok' : 'missing'})`;
+  const telemetrySummaryTooltip = [
+    `Telemetry signals ${telemetrySignalsFilled}/${telemetrySignalsTotal}`,
+    telemetryDetectedShip ? `Ship detected: ${telemetryDetectedShip.split('(')[0].trim()}` : 'Ship pending',
+    telemetryDetectedHero ? `Prospector detected: ${telemetryDetectedHero}` : 'Prospector pending',
+    hasMatchTelemetry ? 'Match telemetry active' : 'Match telemetry idle',
+  ].join(' | ');
 
   const sourceChip = (label: string, source?: 'manual' | 'telemetry' | 'ocr') => {
     if (!source || source === 'manual' || source === 'telemetry') return null;
@@ -78,9 +83,10 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
                 data-testid="recording-telemetry-summary"
                 className="recording-telemetry-indicator is-active"
                 title={telemetrySummaryTooltip}
+                aria-label={telemetrySummaryTooltip}
               >
                 <span className="recording-telemetry-dot" />
-                Telemetry {telemetrySignalsFilled}/{telemetrySignalsTotal}
+                Telemetry Signals {telemetrySignalsFilled}/{telemetrySignalsTotal}
               </span>
             )}
             {sourceChip('Ship', shipSource)}
@@ -154,9 +160,10 @@ export const SquadronPanel: React.FC<SquadronPanelProps> = ({ density = 'standar
               data-testid="recording-telemetry-summary"
               className="recording-telemetry-indicator is-active"
               title={telemetrySummaryTooltip}
+              aria-label={telemetrySummaryTooltip}
             >
               <span className="recording-telemetry-dot" />
-              Telemetry {telemetrySignalsFilled}/{telemetrySignalsTotal}
+              Telemetry Signals {telemetrySignalsFilled}/{telemetrySignalsTotal}
             </span>
           )}
           {sourceChip('Ship', shipSource)}

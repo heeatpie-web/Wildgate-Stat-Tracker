@@ -61,6 +61,19 @@ export const cloneLoadout = (loadout: Loadout | null | undefined): Loadout | nul
   sanitizeLoadout(loadout)
 );
 
+export const buildActiveWeaponsFromLoadout = (loadout: Loadout | null | undefined): Record<string, number> => {
+  const sanitized = sanitizeLoadout(loadout);
+  if (!sanitized) return {};
+  return [
+    ...(sanitized.characterWeapons || []),
+    ...(sanitized.characterEquipment || []),
+  ].reduce<Record<string, number>>((acc, entry) => {
+    if (!entry) return acc;
+    acc[entry] = Math.max(1, Math.floor(Number(acc[entry] || 0)) + 1);
+    return acc;
+  }, {});
+};
+
 export const buildLoadoutSignature = (loadout: Loadout | null | undefined): string => {
   const sanitized = sanitizeLoadout(loadout);
   if (!sanitized) return '';

@@ -212,6 +212,7 @@ export interface Match {
       teamName?: string;
       teamColor?: string;
     }>>;
+    nameConfidence?: Record<string, number>;
     fieldConfidence?: { teammateNames: number; opponentNames: number; ship: number; modifiers: number };
     routing?: {
       attempted: boolean;

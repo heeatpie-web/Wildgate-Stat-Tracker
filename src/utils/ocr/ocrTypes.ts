@@ -6,6 +6,7 @@
 export type ScreenshotType = 'crew_hub' | 'tactical_map' | 'unknown';
 
 export type TeamColor = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'cyan' | 'purple' | 'unknown';
+export type ExtractedPlayerConfidenceSource = 'direct_ocr' | 'region_ocr' | 'legacy_default' | 'cloud_inferred';
 
 /**
  * Represents an extracted player with confidence score
@@ -13,6 +14,7 @@ export type TeamColor = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'cyan' 
 export interface ExtractedPlayer {
   name: string;
   confidence: number;
+  confidenceSource?: ExtractedPlayerConfidenceSource;
   teamColor?: TeamColor;
   isTeammate?: boolean;
 }

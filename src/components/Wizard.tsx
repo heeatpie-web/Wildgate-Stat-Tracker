@@ -22,7 +22,10 @@ import { useAppStore } from '../store/useAppStore';
 import { getElectronAPI } from '../utils/electronAPI';
 import type { OCRProcessRuntimeOptions } from '../utils/electronBridge';
 import { rerunOCRMulti } from '../utils/artifactService';
-import { buildOcrNameSourceMap } from '../utils/ocr/nameSourceHints';
+import {
+    buildOcrNameConfidenceMapFromExtractedData,
+    buildOcrNameSourceMap,
+} from '../utils/ocr/nameSourceHints';
 import {
     getEliminatorDisplayLabel,
     getPrimaryEliminatedByTeamValue,
@@ -67,6 +70,11 @@ const formatDurationOffset = (seconds: number): string => {
     return `${remaining}s`;
 };
 
+interface EmbeddedOcrFooterActions {
+    discard: () => void;
+    saveAndClose: () => void;
+}
+
 export const Wizard: React.FC = () => {
     const {
         pendingMatchData,
@@ -100,6 +108,7 @@ export const Wizard: React.FC = () => {
     const [guidedResultStep, setGuidedResultStep] = useState<'stats' | 'team-review' | 'save'>('stats');
     const [isRerunningOcr, setIsRerunningOcr] = useState(false);
     const [isProspectorLoadoutExpanded, setIsProspectorLoadoutExpanded] = useState(false);
+    const [embeddedOcrFooterActions, setEmbeddedOcrFooterActions] = useState<EmbeddedOcrFooterActions | null>(null);
     const isWizardOpen = Boolean(showWizard);
     const lastTimeSyncMatchIdRef = React.useRef<number | null>(null);
     const dialogRef = React.useRef<HTMLDivElement | null>(null);
@@ -444,16 +453,6 @@ export const Wizard: React.FC = () => {
         return acc;
     }, {});
     const shipWeaponTotal = Object.values(shipWeaponCountMap).reduce((sum, quantity) => sum + quantity, 0);
-    const hasTelemetryLoadout = shipWeaponTotal > 0
-        || (pendingLoadout.characterWeapons?.length || 0) > 0
-        || (pendingLoadout.characterEquipment?.length || 0) > 0;
-    const hasTelemetryShipLoadout = shipWeaponTotal > 0;
-    const hasTelemetryProspectorLoadout = (pendingLoadout.characterWeapons?.length || 0) > 0
-        || (pendingLoadout.characterEquipment?.length || 0) > 0;
-    const latestTelemetryLoadoutSource = pendingMatchData?.telemetryConsistency?.loadoutSaves?.length
-        ? pendingMatchData.telemetryConsistency.loadoutSaves[pendingMatchData.telemetryConsistency.loadoutSaves.length - 1].source
-        : null;
-    const loadoutSourceBadgeLabel = getTelemetryLoadoutSourceLabel(latestTelemetryLoadoutSource) || 'Telemetry';
     const displayedCharacterWeapons = pendingLoadout.characterWeapons || [];
     const displayedCharacterEquipment = pendingLoadout.characterEquipment || [];
     const displayedPerks = (() => {
@@ -469,6 +468,17 @@ export const Wizard: React.FC = () => {
                 .filter(Boolean)
         ));
     })();
+    const hasTelemetryLoadout = shipWeaponTotal > 0
+        || (pendingLoadout.characterWeapons?.length || 0) > 0
+        || (pendingLoadout.characterEquipment?.length || 0) > 0;
+    const hasTelemetryShipLoadout = shipWeaponTotal > 0;
+    const hasTelemetryProspectorLoadout = (pendingLoadout.characterWeapons?.length || 0) > 0
+        || (pendingLoadout.characterEquipment?.length || 0) > 0
+        || displayedPerks.length > 0;
+    const latestTelemetryLoadoutSource = pendingMatchData?.telemetryConsistency?.loadoutSaves?.length
+        ? pendingMatchData.telemetryConsistency.loadoutSaves[pendingMatchData.telemetryConsistency.loadoutSaves.length - 1].source
+        : null;
+    const loadoutSourceBadgeLabel = getTelemetryLoadoutSourceLabel(latestTelemetryLoadoutSource) || 'Telemetry';
     const telemetryDurationSeconds = typeof pendingMatchData?.telemetryConsistency?.telemetryDurationSeconds === 'number'
         ? pendingMatchData.telemetryConsistency.telemetryDurationSeconds
         : null;
@@ -663,6 +673,7 @@ export const Wizard: React.FC = () => {
             const failedCount = perFileResults.length - successfulCount;
             const mergedData = rerun.data;
             const nameSources = buildOcrNameSourceMap(perFileResults);
+            const nameConfidence = buildOcrNameConfidenceMapFromExtractedData(mergedData);
             if (!mergedData || successfulCount === 0) {
                 pushNotification({
                     message: 'OCR rerun failed for all artifacts.',
@@ -775,6 +786,9 @@ export const Wizard: React.FC = () => {
                     playerShipTeamName: String(mergedData.playerShip?.teamName || mergedData.playerTeamName || latestPending.ocrDebug?.playerShipTeamName || '').trim() || undefined,
                     playerShipName: String(mergedData.playerShipName || mergedData.playerTeamName || mergedData.playerShip?.teamName || latestPending.ocrDebug?.playerShipName || '').trim() || undefined,
                     nameSources: Object.keys(nameSources).length > 0 ? nameSources : undefined,
+                    nameConfidence: Object.keys(nameConfidence).length > 0
+                        ? nameConfidence
+                        : latestPending.ocrDebug?.nameConfidence,
                     timestamp: Date.now(),
                 },
             });
@@ -1224,33 +1238,6 @@ export const Wizard: React.FC = () => {
                                 <button onClick={handleWizardSmartCaptureRequest} className="w-full py-3 rounded-2xl mg-surface-high border border-md-sys-outline/15 text-label-sm font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:border-md-sys-primary/30 hover:bg-md-sys-primary/5 transition-all">
                                     <Scan size={14} /> Smart Capture
                                 </button>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            if (!canFinalizeResult) return;
-                                            saveResultDraft(selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat'));
-                                        }}
-                                        disabled={submitting || !canFinalizeResult}
-                                        className={`w-full ${isOverlayMode ? 'py-4' : 'py-5'} rounded-3xl font-bold uppercase tracking-wide-30 text-label-sm transition-all border border-md-sys-outline/18 ${submitting || !canFinalizeResult ? 'opacity-disabled grayscale' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/82 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'}`}
-                                    >
-                                        Save Results Only
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            if (hasPendingOcrReview) {
-                                                React.startTransition(() => setActiveTab('ocr'));
-                                                return;
-                                            }
-                                            processFinalSubmission(selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat'));
-                                        }}
-                                        disabled={submitting || !canFinalizeResult}
-                                        className={`w-full ${isOverlayMode ? 'py-4' : 'py-5'} rounded-3xl font-bold uppercase tracking-wide-30 text-label-sm transition-all shadow-xl active:scale-95 ${submitting ? 'opacity-disabled grayscale' : (!canFinalizeResult ? 'opacity-disabled grayscale' : (selectedResult === 'Draw' ? 'bg-info text-ink-strong' : (selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong' : 'bg-md-sys-primary text-md-sys-onPrimary')))}`}
-                                    >
-                                        {submitting ? 'Synchronizing...' : finalizeButtonLabel}
-                                    </button>
-                                </div>
                             </>
                         )}
                     </div>
@@ -1259,23 +1246,6 @@ export const Wizard: React.FC = () => {
                         data-testid="wizard-ocr-tab-panel"
                         className={`flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col ${isOverlayMode ? 'px-4 py-4 gap-3' : 'px-8 py-6 gap-4'}`}
                     >
-                        <div className="flex items-center gap-3 rounded-xl mg-surface border border-md-sys-outline/10 px-4 py-2.5">
-                            <span className="text-label-sm font-bold text-md-sys-on-surface/70 whitespace-nowrap">Review Panel</span>
-                            <span className="text-label-xs text-md-sys-on-surface/45 hidden sm:inline">·</span>
-                            <span className="text-label-xs text-md-sys-on-surface/45 truncate hidden sm:inline">Correct players before final submit</span>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    void handleWizardRerunOcr();
-                                }}
-                                disabled={isRerunningOcr || isPendingOcrProcessing}
-                                className="ml-auto px-3 py-1.5 rounded-lg text-label-xs font-bold md3-btn-tonal inline-flex items-center gap-1.5 shrink-0"
-                                title="Re-run OCR across bundled screenshot artifacts"
-                            >
-                                <RefreshCw size={12} className={isRerunningOcr ? 'animate-spin' : ''} />
-                                {isRerunningOcr ? 'Re-running...' : 'Re-run OCR'}
-                            </button>
-                        </div>
                         <div className={cardClass}>
                             <div className="flex items-center justify-between gap-2">
                                 <span className={labelClass + ' mb-0 flex items-center gap-2'}>
@@ -1382,12 +1352,19 @@ export const Wizard: React.FC = () => {
                                 </div>
                             )}
                         </div>
-                        <div className="h-[420px] flex flex-col overflow-hidden relative">
-                            <div className={`flex-1 min-h-0 ${isPendingOcrProcessing ? 'pointer-events-none opacity-60' : ''}`}>
+                        <div data-testid="wizard-ocr-review-shell" className="relative">
+                            <div className={isPendingOcrProcessing ? 'pointer-events-none opacity-60' : undefined}>
                                 <OcrCorrectionModal
                                     isOpen={true}
                                     embedded={true}
+                                    hideFooterActions={true}
+                                    onEmbeddedFooterActionsChange={setEmbeddedOcrFooterActions}
                                     onClose={() => React.startTransition(() => setActiveTab('result'))}
+                                    onRequestRerunOcr={() => {
+                                        void handleWizardRerunOcr();
+                                    }}
+                                    rerunOcrDisabled={isRerunningOcr || isPendingOcrProcessing}
+                                    isRerunningOcr={isRerunningOcr}
                                     onAcceptAll={() => {
                                         // Persist OCR review state to the actual match record
                                         // before closing, so the snapshot-restore effect doesn't
@@ -1431,7 +1408,7 @@ export const Wizard: React.FC = () => {
                     </div>
                 )}
 
-                <div className="p-4 flex justify-center border-t border-md-sys-outline/5">
+                <div className="p-4 border-t border-md-sys-outline/5 bg-md-sys-surface flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <button
                         onClick={() => {
                             if (activeTab === 'ocr') {
@@ -1440,11 +1417,59 @@ export const Wizard: React.FC = () => {
                             }
                             setShowWizard(null);
                         }}
-                        className="text-label-sm font-bold uppercase tracking-widest text-md-sys-on-surface/70 hover:text-md-sys-on-surface transition-colors flex items-center gap-2"
+                        className="text-label-sm font-bold uppercase tracking-widest text-md-sys-on-surface/70 hover:text-md-sys-on-surface transition-colors inline-flex items-center gap-2 justify-center sm:justify-start"
                     >
                         <CheckCircle2 size={14} />
                         {activeTab === 'result' ? 'Abort Submission' : 'Back to Result'}
                     </button>
+                    {activeTab === 'result' && showSaveStep && (
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!canFinalizeResult) return;
+                                    saveResultDraft(selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat'));
+                                }}
+                                disabled={submitting || !canFinalizeResult}
+                                className={`w-full sm:w-auto min-w-[12rem] px-5 py-3 rounded-2xl font-bold uppercase tracking-wide-30 text-label-sm transition-all border border-md-sys-outline/18 ${submitting || !canFinalizeResult ? 'opacity-disabled grayscale' : 'bg-md-sys-surface-container-high text-md-sys-on-surface/82 hover:bg-md-sys-surface-container-highest hover:text-md-sys-on-surface'}`}
+                            >
+                                Save Results Only
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (hasPendingOcrReview) {
+                                        React.startTransition(() => setActiveTab('ocr'));
+                                        return;
+                                    }
+                                    processFinalSubmission(selectedResult === 'Draw' ? 'Combat' : (selectedWinType || 'Combat'));
+                                }}
+                                disabled={submitting || !canFinalizeResult}
+                                className={`w-full sm:w-auto min-w-[12rem] px-5 py-3 rounded-2xl font-bold uppercase tracking-wide-30 text-label-sm transition-all shadow-xl active:scale-95 ${submitting ? 'opacity-disabled grayscale' : (!canFinalizeResult ? 'opacity-disabled grayscale' : (selectedResult === 'Draw' ? 'bg-info text-ink-strong' : (selectedWinType === 'Artifact' ? 'bg-warning text-ink-strong' : 'bg-md-sys-primary text-md-sys-onPrimary')))}`}
+                            >
+                                {submitting ? 'Synchronizing...' : finalizeButtonLabel}
+                            </button>
+                        </div>
+                    )}
+                    {activeTab === 'ocr' && embeddedOcrFooterActions && (
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <button
+                                type="button"
+                                onClick={embeddedOcrFooterActions.discard}
+                                className="w-full sm:w-auto px-5 py-3 rounded-2xl font-bold uppercase tracking-wide-30 text-label-sm border border-danger/22 bg-danger-soft text-danger transition-colors hover:bg-danger-soft-strong"
+                                title="Discard all OCR review edits and return to results"
+                            >
+                                Discard
+                            </button>
+                            <button
+                                type="button"
+                                onClick={embeddedOcrFooterActions.saveAndClose}
+                                className="w-full sm:w-auto px-5 py-3 rounded-2xl font-bold uppercase tracking-wide-30 text-label-sm bg-md-sys-primary text-md-sys-onPrimary shadow-xl active:scale-95 transition-all"
+                                title="Save reviewed OCR corrections and apply them"
+                            >
+                                Save and Apply
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

@@ -61,7 +61,11 @@ import { SmartCaptureSummaryBar } from './smart-captures/detail/SmartCaptureSumm
 import { SmartCaptureActionBar } from './smart-captures/detail/SmartCaptureActionBar';
 import { OcrTeamAssignmentBoard, type OcrTeamAssignmentTeam } from './ocr/OcrTeamAssignmentBoard';
 import { WorkspaceImageViewer } from './media/WorkspaceImageViewer';
-import { combinedNameSimilarityScore, findClosestMatch, normalizeOcrName } from '../utils/stringUtils';
+import {
+    combinedNameSimilarityScore,
+    getAdaptiveNameSimilarityThreshold,
+    normalizeOcrName,
+} from '../utils/stringUtils';
 import { getTelemetryEventTimestamp, type TelemetryArchiveEvent } from '../utils/telemetryArchive';
 import {
     deriveTelemetryConsistencyFromCollections,
@@ -77,7 +81,11 @@ import {
     isEliminatedByTeamMatch,
 } from '../utils/eliminatorTeam';
 import { rerunMatchArtifacts } from '../utils/ocr/rerunMatchArtifacts';
-import { buildOcrNameSourceMap, type OcrNameSourceMap } from '../utils/ocr/nameSourceHints';
+import {
+    buildOcrNameConfidenceMapFromExtractedData,
+    buildOcrNameSourceMap,
+    type OcrNameSourceMap,
+} from '../utils/ocr/nameSourceHints';
 import { sanitizeOpponentTeamsAgainstFriendlyRoster } from '../utils/ocr/friendlyTeamDeduper';
 import {
     extractArtifactSourceFromOcrData,
@@ -435,9 +443,7 @@ const SmartCapturesPanel: React.FC = () => {
         const exact = pilotRegistry.find(p => normalizeOcrName(p).toLowerCase() === normalized.toLowerCase());
         if (exact) return exact;
         if (!opts?.allowFuzzy) return normalized;
-        const threshold = normalized.length > 8 ? 2 : 1;
-        const fuzzy = findClosestMatch(normalized, pilotRegistry, threshold);
-        return fuzzy || normalized;
+        return getBestRosterSuggestion(normalized, pilotRegistry)?.name || normalized;
     }, [pilotRegistry]);
     const getMaxTeammatesForShip = useCallback((shipType?: string | null) => (
         getMaxTeammatesForShipLimit(shipType)
@@ -1130,6 +1136,7 @@ const SmartCapturesPanel: React.FC = () => {
                     normalizeModifierName
                 );
                 const finalTeammates = capTeammateNames(cappedTeammates, shipForTeammateCap);
+                const combinedNameConfidence = buildOcrNameConfidenceMapFromExtractedData(combined);
 
                 const updated: Match = {
                     ...match,
@@ -1149,6 +1156,9 @@ const SmartCapturesPanel: React.FC = () => {
                         fallbackReason: combined.ocrFallbackReason || match.ocrDebug?.fallbackReason,
                         cloudError: combined.ocrCloudError || match.ocrDebug?.cloudError,
                         geminiError: combined.ocrGeminiError || match.ocrDebug?.geminiError,
+                        nameConfidence: Object.keys(combinedNameConfidence).length > 0
+                            ? combinedNameConfidence
+                            : match.ocrDebug?.nameConfidence,
                         playerTeamName: String(
                             combined.playerTeamName
                             || combined.playerShip?.teamName
@@ -1707,6 +1717,7 @@ const SmartCapturesPanel: React.FC = () => {
                                                 const nextPendingHazards = Array.isArray(data.hazards)
                                                     ? Array.from(new Set(data.hazards.map((hazard) => String(hazard || '').trim()).filter(Boolean)))
                                                     : [];
+                                                const nextNameConfidence = buildOcrNameConfidenceMapFromExtractedData(data);
                                                 setSelectedReachModifiers(canonicalSessionModifiers, 'manual');
                                                 const latestPendingDraft = (useAppStore.getState().pendingMatchData || {}) as Partial<Match>;
                                                 useAppStore.getState().setPendingMatchData({
@@ -1721,6 +1732,9 @@ const SmartCapturesPanel: React.FC = () => {
                                                     ocrDebug: {
                                                         ...(latestPendingDraft.ocrDebug || {}),
                                                         hazards: nextPendingHazards,
+                                                        nameConfidence: Object.keys(nextNameConfidence).length > 0
+                                                            ? nextNameConfidence
+                                                            : latestPendingDraft.ocrDebug?.nameConfidence,
                                                         timestamp: Number(data.captureTimestamp || Date.now()),
                                                     },
                                                 });
@@ -1753,6 +1767,7 @@ const SmartCapturesPanel: React.FC = () => {
                                                 const hazards = Array.isArray(data.hazards)
                                                     ? Array.from(new Set(data.hazards.map((hazard) => String(hazard || '').trim()).filter(Boolean)))
                                                     : undefined;
+                                                const nextNameConfidence = buildOcrNameConfidenceMapFromExtractedData(data);
                                                 const latest = useAppStore.getState().matches.find(m => m.id === selectedMatch.id) || selectedMatch;
                                                 matchUpdates.ocrDebug = {
                                                     ...(latest.ocrDebug || {}),
@@ -1768,6 +1783,9 @@ const SmartCapturesPanel: React.FC = () => {
                                                     mergeStats: data.mergeStats || latest.ocrDebug?.mergeStats,
                                                     fieldConfidence: data.fieldConfidence || latest.ocrDebug?.fieldConfidence,
                                                     routing: data.ocrRouting || latest.ocrDebug?.routing,
+                                                    nameConfidence: Object.keys(nextNameConfidence).length > 0
+                                                        ? nextNameConfidence
+                                                        : latest.ocrDebug?.nameConfidence,
                                                     timestamp: Number(data.captureTimestamp || Date.now()),
                                                 };
                                                 const nextMatch: Match = { ...latest, ...matchUpdates };
@@ -2055,6 +2073,34 @@ export const getRosterCandidateSuggestions = (
         .slice(0, 3);
 };
 
+const normalizeRosterDisplayKey = (value: string): string =>
+    String(value || '').trim().toLowerCase();
+
+export const getBestRosterSuggestion = (
+    rawName: string,
+    pilotRegistry: string[]
+): { name: string; score: number } | null => {
+    const normalized = normalizeOcrName(rawName || '');
+    if (!normalized || normalized.length < 2) return null;
+
+    const rawKey = normalizeRosterDisplayKey(rawName);
+    const exact = pilotRegistry.find((pilot) => (
+        normalizeOcrName(pilot).toLowerCase() === normalized.toLowerCase()
+    ));
+    if (exact) {
+        return normalizeRosterDisplayKey(exact) === rawKey
+            ? null
+            : { name: exact, score: 100 };
+    }
+
+    const topSuggestion = getRosterCandidateSuggestions(normalized, pilotRegistry)[0];
+    if (!topSuggestion) return null;
+    const minScore = getAdaptiveNameSimilarityThreshold(normalized.length);
+    if (topSuggestion.score < minScore) return null;
+    if (normalizeRosterDisplayKey(topSuggestion.name) === rawKey) return null;
+    return topSuggestion;
+};
+
 const SmartMatchDetail: React.FC<{
     match: Match;
     displayNumber: number;
@@ -2190,9 +2236,7 @@ const SmartMatchDetail: React.FC<{
             const exact = pilotRegistry.find(p => normalizeOcrName(p).toLowerCase() === normalized.toLowerCase());
             if (exact) return exact;
             if (!opts?.allowFuzzy) return normalized;
-            const threshold = normalized.length > 8 ? 2 : 1;
-            const fuzzy = findClosestMatch(normalized, pilotRegistry, threshold);
-            return fuzzy || normalized;
+            return getBestRosterSuggestion(normalized, pilotRegistry)?.name || normalized;
         }, [pilotRegistry]);
         const activeUserDisplayKey = useMemo(
             () => normalizeOcrName(activeUser || match.player || '').toLowerCase(),
@@ -2327,6 +2371,7 @@ const SmartMatchDetail: React.FC<{
                     reachModifiers: Array.isArray(pendingDraft?.reachModifiers)
                         ? [...pendingDraft.reachModifiers]
                         : [...(liveMatch.reachModifiers || [])],
+                    artifactSource: String(pendingDraft?.artifactSource || liveMatch.artifactSource || '').trim() || undefined,
                     kills: pendingDraft?.kills
                         ? { ...(liveMatch.kills || {}), ...(pendingDraft.kills as Record<string, number>) }
                         : { ...(liveMatch.kills || {}) },
@@ -2443,9 +2488,11 @@ const SmartMatchDetail: React.FC<{
             setPendingKilledBy(String(latestMatch.killedBy || ''));
             setPendingKilledByShip(String(latestMatch.killedByShip || ''));
             const pendingNameSources = pendingDraft?.ocrDebug?.nameSources;
+            const pendingNameConfidence = pendingDraft?.ocrDebug?.nameConfidence;
             const mergedOcrDebug = {
                 ...(latestMatch.ocrDebug || {}),
                 ...(pendingNameSources ? { nameSources: pendingNameSources } : {}),
+                ...(pendingNameConfidence ? { nameConfidence: pendingNameConfidence } : {}),
             };
 
             const pendingMatchData: Partial<Match> = {
@@ -2460,6 +2507,7 @@ const SmartMatchDetail: React.FC<{
                 loadout: latestMatch.loadout,
                 weapons: latestMatch.weapons || {},
                 reachModifiers: [...(latestMatch.reachModifiers || [])],
+                artifactSource: latestMatch.artifactSource || undefined,
                 kills: { ...(latestMatch.kills || {}) },
                 time: latestMatch.time || '',
                 poiEasy: latestMatch.poiEasy || 0,
@@ -2888,26 +2936,19 @@ const SmartMatchDetail: React.FC<{
         }, [dedupeBoardNames, isActiveUserLike, match, match.opponentTeams, match.opponents, match.ship, match.teammates]);
         const assignmentBoardFuzzyMatches = useMemo<Record<string, string>>(() => {
             if (!Array.isArray(pilotRegistry) || pilotRegistry.length === 0) return {};
-            const exactRegistryKeys = new Set(
-                pilotRegistry
-                    .map((name) => normalizeOcrName(name).toLowerCase())
-                    .filter(Boolean)
-            );
             const next: Record<string, string> = {};
             assignmentBoardTeams.forEach((team) => {
                 (team.players || []).forEach((name) => {
                     const cleaned = normalizeOcrName(name);
                     const key = cleaned.toLowerCase();
                     if (!cleaned || !key) return;
-                    if (exactRegistryKeys.has(key)) return;
-                    const fuzzy = resolveRosterName(cleaned, { allowFuzzy: true });
-                    const fuzzyKey = normalizeOcrName(fuzzy).toLowerCase();
-                    if (!fuzzy || !fuzzyKey || fuzzyKey === key) return;
-                    next[key] = fuzzy;
+                    const suggestion = getBestRosterSuggestion(name, pilotRegistry);
+                    if (!suggestion?.name) return;
+                    next[key] = suggestion.name;
                 });
             });
             return next;
-        }, [assignmentBoardTeams, pilotRegistry, resolveRosterName]);
+        }, [assignmentBoardTeams, pilotRegistry]);
         const commitAssignmentBoardTeams = useCallback((nextTeams: OcrTeamAssignmentTeam[]) => {
             if (!Array.isArray(nextTeams) || nextTeams.length === 0) return;
             const [friendlyTeam, ...opponentTeamsRaw] = nextTeams;
@@ -3488,8 +3529,7 @@ const SmartMatchDetail: React.FC<{
                                 <div className="sc-detail-identity-top">
                                     <span className="sc-detail-match-title">Match {displayNumber}</span>
                                     {hasResult && (
-                                        <span className={`sc-detail-chip sc-result-chip--${match.result?.toLowerCase()}`} title="Match outcome">
-                                            {match.result === 'Win' ? <Trophy size={10} /> : match.result === 'Loss' ? <Skull size={10} /> : <AlertTriangle size={10} />}
+                                        <span className={`sc-result-chip sc-result-chip--${match.result?.toLowerCase()}`} title="Match outcome">
                                             {match.result}
                                         </span>
                                     )}

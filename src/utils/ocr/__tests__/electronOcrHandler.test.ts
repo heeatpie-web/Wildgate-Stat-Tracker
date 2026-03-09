@@ -90,6 +90,38 @@ describe('electron/ocrHandler crew-hub teammate cleanup', () => {
     ]);
   });
 
+  it('marks legacy string-only crew-hub names as inferred confidence', () => {
+    const result = __test__.convertCrewHubToLegacy(
+      {
+        yourTeam: {
+          name: 'Friendly',
+          shipType: 'Hunter',
+          players: ['PilotOne'],
+        },
+        enemyTeams: [
+          {
+            name: 'Red Team',
+            color: 'red',
+            players: ['EnemyOne'],
+            confidence: 81,
+          },
+        ],
+        hazards: [],
+        confidence: 80,
+      },
+      ''
+    );
+
+    expect(result.teammates?.[0]).toMatchObject({
+      name: 'PilotOne',
+      confidenceSource: 'legacy_default',
+    });
+    expect(result.opponentTeams?.[0]?.players?.[0]).toMatchObject({
+      name: 'EnemyOne',
+      confidenceSource: 'legacy_default',
+    });
+  });
+
   it('still applies ship-capacity cleanup to tactical-map teammate lists', () => {
     expect(__test__.getMaxTeammatesForShipType('Outlaw')).toBe(1);
 

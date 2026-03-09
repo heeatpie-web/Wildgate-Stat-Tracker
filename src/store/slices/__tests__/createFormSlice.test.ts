@@ -214,6 +214,16 @@ describe('createFormSlice', () => {
       const hero = store.getState().activeHero;
       expect(store.getState().characterLoadouts[hero]).toEqual({ 'Blaster': 3 });
     });
+
+    it('can clear active weapons without wiping the saved hero loadout', () => {
+      store.getState().setActiveHero('Kae');
+      store.getState().setActiveWeapons({ 'Blaster': 3 });
+
+      store.getState().setActiveWeapons({}, false);
+
+      expect(store.getState().activeWeapons).toEqual({});
+      expect(store.getState().characterLoadouts.Kae).toEqual({ 'Blaster': 3 });
+    });
   });
 
   // ── resetForm ──
@@ -239,6 +249,29 @@ describe('createFormSlice', () => {
       expect(store.getState().activeShip).toBe('Hunter (4 Player)');
       expect(store.getState().heroSource).toBe('telemetry');
       expect(store.getState().shipSource).toBe('telemetry');
+    });
+  });
+
+  describe('resetMatchTrackingForNewMatch', () => {
+    it('clears match-scoped tracking fields while leaving roster and loadout alone', () => {
+      store.getState().toggleTeammate('Wingman');
+      store.getState().setSelectedReachModifiers(['Ice Storm'], 'manual');
+      store.getState().setKills({ 'AI Legion': 3 });
+      store.getState().setPoiEasy(2);
+      store.getState().setPoiMedium(1);
+      store.getState().setPoiEpic(1);
+      store.getState().setCurrentNote('old note');
+
+      store.getState().resetMatchTrackingForNewMatch();
+
+      expect(store.getState().selectedTeammates).toEqual(['Wingman']);
+      expect(store.getState().selectedReachModifiers).toEqual([]);
+      expect(store.getState().modifiersSource).toBeUndefined();
+      expect(store.getState().kills).toEqual({ 'AI Legion': 0 });
+      expect(store.getState().poiEasy).toBe(0);
+      expect(store.getState().poiMedium).toBe(0);
+      expect(store.getState().poiEpic).toBe(0);
+      expect(store.getState().currentNote).toBe('');
     });
   });
 

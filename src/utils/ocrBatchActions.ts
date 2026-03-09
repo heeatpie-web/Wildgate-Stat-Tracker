@@ -1,11 +1,17 @@
-export const OCR_BATCH_THRESHOLD_MIN = 70;
-export const OCR_BATCH_THRESHOLD_MAX = 95;
+export const OCR_BATCH_THRESHOLD_MIN = 50;
+export const OCR_BATCH_THRESHOLD_MAX = 100;
 export const OCR_BATCH_THRESHOLD_STEP = 5;
 
 export interface BatchCandidate {
   name: string;
-  confidence?: number;
+  confidence?: number | null;
 }
+
+const normalizeCandidateConfidence = (value: unknown): number | null => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return numeric;
+};
 
 export const normalizeOcrBatchThreshold = (value: unknown): number => {
   const numeric = Number(value);
@@ -30,7 +36,8 @@ export const getHighConfidenceEligible = (
   const normalizedThreshold = normalizeOcrBatchThreshold(threshold);
   return (Array.isArray(candidates) ? candidates : []).filter((candidate) => (
     isEligible(candidate.name, corrections || {}, ignored || new Set<string>())
-    && Number(candidate.confidence || 0) >= normalizedThreshold
+    && normalizeCandidateConfidence(candidate.confidence) !== null
+    && Number(candidate.confidence) >= normalizedThreshold
   ));
 };
 
@@ -43,6 +50,7 @@ export const getLowConfidenceEligible = (
   const normalizedThreshold = normalizeOcrBatchThreshold(threshold);
   return (Array.isArray(candidates) ? candidates : []).filter((candidate) => (
     isEligible(candidate.name, corrections || {}, ignored || new Set<string>())
-    && Number(candidate.confidence || 0) < normalizedThreshold
+    && normalizeCandidateConfidence(candidate.confidence) !== null
+    && Number(candidate.confidence) < normalizedThreshold
   ));
 };

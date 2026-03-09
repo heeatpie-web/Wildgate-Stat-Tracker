@@ -38,6 +38,7 @@ vi.mock('../../providers/GameDataProvider', () => ({
     recordPlayerSighting: vi.fn(),
     setTimelineEvents: vi.fn(),
     setSessionTeams: vi.fn(),
+    setCurrentLoadout: vi.fn(),
   }),
 }));
 

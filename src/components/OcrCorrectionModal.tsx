@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, Search, Info, Users, Image as ImageIcon, Shield, Minus, Plus, ArrowLeft, Trash2 } from 'lucide-react';
+import { X, Check, Search, Info, Users, Image as ImageIcon, Shield, Minus, Plus, Trash2, RefreshCw } from 'lucide-react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
@@ -22,11 +22,14 @@ import { BatchActionConfirmDialog } from './BatchActionConfirmDialog';
 import { Match, SHIPS } from '../types';
 import Logger from '../utils/logger';
 import { getElectronAPI } from '../utils/electronAPI';
-import { findClosestMatch, similarityScore } from '../utils/stringUtils';
+import { findClosestMatch, normalizeOcrName, similarityScore } from '../utils/stringUtils';
 import { OcrTeamAssignmentBoard } from './ocr/OcrTeamAssignmentBoard';
 import { WorkspaceImageViewer } from './media/WorkspaceImageViewer';
 import { UI_REACH_MODIFIERS } from '../utils/constants';
-import { extractArtifactSourceFromReachModifiers } from '../utils/artifactSource';
+import {
+    extractArtifactSourceFromReachModifiers,
+    formatArtifactSourceModifier,
+} from '../utils/artifactSource';
 import { getRosterCandidatePruneIds } from '../utils/pendingReviewUtils';
 import { sanitizeOpponentTeamsAgainstFriendlyRoster } from '../utils/ocr/friendlyTeamDeduper';
 
@@ -36,6 +39,14 @@ interface OcrCorrectionModalProps {
     onAcceptAll: () => void;
     screenshots?: string[];
     embedded?: boolean;
+    hideFooterActions?: boolean;
+    onEmbeddedFooterActionsChange?: ((actions: {
+        discard: () => void;
+        saveAndClose: () => void;
+    } | null) => void) | null;
+    onRequestRerunOcr?: () => void;
+    rerunOcrDisabled?: boolean;
+    isRerunningOcr?: boolean;
 }
 
 interface DetectedPlayer {
@@ -43,7 +54,7 @@ interface DetectedPlayer {
     teamColor: string;
     teamName?: string;
     shipType?: string;
-    confidence?: number;
+    confidence?: number | null;
 }
 
 interface OcrDetectedNameSource {
@@ -92,7 +103,14 @@ const getStoredHelpBannerDismissed = (): boolean => {
 };
 
 const normalizeNameKey = (name: string): string => String(name || '').trim().toLowerCase();
+const normalizeConfidenceKey = (name: string): string => normalizeOcrName(name || '').toLowerCase();
 const normalizeSubmittedName = (name: string): string => String(name || '').trim();
+const normalizeConfidence = (value: unknown): number | null => {
+    if (value === null || value === undefined || value === '') return null;
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return null;
+    return Math.max(0, Math.min(100, Math.round(numeric)));
+};
 const normalizeModifierName = (name: string): string => {
     const normalized = normalizeSubmittedName(name);
     if (!normalized) return '';
@@ -369,6 +387,7 @@ const clonePendingMatchDraft = (value: Partial<Match> | null | undefined): Parti
             ? {
                 ...value.ocrDebug,
                 hazards: Array.isArray(value.ocrDebug.hazards) ? [...value.ocrDebug.hazards] : value.ocrDebug.hazards,
+                nameConfidence: value.ocrDebug.nameConfidence ? { ...value.ocrDebug.nameConfidence } : value.ocrDebug.nameConfidence,
                 nameSources: value.ocrDebug.nameSources
                     ? Object.fromEntries(
                         Object.entries(value.ocrDebug.nameSources).map(([key, entries]) => [
@@ -419,6 +438,11 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     onAcceptAll,
     screenshots,
     embedded = false,
+    hideFooterActions = false,
+    onEmbeddedFooterActionsChange = null,
+    onRequestRerunOcr,
+    rerunOcrDisabled = false,
+    isRerunningOcr = false,
 }) => {
     const {
         sessionTeams,
@@ -547,8 +571,9 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 .map((entry) => normalizeSubmittedName(String(entry || '')))
                 .filter(Boolean)),
             ...detectedHazards,
+            formatArtifactSourceModifier(pendingMatchData?.artifactSource),
         ])
-    ), [detectedHazards, pendingMatchData?.reachModifiers]);
+    ), [detectedHazards, pendingMatchData?.artifactSource, pendingMatchData?.reachModifiers]);
     const [modifierDraft, setModifierDraft] = useState<string[]>(() => seededModifierDraft);
     const [modifierInput, setModifierInput] = useState('');
     const modifierSuggestions = useMemo(() => {
@@ -701,7 +726,18 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         if (reviewScreenshots.length === 0) return;
         announce(`Viewing screenshot ${selectedScreenshotIdx + 1} of ${reviewScreenshots.length}.`, 'polite');
     }, [announce, reviewScreenshots.length, selectedScreenshotIdx]);
-
+    const storedNameConfidenceByKey = useMemo(() => {
+        const next = new Map<string, number>();
+        const raw = (pendingMatchData as { ocrDebug?: { nameConfidence?: unknown } } | null | undefined)?.ocrDebug?.nameConfidence;
+        if (!raw || typeof raw !== 'object') return next;
+        Object.entries(raw as Record<string, unknown>).forEach(([name, confidence]) => {
+            const key = normalizeConfidenceKey(name);
+            const normalizedConfidence = normalizeConfidence(confidence);
+            if (!key || normalizedConfidence === null) return;
+            next.set(key, normalizedConfidence);
+        });
+        return next;
+    }, [pendingMatchData]);
     // Collect all detected players from the editable team draft.
     const detectedPlayers = useMemo(() => {
         const players: DetectedPlayer[] = [];
@@ -709,19 +745,18 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
 
         teamDraft.forEach((team) => {
             team.players.forEach((name) => {
-                // Check if this name has a prior correction
-                const priorCorrection = ocrCorrections?.[name];
+                const detectedConfidence = storedNameConfidenceByKey.get(normalizeConfidenceKey(name));
                 players.push({
                     name,
                     teamColor: team.color,
                     teamName: team.teamName,
                     shipType: team.shipType || sessionShipTypes?.[team.color] || sessionShipTypes?.[name],
-                    confidence: priorCorrection ? 95 : 70 // Simulated - in real impl, store confidence from OCR
+                    confidence: detectedConfidence ?? null,
                 });
             });
         });
         return players;
-    }, [teamDraft, sessionShipTypes, ocrCorrections]);
+    }, [teamDraft, sessionShipTypes, storedNameConfidenceByKey]);
     const fuzzyMatchByPlayer = useMemo<Record<string, string>>(() => {
         if (!Array.isArray(pilotRegistry) || pilotRegistry.length === 0) return {};
         const registryByKey = new Map<string, string>();
@@ -1150,6 +1185,12 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         ? `Accept all players with ${ocrBatchAcceptThreshold}%+ confidence?`
         : `Ignore all players with confidence below ${ocrBatchAcceptThreshold}%?`;
     const confirmCount = pendingBatchAction === 'accept' ? highEligibleCount : lowEligibleCount;
+    const batchThresholdProgress = Math.round(
+        ((ocrBatchAcceptThreshold - OCR_BATCH_THRESHOLD_MIN) / (OCR_BATCH_THRESHOLD_MAX - OCR_BATCH_THRESHOLD_MIN)) * 100
+    );
+    const batchThresholdSliderStyle = {
+        '--ocr-threshold-progress': `${batchThresholdProgress}%`,
+    } as React.CSSProperties;
 
     const handleConfirmBatchAction = () => {
         if (pendingBatchAction === 'accept') {
@@ -1181,6 +1222,24 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         announce('Discarded OCR review changes.', 'polite');
         onClose();
     };
+    const handleSaveAndClose = () => {
+        handleSubmitCorrections({ closeAfterApply: true });
+    };
+    const embeddedDiscardActionRef = useRef<() => void>(() => {});
+    const embeddedSaveActionRef = useRef<() => void>(() => {});
+    embeddedDiscardActionRef.current = handleDiscardReview;
+    embeddedSaveActionRef.current = handleSaveAndClose;
+
+    useEffect(() => {
+        if (!embedded || !onEmbeddedFooterActionsChange) return;
+        onEmbeddedFooterActionsChange({
+            discard: () => embeddedDiscardActionRef.current(),
+            saveAndClose: () => embeddedSaveActionRef.current(),
+        });
+        return () => {
+            onEmbeddedFooterActionsChange(null);
+        };
+    }, [embedded, onEmbeddedFooterActionsChange]);
 
     const updateTeamShip = (teamIndex: number, shipType: string) => {
         setTeamDraft((prev) => prev.map((team, index) => (
@@ -1286,7 +1345,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         <>
             <div
                 className={embedded
-                    ? 'w-full h-full min-h-0 flex flex-col overflow-hidden'
+                    ? 'w-full flex flex-col'
                     : 'fixed inset-0 md3-dialog-scrim z-top-second flex items-start justify-center p-4 overflow-y-auto animate-fade-in'}
                 onClick={embedded ? undefined : onClose}
             >
@@ -1297,46 +1356,36 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                     aria-labelledby={dialogTitleId}
                     aria-describedby={isHelpBannerDismissed ? undefined : dialogDescriptionId}
                     className={embedded
-                        ? 'ocr-correction-dialog ocr-correction-dialog--embedded w-full h-full min-h-0 flex flex-col overflow-hidden'
+                        ? 'ocr-correction-dialog ocr-correction-dialog--embedded w-full flex flex-col'
                         : 'ocr-correction-dialog md3-dialog rounded-modal w-full max-w-7xl h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] my-2 flex flex-col animate-scale-in overflow-hidden'}
                     onClick={e => e.stopPropagation()}
                 >
-                    {/* Header */}
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 min-w-0">
-                            <div className="min-w-0">
-                                <h2 id={dialogTitleId} className="text-body font-bold truncate">OCR Review</h2>
-                                <p className="text-label-xs text-md-sys-on-surface/62 truncate">
-                                    Review player names, team grouping, and ship assignment.
-                                </p>
-                            </div>
-                            {!embedded && (
+                    {embedded ? (
+                        <h2 id={dialogTitleId} className="sr-only">OCR Review</h2>
+                    ) : (
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <div className="min-w-0">
+                                    <h2 id={dialogTitleId} className="text-body font-bold truncate">OCR Review</h2>
+                                    <p className="text-label-xs text-md-sys-on-surface/62 truncate">
+                                        Review player names, team grouping, and ship assignment.
+                                    </p>
+                                </div>
                                 <span className="md3-chip text-label-xs font-mono shrink-0">
                                     {detectedPlayers.length} detected
                                 </span>
-                            )}
-                        </div>
-                        {embedded ? (
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                className="md3-btn-text inline-flex items-center gap-1.5"
-                                title="Back to result tab"
-                                aria-label="Back to result tab"
-                            >
-                                <ArrowLeft size={14} />
-                                Back to Result
-                            </button>
-                        ) : (
+                            </div>
                             <button onClick={onClose} className="md3-icon-btn" title="Close" aria-label="Close OCR correction dialog">
                                 <X size={18} />
                             </button>
-                        )}
-                    </div>
+                        </div>
+                    )}
 
                     <div
                         ref={scrollBodyRef}
-                        className="ocr-correction-body flex-1 min-h-0 overflow-y-auto custom-scrollbar md3-dialog-content overscroll-contain"
+                        className={embedded
+                            ? 'ocr-correction-body md3-dialog-content'
+                            : 'ocr-correction-body flex-1 min-h-0 overflow-y-auto custom-scrollbar md3-dialog-content overscroll-contain'}
                         tabIndex={0}
                     >
                         {!isHelpBannerDismissed && (
@@ -1364,18 +1413,47 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                         )}
 
                         <div className="md3-card p-4 md:p-5 mb-4 border border-md-sys-outline/20 ocr-correction-batch-card space-y-4">
-                            <div className="flex items-center justify-between">
-                                <span className="text-label-sm font-bold uppercase text-md-sys-on-surface/70">Batch Operations</span>
-                                <span className="text-label-xs text-md-sys-on-surface/45">
-                                    Players above {ocrBatchAcceptThreshold}% = high confidence
-                                </span>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="text-label-xs font-black uppercase tracking-[0.18em] text-md-sys-primary/80">
+                                    Batch Operations
+                                </div>
+                                {embedded && onRequestRerunOcr && (
+                                    <button
+                                        type="button"
+                                        onClick={onRequestRerunOcr}
+                                        disabled={rerunOcrDisabled}
+                                        className="rounded-2xl border border-md-sys-outline/15 bg-md-sys-surface-container-high px-3.5 py-2 text-label-sm font-bold text-md-sys-on-surface inline-flex items-center justify-center gap-2 transition-colors hover:bg-md-sys-surface-container-highest disabled:opacity-disabled disabled:hover:bg-md-sys-surface-container-high"
+                                        title="Re-run OCR across bundled screenshot artifacts"
+                                    >
+                                        <RefreshCw size={14} className={isRerunningOcr ? 'animate-spin' : ''} />
+                                        {isRerunningOcr ? 'Re-running...' : 'Re-run OCR'}
+                                    </button>
+                                )}
                             </div>
-                            <div className="space-y-1.5">
-                                <div className="flex items-center gap-3">
+                            <div className="rounded-3xl border border-md-sys-primary/10 bg-md-sys-surface-container-low p-4 space-y-3">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <div className="text-label-xs font-bold uppercase tracking-[0.16em] text-md-sys-on-surface/54">
+                                            Auto-Accept Threshold
+                                        </div>
+                                        <div className="mt-1 text-label-sm text-md-sys-on-surface/64">
+                                            Players at or above this confidence are treated as strong matches.
+                                        </div>
+                                    </div>
+                                    <div className="shrink-0 rounded-2xl border border-md-sys-primary/16 bg-md-sys-surface-container-high px-3 py-2 text-right">
+                                        <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-md-sys-on-surface/48">
+                                            Current
+                                        </div>
+                                        <div className="text-lg font-black tabular-nums text-md-sys-primary">
+                                            {ocrBatchAcceptThreshold}%
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2.5">
                                     <button
                                         type="button"
                                         onClick={() => setOcrBatchAcceptThreshold(Math.max(OCR_BATCH_THRESHOLD_MIN, ocrBatchAcceptThreshold - OCR_BATCH_THRESHOLD_STEP))}
-                                        className="md3-icon-btn h-7 w-7 shrink-0 border border-md-sys-outline/15"
+                                        className="h-9 w-9 shrink-0 rounded-2xl border border-md-sys-outline/14 bg-md-sys-surface-container-high text-md-sys-on-surface inline-flex items-center justify-center transition-colors hover:bg-md-sys-surface-container-highest"
                                         aria-label="Lower batch confidence threshold"
                                         title="Lower threshold"
                                     >
@@ -1391,42 +1469,42 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                             onChange={(event) => setOcrBatchAcceptThreshold(Number(event.target.value))}
                                             className="ocr-threshold-slider w-full h-8 cursor-pointer touch-manipulation"
                                             aria-label="Batch confidence threshold"
+                                            style={batchThresholdSliderStyle}
                                         />
                                     </div>
                                     <button
                                         type="button"
                                         onClick={() => setOcrBatchAcceptThreshold(Math.min(OCR_BATCH_THRESHOLD_MAX, ocrBatchAcceptThreshold + OCR_BATCH_THRESHOLD_STEP))}
-                                        className="md3-icon-btn h-7 w-7 shrink-0 border border-md-sys-outline/15"
+                                        className="h-9 w-9 shrink-0 rounded-2xl border border-md-sys-outline/14 bg-md-sys-surface-container-high text-md-sys-on-surface inline-flex items-center justify-center transition-colors hover:bg-md-sys-surface-container-highest"
                                         aria-label="Raise batch confidence threshold"
                                         title="Raise threshold"
                                     >
                                         <Plus size={14} />
                                     </button>
-                                    <span className="text-label-md font-black tabular-nums text-md-sys-primary w-12 text-right">{ocrBatchAcceptThreshold}%</span>
                                 </div>
-                                <div className="flex justify-between text-[10px] font-semibold text-md-sys-on-surface/35 px-10">
-                                    <span>Lenient</span>
-                                    <span>Strict</span>
+                                <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.18em] text-md-sys-on-surface/42">
+                                    <span>{OCR_BATCH_THRESHOLD_MIN}% balanced</span>
+                                    <span>{OCR_BATCH_THRESHOLD_MAX}% exact only</span>
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-2 ocr-correction-batch-actions">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 ocr-correction-batch-actions">
                                 <button
                                     type="button"
                                     onClick={() => setPendingBatchAction('accept')}
                                     disabled={highEligibleCount === 0}
-                                    className="md3-btn-tonal disabled:opacity-disabled py-2 flex flex-col items-center gap-0.5"
+                                    className="rounded-2xl border border-success/18 bg-success-soft px-4 py-3 text-success disabled:opacity-disabled flex flex-col items-center gap-0.5 transition-colors hover:border-success/28"
                                 >
                                     <span className="text-label-sm font-bold">Accept {highEligibleCount}</span>
-                                    <span className="text-[10px] opacity-60 font-medium">≥ {ocrBatchAcceptThreshold}% confidence</span>
+                                    <span className="text-[10px] opacity-70 font-medium">At or above {ocrBatchAcceptThreshold}% confidence</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setPendingBatchAction('ignore')}
                                     disabled={lowEligibleCount === 0}
-                                    className="md3-btn-text text-warning disabled:opacity-disabled py-2 flex flex-col items-center gap-0.5"
+                                    className="rounded-2xl border border-warning/18 bg-warning-soft px-4 py-3 text-warning disabled:opacity-disabled flex flex-col items-center gap-0.5 transition-colors hover:border-warning/28"
                                 >
                                     <span className="text-label-sm font-bold">Ignore {lowEligibleCount}</span>
-                                    <span className="text-[10px] opacity-60 font-medium">&lt; {ocrBatchAcceptThreshold}% confidence</span>
+                                    <span className="text-[10px] opacity-70 font-medium">Below {ocrBatchAcceptThreshold}% confidence</span>
                                 </button>
                             </div>
                         </div>
@@ -1581,7 +1659,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                     const isIgnored = ignored.has(player.name);
                                     const hasCorrected = corrections[player.name];
                                     const priorCorrection = ocrCorrections?.[player.name];
-                                    const conf = player.confidence || 70;
+                                    const conf = normalizeConfidence(player.confidence);
                                     const playerSources = resolvePlayerSources(player.name);
                                     const primaryPlayerSource = playerSources[0] || null;
                                     const sourceScreenshotIndex = primaryPlayerSource && primaryPlayerSource.imageIndex >= 0
@@ -1612,7 +1690,9 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                                 ? 'bg-md-sys-on-surface/5 border-md-sys-outline-variant/30 opacity-50'
                                                 : hasCorrected
                                                     ? 'bg-success-soft border-success-soft'
-                                                    : getConfidenceBg(conf)
+                                                    : conf === null
+                                                        ? 'bg-md-sys-surface-container border-md-sys-outline/20'
+                                                        : getConfidenceBg(conf)
                                                 }`}
                                         >
                                             <div className="flex items-center justify-between gap-3">
@@ -1647,9 +1727,15 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                                                 </span>
                                                             )}
                                                         </div>
-                                                        <div className="mt-1 max-w-220px">
-                                                            <ConfidenceMeter confidence={conf} size="sm" />
-                                                        </div>
+                                                        {conf === null ? (
+                                                            <div className="mt-1 text-label-xs uppercase tracking-[0.14em] text-md-sys-on-surface/45">
+                                                                No direct OCR confidence
+                                                            </div>
+                                                        ) : (
+                                                            <div className="mt-1 max-w-220px">
+                                                                <ConfidenceMeter confidence={conf} size="sm" />
+                                                            </div>
+                                                        )}
                                                         {player.shipType && (
                                                             <div className="text-label-sm opacity-60 mt-0.5">
                                                                 Ship: {player.shipType}
@@ -1827,30 +1913,32 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                     </div>
 
                     {/* Footer */}
-                    <div className="md3-dialog-actions w-full justify-between">
-                        <button onClick={onClose} className="md3-btn-text">
-                            {embedded ? 'Back' : 'Close'}
-                        </button>
+                    {!hideFooterActions && (
+                        <div className="md3-dialog-actions w-full justify-between">
+                            <button onClick={onClose} className="md3-btn-text">
+                                {embedded ? 'Back' : 'Close'}
+                            </button>
 
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={handleDiscardReview}
-                                className="md3-btn-tonal inline-flex items-center gap-1.5 text-danger"
-                                title="Discard all OCR review edits and close"
-                            >
-                                <Trash2 size={14} />
-                                Discard
-                            </button>
-                            <button
-                                onClick={() => handleSubmitCorrections({ closeAfterApply: true })}
-                                className="md3-btn-filled flex items-center gap-2"
-                                title="Save reviewed OCR corrections and close this review"
-                            >
-                                <Check size={16} />
-                                Save and Close
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handleDiscardReview}
+                                    className="md3-btn-tonal inline-flex items-center gap-1.5 text-danger"
+                                    title="Discard all OCR review edits and close"
+                                >
+                                    <Trash2 size={14} />
+                                    Discard
+                                </button>
+                                <button
+                                    onClick={handleSaveAndClose}
+                                    className="md3-btn-filled flex items-center gap-2"
+                                    title="Save reviewed OCR corrections and close this review"
+                                >
+                                    <Check size={16} />
+                                    {embedded ? 'Save and Apply' : 'Save and Close'}
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             </div>
             <BatchActionConfirmDialog

@@ -564,7 +564,7 @@ export const useMatchSubmission = () => {
             setMatchStartTime(null);
             setPoiEasy(0); setPoiMedium(0); setPoiEpic(0); setKills({ "AI Legion": 0 });
             setTimeMin(""); setTimeSec(""); setSelectedReachModifiers([]);
-            setDamageTaken(""); setCurrentNote(""); setActiveWeapons({});
+            setDamageTaken(""); setCurrentNote(""); setActiveWeapons({}, false);
             setCurrentLoadout(null);
             if (isTelemetryDraftSource && existingMatch) {
                 window.dispatchEvent(new CustomEvent('telemetry-draft:resolved', {
@@ -767,7 +767,7 @@ export const useMatchSubmission = () => {
             setMatchStartTime(null);
             setPoiEasy(0); setPoiMedium(0); setPoiEpic(0); setKills({ "AI Legion": 0 });
             setTimeMin(""); setTimeSec(""); setSelectedReachModifiers([]);
-            setDamageTaken(""); setCurrentNote(""); setActiveWeapons({});
+            setDamageTaken(""); setCurrentNote(""); setActiveWeapons({}, false);
             setCurrentLoadout(null);
             if (isTelemetryDraftSource && existingMatch) {
                 window.dispatchEvent(new CustomEvent('telemetry-draft:resolved', {

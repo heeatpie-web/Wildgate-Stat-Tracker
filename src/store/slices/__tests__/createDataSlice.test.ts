@@ -209,6 +209,24 @@ describe('createDataSlice', () => {
       // ocr < telemetry, should NOT overwrite
       expect(store.getState().sessionShipTypes).toEqual({ 'TeamA': 'Hunter' });
     });
+
+    it('clears live match metric values and source gates for a fresh match', () => {
+      store.getState().setTimeMin('12', 'manual');
+      store.getState().setTimeSec('34', 'manual');
+      store.getState().setDamageTaken('900', 'manual');
+
+      store.getState().resetMatchMetricsForNewMatch();
+
+      expect(store.getState().timeMin).toBe('');
+      expect(store.getState().timeSec).toBe('');
+      expect(store.getState().damageTaken).toBe('');
+      expect(store.getState().timeSource).toBeUndefined();
+      expect(store.getState().damageSource).toBeUndefined();
+
+      store.getState().setTimeMin('01', 'telemetry');
+      expect(store.getState().timeMin).toBe('01');
+      expect(store.getState().timeSource).toBe('telemetry');
+    });
   });
 
   // ── Rename Pilot ──

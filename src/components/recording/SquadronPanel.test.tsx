@@ -53,7 +53,8 @@ describe('SquadronPanel', () => {
     expect(screen.getByText('Ship and Loadout')).toBeInTheDocument();
     expect(screen.getByText('Ship')).toBeInTheDocument();
     expect(screen.getByText('Prospector')).toBeInTheDocument();
-    expect(screen.getByTestId('recording-telemetry-summary')).toHaveTextContent('Telemetry 3/3');
+    expect(screen.getByTestId('recording-telemetry-summary')).toHaveTextContent('Telemetry Signals 3/3');
+    expect(screen.getByTestId('recording-telemetry-summary')).toHaveAttribute('title', expect.stringContaining('Ship detected: Hunter'));
     expect(screen.queryAllByText(/^Telemetry$/i)).toHaveLength(0);
   });
 
@@ -63,7 +64,7 @@ describe('SquadronPanel', () => {
     expect(screen.getByText('Ship and Loadout')).toBeInTheDocument();
     expect(screen.getByText('Ship')).toBeInTheDocument();
     expect(screen.getByText('Prospector')).toBeInTheDocument();
-    expect(screen.getByTestId('recording-telemetry-summary')).toHaveTextContent('Telemetry 3/3');
+    expect(screen.getByTestId('recording-telemetry-summary')).toHaveTextContent('Telemetry Signals 3/3');
     expect(screen.queryAllByText(/^Telemetry$/i)).toHaveLength(0);
   });
 

@@ -1271,7 +1271,7 @@ function mergeGeminiRefinement(extractedData, geminiData) {
     const merged = [...(out.teammates || [])];
     gemTeammates.forEach(name => {
       if (!existing.has(name.toLowerCase())) {
-        merged.push({ name, confidence: 86, isTeammate: true });
+        merged.push({ name, confidence: 86, confidenceSource: 'cloud_inferred', isTeammate: true });
         existing.add(name.toLowerCase());
         contributed = true;
       }
@@ -1293,6 +1293,7 @@ function mergeGeminiRefinement(extractedData, geminiData) {
       const newPlayers = normalizeNameList(team?.players).map(name => ({
         name,
         confidence: 84,
+        confidenceSource: 'cloud_inferred',
         isTeammate: false,
       }));
 
@@ -1429,11 +1430,12 @@ function dedupeExtractedPlayers(players, maxCount = 4) {
     const cleanedName = cleanupCrewHubPlayerName(String(rawName || ''));
     const key = normalizeNameKey(cleanedName);
     if (!key || !cleanedName) return;
-    const confidence = Number(player?.confidence || 0);
+    const confidence = Number(player?.confidence);
     const existing = byName.get(key);
     const candidateEntry = {
       name: cleanedName,
-      confidence: Math.max(60, Math.min(99, confidence || 74)),
+      confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(99, confidence)) : 0,
+      confidenceSource: player?.confidenceSource,
       isTeammate: player?.isTeammate,
     };
     const shouldReplace = !existing
@@ -1581,10 +1583,11 @@ function extractCrewHubNamesFromWords(words, imageWidth, imageHeight) {
     if (!isValidCrewHubPlayerName(cleaned)) continue;
     const avgConfidence = Array.isArray(line?.words) && line.words.length > 0
       ? (line.words.reduce((sum, word) => sum + Number(word?.confidence || 0), 0) / line.words.length)
-      : 74;
+      : 0;
     names.push({
       name: cleaned,
-      confidence: Math.max(60, Math.min(99, Number.isFinite(avgConfidence) ? avgConfidence : 74)),
+      confidence: Number.isFinite(avgConfidence) ? Math.max(0, Math.min(99, avgConfidence)) : 0,
+      confidenceSource: 'direct_ocr',
     });
   }
   return dedupeExtractedPlayers(names, 4);
@@ -2033,12 +2036,14 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
             [
               ...existingTeammates.map((player) => ({
                 name: typeof player === 'string' ? player : player?.name,
-                confidence: Number(player?.confidence || 68),
+                confidence: Number.isFinite(Number(player?.confidence)) ? Number(player.confidence) : 0,
+                confidenceSource: player?.confidenceSource,
                 isTeammate: true,
               })),
-              ...regionPlayers.map((name) => ({
-                name,
-                confidence: 76, // region crop is usually cleaner than full-image OCR
+              ...regionPlayers.map((player) => ({
+                name: typeof player === 'string' ? player : player?.name,
+                confidence: Number.isFinite(Number(player?.confidence)) ? Number(player.confidence) : 0,
+                confidenceSource: 'region_ocr',
                 isTeammate: true,
               })),
             ],
@@ -2114,9 +2119,10 @@ async function processCapture(imageBase64, activeUser = null, existingData = nul
           )
           : [];
         if (Array.isArray(routedPlayers) && routedPlayers.length > 0) {
-          const candidatePlayers = routedPlayers.map((name) => ({
-            name,
-            confidence: 76,
+          const candidatePlayers = routedPlayers.map((player) => ({
+            name: typeof player === 'string' ? player : player?.name,
+            confidence: Number.isFinite(Number(player?.confidence)) ? Number(player.confidence) : 0,
+            confidenceSource: 'region_ocr',
             isTeammate: true,
           }));
           const mergedPlayers = dedupeExtractedPlayers(
@@ -2573,7 +2579,8 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
 
   const teammates = capPlayers((crewHubData.yourTeam?.players || []).map(name => ({
     name: typeof name === 'string' ? name : name.name,
-    confidence: typeof name === 'string' ? 80 : (name.confidence || 80),
+    confidence: typeof name === 'string' ? 80 : (Number.isFinite(Number(name.confidence)) ? Number(name.confidence) : 0),
+    confidenceSource: typeof name === 'string' ? 'legacy_default' : name.confidenceSource,
     isTeammate: true,
   })), LEGACY_MAX_TEAMMATES);
 
@@ -2586,7 +2593,8 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
     sourceRowY: Number.isFinite(team.sourceRowY) ? team.sourceRowY : undefined,
     players: capPlayers((team.players || []).map(p => ({
       name: typeof p === 'string' ? p : p.name,
-      confidence: typeof p === 'string' ? 75 : (p.confidence || 75),
+      confidence: typeof p === 'string' ? 75 : (Number.isFinite(Number(p.confidence)) ? Number(p.confidence) : 0),
+      confidenceSource: typeof p === 'string' ? 'legacy_default' : p.confidenceSource,
       isTeammate: false,
     })), 4),
     confidence: team.confidence || 70,
@@ -2662,7 +2670,8 @@ function convertMapScreenToLegacy(mapScreenData, rawText) {
   const maxTeammates = getMaxTeammatesForShipType(mapScreenData.yourShip?.shipType || '');
   const teammates = (mapScreenData.players || []).map(name => ({
     name: typeof name === 'string' ? name : name.name,
-    confidence: 70,
+    confidence: typeof name === 'string' ? 70 : (Number.isFinite(Number(name.confidence)) ? Number(name.confidence) : 0),
+    confidenceSource: typeof name === 'string' ? 'legacy_default' : (name.confidenceSource || 'direct_ocr'),
     isTeammate: true,
   })).slice(0, maxTeammates);
 

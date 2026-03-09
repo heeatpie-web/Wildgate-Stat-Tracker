@@ -59,6 +59,8 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
     const ocrAutoOpenAfterRerun = useAppStore(s => s.ocrAutoOpenAfterRerun);
     const showSmartCaptureInHeader = useAppStore(s => s.showSmartCaptureInHeader);
     const selectedSmartCapturesMatchId = useAppStore(s => s.selectedMatchId);
+    const resetMatchTrackingForNewMatch = useAppStore(s => s.resetMatchTrackingForNewMatch);
+    const resetMatchMetricsForNewMatch = useAppStore(s => s.resetMatchMetricsForNewMatch);
     const ocrModeLabel = 'Local';
 
     const [smartCaptureState, smartCaptureActions] = useSmartCapture();
@@ -257,6 +259,12 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
             deepLink: { type: 'openView', view: 'recording' },
         });
     }, [discardMatch, clearCaptures, setSessionTeams, pushNotification]);
+    const startFreshMatch = React.useCallback(() => {
+        resetMatchTrackingForNewMatch();
+        resetMatchMetricsForNewMatch();
+        setIsMatchInProgress(true);
+        setMatchStartTime(Date.now());
+    }, [resetMatchMetricsForNewMatch, resetMatchTrackingForNewMatch, setIsMatchInProgress, setMatchStartTime]);
 
     // Dedicated mission timer display so match time remains visible at a glance.
     const [matchElapsed, setMatchElapsed] = React.useState('00:00');
@@ -803,7 +811,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     </div>
                 ) : (
                     <button
-                        onClick={() => { setIsMatchInProgress(true); setMatchStartTime(Date.now()); }}
+                        onClick={startFreshMatch}
                         className="w-full bg-success-soft border border-success-soft-strong rounded-control px-3 py-2 flex items-center justify-center gap-2 transition-all hover:brightness-110"
                     >
                         <Timer size={12} className="text-success" />
@@ -818,7 +826,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     onRefreshActivity={() => setLastActivity(Date.now())}
                     matchStartTime={matchStartTime}
                     isMatchInProgress={isMatchInProgress}
-                    onStartMatch={() => { setIsMatchInProgress(true); setMatchStartTime(Date.now()); }}
+                    onStartMatch={startFreshMatch}
                     onResetMatch={() => { setMatchStartTime(null); setIsMatchInProgress(false); }}
                     variant="compact"
                 />
@@ -866,7 +874,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     onRefreshActivity={() => setLastActivity(Date.now())}
                     matchStartTime={matchStartTime}
                     isMatchInProgress={isMatchInProgress}
-                    onStartMatch={() => { setIsMatchInProgress(true); setMatchStartTime(Date.now()); }}
+                    onStartMatch={startFreshMatch}
                     onResetMatch={() => { setMatchStartTime(null); setIsMatchInProgress(false); }}
                     variant={isCompact ? 'compact' : 'default'}
                 />
@@ -921,7 +929,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({ variant = 'default', d
                     </div>
                 ) : (
                     <button
-                        onClick={() => { setIsMatchInProgress(true); setMatchStartTime(Date.now()); }}
+                        onClick={startFreshMatch}
                         className="w-full bg-success-soft border border-success-soft-strong rounded-control px-3 py-2 flex items-center justify-center gap-2 transition-all hover:brightness-110"
                     >
                         <Timer size={12} className="text-success" />

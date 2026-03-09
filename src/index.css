@@ -1031,22 +1031,24 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 }
 
 .ocr-threshold-slider {
-  --ocr-threshold-track-height: 12px;
-  --ocr-threshold-thumb-size: 22px;
+  --ocr-threshold-track-height: 10px;
+  --ocr-threshold-thumb-size: 20px;
+  --ocr-threshold-progress: 25%;
+  --ocr-threshold-fill: color-mix(in srgb, var(--md-sys-color-primary), white 10%);
+  --ocr-threshold-track: color-mix(in srgb, var(--md-sys-color-primary), transparent 88%);
   appearance: none;
   -webkit-appearance: none;
   height: 28px;
   min-height: 28px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--md-sys-color-primary), transparent 82%);
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-primary), transparent 58%);
+  border: none;
+  background: transparent;
   touch-action: pan-x;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 
 .ocr-threshold-slider:hover {
-  background: color-mix(in srgb, var(--md-sys-color-primary), transparent 76%);
+  --ocr-threshold-fill: color-mix(in srgb, var(--md-sys-color-primary), white 6%);
 }
 
 .ocr-threshold-slider:focus-visible {
@@ -1057,8 +1059,12 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
 .ocr-threshold-slider::-webkit-slider-runnable-track {
   height: var(--ocr-threshold-track-height);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--md-sys-color-primary), transparent 82%);
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-primary), transparent 58%);
+  background: linear-gradient(90deg,
+    var(--ocr-threshold-fill) 0%,
+    var(--ocr-threshold-fill) var(--ocr-threshold-progress),
+    var(--ocr-threshold-track) var(--ocr-threshold-progress),
+    var(--ocr-threshold-track) 100%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 78%);
 }
 
 .ocr-threshold-slider::-webkit-slider-thumb {
@@ -1068,35 +1074,51 @@ body[data-mode='twilight'] .sc-queue-item--rich:hover {
   width: var(--ocr-threshold-thumb-size);
   height: var(--ocr-threshold-thumb-size);
   border-radius: 999px;
-  background: var(--md-sys-color-primary);
-  border: 3px solid var(--md-sys-color-on-primary);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 40%);
-  transition: transform 120ms ease;
+  background: var(--md-sys-color-surface-container-highest);
+  border: 5px solid var(--md-sys-color-primary);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 48%),
+    0 8px 18px color-mix(in srgb, black, transparent 82%);
+  transition: transform 120ms ease, box-shadow 120ms ease;
 }
 
 .ocr-threshold-slider:active::-webkit-slider-thumb {
-  transform: scale(1.04);
+  transform: scale(1.05);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 42%),
+    0 10px 22px color-mix(in srgb, black, transparent 78%);
 }
 
 .ocr-threshold-slider::-moz-range-thumb {
   width: var(--ocr-threshold-thumb-size);
   height: var(--ocr-threshold-thumb-size);
   border-radius: 999px;
-  background: var(--md-sys-color-primary);
-  border: 3px solid var(--md-sys-color-on-primary);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 40%);
-  transition: transform 120ms ease;
+  background: var(--md-sys-color-surface-container-highest);
+  border: 5px solid var(--md-sys-color-primary);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 48%),
+    0 8px 18px color-mix(in srgb, black, transparent 82%);
+  transition: transform 120ms ease, box-shadow 120ms ease;
 }
 
 .ocr-threshold-slider:active::-moz-range-thumb {
-  transform: scale(1.04);
+  transform: scale(1.05);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 42%),
+    0 10px 22px color-mix(in srgb, black, transparent 78%);
+}
+
+.ocr-threshold-slider::-moz-range-progress {
+  height: var(--ocr-threshold-track-height);
+  border-radius: 999px;
+  background: var(--ocr-threshold-fill);
 }
 
 .ocr-threshold-slider::-moz-range-track {
   height: var(--ocr-threshold-track-height);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--md-sys-color-primary), transparent 82%);
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-primary), transparent 58%);
+  background: var(--ocr-threshold-track);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-sys-color-primary), transparent 78%);
 }
 
 .ocr-team-player-row {
@@ -1620,18 +1642,14 @@ body[data-mode='twilight'] .ocr-teammate-chip {
 }
 
 .ocr-correction-dialog--embedded {
-  height: 100%;
-  min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
 .ocr-correction-dialog--embedded .ocr-correction-body {
-  flex: 1 1 auto;
-  overflow-y: auto !important;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  min-height: 0;
+  flex: 0 0 auto;
+  overflow: visible !important;
+  min-height: auto;
 }
 
 .ocr-correction-dialog .md3-textfield--outlined,
@@ -2009,46 +2027,25 @@ body[data-mode='twilight'] .sc-detail-sticky-header {
   padding: 0 4px;
 }
 
-.sc-result-chip--win {
+.sc-result-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 28px;
-  padding: 0 9px;
-  border-radius: 8px;
   font-size: var(--md-sys-typescale-label-small-size, 11px);
   font-weight: 700;
-  background: color-mix(in srgb, var(--md-sys-color-success), transparent 82%);
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.sc-result-chip--win {
   color: var(--md-sys-color-success);
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-success), transparent 62%);
 }
 
 .sc-result-chip--loss {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 28px;
-  padding: 0 9px;
-  border-radius: 8px;
-  font-size: var(--md-sys-typescale-label-small-size, 11px);
-  font-weight: 700;
-  background: color-mix(in srgb, var(--md-sys-color-danger), transparent 82%);
   color: var(--md-sys-color-danger);
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-danger), transparent 62%);
 }
 
 .sc-result-chip--draw {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 28px;
-  padding: 0 9px;
-  border-radius: 8px;
-  font-size: var(--md-sys-typescale-label-small-size, 11px);
-  font-weight: 700;
-  background: color-mix(in srgb, var(--md-sys-color-warning), transparent 82%);
   color: var(--md-sys-color-warning);
-  border: 1px solid color-mix(in srgb, var(--md-sys-color-warning), transparent 62%);
 }
 
 .sc-detail-action-bar {

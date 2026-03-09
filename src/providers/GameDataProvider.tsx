@@ -71,7 +71,7 @@ interface GameDataContextType {
     telemetryDetectedShip?: string;
     setActiveShip: (s: string, source?: 'manual' | 'telemetry' | 'ocr') => void;
     activeWeapons: Record<string, number>;
-    setActiveWeapons: (w: Record<string, number>) => void;
+    setActiveWeapons: (w: Record<string, number>, persistToCharacterLoadout?: boolean) => void;
     matchStartTime: number | null;
     setMatchStartTime: (ts: number | null) => void;
     isMatchInProgress: boolean;

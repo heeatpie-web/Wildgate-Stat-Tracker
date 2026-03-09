@@ -4,6 +4,7 @@ import type { OCRExtractedData } from '../utils/ocr/ocrTypes';
 import { backfillOpponentTeamShipTypes } from '../utils/ocr/opponentTeamShipTypes';
 import {
   commitPendingMatchDataForWizard,
+  getBestRosterSuggestion,
   buildMatchReachModifierDisplayList,
   clearSmartCapturePlayerAssignments,
   getSmartCaptureFriendlyTeamName,
@@ -378,6 +379,26 @@ describe('getRosterCandidateSuggestions', () => {
     expect(suggestions.length).toBeLessThanOrEqual(3);
     expect(suggestions[0].score).toBeGreaterThanOrEqual(suggestions[suggestions.length - 1].score);
     expect(suggestions.every((entry) => entry.score > 0)).toBe(true);
+  });
+
+  it('scores OCR digit/letter confusions for friendly roster names', () => {
+    const suggestions = getRosterCandidateSuggestions('C0mbat Barbie', [
+      'Combat Barbie',
+      'Rapid Warrior',
+      'RandomName',
+    ]);
+
+    expect(suggestions[0]?.name).toBe('Combat Barbie');
+    expect(suggestions[0]?.score).toBeGreaterThanOrEqual(95);
+  });
+});
+
+describe('getBestRosterSuggestion', () => {
+  it('returns a visible roster suggestion when OCR normalization matches but raw text differs', () => {
+    expect(getBestRosterSuggestion('C0mbat Barbie', ['Combat Barbie'])).toEqual({
+      name: 'Combat Barbie',
+      score: 100,
+    });
   });
 });
 

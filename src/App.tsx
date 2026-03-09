@@ -96,8 +96,9 @@ import { assignDeterministicTeamColors, buildPlayerColorHints, normalizeTeamColo
 import { backfillOpponentTeamShipTypes } from './utils/ocr/opponentTeamShipTypes';
 import { sanitizeOpponentTeamsAgainstFriendlyRoster } from './utils/ocr/friendlyTeamDeduper';
 import { capTeammatePlayers, getMaxTeammatesForShip } from './utils/teamLimits';
-import { cloneLoadout, sanitizeUnknownLoadout } from './utils/loadout';
+import { buildActiveWeaponsFromLoadout, cloneLoadout, sanitizeUnknownLoadout } from './utils/loadout';
 import { extractArtifactSourceFromOcrData } from './utils/artifactSource';
+import { buildOcrNameConfidenceMapFromExtractedData } from './utils/ocr/nameSourceHints';
 import {
     deriveCanonicalRosterCandidateTargetKey,
     getRosterCandidatePruneIds,
@@ -309,6 +310,7 @@ const App: React.FC = () => {
     const [showStartupHealthCheck] = useState(false);
     const [startupFlowReady, setStartupFlowReady] = useState(false);
     const [startupInteractionReady, setStartupInteractionReady] = useState(false);
+    const startupLoadoutSyncUserRef = useRef('');
     const [isCompactNav, setIsCompactNav] = useState(() => window.innerWidth < 1024);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const navToggleRef = React.useRef<HTMLButtonElement | null>(null);
@@ -889,23 +891,50 @@ const App: React.FC = () => {
     useEffect(() => {
         if (isStoreLoading) return;
         if (showSetupWizard) return;
+        const activeUserKey = String(activeUser || '').trim().toLowerCase() || '__none__';
+        if (startupLoadoutSyncUserRef.current === activeUserKey) return;
         const state = useAppStore.getState();
-        if (state.currentLoadout) return;
+        const syncStartupLoadoutState = (
+            loadoutValue: Match['loadout'] | null | undefined,
+            heroValue?: string | null,
+            shipValue?: string | null,
+        ) => {
+            const restoredLoadout = cloneLoadout(loadoutValue);
+            const restoredHero = String(heroValue || restoredLoadout?.hero || '').trim();
+            const restoredShip = String(shipValue || restoredLoadout?.ship || '').trim();
+            if (restoredShip) {
+                state.setActiveShip(restoredShip, 'manual');
+            }
+            if (restoredHero) {
+                state.setActiveHero(restoredHero, 'manual');
+            }
+            if (restoredLoadout) {
+                state.setCurrentLoadout(restoredLoadout);
+                if (Object.keys(state.activeWeapons || {}).length === 0) {
+                    const restoredActiveWeapons = buildActiveWeaponsFromLoadout(restoredLoadout);
+                    if (Object.keys(restoredActiveWeapons).length > 0) {
+                        state.setActiveWeapons(restoredActiveWeapons);
+                    }
+                }
+            }
+        };
+        if (state.currentLoadout) {
+            startupLoadoutSyncUserRef.current = activeUserKey;
+            syncStartupLoadoutState(state.currentLoadout);
+            return;
+        }
         const latestConfirmedMatch = [...(matches || [])]
             .filter((match) => match.subType !== 'Telemetry Draft')
             .sort((left, right) => Number(right.timestamp || 0) - Number(left.timestamp || 0))
             .find((match) => match.loadout || match.ship || match.hero);
+        startupLoadoutSyncUserRef.current = activeUserKey;
         if (!latestConfirmedMatch) return;
-        if (latestConfirmedMatch.loadout) {
-            state.setCurrentLoadout(cloneLoadout(latestConfirmedMatch.loadout));
-        }
-        if (latestConfirmedMatch.ship) {
-            state.setActiveShip(latestConfirmedMatch.ship, 'manual');
-        }
-        if (latestConfirmedMatch.hero) {
-            state.setActiveHero(latestConfirmedMatch.hero, 'manual');
-        }
-    }, [isStoreLoading, matches, showSetupWizard]);
+        syncStartupLoadoutState(
+            latestConfirmedMatch.loadout,
+            latestConfirmedMatch.hero,
+            latestConfirmedMatch.ship,
+        );
+    }, [activeUser, isStoreLoading, matches, showSetupWizard]);
 
     const clearRestoreSessionSnapshot = useCallback(() => {
         try {
@@ -1040,7 +1069,7 @@ const App: React.FC = () => {
         if (payload.activeShip) state.setActiveShip(payload.activeShip, 'manual');
         if (payload.activeHero) state.setActiveHero(payload.activeHero, 'manual');
         state.setCurrentLoadout(payload.currentLoadout || null);
-        state.setActiveWeapons(isRecord(payload.activeWeapons) ? payload.activeWeapons as Record<string, number> : {});
+        state.setActiveWeapons(isRecord(payload.activeWeapons) ? payload.activeWeapons as Record<string, number> : {}, false);
         state.setSelectedReachModifiers(Array.isArray(payload.selectedReachModifiers) ? payload.selectedReachModifiers : [], 'manual');
         state.setTimeMin(String(payload.timeMin || ''), 'manual');
         state.setTimeSec(String(payload.timeSec || ''), 'manual');
@@ -2367,6 +2396,7 @@ const App: React.FC = () => {
             if (!key || pendingModifierMap.has(key)) return;
             pendingModifierMap.set(key, name);
         });
+        const nameConfidence = buildOcrNameConfidenceMapFromExtractedData(data);
         const nextPendingMatchData: Partial<Match> = {
             ...basePendingMatch,
             id: targetMatchId ?? basePendingMatch.id,
@@ -2389,6 +2419,9 @@ const App: React.FC = () => {
                 mergeStats: data.mergeStats,
                 fieldConfidence: data.fieldConfidence,
                 routing: data.ocrRouting,
+                nameConfidence: Object.keys(nameConfidence).length > 0
+                    ? nameConfidence
+                    : basePendingMatch.ocrDebug?.nameConfidence,
                 playerTeamName: String(data.playerTeamName || data.playerShip?.teamName || '').trim() || undefined,
                 playerShipTeamName: String(data.playerShip?.teamName || data.playerTeamName || '').trim() || undefined,
                 playerShipName: String(data.playerShipName || data.playerTeamName || data.playerShip?.teamName || '').trim() || undefined,

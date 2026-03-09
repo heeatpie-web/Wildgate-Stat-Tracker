@@ -35,6 +35,8 @@ const gameData = {
   } as Record<string, number>,
   setActiveWeapons: vi.fn(),
   activeHero: 'Adrian',
+  telemetryDetectedHero: 'Adrian',
+  telemetryDetectedShip: 'Hunter (2 Player)',
   setCurrentLoadout: vi.fn(),
   currentLoadout: {
     hero: 'Adrian',
@@ -50,6 +52,7 @@ const gameData = {
 const uiState = {
   showArtifactSelect: false,
   setShowArtifactSelect: vi.fn(),
+  telemetryStatus: { lastEventAt: Date.now() },
 };
 
 vi.mock('../../providers/GameDataProvider', () => ({
@@ -68,6 +71,9 @@ vi.mock('../../utils/scanService', () => ({
 describe('MissionPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    uiState.telemetryStatus = { lastEventAt: Date.now() };
+    gameData.telemetryDetectedHero = 'Adrian';
+    gameData.telemetryDetectedShip = 'Hunter (2 Player)';
     gameData.currentLoadout = {
       hero: 'Adrian',
       ship: null,
@@ -151,6 +157,15 @@ describe('MissionPanel', () => {
     expect(summary).toHaveAttribute('title', expect.stringContaining('Weapons 1/2'));
     expect(summary).toHaveAttribute('title', expect.stringContaining('Equipment 0/2'));
     expect(summary).toHaveAttribute('title', expect.stringContaining('Perks 1/2'));
+  });
+
+  it('suppresses the telemetry summary when no fresh telemetry identity is present', async () => {
+    gameData.telemetryDetectedHero = undefined as unknown as string;
+    gameData.telemetryDetectedShip = undefined as unknown as string;
+    const { MissionPanel } = await import('./MissionPanel');
+    render(<MissionPanel accordionMode />);
+
+    expect(screen.queryByTestId('mission-telemetry-summary')).not.toBeInTheDocument();
   });
 
   it('includes patch-era prospector loadout options for manual entry', async () => {

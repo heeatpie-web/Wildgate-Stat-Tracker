@@ -240,7 +240,7 @@ export const useLogMonitor = (activeUser?: string) => {
                 perks: [],
             });
         }
-        setActiveWeapons({});
+        setActiveWeapons({}, false);
     }, [setActiveWeapons, setCurrentLoadout]);
 
     const scheduleTelemetryDraftCapturePrompt = (matchId: number) => {
@@ -270,6 +270,8 @@ export const useLogMonitor = (activeUser?: string) => {
     const resetSelectionDefaultsForNewMatch = () => {
         const state = useAppStore.getState();
         state.resetSelectionSourcesForNewMatch?.();
+        state.resetMatchTrackingForNewMatch?.();
+        state.resetMatchMetricsForNewMatch?.();
         const loadout = currentLoadoutRef.current;
         if (hasTelemetrySelection(loadout?.hero)) {
             setActiveHero(loadout.hero, 'telemetry');

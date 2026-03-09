@@ -92,11 +92,30 @@ vi.mock('../store/useAppStore', () => {
 });
 
 vi.mock('./OcrCorrectionModal', () => ({
-    OcrCorrectionModal: () => (
-        <div data-testid="ocr-correction-embedded-shell" className="ocr-correction-dialog--embedded">
-            <div data-testid="ocr-correction-scroll-body" className="ocr-correction-body" />
-        </div>
-    ),
+    OcrCorrectionModal: ({ onRequestRerunOcr, rerunOcrDisabled, isRerunningOcr, onEmbeddedFooterActionsChange }: any) => {
+        React.useEffect(() => {
+            onEmbeddedFooterActionsChange?.({
+                discard: vi.fn(),
+                saveAndClose: vi.fn(),
+            });
+            return () => onEmbeddedFooterActionsChange?.(null);
+        }, [onEmbeddedFooterActionsChange]);
+
+        return (
+            <div data-testid="ocr-correction-embedded-shell" className="ocr-correction-dialog--embedded">
+                {onRequestRerunOcr && (
+                    <button
+                        type="button"
+                        onClick={onRequestRerunOcr}
+                        disabled={rerunOcrDisabled}
+                    >
+                        {isRerunningOcr ? 'Re-running...' : 'Re-run OCR'}
+                    </button>
+                )}
+                <div data-testid="ocr-correction-scroll-body" className="ocr-correction-body" />
+            </div>
+        );
+    },
 }));
 
 describe('Wizard', () => {
@@ -264,6 +283,9 @@ describe('Wizard', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /continue to team review/i }));
         fireEvent.click(screen.getByRole('button', { name: /continue to save/i }));
+        expect(screen.getByRole('button', { name: /abort submission/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /save results only/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /finalize artifact win/i })).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: /save results only/i }));
         expect(saveResultDraft).toHaveBeenCalledWith('Artifact');
     });
@@ -511,7 +533,7 @@ describe('Wizard', () => {
         expect(shell).toHaveClass('max-w-7xl');
     });
 
-  it('keeps OCR review tab in a non-clipping flex layout chain', async () => {
+  it('lets the OCR review tab own scrolling instead of a fixed inner shell', async () => {
         const { Wizard } = await import('./Wizard');
         gameData.pendingMatchData = {
             id: 910,
@@ -530,19 +552,23 @@ describe('Wizard', () => {
 
         const ocrPanel = screen.getByTestId('wizard-ocr-tab-panel');
         const embeddedShell = screen.getByTestId('ocr-correction-embedded-shell');
+        const reviewShell = screen.getByTestId('wizard-ocr-review-shell');
         const innerWrapper = container.querySelector('[data-testid=\"wizard-ocr-tab-panel\"] > .flex-1') as HTMLDivElement | null;
 
         expect(ocrPanel).toHaveClass('flex-1');
         expect(ocrPanel).toHaveClass('min-h-0');
+        expect(ocrPanel).toHaveClass('overflow-y-auto');
         expect(ocrPanel).toHaveClass('flex');
         expect(ocrPanel).toHaveClass('flex-col');
-        expect(innerWrapper).not.toBeNull();
-        expect(innerWrapper).toHaveClass('flex-1');
-        expect(innerWrapper).toHaveClass('min-h-0');
-        expect(innerWrapper).toHaveClass('flex');
-        expect(innerWrapper).toHaveClass('flex-col');
-        expect(innerWrapper).toHaveClass('overflow-hidden');
+        expect(screen.queryByText(/review panel/i)).toBeNull();
+        expect(reviewShell).toHaveClass('relative');
+        expect(reviewShell).not.toHaveClass('overflow-hidden');
+        expect(innerWrapper).toBeNull();
         expect(embeddedShell).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /re-run ocr/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /back to result/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /discard/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /save and apply/i })).toBeInTheDocument();
     });
 
     it('dims the OCR review content while background processing is still running', async () => {

@@ -1322,7 +1322,11 @@ function extractPlayerList(words, imageWidth, imageHeight, layout = LAYOUT) {
     for (const line of lineSet) {
       const playerName = extractPlayerNameFromLine(line.words);
       if (!playerName || !isValidPlayerName(playerName)) continue;
-      candidates.push(playerName);
+      candidates.push({
+        name: playerName,
+        confidence: estimatePlayerLineConfidence(line.words, playerName),
+        confidenceSource: 'direct_ocr',
+      });
     }
   };
 
@@ -1504,6 +1508,56 @@ function normalizeNameKey(input) {
   return (input || '').toLowerCase().replace(/[^a-z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/g, '');
 }
 
+function levenshteinDistance(a, b) {
+  if (a === b) return 0;
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  const matrix = Array.from({ length: rows }, () => Array(cols).fill(0));
+  for (let i = 0; i < rows; i += 1) matrix[i][0] = i;
+  for (let j = 0; j < cols; j += 1) matrix[0][j] = j;
+  for (let i = 1; i < rows; i += 1) {
+    for (let j = 1; j < cols; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return matrix[a.length][b.length];
+}
+
+function getPlayerCandidateName(candidate) {
+  return typeof candidate === 'string' ? candidate : String(candidate?.name || '');
+}
+
+function getPlayerCandidateConfidence(candidate) {
+  const numeric = Number(candidate?.confidence);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(99, numeric));
+}
+
+function estimatePlayerLineConfidence(words, playerName) {
+  if (!Array.isArray(words) || words.length === 0) return 0;
+  const playerKey = normalizeNameKey(playerName);
+  const relevant = words.filter((word) => {
+    const tokenKey = normalizeNameKey(word?.text || '');
+    if (!tokenKey || !playerKey) return false;
+    if (tokenKey === playerKey) return true;
+    if (playerKey.includes(tokenKey) || tokenKey.includes(playerKey)) return true;
+    return Math.abs(tokenKey.length - playerKey.length) <= 1 && levenshteinDistance(tokenKey, playerKey) <= 1;
+  });
+  const sourceWords = relevant.length > 0 ? relevant : words;
+  const confidences = sourceWords
+    .map((word) => Number(word?.confidence))
+    .filter((value) => Number.isFinite(value) && value >= 0);
+  if (confidences.length === 0) return 0;
+  const average = confidences.reduce((sum, value) => sum + value, 0) / confidences.length;
+  const peak = Math.max(...confidences);
+  return Math.max(0, Math.min(99, Math.round((average * 0.7) + (peak * 0.3))));
+}
+
 function getPlayerNameVariantScore(name) {
   const value = String(name || '').trim();
   if (!value) return 0;
@@ -1518,10 +1572,12 @@ function getPlayerNameVariantScore(name) {
 function dedupePlayerNames(players) {
   const out = [];
   for (const candidate of players) {
-    const key = normalizeNameKey(candidate);
+    const candidateName = getPlayerCandidateName(candidate);
+    const key = normalizeNameKey(candidateName);
     if (!key) continue;
     const existingIdx = out.findIndex(existing => {
-      const existingKey = normalizeNameKey(existing);
+      const existingName = getPlayerCandidateName(existing);
+      const existingKey = normalizeNameKey(existingName);
       if (existingKey === key) return true;
       // Keep short tags strict: don't collapse names like "Riv", "Rive", "Riv2".
       const shorter = existingKey.length <= key.length ? existingKey : key;
@@ -1532,7 +1588,15 @@ function dedupePlayerNames(players) {
       out.push(candidate);
       continue;
     }
-    if (getPlayerNameVariantScore(candidate) > getPlayerNameVariantScore(out[existingIdx])) {
+    const candidateVariantScore = getPlayerNameVariantScore(candidateName);
+    const existingVariantScore = getPlayerNameVariantScore(getPlayerCandidateName(out[existingIdx]));
+    if (
+      candidateVariantScore > existingVariantScore
+      || (
+        candidateVariantScore === existingVariantScore
+        && getPlayerCandidateConfidence(candidate) > getPlayerCandidateConfidence(out[existingIdx])
+      )
+    ) {
       out[existingIdx] = candidate;
     }
   }

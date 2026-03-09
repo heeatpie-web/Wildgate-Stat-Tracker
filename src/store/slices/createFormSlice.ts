@@ -58,7 +58,7 @@ export interface FormSlice {
     toggleOpponent: (name: string) => void;
     setActiveHero: (hero: string, source?: DataSource) => void;
     setActiveShip: (ship: string, source?: DataSource) => void;
-    setActiveWeapons: (weapons: Record<string, number>) => void;
+    setActiveWeapons: (weapons: Record<string, number>, persistToCharacterLoadout?: boolean) => void;
     setMatchStartTime: (time: number | null) => void;
     setIsMatchInProgress: (inProgress: boolean) => void;
     setSelectedReachModifiers: (modifiers: string[], source?: DataSource) => void;
@@ -77,6 +77,7 @@ export interface FormSlice {
     setWizardInitialTab: (tab: 'result' | 'ocr' | null) => void;
     clearTelemetryDetected: () => void;
     resetSelectionSourcesForNewMatch: () => void;
+    resetMatchTrackingForNewMatch: () => void;
 
     resetForm: () => void;
     discardMatch: () => void;
@@ -204,13 +205,14 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
         }
         return telemetryUpdate;
     }),
-    setActiveWeapons: (weapons) => set((state) => ({
+    setActiveWeapons: (weapons, persistToCharacterLoadout = true) => set((state) => ({
         activeWeapons: weapons,
-        // Save to current hero's loadout
-        characterLoadouts: {
-            ...state.characterLoadouts,
-            [state.activeHero]: weapons
-        }
+        characterLoadouts: persistToCharacterLoadout
+            ? {
+                ...state.characterLoadouts,
+                [state.activeHero]: weapons
+            }
+            : state.characterLoadouts
     })),
     setMatchStartTime: (time) => set({ matchStartTime: time }),
     setIsMatchInProgress: (inProgress) => set({ isMatchInProgress: inProgress }),
@@ -268,6 +270,16 @@ export const createFormSlice: StateCreator<FormSlice> = (set, get) => ({
     resetSelectionSourcesForNewMatch: () => set({
         heroSource: undefined,
         shipSource: undefined,
+    }),
+    resetMatchTrackingForNewMatch: () => set({
+        selectedReachModifiers: [],
+        modifiersSource: undefined,
+        kills: { "AI Legion": 0 },
+        poiEasy: 0,
+        poiMedium: 0,
+        poiEpic: 0,
+        elims: "",
+        currentNote: "",
     }),
 
     resetForm: () => set((state) => ({

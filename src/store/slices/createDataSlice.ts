@@ -289,6 +289,7 @@ export interface DataSlice {
   damageTaken: string;
   damageSource?: DataSource;
   setDamageTaken: (v: string, source?: DataSource) => void;
+  resetMatchMetricsForNewMatch: () => void;
 
   // ... rest of interface
 
@@ -418,6 +419,13 @@ export const createDataSlice: StateCreator<DataSlice> = (set, get) => ({
       return { damageTaken: v, damageSource: source };
     }
     return {};
+  }),
+  resetMatchMetricsForNewMatch: () => set({
+    timeMin: "",
+    timeSec: "",
+    timeSource: undefined,
+    damageTaken: "",
+    damageSource: undefined,
   }),
   timelineEvents: [],
   setTimelineEvents: (events) => set({ timelineEvents: events }),
