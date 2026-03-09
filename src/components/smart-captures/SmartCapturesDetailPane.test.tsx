@@ -25,9 +25,10 @@ describe('SmartCapturesDetailPane', () => {
     expect(scroller).toHaveClass('flex-1', 'min-h-0', 'overflow-y-auto', 'overflow-x-hidden');
   });
 
-  it('renders an overlay inside the scrollable content region when provided', () => {
-    render(
+  it('dims the detail pane and renders a blocking overlay when provided', () => {
+    const { container } = render(
       <SmartCapturesDetailPane
+        header={<div>Detail Header</div>}
         content={<div>Detail Body</div>}
         contentOverlay={<div>Processing overlay</div>}
       />,
@@ -35,5 +36,14 @@ describe('SmartCapturesDetailPane', () => {
 
     expect(screen.getByTestId('smart-captures-detail-overlay')).toBeInTheDocument();
     expect(screen.getByText('Processing overlay')).toBeInTheDocument();
+
+    const pane = container.querySelector('section');
+    expect(pane).toHaveAttribute('aria-busy', 'true');
+
+    const header = screen.getByText('Detail Header').parentElement;
+    expect(header).toHaveClass('opacity-55', 'pointer-events-none');
+
+    const scroller = screen.getByText('Detail Body').parentElement;
+    expect(scroller).toHaveClass('opacity-45', 'pointer-events-none');
   });
 });

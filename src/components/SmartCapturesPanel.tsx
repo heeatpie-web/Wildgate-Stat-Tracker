@@ -78,8 +78,10 @@ import {
 } from '../utils/eliminatorTeam';
 import { rerunMatchArtifacts } from '../utils/ocr/rerunMatchArtifacts';
 import { buildOcrNameSourceMap, type OcrNameSourceMap } from '../utils/ocr/nameSourceHints';
+import { sanitizeOpponentTeamsAgainstFriendlyRoster } from '../utils/ocr/friendlyTeamDeduper';
 import {
-    extractArtifactSourceFromReachModifiers,
+    extractArtifactSourceFromOcrData,
+    formatArtifactSourceModifier,
     stripArtifactSourceModifiers,
 } from '../utils/artifactSource';
 import {
@@ -143,6 +145,19 @@ const toCanonicalModifierNames = (
         )
     );
     return stripArtifactSourceModifiers(combined);
+};
+
+export const buildMatchReachModifierDisplayList = (match: Pick<Match, 'reachModifiers' | 'artifactSource'>): string[] => {
+    const reachModifiers = Array.isArray(match.reachModifiers)
+        ? match.reachModifiers.map((entry) => String(entry || '').trim()).filter(Boolean)
+        : [];
+    const artifactModifier = formatArtifactSourceModifier(match.artifactSource);
+    if (!artifactModifier) return reachModifiers;
+    const artifactKey = normalizeOcrName(artifactModifier).toLowerCase();
+    if (!artifactKey) return reachModifiers;
+    const hasArtifactModifier = reachModifiers.some((entry) => normalizeOcrName(entry).toLowerCase() === artifactKey);
+    if (hasArtifactModifier) return reachModifiers;
+    return [...reachModifiers, artifactModifier];
 };
 
 const hasTelemetrySelection = (value: unknown): value is string => {
@@ -1066,12 +1081,27 @@ const SmartCapturesPanel: React.FC = () => {
                     sourceRowIndex: typeof t.sourceRowIndex === 'number' ? t.sourceRowIndex : undefined,
                     sourceRowY: typeof t.sourceRowY === 'number' ? t.sourceRowY : undefined,
                 }));
+                const friendlyTeamSanitization = sanitizeOpponentTeamsAgainstFriendlyRoster({
+                    teams: unresolvedOppTeams,
+                    activeUser: activeUser || match.player || '',
+                    friendlyPlayers: [
+                        ...(match.teammates || []),
+                        ...nextTeammates,
+                    ],
+                    friendlyTeamLabels: [
+                        combined.playerTeamName,
+                        combined.playerShip?.teamName,
+                        combined.playerShipName,
+                        combined.playerShip?.shipType,
+                        match.ship,
+                    ],
+                });
                 const mergedHints = {
                     ...buildPlayerColorHintsFromOpponentTeams(match.opponentTeams || []),
                     ...buildPlayerColorHints(sessionTeams),
                 };
-                const rerunAssignedColors = assignDeterministicTeamColors(unresolvedOppTeams, { playerColorHints: mergedHints });
-                const coloredOppTeams = applyPositionalTeamColorFallback(unresolvedOppTeams, rerunAssignedColors);
+                const rerunAssignedColors = assignDeterministicTeamColors(friendlyTeamSanitization.teams, { playerColorHints: mergedHints });
+                const coloredOppTeams = applyPositionalTeamColorFallback(friendlyTeamSanitization.teams, rerunAssignedColors);
                 const nextOppTeams: OpponentTeam[] = sortOpponentTeamsByPriority(backfillOpponentTeamShipTypes(coloredOppTeams, {
                     sessionShipTypes,
                     enemyShips: combined.enemyShips,
@@ -1085,9 +1115,14 @@ const SmartCapturesPanel: React.FC = () => {
                         })
                 ));
                 const shipForTeammateCap = combined.playerShip?.shipType || match.ship || '';
-                const cappedTeammates = capTeammateNames(nextTeammates, shipForTeammateCap);
-                const mergedArtifactSource = extractArtifactSourceFromReachModifiers(
-                    (combined.reachModifiers || []) as Array<string | ExtractedModifier>
+                const cappedTeammates = capTeammateNames([
+                    ...nextTeammates,
+                    ...friendlyTeamSanitization.promotedFriendlyPlayers,
+                ], shipForTeammateCap);
+                const mergedArtifactSource = extractArtifactSourceFromOcrData(
+                    (combined.reachModifiers || []) as Array<string | ExtractedModifier>,
+                    (combined.hazards || []) as Array<string | ExtractedModifier>,
+                    combined.artifactType
                 );
                 const mergedModifierNames = toCanonicalModifierNames(
                     (combined.reachModifiers || []) as Array<string | ExtractedModifier>,
@@ -1528,11 +1563,6 @@ const SmartCapturesPanel: React.FC = () => {
                                                     existing.add(key);
                                                 }
                                             }
-                                            const cappedTeammates = capTeammateNames(nextTeammates, shipForCapacity);
-                                            if (shouldSyncCurrentSession) {
-                                                setSelectedTeammates(cappedTeammates);
-                                            }
-
                                             let resolvedOpponentTeams: OpponentTeam[] = [];
                                             if (data.opponentTeams?.length > 0) {
                                                 const unresolvedOpponentTeams: OpponentTeam[] = data.opponentTeams.map((team) => ({
@@ -1557,17 +1587,41 @@ const SmartCapturesPanel: React.FC = () => {
                                                     sourceRowIndex: typeof team.sourceRowIndex === 'number' ? team.sourceRowIndex : undefined,
                                                     sourceRowY: typeof team.sourceRowY === 'number' ? team.sourceRowY : undefined,
                                                 }));
-                                                const assignedOpponentColors = assignDeterministicTeamColors(unresolvedOpponentTeams, {
+                                                const friendlyTeamSanitization = sanitizeOpponentTeamsAgainstFriendlyRoster({
+                                                    teams: unresolvedOpponentTeams,
+                                                    activeUser: activeUser || selectedMatch.player || '',
+                                                    friendlyPlayers: nextTeammates,
+                                                    friendlyTeamLabels: [
+                                                        data.playerTeamName,
+                                                        data.playerShip?.teamName,
+                                                        data.playerShipName,
+                                                        data.playerShip?.shipType,
+                                                        friendlyShipSeed,
+                                                    ],
+                                                });
+                                                friendlyTeamSanitization.promotedFriendlyPlayers.forEach((name) => queueRosterCandidate(name));
+                                                const assignedOpponentColors = assignDeterministicTeamColors(friendlyTeamSanitization.teams, {
                                                     playerColorHints: buildPlayerColorHints(sessionTeams),
                                                 });
                                                 resolvedOpponentTeams = sortOpponentTeamsByPriority(backfillOpponentTeamShipTypes(
-                                                    applyPositionalTeamColorFallback(unresolvedOpponentTeams, assignedOpponentColors),
+                                                    applyPositionalTeamColorFallback(friendlyTeamSanitization.teams, assignedOpponentColors),
                                                     {
                                                         sessionShipTypes,
                                                         enemyShips: data.enemyShips,
                                                     }
                                                 ));
+                                                const finalTeammates = capTeammateNames([
+                                                    ...nextTeammates,
+                                                    ...friendlyTeamSanitization.promotedFriendlyPlayers,
+                                                ], shipForCapacity);
+                                                if (shouldSyncCurrentSession) {
+                                                    setSelectedTeammates(finalTeammates);
+                                                }
+                                                nextTeammates.splice(0, nextTeammates.length, ...finalTeammates);
+                                            } else if (shouldSyncCurrentSession) {
+                                                setSelectedTeammates(capTeammateNames(nextTeammates, shipForCapacity));
                                             }
+                                            const cappedTeammates = capTeammateNames(nextTeammates, shipForCapacity);
                                             const resolvedOpponents = dedupeNames(
                                                 resolvedOpponentTeams
                                                     .flatMap((team) => team.players || [])
@@ -1638,7 +1692,11 @@ const SmartCapturesPanel: React.FC = () => {
                                                 hazards,
                                                 normalizeModifierName
                                             );
-                                            const extractedArtifactSource = extractArtifactSourceFromReachModifiers(canonicalSessionModifiers);
+                                            const extractedArtifactSource = extractArtifactSourceFromOcrData(
+                                                reachModifiers as Array<string | ExtractedModifier>,
+                                                hazards as Array<string | ExtractedModifier>,
+                                                data.artifactType
+                                            );
                                             const normalizedOpponentTeamsForMatch = resolvedOpponentTeams.map((team) => ({
                                                 teamName: team.teamName || 'Unknown Team',
                                                 shipType: team.shipType || '',
@@ -1945,6 +2003,7 @@ type OpenWizardForMatchOptions = {
 
 type PendingMatchWriter = (data: Partial<Match> | null) => void;
 type PendingMatchReader = () => Partial<Match> | null;
+type SmartCaptureWizardEntryIntent = 'open' | 'reanalyze-complete' | 'ocr-review';
 
 const normalizePositiveMatchId = (value: unknown): number | null => {
     const parsed = Number(value || 0);
@@ -1960,6 +2019,12 @@ export const shouldSyncOcrApplyToCurrentSession = (
     const selectedId = normalizePositiveMatchId(selectedMatchId);
     return pendingId != null && selectedId != null && pendingId === selectedId;
 };
+
+export const getSmartCaptureWizardInitialTab = (
+    intent: SmartCaptureWizardEntryIntent
+): 'result' | 'ocr' => (
+    intent === 'open' ? 'result' : 'ocr'
+);
 
 export const commitPendingMatchDataForWizard = (
     pendingData: Partial<Match>,
@@ -2435,7 +2500,7 @@ const SmartMatchDetail: React.FC<{
         useEffect(() => {
             if (!smartCapturesOpenOcrReviewMatchId) return;
             if (Number(match.id || 0) !== Number(smartCapturesOpenOcrReviewMatchId)) return;
-            openWizardForMatch({ openOcrReview: true });
+            openWizardForMatch({ openOcrReview: getSmartCaptureWizardInitialTab('ocr-review') === 'ocr' });
             setSmartCapturesOpenOcrReviewMatchId(null);
         }, [match.id, openWizardForMatch, setSmartCapturesOpenOcrReviewMatchId, smartCapturesOpenOcrReviewMatchId]);
 
@@ -2465,7 +2530,10 @@ const SmartMatchDetail: React.FC<{
             useAppStore.getState().setPendingMatchData(snapshot.pendingMatchData ? { ...snapshot.pendingMatchData } : null);
         }, [setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setTimeMin, setTimeSec, showWizard]);
 
-        const applyReviewDataToSession = useCallback((readyReviewData?: OCRExtractedData | null) => {
+        const applyReviewDataToSession = useCallback((
+            readyReviewData?: OCRExtractedData | null,
+            options?: { initialTab?: 'result' | 'ocr' }
+        ) => {
             if (!onApplyToSession) {
                 setToast({ message: 'Apply OCR is unavailable in this context.', type: 'warning' });
                 return;
@@ -2488,12 +2556,16 @@ const SmartMatchDetail: React.FC<{
                 });
             }
             persistNameSourceHintsToPendingDraft(ocrNameSources);
-            window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
-                detail: { matchId: Number(appliedMatch?.id || match.id || 0) || null },
-            }));
+            const initialTab = options?.initialTab || 'result';
+            if (initialTab === 'ocr') {
+                window.dispatchEvent(new CustomEvent('wizard:request-ocr-review', {
+                    detail: { matchId: Number(appliedMatch?.id || match.id || 0) || null },
+                }));
+            }
             openWizardForMatch({
                 matchOverride: appliedMatch,
                 reusePendingDraft: false,
+                openOcrReview: initialTab === 'ocr',
             });
         }, [onApplyToSession, openWizardForMatch, reviewData, setToast, match.artifacts, match.id, ocrNameSources, persistNameSourceHintsToPendingDraft]);
 
@@ -3121,9 +3193,11 @@ const SmartMatchDetail: React.FC<{
                 onUpdate({ ...reviewingBaseMatch, ocrState: 'reviewing' });
                 persistNameSourceHintsToPendingDraft(nextNameSources);
                 if (onApplyToSession) {
-                    applyReviewDataToSession(mergedData);
+                    applyReviewDataToSession(mergedData, {
+                        initialTab: getSmartCaptureWizardInitialTab('reanalyze-complete'),
+                    });
                 } else {
-                    openWizardForMatch({ openOcrReview: true });
+                    openWizardForMatch({ openOcrReview: getSmartCaptureWizardInitialTab('reanalyze-complete') === 'ocr' });
                     pushNotification({
                         message: `OCR analysis complete for Match ${displayNumber}.`,
                         type: 'success',
@@ -3379,7 +3453,9 @@ const SmartMatchDetail: React.FC<{
                     void handleRerunAnalysis();
                 } else if (k === 'a' && onApplyToSession) {
                     e.preventDefault();
-                    applyReviewDataToSession();
+                    applyReviewDataToSession(undefined, {
+                        initialTab: getSmartCaptureWizardInitialTab('open'),
+                    });
                 } else if (k === 'j') {
                     e.preventDefault();
                     screenshotsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -3469,19 +3545,19 @@ const SmartMatchDetail: React.FC<{
                                     <button
                                         onClick={() => {
                                             if (reviewData) {
-                                                applyReviewDataToSession(reviewData);
+                                                applyReviewDataToSession(reviewData, {
+                                                    initialTab: getSmartCaptureWizardInitialTab('open'),
+                                                });
                                                 return;
                                             }
                                             if (normalizedOcrState === 'reviewing' || normalizedOcrState === 'ready') {
-                                                openWizardForMatch({ openOcrReview: true });
+                                                openWizardForMatch();
                                                 return;
                                             }
                                             openWizardForMatch();
                                         }}
                                         className="sc-detail-action-btn sc-detail-action-btn--filled sc-detail-action-btn--workflow"
-                                        title={reviewData || normalizedOcrState === 'reviewing' || normalizedOcrState === 'ready'
-                                            ? 'Open wizard directly to OCR review'
-                                            : 'Open wizard for review and final save'}
+                                        title="Open wizard for review and final save"
                                     >
                                         <FlaskConical size={16} />
                                         Open
@@ -3922,12 +3998,26 @@ const SmartMatchDetail: React.FC<{
                         </Section>
 
                         <Section title="Reach Modifiers" collapsible collapsed={!!collapsedSections.modifiers} onToggle={() => toggleSection('modifiers')}>
+                            {(() => {
+                                const displayedModifiers = buildMatchReachModifierDisplayList(match);
+                                const artifactModifierLabel = formatArtifactSourceModifier(match.artifactSource);
+                                const hasSyntheticArtifactModifier = !!artifactModifierLabel
+                                    && displayedModifiers.length > (match.reachModifiers || []).length;
+                                return (
                             <div className="flex flex-wrap gap-1.5 items-center">
-                                {(match.reachModifiers || []).map((mod, i) => (
+                                {displayedModifiers.map((mod, i) => {
+                                    const isArtifactModifier = hasSyntheticArtifactModifier
+                                        && mod === artifactModifierLabel
+                                        && i === displayedModifiers.length - 1;
+                                    return (
                                     <span key={i} className="px-2 py-0.5 bg-warning-soft text-warning rounded-md text-label-sm font-bold flex items-center gap-1 group">
                                         {mod}
                                         <button
                                             onClick={() => {
+                                                if (isArtifactModifier) {
+                                                    onUpdate({ ...match, artifactSource: undefined });
+                                                    return;
+                                                }
                                                 const mods = [...(match.reachModifiers || [])];
                                                 mods.splice(i, 1);
                                                 onUpdate({ ...match, reachModifiers: mods });
@@ -3937,12 +4027,15 @@ const SmartMatchDetail: React.FC<{
                                             <X size={10} />
                                         </button>
                                     </span>
-                                ))}
+                                    );
+                                })}
                                 <ModifierAdder
                                     existing={match.reachModifiers || []}
                                     onAdd={(mod) => onUpdate({ ...match, reachModifiers: [...(match.reachModifiers || []), mod] })}
                                 />
                             </div>
+                                );
+                            })()}
                         </Section>
 
                         <Section title="Artifact" collapsible collapsed={!!collapsedSections.artifact} onToggle={() => toggleSection('artifact')}>

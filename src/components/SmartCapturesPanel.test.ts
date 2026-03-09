@@ -4,8 +4,10 @@ import type { OCRExtractedData } from '../utils/ocr/ocrTypes';
 import { backfillOpponentTeamShipTypes } from '../utils/ocr/opponentTeamShipTypes';
 import {
   commitPendingMatchDataForWizard,
+  buildMatchReachModifierDisplayList,
   clearSmartCapturePlayerAssignments,
   getSmartCaptureFriendlyTeamName,
+  getSmartCaptureWizardInitialTab,
   getRosterCandidateSuggestions,
   resolveFriendlyTeamLabel,
   shouldSyncOcrApplyToCurrentSession,
@@ -264,6 +266,17 @@ describe('shouldSyncOcrApplyToCurrentSession', () => {
   });
 });
 
+describe('getSmartCaptureWizardInitialTab', () => {
+  it('returns result for the standard Open action', () => {
+    expect(getSmartCaptureWizardInitialTab('open')).toBe('result');
+  });
+
+  it('returns ocr for re-analyze completion and explicit OCR review entry', () => {
+    expect(getSmartCaptureWizardInitialTab('reanalyze-complete')).toBe('ocr');
+    expect(getSmartCaptureWizardInitialTab('ocr-review')).toBe('ocr');
+  });
+});
+
 describe('clearSmartCapturePlayerAssignments', () => {
   it('clears players, team assignments, and reach hazards together', () => {
     const cleared = clearSmartCapturePlayerAssignments({
@@ -298,6 +311,18 @@ describe('clearSmartCapturePlayerAssignments', () => {
     expect(cleared.ocrDebug?.playerShipName).toBe('');
     expect(cleared.ocrDebug?.rawText).toBe('ocr text');
     expect(cleared.ocrDebug?.confidence).toBe(88);
+  });
+});
+
+describe('buildMatchReachModifierDisplayList', () => {
+  it('includes artifact source as a displayed reach modifier chip', () => {
+    expect(buildMatchReachModifierDisplayList({
+      reachModifiers: ['Sandstorm'],
+      artifactSource: 'ice',
+    } as Pick<Match, 'reachModifiers' | 'artifactSource'>)).toEqual([
+      'Sandstorm',
+      'Artifact: Ice',
+    ]);
   });
 });
 

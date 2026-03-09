@@ -316,6 +316,7 @@ describe('App', () => {
       playerShip: { shipType: 'Bastion', confidence: 90 },
       playerTeamName: 'Friendly Team',
       reachModifiers: [{ name: 'Ionized', confidence: 80, rawText: 'Ionized' }],
+      artifactType: 'ice',
       enemyShips: [],
       teammates: [{ name: 'Wing2', confidence: 90 }],
       opponentTeams: [{
@@ -345,16 +346,86 @@ describe('App', () => {
         teammates: ['Wing2'],
         opponents: ['Enemy2'],
         reachModifiers: ['Ionized'],
+        artifactSource: 'ice',
         artifacts: ['canonical.png', 'ocr.png'],
         ocrState: 'reviewing',
       }));
     });
     expect(appStoreState.updateMatch).toHaveBeenCalledWith(expect.objectContaining({
       id: 77,
+      artifactSource: 'ice',
       artifacts: ['canonical.png', 'ocr.png'],
       ocrState: 'reviewing',
     }));
+    expect(appStoreState.setPendingArtifactType).toHaveBeenCalledWith('ice');
     expect(uiState.setShowWizard).toHaveBeenCalledWith('Win');
+  });
+
+  it('drops OCR opponent teams that duplicate the friendly roster', async () => {
+    const { default: App } = await import('./App');
+    appStoreState.selectedTeammates = ['Wing1'];
+    appStoreState.pendingMatchData = {
+      teammates: ['Wing1'],
+      ship: 'Hunter',
+    };
+
+    render(<App />);
+
+    const ocrPayload = {
+      screenshotType: 'crew_hub',
+      playerShip: { shipType: 'Hunter', teamName: 'Starlight', confidence: 92 },
+      playerTeamName: 'Starlight',
+      playerShipName: "Starlight's Crew",
+      reachModifiers: [],
+      enemyShips: [],
+      teammates: [],
+      opponentTeams: [
+        {
+          teamName: 'Starlight',
+          shipType: 'Hunter',
+          color: 'blue',
+          players: [
+            { name: 'Pilot', confidence: 93 },
+            { name: 'Wing1', confidence: 90 },
+            { name: 'Wing2', confidence: 89 },
+          ],
+          confidence: 90,
+        },
+        {
+          teamName: 'Enemy Team',
+          shipType: 'Scout',
+          color: 'red',
+          players: [{ name: 'Enemy1', confidence: 88 }],
+          confidence: 88,
+        },
+      ],
+      artifacts: ['ocr.png'],
+      overallConfidence: 90,
+      captureTimestamp: Date.now(),
+    } as const;
+
+    window.dispatchEvent(new CustomEvent('submission:ocr-gate', {
+      detail: {
+        result: 'Win',
+        data: ocrPayload,
+      },
+    }));
+
+    await waitFor(() => {
+      expect(gameDataState.setSelectedTeammates).toHaveBeenCalledWith(['Wing1', 'Wing2']);
+    });
+
+    expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
+      teammates: ['Wing1', 'Wing2'],
+      opponents: ['Enemy1'],
+      opponentTeams: [
+        expect.objectContaining({
+          teamName: 'Enemy Team',
+          players: ['Enemy1'],
+        }),
+      ],
+      ocrState: 'reviewing',
+    }));
   });
 });
 

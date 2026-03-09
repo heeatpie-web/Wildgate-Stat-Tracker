@@ -191,7 +191,7 @@ describe('OcrCorrectionModal', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /remove pilottwo from red/i }));
 
-        fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
+        fireEvent.click(screen.getByRole('button', { name: /save and close/i }));
 
         expect(gameData.setSessionTeams).toHaveBeenCalledWith({ red: ['PilotOneEdited'] });
     });
@@ -224,7 +224,7 @@ describe('OcrCorrectionModal', () => {
         fireEvent.click(screen.getByRole('button', { name: /remove modifier sandstorm/i }));
         fireEvent.change(screen.getByLabelText(/add reach modifier/i), { target: { value: 'Ancient Vault' } });
         fireEvent.click(screen.getByRole('button', { name: /add modifier/i }));
-        fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
+        fireEvent.click(screen.getByRole('button', { name: /save and close/i }));
 
         expect(gameData.setSelectedReachModifiers).toHaveBeenCalledWith(
             ['Artifact: Ice', 'Ancient Vault'],
@@ -257,7 +257,7 @@ describe('OcrCorrectionModal', () => {
             />
         );
 
-        fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
+        fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true });
 
         expect(gameData.setSessionTeams).toHaveBeenCalled();
         expect(onAcceptAll).not.toHaveBeenCalled();
@@ -308,7 +308,7 @@ describe('OcrCorrectionModal', () => {
 
         const teamNameInput = screen.getByLabelText(/team 1 name/i);
         fireEvent.change(teamNameInput, { target: { value: 'Renamed Team' } });
-        fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
+        fireEvent.click(screen.getByRole('button', { name: /save and close/i }));
 
         expect(appStoreState.recordTeamIdentityCorrection).toHaveBeenCalled();
     });
@@ -349,11 +349,11 @@ describe('OcrCorrectionModal', () => {
         fireEvent.change(searchInput, { target: { value: 'chrismario' } });
         fireEvent.keyDown(searchInput, { key: 'Enter' });
 
-        fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
+        fireEvent.click(screen.getByRole('button', { name: /save and close/i }));
 
         expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
             teammates: ['chrismario'],
-            opponentTeams: expect.any(Array),
+            opponentTeams: [],
         }));
     });
 

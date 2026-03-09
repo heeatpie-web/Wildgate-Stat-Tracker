@@ -94,8 +94,10 @@ import { shouldQueueLearningReview } from './utils/ocrAliasEngine';
 import { buildAliasVariantMap, resolveOcrName } from './utils/ocrNameResolver';
 import { assignDeterministicTeamColors, buildPlayerColorHints, normalizeTeamColor } from './utils/ocr/teamColorAssignment';
 import { backfillOpponentTeamShipTypes } from './utils/ocr/opponentTeamShipTypes';
+import { sanitizeOpponentTeamsAgainstFriendlyRoster } from './utils/ocr/friendlyTeamDeduper';
 import { capTeammatePlayers, getMaxTeammatesForShip } from './utils/teamLimits';
 import { cloneLoadout, sanitizeUnknownLoadout } from './utils/loadout';
+import { extractArtifactSourceFromOcrData } from './utils/artifactSource';
 import {
     deriveCanonicalRosterCandidateTargetKey,
     getRosterCandidatePruneIds,
@@ -2059,6 +2061,11 @@ const App: React.FC = () => {
             combinedModifierMap.set(key, name);
         });
         const canonicalModifierNames = Array.from(combinedModifierMap.values());
+        const extractedArtifactSource = extractArtifactSourceFromOcrData(
+            (data.reachModifiers || []) as Array<string | { name?: string; rawText?: string }>,
+            (data.hazards || []) as Array<string | { name?: string; rawText?: string }>,
+            data.artifactType
+        );
 
         if (canonicalModifierNames.length > 0) {
             const sessionModifierMap = new Map<string, string>();
@@ -2095,8 +2102,7 @@ const App: React.FC = () => {
             setSelectedTeammates(merged);
         }
 
-        const seenOpponentPlayers = new Set<string>();
-        const unresolvedTeams = data.opponentTeams.map((team) => {
+        const resolvedOpponentTeams = data.opponentTeams.map((team) => {
             const resolvedPlayers = dedupeNamesWithCap(
                 team.players
                     .map((player) => {
@@ -2111,19 +2117,52 @@ const App: React.FC = () => {
                     .filter(Boolean) as string[],
                 MAX_OPPONENT_PLAYERS_PER_TEAM
             );
-            const uniquePlayers = resolvedPlayers.filter((name) => {
+            return {
+                teamName: team.teamName || 'Unknown Team',
+                shipType: team.shipType || '',
+                color: team.color || 'unknown',
+                players: resolvedPlayers,
+                sourceRowIndex: typeof team.sourceRowIndex === 'number' ? team.sourceRowIndex : undefined,
+                sourceRowY: typeof team.sourceRowY === 'number' ? team.sourceRowY : undefined,
+            };
+        });
+        const friendlyTeamSanitization = sanitizeOpponentTeamsAgainstFriendlyRoster({
+            teams: resolvedOpponentTeams,
+            activeUser,
+            friendlyPlayers: [
+                ...(useAppStore.getState().pendingMatchData?.teammates || []),
+                ...teammateBaseline,
+                ...nextDraftTeammates,
+            ],
+            friendlyTeamLabels: [
+                data.playerTeamName,
+                data.playerShip?.teamName,
+                data.playerShipName,
+                data.playerShip?.shipType,
+            ],
+        });
+        const promotedFriendlyTeammates = dedupeNames(friendlyTeamSanitization.promotedFriendlyPlayers);
+        if (promotedFriendlyTeammates.length > 0) {
+            nextDraftTeammates = dedupeNames([
+                ...nextDraftTeammates,
+                ...promotedFriendlyTeammates,
+            ]).slice(0, maxTeammates);
+        }
+        if (cappedTeammates.length > 0 || promotedFriendlyTeammates.length > 0) {
+            setSelectedTeammates(nextDraftTeammates);
+        }
+
+        const seenOpponentPlayers = new Set<string>();
+        const unresolvedTeams = friendlyTeamSanitization.teams.map((team) => {
+            const uniquePlayers = team.players.filter((name) => {
                 const key = normalizeOcrName(name).toLowerCase();
                 if (seenOpponentPlayers.has(key)) return false;
                 seenOpponentPlayers.add(key);
                 return true;
             });
             return {
-                teamName: team.teamName || 'Unknown Team',
-                shipType: team.shipType || '',
-                color: team.color || 'unknown',
+                ...team,
                 players: uniquePlayers,
-                sourceRowIndex: typeof team.sourceRowIndex === 'number' ? team.sourceRowIndex : undefined,
-                sourceRowY: typeof team.sourceRowY === 'number' ? team.sourceRowY : undefined,
             };
         });
         const normalizeOpponentFallbackColor = (rawColor: string | null | undefined): string => {
@@ -2207,10 +2246,10 @@ const App: React.FC = () => {
             setSelectedOpponents((prev: string[]) => dedupeNames([...prev, ...mergedOpponents]));
         }
 
-        const autoAppliedPlayers = [...autoAppliedTeammates, ...mergedOpponents];
+        const autoAppliedPlayers = [...autoAppliedTeammates, ...promotedFriendlyTeammates, ...mergedOpponents];
         const currentSessionPlayerKeys = new Set(
             [
-                ...(useAppStore.getState().selectedTeammates || []),
+                ...nextDraftTeammates,
                 ...(selectedOpponents || []),
                 ...structuredTeams.flatMap((team) => team.players || []),
             ]
@@ -2261,8 +2300,8 @@ const App: React.FC = () => {
             pendingRosterCandidateKeys.add(key);
         });
 
-        if (data.artifactType) {
-            useAppStore.getState().setPendingArtifactType(data.artifactType);
+        if (extractedArtifactSource) {
+            useAppStore.getState().setPendingArtifactType(extractedArtifactSource);
         }
 
         const newSessionTeams = { ...sessionTeams };
@@ -2336,6 +2375,7 @@ const App: React.FC = () => {
             opponents: nextDraftOpponents.length > 0 ? nextDraftOpponents : (basePendingMatch.opponents || []),
             artifacts: mergedArtifactPaths.length > 0 ? mergedArtifactPaths : basePendingMatch.artifacts,
             reachModifiers: Array.from(pendingModifierMap.values()),
+            artifactSource: extractedArtifactSource || String(basePendingMatch.artifactSource || '').trim() || undefined,
             opponentTeams: structuredTeams.length > 0 ? structuredTeams : (basePendingMatch.opponentTeams || []),
             ocrState: 'reviewing',
             ocrDebug: {
@@ -2363,6 +2403,7 @@ const App: React.FC = () => {
                 teammates: Array.isArray(nextPendingMatchData.teammates) ? [...nextPendingMatchData.teammates] : canonicalMatch.teammates,
                 opponents: Array.isArray(nextPendingMatchData.opponents) ? [...nextPendingMatchData.opponents] : canonicalMatch.opponents,
                 reachModifiers: Array.isArray(nextPendingMatchData.reachModifiers) ? [...nextPendingMatchData.reachModifiers] : canonicalMatch.reachModifiers,
+                artifactSource: String(nextPendingMatchData.artifactSource || canonicalMatch.artifactSource || '').trim() || undefined,
                 artifacts: mergedArtifactPaths.length > 0 ? mergedArtifactPaths : canonicalMatch.artifacts,
                 opponentTeams: Array.isArray(nextPendingMatchData.opponentTeams) ? nextPendingMatchData.opponentTeams : canonicalMatch.opponentTeams,
                 ocrState: 'reviewing',

@@ -326,6 +326,48 @@ describe('useSmartCapture', () => {
     expect(result.current[1].getMergedData()?.hazards).toEqual(['Sandstorm']);
   });
 
+  it('preserves explicit OCR artifactType when tactical-map modifiers come from the hazard list', async () => {
+    vi.mocked(isElectron).mockReturnValue(true);
+    vi.mocked(captureGameWindow).mockResolvedValue({
+      success: true,
+      imageBase64: 'ZmFrZQ==',
+    });
+    vi.mocked(saveScreenshot).mockResolvedValue({
+      success: true,
+      filePath: 'C:\\captures\\artifact-type.png',
+      filename: 'artifact-type.png',
+    });
+    vi.mocked(rerunOCROnArtifact).mockResolvedValue({
+      success: true,
+      data: {
+        screenshotType: 'tactical_map',
+        playerShip: undefined,
+        playerTeamName: '',
+        reachModifiers: [],
+        artifactType: 'ice',
+        hazards: ['Sandstorm'],
+        enemyShips: [],
+        teammates: [],
+        opponentTeams: [],
+        overallConfidence: 84,
+        captureTimestamp: Date.now(),
+      },
+    });
+
+    const { result } = renderHook(() => useSmartCapture());
+    const [, actions] = result.current;
+
+    await act(async () => {
+      await actions.captureOnly('match-artifact-type');
+    });
+    await act(async () => {
+      await actions.processStoredImage('C:\\captures\\artifact-type.png', 'Pilot');
+    });
+
+    expect(result.current[1].getPendingData('match-artifact-type')?.artifactType).toBe('ice');
+    expect(result.current[1].getMergedData()?.artifactType).toBe('ice');
+  });
+
   it('does not classify crew-hub hazard-only OCR as empty output', async () => {
     vi.mocked(isElectron).mockReturnValue(true);
     vi.mocked(captureGameWindow).mockResolvedValue({

@@ -28,6 +28,7 @@ import { WorkspaceImageViewer } from './media/WorkspaceImageViewer';
 import { UI_REACH_MODIFIERS } from '../utils/constants';
 import { extractArtifactSourceFromReachModifiers } from '../utils/artifactSource';
 import { getRosterCandidatePruneIds } from '../utils/pendingReviewUtils';
+import { sanitizeOpponentTeamsAgainstFriendlyRoster } from '../utils/ocr/friendlyTeamDeduper';
 
 interface OcrCorrectionModalProps {
     isOpen: boolean;
@@ -247,7 +248,7 @@ const buildTeamDraftFromPendingData = (
     const parsedFriendlyLabel = seededFriendlyLabel
         ? parseTeamKey(seededFriendlyLabel, 0).teamName
         : '';
-    const friendlyPlayers = dedupeNames([
+    const baseFriendlyPlayers = dedupeNames([
         ...((pendingMatchData?.teammates || [])
             .map((name) => normalizeSubmittedName(String(name || '')))
             .filter((name) => !isActiveUserCandidate(name))),
@@ -256,6 +257,28 @@ const buildTeamDraftFromPendingData = (
         || normalizeSubmittedName(String((pendingMatchData as { playerTeamName?: string } | null | undefined)?.playerTeamName || ''))
         || normalizeSubmittedName(parsedFriendlyLabel)
         || 'Friendly Team';
+    const sanitizedPendingOpponents = sanitizeOpponentTeamsAgainstFriendlyRoster({
+        teams: fromPendingOpponents.map((team) => ({
+            teamName: String(team?.teamName || '').trim() || '',
+            shipType: String(team?.shipType || '').trim(),
+            color: String(team?.color || '').trim() || 'unknown',
+            players: (team?.players || [])
+                .map((name) => normalizeSubmittedName(String(name || '')))
+                .filter((name) => !isActiveUserCandidate(name)),
+        })),
+        activeUser: activeUserSeed,
+        friendlyPlayers: baseFriendlyPlayers,
+        friendlyTeamLabels: [
+            friendlyTeamName,
+            String(pendingMatchData?.ship || ''),
+            String((pendingMatchData as { playerTeamName?: string } | null | undefined)?.playerTeamName || ''),
+            parsedFriendlyLabel,
+        ],
+    });
+    const friendlyPlayers = dedupeNames([
+        ...baseFriendlyPlayers,
+        ...sanitizedPendingOpponents.promotedFriendlyPlayers,
+    ]);
     const friendlyShipType = normalizeSubmittedName(
         String(pendingMatchData?.ship || '')
     ) || resolveInitialTeamShip(`friendly:${friendlyTeamName}`, 'friendly', friendlyPlayers, sessionShipTypes);
@@ -267,14 +290,10 @@ const buildTeamDraftFromPendingData = (
         shipType: friendlyShipType,
     }];
 
-    fromPendingOpponents.forEach((team, index) => {
+    sanitizedPendingOpponents.teams.forEach((team, index) => {
         const teamColor = String(team?.color || '').trim() || 'unknown';
         const teamName = String(team?.teamName || '').trim() || `Enemy Team ${index + 1}`;
-        const players = dedupeNames(
-            (team?.players || [])
-                .map((name) => normalizeSubmittedName(String(name || '')))
-                .filter((name) => !isActiveUserCandidate(name))
-        );
+        const players = dedupeNames(team?.players || []);
         const shipType = normalizeSubmittedName(String(team?.shipType || ''))
             || resolveInitialTeamShip(`${teamColor}:${teamName}`, teamColor, players, sessionShipTypes);
         teams.push({
@@ -1038,6 +1057,16 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                 return activeUserKey ? key !== activeUserKey : true;
             })
         );
+        const persistedOpponentTeams = resolvedTeams.flatMap((team, index) => (
+            index === friendlyTeamIndex
+                ? []
+                : [{
+                    teamName: team.teamName || '',
+                    shipType: team.shipType || '',
+                    color: team.color || 'unknown',
+                    players: [...(team.players || [])],
+                }]
+        ));
 
         setSelectedTeammates(nextTeammates);
         setSelectedOpponents(nextOpponents);
@@ -1045,12 +1074,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             ...(pendingMatchData || {}),
             teammates: nextTeammates,
             opponents: nextOpponents,
-            opponentTeams: resolvedTeams.map((team) => ({
-                teamName: team.teamName || '',
-                shipType: team.shipType || '',
-                color: team.color || 'unknown',
-                players: [...(team.players || [])],
-            })),
+            opponentTeams: persistedOpponentTeams,
             reachModifiers: nextReachModifiers,
             artifactSource: nextArtifactSource || '',
             ocrState: closeAfterApply ? 'saved' : 'ready',

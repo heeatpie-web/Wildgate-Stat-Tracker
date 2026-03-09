@@ -1,4 +1,4 @@
-import { ARTIFACT_DISPLAY_TO_TYPE } from './constants';
+import { ARTIFACT_DISPLAY_TO_TYPE, ARTIFACT_TYPE_TO_DISPLAY } from './constants';
 
 const ARTIFACT_PREFIX_PATTERN = /^\s*artifact\s*[:=\-]\s*(.+)\s*$/i;
 const ARTIFACT_INLINE_PATTERN = /\bartifact\s*[:=\-]\s*([^|,;]+)/i;
@@ -46,6 +46,10 @@ export const isArtifactSourceModifierValue = (value: string): boolean => (
     extractFromText(value).length > 0
 );
 
+export const normalizeArtifactSource = (value: string | null | undefined): string => (
+    resolveArtifactType(String(value || ''))
+);
+
 export const extractArtifactSourceFromReachModifiers = (
     modifiers: Array<string | { name?: string; rawText?: string }> | undefined
 ): string => {
@@ -58,6 +62,22 @@ export const extractArtifactSourceFromReachModifiers = (
         }
     }
     return '';
+};
+
+export const extractArtifactSourceFromOcrData = (
+    modifiers: Array<string | { name?: string; rawText?: string }> | undefined,
+    hazards: Array<string | { name?: string; rawText?: string }> | undefined,
+    artifactType: string | null | undefined
+): string => (
+    extractArtifactSourceFromReachModifiers(modifiers)
+    || extractArtifactSourceFromReachModifiers(hazards)
+    || normalizeArtifactSource(artifactType)
+);
+
+export const formatArtifactSourceModifier = (artifactSource: string | null | undefined): string => {
+    const normalizedSource = normalizeArtifactSource(artifactSource);
+    if (!normalizedSource) return '';
+    return ARTIFACT_TYPE_TO_DISPLAY[normalizedSource] || `Artifact: ${cleanCandidate(String(artifactSource || normalizedSource))}`;
 };
 
 export const stripArtifactSourceModifiers = (modifiers: string[] | undefined): string[] => {
