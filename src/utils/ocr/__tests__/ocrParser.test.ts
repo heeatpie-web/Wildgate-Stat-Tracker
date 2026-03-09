@@ -108,6 +108,10 @@ describe('cleanPlayerName', () => {
   it('preserves clean names', () => {
     expect(cleanPlayerName('NormalName')).toBe('NormalName');
   });
+
+  it('preserves pipe-spacer player names', () => {
+    expect(cleanPlayerName('|          |')).toBe('| |');
+  });
 });
 
 // ── extractShipType ──
@@ -799,6 +803,7 @@ describe('validateExtractedData', () => {
       playerShip: { shipType: 'Outlaw', confidence: 88, teamName: 'Crew' },
       teammates: [
         { name: 'Small Crew Bonus', confidence: 91, isTeammate: true },
+        { name: 'SmallCrewBonus', confidence: 90, isTeammate: true },
         { name: 'Wing One', confidence: 84, isTeammate: true },
         { name: 'Wing Two', confidence: 82, isTeammate: true },
       ],
@@ -815,6 +820,7 @@ describe('validateExtractedData', () => {
         color: 'red',
         players: [
           { name: 'Reduced Fires', confidence: 86, isTeammate: false },
+          { name: 'ReducedFired', confidence: 84, isTeammate: false },
           { name: 'Enemy One', confidence: 80, isTeammate: false },
         ],
         confidence: 74,

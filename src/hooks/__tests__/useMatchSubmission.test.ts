@@ -1,44 +1,66 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useMatchSubmission } from '../useMatchSubmission';
-import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured } from '../../utils/artifactService';
+import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured, removeMatchArtifact } from '../../utils/artifactService';
+import { StorageService } from '../../utils/storage';
 
 const setToast = vi.fn();
 const setShowWizard = vi.fn();
 const setPendingMatchData = vi.fn();
+const setPendingPlacement = vi.fn();
+const setPendingArtifactType = vi.fn();
+const setPendingKilledBy = vi.fn();
+const setPendingKilledByShip = vi.fn();
+const setSelectedTeammates = vi.fn();
+const setSelectedOpponents = vi.fn();
+const setTimeMin = vi.fn();
+const setTimeSec = vi.fn();
+const setDamageTaken = vi.fn();
+const setPoiEasy = vi.fn();
+const setPoiMedium = vi.fn();
+const setPoiEpic = vi.fn();
+const setCurrentNote = vi.fn();
+const setActiveWeapons = vi.fn();
+const setSelectedReachModifiers = vi.fn();
+const setKills = vi.fn();
 const setIsMatchInProgress = vi.fn();
 const setMatchStartTime = vi.fn();
+const setTimelineEvents = vi.fn();
+const setSessionTeams = vi.fn();
+const setCurrentLoadout = vi.fn();
 const addMatch = vi.fn();
+const deleteMatch = vi.fn();
 const updateMatch = vi.fn();
 const dispatchEventSpy = vi.spyOn(window, 'dispatchEvent');
 
 vi.mock('../../providers/GameDataProvider', () => ({
   useGameData: () => ({
     addMatch,
+    deleteMatch,
     setPendingMatchData,
-    setPendingPlacement: vi.fn(),
-    setPendingArtifactType: vi.fn(),
-    setPendingKilledBy: vi.fn(),
-    setPendingKilledByShip: vi.fn(),
-    setSelectedTeammates: vi.fn(),
-    setSelectedOpponents: vi.fn(),
-    setTimeMin: vi.fn(),
-    setTimeSec: vi.fn(),
-    setDamageTaken: vi.fn(),
-    setPoiEasy: vi.fn(),
-    setPoiMedium: vi.fn(),
-    setPoiEpic: vi.fn(),
-    setCurrentNote: vi.fn(),
-    setActiveWeapons: vi.fn(),
-    setSelectedReachModifiers: vi.fn(),
-    setKills: vi.fn(),
+    setPendingPlacement,
+    setPendingArtifactType,
+    setPendingKilledBy,
+    setPendingKilledByShip,
+    setSelectedTeammates,
+    setSelectedOpponents,
+    setTimeMin,
+    setTimeSec,
+    setDamageTaken,
+    setPoiEasy,
+    setPoiMedium,
+    setPoiEpic,
+    setCurrentNote,
+    setActiveWeapons,
+    setSelectedReachModifiers,
+    setKills,
     setMatchStartTime,
     setIsMatchInProgress,
     updateMatch,
     recordPlayerSighting: vi.fn(),
-    setTimelineEvents: vi.fn(),
-    setSessionTeams: vi.fn(),
-    setCurrentLoadout: vi.fn(),
+    setTimelineEvents,
+    setSessionTeams,
+    setCurrentLoadout,
   }),
 }));
 
@@ -99,6 +121,7 @@ vi.mock('../../utils/artifactService', () => ({
   applyArtifactRepair: vi.fn().mockResolvedValue({ summary: { mode: 'apply', matches: 0, candidatesScanned: 0, candidatesEligible: 0, plannedLinks: 0, appliedLinks: 0, updatedMatches: 0 }, candidates: [], applied: [] }),
   bundleMatchArtifacts: vi.fn().mockResolvedValue([]),
   getMatchArtifactsStructured: vi.fn().mockResolvedValue({ images: [], imageFiles: [], telemetry: [] }),
+  removeMatchArtifact: vi.fn().mockResolvedValue({ success: true }),
 }));
 
 vi.mock('../../utils/storage', () => ({
@@ -116,7 +139,29 @@ describe('useMatchSubmission', () => {
     setToast.mockClear();
     setShowWizard.mockClear();
     setPendingMatchData.mockClear();
+    setPendingPlacement.mockClear();
+    setPendingArtifactType.mockClear();
+    setPendingKilledBy.mockClear();
+    setPendingKilledByShip.mockClear();
+    setSelectedTeammates.mockClear();
+    setSelectedOpponents.mockClear();
+    setTimeMin.mockClear();
+    setTimeSec.mockClear();
+    setDamageTaken.mockClear();
+    setPoiEasy.mockClear();
+    setPoiMedium.mockClear();
+    setPoiEpic.mockClear();
+    setCurrentNote.mockClear();
+    setActiveWeapons.mockClear();
+    setSelectedReachModifiers.mockClear();
+    setKills.mockClear();
+    setMatchStartTime.mockClear();
+    setIsMatchInProgress.mockClear();
+    setTimelineEvents.mockClear();
+    setSessionTeams.mockClear();
+    setCurrentLoadout.mockClear();
     addMatch.mockClear();
+    deleteMatch.mockClear();
     updateMatch.mockClear();
     dispatchEventSpy.mockClear();
     Object.assign(mockStoreState, {
@@ -157,6 +202,9 @@ describe('useMatchSubmission', () => {
     vi.mocked(applyArtifactRepair).mockResolvedValue({ summary: { mode: 'apply', matches: 0, candidatesScanned: 0, candidatesEligible: 0, plannedLinks: 0, appliedLinks: 0, updatedMatches: 0 }, candidates: [], applied: [] });
     vi.mocked(getMatchArtifactsStructured).mockReset();
     vi.mocked(getMatchArtifactsStructured).mockResolvedValue({ images: [], imageFiles: [], telemetry: [] });
+    vi.mocked(removeMatchArtifact).mockReset();
+    vi.mocked(removeMatchArtifact).mockResolvedValue({ success: true });
+    vi.mocked(StorageService.flush).mockClear();
   });
 
   it('returns initiateSubmission, processFinalSubmission, and submitting', () => {
@@ -164,10 +212,12 @@ describe('useMatchSubmission', () => {
     expect(result.current).toHaveProperty('initiateSubmission');
     expect(result.current).toHaveProperty('processFinalSubmission');
     expect(result.current).toHaveProperty('saveResultDraft');
+    expect(result.current).toHaveProperty('discardTelemetryDraft');
     expect(result.current).toHaveProperty('submitting');
     expect(typeof result.current.initiateSubmission).toBe('function');
     expect(typeof result.current.processFinalSubmission).toBe('function');
     expect(typeof result.current.saveResultDraft).toBe('function');
+    expect(typeof result.current.discardTelemetryDraft).toBe('function');
     expect(result.current.submitting).toBe(false);
   });
 
@@ -912,6 +962,71 @@ describe('useMatchSubmission', () => {
       .map(([evt]) => evt as Event)
       .find((evt) => evt.type === 'telemetry-draft:resolved') as CustomEvent | undefined;
     expect(resolvedEvent?.detail).toEqual({ matchId: draftId });
+  });
+
+  it('discardTelemetryDraft removes draft artifacts, deletes the draft, and clears submission state', async () => {
+    mockStoreState.matches = [{
+      id: 4242,
+      timestamp: 1_700_000_444_000,
+      date: '1/1/2024',
+      mode: 'Artifact Brawl',
+      player: 'Tester',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+      artifacts: ['C:\\match_artifacts\\4242\\capture_a.png', 'C:\\match_artifacts\\4242\\capture_b.png'],
+    }];
+    vi.mocked(getMatchArtifactsStructured).mockResolvedValue({
+      images: ['C:\\match_artifacts\\4242\\capture_a.png', 'C:\\match_artifacts\\4242\\capture_b.png'],
+      imageFiles: [
+        { artifactId: 'artifact-a', filename: 'capture_a.png', path: 'C:\\match_artifacts\\4242\\capture_a.png' },
+        { artifactId: 'artifact-b', filename: 'capture_b.png', path: 'C:\\match_artifacts\\4242\\capture_b.png' },
+      ],
+      telemetry: [],
+      missingImages: [],
+      resolvedFromDisk: true,
+    });
+
+    const { result } = renderHook(() => useMatchSubmission());
+
+    await act(async () => {
+      await result.current.discardTelemetryDraft(4242);
+    });
+
+    expect(getMatchArtifactsStructured).toHaveBeenCalledWith(4242, [
+      'C:\\match_artifacts\\4242\\capture_a.png',
+      'C:\\match_artifacts\\4242\\capture_b.png',
+    ]);
+    expect(removeMatchArtifact).toHaveBeenCalledTimes(2);
+    expect(removeMatchArtifact).toHaveBeenNthCalledWith(1, 4242, 'artifact-a');
+    expect(removeMatchArtifact).toHaveBeenNthCalledWith(2, 4242, 'artifact-b');
+    expect(deleteMatch).toHaveBeenCalledWith(4242);
+    expect(setPendingMatchData).toHaveBeenCalledWith(null);
+    expect(setShowWizard).toHaveBeenCalledWith(null);
+    expect(StorageService.flush).toHaveBeenCalled();
+
+    const resolvedEvent = dispatchEventSpy.mock.calls
+      .map(([evt]) => evt as Event)
+      .find((evt) => evt.type === 'telemetry-draft:resolved') as CustomEvent | undefined;
+    expect(resolvedEvent?.detail).toEqual({ matchId: 4242 });
+
+    const consumedEvent = dispatchEventSpy.mock.calls
+      .map(([evt]) => evt as Event)
+      .find((evt) => evt.type === 'smart-capture:artifacts-consumed') as CustomEvent | undefined;
+    expect(consumedEvent?.detail).toEqual({
+      matchId: 4242,
+      artifactPaths: ['C:\\match_artifacts\\4242\\capture_a.png', 'C:\\match_artifacts\\4242\\capture_b.png'],
+    });
+
+    expect(setToast).toHaveBeenCalledWith({
+      message: 'Match discarded. Removed 2 recorded screenshots.',
+      type: 'info',
+    });
   });
 });
 

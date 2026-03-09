@@ -23,6 +23,11 @@ describe('electron/crewHubExtractor regression guards', () => {
     expect(cleanupPlayerName('Riv19')).toBe('Riv19');
   });
 
+  it('preserves pipe-spacer player names instead of stripping them as OCR junk', () => {
+    expect(cleanupPlayerName('|          |')).toBe('| |');
+    expect(__test__.isValidOpponentName('| |')).toBe(true);
+  });
+
   it('does not treat all-caps gamer tags with digits or underscores as team names', () => {
     expect(isTeamName('H4VOK_XP')).toBe(false);
     expect(__test__.isValidOpponentName('H4VOK_XP')).toBe(true);

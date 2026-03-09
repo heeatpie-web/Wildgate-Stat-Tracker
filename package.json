@@ -2,7 +2,7 @@
   "name": "wildgate-stat-tracker",
   "productName": "Wildgate Stat Tracker",
   "private": true,
-  "version": "3.1.3",
+  "version": "3.1.4",
   "type": "module",
   "main": "electron/main.cjs",
   "author": {

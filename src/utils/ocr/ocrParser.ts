@@ -20,6 +20,7 @@ import {
 } from './ocrMappings';
 import { capTeammatePlayers } from '../teamLimits';
 import { deduplicatePlayersByLikelyName } from './playerNameMatching';
+import { normalizePipeSpacerPlayerName } from '../stringUtils';
 
 function distance(a: string, b: string): number {
   const matrix: number[][] = [];
@@ -49,7 +50,13 @@ const MAX_OPPONENT_TEAMS = 4;
 const MAX_OPPONENT_PLAYERS_PER_TEAM = 4;
 const UNDERCREW_SHIP_BONUS_PHRASES = new Set([
   'SMALL CREW BONUS',
+  'SMALLCREWBONUS',
+  'SMALL CREWBONUS',
+  'SMALLCREW BONUS',
   'REDUCED FIRES',
+  'REDUCEDFIRES',
+  'REDUCED FIRED',
+  'REDUCEDFIRED',
 ]);
 
 const isUnderCrewShipBonusText = (value?: string | null): boolean => {
@@ -240,6 +247,7 @@ export function fuzzyMatch(
  * Check if text is likely noise/UI element
  */
 export function isNoiseText(text: string): boolean {
+  if (normalizePipeSpacerPlayerName(text)) return false;
   const upper = text.toUpperCase().trim();
   if (upper.length < 2) return true;
   if (isUnderCrewShipBonusText(text)) return true;
@@ -255,6 +263,9 @@ export function isNoiseText(text: string): boolean {
  * Clean extracted player name
  */
 export function cleanPlayerName(rawName: string): string {
+  const specialPipeName = normalizePipeSpacerPlayerName(rawName);
+  if (specialPipeName) return specialPipeName;
+
   let cleaned = rawName
     .replace(/[\[\](){}|\\\/]/g, '')
     .replace(/^[.,;:!?'"]+|[.,;:!?'"]+$/g, '')

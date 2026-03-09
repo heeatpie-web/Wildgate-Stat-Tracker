@@ -167,6 +167,7 @@ describe('isOcrNoise', () => {
   it('allows valid text', () => {
     expect(isOcrNoise('PlayerName123')).toBe(false);
     expect(isOcrNoise('The Bull')).toBe(false);
+    expect(isOcrNoise('|          |')).toBe(false);
   });
 });
 
@@ -183,6 +184,10 @@ describe('cleanPlayerName', () => {
 
   it('leaves clean names unchanged', () => {
     expect(cleanPlayerName('CleanName')).toBe('CleanName');
+  });
+
+  it('preserves pipe-spacer player names', () => {
+    expect(cleanPlayerName('|          |')).toBe('| |');
   });
 });
 
@@ -208,6 +213,10 @@ describe('normalizeOcrName', () => {
 
   it('removes trailing decorative glyphs', () => {
     expect(normalizeOcrName('TestPilot 🚀')).toBe('TestPilot');
+  });
+
+  it('preserves pipe-spacer player names', () => {
+    expect(normalizeOcrName('|          |')).toBe('| |');
   });
 });
 

@@ -1352,6 +1352,9 @@ function mergeGeminiRefinement(extractedData, geminiData) {
 }
 
 function normalizeNameKey(value) {
+  if (/^\|+\s+\|+$/.test(String(value || '').replace(/\s+/g, ' ').trim())) {
+    return 'pipe-spacer-player';
+  }
   return String(value || '')
     .trim()
     .toLowerCase()
@@ -2404,9 +2407,13 @@ function normalizePlayerShipName(rawName, shipType = '') {
 
 const UNDERCREW_SHIP_BONUS_PHRASES = new Set([
   'SMALL CREW BONUS',
-  'REDUCED FIRES',
   'SMALLCREWBONUS',
+  'SMALL CREWBONUS',
+  'SMALLCREW BONUS',
+  'REDUCED FIRES',
   'REDUCEDFIRES',
+  'REDUCED FIRED',
+  'REDUCEDFIRED',
 ]);
 const SHIP_CAPACITY_BY_TYPE = {
   hunter: 4,

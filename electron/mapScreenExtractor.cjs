@@ -147,9 +147,13 @@ const SHIP_TYPE_COMPACT_MAP = new Map(
 const SHIP_TYPE_TEAM_WORDS = new Set(['SOLO', 'OUTLAW', 'BATTLE', 'SCOUT', 'PRIVATEER', 'BASTION', 'HUNTER']);
 const UNDERCREW_SHIP_BONUS_PHRASES = new Set([
   'SMALL CREW BONUS',
-  'REDUCED FIRES',
   'SMALLCREWBONUS',
+  'SMALL CREWBONUS',
+  'SMALLCREW BONUS',
+  'REDUCED FIRES',
   'REDUCEDFIRES',
+  'REDUCED FIRED',
+  'REDUCEDFIRED',
 ]);
 const HUD_TEAM_LABEL_NOISE_FRAGMENTS = [
   'YOURSHIP',
@@ -1376,11 +1380,21 @@ function groupWordsIntoLinesWithThreshold(words, lineThreshold) {
   return lines;
 }
 
+const PIPE_SPACER_PLAYER_NAME = '| |';
+function normalizePipeSpacerPlayerName(value) {
+  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+  return /^\|+\s+\|+$/.test(normalized) ? PIPE_SPACER_PLAYER_NAME : '';
+}
+
 /**
  * Extract player name from line of words
  */
 function extractPlayerNameFromLine(words) {
   if (!words || words.length === 0) return null;
+  const specialPipeName = normalizePipeSpacerPlayerName(
+    words.map((word) => String(word?.text || '')).join(' ')
+  );
+  if (specialPipeName) return specialPipeName;
 
   const scoredTokens = [];
   let bestToken = '';
@@ -1434,6 +1448,7 @@ function extractPlayerNameFromLine(words) {
  */
 function isValidPlayerName(name) {
   if (!name || name.length < 3 || name.length > 25) return false;
+  if (normalizePipeSpacerPlayerName(name)) return true;
 
   // \u00C0-\u024F: Extended Latin (accented characters)
   // \u0400-\u04FF: Cyrillic
@@ -1463,6 +1478,8 @@ function isValidPlayerName(name) {
 
 function cleanupPlayerToken(name) {
   if (!name) return '';
+  const specialPipeName = normalizePipeSpacerPlayerName(name);
+  if (specialPipeName) return specialPipeName;
   return name
     .replace(/@/g, 'Q')
     .replace(/»/g, 'a')
@@ -1481,6 +1498,7 @@ function cleanupPlayerToken(name) {
 
 function scoreAsMapPlayerToken(token) {
   if (!token || token.length < 3) return 0;
+  if (normalizePipeSpacerPlayerName(token)) return 36;
   let score = 0;
   if (token.length >= 4 && token.length <= 16) score += 20;
   if (/[0-9]/.test(token)) score += 12;
@@ -1505,6 +1523,7 @@ function filterWordsInBounds(words, bounds) {
 }
 
 function normalizeNameKey(input) {
+  if (normalizePipeSpacerPlayerName(input)) return 'pipe-spacer-player';
   return (input || '').toLowerCase().replace(/[^a-z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/g, '');
 }
 

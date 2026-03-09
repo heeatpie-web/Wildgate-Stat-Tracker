@@ -5,7 +5,7 @@ import '@testing-library/jest-dom/vitest';
 import type { Match } from '../types';
 import PlayerHub from './PlayerHub';
 
-const matches: Match[] = [
+const baseMatches: Match[] = [
     {
         id: 1,
         timestamp: 1_700_000_000_000,
@@ -43,8 +43,10 @@ const gameDataState = {
     dismissedRosterMergePairKeys: [],
     dismissRosterMergeSuggestionPairs: vi.fn(),
     addToRegistry: vi.fn(),
+    addPilotAlias: vi.fn(),
+    removePilotAlias: vi.fn(),
     removePendingReview: vi.fn(),
-    matches,
+    matches: [...baseMatches],
     playerProfiles: {
         PilotOne: {
             id: 'PilotOne',
@@ -101,6 +103,7 @@ const appStoreState = {
         stats: { totalEntries: 1, lastCompactedAt: Date.now() },
     },
     recordOcrAliasCorrection: vi.fn(),
+    removeOcrAliasCorrection: vi.fn(),
     ocrAutoApplyMinScore: 0.83,
 };
 
@@ -125,10 +128,56 @@ describe('PlayerHub', () => {
         vi.clearAllMocks();
         gameDataState.pilotRegistry = ['PilotOne', 'Pilot0ne'];
         gameDataState.pilotAliases = { PilotOne: ['Pilot One Old'] };
+        gameDataState.matches = [...baseMatches];
+        gameDataState.playerProfiles = {
+            PilotOne: {
+                id: 'PilotOne',
+                sightings: 3,
+                firstSeen: 1_700_000_000_000,
+                lastSeen: 1_700_000_000_000,
+                teamsObserved: {},
+                playedWith: { Wingman: 2 },
+                playedAgainst: { Pilot0ne: 2 },
+                shipsObserved: { Hunter: 2 },
+                ocrSightings: 2,
+                manualSightings: 1,
+                lastOcrConfidence: 88,
+            },
+            Pilot0ne: {
+                id: 'Pilot0ne',
+                sightings: 2,
+                firstSeen: 1_700_000_000_000,
+                lastSeen: 1_700_000_000_000,
+                teamsObserved: {},
+                playedWith: {},
+                playedAgainst: { PilotOne: 2 },
+                shipsObserved: { Hunter: 2 },
+                ocrSightings: 0,
+                manualSightings: 1,
+                lastOcrConfidence: null,
+            },
+        };
         gameDataState.pendingReviews = [];
         gameDataState.mergeHistory = [];
         gameDataState.activeMergeNotificationId = null;
         gameDataState.dismissedRosterMergePairKeys = [];
+        appStoreState.ocrAliasModel = {
+            version: 1 as const,
+            entries: {
+                pil0tone: [{
+                    rawKey: 'PliotOne',
+                    normalizedKey: 'pil0tone',
+                    targetName: 'PilotOne',
+                    count: 3,
+                    lastUpdatedAt: Date.now(),
+                    source: 'review_modal' as const,
+                    confidenceWeight: 0.8,
+                    contexts: { unknown: 3 },
+                }],
+            },
+            blocklist: {},
+            stats: { totalEntries: 1, lastCompactedAt: Date.now() },
+        };
     });
 
     it('shows former names, learned OCR variants, and duplicate candidates for the selected player', () => {
@@ -164,6 +213,92 @@ describe('PlayerHub', () => {
         expect(appStoreState.recordOcrAliasCorrection).toHaveBeenCalledWith('PliotOne', 'PilotOne', expect.any(Object));
         expect(gameDataState.removePendingReview).toHaveBeenCalledWith('candidate-1');
         expect(gameDataState.addToRegistry).toHaveBeenCalledWith('PilotOne');
+    });
+
+    it('lets the selected player add and remove former names and OCR variants from the players tab', () => {
+        render(<PlayerHub />);
+
+        fireEvent.click(screen.getByRole('button', { name: /pilotone/i }));
+        fireEvent.click(screen.getByRole('button', { name: /manage ocr aliases/i }));
+
+        expect(screen.getByText('PliotOne')).toBeInTheDocument();
+
+        fireEvent.change(screen.getByPlaceholderText(/add former name or ocr variant/i), {
+            target: { value: 'PilotOneAlt' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /add former name/i }));
+
+        expect(gameDataState.addPilotAlias).toHaveBeenCalledWith('PilotOne', 'PilotOneAlt');
+        expect(appStoreState.recordOcrAliasCorrection).toHaveBeenCalledWith('PilotOneAlt', 'PilotOne', {
+            source: 'manual_correction',
+            context: 'unknown',
+            confidenceWeight: 1,
+        });
+
+        fireEvent.change(screen.getByPlaceholderText(/add former name or ocr variant/i), {
+            target: { value: 'PilotOneOCR' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /add ocr variant/i }));
+
+        expect(appStoreState.recordOcrAliasCorrection).toHaveBeenNthCalledWith(2, 'PilotOneOCR', 'PilotOne', {
+            source: 'manual_correction',
+            context: 'unknown',
+            confidenceWeight: 1,
+        });
+
+        fireEvent.click(screen.getByRole('button', { name: /remove former name pilot one old/i }));
+        fireEvent.click(screen.getByRole('button', { name: /remove ocr variant pliotone/i }));
+
+        expect(gameDataState.removePilotAlias).toHaveBeenCalledWith('PilotOne', 'Pilot One Old');
+        expect(appStoreState.removeOcrAliasCorrection).toHaveBeenCalledWith('Pilot One Old', 'PilotOne');
+        expect(appStoreState.removeOcrAliasCorrection).toHaveBeenCalledWith('PliotOne', 'PilotOne');
+    });
+
+    it('uses recent matches from OCR variants when showing last encounter recency', () => {
+        const now = Date.UTC(2026, 2, 9, 18, 0, 0);
+        const dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+        gameDataState.pilotRegistry = ['PilotOne'];
+        gameDataState.playerProfiles = {
+            PilotOne: {
+                id: 'PilotOne',
+                sightings: 4,
+                firstSeen: now - (16 * 24 * 60 * 60 * 1000),
+                lastSeen: now - (16 * 24 * 60 * 60 * 1000),
+                teamsObserved: {},
+                playedWith: {},
+                playedAgainst: {},
+                shipsObserved: { Hunter: 1 },
+                ocrSightings: 2,
+                manualSightings: 2,
+                lastOcrConfidence: 88,
+            },
+        };
+        gameDataState.matches = [{
+            id: 2,
+            timestamp: now - (24 * 60 * 60 * 1000),
+            date: '2026-03-08',
+            mode: 'Artifact Brawl',
+            player: 'ActiveUser',
+            teammates: ['PliotOne'],
+            opponents: [],
+            hero: 'Hero',
+            ship: 'Hunter',
+            reachModifiers: [],
+            kills: {},
+            result: 'Win',
+            subType: 'Combat',
+        }];
+
+        render(<PlayerHub />);
+
+        const pilotButton = screen.getByRole('button', { name: /pilotone/i });
+        expect(pilotButton).toHaveTextContent('1 encounter');
+        expect(pilotButton).toHaveTextContent('1d ago');
+
+        fireEvent.click(pilotButton);
+        expect(screen.getByText(/last seen 1d ago/i)).toBeInTheDocument();
+
+        dateNowSpy.mockRestore();
     });
 
     it('shows a dismissible merge notification banner for the active merge', () => {

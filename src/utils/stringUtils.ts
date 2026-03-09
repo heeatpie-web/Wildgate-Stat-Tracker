@@ -192,10 +192,23 @@ export const normalizeOcrText = (text: string): string => {
     return normalized;
 };
 
+const PIPE_SPACER_PLAYER_NAME = '| |';
+const PIPE_SPACER_PLAYER_NAME_PATTERN = /^\|+\s+\|+$/;
+
+export const normalizePipeSpacerPlayerName = (value: string): string => {
+    const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+    return PIPE_SPACER_PLAYER_NAME_PATTERN.test(normalized) ? PIPE_SPACER_PLAYER_NAME : '';
+};
+
+export const isPipeSpacerPlayerName = (value: string): boolean => (
+    normalizePipeSpacerPlayerName(value).length > 0
+);
+
 /**
  * Checks if a line is likely OCR noise or debug overlay info
  */
 export const isOcrNoise = (line: string): boolean => {
+    if (isPipeSpacerPlayerName(line)) return false;
     const upper = line.toUpperCase();
     if (upper.includes('GANE:') || upper.includes('RENDER:') || upper.includes('GPU:')) return true;
     if (upper.includes('LOSS:') && upper.includes('RATE:')) return true;
@@ -211,6 +224,8 @@ export const isOcrNoise = (line: string): boolean => {
  * Cleans up player names from OCR noise
  */
 export const cleanPlayerName = (name: string): string => {
+    const specialPipeName = normalizePipeSpacerPlayerName(name);
+    if (specialPipeName) return specialPipeName;
     let cleaned = name.replace(/[()\[\]{}|\\\/<>,;:"'!@#$%^&*+=~`]$/, '');
     cleaned = cleaned.replace(/(?<![a-zA-Z0-9])\.$/, '');
     cleaned = cleaned.replace(/^[\u2022\u00b7•·\-_* ]+/, '');
@@ -230,6 +245,8 @@ export const cleanMissionName = (name: string): string => {
 
 export const normalizeOcrName = (name: string): string => {
     if (!name) return '';
+    const specialPipeName = normalizePipeSpacerPlayerName(name);
+    if (specialPipeName) return specialPipeName;
     let cleaned = cleanPlayerName(name);
     // Normalize common OCR confusions inside alphanumeric names.
     cleaned = cleaned

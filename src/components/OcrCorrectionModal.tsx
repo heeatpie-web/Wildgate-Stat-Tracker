@@ -30,7 +30,10 @@ import {
     extractArtifactSourceFromReachModifiers,
     formatArtifactSourceModifier,
 } from '../utils/artifactSource';
-import { getRosterCandidatePruneIds } from '../utils/pendingReviewUtils';
+import {
+    getRosterCandidatePruneIds,
+    getRosterCandidatePruneIdsForAcceptedName,
+} from '../utils/pendingReviewUtils';
 import { sanitizeOpponentTeamsAgainstFriendlyRoster } from '../utils/ocr/friendlyTeamDeduper';
 
 interface OcrCorrectionModalProps {
@@ -109,7 +112,8 @@ const normalizeConfidence = (value: unknown): number | null => {
     if (value === null || value === undefined || value === '') return null;
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) return null;
-    return Math.max(0, Math.min(100, Math.round(numeric)));
+    const normalized = numeric > 0 && numeric <= 1 ? numeric * 100 : numeric;
+    return Math.max(0, Math.min(100, Math.round(normalized)));
 };
 const normalizeModifierName = (name: string): string => {
     const normalized = normalizeSubmittedName(name);
@@ -889,6 +893,19 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         announce(`Accepted ${name} as a new player.`, 'polite');
     };
 
+    const handleAddRosterPlayer = useCallback((name: string) => {
+        const normalized = normalizeOcrName(name || '');
+        if (!normalized) return;
+        addToRegistry(normalized);
+        const pendingPruneIds = getRosterCandidatePruneIdsForAcceptedName({
+            pendingReviews,
+            acceptedName: normalized,
+        });
+        if (pendingPruneIds.length > 0) {
+            removePendingReviews(pendingPruneIds);
+        }
+    }, [addToRegistry, pendingReviews, removePendingReviews]);
+
     const addModifierToDraft = (rawValue: string) => {
         const normalized = normalizeModifierName(rawValue);
         if (!normalized) return;
@@ -1548,7 +1565,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                     onPlayerRemove={removeTeamPlayer}
                                     onPlayerAdd={addTeamPlayer}
                                     onPlayerMove={moveTeamPlayer}
-                                    onAddToRoster={(name) => addToRegistry(name)}
+                                    onAddToRoster={handleAddRosterPlayer}
                                     dataTestId="ocr-team-assignment-board"
                                 />
                             </section>

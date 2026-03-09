@@ -375,8 +375,7 @@ const writeNow = async (data: StorageData): Promise<boolean> => {
     if (ipc) {
       await ipc.invoke('db-write', data);
       await maybeAutoBackup(data);
-    }
-    if (typeof localStorage !== 'undefined') {
+    } else if (typeof localStorage !== 'undefined') {
       try {
         localStorage.setItem('wg_db', JSON.stringify(data));
       } catch (error) {
@@ -404,14 +403,17 @@ export const StorageService = {
     if (typeof window === 'undefined') return;
 
     lifecycleGuardsBound = true;
+    const isElectronRuntime = Boolean(getElectronAPI());
     const flushSoon = () => { void this.flush(); };
     const flushSoonEvent: EventListener = () => { void this.flush(); };
 
     window.addEventListener('beforeunload', flushSoon);
-    window.addEventListener('pagehide', flushSoonEvent);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') flushSoon();
-    });
+    if (!isElectronRuntime) {
+      window.addEventListener('pagehide', flushSoonEvent);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') flushSoon();
+      });
+    }
     // Best-effort: if the renderer is about to die due to an exception,
     // attempt to flush whatever is currently staged.
     window.addEventListener('error', flushSoonEvent);

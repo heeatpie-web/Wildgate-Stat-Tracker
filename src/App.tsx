@@ -6,6 +6,7 @@ import { useUserPreferences } from './providers/UserPreferencesProvider';
 import { useLogMonitor } from './hooks/useLogMonitor';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useFocusTrap } from './hooks/useFocusTrap';
+import { useMatchSubmission } from './hooks/useMatchSubmission';
 import { Sidebar } from './components/Sidebar';
 import { RecordingView } from './components/RecordingView';
 import HistoryTable from './components/HistoryTable';
@@ -165,11 +166,13 @@ interface RestoreSessionSnapshot {
 const RESTORE_SESSION_STORAGE_KEY = 'wg_restore_session_v1';
 const RESTORE_SESSION_DISMISSED_SIGNATURE_KEY = 'wg_restore_session_dismissed_signature_v1';
 const INTENTIONAL_CLOSE_STORAGE_KEY = 'wg_intentional_close_v1';
+const SESSION_EXIT_STATE_STORAGE_KEY = 'wg_session_exit_state_v1';
 const RESTORE_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const SETTINGS_FOCUS_SECTION_STORAGE_KEY = 'wg_settings_focus_section_v1';
 const STARTUP_INTERACTION_GRACE_MS = 3500;
 const HAS_LAUNCHED_BEFORE_STORAGE_KEY = 'wg_has_launched_before_v1';
 const WELCOME_MESSAGE_SHOWN_THIS_LAUNCH_KEY = 'wg_welcome_message_shown_this_launch_v1';
+type SessionExitState = 'clean' | 'running';
 const getOnboardingUserScope = (user: string | null | undefined): string => {
     const normalized = String(user || '').trim().toLowerCase();
     return normalized || '__global__';
@@ -191,6 +194,23 @@ const asRecord = (value: unknown): UnknownRecord =>
 const toFiniteNumber = (value: unknown, fallback = 0): number => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const readStoredSessionExitState = (): SessionExitState | null => {
+    try {
+        const raw = window.localStorage.getItem(SESSION_EXIT_STATE_STORAGE_KEY);
+        return raw === 'clean' || raw === 'running' ? raw : null;
+    } catch {
+        return null;
+    }
+};
+
+const writeStoredSessionExitState = (state: SessionExitState): void => {
+    try {
+        window.localStorage.setItem(SESSION_EXIT_STATE_STORAGE_KEY, state);
+    } catch {
+        // no-op: localStorage can be unavailable in rare embedded contexts
+    }
 };
 
 type FinalMatchResult = Exclude<MatchResult, 'Ongoing'>;
@@ -400,7 +420,7 @@ const App: React.FC = () => {
         setPendingMatchData,
         pilotRegistry,
         setSelectedTeammates,
-        selectedOpponents, setSelectedOpponents,
+        selectedOpponents,
         activeShip, setActiveShip,
         selectedReachModifiers, setSelectedReachModifiers,
         addPendingReview,
@@ -409,9 +429,7 @@ const App: React.FC = () => {
         pendingReviews,
         detectedUnknowns,
         drillDownTarget,
-        sessionTeams, setSessionTeams,
         sessionShipTypes,
-        setSessionShipTypes
     } = useGameData();
 
     const {
@@ -421,6 +439,7 @@ const App: React.FC = () => {
     } = useUserPreferences();
 
     const { logFeed, logStatus } = useLogMonitor();
+    const { discardTelemetryDraft, submitting: telemetryDraftDiscarding } = useMatchSubmission();
 
     const fuzzyRosterCandidates = React.useMemo(() => (
         (pendingReviews || [])
@@ -1100,6 +1119,11 @@ const App: React.FC = () => {
         }
         let parsed: unknown = null;
         try {
+            if (readStoredSessionExitState() === 'clean') {
+                clearRestoreSessionSnapshot();
+                window.localStorage.removeItem(INTENTIONAL_CLOSE_STORAGE_KEY);
+                return;
+            }
             const intentionalCloseRaw = window.localStorage.getItem(INTENTIONAL_CLOSE_STORAGE_KEY);
             if (intentionalCloseRaw) {
                 window.localStorage.removeItem(INTENTIONAL_CLOSE_STORAGE_KEY);
@@ -1731,6 +1755,23 @@ const App: React.FC = () => {
         setToast({ message: `Telemetry draft loaded. Opening result wizard...`, type: 'success' });
     }, [activeView, matches, setActiveView, setPendingMatchData, setToast, telemetryDraftPrompt]);
 
+    const handleTelemetryDraftDiscard = useCallback(async () => {
+        if (!telemetryDraftPrompt || telemetryDraftPrompt.phase !== 'postmatch' || telemetryDraftDiscarding) return;
+        const draft = matches.find(m => m.id === telemetryDraftPrompt.matchId);
+        if (!draft) {
+            handledTelemetryDraftPostmatchPromptIdsRef.current.add(telemetryDraftPrompt.matchId);
+            telemetryDraftCaptureClicksRef.current.delete(telemetryDraftPrompt.matchId);
+            setTelemetryDraftPrompt(null);
+            setToast({ message: 'Telemetry draft no longer exists. Start from Win/Loss/Draw buttons.', type: 'warning' });
+            return;
+        }
+        const confirmed = window.confirm(
+            'Discard this telemetry draft? Recorded screenshots will be deleted and the current submission state will be cleared.'
+        );
+        if (!confirmed) return;
+        await discardTelemetryDraft(draft.id);
+    }, [discardTelemetryDraft, matches, setToast, telemetryDraftDiscarding, telemetryDraftPrompt]);
+
     useEffect(() => {
         if (!telemetryDraftPendingResult || activeView !== 'recording') return;
         window.dispatchEvent(new CustomEvent('submission:open-result', {
@@ -2271,9 +2312,6 @@ const App: React.FC = () => {
         const nextDraftOpponents = mergedOpponents.length > 0
             ? dedupeNames([...(selectedOpponents || []), ...mergedOpponents])
             : dedupeNames(selectedOpponents || []);
-        if (mergedOpponents.length > 0) {
-            setSelectedOpponents((prev: string[]) => dedupeNames([...prev, ...mergedOpponents]));
-        }
 
         const autoAppliedPlayers = [...autoAppliedTeammates, ...promotedFriendlyTeammates, ...mergedOpponents];
         const currentSessionPlayerKeys = new Set(
@@ -2332,26 +2370,6 @@ const App: React.FC = () => {
         if (extractedArtifactSource) {
             useAppStore.getState().setPendingArtifactType(extractedArtifactSource);
         }
-
-        const newSessionTeams = { ...sessionTeams };
-        const newShipTypes: Record<string, string> = {};
-        structuredTeams.forEach(team => {
-            const colorKey = team.color || 'unknown';
-            if (!newSessionTeams[colorKey]) newSessionTeams[colorKey] = [];
-            const existingKeys = new Set(newSessionTeams[colorKey].map((name) => normalizeOcrName(name).toLowerCase()));
-            team.players.forEach(p => {
-                const key = normalizeOcrName(p || '').toLowerCase();
-                if (p && key && !existingKeys.has(key)) {
-                    newSessionTeams[colorKey].push(p);
-                    existingKeys.add(key);
-                }
-            });
-            if (team.shipType) {
-                newShipTypes[colorKey] = team.shipType;
-            }
-        });
-        setSessionTeams(newSessionTeams);
-        setSessionShipTypes(newShipTypes, 'ocr');
 
         const storeState = useAppStore.getState();
         const existingPendingMatch = clonePendingMatchDraft(storeState.pendingMatchData || null);
@@ -2472,7 +2490,7 @@ const App: React.FC = () => {
                 detail: { source: 'app-ocr-gate', matchId: targetMatchId },
             }));
         }, 0);
-    }, [pilotRegistry, activeShip, setSelectedTeammates, selectedOpponents, setSelectedOpponents, setActiveShip, selectedReachModifiers, setSelectedReachModifiers, setToast, addPendingReview, pendingReviews, sessionTeams, sessionShipTypes, setSessionTeams, setSessionShipTypes, showWizard, setShowWizard]);
+    }, [pilotRegistry, activeShip, setSelectedTeammates, selectedOpponents, setActiveShip, selectedReachModifiers, setSelectedReachModifiers, setToast, addPendingReview, pendingReviews, sessionShipTypes, showWizard, setShowWizard]);
 
     const handleSmartCaptureData = useCallback((data: OCRExtractedData) => {
         handleApplyOCRData(data, null, null);
@@ -2518,12 +2536,14 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (isStoreLoading) return;
+        writeStoredSessionExitState('running');
         persistRestoreSessionSnapshot();
         const persistInterval = window.setInterval(() => {
             persistRestoreSessionSnapshot();
         }, 3000);
         const onBeforeUnload = () => {
             persistRestoreSessionSnapshot();
+            writeStoredSessionExitState('clean');
             StorageService.flush?.();
         };
         window.addEventListener('beforeunload', onBeforeUnload);
@@ -2873,6 +2893,7 @@ const App: React.FC = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => handleTelemetryDraftResult('Win')}
+                                                disabled={telemetryDraftDiscarding}
                                                 className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
                                             >
                                                 Win
@@ -2880,6 +2901,7 @@ const App: React.FC = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => handleTelemetryDraftResult('Loss')}
+                                                disabled={telemetryDraftDiscarding}
                                                 className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
                                             >
                                                 Loss
@@ -2887,17 +2909,27 @@ const App: React.FC = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => handleTelemetryDraftResult('Draw')}
+                                                disabled={telemetryDraftDiscarding}
                                                 className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
                                             >
                                                 Draw
                                             </button>
                                         </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleTelemetryDraftDiscard}
+                                            disabled={telemetryDraftDiscarding}
+                                            className="mt-2 w-full rounded-2xl border border-danger/35 px-3 py-1.5 text-label-sm font-bold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                            {telemetryDraftDiscarding ? 'Discarding...' : 'Discard match'}
+                                        </button>
                                     </>
                                 )}
                                 <div className="mt-3 flex items-center gap-2">
                                     <button
                                         type="button"
                                         onClick={handleTelemetryDraftSmartCapture}
+                                        disabled={telemetryDraftDiscarding}
                                         className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
                                     >
                                         Start Smart Capture
@@ -2905,6 +2937,7 @@ const App: React.FC = () => {
                                     <button
                                         type="button"
                                         onClick={handleTelemetryDraftLater}
+                                        disabled={telemetryDraftDiscarding}
                                         className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
                                     >
                                         Later

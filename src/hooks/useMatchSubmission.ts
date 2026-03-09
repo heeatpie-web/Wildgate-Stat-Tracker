@@ -5,7 +5,7 @@ import { useAppStore } from '../store/useAppStore';
 import { Match } from '../types';
 import confetti from 'canvas-confetti';
 import { useSoundEffects } from '../hooks/useSoundEffects';
-import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured } from '../utils/artifactService';
+import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured, removeMatchArtifact } from '../utils/artifactService';
 import { StorageService } from '../utils/storage';
 import Logger from '../utils/logger';
 import { capTeammateNames } from '../utils/teamLimits';
@@ -102,6 +102,7 @@ const resolveExistingSubmissionMatch = ({
 export const useMatchSubmission = () => {
     const {
         addMatch,
+        deleteMatch,
         setPendingMatchData,
         setPendingPlacement,
         setPendingArtifactType,
@@ -140,6 +141,69 @@ export const useMatchSubmission = () => {
         const known = values.find(v => v && !/^unknown/i.test(v));
         return known || values.find(v => v) || '';
     };
+
+    const clearSubmissionState = useCallback(() => {
+        setShowWizard(null);
+        setPendingMatchData(null);
+        setPendingPlacement(null);
+        setPendingArtifactType("");
+        setPendingKilledBy("");
+        setPendingKilledByShip("");
+        setSelectedOpponents([]);
+        setSessionTeams({});
+        setTimelineEvents([]);
+        setIsMatchInProgress(false);
+        setMatchStartTime(null);
+        setPoiEasy(0);
+        setPoiMedium(0);
+        setPoiEpic(0);
+        setKills({ "AI Legion": 0 });
+        setTimeMin("");
+        setTimeSec("");
+        setSelectedReachModifiers([]);
+        setDamageTaken("");
+        setCurrentNote("");
+        setActiveWeapons({}, false);
+        setCurrentLoadout(null);
+    }, [
+        setActiveWeapons,
+        setCurrentLoadout,
+        setCurrentNote,
+        setDamageTaken,
+        setIsMatchInProgress,
+        setKills,
+        setMatchStartTime,
+        setPendingArtifactType,
+        setPendingKilledBy,
+        setPendingKilledByShip,
+        setPendingMatchData,
+        setPendingPlacement,
+        setPoiEasy,
+        setPoiEpic,
+        setPoiMedium,
+        setSelectedOpponents,
+        setSelectedReachModifiers,
+        setSessionTeams,
+        setShowWizard,
+        setTimeMin,
+        setTimeSec,
+        setTimelineEvents,
+    ]);
+
+    const notifyTelemetryDraftResolved = useCallback((matchId: number) => {
+        window.dispatchEvent(new CustomEvent('telemetry-draft:resolved', {
+            detail: { matchId },
+        }));
+    }, []);
+
+    const notifyArtifactsConsumed = useCallback((matchId: number, artifactPaths: string[]) => {
+        window.dispatchEvent(new CustomEvent('smart-capture:artifacts-consumed', {
+            detail: {
+                matchId,
+                artifactPaths,
+            },
+        }));
+    }, []);
 
     const initiateSubmission = useCallback((result: 'Win' | 'Loss' | 'Draw') => {
         const state = useAppStore.getState();
@@ -551,35 +615,14 @@ export const useMatchSubmission = () => {
                     recordPlayerSighting(p, color, myTeam, explicitOpponents, ship);
                 });
             });
-            setShowWizard(null);
-            setPendingMatchData(null);
-            setPendingPlacement(null);
-            setPendingArtifactType("");
-            setPendingKilledBy("");
-            setPendingKilledByShip("");
-            setSelectedOpponents([]);
-            setSessionTeams({});
-            setTimelineEvents([]);
-            setIsMatchInProgress(false);
-            setMatchStartTime(null);
-            setPoiEasy(0); setPoiMedium(0); setPoiEpic(0); setKills({ "AI Legion": 0 });
-            setTimeMin(""); setTimeSec(""); setSelectedReachModifiers([]);
-            setDamageTaken(""); setCurrentNote(""); setActiveWeapons({}, false);
-            setCurrentLoadout(null);
+            clearSubmissionState();
             if (isTelemetryDraftSource && existingMatch) {
-                window.dispatchEvent(new CustomEvent('telemetry-draft:resolved', {
-                    detail: { matchId: existingMatch.id },
-                }));
+                notifyTelemetryDraftResolved(existingMatch.id);
             }
 
 
             const consumedArtifactPaths = mergeArtifactLists(existingMatch?.artifacts, pendingMatchData.artifacts, bundledArtifacts);
-            window.dispatchEvent(new CustomEvent('smart-capture:artifacts-consumed', {
-                detail: {
-                    matchId: newMatch.id,
-                    artifactPaths: consumedArtifactPaths,
-                },
-            }));
+            notifyArtifactsConsumed(newMatch.id, consumedArtifactPaths);
             window.dispatchEvent(new CustomEvent('recording:match-complete', { detail: { result: submittedResult, matchId: newMatch.id } }));
             if (scopedRepairRemovedLinks > 0) {
                 setToast({
@@ -599,7 +642,7 @@ export const useMatchSubmission = () => {
         } finally {
             setSubmitting(false);
         }
-    }, [submitting, addMatch, setPendingMatchData, setShowWizard, setPendingPlacement, setPendingArtifactType, setPendingKilledBy, setPendingKilledByShip, setSelectedOpponents, setTimelineEvents, setIsMatchInProgress, setMatchStartTime, setPoiEasy, setPoiMedium, setPoiEpic, setKills, setTimeMin, setTimeSec, setSelectedReachModifiers, setDamageTaken, setCurrentNote, setActiveWeapons, setCurrentLoadout, setToast, playVictory, playDefeat, updateMatch, recordPlayerSighting, pickFirstKnown]);
+    }, [submitting, addMatch, clearSubmissionState, notifyArtifactsConsumed, notifyTelemetryDraftResolved, setToast, playVictory, playDefeat, updateMatch, recordPlayerSighting, pickFirstKnown]);
 
     const saveResultDraft = useCallback(async (subType: string) => {
         const state = useAppStore.getState();
@@ -754,25 +797,9 @@ export const useMatchSubmission = () => {
             }
             await StorageService.flush();
 
-            setShowWizard(null);
-            setPendingMatchData(null);
-            setPendingPlacement(null);
-            setPendingArtifactType("");
-            setPendingKilledBy("");
-            setPendingKilledByShip("");
-            setSelectedOpponents([]);
-            setSessionTeams({});
-            setTimelineEvents([]);
-            setIsMatchInProgress(false);
-            setMatchStartTime(null);
-            setPoiEasy(0); setPoiMedium(0); setPoiEpic(0); setKills({ "AI Legion": 0 });
-            setTimeMin(""); setTimeSec(""); setSelectedReachModifiers([]);
-            setDamageTaken(""); setCurrentNote(""); setActiveWeapons({}, false);
-            setCurrentLoadout(null);
+            clearSubmissionState();
             if (isTelemetryDraftSource && existingMatch) {
-                window.dispatchEvent(new CustomEvent('telemetry-draft:resolved', {
-                    detail: { matchId: existingMatch.id },
-                }));
+                notifyTelemetryDraftResolved(existingMatch.id);
             }
 
             window.dispatchEvent(new CustomEvent('recording:match-complete', { detail: { result: savedMatch.result } }));
@@ -783,12 +810,76 @@ export const useMatchSubmission = () => {
         } finally {
             setSubmitting(false);
         }
-    }, [submitting, addMatch, setPendingMatchData, setShowWizard, setPendingPlacement, setPendingArtifactType, setPendingKilledBy, setPendingKilledByShip, setSelectedOpponents, setSessionTeams, setTimelineEvents, setIsMatchInProgress, setMatchStartTime, setPoiEasy, setPoiMedium, setPoiEpic, setKills, setTimeMin, setTimeSec, setSelectedReachModifiers, setDamageTaken, setCurrentNote, setActiveWeapons, setCurrentLoadout, setToast, updateMatch, pickFirstKnown]);
+    }, [submitting, addMatch, clearSubmissionState, notifyTelemetryDraftResolved, setToast, updateMatch, pickFirstKnown]);
+
+    const discardTelemetryDraft = useCallback(async (matchId: number) => {
+        if (!Number.isInteger(matchId) || matchId <= 0 || submitting) return false;
+
+        const state = useAppStore.getState();
+        const draft = Array.isArray(state.matches)
+            ? state.matches.find((match: Match) => match.id === matchId && match.subType === 'Telemetry Draft')
+            : undefined;
+
+        if (!draft) {
+            notifyTelemetryDraftResolved(matchId);
+            clearSubmissionState();
+            setToast({ message: 'Telemetry draft no longer exists. State cleared.', type: 'warning' });
+            return false;
+        }
+
+        try {
+            setSubmitting(true);
+
+            const structuredArtifacts = await getMatchArtifactsStructured(draft.id, draft.artifacts || []);
+            const artifactFiles = Array.isArray(structuredArtifacts?.imageFiles) ? structuredArtifacts.imageFiles : [];
+            const consumedArtifactPaths = mergeArtifactLists(
+                draft.artifacts,
+                Array.isArray(structuredArtifacts?.images) ? structuredArtifacts.images : [],
+            );
+
+            let failedRemovals = 0;
+            for (const artifactFile of artifactFiles) {
+                if (!artifactFile?.artifactId) continue;
+                const removal = await removeMatchArtifact(draft.id, artifactFile.artifactId);
+                if (!removal.success) failedRemovals += 1;
+            }
+
+            deleteMatch(draft.id);
+            clearSubmissionState();
+            await StorageService.flush();
+            notifyTelemetryDraftResolved(draft.id);
+            notifyArtifactsConsumed(draft.id, consumedArtifactPaths);
+
+            if (failedRemovals > 0) {
+                const removedCount = Math.max(0, consumedArtifactPaths.length - failedRemovals);
+                setToast({
+                    message: `Match discarded. Removed ${removedCount} screenshot${removedCount === 1 ? '' : 's'}; ${failedRemovals} could not be deleted.`,
+                    type: 'warning',
+                });
+            } else if (consumedArtifactPaths.length > 0) {
+                setToast({
+                    message: `Match discarded. Removed ${consumedArtifactPaths.length} recorded screenshot${consumedArtifactPaths.length === 1 ? '' : 's'}.`,
+                    type: 'info',
+                });
+            } else {
+                setToast({ message: 'Match discarded. Ready for a fresh start.', type: 'info' });
+            }
+
+            return true;
+        } catch (e) {
+            Logger.error('Submission', 'Discard telemetry draft failed', e);
+            setToast({ message: 'Discard failed.', type: 'error' });
+            return false;
+        } finally {
+            setSubmitting(false);
+        }
+    }, [clearSubmissionState, deleteMatch, notifyArtifactsConsumed, notifyTelemetryDraftResolved, setToast, submitting]);
 
     return {
         initiateSubmission,
         processFinalSubmission,
         saveResultDraft,
+        discardTelemetryDraft,
         submitting
     };
 };

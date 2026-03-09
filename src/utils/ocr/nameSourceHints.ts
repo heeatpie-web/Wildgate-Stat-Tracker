@@ -38,7 +38,8 @@ const toCleanPath = (value: string): string =>
 const toConfidence = (value: unknown): number | null => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return null;
-  return Math.max(0, Math.min(100, Math.round(numeric)));
+  const normalized = numeric > 0 && numeric <= 1 ? numeric * 100 : numeric;
+  return Math.max(0, Math.min(100, Math.round(normalized)));
 };
 
 const NON_DIRECT_CONFIDENCE_SOURCES = new Set(['legacy_default', 'cloud_inferred']);

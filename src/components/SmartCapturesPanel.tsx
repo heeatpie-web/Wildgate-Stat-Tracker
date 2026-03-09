@@ -94,6 +94,7 @@ import {
 } from '../utils/artifactSource';
 import {
     deriveCanonicalRosterCandidateTargetKey,
+    getRosterCandidatePruneIdsForAcceptedName,
     shouldQueueCanonicalRosterCandidate,
 } from '../utils/pendingReviewUtils';
 
@@ -416,6 +417,7 @@ const SmartCapturesPanel: React.FC = () => {
     const setShowResolved = useAppStore(s => s.setShowResolved);
     const addPendingReview = useAppStore(s => s.addPendingReview);
     const pendingReviews = useAppStore(s => s.pendingReviews);
+    const removePendingReviews = useAppStore(s => s.removePendingReviews);
     const queueCollapsed = useAppStore(s => s.queueCollapsed);
     const toggleQueueCollapsed = useAppStore(s => s.toggleQueueCollapsed);
     const rerunRuntimeOptions = useMemo<OCRProcessRuntimeOptions>(() => ({}), []);
@@ -490,6 +492,18 @@ const SmartCapturesPanel: React.FC = () => {
         });
         setToast({ message: `Queued roster candidate: ${normalized}`, type: 'info' });
     }, [addPendingReview, pendingReviews, pilotRegistry, setToast]);
+    const handleAddPilotToRoster = useCallback((rawName: string) => {
+        const normalized = normalizeOcrName(rawName || '');
+        if (!normalized || normalized.length < 2) return;
+        addToRegistry(normalized);
+        const pendingPruneIds = getRosterCandidatePruneIdsForAcceptedName({
+            pendingReviews,
+            acceptedName: normalized,
+        });
+        if (pendingPruneIds.length > 0) {
+            removePendingReviews(pendingPruneIds);
+        }
+    }, [addToRegistry, pendingReviews, removePendingReviews]);
     const dispatchSettingsFocusRequest = useCallback((detail: { tab?: string; search?: string }) => {
         window.dispatchEvent(new CustomEvent('settings:focus-section', { detail }));
     }, []);
@@ -1796,7 +1810,7 @@ const SmartCapturesPanel: React.FC = () => {
                                             return appliedMatch;
                                         }}
                                         onQueueRosterCandidate={queueRosterCandidate}
-                                        onAddPilotToRoster={addToRegistry}
+                                        onAddPilotToRoster={handleAddPilotToRoster}
                                         onDeleteMatch={handleDeleteSingleMatch}
                                         devMode={devMode}
                                     />

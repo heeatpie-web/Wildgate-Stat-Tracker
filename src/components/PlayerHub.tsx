@@ -1,13 +1,13 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
     Users, Search, Star, Edit2, Trash2, ChevronRight, ChevronDown, Merge,
-    Undo2, ScanEye, Swords, Handshake, TrendingUp, X,
+    Undo2, ScanEye, Swords, Handshake, TrendingUp, X, Plus,
     Check, AlertTriangle, Image as ImageIcon
 } from 'lucide-react';
 import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
-import { calculateSocialData } from '../utils/analyticsSocial';
+import type { Match } from '../types';
 import { getShipColor } from '../types';
 import { normalizeOcrName, similarityScore } from '../utils/stringUtils';
 import { buildRosterMergeSuggestionGroups, type RosterMergeSuggestionGroup } from '../utils/rosterMergeSuggestions';
@@ -46,6 +46,28 @@ interface DuplicateCandidate {
     totalEncounters: number;
 }
 
+interface EncounterSnapshot {
+    totalEncounters: number;
+    firstSeen: number | null;
+    lastSeen: number | null;
+    asTeammate: { wins: number; total: number } | null;
+    asOpponent: { wins: number; total: number } | null;
+}
+
+const normalizeNameKey = (value: string | null | undefined): string => (
+    normalizeOcrName(String(value || '')).toLowerCase()
+);
+
+const getMatchOpponentNames = (match: Match): string[] => {
+    const opponentsFromTeams = Array.isArray(match.opponentTeams)
+        ? match.opponentTeams.flatMap((team) => (Array.isArray(team.players) ? team.players : []))
+        : [];
+    return [
+        ...(Array.isArray(match.opponents) ? match.opponents : []),
+        ...opponentsFromTeams,
+    ];
+};
+
 const PlayerHub: React.FC = () => {
     const {
         pilotRegistry,
@@ -78,6 +100,7 @@ const PlayerHub: React.FC = () => {
     const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
     const ocrAutoApplyMinScore = useAppStore(s => s.ocrAutoApplyMinScore);
     const recordOcrAliasCorrection = useAppStore(s => s.recordOcrAliasCorrection);
+    const removeOcrAliasCorrection = useAppStore(s => s.removeOcrAliasCorrection);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [ocrSearchTerm, setOcrSearchTerm] = useState('');
@@ -94,13 +117,12 @@ const PlayerHub: React.FC = () => {
     const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
     const [showFullProfile, setShowFullProfile] = useState(false);
     const [showAliases, setShowAliases] = useState(false);
+    const [newAliasValue, setNewAliasValue] = useState('');
     const [pendingCandidateEdits, setPendingCandidateEdits] = useState<Record<string, string>>({});
     const [sourcePreview, setSourcePreview] = useState<{ src: string; label: string } | null>(null);
     const [possibleMergesExpanded, setPossibleMergesExpanded] = useState(false);
     const hadPossibleMergesRef = useRef(false);
     const mergeKeepNameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    const socialData = useMemo(() => calculateSocialData(matches), [matches]);
     const pendingRosterCandidates = useMemo(() => {
         const seen = new Set<string>();
         return (pendingReviews || [])
@@ -123,67 +145,6 @@ const PlayerHub: React.FC = () => {
             return next;
         });
     }, [pendingRosterCandidates]);
-
-    const teammateMap = useMemo(() => {
-        const map: Record<string, { wins: number; total: number }> = {};
-        socialData.teammates.forEach(([name, stats]) => { map[name] = stats; });
-        return map;
-    }, [socialData]);
-
-    const opponentMap = useMemo(() => {
-        const map: Record<string, { wins: number; total: number }> = {};
-        socialData.opponents.forEach(([name, stats]) => { map[name] = stats; });
-        return map;
-    }, [socialData]);
-
-    const enrichedPilots = useMemo(() => {
-        const unique = Array.from(new Set(pilotRegistry));
-        return unique.map(name => {
-            const profile = playerProfiles?.[name];
-            const tm = teammateMap[name] || null;
-            const op = opponentMap[name] || null;
-            const detail: PlayerDetail = {
-                name,
-                isFavorite: favorites.includes(name),
-                note: pilotNotes[name] || '',
-                asTeammate: tm,
-                asOpponent: op,
-                totalEncounters: (tm?.total || 0) + (op?.total || 0),
-                firstSeen: profile?.firstSeen || null,
-                lastSeen: profile?.lastSeen || null,
-                shipsObserved: profile?.shipsObserved || {},
-                teamsObserved: profile?.teamsObserved || {},
-                ocrSightings: profile?.ocrSightings || 0,
-                manualSightings: profile?.manualSightings || 0,
-                lastOcrConfidence: profile?.lastOcrConfidence ?? null,
-            };
-            return detail;
-        });
-    }, [pilotRegistry, favorites, pilotNotes, teammateMap, opponentMap, playerProfiles]);
-
-    const filtered = useMemo(() => {
-        let list = enrichedPilots;
-        if (searchTerm) {
-            const q = searchTerm.toLowerCase();
-            list = list.filter(p => p.name.toLowerCase().includes(q));
-        }
-        list = [...list].sort((a, b) => {
-            switch (sortMode) {
-                case 'favorites':
-                    if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
-                    return a.name.localeCompare(b.name);
-                case 'alpha':
-                    return a.name.localeCompare(b.name);
-                case 'recent':
-                    return (b.lastSeen || 0) - (a.lastSeen || 0);
-                case 'encounters':
-                    return b.totalEncounters - a.totalEncounters;
-                default:
-                    return 0;
-            }
-        });
-        return list;
-    }, [enrichedPilots, searchTerm, sortMode]);
 
     const filteredOcrCandidates = useMemo(() => {
         const query = ocrSearchTerm.trim().toLowerCase();
@@ -216,6 +177,7 @@ const PlayerHub: React.FC = () => {
     useEffect(() => {
         setShowFullProfile(false);
         setShowAliases(false);
+        setNewAliasValue('');
     }, [selectedPilot]);
 
     useEffect(() => {
@@ -244,75 +206,203 @@ const PlayerHub: React.FC = () => {
         hadPossibleMergesRef.current = true;
     }, [possibleMergeGroups.length]);
 
+    const learnedAliasInsightsByTarget = useMemo(() => {
+        const learnedByTarget = new Map<string, Map<string, AliasInsight>>();
+        Object.values(ocrAliasModel?.entries || {}).forEach((entries) => {
+            entries.forEach((entry) => {
+                const targetKey = normalizeNameKey(entry.targetName);
+                const rawKey = normalizeNameKey(entry.rawKey);
+                if (!targetKey || !rawKey || rawKey === targetKey) return;
+                const targetAliases = learnedByTarget.get(targetKey) || new Map<string, AliasInsight>();
+                const existing = targetAliases.get(rawKey);
+                const count = Number(entry.count || 0);
+                if (existing) {
+                    existing.count = (existing.count || 0) + count;
+                } else {
+                    targetAliases.set(rawKey, {
+                        label: String(entry.rawKey || '').trim(),
+                        count,
+                        source: 'learned',
+                    });
+                }
+                learnedByTarget.set(targetKey, targetAliases);
+            });
+        });
+        const normalized = new Map<string, AliasInsight[]>();
+        learnedByTarget.forEach((entries, targetKey) => {
+            normalized.set(
+                targetKey,
+                Array.from(entries.values()).sort((left, right) => (
+                    (right.count || 0) - (left.count || 0)
+                    || left.label.localeCompare(right.label)
+                ))
+            );
+        });
+        return normalized;
+    }, [ocrAliasModel]);
+
+    const identityKeysByPilot = useMemo(() => {
+        const lookup = new Map<string, Set<string>>();
+        Array.from(new Set(pilotRegistry)).forEach((name) => {
+            const keys = new Set<string>();
+            const normalizedName = normalizeNameKey(name);
+            if (normalizedName) keys.add(normalizedName);
+            (pilotAliases[name] || []).forEach((alias) => {
+                const aliasKey = normalizeNameKey(alias);
+                if (aliasKey && aliasKey !== normalizedName) keys.add(aliasKey);
+            });
+            (learnedAliasInsightsByTarget.get(normalizedName) || []).forEach((alias) => {
+                const aliasKey = normalizeNameKey(alias.label);
+                if (aliasKey && aliasKey !== normalizedName) keys.add(aliasKey);
+            });
+            lookup.set(name, keys);
+        });
+        return lookup;
+    }, [learnedAliasInsightsByTarget, pilotAliases, pilotRegistry]);
+
+    const pilotNamesByIdentityKey = useMemo(() => {
+        const lookup = new Map<string, Set<string>>();
+        identityKeysByPilot.forEach((keys, pilotName) => {
+            keys.forEach((key) => {
+                const pilots = lookup.get(key) || new Set<string>();
+                pilots.add(pilotName);
+                lookup.set(key, pilots);
+            });
+        });
+        return lookup;
+    }, [identityKeysByPilot]);
+
+    const getKnownAliasKeys = useMemo(() => (
+        (name: string): Set<string> => new Set(identityKeysByPilot.get(name) || [])
+    ), [identityKeysByPilot]);
+
+    const encounterSnapshotsByPilot = useMemo(() => {
+        const snapshots = new Map<string, EncounterSnapshot>();
+        Array.from(new Set(pilotRegistry)).forEach((name) => {
+            snapshots.set(name, {
+                totalEncounters: 0,
+                firstSeen: null,
+                lastSeen: null,
+                asTeammate: null,
+                asOpponent: null,
+            });
+        });
+
+        const collectPilots = (names: string[]): Set<string> => {
+            const matched = new Set<string>();
+            names.forEach((name) => {
+                const key = normalizeNameKey(name);
+                if (!key) return;
+                (pilotNamesByIdentityKey.get(key) || new Set<string>()).forEach((pilotName) => matched.add(pilotName));
+            });
+            return matched;
+        };
+
+        const touchSeen = (snapshot: EncounterSnapshot, timestamp: number) => {
+            if (!Number.isFinite(timestamp) || timestamp <= 0) return;
+            snapshot.firstSeen = snapshot.firstSeen === null ? timestamp : Math.min(snapshot.firstSeen, timestamp);
+            snapshot.lastSeen = snapshot.lastSeen === null ? timestamp : Math.max(snapshot.lastSeen, timestamp);
+        };
+
+        (matches || [])
+            .filter((match) => match?.result !== 'Ongoing')
+            .forEach((match) => {
+                const timestamp = Number(match?.timestamp || 0);
+                const teammatePilots = collectPilots(Array.isArray(match.teammates) ? match.teammates : []);
+                const opponentPilots = collectPilots(getMatchOpponentNames(match));
+
+                teammatePilots.forEach((pilotName) => {
+                    const snapshot = snapshots.get(pilotName);
+                    if (!snapshot) return;
+                    snapshot.totalEncounters += 1;
+                    snapshot.asTeammate = snapshot.asTeammate || { wins: 0, total: 0 };
+                    snapshot.asTeammate.total += 1;
+                    if (match.result === 'Win') snapshot.asTeammate.wins += 1;
+                    touchSeen(snapshot, timestamp);
+                });
+
+                opponentPilots.forEach((pilotName) => {
+                    const snapshot = snapshots.get(pilotName);
+                    if (!snapshot) return;
+                    snapshot.totalEncounters += 1;
+                    snapshot.asOpponent = snapshot.asOpponent || { wins: 0, total: 0 };
+                    snapshot.asOpponent.total += 1;
+                    if (match.result === 'Win') snapshot.asOpponent.wins += 1;
+                    touchSeen(snapshot, timestamp);
+                });
+            });
+
+        return snapshots;
+    }, [matches, pilotNamesByIdentityKey, pilotRegistry]);
+
+    const enrichedPilots = useMemo(() => {
+        const unique = Array.from(new Set(pilotRegistry));
+        return unique.map(name => {
+            const profile = playerProfiles?.[name];
+            const encounterSnapshot = encounterSnapshotsByPilot.get(name);
+            const detail: PlayerDetail = {
+                name,
+                isFavorite: favorites.includes(name),
+                note: pilotNotes[name] || '',
+                asTeammate: encounterSnapshot?.asTeammate || null,
+                asOpponent: encounterSnapshot?.asOpponent || null,
+                totalEncounters: encounterSnapshot?.totalEncounters || 0,
+                firstSeen: encounterSnapshot?.firstSeen ?? profile?.firstSeen ?? null,
+                lastSeen: encounterSnapshot?.lastSeen ?? profile?.lastSeen ?? null,
+                shipsObserved: profile?.shipsObserved || {},
+                teamsObserved: profile?.teamsObserved || {},
+                ocrSightings: profile?.ocrSightings || 0,
+                manualSightings: profile?.manualSightings || 0,
+                lastOcrConfidence: profile?.lastOcrConfidence ?? null,
+            };
+            return detail;
+        });
+    }, [encounterSnapshotsByPilot, favorites, pilotNotes, pilotRegistry, playerProfiles]);
+
+    const filtered = useMemo(() => {
+        let list = enrichedPilots;
+        if (searchTerm) {
+            const q = searchTerm.toLowerCase();
+            list = list.filter(p => p.name.toLowerCase().includes(q));
+        }
+        list = [...list].sort((a, b) => {
+            switch (sortMode) {
+                case 'favorites':
+                    if (a.isFavorite !== b.isFavorite) return a.isFavorite ? -1 : 1;
+                    return a.name.localeCompare(b.name);
+                case 'alpha':
+                    return a.name.localeCompare(b.name);
+                case 'recent':
+                    return (b.lastSeen || 0) - (a.lastSeen || 0);
+                case 'encounters':
+                    return b.totalEncounters - a.totalEncounters;
+                default:
+                    return 0;
+            }
+        });
+        return list;
+    }, [enrichedPilots, searchTerm, sortMode]);
+
     const selected = useMemo(() => {
         if (!selectedPilot) return null;
         return enrichedPilots.find(p => p.name === selectedPilot) || null;
     }, [selectedPilot, enrichedPilots]);
 
-    const getKnownAliasKeys = useMemo(() => {
-        const learnedByTarget = new Map<string, Set<string>>();
-        Object.values(ocrAliasModel?.entries || {}).forEach((entries) => {
-            entries.forEach((entry) => {
-                const targetKey = normalizeOcrName(entry.targetName || '').toLowerCase();
-                const rawKey = normalizeOcrName(entry.rawKey || '').toLowerCase();
-                if (!targetKey || !rawKey || rawKey === targetKey) return;
-                const current = learnedByTarget.get(targetKey) || new Set<string>();
-                current.add(rawKey);
-                learnedByTarget.set(targetKey, current);
-            });
-        });
-        return (name: string): Set<string> => {
-            const normalizedName = normalizeOcrName(name || '').toLowerCase();
-            const keys = new Set<string>();
-            if (!normalizedName) return keys;
-            keys.add(normalizedName);
-            (pilotAliases[name] || []).forEach((alias) => {
-                const aliasKey = normalizeOcrName(alias || '').toLowerCase();
-                if (aliasKey && aliasKey !== normalizedName) keys.add(aliasKey);
-            });
-            (learnedByTarget.get(normalizedName) || new Set<string>()).forEach((aliasKey) => keys.add(aliasKey));
-            return keys;
-        };
-    }, [ocrAliasModel, pilotAliases]);
-
     const selectedAliasInsights = useMemo(() => {
         if (!selected) return { manual: [] as AliasInsight[], learned: [] as AliasInsight[] };
-        const selectedKey = normalizeOcrName(selected.name || '').toLowerCase();
+        const selectedKey = normalizeNameKey(selected.name);
         const manual = (pilotAliases[selected.name] || [])
             .map((alias) => String(alias || '').trim())
             .filter(Boolean)
             .filter((alias, index, list) => (
-                normalizeOcrName(alias).toLowerCase() !== selectedKey
-                && list.findIndex((candidate) => normalizeOcrName(candidate).toLowerCase() === normalizeOcrName(alias).toLowerCase()) === index
+                normalizeNameKey(alias) !== selectedKey
+                && list.findIndex((candidate) => normalizeNameKey(candidate) === normalizeNameKey(alias)) === index
             ))
             .map((alias) => ({ label: alias, source: 'manual' as const }));
-
-        const learnedMap = new Map<string, AliasInsight>();
-        Object.values(ocrAliasModel?.entries || {}).forEach((entries) => {
-            entries.forEach((entry) => {
-                if (normalizeOcrName(entry.targetName || '').toLowerCase() !== selectedKey) return;
-                const rawKey = normalizeOcrName(entry.rawKey || '').toLowerCase();
-                if (!rawKey || rawKey === selectedKey) return;
-                const existing = learnedMap.get(rawKey);
-                const count = Number(entry.count || 0);
-                if (!existing) {
-                    learnedMap.set(rawKey, {
-                        label: entry.rawKey,
-                        count,
-                        source: 'learned',
-                    });
-                    return;
-                }
-                existing.count = (existing.count || 0) + count;
-            });
-        });
-
-        const learned = Array.from(learnedMap.values())
-            .filter((entry) => !manual.some((alias) => normalizeOcrName(alias.label).toLowerCase() === normalizeOcrName(entry.label).toLowerCase()))
-            .sort((left, right) => (right.count || 0) - (left.count || 0) || left.label.localeCompare(right.label));
-
+        const learned = (learnedAliasInsightsByTarget.get(selectedKey) || [])
+            .filter((entry) => !manual.some((alias) => normalizeNameKey(alias.label) === normalizeNameKey(entry.label)));
         return { manual, learned };
-    }, [ocrAliasModel, pilotAliases, selected]);
+    }, [learnedAliasInsightsByTarget, pilotAliases, selected]);
 
     const duplicateCandidates = useMemo(() => {
         if (!selected) return [] as DuplicateCandidate[];
@@ -500,6 +590,37 @@ const PlayerHub: React.FC = () => {
             if (selectedPilot === renaming) setSelectedPilot(renameValue.trim());
         }
         setRenaming(null);
+    };
+
+    const handleAddAlias = (kind: 'manual' | 'learned') => {
+        if (!selected) return;
+        const trimmedAlias = normalizeOcrName(newAliasValue);
+        if (!trimmedAlias) return;
+        const trimmedKey = normalizeNameKey(trimmedAlias);
+        const selectedKey = normalizeNameKey(selected.name);
+        if (!trimmedKey || trimmedKey === selectedKey) return;
+        const manualExists = selectedAliasInsights.manual.some((alias) => normalizeNameKey(alias.label) === trimmedKey);
+        const learnedExists = selectedAliasInsights.learned.some((alias) => normalizeNameKey(alias.label) === trimmedKey);
+        if ((kind === 'manual' && manualExists) || (kind === 'learned' && learnedExists)) return;
+        if (kind === 'manual') {
+            addPilotAlias(selected.name, trimmedAlias);
+        }
+        recordOcrAliasCorrection(trimmedAlias, selected.name, {
+            source: 'manual_correction',
+            context: 'unknown',
+            confidenceWeight: 1,
+        });
+        setNewAliasValue('');
+        setShowAliases(true);
+    };
+
+    const handleRemoveAlias = (pilotName: string, alias: string) => {
+        removePilotAlias(pilotName, alias);
+        removeOcrAliasCorrection(alias, pilotName);
+    };
+
+    const handleRemoveLearnedVariant = (pilotName: string, alias: string) => {
+        removeOcrAliasCorrection(alias, pilotName);
     };
 
     const handleMerge = () => {
@@ -1208,6 +1329,11 @@ const PlayerHub: React.FC = () => {
                                                     {selected.totalEncounters} encounters
                                                 </span>
                                             )}
+                                            {selected.lastSeen && (
+                                                <span className="text-label-xs text-md-sys-on-surface/40">
+                                                    · Last seen {timeAgo(selected.lastSeen)}
+                                                </span>
+                                            )}
                                             {selected.firstSeen && (
                                                 <span className="text-label-xs text-md-sys-on-surface/40">
                                                     · First seen {timeAgo(selected.firstSeen)}
@@ -1333,35 +1459,102 @@ const PlayerHub: React.FC = () => {
                                 >
                                     Back to Recording
                                 </button>
-                                <div className="mt-2">
+                                <div className="mt-2 w-full">
                                     <button
                                         type="button"
                                         onClick={() => setShowAliases(prev => !prev)}
                                         className="flex items-center gap-1 text-label-xs font-bold uppercase tracking-wide text-md-sys-primary hover:text-md-sys-primary/80"
                                     >
                                         <ChevronDown size={12} className={`transition-transform ${showAliases ? 'rotate-180' : ''}`} />
-                                        OCR Aliases
+                                        Manage OCR Aliases
                                     </button>
                                     {showAliases && (
-                                        <div className="mt-2 flex flex-wrap gap-1 min-h-[24px]">
-                                            {(pilotAliases[selected.name] || []).length === 0 ? (
-                                                <span className="text-label-xs text-md-sys-on-surface/40">No aliases yet.</span>
-                                            ) : (pilotAliases[selected.name] || []).map(alias => (
-                                                <span
-                                                    key={alias}
-                                                    className="flex items-center gap-1 px-2 py-0.5 rounded-control bg-md-sys-primary/10 text-md-sys-primary text-label-xs font-semibold"
+                                        <div className="mt-2 rounded-xl border border-md-sys-outline/12 bg-md-sys-on-surface/[0.04] p-3">
+                                            <div className="grid gap-3 md:grid-cols-2">
+                                                <div>
+                                                    <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/48 mb-2">
+                                                        Former names
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-1 min-h-[24px]">
+                                                        {selectedAliasInsights.manual.length === 0 ? (
+                                                            <span className="text-label-xs text-md-sys-on-surface/40">No former names yet.</span>
+                                                        ) : selectedAliasInsights.manual.map((alias) => (
+                                                            <span
+                                                                key={`manual-manage-${alias.label}`}
+                                                                className="flex items-center gap-1 px-2 py-0.5 rounded-control bg-md-sys-primary/10 text-md-sys-primary text-label-xs font-semibold"
+                                                            >
+                                                                {alias.label}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleRemoveAlias(selected.name, alias.label)}
+                                                                    className="hover:text-danger"
+                                                                    aria-label={`Remove former name ${alias.label}`}
+                                                                >
+                                                                    <X size={10} />
+                                                                </button>
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-label-xs font-bold uppercase tracking-wide text-md-sys-on-surface/48 mb-2">
+                                                        OCR variants
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-1 min-h-[24px]">
+                                                        {selectedAliasInsights.learned.length === 0 ? (
+                                                            <span className="text-label-xs text-md-sys-on-surface/40">No OCR variants yet.</span>
+                                                        ) : selectedAliasInsights.learned.map((alias) => (
+                                                            <span
+                                                                key={`learned-manage-${alias.label}`}
+                                                                className="flex items-center gap-1 px-2 py-0.5 rounded-control bg-info-soft text-info text-label-xs font-semibold border border-info/15"
+                                                            >
+                                                                {alias.label}
+                                                                {alias.count ? <span className="opacity-65">x{alias.count}</span> : null}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleRemoveLearnedVariant(selected.name, alias.label)}
+                                                                    className="hover:text-danger"
+                                                                    aria-label={`Remove OCR variant ${alias.label}`}
+                                                                >
+                                                                    <X size={10} />
+                                                                </button>
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="mt-3 flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={newAliasValue}
+                                                    onChange={(event) => setNewAliasValue(event.target.value)}
+                                                    onKeyDown={(event) => {
+                                                        if (event.key === 'Enter') handleAddAlias('manual');
+                                                    }}
+                                                    placeholder="Add former name or OCR variant..."
+                                                    className="flex-1 h-8 md3-textfield--outlined text-label-sm outline-none px-2"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleAddAlias('manual')}
+                                                    disabled={!newAliasValue.trim()}
+                                                    aria-label="Add former name"
+                                                    className="h-8 px-2 md3-btn-tonal rounded-control text-label-sm font-bold flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
-                                                    {alias}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => removePilotAlias(selected.name, alias)}
-                                                        className="hover:text-danger"
-                                                        aria-label={`Remove alias ${alias}`}
-                                                    >
-                                                        <X size={10} />
-                                                    </button>
-                                                </span>
-                                            ))}
+                                                    <Plus size={12} />
+                                                    Add Former Name
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleAddAlias('learned')}
+                                                    disabled={!newAliasValue.trim()}
+                                                    aria-label="Add OCR variant"
+                                                    className="h-8 px-2 rounded-control text-label-sm font-bold flex items-center gap-1 bg-info-soft text-info border border-info/15 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    <ScanEye size={12} />
+                                                    Add OCR Variant
+                                                </button>
+                                            </div>
                                         </div>
                                     )}
                                 </div>

@@ -5,7 +5,7 @@ import { sampleRegion } from './colorDetection';
 import { cropImageDataUrl, preprocessImage } from './imageUtils';
 import { groupWordsIntoLines, runNativeOCR, detectModifiers } from './ocrUtils';
 import { getElectronAPI } from '../electronAPI';
-import { normalizeOcrName } from '../stringUtils';
+import { normalizeOcrName, normalizePipeSpacerPlayerName } from '../stringUtils';
 
 export const processLobbyScreenshot = async (
     imageDataUrl: string,
@@ -121,7 +121,8 @@ export const processLobbyScreenshot = async (
                 .replace(/PARTY VOICE/gi, '')
                 .replace(/[\]\[]+$/g, '');
 
-            const nameCandidate = normalizeOcrName(cleanText.replace(/[^\w\s\u00C0-\u00FF\u3000-\u30FF\u4E00-\u9FA5]/g, '').trim());
+            const specialPipeName = normalizePipeSpacerPlayerName(cleanText);
+            const nameCandidate = specialPipeName || normalizeOcrName(cleanText.replace(/[^\w\s\u00C0-\u00FF\u3000-\u30FF\u4E00-\u9FA5]/g, '').trim());
 
             return {
                 id: idx,

@@ -152,7 +152,8 @@ const NOISE_WORDS = new Set([
   'WAYPOINT', 'COMPASS', 'MARKER', 'MINIMAP', 'ICON',
   'GATE', 'VAULT', 'STORM', 'SWARM', 'SWARMS',
   'RANK', 'LEVEL', 'PRESTIGE', 'PROGRESS',
-  'SMALL CREW BONUS', 'REDUCED FIRES', 'REDUCEDFIRES', 'SMALLCREWBONUS',
+  'SMALL CREW BONUS', 'SMALLCREWBONUS', 'SMALL CREWBONUS', 'SMALLCREW BONUS',
+  'REDUCED FIRES', 'REDUCEDFIRES', 'REDUCED FIRED', 'REDUCEDFIRED',
 ]);
 const UI_NOISE_PHRASES = [
   'CREW HUB',
@@ -166,12 +167,26 @@ const UI_NOISE_PHRASES = [
   'VOICE CHANNEL',
   'YOUR VOICE',
   'SMALL CREW BONUS',
+  'SMALLCREWBONUS',
   'REDUCED FIRES',
+  'REDUCEDFIRES',
+  'REDUCED FIRED',
+  'REDUCEDFIRED',
 ];
 const SAME_COLOR_BASE_GAP_MULTIPLIER = 1.35;
 const SAME_COLOR_SPECTATOR_GAP_MULTIPLIER = 0.95;
 const SAME_COLOR_MERGE_GAP_MULTIPLIER = 2.2;
 const MAX_SPECTATOR_GAP_SLOTS = 2;
+const UNDERCREW_SHIP_BONUS_PHRASES = new Set([
+  'SMALL CREW BONUS',
+  'SMALLCREWBONUS',
+  'SMALL CREWBONUS',
+  'SMALLCREW BONUS',
+  'REDUCED FIRES',
+  'REDUCEDFIRES',
+  'REDUCED FIRED',
+  'REDUCEDFIRED',
+]);
 
 function containsUiNoisePhrase(input) {
   const normalized = String(input || '')
@@ -189,8 +204,7 @@ function containsUnderCrewBonusPhrase(input) {
     .replace(/\s+/g, ' ')
     .trim();
   if (!normalized) return false;
-  return normalized === 'SMALL CREW BONUS' || normalized === 'REDUCED FIRES'
-    || normalized === 'SMALLCREWBONUS' || normalized === 'REDUCEDFIRES';
+  return UNDERCREW_SHIP_BONUS_PHRASES.has(normalized);
 }
 
 function countAnchorsBetween(anchorYs, a, b) {
@@ -1857,6 +1871,10 @@ function extractPlayerNameFromLine(words) {
   // This adds merged candidates (e.g. "Sticks and Stones") alongside the originals
   // so the best-scoring name can win whether it's a single token or multi-word.
   const wordsWithMultiWord = assembleMultiWordNames(words);
+  const specialPipeName = normalizePipeSpacerPlayerName(
+    wordsWithMultiWord.map((word) => String(word?.text || '')).join(' ')
+  );
+  if (specialPipeName) return specialPipeName;
 
   // Pre-pass: detect rank/prestige prefix tokens like "[6°]", "[7*]" before the
   // general noise filters discard them (bracket-containing tokens are skipped by
@@ -2059,6 +2077,7 @@ function getLineMinX(words) {
  */
 function scoreAsPlayerName(text) {
   if (!text || text.length < 3) return 0;
+  if (normalizePipeSpacerPlayerName(text)) return 42;
   if (containsUnderCrewBonusPhrase(text) || containsUiNoisePhrase(text)) return 0;
 
   let score = 0;
@@ -2120,8 +2139,16 @@ function splitCamelCaseFallback(name) {
     .trim();
 }
 
+const PIPE_SPACER_PLAYER_NAME = '| |';
+function normalizePipeSpacerPlayerName(value) {
+  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+  return /^\|+\s+\|+$/.test(normalized) ? PIPE_SPACER_PLAYER_NAME : '';
+}
+
 function cleanupPlayerName(name) {
   if (!name) return '';
+  const specialPipeName = normalizePipeSpacerPlayerName(name);
+  if (specialPipeName) return specialPipeName;
 
   let cleaned = name
     // Common OCR substitutions
@@ -2233,6 +2260,8 @@ function stripLikelyLeftPanelSlotDigitSuffix(name) {
 
 function sanitizeLeftPanelPlayerName(name) {
   if (!name) return null;
+  const specialPipeName = normalizePipeSpacerPlayerName(name);
+  if (specialPipeName) return specialPipeName;
 
   const UI_EDGE_TOKENS = new Set([
     'PARTY', 'VOICE', 'TEAM', 'PUSH', 'TALK', 'CHANNEL', 'MUTE', 'DEAFEN',
@@ -2339,6 +2368,7 @@ function repairKnownLeftPanelMisreads(name) {
  * - Length 3-25 characters
  */
 function isValidPlayerName(name) {
+  if (normalizePipeSpacerPlayerName(name)) return true;
   if (!name || name.length < 4 || name.length > 25) return false;
   if (containsUnderCrewBonusPhrase(name)) return false;
 
@@ -2386,6 +2416,7 @@ function isValidPlayerName(name) {
 }
 
 function isValidOpponentName(name) {
+  if (normalizePipeSpacerPlayerName(name)) return true;
   if (!name || name.length < 4 || name.length > 28) return false;
   if (containsUnderCrewBonusPhrase(name)) return false;
   if (/^[0-9]/.test(name)) {
@@ -2485,6 +2516,7 @@ function isTeamName(text) {
 }
 
 function normalizeNameKey(input) {
+  if (normalizePipeSpacerPlayerName(input)) return 'pipe-spacer-player';
   return (input || '').toLowerCase().replace(/[^a-z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/g, '');
 }
 

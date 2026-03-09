@@ -6,7 +6,20 @@ import { sampleRegion } from './colorDetection';
 import { preprocessImage } from './imageUtils';
 import { groupWordsIntoLines, runNativeOCR, detectModifiers } from './ocrUtils';
 import { getElectronAPI } from '../electronAPI';
-import { normalizeOcrName } from '../stringUtils';
+import { normalizeOcrName, normalizePipeSpacerPlayerName } from '../stringUtils';
+
+export const normalizeTacticalPlayerName = (rawName: string): string => {
+    const specialPipeName = normalizePipeSpacerPlayerName(rawName);
+    if (specialPipeName) return specialPipeName;
+
+    const normalized = normalizeOcrName(String(rawName || ''));
+    if (normalized.length < 3) return '';
+
+    const letterMatches = normalized.match(/[a-zA-Z\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/g) || [];
+    if (letterMatches.length < 2) return '';
+
+    return normalized;
+};
 
 export const processTacticalScreenshot = async (
     imageDataUrl: string,
@@ -134,8 +147,10 @@ export const processTacticalScreenshot = async (
             }
 
             if (color !== 'Unknown' || currentTeamHeader) {
+                const normalizedName = normalizeTacticalPlayerName(nameLine.text);
+                if (!normalizedName) return;
                 players.push({
-                    name: normalizeOcrName(nameLine.text),
+                    name: normalizedName,
                     teamColor: color as TeamColor,
                     teamName: currentTeamHeader || 'Unknown',
                     confidence: nameLine.words[0]?.confidence || 1.0,

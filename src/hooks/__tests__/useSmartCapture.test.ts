@@ -17,6 +17,10 @@ const mockStoreState: Record<string, unknown> = {
   playerProfiles: {},
 };
 
+const playCaptureMock = vi.fn();
+const playSuccessMock = vi.fn();
+const playErrorMock = vi.fn();
+
 vi.mock('../../utils/electronBridge', () => ({
   captureGameWindow: vi.fn().mockResolvedValue(undefined),
   ocrProcessCapture: vi.fn().mockResolvedValue({}),
@@ -47,7 +51,7 @@ vi.mock('../../store/useAppStore', () => ({
 }));
 
 vi.mock('../../hooks/useSoundEffects', () => ({
-  useSoundEffects: () => ({ playSuccess: vi.fn(), playError: vi.fn() }),
+  useSoundEffects: () => ({ playCapture: playCaptureMock, playSuccess: playSuccessMock, playError: playErrorMock }),
 }));
 
 vi.mock('../../utils/stringUtils', () => ({
@@ -184,6 +188,29 @@ describe('useSmartCapture', () => {
     });
 
     expect(result.current[0].error).toBe('Smart Capture is only available in the desktop app');
+  });
+
+  it('plays the capture cue immediately after a screenshot is taken', async () => {
+    vi.mocked(isElectron).mockReturnValue(true);
+    vi.mocked(captureGameWindow).mockResolvedValue({
+      success: true,
+      imageBase64: 'ZmFrZQ==',
+    });
+    vi.mocked(saveScreenshot).mockResolvedValue({
+      success: true,
+      filePath: 'C:\\captures\\capture-sound.png',
+      filename: 'capture-sound.png',
+    });
+
+    const { result } = renderHook(() => useSmartCapture());
+    const [, actions] = result.current;
+
+    await act(async () => {
+      await actions.captureOnly('match-sound');
+    });
+
+    expect(playCaptureMock).toHaveBeenCalledTimes(1);
+    expect(playSuccessMock).not.toHaveBeenCalled();
   });
 
   it('processStoredImage marks capture processed and stages pending data', async () => {

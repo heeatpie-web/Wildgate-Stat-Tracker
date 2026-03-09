@@ -89,4 +89,27 @@ describe('buildOcrNameSourceMap', () => {
     expect(confidenceMap.fallbackonly).toBeUndefined();
     expect(confidenceMap.cloudonly).toBeUndefined();
   });
+
+  it('scales fractional OCR confidences to whole-number percentages', () => {
+    const confidenceMap = buildOcrNameConfidenceMapFromExtractedData({
+      teammates: [
+        { name: 'Tone', confidence: 0.71 },
+        { name: 'tone', confidence: 0.96 },
+      ],
+      opponentTeams: [
+        {
+          teamName: 'Red Team',
+          shipType: 'Hunter',
+          color: 'red',
+          players: [
+            { name: 'EnemyOne', confidence: 0.88 },
+          ],
+          confidence: 0.77,
+        },
+      ],
+    } as any);
+
+    expect(confidenceMap.tone).toBe(96);
+    expect(confidenceMap.enemyone).toBe(88);
+  });
 });

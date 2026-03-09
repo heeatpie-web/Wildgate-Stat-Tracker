@@ -1,36 +1,59 @@
 /**
  * @module useSoundEffects
  * Provides synthesized audio feedback callbacks (Web Audio API).
- * Returns playStart, playWin, playLoss. Respects the soundEnabled preference.
+ * Returns workflow sound callbacks. Respects the soundEnabled preference.
  */
 import { useCallback } from 'react';
 import { useAppStore } from '../store/useAppStore';
 
+let sharedAudioContext: AudioContext | null = null;
+
+const getAudioContext = (): AudioContext | null => {
+    const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextCtor) return null;
+    if (!sharedAudioContext) sharedAudioContext = new AudioContextCtor();
+    return sharedAudioContext;
+};
+
 export const useSoundEffects = () => {
-    const { soundEnabled } = useAppStore();
+    const soundEnabled = useAppStore((state) => state.soundEnabled);
 
     const playTone = useCallback((freq: number, type: 'sine' | 'square' | 'sawtooth' | 'triangle', duration: number, delay = 0) => {
         if (!soundEnabled) return;
-        
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AudioContext) return;
-        
-        const ctx = new AudioContext();
+
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        if (ctx.state === 'suspended') {
+            void ctx.resume().catch(() => undefined);
+        }
+
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
+        const startAt = ctx.currentTime + Math.max(0, delay);
+        const stopAt = startAt + duration;
 
         osc.type = type;
-        osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
-        
-        gain.gain.setValueAtTime(0.1, ctx.currentTime + delay);
-        gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + delay + duration);
+        osc.frequency.setValueAtTime(freq, startAt);
+
+        gain.gain.setValueAtTime(0.0001, startAt);
+        gain.gain.exponentialRampToValueAtTime(0.11, startAt + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.00001, stopAt);
 
         osc.connect(gain);
         gain.connect(ctx.destination);
+        osc.onended = () => {
+            osc.disconnect();
+            gain.disconnect();
+        };
 
-        osc.start(ctx.currentTime + delay);
-        osc.stop(ctx.currentTime + delay + duration);
-    }, []);
+        osc.start(startAt);
+        osc.stop(stopAt);
+    }, [soundEnabled]);
+
+    const playCapture = useCallback(() => {
+        playTone(1046.5, 'triangle', 0.045);
+        playTone(783.99, 'triangle', 0.08, 0.035);
+    }, [playTone]);
 
     const playStart = useCallback(() => {
         playTone(440, 'sine', 0.3); // A4
@@ -71,5 +94,5 @@ export const useSoundEffects = () => {
         playTone(440, 'triangle', 0.5, 0.3);
     }, [playTone]);
 
-    return { playStart, playVictory, playDefeat, playClick, playSuccess, playError, playEnd };
+    return { playCapture, playStart, playVictory, playDefeat, playClick, playSuccess, playError, playEnd };
 };

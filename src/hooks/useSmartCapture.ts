@@ -103,7 +103,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
   const ocrAliasModel = useAppStore(s => s.ocrAliasModel);
   const playerProfiles = useAppStore(s => s.playerProfiles);
   const { visionStatus, setVisionStatus, setToast } = useUIState();
-  const { playSuccess, playError: playSoundError } = useSoundEffects();
+  const { playCapture, playSuccess, playError: playSoundError } = useSoundEffects();
   const {
     setTimeMin, setTimeSec, setDamageTaken,
     setSelectedReachModifiers,
@@ -991,6 +991,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     if (!captureResult.success || !captureResult.imageBase64) {
       throw new Error(captureResult.error || 'Failed to capture game window');
     }
+    playCapture();
 
     // Auto-detect the screen type first. If it's MatchStats/Lobby/Tactical/Social, apply immediately.
     // If Unknown, fall back to the OCR pipeline and queue the result for Review & Apply.
@@ -1053,7 +1054,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
     }
 
     return ocrResult.data;
-  }, [applySmartScanResult, assessCaptureQuality, ocrMode, ocrRegions, ocrRuntimeOptions, refineQualityFromOcr]);
+  }, [applySmartScanResult, assessCaptureQuality, ocrMode, ocrRegions, ocrRuntimeOptions, playCapture, refineQualityFromOcr]);
 
   const captureOnly = useCallback(async (matchId?: string | number | null): Promise<SavedCapture | null> => {
     if (!isElectron()) {
@@ -1073,6 +1074,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       if (!captureResult.success || !captureResult.imageBase64) {
         throw new Error(captureResult.error || 'Failed to capture game window');
       }
+      playCapture();
       setQualityHint(assessCaptureQuality(captureResult.imageBase64));
 
       const resolvedMatchId = normalizeMatchScope(matchId);
@@ -1095,7 +1097,6 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
         return next;
       });
       syncArtifactsToMatchScope(resolvedMatchId, [saved.filePath]);
-      playSuccess();
       return entry;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Capture failed';
@@ -1106,7 +1107,7 @@ export function useSmartCapture(): [SmartCaptureState, SmartCaptureActions] {
       setVisionStatus('idle');
       captureInFlightRef.current = false;
     }
-  }, [playSuccess, playSoundError, setVisionStatus, assessCaptureQuality, normalizeMatchScope, syncArtifactsToMatchScope]);
+  }, [playCapture, playSoundError, setVisionStatus, assessCaptureQuality, normalizeMatchScope, syncArtifactsToMatchScope]);
 
   const processStoredImage = useCallback(async (filePath: string, activeUser?: string | null) => {
     setVisionStatus('processing');

@@ -897,6 +897,7 @@ function resolveAppIconPath() {
 let previousBounds = { x: 0, y: 0, width: 1440, height: 900 };
 let lastOverlayBounds = null;
 let currentOverlayStyle = 'compact';
+let windowVisibilityAnimation = null;
 const DEFAULT_MIN_WINDOW_BOUNDS = { width: 1200, height: 768 };
 const OVERLAY_MIN_WINDOW_BOUNDS = {
   compact: { width: 420, height: 520 },
@@ -905,6 +906,83 @@ const OVERLAY_MIN_WINDOW_BOUNDS = {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function clearWindowVisibilityAnimation() {
+  if (windowVisibilityAnimation) {
+    clearInterval(windowVisibilityAnimation);
+    windowVisibilityAnimation = null;
+  }
+}
+
+function animateWindowOpacity(targetOpacity, { durationMs = 140, onComplete } = {}) {
+  if (!win || win.isDestroyed()) return;
+  clearWindowVisibilityAnimation();
+
+  const startOpacity = typeof win.getOpacity === 'function' ? win.getOpacity() : 1;
+  if (Math.abs(startOpacity - targetOpacity) < 0.01) {
+    try { win.setOpacity(targetOpacity); } catch { /* no-op */ }
+    if (typeof onComplete === 'function') onComplete();
+    return;
+  }
+
+  const startTime = Date.now();
+  windowVisibilityAnimation = setInterval(() => {
+    if (!win || win.isDestroyed()) {
+      clearWindowVisibilityAnimation();
+      return;
+    }
+    const elapsed = Date.now() - startTime;
+    const progress = Math.min(1, elapsed / durationMs);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const nextOpacity = startOpacity + ((targetOpacity - startOpacity) * eased);
+    try {
+      win.setOpacity(Math.max(0, Math.min(1, nextOpacity)));
+    } catch {
+      clearWindowVisibilityAnimation();
+      if (typeof onComplete === 'function') onComplete();
+      return;
+    }
+    if (progress >= 1) {
+      clearWindowVisibilityAnimation();
+      if (typeof onComplete === 'function') onComplete();
+    }
+  }, 16);
+}
+
+function showWindowSmooth({ focus = true, forceDashboard = false } = {}) {
+  if (!win || win.isDestroyed()) return;
+  clearWindowVisibilityAnimation();
+  if (win.isMinimized()) win.restore();
+  try { win.setOpacity(0); } catch { /* no-op */ }
+  if (!win.isVisible()) win.show();
+  if (forceDashboard) {
+    win.setSkipTaskbar(false);
+    win.webContents.send('hotkey-toggle-overlay', false);
+  }
+  win.setAlwaysOnTop(true, 'screen-saver');
+  if (focus) win.focus();
+  animateWindowOpacity(1);
+}
+
+function hideWindowSmooth() {
+  if (!win || win.isDestroyed() || !win.isVisible()) return;
+  animateWindowOpacity(0, {
+    onComplete: () => {
+      if (!win || win.isDestroyed()) return;
+      win.hide();
+      try { win.setOpacity(1); } catch { /* no-op */ }
+    },
+  });
+}
+
+function toggleWindowVisibilitySmooth({ focusOnShow = true } = {}) {
+  if (!win || win.isDestroyed()) return;
+  if (win.isVisible() && !win.isMinimized()) {
+    hideWindowSmooth();
+    return;
+  }
+  showWindowSmooth({ focus: focusOnShow });
 }
 
 function getOverlayBoundsForStyle(style, workAreaSize) {
@@ -1197,17 +1275,14 @@ function createTray() {
         {
           label: 'Show Dashboard', click: () => {
             if (win) {
-              win.show();
-              win.setSkipTaskbar(false);
-              win.webContents.send('hotkey-toggle-overlay', false); // Ensure overlay is off
+              showWindowSmooth({ focus: true, forceDashboard: true });
             }
           }
         },
         {
           label: 'Toggle Overlay (F9)', click: () => {
             if (win) {
-              if (win.isVisible()) win.hide();
-              else win.show();
+              toggleWindowVisibilitySmooth({ focusOnShow: true });
             }
           }
         },
@@ -1224,8 +1299,7 @@ function createTray() {
 
       tray.on('double-click', () => {
         if (win) {
-          if (win.isVisible()) win.hide();
-          else win.show();
+          toggleWindowVisibilitySmooth({ focusOnShow: true });
         }
       });
     } else {
@@ -2240,6 +2314,7 @@ function createWindow() {
   win.webContents.once('destroyed', () => {
     telemetryArchiveTokenRegistry.removeScope(getTelemetryArchiveScope(webContentsId));
   });
+  win.on('closed', clearWindowVisibilityAnimation);
 
   ipcMain.on('open-devtools', () => {
     if (!win || !ALLOW_RUNTIME_DEVTOOLS) return;
@@ -2414,17 +2489,7 @@ app.whenReady().then(async () => {
   if (isDev) setSplashProgress(win, 90, 'Registering hotkeys...', 'Almost there');
   globalShortcut.register('F9', () => {
     if (win) {
-      if (win.isVisible() && !win.isMinimized()) {
-        // If visible and focused (or just visible), Hide it (Dismiss)
-        // We used to minimize, but hide() is cleaner for "toggling away"
-        win.hide();
-      } else {
-        // If hidden or minimized, Bring it up
-        if (win.isMinimized()) win.restore();
-        win.show();
-        win.setAlwaysOnTop(true, 'screen-saver'); // Ensure it pops over game
-        win.focus();
-      }
+      toggleWindowVisibilitySmooth({ focusOnShow: true });
       // Note: We NO LONGER send 'hotkey-toggle-overlay'. 
       // State (Overlay vs Dashboard) is preserved.
     }

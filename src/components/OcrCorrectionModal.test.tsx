@@ -67,6 +67,7 @@ describe('OcrCorrectionModal', () => {
         gameData.matches = [];
         gameData.selectedReachModifiers = [];
         gameData.selectedTeammates = [];
+        gameData.pendingReviews = [];
         appStoreState.ocrCorrections = {};
         appStoreState.ocrBatchAcceptThreshold = 85;
         appStoreState.pendingMatchData = null;
@@ -144,6 +145,30 @@ describe('OcrCorrectionModal', () => {
             ocrDebug: {
                 nameConfidence: {
                     pilotone: 96,
+                },
+            },
+        };
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        expect(screen.getByRole('progressbar', { name: /ocr confidence 96%/i })).toBeInTheDocument();
+        expect(screen.getByText('96%')).toBeInTheDocument();
+    });
+
+    it('scales fractional stored OCR name confidence values to percentages', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        appStoreState.pendingMatchData = {
+            player: 'ActivePilot',
+            ship: 'Hunter (2 Player)',
+            teammates: ['PilotOne'],
+            opponents: [],
+            opponentTeams: [],
+            ocrDebug: {
+                nameConfidence: {
+                    pilotone: 0.96,
                 },
             },
         };
@@ -247,6 +272,29 @@ describe('OcrCorrectionModal', () => {
         fireEvent.click(screen.getByRole('button', { name: /save and close/i }));
 
         expect(gameData.setSessionTeams).toHaveBeenCalledWith({ red: ['PilotOneEdited'] });
+    });
+
+    it('clears matching OCR roster reviews when adding a player to the roster from team assignment', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['Bigtower'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pendingReviews = [{
+            id: 'review-1',
+            type: 'roster_candidate',
+            value: 'Bigtower',
+            originalConfidence: 92,
+            canonicalTargetKey: 'bigtower',
+        }];
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        fireEvent.click(screen.getByRole('button', { name: /add bigtower to roster/i }));
+
+        expect(gameData.addToRegistry).toHaveBeenCalledWith('Bigtower');
+        expect(gameData.removePendingReviews).toHaveBeenCalledWith(['review-1']);
     });
 
     it('allows editing reach modifiers before apply and persists reviewed hazards', async () => {

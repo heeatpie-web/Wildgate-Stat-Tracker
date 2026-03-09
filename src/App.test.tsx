@@ -1,10 +1,43 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 const loggerWarn = vi.fn();
 const getElectronAPIMock = vi.fn(() => null);
+const discardTelemetryDraftMock = vi.fn();
+
+const buildRestoreSessionSnapshot = () => JSON.stringify({
+  version: 1,
+  savedAt: Date.now(),
+  payload: {
+    activeView: 'recording',
+    showWizard: null,
+    pendingMatchData: { player: 'Pilot' },
+    selectedTeammates: [],
+    selectedOpponents: [],
+    sessionTeams: {},
+    sessionShipTypes: {},
+    activeShip: null,
+    activeHero: null,
+    activeWeapons: {},
+    currentLoadout: null,
+    selectedReachModifiers: [],
+    timeMin: '',
+    timeSec: '',
+    damageTaken: '',
+    kills: {},
+    poiEasy: 0,
+    poiMedium: 0,
+    poiEpic: 0,
+    pendingPlacement: null,
+    pendingArtifactType: '',
+    pendingKilledBy: '',
+    pendingKilledByShip: '',
+    matchStartTime: null,
+    isMatchInProgress: false,
+  },
+});
 
 const uiState = {
   isOverlayMode: false,
@@ -107,6 +140,16 @@ vi.mock('./hooks/useKeyboardShortcuts', () => ({
   useKeyboardShortcuts: vi.fn(),
 }));
 
+vi.mock('./hooks/useMatchSubmission', () => ({
+  useMatchSubmission: () => ({
+    initiateSubmission: vi.fn(),
+    processFinalSubmission: vi.fn(),
+    saveResultDraft: vi.fn(),
+    discardTelemetryDraft: (...args: unknown[]) => discardTelemetryDraftMock(...args),
+    submitting: false,
+  }),
+}));
+
 vi.mock('./store/useAppStore', () => {
   const useAppStore = (selector: (state: typeof appStoreState) => unknown) => selector(appStoreState);
   useAppStore.getState = () => appStoreState;
@@ -154,6 +197,7 @@ describe('App', () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     getElectronAPIMock.mockReturnValue(null);
+    discardTelemetryDraftMock.mockReset();
     uiState.activeView = 'recording';
     uiState.isOverlayMode = false;
     uiState.showChangelog = false;
@@ -190,6 +234,77 @@ describe('App', () => {
         type: 'success',
       }));
     });
+  });
+
+  it('shows restore session only after an unclean shutdown', async () => {
+    window.localStorage.setItem('wg_restore_session_v1', buildRestoreSessionSnapshot());
+    window.localStorage.setItem('wg_session_exit_state_v1', 'running');
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    expect(await screen.findByText('Restore Session')).toBeInTheDocument();
+  });
+
+  it('suppresses restore session after a clean shutdown', async () => {
+    window.localStorage.setItem('wg_restore_session_v1', buildRestoreSessionSnapshot());
+    window.localStorage.setItem('wg_session_exit_state_v1', 'clean');
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Restore Session')).not.toBeInTheDocument();
+    });
+  });
+
+  it('marks the session clean during normal window unload', async () => {
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem('wg_session_exit_state_v1')).toBe('running');
+    });
+
+    fireEvent(window, new Event('beforeunload'));
+
+    expect(window.localStorage.getItem('wg_session_exit_state_v1')).toBe('clean');
+  });
+
+  it('offers discard from the telemetry-ready prompt and confirms before cleanup', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    gameDataState.matches = [{
+      id: 99,
+      timestamp: Date.now(),
+      date: '3/9/2026',
+      mode: 'Artifact Brawl',
+      player: 'Pilot',
+      teammates: [],
+      opponents: [],
+      hero: 'Adrian',
+      ship: 'Hunter',
+      reachModifiers: [],
+      kills: {},
+      result: 'Ongoing',
+      subType: 'Telemetry Draft',
+    }];
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('telemetry:draft-ready', {
+        detail: { matchId: 99, duration: '12:34' },
+      }));
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: /discard match/i }));
+
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledWith(
+        'Discard this telemetry draft? Recorded screenshots will be deleted and the current submission state will be cleared.'
+      );
+      expect(discardTelemetryDraftMock).toHaveBeenCalledWith(99);
+    });
+
+    confirmSpy.mockRestore();
   });
 
   it('renders recording view in default dashboard mode', async () => {
@@ -357,6 +472,9 @@ describe('App', () => {
       artifacts: ['canonical.png', 'ocr.png'],
       ocrState: 'reviewing',
     }));
+    expect(gameDataState.setSelectedOpponents).not.toHaveBeenCalled();
+    expect(gameDataState.setSessionTeams).not.toHaveBeenCalled();
+    expect(gameDataState.setSessionShipTypes).not.toHaveBeenCalled();
     expect(appStoreState.setPendingArtifactType).toHaveBeenCalledWith('ice');
     expect(uiState.setShowWizard).toHaveBeenCalledWith('Win');
   });

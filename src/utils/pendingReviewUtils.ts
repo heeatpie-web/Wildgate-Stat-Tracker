@@ -99,3 +99,24 @@ export const getRosterCandidatePruneIds = ({
         })
         .map((review) => review.id);
 };
+
+interface AcceptedRosterNamePruneOptions {
+    pendingReviews: PendingReview[];
+    acceptedName?: string | null;
+    excludeIds?: string[];
+}
+
+export const getRosterCandidatePruneIdsForAcceptedName = ({
+    pendingReviews,
+    acceptedName = '',
+    excludeIds = [],
+}: AcceptedRosterNamePruneOptions): string[] => {
+    const normalizedAcceptedName = normalizeOcrName(String(acceptedName || ''));
+    if (!normalizedAcceptedName) return [];
+    return getRosterCandidatePruneIds({
+        pendingReviews,
+        rawName: normalizedAcceptedName,
+        canonicalTargetKey: normalizedAcceptedName,
+        excludeIds,
+    });
+};

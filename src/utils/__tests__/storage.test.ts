@@ -102,6 +102,49 @@ describe('StorageService', () => {
     await expect(savePromise).resolves.toBe(false);
   });
 
+  it('does not mirror the full DB into localStorage in Electron', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'db-write') return { success: true };
+      if (channel === 'db-backup') return { success: true };
+      return null;
+    });
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem');
+    const { StorageService } = await loadStorageModule({ invoke });
+
+    const savePromise = StorageService.save(createStorageData({ lastActivity: 1234 }));
+    await vi.advanceTimersByTimeAsync(305);
+
+    await expect(savePromise).resolves.toBe(true);
+    expect(setItemSpy).not.toHaveBeenCalledWith('wg_db', expect.any(String));
+  });
+
+  it('does not flush staged Electron saves when the document becomes hidden', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'db-write') return { success: true };
+      if (channel === 'db-backup') return { success: true };
+      return null;
+    });
+    const { StorageService } = await loadStorageModule({ invoke });
+
+    const originalVisibilityDescriptor = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'hidden',
+    });
+
+    try {
+      void StorageService.save(createStorageData({ lastActivity: 4321 }));
+      document.dispatchEvent(new Event('visibilitychange'));
+
+      const writeCalls = invoke.mock.calls.filter(([channel]) => channel === 'db-write');
+      expect(writeCalls).toHaveLength(0);
+    } finally {
+      if (originalVisibilityDescriptor) {
+        Object.defineProperty(document, 'visibilityState', originalVisibilityDescriptor);
+      }
+    }
+  });
+
   it('applies bundled UID seed entries without overwriting user mappings', async () => {
     const invoke = vi.fn(async (channel: string) => {
       if (channel === 'db-read') {
