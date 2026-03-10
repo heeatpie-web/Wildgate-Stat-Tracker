@@ -9,7 +9,7 @@ import { useFocusTrap } from './hooks/useFocusTrap';
 import { useMatchSubmission } from './hooks/useMatchSubmission';
 import { Sidebar } from './components/Sidebar';
 import { RecordingView } from './components/RecordingView';
-import HistoryTable from './components/HistoryTable';
+const HistoryTable = React.lazy(() => import('./components/HistoryTable'));
 import { Header } from './components/Header';
 import { WindowFrame } from './components/WindowFrame';
 import { OverlayView } from './components/OverlayView';
@@ -63,7 +63,6 @@ const loadDashboardChunk = (view: LazyDashboardView): Promise<LazyDashboardModul
 const loadAnalyticsPanel = () => loadDashboardChunk('analytics');
 const AnalyticsPanel = React.lazy(loadAnalyticsPanel);
 import { APP_VERSION, Match, MatchResult, WizardResult } from './types';
-import { CHANGELOG } from './utils/changelog';
 import { UNKNOWN_PLAYER_LABELS } from './utils/constants';
 import { Toast } from './components/Toast';
 const loadDevOCRPanel = () => loadDashboardChunk('dev-ocr');
@@ -346,6 +345,7 @@ const App: React.FC = () => {
     const tipByViewSentAtRef = React.useRef<Record<string, number>>({});
     /** Tracks when the changelog was last dismissed. Tips are suppressed for 10 s after this. */
     const changelogDismissedAtRef = React.useRef<number>(0);
+    const [changelogEntries, setChangelogEntries] = useState<string[]>([]);
 
     const previousTipLibraryIndexRef = React.useRef<number | null>(null);
     const restorePromptCheckedRef = React.useRef(false);
@@ -2526,6 +2526,13 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (!showChangelog) return;
+        import('./utils/changelog').then(({ CHANGELOG }) => {
+            setChangelogEntries(CHANGELOG[APP_VERSION] ?? []);
+        });
+    }, [showChangelog]);
+
+    useEffect(() => {
+        if (!showChangelog) return;
         const onOverlayEscape = (event: KeyboardEvent) => {
             if (event.key !== 'Escape') return;
             closeChangelog();
@@ -2775,7 +2782,7 @@ const App: React.FC = () => {
                             <div className="w-12 h-12 rounded-full bg-md-sys-surface2 flex items-center justify-center text-2xl">Update</div>
                         </div>
                         <div className="space-y-3 max-h-60vh overflow-y-auto custom-scrollbar pr-2">
-                            {CHANGELOG[APP_VERSION]?.map((item, i) => (
+                            {changelogEntries.map((item, i) => (
                                 <div key={i} className="flex gap-3 items-start">
                                     <div className="w-2 h-2 rounded-full bg-md-sys-primary mt-2 flex-shrink-0"></div>
                                     <div className="text-body font-medium opacity-80 leading-relaxed">{item}</div>

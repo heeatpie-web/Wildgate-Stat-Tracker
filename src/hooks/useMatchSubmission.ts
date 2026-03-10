@@ -3,7 +3,6 @@ import { useGameData } from '../providers/GameDataProvider';
 import { useUIState } from '../providers/UIStateProvider';
 import { useAppStore } from '../store/useAppStore';
 import { Match } from '../types';
-import confetti from 'canvas-confetti';
 import { useSoundEffects } from '../hooks/useSoundEffects';
 import { applyArtifactRepair, bundleMatchArtifacts, getMatchArtifactsStructured, removeMatchArtifact } from '../utils/artifactService';
 import { StorageService } from '../utils/storage';
@@ -416,7 +415,7 @@ export const useMatchSubmission = () => {
             if (subType === 'Artifact') finalMods.push(`Artifact: ${pendingArtifactType || 'healing'}`);
 
             if (selectedResult === 'Win') {
-                confetti({ particleCount: 100, spread: 70 });
+                import('canvas-confetti').then(({ default: confetti }) => confetti({ particleCount: 100, spread: 70 }));
                 playVictory();
             } else {
                 playDefeat();
