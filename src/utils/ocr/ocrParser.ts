@@ -717,10 +717,16 @@ export function validateExtractedData(data: OCRExtractedData): OCRExtractedData 
         .filter(p => {
           // Heuristic: skip players whose normalized name exactly matches a known team name label.
           // This prevents OCR misclassifying a team banner as a player entry.
+          // Exception: solo-ship pattern where the player's handle equals their own team name.
           if (!p.name || knownTeamNameKeys.size === 0) return true;
           const playerKey = normalizeKey(p.name);
           if (playerKey.length < 4) return true;
-          return !knownTeamNameKeys.has(playerKey);
+          if (knownTeamNameKeys.has(playerKey)) {
+            // Allow if the match is only against this team's own name (solo-ship pattern).
+            if (!isPlaceholderTeamName(team.teamName) && normalizeKey(team.teamName) === playerKey) return true;
+            return false;
+          }
+          return true;
         })
         .filter(p => {
           const shipCandidate = extractShipMetadataCandidate(p.name || '');

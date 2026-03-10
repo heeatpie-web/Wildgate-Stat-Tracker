@@ -96,15 +96,6 @@ const SETTINGS_SECTION_GROUPS: Array<{
     },
 ];
 
-const SettingsSectionHeader: React.FC<{ title: string; description?: string }> = ({ title, description }) => (
-    <div className="mb-3">
-        <h3 className="text-title font-bold tracking-tight text-md-sys-on-surface">{title}</h3>
-        {description ? (
-            <p className="mt-1 text-label-sm text-md-sys-on-surface/60">{description}</p>
-        ) : null}
-    </div>
-);
-
 const parseSettingsFocusSectionRequest = (raw: unknown): SettingsFocusSectionRequest | null => {
     if (!raw || typeof raw !== 'object') return null;
     const record = raw as Record<string, unknown>;
@@ -807,11 +798,6 @@ const SettingsModalContent: React.FC = () => {
                     )}                    {/* Appearance Section */}
                     {activeSection === 'appearance' && (
                         <section className="space-y-6">
-                            <SettingsSectionHeader
-                                title="Appearance"
-                                description="Set the accent and mode used across the app."
-                            />
-
                             <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
                                 <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
                                     <label className="text-label-sm font-semibold opacity-60 block mb-3">Theme Accent</label>
@@ -880,10 +866,6 @@ const SettingsModalContent: React.FC = () => {
 
                     {activeSection === 'interface' && (
                         <section className="space-y-6">
-                            <SettingsSectionHeader
-                                title="Interface"
-                                description="High-priority controls for the everyday desktop experience."
-                            />
                             <div className="grid gap-4 xl:grid-cols-2">
                                 <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10 space-y-4">
                                     {[
@@ -922,10 +904,6 @@ const SettingsModalContent: React.FC = () => {
 
                     {activeSection === 'interface-tools' && (
                         <section className="space-y-6">
-                            <SettingsSectionHeader
-                                title="Interface Tools"
-                                description="Frequently used controls that stay near the top of the desktop workflow."
-                            />
                             <div className="grid gap-4 xl:grid-cols-3">
                                 <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10 flex flex-col justify-between gap-4">
                                     <div>
@@ -978,10 +956,6 @@ const SettingsModalContent: React.FC = () => {
 
                     {activeSection === 'workspace-background' && (
                         <section className="space-y-6">
-                            <SettingsSectionHeader
-                                title="Workspace Background"
-                                description="Optional background media for the standard desktop workspace."
-                            />
                             <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
                                 <label className="text-label-sm font-semibold opacity-60 block mb-2">Background URL</label>
                                 <div className="flex gap-2">
@@ -1008,25 +982,21 @@ const SettingsModalContent: React.FC = () => {
                     )}                    {/* Overlay Style Section */}
                     {activeSection === 'overlay' && (
                         <section className="space-y-6">
-                            <SettingsSectionHeader
-                                title="Overlay"
-                                description="Choose how the compact overlay sits over the game."
-                            />
                             <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
                                 <div className="grid grid-cols-2 gap-3">
                                     <button
-                                        onClick={() => setOverlayStyle('compact')}
-                                        className={`p-4 rounded-control text-center transition-all ${overlayStyle === 'compact' ? 'md3-btn-filled ring-2 ring-md-sys-primary/50' : 'md3-btn-outlined'}`}
+                                        onClick={() => setOverlayStyle('transparent')}
+                                        className={`p-4 rounded-control text-center transition-all ${overlayStyle === 'transparent' ? 'md3-btn-filled ring-2 ring-md-sys-primary/50' : 'md3-btn-outlined'}`}
                                     >
                                         <div className="text-body font-bold">Compact</div>
                                         <div className="text-label-sm opacity-60">Small opaque popup</div>
                                     </button>
                                     <button
-                                        onClick={() => setOverlayStyle('transparent')}
-                                        className={`p-4 rounded-control text-center transition-all ${overlayStyle === 'transparent' ? 'md3-btn-filled ring-2 ring-md-sys-primary/50' : 'md3-btn-outlined'}`}
+                                        onClick={() => setOverlayStyle('compact')}
+                                        className={`p-4 rounded-control text-center transition-all ${overlayStyle === 'compact' ? 'md3-btn-filled ring-2 ring-md-sys-primary/50' : 'md3-btn-outlined'}`}
                                     >
-                                        <div className="text-body font-bold">Transparent</div>
-                                        <div className="text-label-sm opacity-60">Float over game</div>
+                                        <div className="text-body font-bold">Full Panel</div>
+                                        <div className="text-label-sm opacity-60">Full-height side panel</div>
                                     </button>
                                 </div>
                             </div>
@@ -1035,10 +1005,6 @@ const SettingsModalContent: React.FC = () => {
 
                     {activeSection === 'advanced-interface' && (
                         <section className="space-y-6">
-                            <SettingsSectionHeader
-                                title="Advanced Interface"
-                                description="Controls that affect startup responsiveness and developer workflows."
-                            />
                             <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10 space-y-4">
                                 <div className="flex justify-between items-start gap-3">
                                     <div className="min-w-0">
@@ -1071,10 +1037,6 @@ const SettingsModalContent: React.FC = () => {
                     {/* OCR Quick Setup */}
                     {activeSection === 'capture' && (
                         <section className="space-y-3">
-                        <SettingsSectionHeader
-                            title="Capture"
-                            description="Most users only need these OCR and capture defaults."
-                        />
                         <div className="md3-surface p-5 rounded-card border border-md-sys-outline/10">
                         <div className="flex items-center justify-between gap-3 mb-4">
                             <p className="text-label-sm text-md-sys-on-surface/60">Recommended defaults live here so you can tune OCR flow quickly without digging into advanced controls.</p>
@@ -1141,10 +1103,6 @@ const SettingsModalContent: React.FC = () => {
                     {/* OCR Engine Section */}
                     {activeSection === 'advanced-ocr-tuning' && (
                         <section className="space-y-3">
-                        <SettingsSectionHeader
-                            title="Advanced OCR Tuning"
-                            description="Thresholds, learning policy, event rollback, and diagnostics."
-                        />
                         <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10">
                         <div className="mb-4 rounded-control border border-warning/40 bg-warning-soft/35 px-4 py-3 text-left text-label-sm leading-relaxed text-warning">
                             OCR is tuned for 1920 x 1080. Using other resolutions can lower accuracy unless you adjust OCR scan regions (ROI).
@@ -1450,10 +1408,6 @@ const SettingsModalContent: React.FC = () => {
                     {/* Capture Mode */}
                     {activeSection === 'capture-defaults' && (
                         <section className="space-y-3">
-                        <SettingsSectionHeader
-                            title="Capture Defaults"
-                            description="Choose how screenshots and result-button OCR should behave by default."
-                        />
                         <div className="md3-surface-high p-4 rounded-card border border-md-sys-outline/10">
                         <div className="grid grid-cols-2 gap-2">
                             {[
@@ -1519,10 +1473,6 @@ const SettingsModalContent: React.FC = () => {
                     {/* Data & Updates Section - Full Mode Only */}
                     {activeSection === 'telemetry-monitoring' && (
                         <section className="space-y-6">
-                            <SettingsSectionHeader
-                                title="Telemetry & Monitoring"
-                                description="Manage how Wildgate telemetry is monitored and how aggressively it polls."
-                            />
                             <div className="md3-surface-high p-5 rounded-card border border-md-sys-outline/10 space-y-4">
                                 <div className="flex justify-between items-start gap-3">
                                     <div className="min-w-0">
@@ -1603,10 +1553,6 @@ const SettingsModalContent: React.FC = () => {
 
                     {activeSection === 'data-updates' && (
                         <section className="space-y-6">
-                            <SettingsSectionHeader
-                                title="Data & Updates"
-                                description="Backups, exports, diagnostics, and app maintenance tools."
-                            />
                             <div className="md3-surface-high p-4 rounded-card flex items-center justify-between border border-md-sys-outline/10">
                                 <div>
                                     <div className="text-body font-bold">Auto Backup</div>

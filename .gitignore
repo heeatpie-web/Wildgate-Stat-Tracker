@@ -13,12 +13,7 @@ dist-electron
 dist-ssr
 *.local
 _savepoint_*  
-.visual/current/
-.visual/diff/
-.visual/report.json
-.visual/report.md
-.visual/ui-hardcoded-report.json
-.visual/ui-hardcoded-report.md
+.visual/
 
 # Editor directories and files
 .vscode/
@@ -52,6 +47,9 @@ dataset/
 
 # Large binary OCR data files (download at runtime instead)
 *.traineddata
+
+# ML models (download at runtime)
+models/
 
 # AI assistant configuration files
 .cursorrules

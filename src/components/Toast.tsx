@@ -171,7 +171,7 @@ export const Toast: React.FC<ToastProps> = ({ message, type = 'info', duration =
   }
 
   return createPortal(
-    <div className="fixed top-20 right-4 sm:top-24 sm:right-6 bottom-auto left-auto z-top w-[min(30rem,calc(100vw-2rem))] flex flex-col gap-3 pointer-events-none">
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-top w-[min(44rem,calc(100vw-2rem))] flex flex-col gap-3 pointer-events-none">
       {visibleToasts.map((toastItem) => (
         <ToastCard
           key={toastItem.id}

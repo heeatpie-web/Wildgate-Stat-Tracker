@@ -953,8 +953,8 @@ function animateWindowOpacity(targetOpacity, { durationMs = 140, onComplete } = 
 function showWindowSmooth({ focus = true, forceDashboard = false } = {}) {
   if (!win || win.isDestroyed()) return;
   clearWindowVisibilityAnimation();
-  if (win.isMinimized()) win.restore();
   try { win.setOpacity(0); } catch { /* no-op */ }
+  if (win.isMinimized()) win.restore();
   if (!win.isVisible()) win.show();
   if (forceDashboard) {
     win.setSkipTaskbar(false);
@@ -970,7 +970,7 @@ function hideWindowSmooth() {
   animateWindowOpacity(0, {
     onComplete: () => {
       if (!win || win.isDestroyed()) return;
-      win.hide();
+      win.minimize();
       try { win.setOpacity(1); } catch { /* no-op */ }
     },
   });

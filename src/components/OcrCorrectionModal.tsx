@@ -1435,16 +1435,23 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                     Batch Operations
                                 </div>
                                 {embedded && onRequestRerunOcr && (
-                                    <button
-                                        type="button"
-                                        onClick={onRequestRerunOcr}
-                                        disabled={rerunOcrDisabled}
-                                        className="rounded-2xl border border-md-sys-outline/15 bg-md-sys-surface-container-high px-3.5 py-2 text-label-sm font-bold text-md-sys-on-surface inline-flex items-center justify-center gap-2 transition-colors hover:bg-md-sys-surface-container-highest disabled:opacity-disabled disabled:hover:bg-md-sys-surface-container-high"
-                                        title="Re-run OCR across bundled screenshot artifacts"
-                                    >
-                                        <RefreshCw size={14} className={isRerunningOcr ? 'animate-spin' : ''} />
-                                        {isRerunningOcr ? 'Re-running...' : 'Re-run OCR'}
-                                    </button>
+                                    <div className="flex flex-col items-end gap-1.5">
+                                        <button
+                                            type="button"
+                                            onClick={onRequestRerunOcr}
+                                            disabled={rerunOcrDisabled}
+                                            className="rounded-2xl border border-md-sys-outline/15 bg-md-sys-surface-container-high px-3.5 py-2 text-label-sm font-bold text-md-sys-on-surface inline-flex items-center justify-center gap-2 transition-colors hover:bg-md-sys-surface-container-highest disabled:opacity-disabled disabled:hover:bg-md-sys-surface-container-high"
+                                            title="Re-run OCR across bundled screenshot artifacts"
+                                        >
+                                            <RefreshCw size={14} className={isRerunningOcr ? 'animate-spin' : ''} />
+                                            {isRerunningOcr ? 'Re-running...' : 'Re-run OCR'}
+                                        </button>
+                                        {isRerunningOcr && (
+                                            <div className="w-full overflow-hidden rounded-full bg-md-sys-surface-container-highest h-1">
+                                                <div className="h-full w-2/5 bg-md-sys-primary rounded-full animate-progress-indeterminate" />
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                             <div className="rounded-3xl border border-md-sys-primary/10 bg-md-sys-surface-container-low p-4 space-y-3">

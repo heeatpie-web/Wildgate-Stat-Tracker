@@ -21,7 +21,7 @@ import { OcrCorrectionModal } from './OcrCorrectionModal';
 import { useAppStore } from '../store/useAppStore';
 import { getElectronAPI } from '../utils/electronAPI';
 import type { OCRProcessRuntimeOptions } from '../utils/electronBridge';
-import { rerunOCRMulti } from '../utils/artifactService';
+import { bundleMatchArtifacts, rerunOCRMulti } from '../utils/artifactService';
 import {
     buildOcrNameConfidenceMapFromExtractedData,
     buildOcrNameSourceMap,
@@ -453,8 +453,8 @@ export const Wizard: React.FC = () => {
         return acc;
     }, {});
     const shipWeaponTotal = Object.values(shipWeaponCountMap).reduce((sum, quantity) => sum + quantity, 0);
-    const displayedCharacterWeapons = pendingLoadout.characterWeapons || [];
-    const displayedCharacterEquipment = pendingLoadout.characterEquipment || [];
+    const displayedCharacterWeapons = (pendingLoadout.characterWeapons || []).slice(0, MAX_PROSPECTOR_SLOTS);
+    const displayedCharacterEquipment = (pendingLoadout.characterEquipment || []).slice(0, MAX_PROSPECTOR_SLOTS);
     const displayedPerks = (() => {
         const perkPool = [
             ...(pendingLoadout.characterPerks || []),
@@ -632,7 +632,30 @@ export const Wizard: React.FC = () => {
     };
 
     const handleWizardRerunOcr = async () => {
-        const imagePaths = wizardReviewScreenshots;
+        // Bundle screenshots from disk before OCR so images taken during the match
+        // are available even if finalizeSubmission hasn't run yet.
+        const matchId = Number(pendingMatchData?.id || 0);
+        let imagePaths = wizardReviewScreenshots;
+        if (matchId > 0) {
+            const storeMatchStartTime = useAppStore.getState().matchStartTime;
+            const matchStart = typeof storeMatchStartTime === 'number' && storeMatchStartTime > 0
+                ? storeMatchStartTime
+                : Date.now() - 10 * 60 * 1000;
+            const newlyBundled = await bundleMatchArtifacts(matchId, matchStart, Date.now());
+            if (newlyBundled.length > 0) {
+                const existing = Array.isArray(pendingMatchData?.artifacts) ? pendingMatchData.artifacts : [];
+                const seen = new Set(existing);
+                const added = newlyBundled.filter(p => !seen.has(p));
+                if (added.length > 0) {
+                    const merged = [...existing, ...added];
+                    setPendingDraftData({ ...(pendingMatchData as Record<string, unknown>), artifacts: merged });
+                    imagePaths = merged
+                        .map(e => String(e || '').trim())
+                        .filter(e => e.length > 0)
+                        .filter(e => e.startsWith('data:image/') || /\.(png|jpe?g|webp|bmp|gif)$/i.test(e));
+                }
+            }
+        }
         if (imagePaths.length === 0) {
             pushNotification({
                 message: 'No screenshot artifacts are attached to this match.',

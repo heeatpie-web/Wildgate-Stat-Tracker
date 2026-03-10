@@ -1632,7 +1632,23 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       pushUniquePlayerName(players, card.name);
     }
 
-    const filteredPlayers = players.filter(p => !isTeamName(p));
+    let filteredPlayers = players.filter(p => !isTeamName(p));
+
+    // Solo-ship rescue: if isTeamName filtered every card out, but we have a
+    // captured badge/bar name that exactly matches one of those cards, keep it.
+    // This handles the pattern where a solo player's handle looks like a team
+    // name (e.g. all-caps "GHOST" → isTeamName returns true, but it IS the player).
+    if (filteredPlayers.length === 0 && players.length > 0) {
+      const clusterCapturedName = cluster.badgeName || capturedTeamNames.get(cluster.color);
+      if (clusterCapturedName) {
+        const capturedNorm = clusterCapturedName.toLowerCase().replace(/[^a-z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/g, '');
+        filteredPlayers = players.filter(p => {
+          const pNorm = String(p).toLowerCase().replace(/[^a-z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/g, '');
+          return capturedNorm.length >= 3 && pNorm === capturedNorm;
+        });
+      }
+    }
+
     if (filteredPlayers.length === 0) continue;
 
     const capturedName = cluster.badgeName || capturedTeamNames.get(cluster.color);
