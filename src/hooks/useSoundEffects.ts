@@ -23,31 +23,37 @@ export const useSoundEffects = () => {
 
         const ctx = getAudioContext();
         if (!ctx) return;
-        if (ctx.state === 'suspended') {
-            void ctx.resume().catch(() => undefined);
-        }
 
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        const startAt = ctx.currentTime + Math.max(0, delay);
-        const stopAt = startAt + duration;
+        const doPlay = () => {
+            const startAt = ctx.currentTime + Math.max(0, delay);
+            const stopAt = startAt + duration;
 
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, startAt);
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
 
-        gain.gain.setValueAtTime(0.0001, startAt);
-        gain.gain.exponentialRampToValueAtTime(0.11, startAt + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.00001, stopAt);
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, startAt);
 
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.onended = () => {
-            osc.disconnect();
-            gain.disconnect();
+            gain.gain.setValueAtTime(0.0001, startAt);
+            gain.gain.exponentialRampToValueAtTime(0.11, startAt + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.00001, stopAt);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.onended = () => {
+                osc.disconnect();
+                gain.disconnect();
+            };
+
+            osc.start(startAt);
+            osc.stop(stopAt);
         };
 
-        osc.start(startAt);
-        osc.stop(stopAt);
+        if (ctx.state === 'suspended') {
+            ctx.resume().then(doPlay).catch(() => undefined);
+        } else {
+            doPlay();
+        }
     }, [soundEnabled]);
 
     const playCapture = useCallback(() => {

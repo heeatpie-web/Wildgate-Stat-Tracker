@@ -239,11 +239,11 @@ function mergeLegacyTacticalMap(existing, newData) {
  * and the user's own ship type populated from playerShip.
  */
 function crossMergeCrewHubAndMap(crewHub, tactMap) {
-  // Map ship type lookup: normalized team name → shipType string
+  // Map ship lookup: normalized team name → ship metadata
   const mapShipByName = new Map();
   for (const ship of (tactMap.opponentTeams || [])) {
     if (ship.teamName && ship.shipType) {
-      mapShipByName.set(normalizeTeamName(ship.teamName), ship.shipType);
+      mapShipByName.set(normalizeTeamName(ship.teamName), ship);
     }
   }
 
@@ -253,44 +253,58 @@ function crossMergeCrewHubAndMap(crewHub, tactMap) {
     if (ship.shipType) mapShipsByType.push(ship);
   }
 
+  const buildClaimKey = (ship) => [
+    normalizeTeamName(ship?.teamName || ''),
+    normalizeShipTypeKey(ship?.shipType || ''),
+    normalizeColorToken(ship?.color || ship?.teamColor || ''),
+    Number.isInteger(ship?.sourceSlotIndex) ? ship.sourceSlotIndex : '',
+    Number.isFinite(ship?.sourceSlotY) ? Math.round(ship.sourceSlotY) : '',
+  ].join('|');
+  const claimedMapShips = new Set();
+  const claimMapShip = (ship) => {
+    const key = buildClaimKey(ship);
+    if (key) claimedMapShips.add(key);
+  };
+  const isClaimedMapShip = (ship) => claimedMapShips.has(buildClaimKey(ship));
+
   const enrichedTeams = (crewHub.opponentTeams || []).map(team => {
     if (team.shipType) return team; // already has one
 
     const normName = normalizeTeamName(team.teamName);
 
     // 1. Exact name match
-    let shipType = mapShipByName.get(normName);
+    let mapShip = mapShipByName.get(normName) || null;
 
     // 2. Fuzzy name match (one contains the other, or common prefix ≥5)
-    if (!shipType) {
-      for (const [mapName, st] of mapShipByName.entries()) {
+    if (!mapShip) {
+      for (const [mapName, candidateShip] of mapShipByName.entries()) {
         if (mapName.length < 3 || normName.length < 3) continue;
-        if (mapName.includes(normName) || normName.includes(mapName)) { shipType = st; break; }
+        if (mapName.includes(normName) || normName.includes(mapName)) { mapShip = candidateShip; break; }
         const minLen = Math.min(mapName.length, normName.length);
         if (minLen >= 5) {
           let cp = 0;
           while (cp < minLen && mapName[cp] === normName[cp]) cp++;
-          if (cp >= 5) { shipType = st; break; }
+          if (cp >= 5) { mapShip = candidateShip; break; }
         }
       }
     }
 
-    if (shipType) {
-      const mapShip = (tactMap.opponentTeams || []).find(s => normalizeTeamName(s.teamName) === normalizeTeamName(team.teamName) || (team.color && s.color === team.color));
+    if (mapShip?.shipType) {
+      claimMapShip(mapShip);
       const resolvedTeamName = pickPreferredTeamName(
         team.teamName,
-        mapShip?.teamName || '',
+        mapShip.teamName || '',
         {
-          color: team.color || mapShip?.color || '',
-          preferCandidate: Boolean(team.teamNameSource !== 'team_bar' && mapShip?.teamName),
+          color: team.color || mapShip.color || '',
+          preferCandidate: Boolean(team.teamNameSource !== 'team_bar' && mapShip.teamName),
         }
       );
       return {
         ...team,
         teamName: resolvedTeamName,
-        shipType,
-        sourceSlotIndex: pickDefinedNumber(team.sourceSlotIndex, mapShip?.sourceSlotIndex),
-        sourceSlotY: pickDefinedNumber(team.sourceSlotY, mapShip?.sourceSlotY),
+        shipType: mapShip.shipType,
+        sourceSlotIndex: pickDefinedNumber(team.sourceSlotIndex, mapShip.sourceSlotIndex),
+        sourceSlotY: pickDefinedNumber(team.sourceSlotY, mapShip.sourceSlotY),
       };
     }
     return team;
@@ -302,6 +316,7 @@ function crossMergeCrewHubAndMap(crewHub, tactMap) {
     (team?.players?.length || 0) > 0 || !isPlaceholderTeamName(team?.teamName, team?.color || team?.teamColor)
   )).length;
   const mapOnlyTeams = mapShipsByType.filter((ship) => {
+    if (isClaimedMapShip(ship)) return false;
     const shipColor = String(ship?.color || ship?.teamColor || '').trim().toLowerCase();
     const shipNameKey = normalizeTeamName(ship?.teamName || '');
     return !enrichedTeams.some((team) => {
@@ -329,7 +344,8 @@ function crossMergeCrewHubAndMap(crewHub, tactMap) {
     const colorEvidence = team.color && team.color !== 'unknown' ? 1 : 0;
     const shipEvidence = team.shipType ? 1 : 0;
     const evidenceScore = namedEvidence + colorEvidence + shipEvidence;
-    return evidenceScore >= 2 && Number(team.confidence || 0) >= 80;
+    const hasNamedShipMetadata = Boolean(team.shipType) && !isPlaceholderTeamName(team.teamName, team.color);
+    return evidenceScore >= 2 && (Number(team.confidence || 0) >= 80 || hasNamedShipMetadata);
   });
 
   // Position-based fallback: when name/color matching fails (e.g. yellow vs yellow-green
@@ -368,6 +384,7 @@ function crossMergeCrewHubAndMap(crewHub, tactMap) {
         enriched.teamColor = mapTeam.teamColor || mapTeam.color;
       }
       usedMapOnlyIndices.add(i);
+      claimMapShip(mapTeam);
     }
   }
   const remainingMapOnly = sortedMapOnly.filter((_, idx) => !usedMapOnlyIndices.has(idx));
@@ -418,8 +435,22 @@ function crossMergeInternalCrewAndMap(crew, map) {
     if (ship.teamName) mapByName.set(normalizeTeamName(ship.teamName), ship);
   }
 
-  // Track map ships claimed by name-match so colour-match won't double-use them.
+  // Track map ships claimed by name/colour/positional matches so later fallbacks
+  // cannot reuse the same map row for a second enemy team.
   const claimedNames = new Set();
+  const buildClaimKey = (ship) => [
+    normalizeTeamName(ship?.teamName || ''),
+    normalizeShipTypeKey(ship?.shipType || ''),
+    normalizeColorToken(ship?.color || ship?.teamColor || ''),
+    Number.isInteger(ship?.sourceSlotIndex) ? ship.sourceSlotIndex : '',
+    Number.isFinite(ship?.sourceSlotY) ? Math.round(ship.sourceSlotY) : '',
+  ].join('|');
+  const claimedShipKeys = new Set();
+  const claimMapShip = (ship) => {
+    const key = buildClaimKey(ship);
+    if (key) claimedShipKeys.add(key);
+  };
+  const isClaimedMapShip = (ship) => claimedShipKeys.has(buildClaimKey(ship));
 
   const enrichedTeams = (crew.enemyTeams || []).map(team => {
     if (team.shipType) return team;
@@ -445,7 +476,10 @@ function crossMergeInternalCrewAndMap(crew, map) {
           }
         }
       }
-      if (mapShip) claimedNames.add(normalizeTeamName(mapShip.teamName || ''));
+      if (mapShip) {
+        claimedNames.add(normalizeTeamName(mapShip.teamName || ''));
+        claimMapShip(mapShip);
+      }
     }
 
     // 2. Colour match (fallback).  Skip ships already claimed by the name-match above,
@@ -457,6 +491,7 @@ function crossMergeInternalCrewAndMap(crew, map) {
       if (candidates.length > 0) {
         mapShip = candidates[0];
         claimedNames.add(normalizeTeamName(mapShip.teamName || ''));
+        claimMapShip(mapShip);
       }
     }
 
@@ -492,8 +527,7 @@ function crossMergeInternalCrewAndMap(crew, map) {
   // unused map ships by color-sorted index so the fourth team etc. get correct name/ship
   // instead of ending up as two separate teams.
   const unmatched = enrichedTeams.filter(t => !t.shipType);
-  const matchedColors = new Set(enrichedTeams.filter(t => t.shipType).map(t => t.color));
-  const unusedMapShips = (map.enemyShips || []).filter(s => !matchedColors.has(s.color));
+  const unusedMapShips = (map.enemyShips || []).filter(s => !isClaimedMapShip(s));
   if (unmatched.length >= 1 && unusedMapShips.length >= 1) {
     const sortedUnmatched = sortTeamsByPosition([...unmatched], {
       getPositionIndex: (team) => team?.sourceRowIndex,
@@ -527,7 +561,7 @@ function crossMergeInternalCrewAndMap(crew, map) {
             sourceSlotY: pickDefinedNumber(enrichedTeams[idx].sourceSlotY, mapShip.sourceSlotY),
             name: pickPreferredTeamName(crewTeam.name, mapShip.teamName || '', { color: crewTeam.color, preferCandidate: true }),
           };
-          matchedColors.add(mapShip.color);
+          claimMapShip(mapShip);
         }
       }
     }
@@ -541,6 +575,7 @@ function crossMergeInternalCrewAndMap(crew, map) {
     const finalMatchedNames  = new Set(enrichedTeams.map(t => normalizeTeamName(t.name || '')));
     const crewHasStrongEvidence = enrichedTeams.filter((team) => (team?.players?.length || 0) > 0).length >= 2;
     for (const orphan of (map.enemyShips || [])) {
+      if (isClaimedMapShip(orphan)) continue;
       if (finalMatchedColors.has(orphan.color)) continue;
       if (orphan.teamName && finalMatchedNames.has(normalizeTeamName(orphan.teamName))) continue;
       const orphanColor = String(orphan.color || '').trim().toLowerCase();

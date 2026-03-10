@@ -693,7 +693,7 @@ export const useLogMonitor = (activeUser?: string) => {
                         setMatchStartTime(null);
                         Logger.warn('LogMonitor', 'Cleared stale active-match flag on next mission start.');
                     }
-                    if (startLifecycleSignal && !telemetryLifecycleActiveRef.current) {
+                    if (startLifecycleSignal) {
                         resetSelectionDefaultsForNewMatch();
                     }
                     if (startLifecycleSignal && !telemetryDraftMatchIdRef.current) {
@@ -1301,9 +1301,9 @@ export const useLogMonitor = (activeUser?: string) => {
                         const resolvedProspectorPerks = Array.from(new Set(
                             resolvedGuidPerks.filter((name) => PROSPECTOR_PERK_SET.has(name)),
                         )).slice(0, MAX_PERKS_PER_MATCH);
-                        const shouldApplyCharacterWeapons = hasCharacterWeaponSignal || resolvedProspectorWeapons.length > 0;
-                        const shouldApplyCharacterEquipment = hasCharacterEquipmentSignal || resolvedProspectorEquipment.length > 0;
-                        const shouldApplyCharacterPerks = hasCharacterPerkSignal || resolvedProspectorPerks.length > 0;
+                        const shouldApplyCharacterWeapons = resolvedProspectorWeapons.length > 0;
+                        const shouldApplyCharacterEquipment = resolvedProspectorEquipment.length > 0;
+                        const shouldApplyCharacterPerks = resolvedProspectorPerks.length > 0;
                         const finalHero = (heroName && !heroName.startsWith('Unknown')) ? heroName : currentLoadoutRef.current?.hero;
                         const finalShip = (shipName && !shipName.startsWith('Unknown')) ? shipName : currentLoadoutRef.current?.ship;
 

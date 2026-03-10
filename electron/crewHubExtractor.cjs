@@ -773,12 +773,35 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
   // ── Bounds ──────────────────────────────────────────────────────────────────
   const panelXMin = imageWidth  * layout.ENEMY_PANEL.xMin;   // ~0.55
   const panelXMax = imageWidth  * layout.ENEMY_PANEL.xMax;   // ~1.0
-  const panelYMin = imageHeight * layout.ENEMY_PANEL.yMin;   // ~0.08
+  let panelYMin = imageHeight * layout.ENEMY_PANEL.yMin;     // ~0.08
   const panelYMax = imageHeight * layout.ENEMY_PANEL.yMax;   // ~0.95
 
   // Enemy name X-band: narrower filter to isolate player name text
   const nameXMin = imageWidth * layout.ENEMY_NAME.xMin;      // ~0.63
   const nameXMax = imageWidth * layout.ENEMY_NAME.xMax;      // ~0.92
+
+  const topHudWords = (words || []).filter((word) => {
+    if (!word?.bbox || !word?.text) return false;
+    const cx = (word.bbox.x0 + word.bbox.x1) / 2;
+    const cy = (word.bbox.y0 + word.bbox.y1) / 2;
+    if (cx < nameXMin || cx > panelXMax) return false;
+    if (cy < panelYMin || cy > imageHeight * 0.20) return false;
+
+    const compact = String(word.text || '').toUpperCase().replace(/[^A-Z0-9%]/g, '');
+    return compact === 'FPS'
+      || compact === 'GPU'
+      || compact === 'CPU'
+      || compact === 'LAT'
+      || /^FPS\d+$/.test(compact)
+      || /^GPU\d+%?$/.test(compact)
+      || /^CPU\d+%?$/.test(compact)
+      || /^LAT\d+MS?$/.test(compact);
+  });
+  if (topHudWords.length > 0) {
+    const hudBottomY = Math.max(...topHudWords.map((word) => Number(word?.bbox?.y1 || 0)));
+    panelYMin = Math.min(panelYMax, Math.max(panelYMin, hudBottomY + Math.round(imageHeight * 0.015)));
+    dlog('[CrewHub] Raised enemy panel yMin to skip top HUD: ' + Math.round(panelYMin));
+  }
 
   // ── Step 1: Filter words into enemy name X-band ─────────────────────────────
   const enemyWords = [];
@@ -1053,13 +1076,14 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       }
     }
 
-    if (!isValidOpponentName(playerName)) {
+    const allowShortTagCandidate = isLikelyShortUiSuffixTagCandidate(line.words, playerName);
+    if (!isValidOpponentName(playerName) && !allowShortTagCandidate) {
       // Try stripping a leading digit-noise fragment to recover the real player name
       // e.g. "4s lirolake" → strip "4s" → test "lirolake" alone
       const _nameParts = playerName.trim().split(/\s+/);
       if (_nameParts.length >= 2 && /^\d/.test(_nameParts[0])) {
         const _stripped = _nameParts.slice(1).join(' ');
-        if (isValidOpponentName(_stripped)) {
+        if (isValidOpponentName(_stripped) || isLikelyShortUiSuffixTagCandidate(line.words, _stripped)) {
           playerName = _stripped;
         } else { dlog('[CrewHub] SKIP invalid-name: "' + playerName + '"'); continue; }
       } else { dlog('[CrewHub] SKIP invalid-name: "' + playerName + '"'); continue; }
@@ -1755,7 +1779,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     const existingNames = new Set(enemyTeams.flatMap(t => (t.players || []).map(p => normalizeNameKey(p))));
     const pickSalvageNameFromLine = (lineWords) => {
       let primary = extractPlayerNameFromLine(lineWords);
-      if (primary && isValidOpponentName(primary)) {
+      if (primary && (isValidOpponentName(primary) || isLikelyShortUiSuffixTagCandidate(lineWords, primary))) {
         // Mirror the phantom-19 strip applied in the main extraction loop so that
         // a stripped name (e.g. "Pu4uPu4u") already in existingNames blocks the
         // un-stripped salvage candidate ("Pu4uPu4u19") from leaking into a second team.
@@ -1773,7 +1797,7 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
         const raw = String(word?.text || '').trim();
         if (!raw) continue;
         const candidate = cleanupPlayerName(raw);
-        if (!candidate || !isValidOpponentName(candidate)) continue;
+        if (!candidate || (!isValidOpponentName(candidate) && !isLikelyShortUiSuffixTagCandidate([word], candidate))) continue;
         const score = scoreAsPlayerName(candidate);
         if (score > bestScore) {
           best = candidate;
@@ -1786,6 +1810,8 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
 
     const salvageCandidates = groupedLines
       .map(line => {
+        const inBarZone = barZones.some(z => line.y >= z.min && line.y <= z.max);
+        if (inBarZone) return null;
         const name = pickSalvageNameFromLine(line.words);
         if (!name) return null;
         const key = normalizeNameKey(name);
@@ -2389,6 +2415,30 @@ function sanitizeLeftPanelPlayerName(name) {
   return value || null;
 }
 
+function isLikelyShortUiSuffixTagCandidate(lineWords, candidate) {
+  const cleaned = String(candidate || '').trim();
+  if (!/^[a-z]{3}$/i.test(cleaned)) return false;
+
+  const rawTokens = (lineWords || [])
+    .map((word) => String(word?.text || '').trim())
+    .filter(Boolean);
+  if (rawTokens.length !== 1) return false;
+
+  const rawToken = rawTokens[0];
+  const normalizedRaw = rawToken
+    .replace(/[^a-z0-9]/gi, '')
+    .toLowerCase();
+  const normalizedCandidate = cleaned.toLowerCase();
+  if (!normalizedRaw || normalizedRaw === normalizedCandidate) return false;
+  if (!normalizedRaw.startsWith(normalizedCandidate)) return false;
+  if (!/^(15|19)$/.test(normalizedRaw.slice(normalizedCandidate.length))) return false;
+
+  // Keep this exception narrow: lowercase-ish short tags with a common crew-hub
+  // icon/rank suffix should survive long enough for the shared OCR resolver to
+  // map them back to known pilots like "leet".
+  return /[a-z]/.test(rawToken) && normalizedRaw === normalizedRaw.toLowerCase();
+}
+
 function extractBottomLeftTeammateCandidates(words, imageWidth, imageHeight) {
   const bounds = {
     xMin: imageWidth * 0.0,
@@ -2761,6 +2811,7 @@ module.exports = {
     getSameColorSplitGap,
     getSameColorMergeGap,
     isNearSkippedAnchor,
+    isLikelyShortUiSuffixTagCandidate,
     isValidOpponentName,
   },
 };
