@@ -806,6 +806,58 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
     return [];
   }
 
+  // ── Step 1b: Pre-merge fragmented bracket tokens ─────────────────────────────
+  // Tesseract/PaddleOCR sometimes splits rank prefixes like "[6*]Tiblolan" into
+  // two tokens: "[6*]" (or "[") and "Tiblolan". Merge them back when the bracket
+  // token is immediately left-adjacent (gap < 1 char width) to a name token.
+  {
+    const merged = [];
+    const used = new Set();
+    for (let i = 0; i < enemyWords.length; i++) {
+      if (used.has(i)) continue;
+      const w = enemyWords[i];
+      const t = (w.text || '').trim();
+      // Candidate bracket token: starts with '[' and is short (≤6 chars)
+      if (/^\[[\d*°+~]*\]?$/.test(t) && t.length <= 6 && w.bbox) {
+        // Look for an adjacent word to the right on the same row
+        for (let j = i + 1; j < enemyWords.length; j++) {
+          if (used.has(j)) continue;
+          const n = enemyWords[j];
+          if (!n.bbox) continue;
+          const cy1 = (w.bbox.y0 + w.bbox.y1) / 2;
+          const cy2 = (n.bbox.y0 + n.bbox.y1) / 2;
+          const lineH = w.bbox.y1 - w.bbox.y0;
+          if (Math.abs(cy1 - cy2) > lineH * 1.2) continue; // different row
+          const gap = n.bbox.x0 - w.bbox.x1;
+          const charW = Math.max(4, (w.bbox.x1 - w.bbox.x0) / Math.max(1, t.length));
+          if (gap < charW * 2) {
+            // Merge: "[6*]" + "Tiblolan" → "[6*]Tiblolan"
+            const mergedWord = {
+              text: t + (n.text || '').trim(),
+              confidence: Math.min(w.confidence || 0, n.confidence || 0),
+              bbox: {
+                x0: w.bbox.x0, y0: Math.min(w.bbox.y0, n.bbox.y0),
+                x1: n.bbox.x1, y1: Math.max(w.bbox.y1, n.bbox.y1),
+              },
+            };
+            dlog('[CrewHub] Bracket merge: "' + t + '" + "' + (n.text||'').trim() + '" → "' + mergedWord.text + '"');
+            merged.push(mergedWord);
+            used.add(i);
+            used.add(j);
+            break;
+          }
+        }
+        if (used.has(i)) continue;
+      }
+      merged.push(w);
+    }
+    if (merged.length < enemyWords.length) {
+      dlog('[CrewHub] Bracket pre-merge: ' + enemyWords.length + ' → ' + merged.length + ' words');
+      enemyWords.length = 0;
+      for (const w of merged) enemyWords.push(w);
+    }
+  }
+
   // ── Step 2: Group words into lines ──────────────────────────────────────────
   const groupedLines = groupWordsIntoLines(enemyWords, imageHeight, imageWidth);
   dlog('[CrewHub] Enemy lines found: ' + groupedLines.length + ' | ys=' + groupedLines.map(l => Math.round(l.y)).join(','));
@@ -1025,6 +1077,29 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
       } else {
         dlog('[CrewHub] SKIP multi-word noise: "' + playerName + '"');
         continue;
+      }
+    }
+
+    // ── Phantom numeric suffix filter ────────────────────────────────────────
+    // OCR sometimes appends "19" to a name due to rank-badge bleed on the same
+    // row.  "19" is the most common phantom artifact in this game's rank UI.
+    // We ONLY strip the literal string "19" when preceded by a non-digit, so
+    // that intentional numeric suffixes like "84", "16", "1", "9" are never
+    // touched.  Names with digits before the "19" (e.g. "smu519", "Wobbly319")
+    // are also protected because the penultimate char is a digit.
+    // Examples stripped:  "Limler19"→"Limler", "Pu4uPu4u19"→"Pu4uPu4u",
+    //                     "Daafin19"→"Daafin"
+    // Examples protected: "primord1" (not 19), "itamare84" (not 19),
+    //                     "smu519" (preceding char is digit), "Wobbly319" (same)
+    {
+      const phantomMatch = playerName.match(/^(.*[^0-9])(19)$/);
+      if (phantomMatch) {
+        const base = phantomMatch[1];
+        const suffix = phantomMatch[2];
+        if (base.length >= 4 && isValidOpponentName(base)) {
+          dlog('[CrewHub] Phantom suffix strip: "' + playerName + '" → "' + base + '" (removed "' + suffix + '")');
+          playerName = base;
+        }
       }
     }
 
@@ -1679,8 +1754,15 @@ async function extractEnemyPanel(colorImageBuffer, words, lines, text, imageWidt
   if (knownColorTeams.length > 0 && totalPlayers < Math.max(6, knownColorTeams.length * 3)) {
     const existingNames = new Set(enemyTeams.flatMap(t => (t.players || []).map(p => normalizeNameKey(p))));
     const pickSalvageNameFromLine = (lineWords) => {
-      const primary = extractPlayerNameFromLine(lineWords);
-      if (primary && isValidOpponentName(primary)) return primary;
+      let primary = extractPlayerNameFromLine(lineWords);
+      if (primary && isValidOpponentName(primary)) {
+        // Mirror the phantom-19 strip applied in the main extraction loop so that
+        // a stripped name (e.g. "Pu4uPu4u") already in existingNames blocks the
+        // un-stripped salvage candidate ("Pu4uPu4u19") from leaking into a second team.
+        const pm = primary.match(/^(.*[^0-9])(19)$/);
+        if (pm && pm[1].length >= 4 && isValidOpponentName(pm[1])) primary = pm[1];
+        return primary;
+      }
 
       // Fallback: duplicated OCR tokens on the same row can produce a combined
       // string that fails validation (e.g. "IAH_11 IAH_1111"). In under-capture
@@ -1847,7 +1929,7 @@ function assembleMultiWordNames(words) {
     if (sameRow && !isDuplicateText && !isPureNumericSuffix && gap >= 0 && gap < avgCharWidth * 3) {
       current = {
         text: (current.text || '') + ' ' + (sorted[i].text || ''),
-        confidence: Math.min(current.confidence || 0, sorted[i].confidence || 0),
+        confidence: Math.round(((current.confidence || 0) + (sorted[i].confidence || 0)) / 2),
         bbox: {
           x0: current.bbox.x0,
           y0: Math.min(current.bbox.y0, sorted[i].bbox.y0),
@@ -2452,8 +2534,8 @@ function isValidOpponentName(name) {
   // always have numbers, underscores, or at least one non-title-case word.
   if (name.includes(' ') && !/[0-9_]/.test(name)) {
     const _pp = name.trim().split(/\s+/);
-    // Only block if all words are title-case and all are <6 chars (e.g. 'Fancy Goose'), but allow real names like 'Nathan Fielder'
-    if (_pp.length >= 2 && _pp.every(p => /^[A-Z][a-z]+$/.test(p)) && _pp.every(p => p.length < 6)) return false;
+    // Only block 2-word title-case short names (e.g. 'Fancy Goose'). Allow 3+ word names like 'Sushi Mc Beef' or 'Nathan Fielder'.
+    if (_pp.length === 2 && _pp.every(p => /^[A-Z][a-z]+$/.test(p)) && _pp.every(p => p.length < 6)) return false;
   }
 
   if (!/[a-zA-Z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff]/.test(name)) return false;
@@ -2546,6 +2628,10 @@ function namesAreNearDuplicate(a, b) {
   const shorter = aKey.length <= bKey.length ? aKey : bKey;
   const longer  = aKey.length <= bKey.length ? bKey : aKey;
   if (shorter.length >= 8 && longer.includes(shorter)) return true;
+  // Phantom-suffix dedup: "Daafin" and "Daafin19" are the same player —
+  // the digit suffix is an OCR badge artifact.  Match when the shorter name
+  // is a prefix of the longer and the extra chars are 1–2 digits only.
+  if (shorter.length >= 4 && longer.startsWith(shorter) && /^\d{1,2}$/.test(longer.slice(shorter.length))) return true;
   // Fuzzy dedup (OCR typo tolerance): allow edit distance <=1 for medium+ names.
   // Keep short tags strict to avoid conflating distinct short handles.
   if (
