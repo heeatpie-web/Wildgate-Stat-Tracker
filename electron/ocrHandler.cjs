@@ -2587,7 +2587,7 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
   const teammates = capPlayers((crewHubData.yourTeam?.players || []).map(name => ({
     name: typeof name === 'string' ? name : name.name,
     confidence: typeof name === 'string' ? 80 : (Number.isFinite(Number(name.confidence)) ? Number(name.confidence) : 0),
-    confidenceSource: typeof name === 'string' ? 'legacy_default' : name.confidenceSource,
+    confidenceSource: typeof name === 'string' ? 'direct_ocr' : (name.confidenceSource || 'direct_ocr'),
     isTeammate: true,
   })), LEGACY_MAX_TEAMMATES);
 
@@ -2601,7 +2601,7 @@ function convertCrewHubToLegacy(crewHubData, rawText) {
     players: capPlayers((team.players || []).map(p => ({
       name: typeof p === 'string' ? p : p.name,
       confidence: typeof p === 'string' ? 75 : (Number.isFinite(Number(p.confidence)) ? Number(p.confidence) : 0),
-      confidenceSource: typeof p === 'string' ? 'legacy_default' : p.confidenceSource,
+      confidenceSource: typeof p === 'string' ? 'direct_ocr' : (p.confidenceSource || 'direct_ocr'),
       isTeammate: false,
     })), 4),
     confidence: team.confidence || 70,
