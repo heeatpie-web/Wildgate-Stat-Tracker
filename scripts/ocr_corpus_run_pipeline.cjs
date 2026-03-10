@@ -66,8 +66,12 @@ function resolveSampleImagePaths(sample, truthPath) {
   const truthDir = path.dirname(path.resolve(truthPath));
   const candidates = [];
 
+  // `imagePaths` is the explicit ordered multi-capture list. Keep it first so
+  // map+crew and scrolled capture samples run in the intended merge order.
+  if (safeArray(sample?.imagePaths).length > 0) {
+    candidates.push(...sample.imagePaths);
+  }
   if (String(sample?.imagePath || '').trim()) candidates.push(String(sample.imagePath).trim());
-  if (safeArray(sample?.imagePaths).length > 0) candidates.push(...sample.imagePaths);
   if (safeArray(sample?.artifacts).length > 0) candidates.push(...sample.artifacts);
 
   const unique = [];
@@ -153,7 +157,7 @@ async function main() {
           throw new Error(`Missing image: ${imagePath}`);
         }
         const imageBase64 = fs.readFileSync(imagePath).toString('base64');
-        const result = await processCapture(imageBase64, args.activeUser || null, merged, args.ocrMode, {
+        const result = await processCapture(imageBase64, args.activeUser || null, null, args.ocrMode, {
           sourceImagePath: imagePath,
           skipDebugSave: true,
           forceUncached: true,
@@ -161,6 +165,8 @@ async function main() {
         if (!result?.success || !result?.data) {
           throw new Error(result?.error || 'OCR returned no data');
         }
+        // Mirror the live app's multi-image flow: OCR each image independently
+        // and merge only at the corpus-runner layer.
         merged = merged ? mergeCaptures(merged, result.data) : result.data;
       }
 

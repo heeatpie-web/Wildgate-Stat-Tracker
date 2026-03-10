@@ -37,6 +37,10 @@ function safeArray(v) {
   return Array.isArray(v) ? v : [];
 }
 
+function isMissingImageFailure(failure) {
+  return /^Missing image:/i.test(String(failure?.error || '').trim());
+}
+
 function canonicalizeName(s) {
   // Normalize accents so diacritic-only variants compare as the same handle.
   return String(s || '')
@@ -90,6 +94,10 @@ function canonicalizeModifier(s) {
   return words.join('');
 }
 
+function hasDeadSensorsModifier(modifiers) {
+  return safeArray(modifiers).some((modifier) => canonicalizeModifier(modifier) === 'deadsensors');
+}
+
 function canonicalizeColor(s) {
   return String(s || '')
     .trim()
@@ -100,7 +108,6 @@ function canonicalizeColor(s) {
 function canonicalizeShipType(value) {
   const v = String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
   if (!v) return '';
-  if (v === 'battle scout') return 'scout';
   if (v === 'outlaw solo') return 'solo outlaw';
   return v;
 }
@@ -180,18 +187,22 @@ function computeShipTypeMetrics(truthSample, predSample) {
 
   let opponentComparable = 0;
   let opponentMatched = 0;
-  for (const truthTeam of safeArray(truthSample.opponentTeams)) {
-    const truthShipType = canonicalizeShipType(truthTeam.shipType);
-    if (!truthShipType) continue;
-    opponentComparable += 1;
+  // Dead Sensors hides opponent ship types, so exclude opponent ship-type
+  // scoring even if stale GT labels are present.
+  if (!hasDeadSensorsModifier(truthSample.modifiers)) {
+    for (const truthTeam of safeArray(truthSample.opponentTeams)) {
+      const truthShipType = canonicalizeShipType(truthTeam.shipType);
+      if (!truthShipType) continue;
+      opponentComparable += 1;
 
-    const matchedPredTeam = findMatchingPredOpponentTeam(
-      truthTeam,
-      safeArray(truthSample.opponentTeams),
-      safeArray(predSample && predSample.opponentTeams)
-    );
-    const predShipType = canonicalizeShipType(matchedPredTeam && matchedPredTeam.shipType);
-    if (predShipType && predShipType === truthShipType) opponentMatched += 1;
+      const matchedPredTeam = findMatchingPredOpponentTeam(
+        truthTeam,
+        safeArray(truthSample.opponentTeams),
+        safeArray(predSample && predSample.opponentTeams)
+      );
+      const predShipType = canonicalizeShipType(matchedPredTeam && matchedPredTeam.shipType);
+      if (predShipType && predShipType === truthShipType) opponentMatched += 1;
+    }
   }
 
   return {
@@ -460,8 +471,10 @@ function main() {
 
   const truthSamples = safeArray(truth.samples);
   const predById = new Map(safeArray(pred.samples).map(s => [s.sampleId, s]));
+  const failureById = new Map(safeArray(pred.failures).map((failure) => [String(failure?.sampleId || ''), failure]));
 
   const perSample = [];
+  const skippedSamples = [];
   const totals = {
     teammate: { tp: 0, fp: 0, fn: 0, predCount: 0 },
     opponent: { tp: 0, fp: 0, fn: 0, predCount: 0 },
@@ -481,6 +494,16 @@ function main() {
   };
 
   for (const t of truthSamples) {
+    const failure = failureById.get(String(t?.sampleId || ''));
+    if (isMissingImageFailure(failure)) {
+      skippedSamples.push({
+        sampleId: t.sampleId,
+        reason: 'missing_image',
+        error: String(failure.error || '')
+      });
+      continue;
+    }
+
     const p = predById.get(t.sampleId) || {};
     const teammateStats = setStats(
       filterActiveUser(t.teammates, args.activeUser),
@@ -550,6 +573,8 @@ function main() {
     });
   }
 
+  const evaluatedSamples = perSample.length;
+
   const microPrecision = (cat) => pct(cat.tp / Math.max(1, cat.tp + cat.fp));
   const microRecall = (cat) => pct(cat.tp / Math.max(1, cat.tp + cat.fn));
   const microF1 = (cat) => {
@@ -560,6 +585,8 @@ function main() {
 
   const summary = {
     totalSamples: truthSamples.length,
+    evaluatedSamples,
+    skippedSamples: skippedSamples.length,
     teammateRecall: microRecall(totals.teammate),
     teammatePrecision: microPrecision(totals.teammate),
     teammateF1: microF1(totals.teammate),
@@ -576,7 +603,7 @@ function main() {
         : null,
     truthColorTeams: totals.teamColorTruthCount,
     missingPredTeamColor: totals.teamColorMissingPred,
-    sessionUsablePassRate: pct(totals.sessionUsablePass / Math.max(1, truthSamples.length)),
+    sessionUsablePassRate: pct(totals.sessionUsablePass / Math.max(1, evaluatedSamples)),
     tacticalSamples: totals.tacticalSamples,
     yourShipTypeComparable: totals.yourShipTypeComparable,
     yourShipTypeAccuracy:
@@ -620,6 +647,7 @@ function main() {
     },
     summary,
     deltas,
+    skippedSamples,
     perSample
   };
 
