@@ -75,9 +75,9 @@ export default [
     },
   },
 
-  // Electron main process: mostly CommonJS.
+  // Electron main process: CommonJS entrypoints and helpers.
   {
-    files: ['electron/**/*.cjs', 'electron/**/*.js', 'electron/**/*.mjs'],
+    files: ['electron/**/*.cjs'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'script',
@@ -99,6 +99,34 @@ export default [
     rules: {
       // Avoid blocking on stylistic JS issues in the main process.
       'no-unused-vars': 'off',
+    },
+  },
+
+  // Electron tests: root package.json declares ESM, so plain .js tests use import syntax.
+  {
+    files: ['electron/**/*.js', 'electron/**/*.mjs'],
+    languageOptions: {
+      parser: tsParser,
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: {
+        process: 'readonly',
+        Buffer: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+      },
+    },
+    plugins: {
+      '@typescript-eslint': tsPlugin,
+    },
+    rules: {
+      ...tsPlugin.configs.recommended.rules,
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
     },
   },
 

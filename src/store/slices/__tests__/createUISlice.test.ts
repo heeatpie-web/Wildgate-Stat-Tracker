@@ -11,19 +11,19 @@ describe('createUISlice notifications', () => {
     store = makeStore();
   });
 
-  it('routes setToast notifications into history and stacks popup ids', () => {
+  it('routes setToast notifications into inbox history by default', () => {
     store.getState().setToast({ message: 'First', type: 'info' });
     store.getState().setToast({ message: 'Second', type: 'warning' });
 
     const state = store.getState();
     expect(state.notifications).toHaveLength(2);
-    expect(state.toast?.message).toBe('Second');
-    expect(state.notificationQueue).toHaveLength(2);
+    expect(state.toast).toBeNull();
+    expect(state.notificationQueue).toHaveLength(0);
   });
 
   it('dismisses the active popup while keeping remaining stacked popups visible', () => {
-    store.getState().setToast({ message: 'First', type: 'info' });
-    store.getState().setToast({ message: 'Second', type: 'warning' });
+    store.getState().setToast({ message: 'First', type: 'info', popup: true });
+    store.getState().setToast({ message: 'Second', type: 'warning', popup: true });
 
     store.getState().dismissActiveNotification();
     expect(store.getState().toast?.message).toBe('First');
@@ -31,9 +31,9 @@ describe('createUISlice notifications', () => {
   });
 
   it('keeps history and maintains a stacked popup burst', () => {
-    store.getState().setToast({ message: 'First', type: 'info' });
-    store.getState().setToast({ message: 'Second', type: 'warning' });
-    store.getState().setToast({ message: 'Third', type: 'success' });
+    store.getState().setToast({ message: 'First', type: 'info', popup: true });
+    store.getState().setToast({ message: 'Second', type: 'warning', popup: true });
+    store.getState().setToast({ message: 'Third', type: 'success', popup: true });
 
     const stateAfterBurst = store.getState();
     expect(stateAfterBurst.notifications).toHaveLength(3);
@@ -52,9 +52,9 @@ describe('createUISlice notifications', () => {
   });
 
   it('dismisses a specific popup id without draining the stack', () => {
-    store.getState().setToast({ message: 'First', type: 'info' });
-    store.getState().setToast({ message: 'Second', type: 'warning' });
-    store.getState().setToast({ message: 'Third', type: 'success' });
+    store.getState().setToast({ message: 'First', type: 'info', popup: true });
+    store.getState().setToast({ message: 'Second', type: 'warning', popup: true });
+    store.getState().setToast({ message: 'Third', type: 'success', popup: true });
 
     const second = store.getState().notifications.find((item) => item.message === 'Second');
     expect(second).toBeDefined();
@@ -84,8 +84,8 @@ describe('createUISlice notifications', () => {
   });
 
   it('marks notifications as read and supports mark-all', () => {
-    store.getState().pushNotification({ message: 'One', type: 'info' });
-    store.getState().pushNotification({ message: 'Two', type: 'warning' });
+    store.getState().pushNotification({ message: 'One', type: 'info', popup: true });
+    store.getState().pushNotification({ message: 'Two', type: 'warning', popup: true });
 
     const [first] = store.getState().notifications;
     store.getState().markNotificationRead(first.id);
@@ -100,7 +100,7 @@ describe('createUISlice notifications', () => {
 
   it('queues popup notifications while suspended and restores the toast when resumed', () => {
     store.getState().setNotificationsSuspended(true);
-    store.getState().pushNotification({ message: 'Queued', type: 'info' });
+    store.getState().pushNotification({ message: 'Queued', type: 'info', popup: true });
 
     expect(store.getState().notificationQueue).toHaveLength(1);
     expect(store.getState().toast).toBeNull();

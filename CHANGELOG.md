@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.5] - 2026-03-10
+
+### Fixed
+- Notifications now stay in the notification inbox by default instead of popping separately across the app
+- Telemetry match start, smart-capture reminder, and match-ready/result prompts now appear as centered dialogs above the current view for a consistent workflow
+- Smart Captures OCR review now restores recording-panel enemies, team ship assignments, and match time more reliably after reviewing historical matches
+
 ## [3.1.4] - 2026-03-09
 
 ### Added

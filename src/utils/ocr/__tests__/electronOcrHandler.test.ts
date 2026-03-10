@@ -90,7 +90,7 @@ describe('electron/ocrHandler crew-hub teammate cleanup', () => {
     ]);
   });
 
-  it('marks legacy string-only crew-hub names as inferred confidence', () => {
+  it('marks crew-hub string-only names as direct OCR confidence', () => {
     const result = __test__.convertCrewHubToLegacy(
       {
         yourTeam: {
@@ -114,11 +114,11 @@ describe('electron/ocrHandler crew-hub teammate cleanup', () => {
 
     expect(result.teammates?.[0]).toMatchObject({
       name: 'PilotOne',
-      confidenceSource: 'legacy_default',
+      confidenceSource: 'direct_ocr',
     });
     expect(result.opponentTeams?.[0]?.players?.[0]).toMatchObject({
       name: 'EnemyOne',
-      confidenceSource: 'legacy_default',
+      confidenceSource: 'direct_ocr',
     });
   });
 

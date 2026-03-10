@@ -137,7 +137,7 @@ export const SetupWizard: React.FC = () => {
                 message,
                 type: 'warning',
                 source: 'wizard',
-                popup: true,
+                popup: false,
             });
         });
     }, [pushNotification]);

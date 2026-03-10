@@ -51,7 +51,7 @@ describe('Toast', () => {
     vi.useRealTimers();
   });
 
-  it('renders as a top-right popup and auto-closes on duration', async () => {
+  it('renders as a centered top popup and auto-closes on duration', async () => {
     const onClose = vi.fn();
     const { Toast } = await import('./Toast');
 
@@ -67,10 +67,9 @@ describe('Toast', () => {
     const popup = screen.getByRole('status');
     const stack = popup.parentElement;
     expect(stack).toHaveClass('fixed');
-    expect(stack).toHaveClass('top-20');
-    expect(stack).toHaveClass('right-4');
-    expect(stack).toHaveClass('bottom-auto');
-    expect(stack).toHaveClass('left-auto');
+    expect(stack).toHaveClass('top-4');
+    expect(stack).toHaveClass('left-1/2');
+    expect(stack).toHaveClass('-translate-x-1/2');
     expect(popup).toHaveClass('bg-md-sys-surface-container-highest');
     expect(popup).toHaveClass('text-md-sys-on-surface');
 

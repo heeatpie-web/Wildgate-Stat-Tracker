@@ -17,6 +17,19 @@ import {
 
 const DEFAULT_ARTIFACT_LOOKBACK_MS = 10 * 60 * 1000;
 const IMAGE_ARTIFACT_PATTERN = /\.(png|jpe?g|webp|bmp|gif)$/i;
+const canLaunchConfetti = () => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return false;
+    const userAgent = String(window.navigator?.userAgent || '').toLowerCase();
+    return !userAgent.includes('jsdom');
+};
+const launchVictoryConfetti = () => {
+    if (!canLaunchConfetti()) return;
+    void import('canvas-confetti')
+        .then(({ default: confetti }) => confetti({ particleCount: 100, spread: 70 }))
+        .catch((error) => {
+            Logger.warn('MatchSubmission', `Unable to launch confetti: ${error instanceof Error ? error.message : String(error)}`);
+        });
+};
 const parseDurationSecs = (value: string | undefined): number => {
     if (!value) return 0;
     const parts = value.split(':').map(Number);
@@ -415,7 +428,7 @@ export const useMatchSubmission = () => {
             if (subType === 'Artifact') finalMods.push(`Artifact: ${pendingArtifactType || 'healing'}`);
 
             if (selectedResult === 'Win') {
-                import('canvas-confetti').then(({ default: confetti }) => confetti({ particleCount: 100, spread: 70 }));
+                launchVictoryConfetti();
                 playVictory();
             } else {
                 playDefeat();

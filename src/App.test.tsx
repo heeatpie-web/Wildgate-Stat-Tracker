@@ -307,6 +307,20 @@ describe('App', () => {
     confirmSpy.mockRestore();
   });
 
+  it('renders the telemetry match-start prompt as a centered dialog', async () => {
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('telemetry:draft-started', {
+        detail: { matchId: 321 },
+      }));
+    });
+
+    expect(screen.getByRole('dialog', { name: /telemetry match detected/i })).toBeInTheDocument();
+    expect(screen.getByText(/telemetry detected mission start/i)).toBeInTheDocument();
+  });
+
   it('renders recording view in default dashboard mode', async () => {
     const { default: App } = await import('./App');
     render(<App />);
@@ -339,7 +353,7 @@ describe('App', () => {
     });
   });
 
-  it('renders retention prompts in the top overlay layer via portal', async () => {
+  it('routes telemetry retention reminders into inbox notifications instead of auto-popup overlays', async () => {
     const { default: App } = await import('./App');
     const api = {
       invoke: vi.fn((channel: string) => {
@@ -370,12 +384,14 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText(/telemetry retention needs cleanup/i)).toBeInTheDocument();
+      expect(uiState.pushNotification).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Telemetry retention needs cleanup. Open the prompt from Notifications when you are ready.',
+        type: 'warning',
+        source: 'telemetry',
+        deepLink: { type: 'openTelemetryPrune' },
+      }));
     });
-
-    const overlayStack = document.querySelector('.fixed.z-top');
-    expect(overlayStack).not.toBeNull();
-    expect(overlayStack?.textContent).toContain('Telemetry retention needs cleanup');
+    expect(screen.queryByText(/telemetry retention needs cleanup/i)).not.toBeInTheDocument();
   });
 
   it('renders changelog dialog semantics and closes on Escape', async () => {

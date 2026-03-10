@@ -1,4 +1,9 @@
 export const CHANGELOG: Record<string, string[]> = {
+  "v3.1.5": [
+    "Fix: Notifications now stay in the notification inbox by default instead of popping separately across the app.",
+    "Fix: Telemetry match start, smart-capture reminder, and match-ready/result prompts now appear as centered blocking dialogs above the current view for a more consistent workflow.",
+    "Fix: Smart Captures OCR review now restores recording-panel enemies, team ship assignments, and match time more reliably after reviewing historical matches."
+  ],
   "v3.1.2": [
     "Release: Version 3.1.2 rolls in the recording, sidebar, analytics, and modal polish pass, including new Smart Captures and ID Mapper sidebar badges.",
     "Polish: Smart Capture queue rows, Players surfaces, recording affordances, Profile Hub, Settings, Wizard, and OCR review shells now use the current solid design language with cleaner spacing and less transparency.",

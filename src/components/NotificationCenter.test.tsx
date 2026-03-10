@@ -122,6 +122,33 @@ describe('NotificationCenter', () => {
     expect(uiState.setSmartCapturesOpenOcrReviewMatchId).toHaveBeenCalledWith(119);
   });
 
+  it('dispatches the telemetry prune modal event for prune notifications', async () => {
+    uiState.notificationCenterOpen = true;
+    uiState.notifications = [
+      {
+        id: 'n_prune',
+        message: 'Telemetry retention needs cleanup.',
+        type: 'warning',
+        source: 'telemetry',
+        popup: false,
+        durationMs: 10_000,
+        createdAt: Date.now(),
+        readAt: null,
+        deepLink: { type: 'openTelemetryPrune' },
+      },
+    ];
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+
+    const { NotificationCenter } = await import('./NotificationCenter');
+    render(<NotificationCenter />);
+    fireEvent.click(screen.getByRole('button', { name: /telemetry retention needs cleanup/i }));
+
+    expect(uiState.markNotificationRead).toHaveBeenCalledWith('n_prune');
+    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:open-prune-modal' }));
+
+    dispatchSpy.mockRestore();
+  });
+
   it('anchors the inbox panel at top-right and keeps read rows fully opaque', async () => {
     uiState.notificationCenterOpen = true;
     uiState.notifications = [

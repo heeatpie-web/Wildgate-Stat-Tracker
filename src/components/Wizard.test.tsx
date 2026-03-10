@@ -54,6 +54,7 @@ const processFinalSubmission = vi.fn();
 const saveResultDraft = vi.fn();
 const setPendingMatchDataFromStore = vi.fn();
 const rerunOCRMulti = vi.fn();
+const bundleMatchArtifacts = vi.fn();
 
 vi.mock('../providers/GameDataProvider', () => ({
     useGameData: () => gameData,
@@ -72,6 +73,7 @@ vi.mock('../hooks/useMatchSubmission', () => ({
 }));
 
 vi.mock('../utils/artifactService', () => ({
+    bundleMatchArtifacts,
     rerunOCRMulti,
 }));
 
@@ -126,6 +128,7 @@ describe('Wizard', () => {
         gameData.sessionTeams = {};
         uiState.showWizard = null;
         vi.clearAllMocks();
+        bundleMatchArtifacts.mockResolvedValue([]);
         rerunOCRMulti.mockResolvedValue({
             success: false,
             perFile: [],

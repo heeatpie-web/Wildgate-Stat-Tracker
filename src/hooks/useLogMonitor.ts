@@ -133,12 +133,24 @@ const CHARACTER_EQUIPMENT_NAMES = getProspectorEquipmentCatalog(RAW_CHARACTER_EQ
 const CHARACTER_PERK_NAMES = getPerkCatalog().filter(Boolean);
 const PROSPECTOR_WEAPON_NAME_MAP = buildCanonicalEntityNameMap(CHARACTER_WEAPON_NAMES);
 const PROSPECTOR_WEAPON_SET = new Set(Array.from(PROSPECTOR_WEAPON_NAME_MAP.keys()));
-const PROSPECTOR_EQUIPMENT_SET = new Set(CHARACTER_EQUIPMENT_NAMES);
-const PROSPECTOR_PERK_SET = new Set(CHARACTER_PERK_NAMES);
+const PROSPECTOR_EQUIPMENT_NAME_MAP = buildCanonicalEntityNameMap(CHARACTER_EQUIPMENT_NAMES);
+const PROSPECTOR_EQUIPMENT_SET = new Set(Array.from(PROSPECTOR_EQUIPMENT_NAME_MAP.keys()));
+const PROSPECTOR_PERK_NAME_MAP = buildCanonicalEntityNameMap(CHARACTER_PERK_NAMES);
+const PROSPECTOR_PERK_SET = new Set(Array.from(PROSPECTOR_PERK_NAME_MAP.keys()));
 const toCanonicalProspectorWeaponName = (value: unknown): string => {
     const key = normalizeEntityLabel(value);
     if (!key || !PROSPECTOR_WEAPON_SET.has(key)) return '';
     return PROSPECTOR_WEAPON_NAME_MAP.get(key) || '';
+};
+const toCanonicalProspectorEquipmentName = (value: unknown): string => {
+    const key = normalizeEntityLabel(value);
+    if (!key || !PROSPECTOR_EQUIPMENT_SET.has(key)) return '';
+    return PROSPECTOR_EQUIPMENT_NAME_MAP.get(key) || '';
+};
+const toCanonicalProspectorPerkName = (value: unknown): string => {
+    const key = normalizeEntityLabel(value);
+    if (!key || !PROSPECTOR_PERK_SET.has(key)) return '';
+    return PROSPECTOR_PERK_NAME_MAP.get(key) || '';
 };
 
 
@@ -349,10 +361,9 @@ export const useLogMonitor = (activeUser?: string) => {
         telemetryDraftMatchIdRef.current = matchId;
         telemetryDraftStartedAtRef.current = gameTime;
         telemetryDraftLoadoutSignatureRef.current = buildLoadoutSignature(draft.loadout);
-        setToast({
-            message: 'Telemetry draft match created. We will prompt for result or Smart Capture after match end.',
-            type: 'info',
-        });
+        window.dispatchEvent(new CustomEvent('telemetry:draft-started', {
+            detail: { matchId },
+        }));
         Logger.info('LogMonitor', `Telemetry draft created (matchId=${matchId})`);
         return matchId;
     };
@@ -504,12 +515,6 @@ export const useLogMonitor = (activeUser?: string) => {
             window.dispatchEvent(new CustomEvent('telemetry:draft-ready', {
                 detail: { matchId: draftId, duration },
             }));
-            setToast({
-                message: hasTrustedDuration
-                    ? `Telemetry draft ready (${duration}). Choose result or run Smart Capture.`
-                    : `Telemetry draft ready. Duration reset (over ${maxDurationClock}).`,
-                type: hasTrustedDuration ? 'success' : 'warning',
-            });
             Logger.info('LogMonitor', `Telemetry draft finalized (matchId=${draftId}, duration=${duration})`);
         }
         telemetryDraftMatchIdRef.current = null;
@@ -1262,6 +1267,7 @@ export const useLogMonitor = (activeUser?: string) => {
                             'perk_guid_primary', 'perk_guid_secondary',
                             'guid_perk_primary', 'guid_perk_secondary',
                             'perkGuids', 'perksGuids', 'perkIds', 'perkSlots', 'perkSlotData', 'perkLoadout',
+                            'perks',
                             'characterPerks', 'characterPerk', 'characterPerkSlots', 'characterPerkLoadout',
                             'traits', 'traitIds', 'traitGuids',
                         ]);
@@ -1292,18 +1298,57 @@ export const useLogMonitor = (activeUser?: string) => {
                             .map((g) => resolveGuid(g, PERK_GUIDS, 'Perk'))
                             .filter(Boolean) as string[];
 
+                        const resolveDirectProspectorNames = (
+                            candidates: string[],
+                            type: 'Weapon' | 'Equipment' | 'Perk',
+                        ): string[] => {
+                            const seen = new Set<string>();
+                            const resolved: string[] = [];
+                            candidates.forEach((candidate) => {
+                                const raw = String(candidate || '').trim();
+                                if (!raw) return;
+                                const canonical = type === 'Weapon'
+                                    ? toCanonicalProspectorWeaponName(raw)
+                                    : (type === 'Equipment'
+                                        ? toCanonicalProspectorEquipmentName(raw)
+                                        : toCanonicalProspectorPerkName(raw));
+                                if (!canonical) {
+                                    if (type === 'Perk' && !isStableGuid(normalizeGuid(raw))) {
+                                        registerUnknownId(raw, 'Perk');
+                                    }
+                                    return;
+                                }
+                                const dedupeKey = canonical.toLowerCase();
+                                if (seen.has(dedupeKey)) return;
+                                seen.add(dedupeKey);
+                                resolved.push(canonical);
+                            });
+                            return resolved;
+                        };
                         const resolvedProspectorWeapons = Array.from(new Set(
-                            resolvedGuidWeapons.map((name) => toCanonicalProspectorWeaponName(name)).filter(Boolean),
+                            [
+                                ...resolvedGuidWeapons.map((name) => toCanonicalProspectorWeaponName(name)).filter(Boolean),
+                                ...resolveDirectProspectorNames(weaponGuidCandidates, 'Weapon'),
+                            ],
                         )).slice(0, MAX_TELEMETRY_PROSPECTOR_SLOTS);
                         const resolvedProspectorEquipment = Array.from(new Set(
-                            resolvedGuidEquipment.filter((name) => PROSPECTOR_EQUIPMENT_SET.has(name)),
+                            [
+                                ...resolvedGuidEquipment.map((name) => toCanonicalProspectorEquipmentName(name)).filter(Boolean),
+                                ...resolveDirectProspectorNames(equipmentGuidCandidates, 'Equipment'),
+                            ],
                         )).slice(0, MAX_TELEMETRY_PROSPECTOR_SLOTS);
                         const resolvedProspectorPerks = Array.from(new Set(
-                            resolvedGuidPerks.filter((name) => PROSPECTOR_PERK_SET.has(name)),
+                            [
+                                ...resolvedGuidPerks.map((name) => toCanonicalProspectorPerkName(name)).filter(Boolean),
+                                ...resolveDirectProspectorNames(perkGuidCandidates, 'Perk'),
+                            ],
                         )).slice(0, MAX_PERKS_PER_MATCH);
-                        const shouldApplyCharacterWeapons = resolvedProspectorWeapons.length > 0;
-                        const shouldApplyCharacterEquipment = resolvedProspectorEquipment.length > 0;
-                        const shouldApplyCharacterPerks = resolvedProspectorPerks.length > 0;
+                        const shouldClearCharacterWeapons = hasCharacterWeaponSignal && weaponGuidCandidates.length === 0;
+                        const shouldClearCharacterEquipment = hasCharacterEquipmentSignal && equipmentGuidCandidates.length === 0;
+                        const shouldClearCharacterPerks = hasCharacterPerkSignal && perkGuidCandidates.length === 0;
+                        const shouldApplyCharacterWeapons = resolvedProspectorWeapons.length > 0 || shouldClearCharacterWeapons;
+                        const shouldApplyCharacterEquipment = resolvedProspectorEquipment.length > 0 || shouldClearCharacterEquipment;
+                        const shouldApplyCharacterPerks = resolvedProspectorPerks.length > 0 || shouldClearCharacterPerks;
                         const finalHero = (heroName && !heroName.startsWith('Unknown')) ? heroName : currentLoadoutRef.current?.hero;
                         const finalShip = (shipName && !shipName.startsWith('Unknown')) ? shipName : currentLoadoutRef.current?.ship;
 
@@ -1314,16 +1359,16 @@ export const useLogMonitor = (activeUser?: string) => {
                             weapons: (currentLoadoutRef.current?.weapons || []),
                             equipment: (currentLoadoutRef.current?.equipment || []),
                             characterWeapons: shouldApplyCharacterWeapons
-                                ? resolvedProspectorWeapons
+                                ? (resolvedProspectorWeapons.length > 0 ? resolvedProspectorWeapons : [])
                                 : (currentLoadoutRef.current?.characterWeapons || []),
                             characterEquipment: shouldApplyCharacterEquipment
-                                ? resolvedProspectorEquipment
+                                ? (resolvedProspectorEquipment.length > 0 ? resolvedProspectorEquipment : [])
                                 : (currentLoadoutRef.current?.characterEquipment || []),
                             characterPerks: shouldApplyCharacterPerks
-                                ? resolvedProspectorPerks
+                                ? (resolvedProspectorPerks.length > 0 ? resolvedProspectorPerks : [])
                                 : (currentLoadoutRef.current?.characterPerks || currentLoadoutRef.current?.perks || []),
                             perks: shouldApplyCharacterPerks
-                                ? resolvedProspectorPerks
+                                ? (resolvedProspectorPerks.length > 0 ? resolvedProspectorPerks : [])
                                 : (currentLoadoutRef.current?.perks || currentLoadoutRef.current?.characterPerks || []),
                         };
                         const previousLoadoutNames = new Set([

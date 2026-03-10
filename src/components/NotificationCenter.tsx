@@ -125,6 +125,10 @@ export const NotificationCenter: React.FC = () => {
             setShowReviewQueue(true);
             return;
         }
+        if (deepLink.type === 'openTelemetryPrune') {
+            window.dispatchEvent(new CustomEvent('telemetry:open-prune-modal'));
+            return;
+        }
         if (deepLink.type === 'openWizard') {
             setActiveView('recording');
             setShowWizard(deepLink.result || 'Match Result');

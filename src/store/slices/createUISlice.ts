@@ -31,6 +31,7 @@ export type NotificationDeepLink =
     | { type: 'openSettings'; tab: 'identity' | 'interface' | 'ocr-capture' | 'data'; section?: string }
     | { type: 'openIdMapper' }
     | { type: 'openReviewQueue' }
+    | { type: 'openTelemetryPrune' }
     | { type: 'openWizard'; result?: 'Win' | 'Loss' | 'Draw' | 'Match Result' }
     | { type: 'openSmartCaptureOcrReview'; matchId: number };
 
@@ -170,7 +171,7 @@ const createNotification = (input: NotificationInput): AppNotification => {
         type,
         action: input.action,
         source: input.source ?? 'system',
-        popup: input.popup !== false,
+        popup: input.popup === true,
         durationMs: toPositiveDuration(input.durationMs),
         deepLink: input.deepLink,
         createdAt: Date.now(),
@@ -389,7 +390,7 @@ export const createUISlice: StateCreator<UISlice> = (set) => ({
         }
         return pushNotificationState(state, {
             ...toast,
-            popup: toast.popup !== false,
+            popup: toast.popup === true,
         }, state.notificationsSuspended);
     }),
     pushNotification: (notification) => set((state) => pushNotificationState(state, notification, state.notificationsSuspended)),

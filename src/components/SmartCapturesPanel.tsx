@@ -2007,6 +2007,7 @@ const RERUN_PHASE_LABELS: Record<RerunProgressPhase, string> = {
 };
 
 type NonCurrentWizardSnapshot = {
+    activeShip: string;
     selectedTeammates: string[];
     selectedOpponents: string[];
     sessionTeams: Record<string, string[]>;
@@ -2223,6 +2224,7 @@ const SmartMatchDetail: React.FC<{
         const {
             setSelectedTeammates,
             setSelectedOpponents,
+            setActiveShip,
             setSessionTeams,
             setSessionShipTypes,
             setSelectedReachModifiers,
@@ -2236,6 +2238,7 @@ const SmartMatchDetail: React.FC<{
             setPendingPlacement,
             setPendingKilledBy,
             setPendingKilledByShip,
+            activeShip,
         } = useGameData();
         const getLatestMatchSnapshot = useCallback((): Match => (
             useAppStore.getState().matches.find((entry) => entry.id === match.id) || match
@@ -2301,6 +2304,33 @@ const SmartMatchDetail: React.FC<{
             setToast({ message: `Added "${normalized}" to roster`, type: 'success' });
             return true;
         }, [isInPilotRegistry, onAddPilotToRoster, setToast]);
+        const ensureNonCurrentWizardSnapshot = useCallback((storeState: ReturnType<typeof useAppStore.getState>) => {
+            if (nonCurrentWizardSnapshotRef.current) return;
+            const clonedSessionTeams = Object.fromEntries(
+                Object.entries(storeState.sessionTeams || {}).map(([teamKey, members]) => [teamKey, [...members]])
+            );
+            nonCurrentWizardSnapshotRef.current = {
+                activeShip: String(storeState.activeShip || ''),
+                selectedTeammates: [...(storeState.selectedTeammates || [])],
+                selectedOpponents: [...(storeState.selectedOpponents || [])],
+                sessionTeams: clonedSessionTeams,
+                sessionShipTypes: { ...(storeState.sessionShipTypes || {}) },
+                selectedReachModifiers: [...(storeState.selectedReachModifiers || [])],
+                timeMin: String(storeState.timeMin || ''),
+                timeSec: String(storeState.timeSec || ''),
+                damageTaken: String(storeState.damageTaken || ''),
+                kills: { ...(storeState.kills || {}) },
+                poiEasy: Number(storeState.poiEasy || 0),
+                poiMedium: Number(storeState.poiMedium || 0),
+                poiEpic: Number(storeState.poiEpic || 0),
+                pendingPlacement: Number.isInteger(storeState.pendingPlacement)
+                    ? Number(storeState.pendingPlacement)
+                    : null,
+                pendingKilledBy: String(storeState.pendingKilledBy || ''),
+                pendingKilledByShip: String(storeState.pendingKilledByShip || ''),
+                pendingMatchData: storeState.pendingMatchData ? { ...storeState.pendingMatchData } : null,
+            };
+        }, []);
         const openWizardForMatch = useCallback((options?: OpenWizardForMatchOptions) => {
             const matchOverride = options?.matchOverride || null;
             const reusePendingDraft = options?.reusePendingDraft ?? true;
@@ -2343,31 +2373,7 @@ const SmartMatchDetail: React.FC<{
                     storeState.setActiveShip(telemetryShip, 'telemetry');
                 }
             }
-            if (!nonCurrentWizardSnapshotRef.current) {
-                const clonedSessionTeams = Object.fromEntries(
-                    Object.entries(storeState.sessionTeams || {}).map(([teamKey, members]) => [teamKey, [...members]])
-                );
-                nonCurrentWizardSnapshotRef.current = {
-                    selectedTeammates: [...(storeState.selectedTeammates || [])],
-                    selectedOpponents: [...(storeState.selectedOpponents || [])],
-                    sessionTeams: clonedSessionTeams,
-                    sessionShipTypes: { ...(storeState.sessionShipTypes || {}) },
-                    selectedReachModifiers: [...(storeState.selectedReachModifiers || [])],
-                    timeMin: String(storeState.timeMin || ''),
-                    timeSec: String(storeState.timeSec || ''),
-                    damageTaken: String(storeState.damageTaken || ''),
-                    kills: { ...(storeState.kills || {}) },
-                    poiEasy: Number(storeState.poiEasy || 0),
-                    poiMedium: Number(storeState.poiMedium || 0),
-                    poiEpic: Number(storeState.poiEpic || 0),
-                    pendingPlacement: Number.isInteger(storeState.pendingPlacement)
-                        ? Number(storeState.pendingPlacement)
-                        : null,
-                    pendingKilledBy: String(storeState.pendingKilledBy || ''),
-                    pendingKilledByShip: String(storeState.pendingKilledByShip || ''),
-                    pendingMatchData: storeState.pendingMatchData ? { ...storeState.pendingMatchData } : null,
-                };
-            }
+            ensureNonCurrentWizardSnapshot(storeState);
             const latestMatch: Match = shouldReusePendingDraft
                 ? ({
                     ...liveMatch,
@@ -2557,7 +2563,7 @@ const SmartMatchDetail: React.FC<{
                 useAppStore.getState().setWizardInitialTab('ocr');
             }
             setShowWizard(wizardResult);
-        }, [activeUser, isActiveUserLike, match, setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setShowWizard, setTimeMin, setTimeSec, setToast]);
+        }, [activeUser, ensureNonCurrentWizardSnapshot, isActiveUserLike, match, setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setShowWizard, setTimeMin, setTimeSec, setToast]);
 
         useEffect(() => {
             if (!smartCapturesOpenOcrReviewMatchId) return;
@@ -2574,6 +2580,7 @@ const SmartMatchDetail: React.FC<{
             const restoredTeams = Object.fromEntries(
                 Object.entries(snapshot.sessionTeams || {}).map(([teamKey, members]) => [teamKey, [...members]])
             );
+            setActiveShip(snapshot.activeShip || String(activeShip || ''), 'manual');
             setSelectedTeammates([...snapshot.selectedTeammates]);
             setSelectedOpponents([...snapshot.selectedOpponents]);
             setSessionTeams(restoredTeams);
@@ -2590,7 +2597,7 @@ const SmartMatchDetail: React.FC<{
             setPendingKilledBy(snapshot.pendingKilledBy);
             setPendingKilledByShip(snapshot.pendingKilledByShip);
             useAppStore.getState().setPendingMatchData(snapshot.pendingMatchData ? { ...snapshot.pendingMatchData } : null);
-        }, [setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setTimeMin, setTimeSec, showWizard]);
+        }, [activeShip, setActiveShip, setDamageTaken, setKills, setPendingKilledBy, setPendingKilledByShip, setPendingPlacement, setPoiEasy, setPoiEpic, setPoiMedium, setSelectedOpponents, setSelectedReachModifiers, setSelectedTeammates, setSessionShipTypes, setSessionTeams, setTimeMin, setTimeSec, showWizard]);
 
         const applyReviewDataToSession = useCallback((
             readyReviewData?: OCRExtractedData | null,
@@ -2605,6 +2612,7 @@ const SmartMatchDetail: React.FC<{
                 setToast({ message: 'No OCR analysis is ready yet. Run Re-analyze first.', type: 'warning' });
                 return;
             }
+            ensureNonCurrentWizardSnapshot(useAppStore.getState());
             const appliedMatch = onApplyToSession(dataToApply);
             // Ensure the wizard can access screenshot file paths for its Re-run OCR button
             const artifactPaths = (match.artifacts || [])
@@ -2629,7 +2637,7 @@ const SmartMatchDetail: React.FC<{
                 reusePendingDraft: false,
                 openOcrReview: initialTab === 'ocr',
             });
-        }, [onApplyToSession, openWizardForMatch, reviewData, setToast, match.artifacts, match.id, ocrNameSources, persistNameSourceHintsToPendingDraft]);
+        }, [ensureNonCurrentWizardSnapshot, onApplyToSession, openWizardForMatch, reviewData, setToast, match.artifacts, match.id, ocrNameSources, persistNameSourceHintsToPendingDraft]);
 
         useEffect(() => {
             setShowSecondaryActions(false);

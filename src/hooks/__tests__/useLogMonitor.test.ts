@@ -226,6 +226,7 @@ describe('useLogMonitor', () => {
 
   it('creates a telemetry draft on map-start signal', async () => {
     const { useLogMonitor } = await import('../useLogMonitor');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
     renderHook(() => useLogMonitor('Pilot'));
 
     act(() => {
@@ -245,6 +246,8 @@ describe('useLogMonitor', () => {
       subType: 'Telemetry Draft',
       ocrState: 'queued',
     });
+    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-started' }));
+    dispatchSpy.mockRestore();
   });
 
   it('clears a stale active-match flag when the next mission start is detected', async () => {
@@ -794,6 +797,7 @@ describe('useLogMonitor', () => {
   it('resets telemetry draft duration when mission length exceeds 60 minutes', async () => {
     const baseSec = Math.floor(Date.now() / 1000);
     const { useLogMonitor } = await import('../useLogMonitor');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
     renderHook(() => useLogMonitor('Pilot'));
 
     act(() => {
@@ -831,7 +835,8 @@ describe('useLogMonitor', () => {
     expect(finalizedDraft).toBeTruthy();
     expect(finalizedDraft?.time).toBe('00:00');
     expect(finalizedDraft?.telemetryConsistency?.telemetryDurationSeconds).toBeUndefined();
-    expect(uiState.setToast).toHaveBeenCalledWith(expect.objectContaining({ type: 'warning' }));
+    expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'telemetry:draft-ready' }));
+    dispatchSpy.mockRestore();
   });
 
   it('ignores stale older NebLoadoutSaved events so newer loadout is not regressed', async () => {

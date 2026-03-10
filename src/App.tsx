@@ -125,7 +125,7 @@ interface TelemetryRetentionStatus {
 interface TelemetryDraftPromptState {
     matchId: number;
     duration: string;
-    phase: 'midmatch' | 'postmatch';
+    phase: 'start' | 'midmatch' | 'postmatch';
 }
 
 interface RestoreSessionPayload {
@@ -321,6 +321,7 @@ const buildRestorePayloadSignature = (payload: RestoreSessionPayload): string =>
 const App: React.FC = () => {
     const [telemetryPruneStatus, setTelemetryPruneStatus] = useState<TelemetryRetentionStatus | null>(null);
     const [telemetryPruneBusy, setTelemetryPruneBusy] = useState(false);
+    const [telemetryPruneDialogOpen, setTelemetryPruneDialogOpen] = useState(false);
     const [telemetryDraftPrompt, setTelemetryDraftPrompt] = useState<TelemetryDraftPromptState | null>(null);
     const [telemetryDraftPendingResult, setTelemetryDraftPendingResult] = useState<FinalMatchResult | null>(null);
     const [restoreSessionPrompt, setRestoreSessionPrompt] = useState<RestoreSessionSnapshot | null>(null);
@@ -338,7 +339,7 @@ const App: React.FC = () => {
     const dismissedTelemetryDraftMidmatchPromptIdsRef = React.useRef<Set<number>>(new Set());
     const handledTelemetryDraftPostmatchPromptIdsRef = React.useRef<Set<number>>(new Set());
     const telemetryDraftCaptureClicksRef = React.useRef<Map<number, number>>(new Map());
-    const telemetryPromptNotificationKeyRef = React.useRef<string | null>(null);
+    const telemetryPruneNotificationKeyRef = React.useRef<string | null>(null);
     const fuzzyPromptNotificationCountRef = React.useRef(0);
     const idPromptNotificationCountRef = React.useRef(0);
     const tipLastSentAtRef = React.useRef(0);
@@ -487,31 +488,33 @@ const App: React.FC = () => {
     }, [showIdMapper, unknownIdCount]);
 
     useEffect(() => {
-        if (!telemetryDraftPrompt) {
-            telemetryPromptNotificationKeyRef.current = null;
+        if (!telemetryPruneStatus) {
+            telemetryPruneNotificationKeyRef.current = null;
             return;
         }
-        const key = `${telemetryDraftPrompt.phase}:${telemetryDraftPrompt.matchId}`;
-        if (telemetryPromptNotificationKeyRef.current === key) return;
-        telemetryPromptNotificationKeyRef.current = key;
-        if (telemetryDraftPrompt.phase === 'midmatch') {
-            pushNotification({
-                message: 'Telemetry detected mission start. Smart Capture is ready when you are.',
-                type: 'info',
-                source: 'smart-capture',
-                durationMs: 10_000,
-                deepLink: { type: 'openView', view: 'recording' },
-            });
-            return;
-        }
+        const key = [
+            telemetryPruneStatus.exceedsSize ? 'size' : 'no-size',
+            telemetryPruneStatus.exceedsAge ? 'age' : 'no-age',
+            String(telemetryPruneStatus.sizeBytes || 0),
+            String(telemetryPruneStatus.maxBytes || 0),
+            String(telemetryPruneStatus.maxAgeMs || 0),
+        ].join(':');
+        if (telemetryPruneNotificationKeyRef.current === key) return;
+        telemetryPruneNotificationKeyRef.current = key;
         pushNotification({
-            message: `Telemetry match is ready (${telemetryDraftPrompt.duration}). Open result flow to submit.`,
-            type: 'info',
-            source: 'wizard',
+            message: 'Telemetry retention needs cleanup. Open the prompt from Notifications when you are ready.',
+            type: 'warning',
+            source: 'telemetry',
             durationMs: 10_000,
-            deepLink: { type: 'openView', view: 'recording' },
+            deepLink: { type: 'openTelemetryPrune' },
         });
-    }, [pushNotification, telemetryDraftPrompt]);
+    }, [pushNotification, telemetryPruneStatus]);
+
+    useEffect(() => {
+        if (!telemetryPruneStatus) {
+            setTelemetryPruneDialogOpen(false);
+        }
+    }, [telemetryPruneStatus]);
 
     useEffect(() => {
         if (!showFuzzyReviewPrompt || showReviewQueue) return;
@@ -540,56 +543,6 @@ const App: React.FC = () => {
             deepLink: { type: 'openIdMapper' },
         });
     }, [pushNotification, showIdInfoPrompt, showIdMapper, unknownIdCount]);
-
-    const approveFuzzyCandidates = useCallback(() => {
-        if (!fuzzyRosterCandidates.length) return;
-        let approved = 0;
-        fuzzyRosterCandidates.forEach((review) => {
-            removePendingReview(review.id);
-            const source = normalizeOcrName(review.value || '');
-            const target = normalizeOcrName(review.bestMatch || '');
-            if (!source || !target) return;
-            if (source.toLowerCase() === target.toLowerCase()) return;
-
-            recordOcrAliasCorrection(source, target, {
-                source: 'manual_correction',
-                context: 'matchstats',
-                confidenceWeight: Math.min(1, Math.max(0.6, Number(review.bestScore || 0) / 100)),
-            });
-            const hasTarget = pilotRegistry.some((name) => (
-                normalizeOcrName(name).toLowerCase() === target.toLowerCase()
-            ));
-            if (!hasTarget) {
-                addToRegistry(target);
-            }
-            const duplicateIds = getRosterCandidatePruneIds({
-                pendingReviews: useAppStore.getState().pendingReviews || [],
-                rawName: source,
-                canonicalTargetKey: target,
-                excludeIds: [review.id],
-            });
-            if (duplicateIds.length > 0) {
-                removePendingReviews(duplicateIds);
-            }
-            approved += 1;
-        });
-        setShowFuzzyReviewPrompt(false);
-        if (approved > 0) {
-            setToast({
-                message: `Approved ${approved} fuzzy roster match${approved === 1 ? '' : 'es'}.`,
-                type: 'success',
-            });
-        }
-    }, [
-        addToRegistry,
-        fuzzyRosterCandidates,
-        pilotRegistry,
-        recordOcrAliasCorrection,
-        removePendingReview,
-        removePendingReviews,
-        setShowFuzzyReviewPrompt,
-        setToast,
-    ]);
 
     useEffect(() => {
         const minScorePct = Math.round((Number(ocrAutoApplyMinScore) || 0.83) * 100);
@@ -1616,6 +1569,7 @@ const App: React.FC = () => {
 
     const handleTelemetryPruneLater = useCallback(() => {
         telemetryPruneSnoozedRef.current = true;
+        setTelemetryPruneDialogOpen(false);
         setTelemetryPruneStatus(null);
         setToast({ message: 'Telemetry prune reminder snoozed for this session.', type: 'info' });
     }, [setToast]);
@@ -1630,6 +1584,7 @@ const App: React.FC = () => {
                 const data = asRecord(raw.data);
                 const removed = toFiniteNumber(data.removedEntries);
                 const freedBytes = toFiniteNumber(data.freedBytes);
+                setTelemetryPruneDialogOpen(false);
                 setTelemetryPruneStatus(null);
                 setToast({
                     message: `Telemetry prune complete: removed ${removed} entries, freed ${formatBytes(freedBytes)}.`,
@@ -1653,6 +1608,10 @@ const App: React.FC = () => {
 
     const handleTelemetryDraftLater = useCallback(() => {
         if (!telemetryDraftPrompt) return;
+        if (telemetryDraftPrompt.phase === 'start') {
+            setTelemetryDraftPrompt(null);
+            return;
+        }
         if (telemetryDraftPrompt.phase === 'midmatch') {
             dismissedTelemetryDraftMidmatchPromptIdsRef.current.add(telemetryDraftPrompt.matchId);
             telemetryDraftCaptureClicksRef.current.delete(telemetryDraftPrompt.matchId);
@@ -1802,6 +1761,21 @@ const App: React.FC = () => {
     }, []);
 
     useEffect(() => {
+        const onTelemetryDraftStarted = (evt: Event) => {
+            const customEvt = evt as CustomEvent<{ matchId?: number }>;
+            const matchId = Number(customEvt?.detail?.matchId || 0);
+            if (!Number.isInteger(matchId) || matchId <= 0) return;
+            setTelemetryDraftPrompt((current) => {
+                if (current?.phase === 'midmatch' || current?.phase === 'postmatch') return current;
+                if (current?.phase === 'start' && current.matchId === matchId) return current;
+                return {
+                    matchId,
+                    duration: '00:00',
+                    phase: 'start',
+                };
+            });
+        };
+
         const onTelemetryDraftReady = (evt: Event) => {
             const customEvt = evt as CustomEvent<{ matchId?: number; duration?: string }>;
             const matchId = Number(customEvt?.detail?.matchId || 0);
@@ -1834,13 +1808,24 @@ const App: React.FC = () => {
             });
         };
 
+        window.addEventListener('telemetry:draft-started', onTelemetryDraftStarted as EventListener);
         window.addEventListener('telemetry:draft-ready', onTelemetryDraftReady as EventListener);
         window.addEventListener('telemetry:draft-capture-prompt', onTelemetryDraftCapturePrompt as EventListener);
         return () => {
+            window.removeEventListener('telemetry:draft-started', onTelemetryDraftStarted as EventListener);
             window.removeEventListener('telemetry:draft-ready', onTelemetryDraftReady as EventListener);
             window.removeEventListener('telemetry:draft-capture-prompt', onTelemetryDraftCapturePrompt as EventListener);
         };
     }, []);
+
+    useEffect(() => {
+        const onTelemetryPruneOpen = () => {
+            if (!telemetryPruneStatus) return;
+            setTelemetryPruneDialogOpen(true);
+        };
+        window.addEventListener('telemetry:open-prune-modal', onTelemetryPruneOpen);
+        return () => window.removeEventListener('telemetry:open-prune-modal', onTelemetryPruneOpen);
+    }, [telemetryPruneStatus]);
 
     // Window restore/maximize animation
     const appRef = React.useRef<HTMLDivElement>(null);
@@ -2824,200 +2809,174 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {(telemetryPruneStatus
-                || telemetryDraftPrompt
-                || (showFuzzyReviewPrompt && fuzzyRosterCandidates.length > 0 && !showReviewQueue)
-                || (showIdInfoPrompt && unknownIdCount > 0 && !showIdMapper)) && createPortal((
-                    <div className="fixed z-top top-20 right-4 left-4 md:left-auto md:w-[28rem] pointer-events-none space-y-3">
-                        {telemetryPruneStatus && (
-                            <div className="pointer-events-auto rounded-2xl border border-warning/45 bg-md-sys-surface-container-highest shadow-2xl p-4">
-                                <div className="text-body font-bold">Telemetry retention needs cleanup</div>
-                                <div className="mt-1 text-label-sm opacity-70">
-                                    {telemetryPruneStatus.exceedsSize && telemetryPruneStatus.exceedsAge
-                                        ? 'Retention is exceeded by both size and age.'
-                                        : telemetryPruneStatus.exceedsSize
-                                            ? 'Retention is exceeded by size.'
-                                            : 'Retention is exceeded by age.'}
-                                </div>
-                                {telemetryPruneStatus.exceedsSize ? (
-                                    <div className="mt-1 text-label-sm opacity-70">
-                                        Current: {formatBytes(telemetryPruneStatus.sizeBytes)} of {formatBytes(telemetryPruneStatus.maxBytes)}.
-                                    </div>
-                                ) : (
-                                    <div className="mt-1 text-label-sm opacity-70">
-                                        Age policy: keep telemetry newer than {Math.max(1, Math.round(telemetryPruneStatus.maxAgeMs / (24 * 60 * 60 * 1000)))} day(s).
-                                    </div>
-                                )}
-                                <div className="mt-1 text-label-sm opacity-70">
-                                    Suggested prune: {telemetryPruneStatus.prunePreview?.wouldRemoveEntries || 0} entries
-                                    ({formatBytes(telemetryPruneStatus.prunePreview?.wouldFreeBytes || 0)}).
-                                </div>
-                                <div className="mt-3 flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={handleTelemetryPruneNow}
-                                        disabled={telemetryPruneBusy}
-                                        className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled"
-                                    >
-                                        {telemetryPruneBusy ? 'Pruning...' : 'Prune now'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleTelemetryPruneLater}
-                                        disabled={telemetryPruneBusy}
-                                        className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold disabled:opacity-disabled"
-                                    >
-                                        Later
-                                    </button>
-                                </div>
+            {telemetryPruneStatus && telemetryPruneDialogOpen && createPortal((
+                <div
+                    className="fixed inset-0 z-modal-top md3-dialog-scrim flex items-center justify-center p-4"
+                    onClick={() => setTelemetryPruneDialogOpen(false)}
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Telemetry retention needs cleanup"
+                        className="md3-dialog rounded-modal w-full max-w-md"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="md3-dialog-title">Telemetry retention needs cleanup</div>
+                        <div className="md3-dialog-content text-md-sys-on-surface/70 space-y-2">
+                            <div>
+                                {telemetryPruneStatus.exceedsSize && telemetryPruneStatus.exceedsAge
+                                    ? 'Retention is exceeded by both size and age.'
+                                    : telemetryPruneStatus.exceedsSize
+                                        ? 'Retention is exceeded by size.'
+                                        : 'Retention is exceeded by age.'}
                             </div>
-                        )}
+                            {telemetryPruneStatus.exceedsSize ? (
+                                <div>
+                                    Current: {formatBytes(telemetryPruneStatus.sizeBytes)} of {formatBytes(telemetryPruneStatus.maxBytes)}.
+                                </div>
+                            ) : (
+                                <div>
+                                    Age policy: keep telemetry newer than {Math.max(1, Math.round(telemetryPruneStatus.maxAgeMs / (24 * 60 * 60 * 1000)))} day(s).
+                                </div>
+                            )}
+                            <div>
+                                Suggested prune: {telemetryPruneStatus.prunePreview?.wouldRemoveEntries || 0} entries
+                                ({formatBytes(telemetryPruneStatus.prunePreview?.wouldFreeBytes || 0)}).
+                            </div>
+                        </div>
+                        <div className="md3-dialog-actions flex-col gap-2 sm:flex-row sm:justify-end">
+                            <button
+                                type="button"
+                                onClick={handleTelemetryPruneLater}
+                                disabled={telemetryPruneBusy}
+                                className="md3-btn-tonal"
+                            >
+                                Later
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { void handleTelemetryPruneNow(); }}
+                                disabled={telemetryPruneBusy}
+                                className="md3-btn-filled"
+                            >
+                                {telemetryPruneBusy ? 'Pruning...' : 'Prune now'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ), document.body)}
 
-                        {telemetryDraftPrompt && (
-                            <div className="pointer-events-auto rounded-2xl border border-md-sys-primary/45 bg-md-sys-surface-container-highest shadow-2xl p-4 relative">
+            {telemetryDraftPrompt && createPortal((
+                <div
+                    className="fixed inset-0 z-modal-top md3-dialog-scrim flex items-center justify-center p-4"
+                    onClick={handleTelemetryDraftLater}
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label={
+                            telemetryDraftPrompt.phase === 'start'
+                                ? 'Telemetry match detected'
+                                : telemetryDraftPrompt.phase === 'midmatch'
+                                    ? 'Smart Capture reminder'
+                                    : 'Telemetry match ready'
+                        }
+                        className="md3-dialog rounded-modal w-full max-w-lg"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="md3-dialog-title">
+                            {telemetryDraftPrompt.phase === 'start'
+                                ? 'Telemetry match detected'
+                                : telemetryDraftPrompt.phase === 'midmatch'
+                                    ? 'Smart Capture reminder'
+                                    : 'Telemetry match ready'}
+                        </div>
+                        <div className="md3-dialog-content text-md-sys-on-surface/70 space-y-3">
+                            {telemetryDraftPrompt.phase === 'start' && (
+                                <div>
+                                    Telemetry detected mission start. A match draft is active now, and the app will keep watching for Smart Capture and result-entry prompts while you keep working anywhere in the UI.
+                                </div>
+                            )}
+                            {telemetryDraftPrompt.phase === 'midmatch' && (
+                                <div>
+                                    Telemetry detected a loadout update during the match. Capture Crew Hub or Tactical only if roster, ship, or loadout changed.
+                                </div>
+                            )}
+                            {telemetryDraftPrompt.phase === 'postmatch' && (
+                                <>
+                                    <div>
+                                        Duration: {telemetryDraftPrompt.duration}. Choose a result to continue in Recording. OCR stays manual until you choose Process OCR.
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleTelemetryDraftResult('Win')}
+                                            disabled={telemetryDraftDiscarding}
+                                            className="md3-btn-filled"
+                                        >
+                                            Win
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleTelemetryDraftResult('Loss')}
+                                            disabled={telemetryDraftDiscarding}
+                                            className="md3-btn-tonal"
+                                        >
+                                            Loss
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleTelemetryDraftResult('Draw')}
+                                            disabled={telemetryDraftDiscarding}
+                                            className="md3-btn-tonal"
+                                        >
+                                            Draw
+                                        </button>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleTelemetryDraftDiscard}
+                                        disabled={telemetryDraftDiscarding}
+                                        className="w-full rounded-2xl border border-danger/35 px-3 py-2 text-label-sm font-bold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        {telemetryDraftDiscarding ? 'Discarding...' : 'Discard match'}
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                        <div className="md3-dialog-actions flex-col gap-2 sm:flex-row sm:justify-end">
+                            {telemetryDraftPrompt.phase === 'start' ? (
                                 <button
                                     type="button"
                                     onClick={handleTelemetryDraftLater}
-                                    className="absolute top-2 right-2 h-7 w-7 rounded-full border border-md-sys-outline/20 text-label-sm font-bold text-md-sys-on-surface/70 hover:bg-md-sys-on-surface/10"
-                                    aria-label="Dismiss telemetry prompt"
-                                    title="Dismiss"
+                                    className="md3-btn-filled"
                                 >
-                                    ×
+                                    Continue
                                 </button>
-                                <div className="text-body font-bold pr-8">
-                                    {telemetryDraftPrompt.phase === 'midmatch' ? 'Telemetry match in progress' : 'Telemetry match ready'}
-                                </div>
-                                {telemetryDraftPrompt.phase === 'midmatch' ? (
-                                    <div className="mt-1 text-label-sm opacity-70">
-                                        Telemetry detected mission start. Capture Crew Hub/Tactical only when roster/loadout changed.
-                                    </div>
-                                ) : (
-                                    <>
-                                        <div className="mt-1 text-label-sm opacity-70">
-                                            Duration: {telemetryDraftPrompt.duration}. Choose a result to continue in Recording. OCR stays manual until you choose Process OCR.
-                                        </div>
-                                        <div className="mt-3 grid grid-cols-3 gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => handleTelemetryDraftResult('Win')}
-                                                disabled={telemetryDraftDiscarding}
-                                                className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
-                                            >
-                                                Win
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleTelemetryDraftResult('Loss')}
-                                                disabled={telemetryDraftDiscarding}
-                                                className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
-                                            >
-                                                Loss
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleTelemetryDraftResult('Draw')}
-                                                disabled={telemetryDraftDiscarding}
-                                                className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
-                                            >
-                                                Draw
-                                            </button>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={handleTelemetryDraftDiscard}
-                                            disabled={telemetryDraftDiscarding}
-                                            className="mt-2 w-full rounded-2xl border border-danger/35 px-3 py-1.5 text-label-sm font-bold text-danger transition hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
-                                        >
-                                            {telemetryDraftDiscarding ? 'Discarding...' : 'Discard match'}
-                                        </button>
-                                    </>
-                                )}
-                                <div className="mt-3 flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={handleTelemetryDraftSmartCapture}
-                                        disabled={telemetryDraftDiscarding}
-                                        className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
-                                    >
-                                        Start Smart Capture
-                                    </button>
+                            ) : (
+                                <>
                                     <button
                                         type="button"
                                         onClick={handleTelemetryDraftLater}
                                         disabled={telemetryDraftDiscarding}
-                                        className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
-                                    >
-                                        Later
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {showFuzzyReviewPrompt && fuzzyRosterCandidates.length > 0 && !showReviewQueue && (
-                            <div className="pointer-events-auto rounded-2xl border border-warning/45 bg-md-sys-surface-container-highest shadow-2xl p-4 space-y-2">
-                                <div className="text-body font-bold">Fuzzy Match Review Ready</div>
-                                <div className="text-label-sm opacity-70">
-                                    {fuzzyRosterCandidates.length} OCR name{fuzzyRosterCandidates.length === 1 ? '' : 's'} can be merged.
-                                    Top candidate: "{fuzzyRosterCandidates[0].value}" {'->'} "{fuzzyRosterCandidates[0].bestMatch}" ({Math.round(Number(fuzzyRosterCandidates[0].bestScore || 0))}%)
-                                </div>
-                                <div className="flex items-center gap-2 justify-end">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowFuzzyReviewPrompt(false)}
-                                        className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
+                                        className="md3-btn-outlined"
                                     >
                                         Later
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={approveFuzzyCandidates}
-                                        className="md3-btn-tonal px-3 py-1.5 text-label-sm font-bold"
+                                        onClick={handleTelemetryDraftSmartCapture}
+                                        disabled={telemetryDraftDiscarding}
+                                        className="md3-btn-filled"
                                     >
-                                        Approve
+                                        Start Smart Capture
                                     </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setShowFuzzyReviewPrompt(false);
-                                            setShowReviewQueue(true);
-                                        }}
-                                        className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
-                                    >
-                                        Review now
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {showIdInfoPrompt && unknownIdCount > 0 && !showIdMapper && (
-                            <div className="pointer-events-auto rounded-2xl border border-info/45 bg-md-sys-surface-container-highest shadow-2xl p-4 space-y-2">
-                                <div className="text-body font-bold">ID Info Requested</div>
-                                <div className="text-label-sm opacity-70">
-                                    {unknownIdCount} unknown telemetry ID{unknownIdCount === 1 ? '' : 's'} detected. Map them now so ship/prospector/loadout tracking stays accurate.
-                                </div>
-                                <div className="flex items-center gap-2 justify-end">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowIdInfoPrompt(false)}
-                                        className="md3-btn-outlined px-3 py-1.5 text-label-sm font-bold"
-                                    >
-                                        Later
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setShowIdInfoPrompt(false);
-                                            setShowIdMapper(true);
-                                        }}
-                                        className="md3-btn-filled px-3 py-1.5 text-label-sm font-bold"
-                                    >
-                                        Open ID Mapper
-                                    </button>
-                                </div>
-                            </div>
-                        )}
+                                </>
+                            )}
+                        </div>
                     </div>
-                ), document.body)}
+                </div>
+            ), document.body)}
 
         </div>
     );
