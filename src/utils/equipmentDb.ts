@@ -35,6 +35,9 @@ export const EQUIPMENT_DB: EquipmentItem[] = [
     { id: 'cw9', name: 'Double Whammy', type: 'CharacterWeapon', compatibleChars: ['All'], defaultAmmo: 4, description: "Anti-Ship | Burst: 100" },
     { id: 'cw10', name: 'Ancient Starlance', type: 'CharacterWeapon', compatibleChars: ['All'], description: "Long Range | Shield Break" },
     { id: 'cw11', name: 'Resonator', type: 'CharacterWeapon', compatibleChars: ['All'], description: "Pulse weapon | Resonance burst" },
+    { id: 'cw12', name: 'Rocket Launcher', type: 'CharacterWeapon', compatibleChars: ['All'] },
+    { id: 'cw13', name: 'Hand Cannon', type: 'CharacterWeapon', compatibleChars: ['All'] },
+    { id: 'cw14', name: 'Foam Sprayer', type: 'CharacterWeapon', compatibleChars: ['All'] },
 
     // Character Equipment
     { id: 'ce1', name: 'Teleport Reloader', type: 'CharacterEquipment', compatibleChars: ['All'], description: "Passive | Reload on Teleport" },
@@ -51,6 +54,7 @@ export const EQUIPMENT_DB: EquipmentItem[] = [
     { id: 'ce11', name: 'Thunder Dash', type: 'CharacterEquipment', compatibleChars: ['All'], defaultAmmo: 2, description: "Active | Speed Boost | Smoke" },
     { id: 'ce12', name: 'Rock!', type: 'CharacterEquipment', compatibleChars: ['All'], defaultAmmo: 3, description: "Throw | High Single Target Dmg: 80" },
     { id: 'ce13', name: 'Shield Wall', type: 'CharacterEquipment', compatibleChars: ['All'], defaultAmmo: 1, description: "Deploy | Blocking Shield" },
+    { id: 'ce14', name: 'Plasma Can', type: 'CharacterEquipment', compatibleChars: ['All'] },
 
     // Systems / Utility (Ship)
     { id: 'u1', name: 'Standard Shield', type: 'System', compatibleChars: ['All'] },

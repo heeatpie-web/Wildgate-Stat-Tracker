@@ -141,17 +141,6 @@ const toCanonicalProspectorWeaponName = (value: unknown): string => {
     return PROSPECTOR_WEAPON_NAME_MAP.get(key) || '';
 };
 
-const TELEMETRY_PROSPECTOR_WEAPON_NAMES = Array.from(new Set([
-    ...Array.from(PROSPECTOR_WEAPON_NAME_MAP.values()),
-]));
-
-const TELEMETRY_PROSPECTOR_EQUIPMENT_NAMES = Array.from(new Set([
-    ...CHARACTER_EQUIPMENT_NAMES,
-]));
-
-const TELEMETRY_PROSPECTOR_PERK_NAMES = Array.from(new Set([
-    ...CHARACTER_PERK_NAMES,
-]));
 
 /**
  * useLogMonitor - Monitors external game log files for telemetry events.
@@ -1221,7 +1210,7 @@ export const useLogMonitor = (activeUser?: string) => {
                                 || canonicalDb[cleanUpper];
                             if (!name) {
                                 const matchesKnownPerkName = type === 'Perk'
-                                    ? !!fuzzyMatchList(rawGuidText, TELEMETRY_PROSPECTOR_PERK_NAMES)
+                                    ? !!fuzzyMatchList(rawGuidText, Array.from(PROSPECTOR_PERK_SET))
                                     : false;
                                 const shouldRegisterUnknownPerk = type === 'Perk'
                                     && !matchesKnownPerkName
@@ -1276,41 +1265,6 @@ export const useLogMonitor = (activeUser?: string) => {
                             'characterPerks', 'characterPerk', 'characterPerkSlots', 'characterPerkLoadout',
                             'traits', 'traitIds', 'traitGuids',
                         ]);
-                        const weaponNameCandidates = extractByKeys(loadoutData, [
-                            'weapons', 'weaponSlots', 'weaponSlotData', 'weaponLoadout',
-                            'weaponPrimary', 'weaponSecondary',
-                            'weaponOne', 'weaponTwo',
-                            'primaryWeapon', 'secondaryWeapon',
-                            'weaponNamePrimary', 'weaponNameSecondary',
-                            'weapon_name_primary', 'weapon_name_secondary',
-                            'weaponNames', 'weaponDisplayNames', 'loadoutWeapons', 'loadoutWeaponNames',
-                        ]);
-                        const characterWeaponNameCandidates = extractByKeys(loadoutData, [
-                            'characterWeapons', 'characterWeapon', 'characterWeaponSlots', 'characterWeaponLoadout',
-                            'charWeapons', 'charWeapon', 'charWeaponSlots', 'charWeaponLoadout',
-                            'crewWeapons', 'crewWeaponSlots',
-                            'loadoutCharacterWeapons', 'loadoutCharWeapons',
-                        ]);
-                        const equipmentNameCandidates = extractByKeys(loadoutData, [
-                            'equipment', 'equipmentSlots', 'equipmentSlotData', 'equipmentLoadout',
-                            'equipmentPrimary', 'equipmentSecondary',
-                            'equipmentOne', 'equipmentTwo',
-                            'primaryEquipment', 'secondaryEquipment',
-                            'equipmentNamePrimary', 'equipmentNameSecondary',
-                            'equipment_name_primary', 'equipment_name_secondary',
-                            'equipmentNames', 'equipmentDisplayNames', 'loadoutEquipment', 'loadoutEquipmentNames',
-                        ]);
-                        const characterEquipmentNameCandidates = extractByKeys(loadoutData, [
-                            'characterEquipment', 'characterEquipments', 'characterGear', 'characterEquipmentSlots', 'characterEquipmentLoadout',
-                            'charEquipment', 'charEquipments', 'charGear', 'charEquipmentSlots', 'charEquipmentLoadout',
-                            'crewEquipment', 'crewGear', 'loadoutCharacterEquipment', 'loadoutCharEquipment',
-                        ]);
-                        const perkNameCandidates = extractByKeys(loadoutData, [
-                            'perks', 'perkNames', 'perkDisplayNames', 'perkLoadout',
-                            'characterPerks', 'characterPerk', 'characterPerkSlots', 'characterPerkLoadout',
-                            'traits', 'traitNames', 'traitDisplayNames',
-                            'loadoutPerks', 'loadoutCharacterPerks',
-                        ]);
                         const hasCharacterWeaponSignal = [
                             'characterWeapons', 'characterWeapon', 'characterWeaponSlots', 'characterWeaponLoadout',
                             'charWeapons', 'charWeapon', 'charWeaponSlots', 'charWeaponLoadout',
@@ -1335,66 +1289,18 @@ export const useLogMonitor = (activeUser?: string) => {
                             .map((g) => resolveGuid(g, EQUIPMENT_GUIDS, 'Equipment'))
                             .filter(Boolean) as string[];
                         const resolvedGuidPerks = perkGuidCandidates
-                            .map((g) => resolveGuid(g, {}, 'Perk'))
+                            .map((g) => resolveGuid(g, PERK_GUIDS, 'Perk'))
                             .filter(Boolean) as string[];
 
-                        const matchedWeaponNames = Array.from(new Set([
-                            ...weaponNameCandidates,
-                            ...characterWeaponNameCandidates,
-                        ]
-                            .map((n) => fuzzyMatchList(n, TELEMETRY_PROSPECTOR_WEAPON_NAMES))
-                            .filter(Boolean) as string[]));
-                        const matchedEquipmentNames = Array.from(new Set([
-                            ...equipmentNameCandidates,
-                            ...characterEquipmentNameCandidates,
-                        ]
-                            .map((n) => fuzzyMatchList(n, TELEMETRY_PROSPECTOR_EQUIPMENT_NAMES))
-                            .filter(Boolean) as string[]));
-                        const matchedPerkNames = Array.from(new Set(
-                            perkNameCandidates
-                                .map((n) => fuzzyMatchList(n, TELEMETRY_PROSPECTOR_PERK_NAMES))
-                                .filter(Boolean) as string[]
-                        ));
-                        const NON_ACTIONABLE_PERK_TOKENS = new Set([
-                            'perk', 'perks', 'trait', 'traits',
-                            'slot', 'slots', 'primary', 'secondary',
-                            'name', 'names', 'id', 'ids',
-                            'none', 'unknown', 'empty', 'null', 'default',
-                        ]);
-                        if (hasCharacterPerkSignal) {
-                            const seenUnknownPerkKeys = new Set<string>();
-                            perkNameCandidates.forEach((candidate) => {
-                                const rawCandidate = String(candidate || '').trim();
-                                if (!rawCandidate) return;
-                                const normalizedKey = normalizePerkNameCandidate(rawCandidate);
-                                if (!normalizedKey || seenUnknownPerkKeys.has(normalizedKey)) return;
-                                seenUnknownPerkKeys.add(normalizedKey);
-
-                                if (fuzzyMatchList(rawCandidate, TELEMETRY_PROSPECTOR_PERK_NAMES)) return;
-                                const guidCandidate = normalizeGuid(rawCandidate);
-                                if (isStableGuid(guidCandidate)) return;
-                                if (normalizedKey.length < 3 || normalizedKey.length > 64) return;
-                                if (!/[a-z]/.test(normalizedKey)) return;
-                                const words = normalizedKey.split(/\s+/).filter(Boolean);
-                                if (words.length === 0) return;
-                                if (words.every((word) => NON_ACTIONABLE_PERK_TOKENS.has(word))) return;
-
-                                registerUnknownId(rawCandidate, 'Perk');
-                            });
-                        }
-
-                        const resolvedProspectorWeapons = Array.from(new Set([
-                            ...resolvedGuidWeapons.map((name) => toCanonicalProspectorWeaponName(name)).filter(Boolean),
-                            ...matchedWeaponNames.map((name) => toCanonicalProspectorWeaponName(name)).filter(Boolean),
-                        ])).slice(0, MAX_TELEMETRY_PROSPECTOR_SLOTS);
-                        const resolvedProspectorEquipment = Array.from(new Set([
-                            ...resolvedGuidEquipment.filter((name) => PROSPECTOR_EQUIPMENT_SET.has(name)),
-                            ...matchedEquipmentNames.filter((name) => PROSPECTOR_EQUIPMENT_SET.has(name)),
-                        ])).slice(0, MAX_TELEMETRY_PROSPECTOR_SLOTS);
-                        const resolvedProspectorPerks = Array.from(new Set([
-                            ...resolvedGuidPerks.filter((name) => PROSPECTOR_PERK_SET.has(name)),
-                            ...matchedPerkNames.filter((name) => PROSPECTOR_PERK_SET.has(name)),
-                        ])).slice(0, MAX_PERKS_PER_MATCH);
+                        const resolvedProspectorWeapons = Array.from(new Set(
+                            resolvedGuidWeapons.map((name) => toCanonicalProspectorWeaponName(name)).filter(Boolean),
+                        )).slice(0, MAX_TELEMETRY_PROSPECTOR_SLOTS);
+                        const resolvedProspectorEquipment = Array.from(new Set(
+                            resolvedGuidEquipment.filter((name) => PROSPECTOR_EQUIPMENT_SET.has(name)),
+                        )).slice(0, MAX_TELEMETRY_PROSPECTOR_SLOTS);
+                        const resolvedProspectorPerks = Array.from(new Set(
+                            resolvedGuidPerks.filter((name) => PROSPECTOR_PERK_SET.has(name)),
+                        )).slice(0, MAX_PERKS_PER_MATCH);
                         const shouldApplyCharacterWeapons = hasCharacterWeaponSignal || resolvedProspectorWeapons.length > 0;
                         const shouldApplyCharacterEquipment = hasCharacterEquipmentSignal || resolvedProspectorEquipment.length > 0;
                         const shouldApplyCharacterPerks = hasCharacterPerkSignal || resolvedProspectorPerks.length > 0;
