@@ -495,6 +495,42 @@ describe('App', () => {
     expect(uiState.setShowWizard).toHaveBeenCalledWith('Win');
   });
 
+  it('preserves string reach modifiers when OCR gate data comes from queued startup captures', async () => {
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    const ocrPayload: any = {
+      screenshotType: 'crew_hub',
+      playerShip: { shipType: 'Bastion', confidence: 90 },
+      playerTeamName: 'Friendly Team',
+      reachModifiers: ['Ionized', 'Artifact: Ice'],
+      artifactType: 'ice',
+      enemyShips: [],
+      teammates: [],
+      opponentTeams: [],
+      overallConfidence: 86,
+      captureTimestamp: Date.now(),
+    };
+
+    window.dispatchEvent(new CustomEvent('submission:ocr-gate', {
+      detail: {
+        result: 'Win',
+        data: ocrPayload,
+      },
+    }));
+
+    await waitFor(() => {
+      expect(gameDataState.setSelectedReachModifiers).toHaveBeenCalledWith(['Ionized', 'Artifact: Ice'], 'manual');
+      expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
+        ship: 'Bastion',
+        reachModifiers: ['Ionized', 'Artifact: Ice'],
+        artifactSource: 'ice',
+        ocrState: 'reviewing',
+      }));
+    });
+    expect(uiState.setShowWizard).toHaveBeenCalledWith('Win');
+  });
+
   it('drops OCR opponent teams that duplicate the friendly roster', async () => {
     const { default: App } = await import('./App');
     appStoreState.selectedTeammates = ['Wing1'];

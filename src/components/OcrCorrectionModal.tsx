@@ -54,6 +54,8 @@ interface OcrCorrectionModalProps {
 
 interface DetectedPlayer {
     name: string;
+    rawName: string;
+    displayName: string;
     teamColor: string;
     teamName?: string;
     shipType?: string;
@@ -580,6 +582,24 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     ), [detectedHazards, pendingMatchData?.artifactSource, pendingMatchData?.reachModifiers]);
     const [modifierDraft, setModifierDraft] = useState<string[]>(() => seededModifierDraft);
     const [modifierInput, setModifierInput] = useState('');
+    const previewCorrections = useMemo<Record<string, string>>(() => (
+        Object.entries(corrections).reduce<Record<string, string>>((acc, [ocrName, correctedName]) => {
+            const normalizedOcrName = normalizeSubmittedName(ocrName);
+            const normalizedCorrectedName = normalizeSubmittedName(correctedName);
+            if (!normalizedOcrName || !normalizedCorrectedName) return acc;
+            acc[normalizedOcrName] = normalizedCorrectedName;
+            return acc;
+        }, {})
+    ), [corrections]);
+    const previewTeamDraft = useMemo<TeamDraft[]>(() => (
+        teamDraft.map((team) => ({
+            ...team,
+            players: (team.players || []).map((rawName) => {
+                if (ignored.has(rawName)) return rawName;
+                return previewCorrections[rawName] || rawName;
+            }),
+        }))
+    ), [ignored, previewCorrections, teamDraft]);
     const modifierSuggestions = useMemo(() => {
         const normalizedInput = normalizeModifierName(modifierInput).toLowerCase();
         const existing = new Set(modifierDraft.map((entry) => normalizeModifierKey(entry)));
@@ -750,8 +770,13 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         teamDraft.forEach((team) => {
             team.players.forEach((name) => {
                 const detectedConfidence = storedNameConfidenceByKey.get(normalizeConfidenceKey(name));
+                const displayName = ignored.has(name)
+                    ? name
+                    : (previewCorrections[name] || name);
                 players.push({
                     name,
+                    rawName: name,
+                    displayName,
                     teamColor: team.color,
                     teamName: team.teamName,
                     shipType: team.shipType || sessionShipTypes?.[team.color] || sessionShipTypes?.[name],
@@ -760,7 +785,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             });
         });
         return players;
-    }, [teamDraft, sessionShipTypes, storedNameConfidenceByKey]);
+    }, [ignored, previewCorrections, sessionShipTypes, storedNameConfidenceByKey, teamDraft]);
     const fuzzyMatchByPlayer = useMemo<Record<string, string>>(() => {
         if (!Array.isArray(pilotRegistry) || pilotRegistry.length === 0) return {};
         const registryByKey = new Map<string, string>();
@@ -770,7 +795,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             registryByKey.set(key, pilot);
         });
         const next: Record<string, string> = {};
-        teamDraft.forEach((team) => {
+        previewTeamDraft.forEach((team) => {
             (team.players || []).forEach((rawName) => {
                 const cleaned = normalizeSubmittedName(rawName);
                 const key = normalizeNameKey(cleaned);
@@ -784,7 +809,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             });
         });
         return next;
-    }, [pilotRegistry, teamDraft]);
+    }, [pilotRegistry, previewTeamDraft]);
     const inferredFriendlyTeamIndex = useMemo(() => {
         if (teamDraft.length === 0) return -1;
         const activeUserKey = normalizeNameKey(activeUser || '');
@@ -816,15 +841,15 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
     const displayFriendlyTeamIndex = useMemo(() => {
         if (teamDraft.length === 0) return -1;
         return inferredFriendlyTeamIndex >= 0 ? inferredFriendlyTeamIndex : 0;
-    }, [inferredFriendlyTeamIndex, teamDraft.length]);
+    }, [inferredFriendlyTeamIndex, previewTeamDraft.length]);
     const friendlyPlayerKeys = useMemo(() => {
         if (displayFriendlyTeamIndex < 0) return new Set<string>();
         return new Set(
-            (teamDraft[displayFriendlyTeamIndex]?.players || [])
+            (previewTeamDraft[displayFriendlyTeamIndex]?.players || [])
                 .map((name) => normalizeNameKey(name))
                 .filter(Boolean)
         );
-    }, [displayFriendlyTeamIndex, teamDraft]);
+    }, [displayFriendlyTeamIndex, previewTeamDraft]);
 
     // Filter pilot registry for autocomplete
     const getFilteredRegistry = (playerName: string) => {
@@ -926,6 +951,11 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
         const correctionContext = embedded ? 'matchstats' : 'lobby';
         const confidenceByName = new Map(detectedPlayers.map(player => [player.name, Number(player.confidence || 0)]));
         const calibrationMode = normalizeOcrCalibrationMode(ocrMode);
+        const registryKeys = new Set(
+            (pilotRegistry || [])
+                .map((pilot) => normalizeNameKey(pilot))
+                .filter(Boolean)
+        );
         const effectiveCorrections: Record<string, string> = { ...corrections, ...correctionOverrides };
         Object.entries(searchQuery).forEach(([ocrName, queryValue]) => {
             const normalized = normalizeSubmittedName(queryValue);
@@ -947,6 +977,11 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
             });
 
             if (ocrName !== correctedName) {
+                const correctedKey = normalizeNameKey(correctedName);
+                if (correctedKey && !registryKeys.has(correctedKey)) {
+                    addToRegistry(correctedName);
+                    registryKeys.add(correctedKey);
+                }
                 // Record correction for future matching
                 recordOcrAliasCorrection?.(ocrName, correctedName, {
                     source: 'review_modal',
@@ -1552,7 +1587,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                     </datalist>
                                 )}
                                 <OcrTeamAssignmentBoard
-                                    teams={teamDraft}
+                                    teams={previewTeamDraft}
                                     shipOptions={SHIPS}
                                     pilotRegistry={pilotRegistry}
                                     rosterSuggestionsId={pilotRegistry.length > 0 ? teamAssignmentRosterListId : undefined}
@@ -1680,11 +1715,11 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                 </div>
                             ) : (
                                 detectedPlayers.map((player, idx) => {
-                                    const isIgnored = ignored.has(player.name);
-                                    const hasCorrected = corrections[player.name];
-                                    const priorCorrection = ocrCorrections?.[player.name];
+                                    const isIgnored = ignored.has(player.rawName);
+                                    const hasCorrected = previewCorrections[player.rawName];
+                                    const priorCorrection = ocrCorrections?.[player.rawName];
                                     const conf = normalizeConfidence(player.confidence);
-                                    const playerSources = resolvePlayerSources(player.name);
+                                    const playerSources = resolvePlayerSources(player.rawName);
                                     const primaryPlayerSource = playerSources[0] || null;
                                     const sourceScreenshotIndex = primaryPlayerSource && primaryPlayerSource.imageIndex >= 0
                                         ? primaryPlayerSource.imageIndex
@@ -1692,24 +1727,24 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                     const sourceLabel = sourceScreenshotIndex >= 0
                                         ? `Screenshot #${sourceScreenshotIndex + 1}`
                                         : (primaryPlayerSource?.imagePath?.split(/[\\/]/).pop() || '');
-                                    const filteredRegistry = getFilteredRegistry(player.name);
-                                    const isFriendlyDetectedPlayer = friendlyPlayerKeys.has(normalizeNameKey(player.name));
+                                    const filteredRegistry = getFilteredRegistry(player.rawName);
+                                    const isFriendlyDetectedPlayer = friendlyPlayerKeys.has(normalizeNameKey(player.displayName));
                                     const learningCount = Math.max(1, Number(priorCorrection?.count || 1));
-                                    const learningTooltip = getLearningMetadata(ocrAliasModel, player.name)
+                                    const learningTooltip = getLearningMetadata(ocrAliasModel, player.rawName)
                                         || `Learned from ${learningCount} correction${learningCount === 1 ? '' : 's'}`;
-                                    const inputValue = Object.prototype.hasOwnProperty.call(searchQuery, player.name)
-                                        ? (searchQuery[player.name] || '')
-                                        : (corrections[player.name] || priorCorrection?.correctedTo || player.name);
+                                    const inputValue = Object.prototype.hasOwnProperty.call(searchQuery, player.rawName)
+                                        ? (searchQuery[player.rawName] || '')
+                                        : (previewCorrections[player.rawName] || priorCorrection?.correctedTo || player.rawName);
                                     const showPortalDropdown = (
-                                        activeInputPlayer === player.name
-                                        && String(searchQuery[player.name] || '').trim().length > 0
+                                        activeInputPlayer === player.rawName
+                                        && String(searchQuery[player.rawName] || '').trim().length > 0
                                         && !!dropdownAnchor
                                         && typeof document !== 'undefined'
                                     );
 
                                     return (
                                         <div
-                                            key={`${player.name}-${idx}`}
+                                            key={`${player.rawName}-${idx}`}
                                             className={`ocr-detected-player-card md3-card p-3 rounded-card border transition-all ${isIgnored
                                                 ? 'bg-md-sys-on-surface/5 border-md-sys-outline-variant/30 opacity-50'
                                                 : hasCorrected
@@ -1735,7 +1770,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                                     {/* Name & Details */}
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center gap-2">
-                                                            <span className="font-bold truncate">{toDisplayPlayerName(player.name)}</span>
+                                                            <span className="font-bold truncate">{toDisplayPlayerName(player.displayName)}</span>
                                                             {isFriendlyDetectedPlayer && (
                                                                 <span className="ocr-teammate-chip ocr-teammate-chip--compact" title="Friendly teammate">
                                                                     <Shield size={10} />
@@ -1807,28 +1842,28 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                                                     type="text"
                                                                     placeholder="Search roster or type name..."
                                                                     ref={(node) => {
-                                                                        inputRefs.current[player.name] = node;
+                                                                        inputRefs.current[player.rawName] = node;
                                                                     }}
                                                                     value={inputValue}
                                                                     onFocus={() => {
-                                                                        setActiveInputPlayer(player.name);
-                                                                        if (!Object.prototype.hasOwnProperty.call(searchQuery, player.name)) {
-                                                                            setSearchQuery(prev => ({ ...prev, [player.name]: inputValue }));
+                                                                        setActiveInputPlayer(player.rawName);
+                                                                        if (!Object.prototype.hasOwnProperty.call(searchQuery, player.rawName)) {
+                                                                            setSearchQuery(prev => ({ ...prev, [player.rawName]: inputValue }));
                                                                         }
-                                                                        window.requestAnimationFrame(() => updateDropdownAnchor(player.name));
+                                                                        window.requestAnimationFrame(() => updateDropdownAnchor(player.rawName));
                                                                     }}
                                                                     onBlur={() => {
-                                                                        setActiveInputPlayer((current) => (current === player.name ? null : current));
-                                                                        commitTypedCorrection(player.name, searchQuery[player.name] || inputValue);
+                                                                        setActiveInputPlayer((current) => (current === player.rawName ? null : current));
+                                                                        commitTypedCorrection(player.rawName, searchQuery[player.rawName] || inputValue);
                                                                     }}
                                                                     onChange={e => {
-                                                                        setSearchQuery(prev => ({ ...prev, [player.name]: e.target.value }));
-                                                                        window.requestAnimationFrame(() => updateDropdownAnchor(player.name));
+                                                                        setSearchQuery(prev => ({ ...prev, [player.rawName]: e.target.value }));
+                                                                        window.requestAnimationFrame(() => updateDropdownAnchor(player.rawName));
                                                                     }}
                                                                     onKeyDown={(event) => {
                                                                         if (event.key === 'Enter') {
                                                                             event.preventDefault();
-                                                                            commitTypedCorrection(player.name, searchQuery[player.name] || inputValue);
+                                                                            commitTypedCorrection(player.rawName, searchQuery[player.rawName] || inputValue);
                                                                         }
                                                                         event.stopPropagation();
                                                                     }}
@@ -1854,7 +1889,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                                                     <button
                                                                         key={p}
                                                                         onMouseDown={(event) => event.preventDefault()}
-                                                                        onClick={() => handleCorrection(player.name, p)}
+                                                                        onClick={() => handleCorrection(player.rawName, p)}
                                                                         className="ocr-roster-dropdown-item w-full text-left px-3 py-1.5 text-body text-md-sys-on-surface hover:bg-md-sys-on-surface/10 truncate"
                                                                     >
                                                                         {p}
@@ -1870,9 +1905,9 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                                         )}
 
                                                         {/* Accept as New */}
-                                                        {!pilotRegistry.includes(player.name) && !hasCorrected && (
+                                                        {!pilotRegistry.includes(player.rawName) && !hasCorrected && (
                                                             <button
-                                                                onClick={() => handleAcceptNewPlayer(player.name)}
+                                                                onClick={() => handleAcceptNewPlayer(player.rawName)}
                                                                 className="md3-btn-text text-label-sm text-success whitespace-nowrap"
                                                             >
                                                                 + New
@@ -1881,7 +1916,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
 
                                                         {/* Ignore */}
                                                         <button
-                                                            onClick={() => handleIgnore(player.name)}
+                                                            onClick={() => handleIgnore(player.rawName)}
                                                             className="md3-btn-text text-label-sm text-danger"
                                                         >
                                                             Ignore
@@ -1896,7 +1931,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
                                             </div>
 
                                             {/* Show correction target */}
-                                            {hasCorrected && hasCorrected !== player.name && (
+                                            {hasCorrected && hasCorrected !== player.rawName && (
                                                 <div className="mt-2 text-label-sm text-success flex items-center gap-1">
                                                     <span className="opacity-60">Linked to:</span>
                                                     <span className="font-semibold">{hasCorrected}</span>
@@ -1910,7 +1945,7 @@ export const OcrCorrectionModal: React.FC<OcrCorrectionModalProps> = ({
 
                         {/* All-resolved hint */}
                         {detectedPlayers.length > 0 &&
-                            detectedPlayers.every(p => corrections[p.name] || ignored.has(p.name)) && (
+                            detectedPlayers.every((p) => previewCorrections[p.rawName] || ignored.has(p.rawName)) && (
                                 <div className="px-3 py-2 text-center text-label-sm text-success font-medium">
                                     All players reviewed. Apply changes when ready.
                                 </div>

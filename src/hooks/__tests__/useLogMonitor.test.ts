@@ -675,6 +675,57 @@ describe('useLogMonitor', () => {
     expect(latestLoadout?.characterEquipment).toEqual(expect.arrayContaining(['Repair Drone']));
   });
 
+  it('applies shared ship-selection telemetry from a non-local lobby leader without overwriting the local hero loadout', async () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    gameDataState.currentLoadout = {
+      hero: 'Adrian',
+      ship: 'Hunter',
+      weapons: [],
+      equipment: [],
+      characterWeapons: ['Double Whammy'],
+      characterEquipment: ['Repair Drone'],
+    };
+
+    const { useLogMonitor } = await import('../useLogMonitor');
+    renderHook(() => useLogMonitor('Pilot'));
+
+    act(() => {
+      ipcCallbacks['log-data']?.([
+        {
+          EventName: 'NebCloudSaveRecordSize',
+          context: {
+            client: {
+              platformAccountId: 'pilot-local-id',
+            },
+          },
+          Payload: {
+            recordKey: 'GameModeShipSelection_v2',
+            event: {
+              actorId: 'lobby-leader-id',
+              selection: {
+                shipName: 'Scout',
+              },
+            },
+          },
+          ClientTimestamp: nowSec,
+        },
+      ]);
+    });
+
+    expect(gameDataState.setActiveShip).toHaveBeenCalledWith('Scout', 'telemetry');
+    const latestLoadout = gameDataState.setCurrentLoadout.mock.calls.at(-1)?.[0] as {
+      hero?: string | null;
+      ship?: string | null;
+      characterWeapons?: string[];
+      characterEquipment?: string[];
+    };
+    expect(latestLoadout?.hero).toBe('Adrian');
+    expect(latestLoadout?.ship).toBe('Scout');
+    expect(latestLoadout?.characterWeapons || []).toEqual(['Double Whammy']);
+    expect(latestLoadout?.characterEquipment || []).toEqual(['Repair Drone']);
+    expect(gameDataState.setActiveHero).not.toHaveBeenCalled();
+  });
+
   it('captures matchmaker teammate and mode expectations only after match start', async () => {
     const nowSec = Math.floor(Date.now() / 1000);
     const { useLogMonitor } = await import('../useLogMonitor');

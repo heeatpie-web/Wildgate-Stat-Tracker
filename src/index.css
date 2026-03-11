@@ -1225,13 +1225,29 @@ body[data-mode='twilight'] .ocr-assignment-team-card {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 5px;
+  flex-wrap: wrap;
+  gap: 6px;
   flex: 1 1 auto;
   min-height: 28px;
   padding: 2px 8px;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-outline), transparent 72%);
   border-radius: 8px;
   background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), transparent 6%);
+}
+
+.ocr-assignment-team-name-main {
+  min-width: 0;
+  flex: 1 1 180px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ocr-assignment-team-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
 }
 
 .ocr-assignment-team-head-side {
@@ -1342,9 +1358,10 @@ body[data-mode='twilight'] .ocr-assignment-team-card {
 }
 
 .ocr-assignment-team-ship-inline {
-  min-width: 90px;
+  min-width: 104px;
   min-height: 24px;
-  max-width: 150px;
+  max-width: 160px;
+  flex: 0 1 160px;
   border: 1px solid color-mix(in srgb, var(--md-sys-color-primary), transparent 48%);
   border-radius: 8px;
   background: color-mix(in srgb, var(--md-sys-color-primary), transparent 86%);
@@ -1568,6 +1585,10 @@ body[data-mode='twilight'] .ocr-assignment-team-card {
 .ocr-assignment-board--compact .ocr-assignment-team-name,
 .ocr-assignment-board--compact .ocr-assignment-team-title {
   font-size: 11px;
+}
+
+.ocr-assignment-board--compact .ocr-assignment-team-name-main {
+  flex-basis: 160px;
 }
 
 .ocr-assignment-board--compact .ocr-assignment-team-meta {

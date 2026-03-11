@@ -241,44 +241,50 @@ export const OcrTeamAssignmentBoard: React.FC<OcrTeamAssignmentBoardProps> = ({
                                             aria-hidden="true"
                                         />
                                     )}
-                                    {onTeamNameChange ? (
-                                        <input
-                                            type="text"
-                                            value={team.teamName}
-                                            onChange={(event) => onTeamNameChange(teamIndex, event.target.value)}
-                                            className="md3-textfield ocr-assignment-team-name"
-                                            placeholder={friendlyTeam ? 'Friendly Team' : `Team ${teamIndex + 1}`}
-                                            aria-label={`Team ${teamIndex + 1} name`}
-                                        />
-                                    ) : (
-                                        <span className="ocr-assignment-team-title">
-                                            {team.teamName || `Team ${teamIndex + 1}`}
-                                        </span>
-                                    )}
-                                    {friendlyTeam && (
-                                        <span className="ocr-teammate-chip ocr-teammate-chip--compact">
-                                            <Shield size={10} />
-                                            Friendly
-                                        </span>
-                                    )}
-                                    {isOcrDetected && (
-                                        <span className="ocr-assignment-scan-badge" title="Name auto-detected by OCR scan">
-                                            <Wand2 size={9} />
-                                        </span>
+                                    <div className="ocr-assignment-team-name-main">
+                                        {onTeamNameChange ? (
+                                            <input
+                                                type="text"
+                                                value={team.teamName}
+                                                onChange={(event) => onTeamNameChange(teamIndex, event.target.value)}
+                                                className="md3-textfield ocr-assignment-team-name"
+                                                placeholder={friendlyTeam ? 'Friendly Team' : `Team ${teamIndex + 1}`}
+                                                aria-label={`Team ${teamIndex + 1} name`}
+                                            />
+                                        ) : (
+                                            <span className="ocr-assignment-team-title">
+                                                {team.teamName || `Team ${teamIndex + 1}`}
+                                            </span>
+                                        )}
+                                        <select
+                                            value={team.shipType}
+                                            onChange={(event) => onTeamShipChange(teamIndex, event.target.value)}
+                                            className="md3-textfield ocr-assignment-team-ship-inline"
+                                            aria-label={`Team ${teamIndex + 1} ship`}
+                                        >
+                                            <option value="">Unknown ship</option>
+                                            {shipOptionsWithUnknown.map((ship) => (
+                                                <option key={ship} value={ship}>{ship}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    {(friendlyTeam || isOcrDetected) && (
+                                        <div className="ocr-assignment-team-badges">
+                                            {friendlyTeam && (
+                                                <span className="ocr-teammate-chip ocr-teammate-chip--compact">
+                                                    <Shield size={10} />
+                                                    Friendly
+                                                </span>
+                                            )}
+                                            {isOcrDetected && (
+                                                <span className="ocr-assignment-scan-badge" title="Name auto-detected by OCR scan">
+                                                    <Wand2 size={9} />
+                                                </span>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                                 <div className="ocr-assignment-team-head-side">
-                                    <select
-                                        value={team.shipType}
-                                        onChange={(event) => onTeamShipChange(teamIndex, event.target.value)}
-                                        className="md3-textfield ocr-assignment-team-ship-inline"
-                                        aria-label={`Team ${teamIndex + 1} ship`}
-                                    >
-                                        <option value="">Unknown ship</option>
-                                        {shipOptionsWithUnknown.map((ship) => (
-                                            <option key={ship} value={ship}>{ship}</option>
-                                        ))}
-                                    </select>
                                     <span className="ocr-assignment-team-meta">
                                         {visiblePlayerCount} player{visiblePlayerCount === 1 ? '' : 's'}
                                     </span>

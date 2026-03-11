@@ -183,6 +183,7 @@ interface WindowWithIdleCallbacks {
 }
 
 type UnknownRecord = Record<string, unknown>;
+type OcrModifierLike = string | { name?: string; rawText?: string } | null | undefined;
 
 const isRecord = (value: unknown): value is UnknownRecord =>
     typeof value === 'object' && value !== null;
@@ -236,6 +237,12 @@ const mergeArtifactEntries = (...artifactSets: Array<Array<string | null | undef
     });
     return merged;
 };
+
+const getOcrModifierName = (modifier: OcrModifierLike): string => String(
+    typeof modifier === 'string'
+        ? modifier
+        : (modifier?.name || modifier?.rawText || '')
+).trim();
 
 const clonePendingMatchDraft = (value: Partial<Match> | null | undefined): Partial<Match> => ({
     ...(value || {}),
@@ -2103,8 +2110,8 @@ const App: React.FC = () => {
             setActiveShip(data.playerShip.shipType, 'ocr');
         }
 
-        const extractedModifierNames = (data.reachModifiers || [])
-            .map((modifier) => String(modifier?.name || '').trim())
+        const extractedModifierNames = ((data.reachModifiers || []) as OcrModifierLike[])
+            .map((modifier) => getOcrModifierName(modifier))
             .filter(Boolean);
         const hazardNames = (data.hazards || [])
             .map((hazard) => String(hazard || '').trim())

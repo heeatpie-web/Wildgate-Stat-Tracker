@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 const OCR_REVIEW_HELP_DISMISSED_STORAGE_KEY = 'wg_ocr_review_help_dismissed_v1';
@@ -493,6 +493,60 @@ describe('OcrCorrectionModal', () => {
 
         fireEvent.click(screen.getByRole('button', { name: /save and close/i }));
 
+        expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
+            teammates: ['chrismario'],
+            opponentTeams: [],
+        }));
+    });
+
+    it('previews corrected player matches in team assignment while keeping OCR confidence visible', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['chrismar10'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = ['chrismario'];
+        appStoreState.pendingMatchData = {
+            ocrDebug: {
+                nameConfidence: {
+                    chrismar10: 73,
+                },
+            },
+        };
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        const searchInput = screen.getByPlaceholderText(/search roster or type name/i);
+        fireEvent.focus(searchInput);
+        fireEvent.change(searchInput, { target: { value: 'chrismario' } });
+        fireEvent.keyDown(searchInput, { key: 'Enter' });
+
+        await waitFor(() => {
+            expect(screen.getAllByText('chrismario').length).toBeGreaterThanOrEqual(2);
+            expect(screen.getByLabelText(/ocr confidence 73%/i)).toBeInTheDocument();
+            expect(screen.getByText('Roster')).toBeInTheDocument();
+        });
+    });
+
+    it('adds newly corrected names to the roster when saving OCR review changes', async () => {
+        const { OcrCorrectionModal } = await import('./OcrCorrectionModal');
+        const onClose = vi.fn();
+        const onAcceptAll = vi.fn();
+
+        gameData.sessionTeams = { red: ['chrismar10'] };
+        gameData.sessionShipTypes = { red: 'Hunter (2 Player)' };
+        gameData.pilotRegistry = [];
+
+        render(<OcrCorrectionModal isOpen onClose={onClose} onAcceptAll={onAcceptAll} />);
+
+        const searchInput = screen.getByPlaceholderText(/search roster or type name/i);
+        fireEvent.focus(searchInput);
+        fireEvent.change(searchInput, { target: { value: 'chrismario' } });
+        fireEvent.keyDown(searchInput, { key: 'Enter' });
+        fireEvent.click(screen.getByRole('button', { name: /save and close/i }));
+
+        expect(gameData.addToRegistry).toHaveBeenCalledWith('chrismario');
         expect(appStoreState.setPendingMatchData).toHaveBeenCalledWith(expect.objectContaining({
             teammates: ['chrismario'],
             opponentTeams: [],
